@@ -1,0 +1,61 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+.zed/
+Session.vim
+*~
+/ref
+
+# Dependencies / caches
+node_modules/
+.turbo/
+.cache/
+.next/
+.sst/
+.worktrees
+target/
+dist
+ts-dist
+coverage/
+*.tgz
+*.bun-build
+tsconfig.tsbuildinfo
+a.out
+
+# Environment / local shell state
+.env
+.env.local
+.env.production
+.env*.local
+.direnv/
+
+# Local tooling state
+.codex
+.claude/
+.mimocode/
+.mimo-worktrees
+**/.serena
+.serena/
+.scripts
+*.pid
+
+# Repo-local scratch / outputs
+playground
+tmp
+logs/
+/result
+refs
+/opencode.json
+opencode-dev
+UPCOMING_CHANGELOG.md
+.dev-home/
+
+# Experiment run artifacts (regenerated per run, not source)
+experiment/*.log
+experiment/last-outcome.json
+/experiment
+
+# Project-specific generated files
+/mimoapi/
+/packages/opencode/src/ext
