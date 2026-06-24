@@ -95,6 +95,14 @@ function routeCurrent(route: ReturnType<typeof useRoute>): TuiPluginApi["route"]
       },
     }
   }
+  if (route.data.type === "group-session") {
+    return {
+      name: "group-session",
+      params: {
+        groupSessionID: route.data.groupSessionID,
+      },
+    }
+  }
 
   return {
     name: route.data.id,
