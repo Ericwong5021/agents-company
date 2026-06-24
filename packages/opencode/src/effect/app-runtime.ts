@@ -57,6 +57,7 @@ import { TaskRegistry } from "@/task/registry"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import { History } from "@/history"
 import { Memory } from "@/memory"
+import { CompanyAgent } from "@/company-agent"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -119,6 +120,7 @@ export const AppLayer = Layer.suspend(() =>
     WorkflowRuntime.defaultLayer,
     Memory.defaultLayer,
     History.defaultLayer,
+    CompanyAgent.defaultLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 

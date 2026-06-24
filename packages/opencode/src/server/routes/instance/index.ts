@@ -19,6 +19,7 @@ import { BashInteractiveRoutes } from "./bash-interactive"
 import { Flag } from "@/flag/flag"
 import { ExperimentalHttpApiServer } from "./httpapi/server"
 import { ProjectRoutes } from "./project"
+import { CompanyAgentRoutes } from "./company-agent"
 import { SessionRoutes } from "./session"
 import { PtyRoutes } from "./pty"
 import { McpRoutes } from "./mcp"
@@ -53,6 +54,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
 
   return app
     .route("/project", ProjectRoutes())
+    .route("/company-agent", CompanyAgentRoutes())
     .route("/pty", PtyRoutes(upgrade))
     .route("/config", ConfigRoutes())
     .route("/experimental", ExperimentalRoutes())

@@ -37,6 +37,7 @@ import { DialogLogoDesign } from "@tui/component/dialog-logo-design"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogAgent } from "@tui/component/dialog-agent"
+import { DialogCompanyAgents } from "@tui/component/dialog-company-agents"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { DialogWorkflows } from "@tui/component/dialog-workflows"
 import { DialogConsoleOrg } from "@tui/component/dialog-console-org"
@@ -532,6 +533,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
       onSelect: () => {
         dialog.replace(() => <DialogAgent />)
+      },
+    },
+    {
+      title: "Manage Company Agents",
+      value: "company-agent.list",
+      category: "agent",
+      slash: {
+        name: "company-agents",
+        aliases: ["personas"],
+      },
+      onSelect: () => {
+        dialog.replace(() => <DialogCompanyAgents />)
       },
     },
     {
