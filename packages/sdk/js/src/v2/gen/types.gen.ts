@@ -4035,6 +4035,7 @@ export type SessionCreateData = {
     title?: string
     permission?: PermissionRuleset
     workspaceID?: string
+    companyAgentID?: string
   }
   path?: never
   query?: {

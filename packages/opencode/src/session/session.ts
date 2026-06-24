@@ -104,7 +104,7 @@ export function toRow(info: Info) {
     summary_diffs: info.summary?.diffs,
     revert: info.revert ?? null,
     permission: info.permission,
-    company_agent_id: info.companyAgentID ?? null,
+    company_agent_id: info.companyAgentID ?? ("assistant" as CompanyAgentID),
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
@@ -360,6 +360,7 @@ export interface Interface {
     title?: string
     permission?: Permission.Ruleset
     workspaceID?: WorkspaceID
+    companyAgentID?: CompanyAgentID
   }) => Effect.Effect<Info>
   readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info>
   readonly touch: (sessionID: SessionID) => Effect.Effect<void>

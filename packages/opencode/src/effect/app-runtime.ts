@@ -58,6 +58,7 @@ import { WorkflowRuntime } from "@/workflow/runtime"
 import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
+import { GroupSession } from "@/group-session"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -121,6 +122,7 @@ export const AppLayer = Layer.suspend(() =>
     Memory.defaultLayer,
     History.defaultLayer,
     CompanyAgent.defaultLayer,
+    GroupSession.defaultLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 

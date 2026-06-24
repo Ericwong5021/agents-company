@@ -33,20 +33,44 @@ export function memoryPath(projectID: ProjectID): string {
 }
 
 /**
- * Per-company-agent memory at `<data>/memory/agents/<aid>/MEMORY.md`.
+ * Root directory for a company agent at `<data>/agents/<aid>/`.
+ * Houses SOUL.md, settings.json, MEMORY.md, and per-project memory.
+ */
+export function agentDir(agentID: CompanyAgentID): string {
+  return path.join(Global.Path.data, "agents", agentID)
+}
+
+/**
+ * Agent persona file at `<data>/agents/<aid>/SOUL.md`.
+ * Contains the raw system_prompt text; edit directly to change agent personality.
+ */
+export function agentSoulPath(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "SOUL.md")
+}
+
+/**
+ * Agent config file at `<data>/agents/<aid>/settings.json`.
+ * Stores model override, and will expand to include skills and MCP config.
+ */
+export function agentSettingsPath(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "settings.json")
+}
+
+/**
+ * Per-company-agent memory at `<data>/agents/<aid>/MEMORY.md`.
  * Cross-project long-term memory scoped to one company agent.
  */
 export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
-  return path.join(Global.Path.data, "agents", agentID, "MEMORY.md")
+  return path.join(agentDir(agentID), "MEMORY.md")
 }
 
 /**
  * Per-company-agent × per-project memory at
- * `<data>/memory/agents/<aid>/projects/<pid>/MEMORY.md`.
+ * `<data>/agents/<aid>/projects/<pid>/MEMORY.md`.
  * Captures knowledge this agent accumulated specifically within one project.
  */
 export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID: ProjectID): string {
-  return path.join(Global.Path.data, "agents", agentID, "projects", projectID, "MEMORY.md")
+  return path.join(agentDir(agentID), "projects", projectID, "MEMORY.md")
 }
 
 /**

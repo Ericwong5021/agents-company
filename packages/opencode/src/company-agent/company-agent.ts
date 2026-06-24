@@ -1,12 +1,16 @@
 import z from "zod"
 import fs from "fs/promises"
-import path from "path"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema, Types } from "effect"
 import { Database } from "../storage"
 import { CompanyAgentTable } from "./company-agent.sql"
 import { CompanyAgentID } from "./schema"
-import { companyAgentMemoryPath } from "@/session/checkpoint-paths"
+import {
+  agentDir,
+  agentSoulPath,
+  agentSettingsPath,
+  companyAgentMemoryPath,
+} from "@/session/checkpoint-paths"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { withStatics } from "@/util/schema"
@@ -71,18 +75,25 @@ export const Event = {
 }
 
 // ---------------------------------------------------------------------------
+// Agent settings schema (settings.json)
+// ---------------------------------------------------------------------------
+
+const AgentSettings = z.object({
+  model: z.string().optional(),
+})
+type AgentSettings = z.infer<typeof AgentSettings>
+
+// ---------------------------------------------------------------------------
 // Row mapping
 // ---------------------------------------------------------------------------
 
 type Row = typeof CompanyAgentTable.$inferSelect
 
-function fromRow(row: Row): Info {
+function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
   return {
     id: row.id as CompanyAgentID,
     name: row.name,
     description: row.description ?? undefined,
-    system_prompt: row.system_prompt ?? undefined,
-    model: row.model ?? undefined,
     color: row.color ?? undefined,
     icon: row.icon ?? undefined,
     time: {
@@ -93,20 +104,78 @@ function fromRow(row: Row): Info {
 }
 
 // ---------------------------------------------------------------------------
-// Memory helpers
+// File helpers
 // ---------------------------------------------------------------------------
 
-async function initAgentMemory(id: CompanyAgentID, name: string): Promise<void> {
-  const memPath = companyAgentMemoryPath(id)
-  await fs.mkdir(path.dirname(memPath), { recursive: true })
+async function readSoul(id: CompanyAgentID): Promise<string | undefined> {
   try {
-    await fs.access(memPath)
+    const content = await fs.readFile(agentSoulPath(id), "utf-8")
+    return content.trim() || undefined
   } catch {
+    return undefined
+  }
+}
+
+async function readSettings(id: CompanyAgentID): Promise<AgentSettings> {
+  try {
+    const content = await fs.readFile(agentSettingsPath(id), "utf-8")
+    return AgentSettings.parse(JSON.parse(content))
+  } catch {
+    return {}
+  }
+}
+
+async function fromRowWithFiles(row: Row): Promise<Info> {
+  const id = row.id as CompanyAgentID
+  const [soul, settings] = await Promise.all([readSoul(id), readSettings(id)])
+  return {
+    ...fromRow(row),
+    system_prompt: soul,
+    model: settings.model,
+  }
+}
+
+/**
+ * Initialize the agent directory and create any missing files.
+ * Safe to call on every list/get — all writes are idempotent (no-overwrite).
+ */
+async function initAgentDir(id: CompanyAgentID, name: string): Promise<void> {
+  await fs.mkdir(agentDir(id), { recursive: true })
+
+  // MEMORY.md — create placeholder if absent
+  const memPath = companyAgentMemoryPath(id)
+  const memExists = await fs.access(memPath).then(() => true).catch(() => false)
+  if (!memExists) {
     await fs.writeFile(
       memPath,
       `# ${name}\n\n_Long-term memory for this agent. Add cross-project facts, preferences, and learned patterns here._\n`,
       "utf-8",
     )
+  }
+
+  // settings.json — create empty config if absent
+  const settingsPath = agentSettingsPath(id)
+  const settingsExists = await fs.access(settingsPath).then(() => true).catch(() => false)
+  if (!settingsExists) {
+    await fs.writeFile(settingsPath, "{}\n", "utf-8")
+  }
+}
+
+async function writeAgentFiles(
+  id: CompanyAgentID,
+  patch: { system_prompt?: string; model?: string },
+): Promise<void> {
+  await fs.mkdir(agentDir(id), { recursive: true })
+
+  if (patch.system_prompt !== undefined) {
+    await fs.writeFile(agentSoulPath(id), patch.system_prompt, "utf-8")
+  }
+
+  if (patch.model !== undefined) {
+    const current = await readSettings(id)
+    const updated: AgentSettings = { ...current, model: patch.model || undefined }
+    if (!updated.model) delete updated.model
+    await fs.writeFile(agentSettingsPath(id), JSON.stringify(updated, null, 2) + "\n", "utf-8")
   }
 }
 
@@ -141,8 +210,6 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               id: input.id,
               name: input.name,
               description: input.description ?? null,
-              system_prompt: input.system_prompt ?? null,
-              model: input.model ?? null,
               color: input.color ?? null,
               icon: input.icon ?? null,
               time_created: now,
@@ -151,18 +218,26 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             .run(),
         ),
       )
+      yield* Effect.promise(() =>
+        Promise.all([
+          initAgentDir(input.id as CompanyAgentID, input.name),
+          writeAgentFiles(input.id as CompanyAgentID, {
+            system_prompt: input.system_prompt,
+            model: input.model,
+          }),
+        ]),
+      )
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, input.id)).get()),
       )
       if (!row) yield* Effect.die(new Error(`CompanyAgent.create: insert failed for id="${input.id}"`))
-      const info = fromRow(row!)
+      const info = yield* Effect.promise(() => fromRowWithFiles(row!))
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
           payload: { type: Event.Created.type, properties: info },
         }),
       )
-      yield* Effect.promise(() => initAgentMemory(info.id, info.name))
       return info
     })
 
@@ -170,38 +245,41 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, id)).get()),
       )
-      return row ? fromRow(row) : undefined
+      if (!row) return undefined
+      return yield* Effect.promise(() => fromRowWithFiles(row))
     })
 
     const list = Effect.fn("CompanyAgent.list")(function* () {
       const rows = yield* Effect.sync(() => Database.use((db) => db.select().from(CompanyAgentTable).all()))
-      const infos = rows.map(fromRow)
-      yield* Effect.promise(() => Promise.all(infos.map((a) => initAgentMemory(a.id, a.name))))
+      const infos = yield* Effect.promise(() => Promise.all(rows.map((row) => fromRowWithFiles(row))))
       return infos
     })
 
     const update = Effect.fn("CompanyAgent.update")(function* (input: UpdateInput) {
       const now = Date.now()
+      const dbPatch: Record<string, unknown> = { time_updated: now }
+      if (input.name !== undefined) dbPatch.name = input.name
+      if (input.description !== undefined) dbPatch.description = input.description
+      if (input.color !== undefined) dbPatch.color = input.color
+      if (input.icon !== undefined) dbPatch.icon = input.icon
+
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
-          db
-            .update(CompanyAgentTable)
-            .set({
-              ...(input.name !== undefined && { name: input.name }),
-              ...(input.description !== undefined && { description: input.description }),
-              ...(input.system_prompt !== undefined && { system_prompt: input.system_prompt }),
-              ...(input.model !== undefined && { model: input.model }),
-              ...(input.color !== undefined && { color: input.color }),
-              ...(input.icon !== undefined && { icon: input.icon }),
-              time_updated: now,
-            })
-            .where(eq(CompanyAgentTable.id, input.id))
-            .returning()
-            .get(),
+          db.update(CompanyAgentTable).set(dbPatch).where(eq(CompanyAgentTable.id, input.id)).returning().get(),
         ),
       )
       if (!row) yield* Effect.die(new Error(`CompanyAgent.update: not found id="${input.id}"`))
-      const info = fromRow(row!)
+
+      if (input.system_prompt !== undefined || input.model !== undefined) {
+        yield* Effect.promise(() =>
+          writeAgentFiles(input.id, {
+            ...(input.system_prompt !== undefined && { system_prompt: input.system_prompt }),
+            ...(input.model !== undefined && { model: input.model }),
+          }),
+        )
+      }
+
+      const info = yield* Effect.promise(() => fromRowWithFiles(row!))
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
