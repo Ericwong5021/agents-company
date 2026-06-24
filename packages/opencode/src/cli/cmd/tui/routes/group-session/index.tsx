@@ -17,6 +17,8 @@ import { Spinner } from "@tui/component/spinner"
 import { useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { useKeybind } from "@tui/context/keybind"
+import { useCommandDialog } from "@tui/component/dialog-command"
+import { Autocomplete, type AutocompleteRef } from "@tui/component/prompt/autocomplete"
 import { Sidebar } from "../session/sidebar"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../context/tui-config"
@@ -66,9 +68,23 @@ export function GroupSession() {
   const dimensions = useTerminalDimensions()
   const keybind = useKeybind()
   const tuiConfig = useTuiConfig()
+  const command = useCommandDialog()
+  const { syntax } = useTheme()
 
   let scroll: any
   let textarea: any
+  let promptAnchor: any
+  let promptPartTypeId = 0
+
+  const fileStyleId = syntax().getStyleId("extmark.file")!
+  const agentStyleId = syntax().getStyleId("extmark.agent")!
+
+  // The group prompt only supports client-side slash commands (the global
+  // command palette's `/…` entries). Unlike a single session, group input
+  // fans out to every member agent, so @file attachments, $agent picks, and
+  // per-session server commands (/compact, /undo, …) don't apply — the
+  // Autocomplete's slashCommandsOnly mode restricts the popup accordingly.
+  const [autocompleteRef, setAutocompleteRef] = createSignal<AutocompleteRef | undefined>()
 
   const wide = createMemo(() => dimensions().width > 120)
 
@@ -115,32 +131,24 @@ export function GroupSession() {
   })
 
   // ---- per-member live state derived from sync store ----
+  // Only depends on session_status, which flips on busy/idle transitions —
+  // NOT on message/part deltas. This keeps the memo (and the <For> over it)
+  // from recomputing on every SSE text delta, which was the other half of
+  // the flicker. Streaming text is intentionally not tracked here; the
+  // finalized content arrives via refetchMessages → GroupMessageView.
   const memberState = createMemo(() => {
     const i = info()
     if (!i) return [] as {
       member: GroupMember
       agent: CompanyAgentInfo | undefined
       status: string
-      streamingText: string
       busy: boolean
     }[]
     return i.members.map((member) => {
       const agent = agentByID()[member.companyAgentID]
       const status = sync.data.session_status?.[member.sessionID]?.type ?? "idle"
       const busy = status === "busy"
-
-      // Streaming text: last assistant message in this member's "main" bucket
-      const msgs = sync.data.message[member.sessionID]?.["main"] ?? []
-      const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant")
-      let streamingText = ""
-      if (lastAssistant) {
-        const parts = sync.data.part[lastAssistant.id] ?? []
-        streamingText = parts
-          .filter((p) => p.type === "text")
-          .map((p: any) => p.text)
-          .join("")
-      }
-      return { member, agent, status, streamingText, busy }
+      return { member, agent, status, busy }
     })
   })
 
@@ -188,6 +196,23 @@ export function GroupSession() {
     const raw = textarea && !textarea.isDestroyed ? textarea.plainText : inputText()
     const text = raw.trim()
     if (!text) return
+    // While the slash menu is open, Enter is intercepted by the autocomplete's
+    // onKeyDown (it preventDefaults), so submit never reaches here. Guard
+    // anyway in case a non-keyboard path fires send().
+    if (autocompleteRef()?.visible) return
+    // Client-side slash commands (e.g. /group, /company-agents, /theme) are
+    // global palette entries — trigger them directly instead of fanning the
+    // literal "/group" text out to every member agent. This mirrors how the
+    // session prompt handles a typed slash command without the menu open.
+    const clientSlash = text.startsWith("/")
+      ? command.slashes().find((s) => s.display === text)
+      : undefined
+    if (clientSlash) {
+      setInputText("")
+      if (textarea && !textarea.isDestroyed) textarea.clear()
+      clientSlash.onSelect?.()
+      return
+    }
     if (groupBusy()) {
       toast.show({ variant: "warning", message: "Agents are still responding" })
       return
@@ -257,14 +282,19 @@ export function GroupSession() {
           <text attributes={TextAttributes.BOLD} fg={theme.text}>
             {info()?.title ?? "Group Session"}
           </text>
-          <text fg={theme.textMuted}>
-            {"  ·  "}
-            {memberState().length} agents
-            <Show when={groupBusy()}>
+          {/* Spinner must stay a sibling of <text>, not a child — TextNodeRenderable
+              only accepts strings/TextNodeRenderables/StyledText, so nesting a
+              <Spinner> inside <text> throws when groupBusy() flips on. */}
+          <box flexDirection="row">
+            <text fg={theme.textMuted}>
               {"  ·  "}
+              {memberState().length} agents
+            </text>
+            <Show when={groupBusy()}>
+              <text fg={theme.textMuted}>{"  ·  "}</text>
               <Spinner color={theme.warning}>working</Spinner>
             </Show>
-          </text>
+          </box>
         </box>
 
         <Show
@@ -325,7 +355,6 @@ export function GroupSession() {
                         agent={s.agent}
                         color={agentColor(theme, s.agent, i())}
                         status={s.status}
-                        text={s.streamingText}
                         onClick={() => navigate({ type: "session", sessionID: s.member.sessionID, groupSessionID: route.groupSessionID })}
                       />
                     </Show>
@@ -337,18 +366,52 @@ export function GroupSession() {
 
           {/* input footer */}
           <box flexShrink={0} paddingBottom={1} paddingTop={1} gap={1}>
-            <textarea
-              ref={(v: any) => (textarea = v)}
-              height={3}
-              keyBindings={groupBusy() ? [] : [{ name: "return", action: "submit" }]}
-              onContentChange={(value: string) => setInputText(value)}
-              onSubmit={() => void send()}
-              placeholder={groupBusy() ? "Waiting for all agents to finish…" : "Message all agents…  (enter to send)"}
-              placeholderColor={theme.textMuted}
-              textColor={groupBusy() ? theme.textMuted : theme.text}
-              focusedTextColor={groupBusy() ? theme.textMuted : theme.text}
-              cursorColor={theme.text}
+            {/* Autocomplete renders as an absolute-positioned popup anchored
+                above this box. slashCommandsOnly restricts it to client-side
+                /commands — @files and $agents don't apply to a group fan-out. */}
+            <Autocomplete
+              value={inputText()}
+              setPrompt={() => {}}
+              setExtmark={() => {}}
+              anchor={() => promptAnchor}
+              input={() => textarea}
+              ref={(r) => setAutocompleteRef(() => r)}
+              fileStyleId={fileStyleId}
+              agentStyleId={agentStyleId}
+              promptPartTypeId={() => promptPartTypeId}
+              slashCommandsOnly
             />
+            <box ref={(r: any) => (promptAnchor = r)} flexGrow={1}>
+              <textarea
+                ref={(v: any) => {
+                  textarea = v
+                  if (promptPartTypeId === 0) {
+                    promptPartTypeId = v.extmarks.registerType("prompt-part")
+                  }
+                }}
+                height={3}
+                keyBindings={groupBusy() ? [] : [{ name: "return", action: "submit" }]}
+                onContentChange={() => {
+                  // ContentChangeEvent carries no payload; read the buffer
+                  // directly (mirrors the session Prompt's onContentChange).
+                  const value = textarea && !textarea.isDestroyed ? textarea.plainText : ""
+                  setInputText(value)
+                  autocompleteRef()?.onInput(value)
+                }}
+                onKeyDown={(e: any) => {
+                  // Let the autocomplete handle nav/escape/return/tab while the
+                  // menu is open, plus the "/" trigger when closed. These call
+                  // e.preventDefault() so the textarea never sees the key.
+                  autocompleteRef()?.onKeyDown(e)
+                }}
+                onSubmit={() => void send()}
+                placeholder={groupBusy() ? "Waiting for all agents to finish…" : "Message all agents…  (/ for commands, enter to send)"}
+                placeholderColor={theme.textMuted}
+                textColor={groupBusy() ? theme.textMuted : theme.text}
+                focusedTextColor={groupBusy() ? theme.textMuted : theme.text}
+                cursorColor={theme.text}
+              />
+            </box>
             <Show when={groupBusy()}>
               <box onMouseUp={() => void interrupt()}>
                 <text fg={theme.warning}>interrupt</text>
@@ -487,10 +550,16 @@ function LiveCard(props: {
   agent: CompanyAgentInfo | undefined
   color: string
   status: string
-  text: string
   onClick: () => void
 }) {
-  const { theme, syntax } = useTheme()
+  const { theme } = useTheme()
+  // NOTE: We deliberately do NOT render the streaming text here. Each SSE
+  // message.part.delta updates the sync store at full speed; rendering a
+  // <code streaming> block per delta re-runs a tree-sitter highlight pass
+  // per card, which (multiplied across every busy member) caused heavy
+  // flicker. Instead we show a loading buffer while busy, and the finalized
+  // message is rendered once via GroupMessageView after the round completes
+  // (see the groupBusy → idle effect that triggers refetchMessages).
   return (
     <box border={["left"]} borderColor={props.color as any} customBorderChars={SplitBorder.customBorderChars}>
       <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
@@ -501,17 +570,7 @@ function LiveCard(props: {
           </text>
           <Spinner color={theme.textMuted}>{statusLabel(props.status)}</Spinner>
         </box>
-        <Show when={props.text}>
-          <code
-            filetype="markdown"
-            drawUnstyledText={false}
-            streaming={true}
-            syntaxStyle={syntax()}
-            content={props.text}
-            fg={theme.text}
-          />
-        </Show>
-        <text fg={theme.textMuted}> · click to open session</text>
+        <text fg={theme.textMuted}>generating response… · click to open session</text>
       </box>
       <box onMouseUp={props.onClick} />
     </box>
