@@ -18,10 +18,12 @@ import { useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { useKeybind } from "@tui/context/keybind"
 import { useCommandDialog } from "@tui/component/dialog-command"
+import { useExit } from "@tui/context/exit"
 import { Autocomplete, type AutocompleteRef } from "@tui/component/prompt/autocomplete"
 import { Sidebar } from "../session/sidebar"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../context/tui-config"
+import * as Clipboard from "../../util/clipboard"
 
 interface CompanyAgentInfo {
   id: string
@@ -69,6 +71,7 @@ export function GroupSession() {
   const keybind = useKeybind()
   const tuiConfig = useTuiConfig()
   const command = useCommandDialog()
+  const exit = useExit()
   const { syntax } = useTheme()
 
   let scroll: any
@@ -192,6 +195,53 @@ export function GroupSession() {
   // ---- input ----
   const [inputText, setInputText] = createSignal("")
 
+  // /copy — copy the group session transcript (grouped by round) to the
+  // clipboard. Mirrors the single-session /copy, but the transcript here is
+  // the group-level visible history (user messages + each agent's response),
+  // not a single session's tool/part stream.
+  command.register(() => [
+    {
+      title: "Copy group transcript",
+      value: "group-session.copy",
+      category: "session",
+      slash: {
+        name: "copy",
+      },
+      onSelect: async (dialog) => {
+        try {
+          const i = info()
+          const rounds = groupedMessages()
+          const lines: string[] = []
+          if (i) lines.push(`# ${i.title}`, "")
+          for (const round of rounds) {
+            const roundNum = round[0]?.roundNum ?? 0
+            lines.push(`## Round ${roundNum + 1}`)
+            for (const msg of round) {
+              const who =
+                msg.role === "user"
+                  ? "User"
+                  : (agentByID()[msg.companyAgentID ?? ""]?.name ?? msg.companyAgentID ?? "Agent")
+              const body = msg.content || (msg.statusSummary === "error" ? "(error)" : "(no output)")
+              lines.push(`**${who}**: ${body}`)
+            }
+            lines.push("")
+          }
+          const transcript = lines.join("\n").trim()
+          if (!transcript) {
+            toast.show({ message: "Nothing to copy", variant: "warning" })
+            dialog.clear()
+            return
+          }
+          await Clipboard.copy(transcript)
+          toast.show({ message: "Group transcript copied to clipboard!", variant: "success" })
+        } catch {
+          toast.show({ message: "Failed to copy group transcript", variant: "error" })
+        }
+        dialog.clear()
+      },
+    },
+  ])
+
   async function send() {
     const raw = textarea && !textarea.isDestroyed ? textarea.plainText : inputText()
     const text = raw.trim()
@@ -242,12 +292,14 @@ export function GroupSession() {
     await sdk.fetch(`${sdk.url}/group-session/${route.groupSessionID}/interrupt`, { method: "POST" })
   }
 
+  // Ctrl+C (app_exit): first press interrupts busy agents, second press exits
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
       if (groupBusy()) {
         void interrupt()
         return
       }
+      void exit()
     }
   })
 
