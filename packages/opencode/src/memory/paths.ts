@@ -1,7 +1,7 @@
 import path from "path"
 import { createHash } from "crypto"
 
-export type Scope = "global" | "projects" | "sessions" | "cc"
+export type Scope = "global" | "agents" | "projects" | "sessions" | "cc"
 export type MemoryType =
   | "free"
   | "memory"
@@ -43,7 +43,7 @@ function detectType(key: string): MemoryType {
 }
 
 export function parsePath(absPath: string): MemoryLocator | null {
-  const m = absPath.match(/\/memory\/(global|projects|sessions)(?:\/([^/]+))?\/(.+)\.md$/)
+  const m = absPath.match(/\/memory\/(global|agents|projects|sessions)(?:\/([^/]+))?\/(.+)\.md$/)
   if (!m) return null
   const [, scope, idMaybe, keyRaw] = m
   const scope_id = scope === "global" ? "" : (idMaybe ?? "")

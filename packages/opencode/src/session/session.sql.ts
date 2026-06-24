@@ -1,11 +1,13 @@
 import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
+import { CompanyAgentTable } from "../company-agent/company-agent.sql"
 import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
 import type { Permission } from "../permission"
 import type { ProjectID } from "../project/schema"
 import type { SessionID, MessageID, PartID } from "./schema"
 import type { WorkspaceID } from "../control-plane/schema"
+import type { CompanyAgentID } from "../company-agent/schema"
 import { Timestamps } from "../storage/schema.sql"
 
 type PartData = Omit<MessageV2.Part, "id" | "sessionID" | "messageID">
@@ -19,6 +21,10 @@ export const SessionTable = sqliteTable(
       .$type<ProjectID>()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    company_agent_id: text()
+      .$type<CompanyAgentID>()
+      .references(() => CompanyAgentTable.id)
+      .default("assistant"),
     workspace_id: text().$type<WorkspaceID>(),
     parent_id: text().$type<SessionID>(),
     context_from: text().$type<SessionID>(),
@@ -44,6 +50,7 @@ export const SessionTable = sqliteTable(
     index("session_workspace_idx").on(table.workspace_id),
     index("session_parent_idx").on(table.parent_id),
     index("session_context_from_idx").on(table.context_from),
+    index("session_company_agent_idx").on(table.company_agent_id, table.project_id),
   ],
 )
 

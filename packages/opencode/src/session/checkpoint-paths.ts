@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs/promises"
 import { Global } from "@/global"
 import type { ProjectID } from "@/project/schema"
+import type { CompanyAgentID } from "@/company-agent/schema"
 import { SessionID } from "./schema"
 
 // ---------------------------------------------------------------------------
@@ -25,9 +26,27 @@ export function checkpointPath(sessionID: SessionID): string {
 
 /**
  * v5 per-project memory file at `<data>/memory/projects/<pid>/MEMORY.md`.
+ * Shared across all company agents (project-level, agent-agnostic).
  */
 export function memoryPath(projectID: ProjectID): string {
   return path.join(Global.Path.data, "memory", "projects", projectID, "MEMORY.md")
+}
+
+/**
+ * Per-company-agent memory at `<data>/memory/agents/<aid>/MEMORY.md`.
+ * Cross-project long-term memory scoped to one company agent.
+ */
+export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
+  return path.join(Global.Path.data, "memory", "agents", agentID, "MEMORY.md")
+}
+
+/**
+ * Per-company-agent × per-project memory at
+ * `<data>/memory/agents/<aid>/projects/<pid>/MEMORY.md`.
+ * Captures knowledge this agent accumulated specifically within one project.
+ */
+export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID: ProjectID): string {
+  return path.join(Global.Path.data, "memory", "agents", agentID, "projects", projectID, "MEMORY.md")
 }
 
 /**
