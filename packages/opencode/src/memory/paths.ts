@@ -43,12 +43,20 @@ function detectType(key: string): MemoryType {
 }
 
 export function parsePath(absPath: string): MemoryLocator | null {
-  const m = absPath.match(/\/memory\/(global|agents|projects|sessions)(?:\/([^/]+))?\/(.+)\.md$/)
-  if (!m) return null
-  const [, scope, idMaybe, keyRaw] = m
-  const scope_id = scope === "global" ? "" : (idMaybe ?? "")
-  const key = keyRaw
-  return { scope: scope as Scope, scope_id, type: detectType(key), key }
+  // Normalize separators for cross-platform matching
+  const p = absPath.replace(/\\/g, "/")
+  // Scoped: <data>/(agents|projects|sessions)/<id>/<key>.md
+  const m = p.match(/\/(agents|projects|sessions)\/([^/]+)\/(.+)\.md$/)
+  if (m) {
+    const [, scope, id, key] = m
+    return { scope: scope as Scope, scope_id: id, type: detectType(key), key }
+  }
+  // Global: <data>/memory/<key>.md
+  const g = p.match(/\/memory\/(.+)\.md$/)
+  if (g) {
+    return { scope: "global", scope_id: "", type: detectType(g[1]), key: g[1] }
+  }
+  return null
 }
 
 // Match: <anything>/.claude/projects/<slug>/memory/<key>.md
@@ -105,10 +113,12 @@ function assertSafeComponent(value: string) {
 export function buildPath(input: { root: string; scope: Scope; scope_id?: string; key: string }): string {
   if (input.scope_id !== undefined) assertSafeComponent(input.scope_id)
   assertSafeComponent(input.key)
-  const parts = [input.root, input.scope]
-  if (input.scope !== "global") parts.push(input.scope_id ?? "")
-  parts.push(`${input.key}.md`)
-  return path.join(...parts)
+  if (input.scope === "global") {
+    // global → <root>/memory/<key>.md
+    return path.join(input.root, "memory", `${input.key}.md`)
+  }
+  // <root>/(agents|projects|sessions)/<id>/<key>.md
+  return path.join(input.root, input.scope, input.scope_id ?? "", `${input.key}.md`)
 }
 
 export function resolveProjectId(absRepoPath: string): string {

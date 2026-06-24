@@ -612,7 +612,7 @@ export const layer: Layer.Layer<
           catch: () => undefined,
         }).pipe(Effect.orElseSucceed(() => undefined))) ?? ProjectID.global
       const sessMemDir = metaDir(input.sessionID)
-      const projectMemDir = path.join(Global.Path.data, "memory", "projects", projectID)
+      const projectMemDir = path.dirname(memoryFile)
       const checkpointFile = checkpointPath(input.sessionID)
       const memoryFile = memoryPath(projectID)
       const taskMemDir = path.join(sessMemDir, "tasks")

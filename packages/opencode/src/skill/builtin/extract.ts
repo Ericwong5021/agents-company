@@ -24,13 +24,13 @@ const log = Log.create({ service: "skill.builtin" })
 export const extractBuiltinBundle = Effect.fn("Skill.extractBuiltinBundle")(function* (
   fsys: AppFileSystem.Interface,
 ) {
-  const root = path.join(GlobalPath.data, "builtin_skills", InstallationVersion)
+  const root = path.join(GlobalPath.data, "skills", "builtin", InstallationVersion)
   const marker = path.join(root, ".extracted")
 
   if (!InstallationLocal && (yield* fsys.existsSafe(marker))) return root
 
   for (const [skillName, files] of Object.entries(BUILTIN_BUNDLE)) {
-    const skillDir = path.join(root, "skills", skillName)
+    const skillDir = path.join(root, skillName)
     for (const [relPath, content] of Object.entries(files)) {
       yield* fsys.writeWithDirs(path.join(skillDir, relPath), content)
     }

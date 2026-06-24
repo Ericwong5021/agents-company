@@ -36,8 +36,10 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.Service
-    const root = path.join(Global.Path.data, "memory")
+    const root = Global.Path.data
     const ccBase = path.join(os.homedir(), ".claude", "projects")
+    // Sub-directories that contain memory .md files (walked during reconcile)
+    const mimoRoots = ["agents", "projects", "sessions", "memory"].map((d) => path.join(root, d))
 
     const rootEff = Effect.fn("Memory.root")(function* () {
       return root
@@ -46,7 +48,7 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
     const reconcile = Effect.fn("Memory.reconcile")(function* () {
       const cfg = yield* config.get()
       const cc = cfg.memory?.cc_index ? ccBase : undefined
-      return yield* Effect.promise(() => reconcileMemory({ mimo: root, cc }))
+      return yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoots, cc }))
     })
 
     const search = Effect.fn("Memory.search")(function* (input: {
@@ -60,7 +62,7 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       const cfg = yield* config.get()
       if (cfg.checkpoint?.memory_reconcile_on_search ?? true) {
         const cc = cfg.memory?.cc_index ? ccBase : undefined
-        yield* Effect.promise(() => reconcileMemory({ mimo: root, cc }))
+        yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoots, cc }))
       }
 
       const limit = input.limit ?? 10

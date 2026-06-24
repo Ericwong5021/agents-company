@@ -14,7 +14,7 @@ import { SessionID } from "./schema"
  * other per-session memory files under `<data>/memory/sessions/<sid>/`.
  */
 export function metaDir(sessionID: SessionID): string {
-  return path.join(Global.Path.data, "memory", "sessions", sessionID)
+  return path.join(Global.Path.data, "sessions", sessionID)
 }
 
 /**
@@ -29,7 +29,7 @@ export function checkpointPath(sessionID: SessionID): string {
  * Shared across all company agents (project-level, agent-agnostic).
  */
 export function memoryPath(projectID: ProjectID): string {
-  return path.join(Global.Path.data, "memory", "projects", projectID, "MEMORY.md")
+  return path.join(Global.Path.data, "projects", projectID, "MEMORY.md")
 }
 
 /**
@@ -37,7 +37,7 @@ export function memoryPath(projectID: ProjectID): string {
  * Cross-project long-term memory scoped to one company agent.
  */
 export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
-  return path.join(Global.Path.data, "memory", "agents", agentID, "MEMORY.md")
+  return path.join(Global.Path.data, "agents", agentID, "MEMORY.md")
 }
 
 /**
@@ -46,7 +46,7 @@ export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
  * Captures knowledge this agent accumulated specifically within one project.
  */
 export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID: ProjectID): string {
-  return path.join(Global.Path.data, "memory", "agents", agentID, "projects", projectID, "MEMORY.md")
+  return path.join(Global.Path.data, "agents", agentID, "projects", projectID, "MEMORY.md")
 }
 
 /**
@@ -54,7 +54,7 @@ export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID
  * cross-project preferences. Read-only from the agent side; no auto-create.
  */
 export function globalMemoryPath(): string {
-  return path.join(Global.Path.data, "memory", "global", "MEMORY.md")
+  return path.join(Global.Path.data, "memory", "MEMORY.md")
 }
 
 /**

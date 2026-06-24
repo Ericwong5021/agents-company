@@ -1,9 +1,12 @@
 import z from "zod"
+import fs from "fs/promises"
+import path from "path"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema, Types } from "effect"
 import { Database } from "../storage"
 import { CompanyAgentTable } from "./company-agent.sql"
 import { CompanyAgentID } from "./schema"
+import { companyAgentMemoryPath } from "@/session/checkpoint-paths"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 import { withStatics } from "@/util/schema"
@@ -90,6 +93,24 @@ function fromRow(row: Row): Info {
 }
 
 // ---------------------------------------------------------------------------
+// Memory helpers
+// ---------------------------------------------------------------------------
+
+async function initAgentMemory(id: CompanyAgentID, name: string): Promise<void> {
+  const memPath = companyAgentMemoryPath(id)
+  await fs.mkdir(path.dirname(memPath), { recursive: true })
+  try {
+    await fs.access(memPath)
+  } catch {
+    await fs.writeFile(
+      memPath,
+      `# ${name}\n\n_Long-term memory for this agent. Add cross-project facts, preferences, and learned patterns here._\n`,
+      "utf-8",
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Service interface
 // ---------------------------------------------------------------------------
 
@@ -141,6 +162,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
           payload: { type: Event.Created.type, properties: info },
         }),
       )
+      yield* Effect.promise(() => initAgentMemory(info.id, info.name))
       return info
     })
 
@@ -153,7 +175,9 @@ export const layer: Layer.Layer<Service> = Layer.effect(
 
     const list = Effect.fn("CompanyAgent.list")(function* () {
       const rows = yield* Effect.sync(() => Database.use((db) => db.select().from(CompanyAgentTable).all()))
-      return rows.map(fromRow)
+      const infos = rows.map(fromRow)
+      yield* Effect.promise(() => Promise.all(infos.map((a) => initAgentMemory(a.id, a.name))))
+      return infos
     })
 
     const update = Effect.fn("CompanyAgent.update")(function* (input: UpdateInput) {

@@ -83,7 +83,7 @@ export const layer: Layer.Layer<
         const state = {
           directory: ctx.directory,
           worktree: ctx.worktree,
-          gitdir: path.join(Global.Path.data, "snapshot", ctx.project.id, Hash.fast(ctx.worktree)),
+          gitdir: path.join(Global.Path.data, "projects", ctx.project.id, "snapshot", Hash.fast(ctx.worktree)),
           vcs: ctx.project.vcs,
         }
 

@@ -2374,7 +2374,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               .hasMemoryOrTasks(sessionID)
               .pipe(Effect.catch(() => Effect.succeed(false)))
             if (hasRecallTarget) {
-              const sessMemDir = path.join(Global.Path.data, "memory", "sessions", sessionID)
+              const sessMemDir = path.join(Global.Path.data, "sessions", sessionID)
               const hints = recallHintLines((yield* config.get()).tool)
               lastUserMsgForRecall.parts.push({
                 id: PartID.ascending(),

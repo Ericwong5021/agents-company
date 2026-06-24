@@ -99,7 +99,7 @@ function buildMemoryInstructions(sessionID: SessionID, projectID: ProjectID, mem
   const memoryFile = path.join(memoryRoot, "projects", projectID, "MEMORY.md")
   const checkpointFile = path.join(memoryRoot, "sessions", sessionID, "checkpoint.md")
   const sessionMemoryDir = path.join(memoryRoot, "sessions", sessionID)
-  const globalMemoryFile = path.join(memoryRoot, "global", "MEMORY.md")
+  const globalMemoryFile = path.join(memoryRoot, "memory", "MEMORY.md")
   return `# Memory system
 
 You have a persistent file-based memory system. Four file types:

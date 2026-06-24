@@ -32,13 +32,13 @@ const log = Log.create({ service: "skill.compose" })
 export const extractComposeBundle = Effect.fn("Skill.extractComposeBundle")(function* (
   fsys: AppFileSystem.Interface,
 ) {
-  const root = path.join(GlobalPath.data, "compose", InstallationVersion)
+  const root = path.join(GlobalPath.data, "skills", "compose", InstallationVersion)
   const marker = path.join(root, ".extracted")
 
   if (!InstallationLocal && (yield* fsys.existsSafe(marker))) return root
 
   for (const [skillName, files] of Object.entries(COMPOSE_BUNDLE)) {
-    const skillDir = path.join(root, "skills", skillName)
+    const skillDir = path.join(root, skillName)
     for (const [relPath, content] of Object.entries(files)) {
       yield* fsys.writeWithDirs(path.join(skillDir, relPath), content)
     }
@@ -61,7 +61,7 @@ function parseSkillMeta(content: string) {
 }
 
 export function composeSkillsBlock(): string {
-  const root = path.join(GlobalPath.data, "compose", InstallationVersion)
+  const root = path.join(GlobalPath.data, "skills", "compose", InstallationVersion)
   const entries: string[] = []
 
   for (const [skillName, files] of Object.entries(COMPOSE_BUNDLE)) {
