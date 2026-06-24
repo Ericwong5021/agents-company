@@ -78,6 +78,12 @@ export function Autocomplete(props: {
   fileStyleId: number
   agentStyleId: number
   promptPartTypeId: () => number
+  // Restrict the popup to client-side slash commands only (the global command
+  // registry's `slash` entries). Used by routes that don't own a single session
+  // — e.g. the group-session route, where @files/$agents and per-session server
+  // commands (/compact, /undo, …) don't map to a group fan-out. The `/` trigger
+  // and popup behavior is otherwise identical to the session prompt.
+  slashCommandsOnly?: boolean
 }) {
   const sdk = useSDK()
   const sync = useSync()
@@ -366,6 +372,19 @@ export function Autocomplete(props: {
   const commands = createMemo((): AutocompleteOption[] => {
     const results: AutocompleteOption[] = [...command.slashes()]
 
+    // slashCommandsOnly: skip server-side commands. They're per-session
+    // operations (/compact, /undo, /share, …) that can't run against a group
+    // fan-out, so showing them in the group prompt would mislead the user.
+    if (props.slashCommandsOnly) {
+      results.sort((a, b) => a.display.localeCompare(b.display))
+      const max = firstBy(results, [(x) => x.display.length, "desc"])?.display.length
+      if (!max) return results
+      return results.map((item) => ({
+        ...item,
+        display: item.display.padEnd(max + 2),
+      }))
+    }
+
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "skill") continue
       const label = serverCommand.source === "mcp" ? ":mcp" : ""
@@ -542,6 +561,10 @@ export function Autocomplete(props: {
           return
         }
 
+        // slashCommandsOnly: the group prompt only supports slash commands, so
+        // @file and $agent triggers don't apply.
+        if (props.slashCommandsOnly) return
+
         // Check for "@" (files) or "$" (agents) trigger - find the nearest one before
         // the cursor with no whitespace between it and the cursor.
         const text = value.slice(0, offset)
@@ -599,7 +622,8 @@ export function Autocomplete(props: {
           }
         }
         if (!store.visible) {
-          if (e.name === "@" || e.name === "$") {
+          // @file and $agent triggers are disabled in slashCommandsOnly mode.
+          if (!props.slashCommandsOnly && (e.name === "@" || e.name === "$")) {
             const cursorOffset = props.input().cursorOffset
             const charBeforeCursor =
               cursorOffset === 0 ? undefined : props.input().getTextRange(cursorOffset - 1, cursorOffset)
