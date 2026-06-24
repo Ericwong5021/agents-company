@@ -30,6 +30,10 @@ import * as Option from "effect/Option"
 import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { ActorRegistry } from "@/actor/registry"
 import { Memory } from "@/memory"
+import { CompanyAgent } from "@/company-agent"
+import { CompanyAgentID } from "@/company-agent/schema"
+import { Database, eq } from "@/storage"
+import { SessionTable } from "./session.sql"
 import { isRetryableTransientError } from "./retry"
 
 const log = Log.create({ service: "llm" })
@@ -218,7 +222,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/LL
 const live: Layer.Layer<
   Service,
   never,
-  Auth.Service | Config.Service | Provider.Service | Plugin.Service | Permission.Service | ActorRegistry.Service | Memory.Service
+  Auth.Service | Config.Service | Provider.Service | Plugin.Service | Permission.Service | ActorRegistry.Service | Memory.Service | CompanyAgent.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -229,6 +233,7 @@ const live: Layer.Layer<
     const perm = yield* Permission.Service
     const actorReg = yield* ActorRegistry.Service
     const memory = yield* Memory.Service
+    const companyAgentSvc = yield* CompanyAgent.Service
 
     const buildSystemArray = Effect.fn("LLM.buildSystemArray")(function* (input: {
       agent: Agent.Info
@@ -238,11 +243,44 @@ const live: Layer.Layer<
       sessionID: string
       agentID?: string
     }) {
+      // Resolve company agent system prompt for this session
+      let companyAgentPrompt: string | undefined
+      const sessionRow = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ company_agent_id: SessionTable.company_agent_id })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, SessionID.make(input.sessionID)))
+            .get(),
+        ),
+      )
+      const companyAgentId = sessionRow?.company_agent_id
+      if (companyAgentId && companyAgentId !== "assistant") {
+        const companyAgent = yield* companyAgentSvc.get(companyAgentId as CompanyAgentID)
+        if (companyAgent?.system_prompt) {
+          companyAgentPrompt = companyAgent.system_prompt
+          log.info("injecting company agent system prompt", {
+            session: input.sessionID,
+            agent_id: companyAgentId,
+            agent_name: companyAgent.name,
+          })
+        } else {
+          log.info("company agent has no system_prompt, using default", {
+            session: input.sessionID,
+            agent_id: companyAgentId,
+          })
+        }
+      }
+
       const system: string[] = []
       system.push(
         [
-          // use agent prompt otherwise provider prompt
-          ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
+          // Company agent prompt takes priority; falls back to built-in agent prompt or provider default
+          ...(companyAgentPrompt
+            ? [companyAgentPrompt]
+            : input.agent.prompt
+              ? [input.agent.prompt]
+              : SystemPrompt.provider(input.model)),
           // any custom prompt passed into this call
           ...input.system,
           // any custom prompt from last user message
