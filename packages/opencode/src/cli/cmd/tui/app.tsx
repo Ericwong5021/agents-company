@@ -39,12 +39,14 @@ import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogCompanyAgents } from "@tui/component/dialog-company-agents"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
+import { DialogGroupSessionCreate } from "@tui/component/dialog-group-session-create"
 import { DialogWorkflows } from "@tui/component/dialog-workflows"
 import { DialogConsoleOrg } from "@tui/component/dialog-console-org"
 import { KeybindProvider, useKeybind } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
+import { GroupSession } from "@tui/routes/group-session"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -350,6 +352,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (route.data.type === "plugin") {
       renderer.setTerminalTitle(`agent-company | ${route.data.id}`)
     }
+
+    if (route.data.type === "group-session") {
+      renderer.setTerminalTitle(`agent-company | group-session`)
+    }
   })
 
   const args = useArgs()
@@ -545,6 +551,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
       onSelect: () => {
         dialog.replace(() => <DialogCompanyAgents />)
+      },
+    },
+    {
+      title: "New Group Session",
+      value: "group-session.new",
+      category: "session",
+      slash: {
+        name: "group",
+        aliases: ["group-session"],
+      },
+      onSelect: () => {
+        dialog.replace(() => <DialogGroupSessionCreate />)
       },
     },
     {
@@ -1153,6 +1171,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           </Match>
           <Match when={route.data.type === "session"}>
             <Session />
+          </Match>
+          <Match when={route.data.type === "group-session"}>
+            <GroupSession />
           </Match>
         </Switch>
       </Show>

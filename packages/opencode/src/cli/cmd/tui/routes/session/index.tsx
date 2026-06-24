@@ -3,6 +3,7 @@ import {
   createContext,
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
   Match,
@@ -1000,7 +1001,7 @@ export function Session() {
       keybind: "session_parent",
       category: "session",
       hidden: true,
-      enabled: currentAgentID() !== "main" || !!session()?.parentID,
+      enabled: currentAgentID() !== "main" || !!session()?.parentID || !!(fullRoute.data.type === "session" && fullRoute.data.groupSessionID),
       onSelect: (dialog) => {
         if (fullRoute.data.type === "session" && currentAgentID() !== "main") {
           navigate({ ...fullRoute.data, agentID: undefined })
@@ -1013,6 +1014,13 @@ export function Session() {
             type: "session",
             sessionID: parentID,
           })
+          dialog.clear()
+          return
+        }
+        if (fullRoute.data.type === "session" && fullRoute.data.groupSessionID) {
+          navigate({ type: "group-session", groupSessionID: fullRoute.data.groupSessionID })
+          dialog.clear()
+          return
         }
         dialog.clear()
       },
@@ -1213,6 +1221,9 @@ export function Session() {
               </Show>
               <Show when={session()?.parentID || currentAgentID() !== "main"}>
                 <SubagentFooter />
+              </Show>
+              <Show when={fullRoute.data.type === "session" && fullRoute.data.groupSessionID}>
+                <GroupSessionMemberBar groupSessionID={fullRoute.data.groupSessionID} />
               </Show>
               <Show when={visible()}>
                 <TuiPluginRuntime.Slot
@@ -2637,6 +2648,61 @@ function Diagnostics(props: { diagnostics?: Record<string, Record<string, any>[]
         </For>
       </box>
     </Show>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Group Session Member Bar
+// Shows context when viewing a session that belongs to a group session.
+// ---------------------------------------------------------------------------
+
+interface GroupSessionInfo {
+  id: string
+  projectID: string
+  title: string
+  members: { sessionID: string; companyAgentID: string; position: number }[]
+  time: { created: number; updated: number; archived?: number }
+}
+
+function GroupSessionMemberBar(props: { groupSessionID: string }) {
+  const { theme } = useTheme()
+  const sdk = useSDK()
+  const keybind = useKeybind()
+  const fullRoute = useRoute()
+  const navigate = fullRoute.navigate
+  const [info] = createResource(() => props.groupSessionID, async (id: string) => {
+    const res = await sdk.fetch(`${sdk.url}/group-session/${id}`)
+    if (!res.ok) return undefined
+    return (await res.json()) as GroupSessionInfo
+  })
+
+  return (
+    <box flexShrink={0}>
+      <box
+        paddingTop={1}
+        paddingBottom={1}
+        paddingLeft={2}
+        paddingRight={1}
+        border={["left"]}
+        borderColor={theme.success}
+        flexShrink={0}
+        backgroundColor={theme.backgroundPanel}
+      >
+        <box flexDirection="row" justifyContent="space-between" gap={1}>
+          <text fg={theme.text}>
+            <span style={{ fg: theme.success }}>◈</span>{" "}
+            <b>{info()?.title ?? "Group Session"}</b>
+          </text>
+          <box
+            onMouseUp={() => navigate({ type: "group-session", groupSessionID: props.groupSessionID })}
+          >
+            <text fg={theme.text}>
+              Back to group <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
+            </text>
+          </box>
+        </box>
+      </box>
+    </box>
   )
 }
 
