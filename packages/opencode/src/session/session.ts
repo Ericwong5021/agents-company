@@ -23,6 +23,7 @@ import { Snapshot } from "@/snapshot"
 import { ProjectID } from "../project/schema"
 import { WorkspaceID } from "../control-plane/schema"
 import { SessionID, MessageID, PartID } from "./schema"
+import { CompanyAgentID } from "@/company-agent/schema"
 
 import type { Provider } from "@/provider"
 import { Permission } from "@/permission"
@@ -74,6 +75,7 @@ export function fromRow(row: SessionRow): Info {
     share,
     revert,
     permission: row.permission ?? undefined,
+    companyAgentID: (row.company_agent_id ?? undefined) as CompanyAgentID | undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -102,6 +104,7 @@ export function toRow(info: Info) {
     summary_diffs: info.summary?.diffs,
     revert: info.revert ?? null,
     permission: info.permission,
+    company_agent_id: info.companyAgentID ?? null,
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
@@ -151,6 +154,7 @@ export const Info = z
       archived: z.number().optional(),
     }),
     permission: Permission.Ruleset.zod.optional(),
+    companyAgentID: CompanyAgentID.zod.optional(),
     revert: z
       .object({
         messageID: MessageID.zod,
@@ -191,6 +195,7 @@ export const CreateInput = z
     title: z.string().optional(),
     permission: Info.shape.permission,
     workspaceID: WorkspaceID.zod.optional(),
+    companyAgentID: CompanyAgentID.zod.optional(),
   })
   .optional()
 export type CreateInput = z.output<typeof CreateInput>
@@ -438,6 +443,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       workspaceID?: WorkspaceID
       directory: string
       permission?: Permission.Ruleset
+      companyAgentID?: CompanyAgentID
     }) {
       const ctx = yield* InstanceState.context
       const result: Info = {
@@ -452,6 +458,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         contextWatermark: input.contextWatermark,
         title: input.title ?? createDefaultTitle(!!input.parentID),
         permission: input.permission,
+        companyAgentID: input.companyAgentID,
         time: {
           created: Date.now(),
           updated: Date.now(),
@@ -578,6 +585,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       title?: string
       permission?: Permission.Ruleset
       workspaceID?: WorkspaceID
+      companyAgentID?: CompanyAgentID
     }) {
       const directory = yield* InstanceState.directory
       const workspace = yield* InstanceState.workspaceID
@@ -589,6 +597,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         title: input?.title,
         permission: input?.permission,
         workspaceID: workspace,
+        companyAgentID: input?.companyAgentID,
       })
     })
 

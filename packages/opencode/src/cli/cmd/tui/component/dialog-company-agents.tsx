@@ -6,6 +6,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useToast } from "@tui/ui/toast"
 import { useTheme } from "@tui/context/theme"
 import { useKeybind } from "@tui/context/keybind"
+import { useLocal } from "@tui/context/local"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +56,7 @@ export function DialogCompanyAgents() {
   const dialog = useDialog()
   const sdk = useSDK()
   const toast = useToast()
+  const local = useLocal()
   const { theme } = useTheme()
   const keybind = useKeybind()
 
@@ -92,6 +94,7 @@ export function DialogCompanyAgents() {
   return (
     <DialogSelect
       title="Company Agents"
+      current={local.companyAgent.current()}
       options={options()}
       onSelect={(option) => {
         setConfirmDelete(undefined)
@@ -102,6 +105,11 @@ export function DialogCompanyAgents() {
             />
           ))
           return
+        }
+        const agent = agents()?.find((a: CompanyAgentInfo) => a.id === option.value)
+        if (agent) {
+          local.companyAgent.set(agent.id)
+          toast.show({ variant: "info", message: `Switched to ${agent.name}` })
         }
         dialog.clear()
       }}

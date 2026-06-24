@@ -1074,7 +1074,11 @@ export function Prompt(props: PromptProps) {
 
     let sessionID = props.sessionID
     if (sessionID == null) {
-      const res = await sdk.client.session.create({ workspace: props.workspaceID })
+      const companyAgentID = local.companyAgent.current()
+      const res = await sdk.client.session.create({
+        workspace: props.workspaceID,
+        companyAgentID: companyAgentID !== "assistant" ? companyAgentID : undefined,
+      })
 
       if (res.error) {
         console.log("Creating a session failed:", res.error)

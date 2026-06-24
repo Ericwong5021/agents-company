@@ -450,9 +450,22 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     })
 
+    const companyAgent = iife(() => {
+      const [id, setId] = createSignal<string>("assistant")
+      return {
+        current() {
+          return id()
+        },
+        set(agentId: string) {
+          setId(agentId)
+        },
+      }
+    })
+
     const result = {
       model,
       agent,
+      companyAgent,
       mcp,
       neverAsk,
     }
