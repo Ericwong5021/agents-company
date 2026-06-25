@@ -1,4 +1,5 @@
 import path from "path"
+import fs from "fs/promises"
 import { Context, Effect, Layer } from "effect"
 import { sql } from "drizzle-orm"
 import { Database } from "../storage"
@@ -174,6 +175,12 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       }
       yield* Effect.promise(() => resetWorkspace())
       yield* Effect.promise(() => clearConfigOrg().catch((err) => log.error("failed to clear config.org", { error: err })))
+      // Clear storage directory (session diffs, etc.)
+      yield* Effect.promise(() =>
+        fs.rm(path.join(Global.Path.data, "storage"), { recursive: true, force: true }).catch((err) =>
+          log.error("failed to clear storage directory", { error: err }),
+        ),
+      )
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
