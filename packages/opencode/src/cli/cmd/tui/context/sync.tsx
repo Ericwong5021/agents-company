@@ -755,6 +755,22 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           if (match.found) return store.session[match.index]
           return undefined
         },
+        // Re-fetch the authoritative session-status map from the server and
+        // reconcile it into the store. The TUI normally learns status flips
+        // (busy→idle) from session.status SSE events, but those are drop-oldest
+        // under streaming backpressure (event.ts AsyncQueue). When the idle
+        // event for a session is dropped, the store keeps showing "busy" and a
+        // group-session member card sticks on "working". This is the catch-up
+        // path callers (e.g. group_session.round_complete handler) use to force
+        // the store back in sync with the server's in-memory status.
+        async reconcileStatus() {
+          try {
+            const x = await sdk.client.session.status({ workspace })
+            setStore("session_status", reconcile(x.data ?? {}))
+          } catch {
+            // best-effort — a transient HTTP failure just leaves the store as-is
+          }
+        },
         async refresh() {
           const start = Date.now() - 30 * 24 * 60 * 60 * 1000
           const list = await sdk.client.session

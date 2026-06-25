@@ -451,6 +451,25 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           { concurrency: "unbounded", discard: true },
         )
 
+        // F-ghost-busy: re-assert every member's status to idle here. The
+        // runLoop sets "busy" at the top of each iteration (prompt.ts) and the
+        // Runner.onIdle (run-state.ts) is supposed to flip it back to idle when
+        // the fiber exits. But the idle transition reaches the TUI purely via
+        // the session.status SSE event, which is drop-oldest under streaming
+        // backpressure (event.ts AsyncQueue, capacity 10k of per-token deltas).
+        // If the idle event is dropped or arrives after the TUI stops watching,
+        // the member card stays "working" until the user interrupts. Re-setting
+        // idle here — AFTER all members joined but BEFORE RoundComplete — emits
+        // a fresh, authoritative idle event per member so the TUI is guaranteed
+        // to see a clean idle state when the round ends. status.set is a no-op
+        // (publishes an idle event, deletes the map entry) when already idle,
+        // so this is safe even when onIdle already fired.
+        yield* Effect.forEach(
+          info.members,
+          (m) => statusSvc.set(m.sessionID as SessionID, { type: "idle" }),
+          { concurrency: "unbounded", discard: true },
+        )
+
         // All members finished — update group updated_at and emit round complete
         const completedAt = Date.now()
         yield* Effect.sync(() =>
