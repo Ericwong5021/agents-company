@@ -182,7 +182,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
       }
     >
       <Show when={error()}>
-        <box flexDirection="column" gap={1}>
+        <box flexDirection="column" alignItems="center" gap={1}>
           <text fg={theme.error}>⚠ {error()}</text>
           <box backgroundColor={theme.primary} paddingLeft={3} paddingRight={3} onMouseUp={build}>
             <text fg={theme.background}>{t("onboarding.provider.retry")}</text>
@@ -192,7 +192,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
 
       {/* Searching animation: spinner + role label */}
       <Show when={searching()}>
-        <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
+        <box flexDirection="row" justifyContent="center" alignItems="center" gap={1}>
           <Spinner color={theme.primary} />
           <text fg={theme.textMuted}>
             {t("onboarding.founding_team.matching").replace("{{role}}", searching()!)}

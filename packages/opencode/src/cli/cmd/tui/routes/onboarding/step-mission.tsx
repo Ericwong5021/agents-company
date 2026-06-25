@@ -160,9 +160,8 @@ export function StepMission(props: StepMissionProps) {
       stepIndex={props.stepIndex}
       stepCount={props.stepCount}
       title={t("onboarding.mission.title")}
-      subtitle={t("onboarding.mission.subtitle")
-        .replace("{{name}}", props.userName)
-        .replace("{{assistant}}", props.assistantName)}
+      speaker={{ name: props.assistantName, icon: "🌟" }}
+      speech={t("onboarding.mission.intro").replace("{{name}}", props.userName)}
       footer={
         <box flexDirection="column" gap={1}>
           <box flexDirection="row" alignItems="center" gap={1}>
