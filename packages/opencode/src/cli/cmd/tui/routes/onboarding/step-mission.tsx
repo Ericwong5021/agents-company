@@ -20,10 +20,10 @@ interface StepMissionProps {
 }
 
 // Short conversation to understand what business the founder wants to build.
-// The assistant generates a personalised opening line (shown in the speech
-// bubble), the founder replies — 1-2 turns is enough, and the founder can
-// skip at any time. The transcript filters out the hidden kickstart and its
-// reply so there's no double display.
+// The assistant generates a personalised opening via a hidden kickstart; that
+// reply appears as the first message in the chat transcript (same style as all
+// subsequent turns — no separate speech bubble). The hidden kickstart user
+// message is filtered out. The founder can skip at any time.
 export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
@@ -35,10 +35,8 @@ export function StepMission(props: StepMissionProps) {
   const [ready, setReady] = createSignal(false)
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
-  const [openingLine, setOpeningLine] = createSignal<string | null>(null)
-  // IDs of the hidden kickstart exchange — filtered from the visible transcript.
+  // ID of the hidden kickstart user message — filtered from the visible transcript.
   const [kickoffUserID, setKickoffUserID] = createSignal<string | null>(null)
-  const [kickoffAssistantID, setKickoffAssistantID] = createSignal<string | null>(null)
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
@@ -73,9 +71,7 @@ export function StepMission(props: StepMissionProps) {
           system_prompt: buildGuidancePrompt({
             userName: props.userName,
             assistantName: props.assistantName,
-            scopeLabels: props.scopes
-              .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
-              .join("、"),
+            scopeLabels,
           }),
         }),
       })
@@ -113,14 +109,15 @@ export function StepMission(props: StepMissionProps) {
     }
   }
 
-  // Visible transcript: real conversation only (kickstart exchange filtered out).
+  // Visible transcript: the hidden kickstart user message is filtered out, but
+  // the assistant's opening reply stays — it appears as the first chat message
+  // in the same style as all subsequent turns.
   const transcript = createMemo(() => {
     const sid = sessionID()
     if (!sid) return []
     const buckets = sync.data.message[sid]
     if (!buckets) return []
     const koUID = kickoffUserID()
-    const koAID = kickoffAssistantID()
     return Object.values(buckets)
       .flat()
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -133,12 +130,11 @@ export function StepMission(props: StepMissionProps) {
           .map((p) => ("text" in p ? (p.text ?? "") : ""))
           .join(""),
       }))
-      .filter((m) => m.content.trim().length > 0 && m.id !== koUID && m.id !== koAID)
+      .filter((m) => m.content.trim().length > 0 && m.id !== koUID)
   })
 
-  // Capture the kickstart exchange: first user message → first completed
-  // assistant reply. Once both land, show the opening line in the speech
-  // bubble and mark the step as ready.
+  // Once the opening line lands (first completed assistant message), mark the
+  // step as ready and capture the kickstart user message id for filtering.
   createMemo(() => {
     const sid = sessionID()
     if (!sid || ready()) return
@@ -157,8 +153,6 @@ export function StepMission(props: StepMissionProps) {
         .join("")
         .trim()
       if (text) {
-        setKickoffAssistantID(assistantReply.id)
-        setOpeningLine(text)
         setSubmitting(false)
         setReady(true)
         focusInput()
@@ -209,8 +203,6 @@ export function StepMission(props: StepMissionProps) {
           ? t("onboarding.mission.generating").replace("{{assistant}}", props.assistantName)
           : undefined
       }
-      speaker={{ name: props.assistantName, icon: "🌟" }}
-      speech={openingLine() ?? undefined}
       footer={
         <box flexDirection="column" gap={1}>
           <box flexDirection="row" alignItems="center" gap={1}>
@@ -256,14 +248,14 @@ export function StepMission(props: StepMissionProps) {
         <text fg={theme.error}>⚠ {error()}</text>
       </Show>
 
-      {/* Loading spinner while generating opening line */}
+      {/* Loading while generating opening line */}
       <Show when={!ready() && !error()}>
         <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
           <Spinner color={theme.primary} />
         </box>
       </Show>
 
-      {/* Transcript — real conversation only */}
+      {/* Chat transcript — all messages in the same style */}
       <Show when={ready() && transcript().length > 0}>
         <box flexDirection="column" gap={1}>
           <For each={transcript().slice(-6)}>
