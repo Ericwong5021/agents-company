@@ -424,6 +424,45 @@ const InfoSchema = Schema.Struct({
       }),
     }),
   ).annotate({ description: "Dynamic workflow runtime settings." }),
+  org: Schema.optional(
+    Schema.Struct({
+      departments: Schema.optional(
+        Schema.Record(
+          Schema.String,
+          Schema.Struct({
+            clearance: Schema.optional(
+              Schema.Literals(["public", "internal", "confidential", "restricted"]),
+            ).annotate({ description: "Default clearance level for this department" }),
+            roles: Schema.optional(
+              Schema.Record(
+                Schema.String,
+                Schema.Struct({
+                  clearance: Schema.optional(
+                    Schema.Literals(["public", "internal", "confidential", "restricted"]),
+                  ).annotate({ description: "Clearance level for this role" }),
+                  department: Schema.optional(Schema.String).annotate({
+                    description: "Department this role belongs to (redundant if keyed under department)",
+                  }),
+                }),
+              ),
+            ),
+          }),
+        ),
+      ).annotate({ description: "Departments with their roles and clearance levels" }),
+      agents: Schema.optional(
+        Schema.Record(
+          Schema.String,
+          Schema.Struct({
+            department: Schema.String.annotate({ description: "Department the agent belongs to" }),
+            role: Schema.String.annotate({ description: "Role of the agent within the department" }),
+          }),
+        ),
+      ).annotate({ description: "Agent-to-department/role assignments" }),
+    }),
+  ).annotate({
+    description:
+      "Organization structure: departments, roles, clearance levels, and agent assignments. Used by the workspace clearance system to control document access.",
+  }),
 })
 
 // Schema.Struct produces readonly types by default, but the service code

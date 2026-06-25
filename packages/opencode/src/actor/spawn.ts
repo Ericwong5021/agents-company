@@ -19,6 +19,8 @@ import { Inbox } from "@/inbox"
 import { renderActorNotification } from "@/inbox/render"
 import { Plugin, HookEvent } from "@/plugin"
 import { parseReturnHeader, type ReturnStatus } from "./return-header"
+import { Thread } from "@/thread/thread"
+import type { ThreadID } from "@/thread/schema"
 import { Log } from "@/util"
 
 const log = Log.create({ service: "actor.spawn" })
@@ -193,6 +195,7 @@ export const layer = Layer.effect(
     const plugin = yield* Plugin.Service
     const bus = yield* Bus.Service
     const taskRegistry = yield* TaskRegistry.Service
+    const threadService = yield* Thread.Service
     const scope = yield* Scope.Scope
 
     // ForkContext snapshot per actor, captured at spawn for fork agents
@@ -594,10 +597,17 @@ export const layer = Layer.effect(
       })
 
     const spawnPeer = Effect.fn("Actor.spawnPeer")(function* (input: SpawnInput) {
+      // Create or attach to a thread for the peer agent
+      const peerThread = yield* threadService.create({
+        agentID: input.agentType,
+        kind: "reactive",
+        description: `${input.agentType}: ${input.task.slice(0, 40)}`,
+      })
       const child = yield* session.create({
         parentID: input.sessionID,
         contextFrom: input.context === "full" ? input.sessionID : undefined,
         title: `${input.agentType}: ${input.task.slice(0, 40)}`,
+        threadID: peerThread.id,
       })
       yield* actorReg.register({
         sessionID: child.id,
@@ -635,6 +645,10 @@ export const layer = Layer.effect(
 
     const spawnSubagent = Effect.fn("Actor.spawnSubagent")(function* (input: SpawnInput) {
       const actorID = yield* actorReg.allocateActorID(input.sessionID, input.agentType)
+
+      // Inherit parent's thread_id for subagents
+      const parentSession = yield* session.get(input.sessionID)
+      const threadID = parentSession.threadID
 
       const watermark = input.context === "full" ? yield* session.lastMainMessageID(input.sessionID) : undefined
 
@@ -744,6 +758,7 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(Plugin.defaultLayer),
     Layer.provide(Bus.layer),
     Layer.provide(TaskRegistry.defaultLayer),
+    Layer.provide(Thread.defaultLayer),
   ),
 )
 

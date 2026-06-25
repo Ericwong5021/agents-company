@@ -29,6 +29,9 @@ import type { Provider } from "@/provider"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
 import { ActorRegistry } from "@/actor/registry"
+import { ThreadTable } from "@/thread/thread.sql"
+import type { ThreadID } from "@/thread/schema"
+import type { Info as ThreadInfo } from "@/thread/thread"
 import { Effect, Layer, Option, Context } from "effect"
 
 const log = Log.create({ service: "session" })
@@ -76,6 +79,7 @@ export function fromRow(row: SessionRow): Info {
     revert,
     permission: row.permission ?? undefined,
     companyAgentID: (row.company_agent_id ?? undefined) as CompanyAgentID | undefined,
+    threadID: row.thread_id ?? undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -105,6 +109,7 @@ export function toRow(info: Info) {
     revert: info.revert ?? null,
     permission: info.permission,
     company_agent_id: info.companyAgentID ?? ("assistant" as CompanyAgentID),
+    thread_id: info.threadID,
     time_created: info.time.created,
     time_updated: info.time.updated,
     time_compacting: info.time.compacting,
@@ -155,6 +160,7 @@ export const Info = z
     }),
     permission: Permission.Ruleset.zod.optional(),
     companyAgentID: CompanyAgentID.zod.optional(),
+    threadID: z.string().optional(),
     revert: z
       .object({
         messageID: MessageID.zod,
@@ -196,6 +202,7 @@ export const CreateInput = z
     permission: Info.shape.permission,
     workspaceID: WorkspaceID.zod.optional(),
     companyAgentID: CompanyAgentID.zod.optional(),
+    threadID: z.string().optional(),
   })
   .optional()
 export type CreateInput = z.output<typeof CreateInput>
@@ -361,8 +368,10 @@ export interface Interface {
     permission?: Permission.Ruleset
     workspaceID?: WorkspaceID
     companyAgentID?: CompanyAgentID
+    threadID?: string
   }) => Effect.Effect<Info>
   readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info>
+  readonly getThread: (sessionID: SessionID) => Effect.Effect<ThreadInfo | undefined>
   readonly touch: (sessionID: SessionID) => Effect.Effect<void>
   readonly get: (id: SessionID) => Effect.Effect<Info>
   readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void>
@@ -445,7 +454,12 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       directory: string
       permission?: Permission.Ruleset
       companyAgentID?: CompanyAgentID
+      threadID?: string
     }) {
+      if (input.threadID) {
+        const threadRow = yield* db((d) => d.select().from(ThreadTable).where(eq(ThreadTable.id, input.threadID as ThreadID)).get())
+        if (!threadRow) yield* Effect.die(new Error(`Session.createNext: thread not found id="${input.threadID}"`))
+      }
       const ctx = yield* InstanceState.context
       const result: Info = {
         id: SessionID.descending(input.id),
@@ -460,6 +474,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         title: input.title ?? createDefaultTitle(!!input.parentID),
         permission: input.permission,
         companyAgentID: input.companyAgentID,
+        threadID: input.threadID,
         time: {
           created: Date.now(),
           updated: Date.now(),
@@ -587,6 +602,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       permission?: Permission.Ruleset
       workspaceID?: WorkspaceID
       companyAgentID?: CompanyAgentID
+      threadID?: string
     }) {
       const directory = yield* InstanceState.directory
       const workspace = yield* InstanceState.workspaceID
@@ -599,6 +615,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         permission: input?.permission,
         workspaceID: workspace,
         companyAgentID: input?.companyAgentID,
+        threadID: input?.threadID,
       })
     })
 
@@ -767,11 +784,30 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       return row?.id
     })
 
+    const getThread = Effect.fn("Session.getThread")(function* (sessionID: SessionID) {
+      const session = yield* get(sessionID)
+      if (!session.threadID) return undefined
+      const row = yield* db((d) => d.select().from(ThreadTable).where(eq(ThreadTable.id, session.threadID as ThreadID)).get())
+      if (!row) return undefined
+      return {
+        id: row.id,
+        agentID: row.agent_id,
+        kind: row.kind,
+        status: row.status,
+        sessionID: row.session_id ?? undefined,
+        description: row.description ?? undefined,
+        budgetTokens: row.budget_tokens ?? undefined,
+        spentTokens: row.spent_tokens ?? undefined,
+        time: { started: row.time_started, completed: row.time_completed ?? undefined },
+      } as unknown as ThreadInfo
+    })
+
     return Service.of({
       create,
       fork,
       touch,
       get,
+      getThread,
       setTitle,
       setArchived,
       setPermission,

@@ -4,6 +4,7 @@ import os from "os"
 import { Filesystem } from "../util"
 import { Flock } from "@agents-company/shared/util/flock"
 import { resolveAgentCompanyHome } from "@agents-company/shared/global"
+import { initWorkspace } from "../workspace/workspace"
 
 const { data, cache, config, state } = resolveAgentCompanyHome()
 
@@ -30,6 +31,7 @@ await Promise.all([
   fs.mkdir(Path.state, { recursive: true }),
   fs.mkdir(Path.log, { recursive: true }),
   fs.mkdir(Path.bin, { recursive: true }),
+  initWorkspace(data),
 ])
 
 const CACHE_VERSION = "21"

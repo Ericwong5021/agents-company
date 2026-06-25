@@ -62,6 +62,10 @@ import { shellWrap } from "./shell-wrap"
 import * as BashInteractive from "./bash-interactive"
 import { resolveInvocationStyle } from "./invocation-style"
 import { BuiltinWorkflow } from "@/workflow/builtin"
+import { MessageAgentTool } from "./message-agent"
+import { ReadDocTool } from "./read-doc"
+import { AgentMessage } from "@/agent-message/agent-message"
+import { CompanyAgent } from "@/company-agent"
 
 const log = Log.create({ service: "tool.registry" })
 
@@ -143,6 +147,8 @@ export const layer = Layer.effect(
     const memorytool = yield* MemoryTool
     const tasktool = yield* TaskTool
     const workflowtool = yield* WorkflowTool
+    const messageagenttool = yield* MessageAgentTool
+    const readdoctool = yield* ReadDocTool
     const agent = yield* Agent.Service
 
     const state = yield* InstanceState.make<State>(
@@ -230,6 +236,8 @@ export const layer = Layer.effect(
           history: Tool.init(historytool),
           task: Tool.init(tasktool),
           workflow: Tool.init(workflowtool),
+          messageagent: Tool.init(messageagenttool),
+          readdoc: Tool.init(readdoctool),
         })
 
         return {
@@ -258,6 +266,8 @@ export const layer = Layer.effect(
             tool.history,
             tool.task,
             ...(Flag.AGENTCOMPANY_EXPERIMENTAL_WORKFLOW_TOOL ? [tool.workflow] : []),
+            tool.messageagent,
+            tool.readdoc,
           ],
           actor: tool.actor,
           read: tool.read,
@@ -423,6 +433,8 @@ export const defaultLayer = Layer.suspend(() =>
         SessionCheckpoint.defaultLayer,
         TaskRegistry.defaultLayer,
         Auth.defaultLayer,
+        AgentMessage.defaultLayer,
+        CompanyAgent.defaultLayer,
       ),
     ),
   ),

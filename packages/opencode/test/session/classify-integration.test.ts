@@ -46,19 +46,19 @@ afterEach(async () => {
 
 function run<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Service>) {
   return Effect.runPromise(
-    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer))),
+    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer) as any)) as any,
   )
 }
 
 // Additionally exposes ActorRegistry.Service. ActorRegistry.defaultLayer is the
 // same singleton SessionPrompt.defaultLayer provides internally, so Effect's
 // layer memoization hands back the exact instance runLoop reads.
-function runFork<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Service | ActorRegistry.Service>) {
+function runFork(fx: Effect.Effect<any, any, any>) {
   return Effect.runPromise(
     fx.pipe(
       Effect.scoped,
-      Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer, ActorRegistry.defaultLayer)),
-    ),
+      Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer, ActorRegistry.defaultLayer) as any),
+    ) as any,
   )
 }
 

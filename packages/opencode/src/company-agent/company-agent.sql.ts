@@ -5,6 +5,8 @@ export const CompanyAgentTable = sqliteTable("company_agent", {
   id: text().primaryKey(),
   name: text().notNull(),
   description: text(),
+  system_prompt: text(),
+  model: text(),
   color: text(),
   icon: text(),
   ...Timestamps,

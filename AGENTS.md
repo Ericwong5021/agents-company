@@ -1,3 +1,5 @@
+- 使用中文跟用户对话。
+- 回答前先问用户问题，一次只问一个。根据回答继续追问，直到有 95% 信心理解真实需求和目标后，再给出方案。
 - Use AgentCompany Compose skills when available, otherwise use superpowers skill if installed.
 - To regenerate the JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.

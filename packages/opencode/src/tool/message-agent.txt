@@ -1,0 +1,7 @@
+Send messages to other agents in the company. Supports three operations:
+
+- **fyi**: Send an informational message to another agent. No response expected.
+- **delegate**: Delegate a task to another agent with a request message. Creates a request that expects a reply.
+- **reply**: Reply to a request message you received. Use the original message ID from the request.
+
+Use this tool for inter-agent communication, task delegation, and collaboration.

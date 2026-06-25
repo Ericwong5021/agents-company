@@ -24,12 +24,45 @@ export function StepProvider(props: StepProviderProps) {
   const [attemptCount, setAttemptCount] = createSignal(0)
 
   onMount(() => {
-    // Small delay to let the UI settle before showing the dialog
-    setTimeout(() => {
+    // Check if there's already a connected provider with models
+    const connectedProviders = sync.data.provider_next.connected
+    const hasConnectedModels = connectedProviders.some((providerID) => {
+      const provider = sync.data.provider.find((p) => p.id === providerID)
+      return provider && Object.keys(provider.models).length > 0
+    })
+
+    // If there's already a connected provider with models, show model selection directly
+    if (hasConnectedModels) {
       setStarted(true)
-      showProviderDialog()
-    }, 300)
+      showModelDialog()
+    } else {
+      // Small delay to let the UI settle before showing the dialog
+      setTimeout(() => {
+        setStarted(true)
+        showProviderDialog()
+      }, 300)
+    }
   })
+
+  function showModelDialog() {
+    setAttemptCount((c) => c + 1)
+    setDismissed(false)
+
+    // Show model dialog directly with connected providers
+    dialog.replace(
+      () => <DialogModel />,
+      () => {
+        // Dialog was dismissed (Esc) - check if a model was already selected
+        const current = local.model.current()
+        if (!current) {
+          // User dismissed without selecting - mark as dismissed
+          setDismissed(true)
+        } else {
+          checkCompletion()
+        }
+      },
+    )
+  }
 
   function showProviderDialog() {
     setAttemptCount((c) => c + 1)

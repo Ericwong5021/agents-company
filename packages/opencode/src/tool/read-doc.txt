@@ -1,0 +1,7 @@
+Read a document from the company workspace. Access is controlled by the document's front-matter metadata (scope and classification).
+
+Documents have YAML front-matter with:
+- **scope**: Who can see it (public, org, dept:<name>, agent:<id>)
+- **classification**: Security level (public, internal, confidential, restricted)
+
+Your access is determined by your clearance level in the organization structure.

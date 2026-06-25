@@ -70,6 +70,8 @@ import { prefixCaptureRef } from "./prefix-capture-ref"
 import { spawnRef } from "@/actor/spawn-ref"
 import { Inbox } from "@/inbox"
 import { sessionPromptRef } from "@/inbox/inbox-ref"
+import { AgentMessage } from "@/agent-message/agent-message"
+import { drainUnread } from "@/agent-message/primitives"
 import { Tool } from "@/tool"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
@@ -80,6 +82,8 @@ import { AppFileSystem } from "@agents-company/shared/filesystem"
 import { Truncate } from "@/tool"
 import { decodeDataUrl } from "@/util/data-url"
 import { Process } from "@/util"
+import { Thread } from "@/thread/thread"
+import type { ThreadID } from "@/thread/schema"
 import { Cause, Effect, Exit, Layer, Option, Scope, Context } from "effect"
 import { EffectLogger } from "@/effect"
 import { InstanceState } from "@/effect"
@@ -239,6 +243,8 @@ export const layer = Layer.effect(
     const llm = yield* LLM.Service
     const actorRegistry = yield* ActorRegistry.Service
     const inbox = yield* Inbox.Service
+    const agentMessageSvc = yield* AgentMessage.Service
+    const threadService = yield* Thread.Service
 
     // Track sessions that have already shown the "loaded instructions" toast so we
     // surface it once per primary session rather than on every run-loop turn.
@@ -2327,11 +2333,37 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         })
 
         while (true) {
+          // Thread budget check: if the session has a thread with a budget,
+          // check if it's exceeded before starting a new turn
+          if (session.threadID) {
+            const threadInfo = yield* threadService.get(session.threadID as ThreadID)
+            if (threadInfo?.budgetTokens !== undefined && (threadInfo.spentTokens ?? 0) >= threadInfo.budgetTokens) {
+              yield* slog.warn("thread budget exceeded", {
+                sessionID,
+                threadID: session.threadID,
+                budget: threadInfo.budgetTokens,
+                spent: threadInfo.spentTokens ?? 0,
+              })
+              yield* bus.publish(Session.Event.Error, {
+                sessionID,
+                error: new NamedError.Unknown({
+                  message: `Thread budget exceeded: spent ${threadInfo.spentTokens ?? 0} of ${threadInfo.budgetTokens} tokens`,
+                }).toObject(),
+              })
+              break
+            }
+          }
+
           // F55: only main agent sets session status to busy; subagent runners
           // must not touch session-level status (Runner.onBusy is Effect.void
           // for non-main actors per F47).
           if (!agentID || agentID === "main") yield* status.set(sessionID, { type: "busy" })
           yield* inbox.drain(sessionID, agentID ?? "main").pipe(Effect.ignore)
+
+          // Drain unread agent messages into context
+          const unreadAgentMessages = yield* drainUnread(agentID ?? "main", agentMessageSvc).pipe(
+            Effect.catch(() => Effect.succeed("")),
+          )
           yield* slog.info("loop", { step })
 
           // F37: filter by agentID so subagent slices stay isolated from the
@@ -2394,6 +2426,21 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   "Don't ask the user about something memory may already record.",
                   "</system-reminder>",
                 ].join("\n"),
+              })
+            }
+          }
+
+          // Inject unread agent messages into the last user message
+          if (unreadAgentMessages) {
+            const lastUserMsgForAgentMsg = msgs.findLast((m) => m.info.role === "user")
+            if (lastUserMsgForAgentMsg) {
+              lastUserMsgForAgentMsg.parts.push({
+                id: PartID.ascending(),
+                messageID: lastUserMsgForAgentMsg.info.id,
+                sessionID,
+                type: "text" as const,
+                synthetic: true,
+                text: unreadAgentMessages,
               })
             }
           }
@@ -3268,6 +3315,23 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             return "continue" as const
           }).pipe(Effect.ensuring(instruction.clear(handle.message.id)))
 
+          // Update thread's spent_tokens after each turn
+          if (session.threadID && handle.message.tokens) {
+            const totalTokens =
+              (handle.message.tokens.input ?? 0) +
+              (handle.message.tokens.output ?? 0) +
+              (handle.message.tokens.reasoning ?? 0)
+            if (totalTokens > 0) {
+              yield* threadService
+                .addTokens(session.threadID as ThreadID, totalTokens)
+                .pipe(
+                  Effect.catch((err) =>
+                    Effect.sync(() => log.warn("failed to update thread tokens", { error: String(err) })),
+                  ),
+                )
+            }
+          }
+
           // --- Text Loop Detection (cross-step) ---
           const completedParts = MessageV2.parts(handle.message.id)
           const stepText = completedParts
@@ -3592,9 +3656,11 @@ export const defaultLayer = Layer.suspend(() =>
         Bus.layer,
         CrossSpawnSpawner.defaultLayer,
         Inbox.defaultLayer,
+        AgentMessage.defaultLayer,
         Goal.defaultLayer,
         TaskGateState.defaultLayer,
         TaskRegistry.defaultLayer,
+        Thread.defaultLayer,
       ),
     ),
   ),

@@ -3,6 +3,8 @@ import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useLocal } from "@tui/context/local"
+import { useKeybind } from "@tui/context/keybind"
+import { useExit } from "@tui/context/exit"
 import { Spinner } from "@tui/component/spinner"
 import { BusinessScopeCards } from "./business-scope-cards"
 import { TextAttributes, TextareaRenderable } from "@opentui/core"
@@ -40,6 +42,8 @@ export function StepInterview(props: StepInterviewProps) {
   const sync = useSync()
   const local = useLocal()
   const t = useLanguage().t
+  const keybind = useKeybind()
+  const exit = useExit()
 
   const [messages, setMessages] = createSignal<ChatMessage[]>([])
   const [input, setInput] = createSignal("")
@@ -53,6 +57,11 @@ export function StepInterview(props: StepInterviewProps) {
   const [error, setError] = createSignal<InterviewError | null>(null)
   const [validationErrors, setValidationErrors] = createSignal<string[]>([])
 
+  useKeyboard((evt) => {
+    if (keybind.match("app_exit", evt)) {
+      void exit()
+    }
+  })
 
   onMount(async () => {
     await initializeInterview()
@@ -75,11 +84,11 @@ export function StepInterview(props: StepInterviewProps) {
       }
 
       // Then create a session with it
-      const sessionCreated = await createSession()
-      if (!sessionCreated) {
+      const sessionResult = await createSession()
+      if (!sessionResult.success) {
         setError({
           type: "session",
-          message: "Failed to create session. Please try again.",
+          message: sessionResult.error || "Failed to create session. Please try again.",
           retryable: true,
         })
         return
@@ -118,26 +127,36 @@ export function StepInterview(props: StepInterviewProps) {
         }),
       })
 
-      return res.ok
-    } catch {
+      if (!res.ok) {
+        console.error("Failed to create onboarding agent:", res.status, await res.text())
+        return false
+      }
+      return true
+    } catch (err) {
+      console.error("Failed to create onboarding agent:", err)
       return false
     }
   }
 
-  async function createSession(): Promise<boolean> {
+  async function createSession(): Promise<{ success: boolean; error?: string }> {
     try {
+      console.log("Creating session with companyAgentID: onboarding-assistant")
       const res = await sdk.client.session.create({
         companyAgentID: "onboarding-assistant",
       })
+      console.log("Session create response:", JSON.stringify(res, null, 2))
       if (res.data) {
         setSessionID(res.data.id)
         // Send initial greeting to trigger the assistant
         await sendMessage(res.data.id, "Hello, I'm ready to start the onboarding process.")
-        return true
+        return { success: true }
       }
-      return false
-    } catch {
-      return false
+      console.error("Failed to create session: no data returned, response:", res)
+      return { success: false, error: `No data returned from session.create. Response: ${JSON.stringify(res)}` }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      console.error("Failed to create session:", err)
+      return { success: false, error: errorMsg }
     }
   }
 

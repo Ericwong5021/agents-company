@@ -65,6 +65,46 @@ export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
 }
 
 /**
+ * Agent instruct file at `<data>/agents/<aid>/INSTRUCT.md`.
+ * Evolvable instructions: how to judge, communicate, when to escalate.
+ */
+export function agentInstructPath(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "INSTRUCT.md")
+}
+
+/**
+ * Agent relationships file at `<data>/agents/<aid>/relationships.md`.
+ * Colleague relationships: collaboration preferences, communication style, trust level.
+ */
+export function agentRelationshipsPath(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "relationships.md")
+}
+
+/**
+ * Agent kanban file at `<data>/agents/<aid>/kanban.md`.
+ * Personal task view: current projects, todos, progress.
+ */
+export function agentKanbanPath(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "kanban.md")
+}
+
+/**
+ * Agent skills directory at `<data>/agents/<aid>/skills/`.
+ * Private skills: reusable capabilities crystallized from experience.
+ */
+export function agentSkillsDir(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "skills")
+}
+
+/**
+ * Agent memory directory at `<data>/agents/<aid>/memory/`.
+ * Houses per-agent memory files indexed by the FTS5 search system.
+ */
+export function agentMemoryDir(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "memory")
+}
+
+/**
  * Per-company-agent × per-project memory at
  * `<data>/agents/<aid>/projects/<pid>/MEMORY.md`.
  * Captures knowledge this agent accumulated specifically within one project.

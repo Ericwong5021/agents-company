@@ -48,6 +48,7 @@ import { Worktree } from "@/worktree"
 import { Pty } from "@/pty"
 import { Installation } from "@/installation"
 import { ShareNext } from "@/share"
+import { AgentMessage } from "@/agent-message/agent-message"
 import { SessionShare } from "@/share"
 import { Npm } from "@/npm"
 import { ActorRegistry } from "@/actor/registry"
@@ -59,6 +60,7 @@ import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { GroupSession } from "@/group-session"
+import { Thread } from "@/thread/thread"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -123,10 +125,12 @@ export const AppLayer = Layer.suspend(() =>
     History.defaultLayer,
     CompanyAgent.defaultLayer,
     GroupSession.defaultLayer,
+    Thread.defaultLayer,
+    AgentMessage.defaultLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 
-const rt = ManagedRuntime.make(AppLayer, { memoMap })
+const rt = ManagedRuntime.make(AppLayer as Layer.Layer<any, never, never>, { memoMap })
 type Runtime = Pick<typeof rt, "runSync" | "runPromise" | "runPromiseExit" | "runFork" | "runCallback" | "dispose">
 const wrap = (effect: Parameters<typeof rt.runSync>[0]) => attach(effect as never) as never
 

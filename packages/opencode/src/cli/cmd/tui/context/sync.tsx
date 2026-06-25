@@ -18,6 +18,7 @@ import type {
   ProviderListResponse,
   ProviderAuthMethod,
   VcsInfo,
+  ThreadInfo,
 } from "@agents-company/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useProject } from "@tui/context/project"
@@ -185,6 +186,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       workflow: {
         [runID: string]: WorkflowRun
       }
+      threads: {
+        [agentID: string]: ThreadInfo[]
+      }
+      agentStatus: {
+        [agentID: string]: "idle" | "busy" | "focused"
+      }
     }>({
       provider_next: {
         all: [],
@@ -218,11 +225,23 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       vcs: undefined,
       actor: {},
       workflow: {},
+      threads: {},
+      agentStatus: {},
     })
 
     const event = useEvent()
     const project = useProject()
     const sdk = useSDK()
+
+    function updateAgentStatus(agentID: string) {
+      const threads = store.threads[agentID]
+      if (!threads || threads.length === 0) {
+        setStore("agentStatus", agentID, "idle")
+        return
+      }
+      const hasPrimary = threads.some((t) => t.kind === "primary")
+      setStore("agentStatus", agentID, hasPrimary ? "focused" : "busy")
+    }
 
     const fullSyncedSessions = new Set<string>()
     let syncedWorkspace = project.workspace.current()
@@ -623,11 +642,92 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           setStore("workflow", event.properties.runID, "status", event.properties.status)
           break
         }
+
+        case "thread.created": {
+          const thread = event.properties
+          const list = store.threads[thread.agentID]
+          if (!list) {
+            setStore("threads", thread.agentID, [thread])
+            break
+          }
+          const exists = list.findIndex((t) => t.id === thread.id)
+          if (exists >= 0) break
+          setStore(
+            "threads",
+            thread.agentID,
+            produce((draft) => {
+              draft.push(thread)
+            }),
+          )
+          updateAgentStatus(thread.agentID)
+          break
+        }
+
+        case "thread.updated": {
+          const thread = event.properties
+          const list = store.threads[thread.agentID]
+          if (!list) {
+            setStore("threads", thread.agentID, [thread])
+            updateAgentStatus(thread.agentID)
+            break
+          }
+          const idx = list.findIndex((t) => t.id === thread.id)
+          if (idx < 0) {
+            setStore(
+              "threads",
+              thread.agentID,
+              produce((draft) => {
+                draft.push(thread)
+              }),
+            )
+          } else {
+            setStore("threads", thread.agentID, idx, reconcile(thread))
+          }
+          updateAgentStatus(thread.agentID)
+          break
+        }
+
+        case "thread.completed": {
+          const thread = event.properties
+          const list = store.threads[thread.agentID]
+          if (!list) break
+          const idx = list.findIndex((t) => t.id === thread.id)
+          if (idx < 0) break
+          setStore(
+            "threads",
+            thread.agentID,
+            produce((draft) => {
+              draft.splice(idx, 1)
+            }),
+          )
+          updateAgentStatus(thread.agentID)
+          break
+        }
       }
     })
 
     const exit = useExit()
     const args = useArgs()
+
+    async function fetchActiveThreads() {
+      const workspace = project.workspace.current()
+      const url = new URL("/thread", sdk.url)
+      if (workspace) url.searchParams.set("workspace", workspace)
+      const res = await sdk.fetch(url.toString())
+      if (!res.ok) return
+      const threads = (await res.json()) as ThreadInfo[]
+      batch(() => {
+        const byAgent: Record<string, ThreadInfo[]> = {}
+        for (const thread of threads) {
+          if (!byAgent[thread.agentID]) byAgent[thread.agentID] = []
+          byAgent[thread.agentID].push(thread)
+        }
+        for (const [agentID, agentThreads] of Object.entries(byAgent)) {
+          setStore("threads", agentID, reconcile(agentThreads))
+          updateAgentStatus(agentID)
+        }
+      })
+    }
 
     async function bootstrap(input: { fatal?: boolean } = {}) {
       const fatal = input.fatal ?? true
@@ -714,6 +814,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.provider.auth({ workspace }).then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
             sdk.client.vcs.get({ workspace }).then((x) => setStore("vcs", reconcile(x.data))),
             project.workspace.sync(),
+            fetchActiveThreads(),
           ]).then(() => {
             setStore("status", "complete")
           })
@@ -838,6 +939,15 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       },
       resumeWorkflow(runID: string) {
         return sdk.client.workflow.resume({ runID })
+      },
+      getAgentStatus(agentID: string): "idle" | "busy" | "focused" {
+        return store.agentStatus[agentID] ?? "idle"
+      },
+      getThreads(agentID: string): ThreadInfo[] {
+        return store.threads[agentID] ?? []
+      },
+      async refreshThreads() {
+        await fetchActiveThreads()
       },
     }
     return result

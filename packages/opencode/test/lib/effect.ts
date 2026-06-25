@@ -49,5 +49,5 @@ const liveEnv = TestConsole.layer
 
 export const it = make(testEnv, liveEnv)
 
-export const testEffect = <R, E>(layer: Layer.Layer<R, E>) =>
-  make(Layer.provideMerge(layer, testEnv), Layer.provideMerge(layer, liveEnv))
+export const testEffect = (layer: Layer.Layer<any, any, any>) =>
+  make(Layer.provideMerge(layer, testEnv) as any, Layer.provideMerge(layer, liveEnv) as any)

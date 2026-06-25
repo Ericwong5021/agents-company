@@ -17,7 +17,7 @@ afterEach(async () => {
 
 function run<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Service>) {
   return Effect.runPromise(
-    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer))),
+    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer) as any)) as any,
   )
 }
 
@@ -57,7 +57,7 @@ describe("SessionPrompt session loop hooks", () => {
           }),
         )
 
-        const exit = await Instance.provide({
+        const exit: any = await Instance.provide({
           directory: tmp.path,
           fn: () =>
             run(

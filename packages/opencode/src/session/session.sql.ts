@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import { CompanyAgentTable } from "../company-agent/company-agent.sql"
+import { ThreadTable } from "../thread/thread.sql"
 import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
 import type { Permission } from "../permission"
@@ -25,6 +26,8 @@ export const SessionTable = sqliteTable(
       .$type<CompanyAgentID>()
       .references(() => CompanyAgentTable.id)
       .default("assistant" as CompanyAgentID),
+    thread_id: text()
+      .references(() => ThreadTable.id),
     workspace_id: text().$type<WorkspaceID>(),
     parent_id: text().$type<SessionID>(),
     context_from: text().$type<SessionID>(),
@@ -51,6 +54,7 @@ export const SessionTable = sqliteTable(
     index("session_parent_idx").on(table.parent_id),
     index("session_context_from_idx").on(table.context_from),
     index("session_company_agent_idx").on(table.company_agent_id, table.project_id),
+    index("session_thread_idx").on(table.thread_id),
   ],
 )
 

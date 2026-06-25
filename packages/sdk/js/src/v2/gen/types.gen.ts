@@ -785,6 +785,38 @@ export type EventGroupSessionAgentCompleted = {
   }
 }
 
+export type ThreadInfo = {
+  id: string
+  agentID: string
+  kind: "primary" | "reactive" | "ambient"
+  status: "active" | "paused" | "completed"
+  sessionID?: string
+  description?: string
+  budgetTokens?: number
+  spentTokens: number
+  timeStarted?: number
+  timeCompleted?: number
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export type EventThreadCreated = {
+  type: "thread.created"
+  properties: ThreadInfo
+}
+
+export type EventThreadUpdated = {
+  type: "thread.updated"
+  properties: ThreadInfo
+}
+
+export type EventThreadCompleted = {
+  type: "thread.completed"
+  properties: ThreadInfo
+}
+
 export type EventSessionGoal = {
   type: "session.goal"
   properties: {
@@ -1608,6 +1640,9 @@ export type GlobalEvent = {
     | SyncEventSessionCreated
     | SyncEventSessionUpdated
     | SyncEventSessionDeleted
+    | EventThreadCreated
+    | EventThreadUpdated
+    | EventThreadCompleted
 }
 
 /**
@@ -2768,6 +2803,9 @@ export type Event =
   | EventGroupSessionUserMessagePersisted
   | EventGroupSessionAgentStarted
   | EventGroupSessionAgentCompleted
+  | EventThreadCreated
+  | EventThreadUpdated
+  | EventThreadCompleted
 
 export type McpStatusConnected = {
   status: "connected"

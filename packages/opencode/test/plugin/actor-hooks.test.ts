@@ -21,7 +21,7 @@ afterEach(async () => {
 
 function run<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Service>) {
   return Effect.runPromise(
-    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer))),
+    fx.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(SessionPrompt.defaultLayer, Session.defaultLayer) as any)) as any,
   )
 }
 
@@ -29,7 +29,7 @@ describe("provenance plumbing", () => {
   test("source=hook + provenance is persisted onto the User message", async () => {
     await using tmp = await tmpdir({})
 
-    const result = await Instance.provide({
+    const result: any = await Instance.provide({
       directory: tmp.path,
       fn: () =>
         run(
@@ -69,7 +69,7 @@ describe("provenance plumbing", () => {
   test("source=spawn (default) leaves provenance undefined", async () => {
     await using tmp = await tmpdir({})
 
-    const result = await Instance.provide({
+    const result: any = await Instance.provide({
       directory: tmp.path,
       fn: () =>
         run(

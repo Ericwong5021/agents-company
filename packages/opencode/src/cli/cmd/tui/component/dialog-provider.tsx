@@ -27,7 +27,6 @@ export function createDialogProviderOptions() {
   const options = createMemo(() => {
     const list = pipe(
       sync.data.provider_next.all,
-      (providers) => providers.filter((provider) => sync.data.provider_next.connected.includes(provider.id)),
       sortBy((x) => PROVIDER_PRIORITY[x.id] ?? 99),
       map((provider) => {
         const consoleManaged = isConsoleManagedProvider(sync.data.console_state.consoleManagedProviders, provider.id)

@@ -1,6 +1,9 @@
 import { createSignal, Match, Switch, Show } from "solid-js"
+import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useKV } from "@tui/context/kv"
+import { useKeybind } from "@tui/context/keybind"
+import { useExit } from "@tui/context/exit"
 import { StarryBackground } from "@tui/component/starry-background"
 import { TextAttributes } from "@opentui/core"
 import { StepWelcome } from "./step-welcome"
@@ -33,7 +36,15 @@ interface StepError {
 export function Onboarding() {
   const { theme } = useTheme()
   const kv = useKV()
+  const keybind = useKeybind()
+  const exit = useExit()
   const [step, setStep] = createSignal<OnboardingStep>("welcome")
+
+  useKeyboard((evt) => {
+    if (keybind.match("app_exit", evt)) {
+      void exit()
+    }
+  })
   const [data, setData] = createSignal<OnboardingData>({})
   const [error, setError] = createSignal<StepError | null>(null)
   const [retryKey, setRetryKey] = createSignal(0)

@@ -21,6 +21,7 @@ import { ExperimentalHttpApiServer } from "./httpapi/server"
 import { ProjectRoutes } from "./project"
 import { CompanyAgentRoutes } from "./company-agent"
 import { GroupSessionRoutes } from "./group-session"
+import { ThreadRoutes } from "./thread"
 import { SessionRoutes } from "./session"
 import { PtyRoutes } from "./pty"
 import { McpRoutes } from "./mcp"
@@ -57,6 +58,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     .route("/project", ProjectRoutes())
     .route("/company-agent", CompanyAgentRoutes())
     .route("/group-session", GroupSessionRoutes())
+    .route("/thread", ThreadRoutes())
     .route("/pty", PtyRoutes(upgrade))
     .route("/config", ConfigRoutes())
     .route("/experimental", ExperimentalRoutes())

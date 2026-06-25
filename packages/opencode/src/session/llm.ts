@@ -35,6 +35,8 @@ import { CompanyAgentID } from "@/company-agent/schema"
 import { Database, eq } from "@/storage"
 import { SessionTable } from "./session.sql"
 import { isRetryableTransientError } from "./retry"
+import { ContextResolver } from "@/workspace"
+import type { OrgStructure } from "@/workspace/clearance"
 
 const log = Log.create({ service: "llm" })
 export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
@@ -243,8 +245,11 @@ const live: Layer.Layer<
       sessionID: string
       agentID?: string
     }) {
-      // Resolve company agent system prompt for this session
+      // Resolve company agent file bundle for this session
       let companyAgentPrompt: string | undefined
+      let companyAgentInstruct: string | undefined
+      let companyAgentRelationships: string | undefined
+      let companyAgentKanban: string | undefined
       const sessionRow = yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -257,15 +262,22 @@ const live: Layer.Layer<
       const companyAgentId = sessionRow?.company_agent_id
       if (companyAgentId && companyAgentId !== "assistant") {
         const companyAgent = yield* companyAgentSvc.get(companyAgentId as CompanyAgentID)
-        if (companyAgent?.system_prompt) {
+        if (companyAgent) {
           companyAgentPrompt = companyAgent.system_prompt
-          log.info("injecting company agent system prompt", {
+          companyAgentInstruct = companyAgent.instruct
+          companyAgentRelationships = companyAgent.relationships
+          companyAgentKanban = companyAgent.kanban
+          log.info("injecting company agent file bundle", {
             session: input.sessionID,
             agent_id: companyAgentId,
             agent_name: companyAgent.name,
+            has_soul: !!companyAgentPrompt,
+            has_instruct: !!companyAgentInstruct,
+            has_relationships: !!companyAgentRelationships,
+            has_kanban: !!companyAgentKanban,
           })
         } else {
-          log.info("company agent has no system_prompt, using default", {
+          log.info("company agent not found, using default prompt", {
             session: input.sessionID,
             agent_id: companyAgentId,
           })
@@ -289,6 +301,41 @@ const live: Layer.Layer<
           .join("\n")
       }
 
+      // Build file bundle sections to inject into system prompt.
+      // SOUL.md (system_prompt) → stable identity (always injected)
+      // INSTRUCT.md → evolvable instructions (always injected)
+      // relationships.md → collaboration context (always injected, lightweight)
+      // kanban.md → task context (always injected, lightweight)
+      const fileBundleParts: string[] = []
+      if (companyAgentInstruct) {
+        fileBundleParts.push(`<agent_instructions>\n${companyAgentInstruct}\n</agent_instructions>`)
+      }
+      if (companyAgentRelationships) {
+        fileBundleParts.push(`<agent_relationships>\n${companyAgentRelationships}\n</agent_relationships>`)
+      }
+      if (companyAgentKanban) {
+        fileBundleParts.push(`<agent_kanban>\n${companyAgentKanban}\n</agent_kanban>`)
+      }
+
+      // Resolve workspace context for the agent (visible docs, standing summary).
+      // Only when a company agent is active. Gracefully falls back if workspace
+      // is not initialised or org config is absent.
+      const contextAgentId = companyAgentId ?? "assistant"
+      const resolvedContext = yield* Effect.gen(function* () {
+        const cfg = yield* config.get()
+        const org = cfg.org as OrgStructure | undefined
+        return yield* ContextResolver.resolve(contextAgentId, org)
+      }).pipe(
+        Effect.catch((err) => {
+          log.debug("context resolver skipped", { agentId: contextAgentId, error: String(err) })
+          return Effect.succeed(undefined)
+        }),
+      )
+
+      if (resolvedContext) {
+        fileBundleParts.push(`<workspace_context>\n${resolvedContext.standingSummary}\n</workspace_context>`)
+      }
+
       const system: string[] = []
       system.push(
         [
@@ -298,6 +345,8 @@ const live: Layer.Layer<
             : input.agent.prompt
               ? [input.agent.prompt]
               : SystemPrompt.provider(input.model)),
+          // File bundle sections (instruct, relationships, kanban)
+          ...fileBundleParts,
           // any custom prompt passed into this call
           ...systemParts,
           // any custom prompt from last user message
