@@ -93,7 +93,7 @@ export function BusinessScopeCards(props: BusinessScopeCardsProps) {
       <text fg={theme.text} attributes={TextAttributes.BOLD}>
         Select your business scope (multi-select):
       </text>
-      <box flexDirection="row" flexWrap="wrap" gap={1}>
+      <box flexDirection="row" flexWrap="wrap" justifyContent="center" gap={1}>
         <For each={BUSINESS_SCOPE_PRESETS}>
           {(option) => {
             const isSelected = () => selected().has(option.key)
