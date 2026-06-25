@@ -11,6 +11,7 @@ import SidebarTodo from "../feature-plugins/sidebar/todo"
 import SidebarFiles from "../feature-plugins/sidebar/files"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
 import PluginManager from "../feature-plugins/system/plugins"
+import { NavOrgChart, NavProjectManagement, NavAgentManagement, NavSettings } from "../feature-plugins/nav"
 import type { TuiPlugin, TuiPluginModule } from "@mimo-ai/plugin/tui"
 
 export type InternalTuiPlugin = TuiPluginModule & {
@@ -32,4 +33,8 @@ export const INTERNAL_TUI_PLUGINS: InternalTuiPlugin[] = [
   SidebarFiles,
   SidebarFooter,
   PluginManager,
+  NavOrgChart,
+  NavProjectManagement,
+  NavAgentManagement,
+  NavSettings,
 ]
