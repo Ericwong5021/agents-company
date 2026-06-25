@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import { resolveAgentCompanyHome } from "@mimo-ai/shared/global"
+import { resolveAgentCompanyHome } from "@agents-company/shared/global"
 
 describe("resolveAgentCompanyHome", () => {
   test("with AGENTCOMPANY_HOME set, resolves 4 subdirs under root", () => {
