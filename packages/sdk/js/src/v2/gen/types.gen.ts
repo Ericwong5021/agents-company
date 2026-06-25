@@ -756,6 +756,35 @@ export type EventSessionIdle = {
   }
 }
 
+export type EventGroupSessionUserMessagePersisted = {
+  type: "group_session.user_message_persisted"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionAgentStarted = {
+  type: "group_session.agent_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+  }
+}
+
+export type EventGroupSessionAgentCompleted = {
+  type: "group_session.agent_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+    statusSummary: "done" | "error" | "interrupted"
+  }
+}
+
 export type EventSessionGoal = {
   type: "session.goal"
   properties: {
@@ -2736,6 +2765,9 @@ export type Event =
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
+  | EventGroupSessionUserMessagePersisted
+  | EventGroupSessionAgentStarted
+  | EventGroupSessionAgentCompleted
 
 export type McpStatusConnected = {
   status: "connected"

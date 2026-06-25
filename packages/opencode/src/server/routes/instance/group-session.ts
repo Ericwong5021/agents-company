@@ -153,8 +153,9 @@ export const GroupSessionRoutes = lazy(() =>
       describeRoute({
         summary: "Send message to group session",
         description:
-          "Fan-out a user message to all member sessions in parallel. Returns 409 if the group is " +
-          "still busy. Subscribe to each member session's event stream for streaming output.",
+          "Persist a user message and fan-out to all member sessions in the background. " +
+          "Returns immediately with the roundNum (200) or 409 if busy. " +
+          "Agent responses arrive via group_session.agent_started / agent_completed events.",
         operationId: "groupSession.chat",
         responses: {
           200: {

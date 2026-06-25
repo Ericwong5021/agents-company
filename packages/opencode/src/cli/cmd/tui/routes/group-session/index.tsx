@@ -24,6 +24,7 @@ import { Autocomplete, type AutocompleteRef } from "@tui/component/prompt/autoco
 import { useRightSidebar } from "@tui/context/right-sidebar"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../context/tui-config"
+import { NavRow } from "../../component/nav-row"
 import * as Clipboard from "../../util/clipboard"
 
 interface CompanyAgentInfo {
@@ -136,6 +137,14 @@ export function GroupSession() {
     await refetchMessages()
   })
 
+  // ---- optimistic user message (instant bubble before POST returns) ----
+  const [optimisticUser, setOptimisticUser] = createSignal<GroupMessage | null>(null)
+
+  // ---- per-agent working state (driven by agent_started / agent_completed events) ----
+  const [workingAgents, setWorkingAgents] = createSignal<
+    Record<string, { companyAgentID: string; roundNum: number }>
+  >({})
+
   // ---- per-member live state derived from sync store ----
   // Only depends on session_status, which flips on busy/idle transitions —
   // NOT on message/part deltas. This keeps the memo (and the <For> over it)
@@ -158,7 +167,19 @@ export function GroupSession() {
     })
   })
 
-  const groupBusy = createMemo(() => memberState().some((m) => m.busy))
+  // Working entries derived from workingAgents signal (event-driven).
+  // Each agent_started event adds an entry; agent_completed removes it.
+  // This drives the LiveCard rendering — agents appear simultaneously.
+  const workingEntries = createMemo(() => {
+    const agents = agentByID()
+    const entries = workingAgents()
+    return Object.entries(entries).map(([sessionID, entry]) => {
+      const agent = agents[entry.companyAgentID]
+      return { sessionID, companyAgentID: entry.companyAgentID, agent, roundNum: entry.roundNum }
+    })
+  })
+
+  const groupBusy = createMemo(() => workingEntries().length > 0 || memberState().some((m) => m.busy))
   const anyMember = createMemo(() => memberState().length > 0)
 
   // Publish the member-list sidebar to the shell's right column. Re-runs when
@@ -204,10 +225,48 @@ export function GroupSession() {
   // sibling card in "busy". (The reconcile is cheap and idempotent.)
   onMount(() => {
     return event.subscribe((ev) => {
-      if (ev.type !== "session.idle") return
-      const i = info()
-      if (!i?.members.some((m) => m.sessionID === ev.properties.sessionID)) return
-      void sync.session.reconcileStatus()
+      switch (ev.type) {
+        // When any member goes idle, reconcile the whole status map.
+        // This catches dropped idle events under streaming backpressure.
+        case "session.idle": {
+          const i = info()
+          if (!i?.members.some((m) => m.sessionID === ev.properties.sessionID)) return
+          void sync.session.reconcileStatus()
+          break
+        }
+        // User message persisted → clear optimistic bubble, refetch real data
+        case "group_session.user_message_persisted": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setOptimisticUser(null)
+          void refetchMessages()
+          toBottom()
+          break
+        }
+        // Agent started → add to workingAgents
+        case "group_session.agent_started": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setWorkingAgents((prev) => ({
+            ...prev,
+            [ev.properties.sessionID]: {
+              companyAgentID: ev.properties.companyAgentID,
+              roundNum: ev.properties.roundNum,
+            },
+          }))
+          break
+        }
+        // Agent completed → remove from workingAgents, refetch messages
+        case "group_session.agent_completed": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setWorkingAgents((prev) => {
+            const next = { ...prev }
+            delete next[ev.properties.sessionID]
+            return next
+          })
+          void refetchMessages()
+          toBottom()
+          break
+        }
+      }
     })
   })
 
@@ -308,24 +367,44 @@ export function GroupSession() {
       toast.show({ variant: "warning", message: "Agents are still responding" })
       return
     }
+    // Optimistic: immediately show the user bubble before the POST returns.
+    // The server persists the user message and returns roundNum, then the
+    // UserMessagePersisted event clears the optimistic bubble and refetches
+    // the real data.
+    const now = Date.now()
+    setOptimisticUser({
+      id: `optimistic-${now}`,
+      groupSessionID: route.groupSessionID,
+      roundNum: 0, // will be corrected by refetch
+      role: "user",
+      content: text,
+      time: { created: now, updated: now },
+    })
+
     setInputText("")
     if (textarea && !textarea.isDestroyed) textarea.clear()
+    toBottom()
+
     const res = await sdk.fetch(`${sdk.url}/group-session/${route.groupSessionID}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     })
     if (res.status === 409) {
+      // Server rejected because group is busy — roll back optimistic bubble
+      setOptimisticUser(null)
       toast.show({ variant: "warning", message: "Group session is busy" })
       return
     }
     if (!res.ok) {
+      // Server error — roll back optimistic bubble
+      setOptimisticUser(null)
       toast.show({ variant: "error", message: "Failed to send message" })
       return
     }
-    // optimistic: refresh messages to show the user msg immediately
-    void refetchMessages()
-    toBottom()
+    // POST succeeded — the server persisted the user message and forked
+    // the agent fan-out. The UserMessagePersisted event will fire shortly
+    // and clear the optimistic bubble + refetch real data.
   }
 
   async function interrupt() {
@@ -436,19 +515,31 @@ export function GroupSession() {
               )}
             </For>
 
+            {/* optimistic user bubble (shown before server confirms) */}
+            <Show when={optimisticUser()}>
+              {(u) => (
+                <box marginTop={1}>
+                  <GroupMessageView
+                    msg={u()}
+                    agent={undefined}
+                    members={info()?.members ?? []}
+                    onJump={() => {}}
+                  />
+                </box>
+              )}
+            </Show>
+
             {/* live cards for the current (in-progress) round */}
-            <Show when={groupBusy()}>
+            <Show when={workingEntries().length > 0}>
               <box marginTop={1} flexDirection="column" gap={1}>
-                <For each={memberState()}>
-                  {(s, i) => (
-                    <Show when={s.busy}>
-                      <LiveCard
-                        agent={s.agent}
-                        color={agentColor(theme, s.agent, i())}
-                        status={s.status}
-                        onClick={() => navigate({ type: "session", sessionID: s.member.sessionID, groupSessionID: route.groupSessionID })}
-                      />
-                    </Show>
+                <For each={workingEntries()}>
+                  {(w, i) => (
+                    <LiveCard
+                      agent={w.agent}
+                      color={agentColor(theme, w.agent, i())}
+                      status="busy"
+                      onClick={() => navigate({ type: "session", sessionID: w.sessionID, groupSessionID: route.groupSessionID })}
+                    />
                   )}
                 </For>
               </box>
@@ -541,7 +632,9 @@ function GroupSessionSidebar(props: {
           </box>
           <For each={props.members}>
             {(s, i) => (
-              <box gap={1} onMouseUp={() => props.onOpen(s.member.sessionID)}>
+              <NavRow
+                onSelect={() => props.onOpen(s.member.sessionID)}
+              >
                 <text fg={agentColor(theme, s.agent, i())}>
                   <b>{s.agent?.icon ? s.agent.icon + " " : ""}{s.agent?.name ?? "Agent"}</b>
                 </text>
@@ -551,7 +644,7 @@ function GroupSessionSidebar(props: {
                 <Show when={!s.busy}>
                   <text fg={theme.textMuted}>· click to open</text>
                 </Show>
-              </box>
+              </NavRow>
             )}
           </For>
         </box>

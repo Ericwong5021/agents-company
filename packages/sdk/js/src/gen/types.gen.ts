@@ -480,6 +480,35 @@ export type EventSessionIdle = {
   }
 }
 
+export type EventGroupSessionUserMessagePersisted = {
+  type: "group_session.user_message_persisted"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionAgentStarted = {
+  type: "group_session.agent_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+  }
+}
+
+export type EventGroupSessionAgentCompleted = {
+  type: "group_session.agent_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+    statusSummary: "done" | "error" | "interrupted"
+  }
+}
+
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -727,6 +756,9 @@ export type Event =
   | EventPtyExited
   | EventPtyDeleted
   | EventServerConnected
+  | EventGroupSessionUserMessagePersisted
+  | EventGroupSessionAgentStarted
+  | EventGroupSessionAgentCompleted
 
 export type GlobalEvent = {
   directory: string

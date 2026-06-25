@@ -93,6 +93,38 @@ export const Event = {
       roundNum: z.number(),
     }),
   ),
+  // Fires after the user message has been persisted to GroupMessageTable,
+  // before agent fan-out starts. TUI uses this to show the user bubble.
+  UserMessagePersisted: BusEvent.define(
+    "group_session.user_message_persisted",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      roundNum: z.number(),
+    }),
+  ),
+  // Fires per-member when an agent's prompt begins. TUI uses this to show
+  // the "working" bubble for that specific agent.
+  AgentStarted: BusEvent.define(
+    "group_session.agent_started",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      roundNum: z.number(),
+      sessionID: z.string(),
+      companyAgentID: z.string(),
+    }),
+  ),
+  // Fires per-member when an agent finishes (success, error, or interrupted).
+  // statusSummary distinguishes the outcome for the TUI.
+  AgentCompleted: BusEvent.define(
+    "group_session.agent_completed",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      roundNum: z.number(),
+      sessionID: z.string(),
+      companyAgentID: z.string(),
+      statusSummary: z.enum(["done", "error", "interrupted"]),
+    }),
+  ),
 }
 
 export class BusyError extends Error {
@@ -399,15 +431,32 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           memberSessionIDs,
         })
 
-        // Fan-out: fire each member session concurrently, collect responses
-        // then write them to group_message. Each runs fire-and-forget (background);
-        // we join to know when all have finished so we can write group messages
-        // and emit RoundComplete.
+        // Emit user message persisted — TUI uses this to show the user bubble
+        yield* bus.publish(Event.UserMessagePersisted, {
+          groupSessionID: input.groupSessionID,
+          roundNum,
+        })
+
+        // Fan-out: fire each member session concurrently in the background.
+        // Each member's lifecycle publishes AgentStarted/AgentCompleted events
+        // so the TUI can show working → content bubble transitions per-agent.
+        // The fan-out is fork-detached so chat() returns immediately after
+        // publishing UserMessagePersisted, letting the TUI show the user bubble
+        // without waiting for agents to finish.
         yield* Effect.forEach(
           info.members,
           (member) =>
             Effect.gen(function* () {
-              const result = yield* promptSvc.prompt({
+              // Signal that this agent is starting
+              yield* bus.publish(Event.AgentStarted, {
+                groupSessionID: input.groupSessionID,
+                roundNum,
+                sessionID: member.sessionID,
+                companyAgentID: member.companyAgentID,
+              })
+
+              // Run the agent prompt
+              yield* promptSvc.prompt({
                 sessionID: member.sessionID as SessionID,
                 agentID: "main",
                 source: "user",
@@ -420,71 +469,79 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
                         .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
                         .map((p) => p.text)
                         .join("") || "(no output)"
-                    return Effect.sync(() =>
-                      insertGroupMessage({
+                    return Effect.gen(function* () {
+                      yield* Effect.sync(() =>
+                        insertGroupMessage({
+                          groupSessionID: input.groupSessionID,
+                          roundNum,
+                          role: "agent",
+                          companyAgentID: member.companyAgentID as CompanyAgentID,
+                          sessionID: member.sessionID as SessionID,
+                          content: chatText,
+                          statusSummary: "done",
+                        }),
+                      )
+                      yield* bus.publish(Event.AgentCompleted, {
                         groupSessionID: input.groupSessionID,
                         roundNum,
-                        role: "agent",
-                        companyAgentID: member.companyAgentID as CompanyAgentID,
-                        sessionID: member.sessionID as SessionID,
-                        content: chatText,
+                        sessionID: member.sessionID,
+                        companyAgentID: member.companyAgentID,
                         statusSummary: "done",
-                      }),
-                    )
+                      })
+                    })
                   },
                   onFailure: () =>
-                    Effect.sync(() =>
-                      insertGroupMessage({
+                    Effect.gen(function* () {
+                      yield* Effect.sync(() =>
+                        insertGroupMessage({
+                          groupSessionID: input.groupSessionID,
+                          roundNum,
+                          role: "agent",
+                          companyAgentID: member.companyAgentID as CompanyAgentID,
+                          sessionID: member.sessionID as SessionID,
+                          content: "",
+                          statusSummary: "error",
+                        }),
+                      )
+                      yield* bus.publish(Event.AgentCompleted, {
                         groupSessionID: input.groupSessionID,
                         roundNum,
-                        role: "agent",
-                        companyAgentID: member.companyAgentID as CompanyAgentID,
-                        sessionID: member.sessionID as SessionID,
-                        content: "",
+                        sessionID: member.sessionID,
+                        companyAgentID: member.companyAgentID,
                         statusSummary: "error",
-                      }),
-                    ),
+                      })
+                    }),
                 }),
               )
-              return result
             }),
           { concurrency: "unbounded", discard: true },
-        )
-
-        // F-ghost-busy: re-assert every member's status to idle here. The
-        // runLoop sets "busy" at the top of each iteration (prompt.ts) and the
-        // Runner.onIdle (run-state.ts) is supposed to flip it back to idle when
-        // the fiber exits. But the idle transition reaches the TUI purely via
-        // the session.status SSE event, which is drop-oldest under streaming
-        // backpressure (event.ts AsyncQueue, capacity 10k of per-token deltas).
-        // If the idle event is dropped or arrives after the TUI stops watching,
-        // the member card stays "working" until the user interrupts. Re-setting
-        // idle here — AFTER all members joined but BEFORE RoundComplete — emits
-        // a fresh, authoritative idle event per member so the TUI is guaranteed
-        // to see a clean idle state when the round ends. status.set is a no-op
-        // (publishes an idle event, deletes the map entry) when already idle,
-        // so this is safe even when onIdle already fired.
-        yield* Effect.forEach(
-          info.members,
-          (m) => statusSvc.set(m.sessionID as SessionID, { type: "idle" }),
-          { concurrency: "unbounded", discard: true },
-        )
-
-        // All members finished — update group updated_at and emit round complete
-        const completedAt = Date.now()
-        yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .update(GroupSessionTable)
-              .set({ time_updated: completedAt })
-              .where(eq(GroupSessionTable.id, input.groupSessionID))
-              .run(),
+        ).pipe(
+          // After all agents finish: re-assert idle + emit RoundComplete
+          Effect.ensuring(
+            Effect.gen(function* () {
+              yield* Effect.forEach(
+                info.members,
+                (m) => statusSvc.set(m.sessionID as SessionID, { type: "idle" }),
+                { concurrency: "unbounded", discard: true },
+              )
+              const completedAt = Date.now()
+              yield* Effect.sync(() =>
+                Database.use((db) =>
+                  db
+                    .update(GroupSessionTable)
+                    .set({ time_updated: completedAt })
+                    .where(eq(GroupSessionTable.id, input.groupSessionID))
+                    .run(),
+                ),
+              )
+              yield* bus.publish(Event.RoundComplete, {
+                groupSessionID: input.groupSessionID,
+                roundNum,
+              })
+            }),
           ),
+          Effect.forkDetach,
         )
-        yield* bus.publish(Event.RoundComplete, {
-          groupSessionID: input.groupSessionID,
-          roundNum,
-        })
       })
 
       // --- interrupt ---
