@@ -202,7 +202,9 @@ export function StepMission(props: StepMissionProps) {
       stepCount={props.stepCount}
       title={t("onboarding.mission.title")}
       subtitle={
-        !ready() && !error() ? t("onboarding.mission.generating") : undefined
+        !ready() && !error()
+          ? t("onboarding.mission.generating").replace("{{assistant}}", props.assistantName)
+          : undefined
       }
       speaker={{ name: props.assistantName, icon: "🌟" }}
       speech={openingLine() ?? undefined}

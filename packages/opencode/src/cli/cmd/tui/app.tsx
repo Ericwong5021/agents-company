@@ -321,6 +321,23 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     renderer.clearSelection()
   })
 
+  // Global Ctrl+C handler: show exit confirmation dialog
+  useKeyboard((evt) => {
+    if (evt.defaultPrevented) return
+    if (!(evt.ctrl && evt.name === "c")) return
+    // Don't interfere if there's already a dialog open (DialogProvider handles that)
+    if (dialog.stack.length > 0) return
+    // Don't interfere with text selection copy
+    if (renderer.getSelection()?.getSelectedText()) return
+
+    evt.preventDefault()
+    evt.stopPropagation()
+
+    void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+      if (result) void exit()
+    })
+  })
+
   // Wire up console copy-to-clipboard via opentui's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
