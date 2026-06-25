@@ -1,11 +1,15 @@
-import { createSignal, Match, Switch } from "solid-js"
+import { createEffect, createSignal, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { useKV } from "@tui/context/kv"
 import { useKeybind } from "@tui/context/keybind"
 import { useExit } from "@tui/context/exit"
+import { useDialog } from "@tui/ui/dialog"
+import { useLocal } from "@tui/context/local"
+import { useSync } from "@tui/context/sync"
 import { StarryBackground } from "@tui/component/starry-background"
+import { DialogProvider } from "@tui/component/dialog-provider"
+import { DialogModel } from "@tui/component/dialog-model"
 import { StepWelcome } from "./step-welcome"
-import { StepProvider } from "./step-provider"
 import { StepProfile } from "./step-profile"
 import { StepMission } from "./step-mission"
 import { StepFoundingTeam } from "./step-founding-team"
@@ -21,92 +25,138 @@ interface OnboardingData {
   mission?: string
 }
 
-// Card-style wizard shown on first launch. The starry background is rendered
-// once here; every step after the welcome screen draws itself as a centered
-// card via <OnboardingFrame>. Completion is gated on the persisted
-// `onboarding_done` flag (see app.tsx), and the captured profile is saved to the
-// KV settings store so later sessions know who the founder and team are.
+// First-launch wizard. Every step after the welcome screen is driven through the
+// shared dialog stack so it renders in the exact same modal window as the
+// provider/model selector — one consistent window form, no second shell. The
+// starry background stays underneath. Completion is gated on the persisted
+// `onboarding_done` flag (see app.tsx) and the captured profile is saved to KV.
 export function Onboarding() {
   const kv = useKV()
   const keybind = useKeybind()
   const exit = useExit()
+  const dialog = useDialog()
+  const local = useLocal()
+  const sync = useSync()
   const [step, setStep] = createSignal<Step>("welcome")
   const [data, setData] = createSignal<OnboardingData>({})
+  const [done, setDone] = createSignal(false)
 
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) void exit()
   })
 
-  // Card steps share a 4-dot progress indicator.
+  // Card steps share a 4-dot progress indicator (provider, profile, mission, team).
   const STEP_COUNT = 4
 
-  function finish(agentIDs: string[]) {
-    kv.set("onboarding_profile", {
-      ...data(),
-      foundingTeam: agentIDs,
-      completedAt: Date.now(),
+  function hasConnectedModels() {
+    return sync.data.provider_next.connected.some((id) => {
+      const provider = sync.data.provider.find((p) => p.id === id)
+      return provider && Object.keys(provider.models).length > 0
     })
-    kv.set("onboarding_done", true)
   }
+
+  function finish(agentIDs: string[]) {
+    setDone(true)
+    kv.set("onboarding_profile", { ...data(), foundingTeam: agentIDs, completedAt: Date.now() })
+    kv.set("onboarding_done", true)
+    dialog.clear()
+  }
+
+  // Push the dialog content for a given step into the shared window.
+  function renderStep(s: Step) {
+    if (s === "provider") {
+      // Reuse the app's native provider/model selector verbatim. Advance once a
+      // model is actually chosen; on Esc the dialog empties and the effect below
+      // simply re-renders this step (so the founder can't slip past model-less).
+      dialog.replace(
+        () => (hasConnectedModels() ? <DialogModel /> : <DialogProvider />),
+        () => {
+          const current = local.model.current()
+          if (current?.providerID && current?.modelID) {
+            setData((p) => ({ ...p, providerID: current.providerID, modelID: current.modelID }))
+            setStep("profile")
+          }
+        },
+      )
+      return
+    }
+
+    if (s === "profile") {
+      dialog.replace(() => (
+        <StepProfile
+          stepIndex={1}
+          stepCount={STEP_COUNT}
+          onComplete={(r) => {
+            setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName, scopes: r.scopes }))
+            setStep("mission")
+          }}
+        />
+      ))
+      return
+    }
+
+    if (s === "mission") {
+      dialog.replace(() => (
+        <StepMission
+          stepIndex={2}
+          stepCount={STEP_COUNT}
+          userName={data().userName ?? ""}
+          assistantName={data().assistantName ?? ""}
+          scopes={data().scopes ?? []}
+          onComplete={(r) => {
+            setData((p) => ({ ...p, mission: r.mission }))
+            setStep("team")
+          }}
+        />
+      ))
+      return
+    }
+
+    if (s === "team") {
+      dialog.replace(() => (
+        <StepFoundingTeam
+          stepIndex={3}
+          stepCount={STEP_COUNT}
+          userName={data().userName ?? ""}
+          assistantName={data().assistantName ?? ""}
+          scopes={data().scopes ?? []}
+          mission={data().mission ?? ""}
+          onComplete={finish}
+        />
+      ))
+    }
+  }
+
+  // Single source of truth for what occupies the dialog window. Re-renders the
+  // current step when the step changes, or when the stack is emptied by an Esc
+  // dismiss mid-flow (tracked via the reactive stack length). Doing this from an
+  // effect — rather than from a dialog onClose handler — avoids the
+  // replace/close re-entrancy that would otherwise recurse.
+  let rendered: Step | null = null
+  createEffect(() => {
+    const s = step()
+    const stackLen = dialog.stack.length
+
+    if (s === "welcome" || done()) {
+      if (stackLen) dialog.clear()
+      rendered = null
+      return
+    }
+
+    if (rendered !== s || stackLen === 0) {
+      rendered = s
+      renderStep(s)
+    }
+  })
 
   return (
     <box position="relative" width="100%" height="100%">
       <StarryBackground />
-      <box position="absolute" top={0} left={0} right={0} bottom={0}>
-        <Switch>
-          <Match when={step() === "welcome"}>
-            <StepWelcome onComplete={() => setStep("provider")} />
-          </Match>
-
-          <Match when={step() === "provider"}>
-            <StepProvider
-              stepIndex={0}
-              stepCount={STEP_COUNT}
-              onComplete={(r) => {
-                setData((p) => ({ ...p, providerID: r.providerID, modelID: r.modelID }))
-                setStep("profile")
-              }}
-            />
-          </Match>
-
-          <Match when={step() === "profile"}>
-            <StepProfile
-              stepIndex={1}
-              stepCount={STEP_COUNT}
-              onComplete={(r) => {
-                setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName, scopes: r.scopes }))
-                setStep("mission")
-              }}
-            />
-          </Match>
-
-          <Match when={step() === "mission"}>
-            <StepMission
-              stepIndex={2}
-              stepCount={STEP_COUNT}
-              userName={data().userName ?? ""}
-              assistantName={data().assistantName ?? ""}
-              scopes={data().scopes ?? []}
-              onComplete={(r) => {
-                setData((p) => ({ ...p, mission: r.mission }))
-                setStep("team")
-              }}
-            />
-          </Match>
-
-          <Match when={step() === "team"}>
-            <StepFoundingTeam
-              stepIndex={3}
-              stepCount={STEP_COUNT}
-              userName={data().userName ?? ""}
-              assistantName={data().assistantName ?? ""}
-              scopes={data().scopes ?? []}
-              mission={data().mission ?? ""}
-              onComplete={finish}
-            />
-          </Match>
-        </Switch>
-      </box>
+      <Show when={step() === "welcome"}>
+        <box position="absolute" top={0} left={0} right={0} bottom={0}>
+          <StepWelcome onComplete={() => setStep("provider")} />
+        </box>
+      </Show>
     </box>
   )
 }

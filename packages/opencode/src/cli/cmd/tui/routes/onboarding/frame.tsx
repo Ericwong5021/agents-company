@@ -17,90 +17,70 @@ interface OnboardingFrameProps {
   footer?: JSX.Element
 }
 
-// Shared card chrome for every onboarding step after the welcome screen, so the
-// whole flow reads as one consistent card-style wizard floating on the starry
-// background.
+// Inner content for an onboarding step. This is rendered *inside* the shared
+// dialog chrome (see ui/dialog.tsx → <Dialog>), the very same modal window the
+// provider/model selector uses, so the whole flow keeps one consistent window
+// form. It therefore only lays out content (no overlay/centering/panel of its
+// own) and matches the dialog padding conventions used by DialogPrompt.
 export function OnboardingFrame(props: OnboardingFrameProps) {
   const { theme } = useTheme()
 
   return (
-    <box
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      justifyContent="center"
-      alignItems="center"
-    >
-      <box
-        flexDirection="column"
-        width={76}
-        maxWidth="90%"
-        backgroundColor={theme.backgroundPanel}
-        border
-        borderColor={theme.border}
-        paddingTop={1}
-        paddingBottom={1}
-        paddingLeft={2}
-        paddingRight={2}
-        gap={1}
-      >
-        {/* Header: title + step dots */}
-        <box flexDirection="row" justifyContent="space-between" alignItems="center">
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            {props.title}
-          </text>
-          <box flexDirection="row" gap={1}>
-            <For each={Array.from({ length: props.stepCount })}>
-              {(_, i) => (
-                <text fg={i() === props.stepIndex ? theme.primary : theme.border}>
-                  {i() === props.stepIndex ? "●" : "○"}
-                </text>
-              )}
-            </For>
-          </box>
+    <box flexDirection="column" paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+      {/* Header: title + step dots */}
+      <box flexDirection="row" justifyContent="space-between" alignItems="center">
+        <text fg={theme.text} attributes={TextAttributes.BOLD}>
+          {props.title}
+        </text>
+        <box flexDirection="row" gap={1}>
+          <For each={Array.from({ length: props.stepCount })}>
+            {(_, i) => (
+              <text fg={i() === props.stepIndex ? theme.primary : theme.border}>
+                {i() === props.stepIndex ? "●" : "○"}
+              </text>
+            )}
+          </For>
         </box>
-
-        <Show when={props.subtitle}>
-          <text fg={theme.textMuted}>{props.subtitle}</text>
-        </Show>
-
-        {/* Assistant speech bubble */}
-        <Show when={props.speech}>
-          <box
-            flexDirection="row"
-            gap={1}
-            backgroundColor={theme.backgroundElement}
-            paddingLeft={1}
-            paddingRight={1}
-            paddingTop={1}
-            paddingBottom={1}
-          >
-            <text fg={theme.primary}>{props.speaker?.icon ?? "🌟"}</text>
-            <box flexDirection="column" flexGrow={1}>
-              <Show when={props.speaker}>
-                <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                  {props.speaker!.name}
-                </text>
-              </Show>
-              <text fg={theme.text}>{props.speech}</text>
-            </box>
-          </box>
-        </Show>
-
-        {/* Body */}
-        <box flexDirection="column" gap={1}>
-          {props.children}
-        </box>
-
-        {/* Footer */}
-        <Show when={props.footer}>
-          <box border={["top"]} borderColor={theme.border} paddingTop={1}>
-            {props.footer}
-          </box>
-        </Show>
       </box>
+
+      <Show when={props.subtitle}>
+        <text fg={theme.textMuted}>{props.subtitle}</text>
+      </Show>
+
+      {/* Assistant speech bubble */}
+      <Show when={props.speech}>
+        <box
+          flexDirection="row"
+          gap={1}
+          backgroundColor={theme.backgroundElement}
+          paddingLeft={1}
+          paddingRight={1}
+          paddingTop={1}
+          paddingBottom={1}
+        >
+          <text fg={theme.primary}>{props.speaker?.icon ?? "🌟"}</text>
+          <box flexDirection="column" flexGrow={1}>
+            <Show when={props.speaker}>
+              <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+                {props.speaker!.name}
+              </text>
+            </Show>
+            <text fg={theme.text}>{props.speech}</text>
+          </box>
+        </box>
+      </Show>
+
+      {/* Body */}
+      <box flexDirection="column" gap={1}>
+        {props.children}
+      </box>
+
+      {/* Footer */}
+      <Show when={props.footer}>
+        <box border={["top"]} borderColor={theme.border} paddingTop={1}>
+          {props.footer}
+        </box>
+      </Show>
     </box>
   )
 }

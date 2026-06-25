@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes, TextareaRenderable } from "@opentui/core"
 
 export interface BusinessScopeOption {
   key: string
@@ -50,12 +50,13 @@ export function BusinessScopeCards(props: BusinessScopeCardsProps) {
   const { theme } = useTheme()
   const [selected, setSelected] = createSignal<Set<string>>(new Set())
   const [hovered, setHovered] = createSignal<string | null>(null)
-  const [customText, setCustomText] = createSignal("")
   const [showCustomInput, setShowCustomInput] = createSignal(false)
+  let customInput: TextareaRenderable | undefined
 
   function toggle(key: string) {
     if (key === "custom") {
       setShowCustomInput(true)
+      setTimeout(() => customInput && !customInput.isDestroyed && customInput.focus(), 1)
       return
     }
     setSelected((prev) => {
@@ -70,14 +71,14 @@ export function BusinessScopeCards(props: BusinessScopeCardsProps) {
   }
 
   function addCustom() {
-    const text = customText().trim()
+    const text = (customInput?.plainText ?? "").trim()
     if (!text) return
     setSelected((prev) => {
       const next = new Set(prev)
       next.add(text)
       return next
     })
-    setCustomText("")
+    customInput?.clear()
     setShowCustomInput(false)
   }
 
@@ -165,11 +166,17 @@ export function BusinessScopeCards(props: BusinessScopeCardsProps) {
             paddingLeft={1}
             paddingRight={1}
           >
-            <input
-              value={customText()}
-              onInput={(e: any) => setCustomText(e.target?.value ?? e.detail ?? "")}
-              placeholder="e.g., AI Research"
+            <textarea
+              height={1}
+              keyBindings={[{ name: "return", action: "submit" }]}
               onSubmit={addCustom}
+              placeholder="e.g., AI Research"
+              placeholderColor={theme.textMuted}
+              textColor={theme.text}
+              focusedTextColor={theme.text}
+              cursorColor={theme.text}
+              onMouseDown={(r: any) => r.target?.focus()}
+              ref={(r: TextareaRenderable) => (customInput = r)}
             />
           </box>
           <text

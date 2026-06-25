@@ -2,6 +2,7 @@ import { createSignal, For, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useLanguage } from "@tui/context/language"
+import { useDialog } from "@tui/ui/dialog"
 import { TextAttributes } from "@opentui/core"
 import { Spinner } from "@tui/component/spinner"
 import { OnboardingFrame } from "./frame"
@@ -34,12 +35,16 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const t = useLanguage().t
+  const dialog = useDialog()
   const [founders, setFounders] = createSignal<Founder[]>([])
   const [building, setBuilding] = createSignal(true)
   const [visible, setVisible] = createSignal(0)
   const [error, setError] = createSignal<string | null>(null)
 
-  onMount(() => void build())
+  onMount(() => {
+    dialog.setSize("large")
+    void build()
+  })
 
   async function build() {
     setError(null)

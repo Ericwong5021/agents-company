@@ -2,8 +2,9 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid
 import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useLanguage } from "@tui/context/language"
+import { useDialog } from "@tui/ui/dialog"
 import { Spinner } from "@tui/component/spinner"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes, TextareaRenderable } from "@opentui/core"
 import { OnboardingFrame } from "./frame"
 import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
 
@@ -30,17 +31,28 @@ export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const t = useLanguage().t
+  const dialog = useDialog()
 
   const [messages, setMessages] = createSignal<ChatMessage[]>([])
-  const [input, setInput] = createSignal("")
   const [loading, setLoading] = createSignal(false)
   const [sessionID, setSessionID] = createSignal<string | null>(null)
   const [ready, setReady] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+  let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
+  const KICKOFF = t("onboarding.mission.kickoff")
 
-  onMount(() => void initialize())
+  onMount(() => {
+    dialog.setSize("large")
+    void initialize()
+  })
+
+  function focusInput() {
+    setTimeout(() => {
+      if (textarea && !textarea.isDestroyed) textarea.focus()
+    }, 1)
+  }
 
   async function initialize() {
     setError(null)
@@ -65,7 +77,8 @@ export function StepMission(props: StepMissionProps) {
       }
       setSessionID(res.data.id)
       setReady(true)
-      await send(res.data.id, t("onboarding.mission.kickoff"))
+      focusInput()
+      await send(res.data.id, KICKOFF)
     } catch {
       setError(t("onboarding.mission.error"))
     }
@@ -74,7 +87,6 @@ export function StepMission(props: StepMissionProps) {
   async function send(sid: string, text: string) {
     setLoading(true)
     setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: "user", content: text }])
-    setInput("")
     try {
       await sdk.client.session.promptAsync({ sessionID: sid, parts: [{ type: "text", text }] })
     } catch {
@@ -103,8 +115,7 @@ export function StepMission(props: StepMissionProps) {
           }))
         setMessages((prev) => {
           const ids = new Set(prev.map((m) => m.id))
-          const next = [...prev, ...assistantMsgs.filter((m: ChatMessage) => !ids.has(m.id))]
-          return next
+          return [...prev, ...assistantMsgs.filter((m: ChatMessage) => !ids.has(m.id))]
         })
         if (assistantMsgs.length > 0) setLoading(false)
       } catch {
@@ -115,21 +126,25 @@ export function StepMission(props: StepMissionProps) {
   })
 
   function submit() {
-    const text = input().trim()
+    const text = (textarea?.plainText ?? "").trim()
     if (!text || loading() || !sessionID()) return
+    textarea?.clear()
     send(sessionID()!, text)
+    focusInput()
   }
 
   function finish() {
     const mission = messages()
-      .filter((m) => m.role === "user")
+      .filter((m) => m.role === "user" && m.content !== KICKOFF)
       .map((m) => m.content)
-      .filter((c) => c !== t("onboarding.mission.kickoff"))
       .join("\n")
     props.onComplete({ mission })
   }
 
-  const exchanged = () => messages().filter((m) => m.role === "user").length > 1
+  // Visible turns: drop the silent kickoff and any empty assistant chunks.
+  const transcript = () =>
+    messages().filter((m) => m.content.trim().length > 0 && m.content !== KICKOFF)
+  const exchanged = () => transcript().some((m) => m.role === "user")
 
   return (
     <OnboardingFrame
@@ -139,26 +154,36 @@ export function StepMission(props: StepMissionProps) {
       speaker={{ name: props.assistantName, icon: "🌟" }}
       speech={t("onboarding.mission.intro").replace("{{name}}", props.userName)}
       footer={
-        <box flexDirection="row" justifyContent="space-between" alignItems="center" gap={1}>
-          <box
-            flexGrow={1}
-            backgroundColor={theme.backgroundElement}
-            paddingLeft={1}
-            paddingRight={1}
-          >
-            <input
-              value={input()}
-              onInput={(e: any) => setInput(e.target?.value ?? e.detail ?? "")}
-              placeholder={t("onboarding.interview.placeholder.message")}
-              onSubmit={submit}
-            />
-          </box>
-          <box backgroundColor={theme.primary} paddingLeft={2} paddingRight={2} onMouseUp={submit}>
-            <text fg={theme.background}>{t("onboarding.profile.next")}</text>
+        <box flexDirection="column" gap={1}>
+          <box flexDirection="row" alignItems="center" gap={1}>
+            <box
+              flexGrow={1}
+              backgroundColor={theme.backgroundElement}
+              paddingLeft={1}
+              paddingRight={1}
+            >
+              <textarea
+                height={1}
+                keyBindings={loading() ? [] : [{ name: "return", action: "submit" }]}
+                onSubmit={submit}
+                placeholder={t("onboarding.interview.placeholder.message")}
+                placeholderColor={theme.textMuted}
+                textColor={theme.text}
+                focusedTextColor={theme.text}
+                cursorColor={theme.text}
+                onMouseDown={(r: any) => r.target?.focus()}
+                ref={(r: TextareaRenderable) => (textarea = r)}
+              />
+            </box>
+            <box backgroundColor={theme.primary} paddingLeft={2} paddingRight={2} onMouseUp={submit}>
+              <text fg={theme.background}>{t("onboarding.profile.next")}</text>
+            </box>
           </box>
           <Show when={exchanged()}>
-            <box backgroundColor={theme.success} paddingLeft={2} paddingRight={2} onMouseUp={finish}>
-              <text fg={theme.background}>{t("onboarding.mission.build")}</text>
+            <box flexDirection="row" justifyContent="flex-end">
+              <box backgroundColor={theme.success} paddingLeft={2} paddingRight={2} onMouseUp={finish}>
+                <text fg={theme.background}>{t("onboarding.mission.build")}</text>
+              </box>
             </box>
           </Show>
         </box>
@@ -173,28 +198,30 @@ export function StepMission(props: StepMissionProps) {
       </Show>
 
       {/* Transcript (last few turns) */}
-      <box flexDirection="column" gap={1}>
-        <For each={messages().filter((m) => m.content.trim().length > 0).slice(-6)}>
-          {(msg) => (
-            <box flexDirection="column">
-              <text
-                fg={msg.role === "user" ? theme.primary : theme.success}
-                attributes={TextAttributes.BOLD}
-              >
-                {msg.role === "user" ? t("onboarding.mission.you") : props.assistantName}
-              </text>
-              <box paddingLeft={2}>
-                <text fg={theme.text}>{msg.content.trim()}</text>
+      <Show when={ready()}>
+        <box flexDirection="column" gap={1}>
+          <For each={transcript().slice(-6)}>
+            {(msg) => (
+              <box flexDirection="column">
+                <text
+                  fg={msg.role === "user" ? theme.primary : theme.success}
+                  attributes={TextAttributes.BOLD}
+                >
+                  {msg.role === "user" ? t("onboarding.mission.you") : props.assistantName}
+                </text>
+                <box paddingLeft={2}>
+                  <text fg={theme.text}>{msg.content.trim()}</text>
+                </box>
               </box>
+            )}
+          </For>
+          <Show when={loading()}>
+            <box paddingLeft={2}>
+              <Spinner color={theme.textMuted} />
             </box>
-          )}
-        </For>
-        <Show when={loading()}>
-          <box paddingLeft={2}>
-            <Spinner color={theme.textMuted} />
-          </box>
-        </Show>
-      </box>
+          </Show>
+        </box>
+      </Show>
     </OnboardingFrame>
   )
 }
