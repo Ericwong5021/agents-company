@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, Index, Show, createSignal } from "solid-js"
 import { TaskItem } from "../../component/task-item"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-task"
 
@@ -42,15 +43,18 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 
   return (
     <Show when={show()}>
-      <box>
-        <box flexDirection="row" gap={1} onMouseDown={() => collapsible() && setOpen((x) => !x)}>
-          <Show when={collapsible()}>
-            <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
-          </Show>
-          <text fg={theme().text}>
-            <b>Tasks</b>
-          </text>
-        </box>
+      <Card
+        title={
+          <box flexDirection="row" gap={1} onMouseDown={() => collapsible() && setOpen((x) => !x)}>
+            <Show when={collapsible()}>
+              <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
+            </Show>
+            <text fg={theme().text}>
+              <b>Tasks</b>
+            </text>
+          </box>
+        }
+      >
         <Show when={!collapsible() || open()}>
           <Index each={rows()}>
             {(item) => (
@@ -71,7 +75,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
             </box>
           </Show>
         </Show>
-      </box>
+      </Card>
     </Show>
   )
 }

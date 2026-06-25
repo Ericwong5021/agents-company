@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, Show } from "solid-js"
 import { Global } from "@/global"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-footer"
 
@@ -58,14 +59,16 @@ function View(props: { api: TuiPluginApi }) {
           </box>
         </box>
       </Show>
-      <text>
-        <span style={{ fg: theme().textMuted }}>{path().parent}/</span>
-        <span style={{ fg: theme().text }}>{path().name}</span>
-      </text>
-      <text fg={theme().textMuted}>
-        <span style={{ fg: theme().success }}>•</span> <b>agent-company</b>{" "}
-        <span>{props.api.app.version}</span>
-      </text>
+      <Card flush>
+        <text>
+          <span style={{ fg: theme().textMuted }}>{path().parent}/</span>
+          <span style={{ fg: theme().text }}>{path().name}</span>
+        </text>
+        <text fg={theme().textMuted}>
+          <span style={{ fg: theme().success }}>•</span> <b>agent-company</b>{" "}
+          <span>{props.api.app.version}</span>
+        </text>
+      </Card>
     </box>
   )
 }

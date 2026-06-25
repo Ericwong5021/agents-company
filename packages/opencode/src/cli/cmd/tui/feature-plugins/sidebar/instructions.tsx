@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, For, Show } from "solid-js"
 import { useLanguage } from "@tui/context/language"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-instructions"
 
@@ -11,12 +12,7 @@ function View(props: { api: TuiPluginApi }) {
 
   return (
     <Show when={list().length > 0}>
-      <box>
-        <box flexDirection="row" gap={1}>
-          <text fg={theme().text}>
-            <b>{t("tui.sidebar.instructions")}</b>
-          </text>
-        </box>
+      <Card title={<text fg={theme().textMuted}><b>{t("tui.sidebar.instructions")}</b></text>}>
         <For each={list()}>
           {(file) => (
             <box flexDirection="row" gap={1}>
@@ -29,7 +25,7 @@ function View(props: { api: TuiPluginApi }) {
             </box>
           )}
         </For>
-      </box>
+      </Card>
     </Show>
   )
 }

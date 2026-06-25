@@ -1,5 +1,6 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, Show } from "solid-js"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-goal"
 
@@ -29,12 +30,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 
   return (
     <Show when={show()}>
-      <box>
-        <box flexDirection="row" gap={1}>
-          <text fg={theme().text}>
-            <b>Goal</b>
-          </text>
-        </box>
+      <Card title={<text fg={theme().textMuted}><b>Goal</b></text>}>
         <Show when={goal()?.condition}>
           {(condition) => (
             <box flexDirection="row" gap={1}>
@@ -59,7 +55,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
             </box>
           )}
         </Show>
-      </box>
+      </Card>
     </Show>
   )
 }

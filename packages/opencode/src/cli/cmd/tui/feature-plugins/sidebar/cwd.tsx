@@ -2,6 +2,7 @@ import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/t
 import { createMemo } from "solid-js"
 import { Global } from "@/global"
 import { useLanguage } from "@tui/context/language"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-cwd"
 
@@ -17,12 +18,9 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
   })
 
   return (
-    <box>
-      <text fg={theme().text}>
-        <b>{t("tui.sidebar.cwd")}</b>
-      </text>
+    <Card title={<text fg={theme().textMuted}><b>{t("tui.sidebar.cwd")}</b></text>}>
       <text fg={theme().textMuted}>{display()}</text>
-    </box>
+    </Card>
   )
 }
 

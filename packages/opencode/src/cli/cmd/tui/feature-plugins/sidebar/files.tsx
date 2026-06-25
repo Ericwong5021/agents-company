@@ -1,5 +1,6 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, For, Show, createSignal } from "solid-js"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-files"
 
@@ -10,15 +11,18 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
 
   return (
     <Show when={list().length > 0}>
-      <box>
-        <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
-          <Show when={list().length > 2}>
-            <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
-          </Show>
-          <text fg={theme().text}>
-            <b>Modified Files</b>
-          </text>
-        </box>
+      <Card
+        title={
+          <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
+            <Show when={list().length > 2}>
+              <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
+            </Show>
+            <text fg={theme().text}>
+              <b>Modified Files</b>
+            </text>
+          </box>
+        }
+      >
         <Show when={list().length <= 2 || open()}>
           <For each={list()}>
             {(item) => (
@@ -38,7 +42,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
             )}
           </For>
         </Show>
-      </box>
+      </Card>
     </Show>
   )
 }

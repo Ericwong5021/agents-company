@@ -1,5 +1,6 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, For, Show, createSignal } from "solid-js"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-lsp"
 
@@ -10,15 +11,18 @@ function View(props: { api: TuiPluginApi }) {
   const off = createMemo(() => props.api.state.config.lsp === false)
 
   return (
-    <box>
-      <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
-        <Show when={list().length > 2}>
-          <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
-        </Show>
-        <text fg={theme().text}>
-          <b>LSP</b>
-        </text>
-      </box>
+    <Card
+      title={
+        <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
+          <Show when={list().length > 2}>
+            <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
+          </Show>
+          <text fg={theme().text}>
+            <b>LSP</b>
+          </text>
+        </box>
+      }
+    >
       <Show when={list().length <= 2 || open()}>
         <Show when={list().length === 0}>
           <text fg={theme().textMuted}>
@@ -43,7 +47,7 @@ function View(props: { api: TuiPluginApi }) {
           )}
         </For>
       </Show>
-    </box>
+    </Card>
   )
 }
 

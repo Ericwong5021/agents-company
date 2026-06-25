@@ -1,5 +1,6 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
 import { createMemo, For, Match, Show, Switch, createSignal } from "solid-js"
+import { Card } from "../../component/card"
 
 const id = "internal:sidebar-mcp"
 
@@ -28,21 +29,24 @@ function View(props: { api: TuiPluginApi }) {
 
   return (
     <Show when={list().length > 0}>
-      <box>
-        <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
-          <Show when={list().length > 2}>
-            <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
-          </Show>
-          <text fg={theme().text}>
-            <b>MCP</b>
-            <Show when={!open()}>
-              <span style={{ fg: theme().textMuted }}>
-                {" "}
-                ({on()} active{bad() > 0 ? `, ${bad()} error${bad() > 1 ? "s" : ""}` : ""})
-              </span>
+      <Card
+        title={
+          <box flexDirection="row" gap={1} onMouseDown={() => list().length > 2 && setOpen((x) => !x)}>
+            <Show when={list().length > 2}>
+              <text fg={theme().text}>{open() ? "▼" : "▶"}</text>
             </Show>
-          </text>
-        </box>
+            <text fg={theme().text}>
+              <b>MCP</b>
+              <Show when={!open()}>
+                <span style={{ fg: theme().textMuted }}>
+                  {" "}
+                  ({on()} active{bad() > 0 ? `, ${bad()} error${bad() > 1 ? "s" : ""}` : ""})
+                </span>
+              </Show>
+            </text>
+          </box>
+        }
+      >
         <Show when={list().length <= 2 || open()}>
           <For each={list()}>
             {(item) => (
@@ -74,7 +78,7 @@ function View(props: { api: TuiPluginApi }) {
             )}
           </For>
         </Show>
-      </box>
+      </Card>
     </Show>
   )
 }
