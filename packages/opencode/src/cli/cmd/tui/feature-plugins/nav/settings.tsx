@@ -60,6 +60,16 @@ function SettingsView() {
         { value: "help.show", label: "Help" },
       ],
     },
+    {
+      label: t("tui.settings.group.danger"),
+      entries: [
+        {
+          value: "org.disband",
+          label: t("tui.org.disband.title"),
+          description: t("tui.org.disband.menu_description"),
+        },
+      ],
+    },
   ]
 
   // Right sidebar: the settings menu list.

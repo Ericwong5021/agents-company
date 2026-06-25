@@ -55,9 +55,14 @@ export function Onboarding() {
     })
   }
 
-  function finish(agentIDs: string[]) {
+  function finish(agentIDs: string[], teamNames: string[]) {
     setDone(true)
-    kv.set("onboarding_profile", { ...data(), foundingTeam: agentIDs, completedAt: Date.now() })
+    kv.set("onboarding_profile", {
+      ...data(),
+      foundingTeam: agentIDs,
+      teamNames,
+      completedAt: Date.now(),
+    })
     kv.set("onboarding_done", true)
     dialog.clear()
   }

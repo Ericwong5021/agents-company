@@ -61,6 +61,7 @@ import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { GroupSession } from "@/group-session"
 import { Thread } from "@/thread/thread"
+import { Org } from "@/org"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -127,6 +128,7 @@ export const AppLayer = Layer.suspend(() =>
     GroupSession.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
+    Org.defaultLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 

@@ -8,6 +8,7 @@ import { Spinner } from "@tui/component/spinner"
 import { TextAttributes, TextareaRenderable } from "@opentui/core"
 import { OnboardingFrame } from "./frame"
 import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
+import { buildGuidancePrompt } from "./prompts"
 
 interface StepMissionProps {
   stepIndex: number
@@ -63,7 +64,13 @@ export function StepMission(props: StepMissionProps) {
           description: t("onboarding.assistant.description"),
           color: "#8B5CF6",
           icon: "🌟",
-          system_prompt: buildSystemPrompt(props),
+          system_prompt: buildGuidancePrompt({
+            userName: props.userName,
+            assistantName: props.assistantName,
+            scopeLabels: props.scopes
+              .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
+              .join("、"),
+          }),
         }),
       })
 
@@ -147,7 +154,8 @@ export function StepMission(props: StepMissionProps) {
     props.onComplete({ mission })
   }
 
-  const exchanged = () => transcript().some((m) => m.role === "user")
+  const userTurns = () => transcript().filter((m) => m.role === "user").length
+  const enoughDepth = () => userTurns() >= 4
 
   return (
     <OnboardingFrame
@@ -182,13 +190,19 @@ export function StepMission(props: StepMissionProps) {
               <text fg={theme.background}>{t("onboarding.profile.next")}</text>
             </box>
           </box>
-          <Show when={exchanged()}>
-            <box flexDirection="row" justifyContent="flex-end">
+          <box flexDirection="row" justifyContent="space-between" alignItems="center">
+            <Show when={userTurns() > 0 && userTurns() < 4}>
+              <text fg={theme.textMuted}>
+                {t("onboarding.mission.hint").replace("{{n}}", String(4 - userTurns()))}
+              </text>
+            </Show>
+            <box />
+            <Show when={enoughDepth()}>
               <box backgroundColor={theme.success} paddingLeft={2} paddingRight={2} onMouseUp={finish}>
                 <text fg={theme.background}>{t("onboarding.mission.build")}</text>
               </box>
-            </box>
-          </Show>
+            </Show>
+          </box>
         </box>
       }
     >
@@ -229,20 +243,3 @@ export function StepMission(props: StepMissionProps) {
   )
 }
 
-function buildSystemPrompt(props: StepMissionProps) {
-  const scopeLabels = props.scopes
-    .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
-    .join("、")
-  return `你是「${props.assistantName}」，${props.userName} 的创业小助理。你温暖、好奇、善于倾听，用对话的方式帮助创始人想清楚公司要做的事。
-
-创始人信息：
-- 名字：${props.userName}
-- 业务方向：${scopeLabels}
-
-你的任务：
-- 用轻松的对谈，引导 ${props.userName} 说清楚「公司想做什么事业」以及「想达成什么目标」。
-- 每次只问一个问题，简短、口语化、有温度。
-- 适时帮对方把想法归纳成清晰的一句话，并确认。
-- 如果创始人用中文，就用中文回复。
-- 不要输出任何控制标记或代码块，只是自然地聊天。`
-}

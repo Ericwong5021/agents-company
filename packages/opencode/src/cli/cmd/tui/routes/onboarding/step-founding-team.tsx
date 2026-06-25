@@ -8,6 +8,7 @@ import { Spinner } from "@tui/component/spinner"
 import { OnboardingFrame } from "./frame"
 import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
 import { resolveFoundingRoles, type FoundingRoleSpec } from "./founding-roles"
+import { buildButlerPrompt } from "./prompts"
 
 interface StepFoundingTeamProps {
   stepIndex: number
@@ -16,7 +17,7 @@ interface StepFoundingTeamProps {
   assistantName: string
   scopes: string[]
   mission: string
-  onComplete: (agentIDs: string[]) => void
+  onComplete: (agentIDs: string[], teamNames: string[]) => void
 }
 
 interface Founder {
@@ -66,6 +67,27 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
 
       setFounders(created)
       setBuilding(false)
+
+      // Hot-swap the assistant's soul from guidance to butler now that the
+      // founding team exists and the company profile is locked in.
+      void sdk.fetch(`${sdk.url}/company-agent/onboarding-assistant`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "onboarding-assistant",
+          name: props.assistantName,
+          system_prompt: buildButlerPrompt({
+            userName: props.userName,
+            assistantName: props.assistantName,
+            scopeLabels: props.scopes
+              .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
+              .join("、"),
+            mission: props.mission || undefined,
+            team: created.map((f) => f.name),
+          }),
+        }),
+      }).catch(() => undefined)
+
       // Stagger the reveal of the founder cards for the achievement moment.
       created.forEach((_, i) => setTimeout(() => setVisible((v) => v + 1), 400 * (i + 1)))
     } catch {
@@ -128,7 +150,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
               paddingRight={4}
               paddingTop={1}
               paddingBottom={1}
-              onMouseUp={() => props.onComplete(founders().map((f) => f.id))}
+              onMouseUp={() => props.onComplete(founders().map((f) => f.id), founders().map((f) => f.name))}
             >
               <text fg={theme.background}>{t("onboarding.founding_team.enter")}</text>
             </box>

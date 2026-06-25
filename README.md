@@ -1,149 +1,143 @@
-# Agent Company
+<h1 align="center">Agent Company</h1>
 
-> **我们打造全球首个 Agent 公司操作系统——让每个人都能拥有自己的第一家 Agent 公司。**
+<p align="center"><strong>The first Agent company operating system — so anyone can run their own first Agent company.</strong></p>
 
-Agent Company 是一间由 AI Agent 组成的可治理虚拟公司。
+<p align="center">
+  <a href="README.zh.md">中文</a> | English
+</p>
 
-用户不是在“使用一个聊天机器人”，而是在经营一套可以分工、协作、观察、审批和持续沉淀经验的数字员工组织。需求会在组织中流动，被理解、拆解、分派、执行、审查，再回到用户做关键决策。
+---
 
-当前仓库的核心开发重点是 **TUI（Terminal UI）**，主实现位于 [packages/opencode/src/cli/cmd/tui](/Users/wangyidong/project/agent-company/agents-company/packages/opencode/src/cli/cmd/tui)。Web 和 App 不是当前主线，不作为默认支持范围。
+Agent Company is a governable virtual company made of AI Agents.
 
-## 产品定位
+You're not "using a chatbot" — you're running an organization of digital employees that divides work, collaborates, reports status, seeks approval, and accumulates experience over time. A request flows through the organization: it gets understood, decomposed, delegated, executed, and reviewed, then comes back to you for the key decisions.
 
-Agent Company 关注的不是“让一个模型回答更多问题”，而是把 AI 组织成一家公司：
+The repo's current focus is the **TUI (Terminal UI)**, implemented in [packages/opencode/src/cli/cmd/tui](packages/opencode/src/cli/cmd/tui). Web and App are not the current mainline and are not a default support target.
 
-- 有不同角色的 Agent
-- 有组织结构、职责边界和上下级关系
-- 有会议、讨论、任务、产出和审批
-- 有活动流、状态、风险和阻塞可观察性
-- 有治理机制，包括暂停、继续、重试、升级和复盘
-- 有记忆、声誉和长期沉淀，而不是一次性会话
+## Product Positioning
 
-理想体验是：
+Agent Company is not about "making one model answer more questions" — it's about organizing AI into a company:
 
-> 用户把目标说清楚，公司自己推进；需要用户拍板的时候，再来请求审批。
+- Agents with distinct roles
+- An org structure, responsibility boundaries, and reporting lines
+- Meetings, discussions, tasks, artifacts, and approvals
+- Observability over activity, status, risk, and blockers
+- Governance: pause, resume, retry, escalate, retrospect
+- Memory, reputation, and long-term accumulation — not one-shot sessions
 
-## 这个仓库正在构建什么
+The ideal experience:
 
-基于 PRD，Agent Company 的目标产品核心对象包括：
+> You state the goal; the company drives it forward. When a call is yours to make, it comes back for approval.
 
-- `Workspace`：公司空间，承载组织、任务、会议、产出、规则和历史
-- `Agent`：具有持续身份的数字员工，而不是 prompt 模板
-- `Group / Meeting`：可治理的协作房间，而不只是群聊
-- `Task`：可追踪、可验收、可审查的工作单
-- `Artifact`：代码、文档、报告、纪要等公司资产
-- `Decision`：带理由、可追溯的组织决策
-- `Proposal`：Agent 自下而上的建议和改进提案
+## Core Ideas
 
-仓库首页、交互和开发方向都会逐步围绕这些对象收敛。
+> See the [Product Design Overview](docs/product-design/00-overview.md)
 
-## 当前开发边界
+The whole system is a recursive **decompose → delegate → admit/escalate** tree. The user discusses with the boardroom; the need is decomposed and delegated downward layer by layer. **Only leaf nodes (the tool layer) produce artifacts** (code, docs, data, designs). Non-leaf nodes turn decisions into plans into specs into orchestration, and results flow back up to be admitted (success) or escalated (failure).
 
-这不是 AgentCompany 的兼容性维护仓库。
+- **Recursive delegation** — a fixed-depth delegation tree; every non-leaf node does the same job: decompose the goal, recruit/delegate, gate admission, escalate on failure.
+- **Identity decoupled from execution** — an Agent is a bundle of persistent files (who); a Model is the engine that runs them (what's being done). The unit of concurrency is the Thread, not the Agent.
+- **Information as files** — policies, strategy, projects, memory, relationships are all documents in the file system; access is governed by scope × classification × clearance.
+- **Attention as cost** — four attention modes (idle / reactive / divergent / focused) jointly decide what context is injected and which model tier runs; idle uses a cheap model, focused uses a strong one.
+- **Governance through records** — an emergent system isn't reproducible; every cross-Agent access, message, admission, and escalation is an audit event. The trace is the "source code" of each run.
+- **Bottom-up proposals** — ideas can bubble up; the board shifts from generating tasks to filtering proposals.
 
-Agent Company 虽然重建自 AgentCompany 的技术基础，但它是一个新的产品方向。除非明确需要迁移桥接，我们不会优先保留历史的 AgentCompany 文件结构、配置格式或 API 兼容性。
+## Organization
 
-当前对外和对内都应默认遵循这些边界：
-
-- 以 **TUI 优先** 的工作流来设计和实现功能
-- 优先建设“组织协作、任务执行、审批治理、状态可观察”能力
-- 不把多 Agent 系统包装成单一 supervisor 的黑盒输出
-- 不把 PRD 愿景描述成已经全部完成的现状
-
-## 仓库结构
-
-- [packages/opencode](/Users/wangyidong/project/agent-company/agents-company/packages/opencode)：当前 CLI 与 TUI 主体
-- [packages/opencode/src/cli/cmd/tui](/Users/wangyidong/project/agent-company/agents-company/packages/opencode/src/cli/cmd/tui)：TUI 主实现
-- [docs/Agent Company 产品 PRD.md](/Users/wangyidong/project/agent-company/agents-company/docs/Agent%20Company%20产品%20PRD.md)：产品定义与长期方向
-- [packages/sdk/js](/Users/wangyidong/project/agent-company/agents-company/packages/sdk/js)：JavaScript SDK
-
-## 本地开发
-
-### 环境要求
-
-- [Bun](https://bun.sh)
-- Node.js（部分工具链会用到）
-
-### 安装依赖
-
-```bash
-bun install
+```
+User ←→ Boardroom (CEO/CTO/CFO/CMO)     ← system entry = a meeting
+        ↓
+     Departments (business + infrastructure)   ← split goals + set acceptance criteria + form squads
+        ↓
+     Project squads (Leader)                   ← decompose into executable specs + recruit + gate admission
+        ↓
+     Execution layer                           ← match a predefined workflow + refine spec + drive tools
+        ↓
+     Tool layer                                ← the only layer that produces artifacts (code/search/writing/design/analysis)
 ```
 
-### 启动开发
+**Strictly no level-skipping**: every layer is traversed regardless of task size; delegation depth is ~4–5 levels.
+
+## What This Repo Is Building
+
+Based on the PRD, the core product objects include:
+
+| Object | Description |
+|--------|-------------|
+| `Workspace` | The company space — organization, tasks, meetings, artifacts, rules, and history |
+| `Agent` | A digital employee with a persistent identity (soul/instruct/memory/skills/relationships/kanban), not a prompt template |
+| `Thread` | The unit of concurrency — primary (focused/divergent), reactive (fragments), ambient (idle exploration) |
+| `Group / Meeting` | A governable collaboration room, not just a group chat |
+| `Task` | A trackable, acceptable, reviewable unit of work |
+| `Artifact` | Artifacts produced by the tool layer (code/docs/data/designs), flowing up through Gates |
+| `Decision` | A traceable organizational decision with rationale (DRI decides, no voting) |
+| `Proposal` | A bottom-up suggestion or improvement from an Agent |
+
+The repo's home page, interactions, and development direction will converge around these objects.
+
+## Development Boundaries
+
+This is not an AgentCompany compatibility release. Agent Company is rebuilt from AgentCompany foundations as a new product direction — legacy filesystem, config, and API compatibility are not preserved unless a migration bridge is explicitly requested.
+
+- Design and implement features with a **TUI-first** workflow
+- Prioritize organization, task execution, approval governance, and observability
+- Don't wrap a multi-Agent system as a single opaque supervisor output
+- Don't describe the design vision as a finished present state
+
+## Repository Layout
+
+- [packages/opencode](packages/opencode) — the current CLI and TUI
+- [packages/opencode/src/cli/cmd/tui](packages/opencode/src/cli/cmd/tui) — the main TUI implementation
+- [docs/product-design](docs/product-design) — product design docs (ideas, organization, modules)
+- [packages/sdk/js](packages/sdk/js) — the JavaScript SDK
+
+## Local Development
+
+Requirements: [Bun](https://bun.sh), Node.js (used by parts of the toolchain).
 
 ```bash
-# 从仓库根目录启动主开发入口
-bun run dev
+bun install              # install dependencies
+bun run dev              # start the main dev entry from the repo root
+bun run dev:desktop      # desktop dev
+bun run dev:console      # console dev
 ```
 
-当前 CLI 入口仍然是 `mimo`，这是现阶段代码实现状态的一部分，品牌与命令名会在后续逐步收敛。
+The CLI entry is still `mimo` — branding and command names will converge later.
 
-### 常用命令
+### Typecheck & Test
 
-```bash
-# 根目录开发入口
-bun run dev
-
-# 桌面端开发
-bun run dev:desktop
-
-# Console 开发
-bun run dev:console
-```
-
-### 类型检查
-
-不要从仓库根目录直接运行测试。
-
-类型检查请优先在具体 package 中执行，例如：
+Do not run tests or typechecks from the repo root. Run them inside a package directory:
 
 ```bash
 cd packages/opencode
 bun typecheck
-```
-
-### 测试
-
-测试也请在具体 package 目录中运行，例如：
-
-```bash
-cd packages/opencode
 bun test
 ```
 
-## SDK
+### SDK
 
-如果修改了 JavaScript SDK 相关内容，按仓库约定重新生成：
+If you change the JavaScript SDK, regenerate it:
 
 ```bash
 ./packages/sdk/js/script/build.ts
 ```
 
-## 设计原则
+## Design Principles
 
-代码和产品实现默认遵循以下方向：
+- An Agent should behave like a digital employee, not a one-shot model call
+- A Workspace should feel like a company runtime, not a plain chat project
+- Async by default; synchronous confirmation at key checkpoints
+- Observability over blind automation
+- Governance over surface-level efficiency
 
-- 一个 Agent 应该像数字员工，而不是一次性模型调用
-- 一个 Workspace 应该像公司运行空间，而不是普通聊天项目
-- 默认异步推进，关键节点同步确认
-- 可观察性优先于盲目自动化
-- 治理能力优先于表面效率
+These make the TUI emphasize: who is working, what they're doing, why, where they're stuck, who's next, and when you should step in.
 
-这些原则决定了我们在 TUI 中更重视：
+## Reference
 
-- 谁在工作
-- 正在做什么
-- 为什么这样做
-- 当前卡在哪里
-- 下一步是谁
-- 用户何时应该介入
-
-## 参考文档
-
-- [Agent Company 产品 PRD](/Users/wangyidong/project/agent-company/agents-company/docs/Agent%20Company%20产品%20PRD.md)
-- [packages/opencode/README.md](/Users/wangyidong/project/agent-company/agents-company/packages/opencode/README.md)
+- [Product Design Overview](docs/product-design/00-overview.md) (ideas, organization, module index)
+- [Agent Company Product PRD](docs/Agent%20Company%20产品%20PRD.md)
+- [packages/opencode/README.md](packages/opencode/README.md)
 
 ## License
 
-[MIT](/Users/wangyidong/project/agent-company/agents-company/LICENSE)
+Source code is licensed under the [MIT License](./LICENSE). Use of Agent Company is also subject to the [Use Restrictions](./USE_RESTRICTIONS.md).

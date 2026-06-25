@@ -1,148 +1,75 @@
-<h1 align="center">AgentCompany</h1>
+<h1 align="center">Agent Company</h1>
 
-<p align="center"><strong>AgentCompany: Where Models and Agents Co-Evolve</strong></p>
-
-<p align="center">
-  <a href="https://mimo.xiaomi.com/coder">Website</a> | <a href="https://mimo.xiaomi.com/en/blog/mimo-code-long-horizon">Blog</a> | <a href="https://github.com/XiaomiMiMo/MiMo-Code">GitHub</a>
-</p>
+<p align="center"><strong>The first Agent company operating system — so anyone can run their own first Agent company.</strong></p>
 
 ---
 
-AgentCompany is a terminal-native AI coding assistant. It can read and write code, run commands, manage Git, and use a persistent memory system to keep a deep understanding of your project across sessions while continuously improving itself.
+Agent Company is a governable virtual company made of AI Agents.
 
-MiMo Auto is built in as a free-for-limited-time channel, so you can start with zero configuration. AgentCompany also supports connecting to any mainstream LLM provider API.
+You're not "using a chatbot" — you're running an organization of digital employees that divides work, collaborates, reports status, seeks approval, and accumulates experience over time. A request flows through the organization: it gets understood, decomposed, delegated, executed, and reviewed, then comes back to you for the key decisions.
+
+> You state the goal; the company drives it forward. When a call is yours to make, it comes back for approval.
+
+---
+
+## Core Ideas
+
+The whole system is a recursive **decompose → delegate → admit/escalate** tree. The user discusses with the boardroom; the need is decomposed and delegated downward layer by layer. **Only leaf nodes (the tool layer) produce artifacts** (code, docs, data, designs). Non-leaf nodes turn decisions into plans into specs into orchestration, and results flow back up to be admitted (success) or escalated (failure).
+
+- **Recursive delegation** — a fixed-depth delegation tree; every non-leaf node does the same job: decompose the goal, recruit/delegate, gate admission, escalate on failure.
+- **Identity decoupled from execution** — an Agent is a bundle of persistent files (who); a Model is the engine that runs them (what's being done). The unit of concurrency is the Thread, not the Agent.
+- **Information as files** — policies, strategy, projects, memory, relationships are all documents in the file system; access is governed by scope × classification × clearance.
+- **Attention as cost** — four attention modes (idle / reactive / divergent / focused) jointly decide what context is injected and which model tier runs; idle uses a cheap model, focused uses a strong one.
+- **Governance through records** — an emergent system isn't reproducible; every cross-Agent access, message, admission, and escalation is an audit event. The trace is the "source code" of each run.
+- **Bottom-up proposals** — ideas can bubble up; the board shifts from generating tasks to filtering proposals.
+
+See the [Product Design Overview](docs/product-design/00-overview.md).
+
+---
+
+## Organization
+
+```
+User ←→ Boardroom (CEO/CTO/CFO/CMO)     ← system entry = a meeting
+        ↓
+     Departments (business + infrastructure)
+        ↓
+     Project squads (Leader)
+        ↓
+     Execution layer                      ← match a predefined workflow + refine spec + drive tools
+        ↓
+     Tool layer                           ← the only layer that produces artifacts
+```
+
+**Strictly no level-skipping**: every layer is traversed regardless of task size; delegation depth is ~4–5 levels.
 
 ---
 
 ## Quick Start
 
 ```bash
-# One-line install
-curl -fsSL https://mimo.xiaomi.com/install | bash
-
-# Or install via npm
-npm install -g @agents-company/cli
-
-# Run
-mimo
+bun install      # install dependencies
+bun run dev      # start the main dev entry from the repo root
 ```
 
-The first launch guides you through configuration automatically. Supported options:
-- **MiMo Auto (free for a limited time)** — anonymous channel, zero configuration
-- **Xiaomi MiMo Platform** — OAuth login
-- **Import from Claude Code** — migrate existing authentication in one step
-- **Custom Provider** — add any OpenAI-compatible API in the TUI
+> The repo's current focus is the **TUI (Terminal UI)** in [packages/opencode/src/cli/cmd/tui](packages/opencode/src/cli/cmd/tui). Web and App are not the current mainline. The CLI entry is still `mimo`; branding and command names will converge later.
 
-<details>
-<summary><strong>WSL: clipboard issues</strong></summary>
+Run typechecks and tests from a package directory (not the repo root):
 
-If you encounter garbled text when copying on WSL, install `xsel`:
 ```bash
-sudo apt install xsel
+cd packages/opencode
+bun typecheck
+bun test
 ```
-</details>
 
 ---
 
-## Core Features
+## Note
 
-### Multiple Agents
-
-| Agent | Description |
-|--------|------|
-| **build** | Default. Full tool permissions for development |
-| **plan** | Read-only analysis mode for code exploration and solution design |
-| **compose** | Orchestration mode for specs-driven development and skill-driven workflows |
-
-Press `Tab` to switch between primary agents. Subagents are created by the system as needed.
-
-### Persistent Memory
-
-Cross-session memory powered by SQLite FTS5 full-text search:
-
-- **Project memory** (`MEMORY.md`) — persistent project knowledge, rules, and architecture decisions
-- **Session checkpoint** (`checkpoint.md`) — structured state snapshots maintained automatically by the checkpoint-writer subagent
-- **Scratch notes** (`notes.md`) — temporary note area for agents
-- **Task progress** (`tasks/<id>/progress.md`) — per-task logs
-
-Memory is injected automatically when a session resumes, so the agent does not need to relearn project context.
-
-### Intelligent Context Management
-
-- **Automatic checkpoints** — decides when to save session state based on the model context window
-- **Context reconstruction** — when context approaches the limit, rebuilds it from the latest checkpoint, project memory, task progress, and retained recent messages so the agent can continue the current task
-- **Budgeted injection** — uses a token budget to control how much checkpoint, memory, and notes content enters context, with importance ranking
-
-### Task Tracking
-
-A tree-shaped task system (`T1`, `T1.1`, `T1.2`, …) that integrates automatically with the checkpoint system, so task progress is preserved when sessions resume.
-
-### Subagent System
-
-The primary agent can create subagents on demand. Subagents share the current session context and can work in parallel, with lifecycle tracking, cancellation, and background execution.
-
-### Goal / Stop Condition
-
-The `/goal` command sets a stopping condition for a session. When the agent tries to stop, an independent judge model evaluates the conversation to decide whether the condition is truly satisfied — preventing premature "optimistic stops" during autonomous work.
-
-### Compose Mode
-
-Compose mode provides a structured workflow for specs-driven development. It includes built-in skills for planning, execution, code review, TDD, debugging, verification, and merging — orchestrating the full lifecycle from spec to shipped code.
-
-### Voice Input
-
-Real-time streaming voice input powered by TenVAD and MiMo ASR. Activate with `/voice`, then speak — audio is segmented by pauses and transcribed incrementally into the input. Available for MiMo logged-in users. Requires `sox` (`brew install sox` on macOS, other platforms similar).
-
-<details>
-<summary><strong>WSLg audio setup</strong></summary>
-
-```bash
-sudo apt install -y sox pulseaudio libasound2-plugins
-export PULSE_SERVER=unix:/mnt/wslg/PulseServer
-```
-</details>
-
-<details>
-<summary><strong>SSH remote audio (Mac → remote host)</strong></summary>
-
-```bash
-# Mac (local)
-brew install pulseaudio
-pulseaudio --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1" --exit-idle-time=-1 --daemonize
-# Add to ~/.ssh/config: RemoteForward 4713 127.0.0.1:4713
-
-# Remote host
-apt install -y pulseaudio pulseaudio-utils sox
-export PULSE_SERVER=tcp:127.0.0.1:4713
-# Verify: pactl info
-```
-</details>
-
-### Dream & Distill
-
-- **`/dream`** — scans recent session traces, extracts persistent knowledge into project memory, and removes outdated entries
-- **`/distill`** — discovers repeated manual workflows in recent work and packages high-confidence candidates into reusable skills, subagents, or commands
-
----
-
-## Configuration
-
-AgentCompany is configured via `.agentcompany/agentcompany.json` in the project directory (or `~/.config/agentcompany/agentcompany.json` globally). Key options include:
-
-- Provider and model selection
-- Agent permissions and custom agents
-- Checkpoint and memory behavior
-- MCP server connections
-- Keybindings and theme
-
-Max Mode (parallel best-of-N reasoning with judge selection) can be enabled via `experimental.maxMode` in the config.
+This is not an AgentCompany compatibility release. Agent Company is rebuilt from AgentCompany foundations as a new product direction; legacy filesystem, config, and API compatibility are not preserved unless a migration bridge is explicitly requested.
 
 ---
 
 ## License
 
-Source code is licensed under the [MIT License](https://github.com/XiaomiMiMo/MiMo-Code/blob/main/LICENSE).
-
-Use of AgentCompany is also subject to the [Use Restrictions](https://github.com/XiaomiMiMo/MiMo-Code/blob/main/USE_RESTRICTIONS.md).
-Use of Xiaomi MiMo-hosted services is subject to the [MiMo Terms of Service](https://platform.xiaomimimo.com/docs/terms/user-agreement).
-Use of the MiMo name, logo, and trademarks is subject to the MiMo Trademark Policy.
+Source code is licensed under the [MIT License](./LICENSE). Use of Agent Company is also subject to the [Use Restrictions](./USE_RESTRICTIONS.md).

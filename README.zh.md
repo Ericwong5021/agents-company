@@ -1,209 +1,109 @@
-<h1 align="center">AgentCompany</h1>
+<h1 align="center">Agent Company</h1>
 
-<p align="center">
-  <img src="assets/readme/mimocode-banner.png" alt="AgentCompany" width="700">
-</p>
-
-<p align="center"><strong>AgentCompany: Where Models and Agents Co-Evolve</strong></p>
+<p align="center"><strong>全球首个 Agent 公司操作系统——让每个人都能拥有自己的第一家 Agent 公司。</strong></p>
 
 <p align="center">
   中文 | <a href="README.md">English</a>
 </p>
 
-<p align="center">
-  <a href="https://mimo.xiaomi.com/zh/mimocode">官网</a> | <a href="https://mimo.xiaomi.com/zh/blog/mimo-code-long-horizon">博客</a>
-</p>
+---
+
+Agent Company 是一间由 AI Agent 组成的可治理虚拟公司。
+
+你不是在「使用一个聊天机器人」，而是在经营一套可以分工、协作、观察、审批和持续沉淀经验的数字员工组织。需求会在组织中流动，被理解、拆解、分派、执行、审查，再回到你做关键决策。
+
+> 你把目标说清楚，公司自己推进；需要你拍板的时候，再来请求审批。
 
 ---
 
-AgentCompany 是一个终端原生的 AI 编程助手。它能读写代码、执行命令、管理 Git，通过持久化记忆系统，在多次会话间保持对你项目的深度理解，并自我进化。
+## 核心理念
 
-内置 MiMo Auto 限时免费通道——零配置即可开始使用。也支持接入各家主流 LLM 厂商 API。
+整个系统是一棵**递归的「拆解—委派—准入/升级」树**：用户与董事会圆桌讨论，需求逐层向下拆解委派，**只有叶子节点（工具层）直接产出制品**（代码/文档/数据/设计稿），非叶节点做的是决策 → 规划 → 规格 → 编排的逐层转化，结果逐层向上准入（成功）或升级（失败）。
+
+- **递归委托** — 固定层级的递归委托树，每个非叶节点都做同一件事：拆解目标、招募/委派、准入校验、失败升级。
+- **身份与执行解耦** — Agent 是一束持久文件（谁），Model 是把文件跑起来的执行引擎（在做什么）；并发计量单位是 Thread，不是 Agent。
+- **信息即文件** — 规章、战略、项目、记忆、关系都是文件系统中的文档，访问由作用域 × 密级 × 清除级别三维控制。
+- **注意力即成本** — 四种注意力模式（空闲/响应/发散/专注）同时决定注入什么上下文、用哪档模型；空闲用廉价模型，专注用强模型。
+- **治理靠记录** — 涌现式系统不追求复现，每次跨 Agent 的访问、消息、准入、升级都是审计事件，轨迹即这次的「源代码」。
+- **自底向上提案** — 想法可自底向上冒，董事会从「生成任务」转为「筛选提案」。
+
+详见 [产品设计总览](docs/product-design/00-overview.md)。
+
+---
+
+## 组织架构
+
+```
+用户 ←→ 董事会圆桌（CEO/CTO/CFO/CMO）   ← 系统入口 = 一场会议
+        ↓
+     部门层（业务部门 + 基建部门）       ← 拆目标 + 定验收标准 + 组团队
+        ↓
+     项目组（Leader）                    ← 拆解为可执行规格 + 招募成员 + 管准入
+        ↓
+     执行层                              ← 匹配预定义工作流 + 细化规格 + 驱动工具
+        ↓
+     工具层                              ← 唯一直接产出制品的层（编码/检索/写作/设计/分析）
+```
+
+**严格不可越级**：无论任务大小，每层必须经过，不设跳步；委派深度约 4–5 层。
+
+---
+
+## 核心对象
+
+| 对象 | 说明 |
+|------|------|
+| **Workspace** | 公司空间，承载组织、任务、会议、产出、规则和历史 |
+| **Agent** | 具有持续身份的数字员工（soul/instruct/memory/skills/relationships/kanban），而不是 prompt 模板 |
+| **Thread** | 并发执行单元：主线（专注/发散）、响应线（碎片）、环境线（空闲探索） |
+| **Group / Meeting** | 可治理的协作房间，而不只是群聊 |
+| **Task** | 可追踪、可验收、可审查的工作单 |
+| **Artifact** | 工具层直接产出的制品（代码/文档/数据/设计稿），经 Gate 向上流转 |
+| **Gate** | 每层向上流转的验收关卡，通过则升级，打回则重试或升级 |
+| **Decision** | 带理由、可追溯的组织决策（DRI 拍板，不投票表决） |
+| **Proposal** | Agent 自下而上的建议和改进提案 |
 
 ---
 
 ## 快速开始
 
 ```bash
-# 一键安装
-curl -fsSL https://mimo.xiaomi.com/install | bash
+# 安装依赖
+bun install
 
-# 或通过 npm 安装
-npm install -g @agents-company/cli
-
-# 运行
-mimo
+# 从仓库根目录启动主开发入口
+bun run dev
 ```
 
-首次启动自动引导配置。支持：
-- **MiMo Auto（限时免费）** — 匿名通道，零配置
-- **小米 MiMo 平台** — OAuth 登录
-- **从 Claude Code 导入** — 一键迁移已有认证
-- **自定义 Provider** — TUI 内添加任意 OpenAI 兼容 API
+> 当前仓库核心开发重点是 **TUI（Terminal UI）**，主实现位于 [packages/opencode/src/cli/cmd/tui](packages/opencode/src/cli/cmd/tui)。Web 和 App 不是当前主线。
+>
+> 当前 CLI 入口仍为 `mimo`，品牌与命令名会在后续逐步收敛。
 
-<details>
-<summary><strong>WSL：剪贴板问题</strong></summary>
-
-如果在 WSL 上复制出现乱码，安装 `xsel`：
-```bash
-sudo apt install xsel
-```
-</details>
-
----
-
-## 核心特性
-
-### 多智能体
-
-| 智能体 | 说明 |
-|--------|------|
-| **build** | 默认。完整工具权限，用于开发 |
-| **plan** | 只读分析模式，适合代码探索和方案设计 |
-| **compose** | 编排模式，适合 specs-driven 开发和 Skill 驱动流程 |
-
-按 `Tab` 在主智能体间切换。子智能体由系统按需生成。
-
-### 持久化记忆
-
-基于 SQLite FTS5 全文搜索的跨会话记忆：
-
-- **项目记忆** (`MEMORY.md`) — 跨会话持久的项目知识、规则、架构决策
-- **会话检查点** (`checkpoint.md`) — 结构化状态快照，由 checkpoint-writer 子智能体自动维护
-- **笔记暂存** (`notes.md`) — Agent 临时记录区
-- **任务进展** (`tasks/<id>/progress.md`) — 逐任务日志
-
-记忆自动在会话恢复时注入上下文，agent 无需重新理解项目背景。
-
-### 智能上下文管理
-
-- **自动检查点** — 根据模型上下文窗口自动决定什么时候保存会话状态
-- **上下文重建** — 当上下文接近上限时，从最新 checkpoint、项目记忆、任务进展和保留的近期消息重建上下文，让 agent 继续当前任务
-- **预算化注入** — 用 token budget 控制 checkpoint / memory / notes 注入上下文的大小，按重要性排序
-
-### 任务追踪
-
-树状任务系统（T1, T1.1, T1.2…），自动与检查点系统联动，恢复会话时任务进度不丢失。
-
-### 子智能体系统
-
-主智能体可按需生成子智能体，共享当前会话上下文并行工作，支持生命周期追踪、取消机制和后台执行。
-
-### Goal / 停止条件
-
-`/goal` 命令为会话设置停止条件。当 agent 想停下来时，由独立裁判模型评估对话内容，判断条件是否真正满足——防止自主工作中的"乐观停止"。
-
-### Compose 编排模式
-
-Compose 模式提供结构化的 specs-driven 开发流程，内置规划、执行、代码审查、TDD、调试、验证、合并等技能——编排从 spec 到交付的完整开发生命周期。
-
-### 语音输入
-
-基于 TenVAD 和 MiMo ASR 的实时流式语音输入。通过 `/voice` 激活，按停顿分片转写，文本逐段追加到输入框。仅对 MiMo 登录用户可用。需要安装 `sox`（macOS 上 `brew install sox`，其他平台类似）。
-
-<details>
-<summary><strong>WSLg 音频配置</strong></summary>
+类型检查与测试请在具体 package 目录中执行（不要从仓库根目录运行）：
 
 ```bash
-sudo apt install -y sox pulseaudio libasound2-plugins
-export PULSE_SERVER=unix:/mnt/wslg/PulseServer
-```
-</details>
-
-<details>
-<summary><strong>SSH 远程音频（Mac → 远程主机）</strong></summary>
-
-```bash
-# Mac（本地）
-brew install pulseaudio
-pulseaudio --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1" --exit-idle-time=-1 --daemonize
-# 在 ~/.ssh/config 中添加: RemoteForward 4713 127.0.0.1:4713
-
-# 远程主机
-apt install -y pulseaudio pulseaudio-utils sox
-export PULSE_SERVER=tcp:127.0.0.1:4713
-# 验证: pactl info
-```
-</details>
-
-<details>
-<summary><strong>非 MiMo 渠道语音输入（OpenRouter、内部 API 等）</strong></summary>
-
-语音输入可通过 `voice` 配置字段路由到其他 OpenAI 兼容 provider。ASR 模型（`mimo-v2.5-asr`）仅在 MiMo 平台可用；语音控制模式（`mimo-v2.5`）可通过 OpenRouter 等中转平台使用。
-
-**OpenRouter（仅语音控制）：**
-
-使用 `/connect` 连接 OpenRouter 后，只需在配置中添加：
-```jsonc
-{
-  "voice": {
-    "control_model": "openrouter/xiaomi/mimo-v2.5"
-  }
-}
-```
-
-**内部 / 自建中转平台（ASR + 语音控制）：**
-```jsonc
-{
-  "provider": {
-    "internal": {
-      "options": {
-        "baseURL": "https://your-api-gateway.example.com/v1",
-        "apiKey": "sk-..."
-      },
-      "models": {
-        "xiaomi/mimo-v2.5-asr": { "name": "MiMo-V2.5-ASR" },
-        "xiaomi/mimo-v2.5": { "name": "MiMo-V2.5" }
-      }
-    }
-  },
-  "voice": {
-    "asr_model": "internal/xiaomi/mimo-v2.5-asr",
-    "control_model": "internal/xiaomi/mimo-v2.5"
-  }
-}
-```
-
-自定义 provider 必须在 `models` 中注册至少一个模型才能被系统识别。`voice.*_model` 中的模型名直接传给 API，不必与注册的 key 完全一致。OpenRouter 等内置 provider 无需手动配置 models。
-
-> **注意**：自定义 provider 注册的模型会出现在主模型选择列表中。请勿将 ASR 专用模型（如 `mimo-v2.5-asr`）用作编程主模型。
-
-</details>
-
-### Dream & Distill
-
-- **`/dream`** — 扫描近期会话轨迹，提取持久知识到项目记忆，清理过时条目
-- **`/distill`** — 发现近期工作中重复的手动工作流，将高置信度候选打包成可复用的 skill、subagent 或 command
-
----
-
-## 配置
-
-通过项目目录下的 `.agentcompany/agentcompany.json`（或全局 `~/.config/agentcompany/agentcompany.json`）配置。主要选项包括：
-
-- Provider 和模型选择
-- Agent 权限和自定义 Agent
-- 检查点和记忆行为
-- MCP 服务器连接
-- 快捷键和主题
-
-Max Mode（并行 best-of-N 推理 + 裁判选优）可通过配置中的 `experimental.maxMode` 开启。
-
----
-
-## 开发
-
-```bash
-bun install              # 安装依赖
-bun run dev              # 开发模式运行
-bun turbo typecheck      # 类型检查
+cd packages/opencode
+bun typecheck
+bun test
 ```
 
 ---
 
-## 与 OpenCode 的关系
+## 当前开发边界
 
-AgentCompany 基于 [OpenCode](https://github.com/anomalyco/opencode) fork 构建，保留其全部核心能力（多 Provider、TUI、LSP、MCP、插件），并在此基础上构建了持久化记忆、智能上下文管理、子智能体编排、目标驱动的自主循环、Compose 工作流，以及通过 dream/distill 实现的自我进化。
+这不是 AgentCompany 的兼容性维护仓库。Agent Company 虽然重建自 AgentCompany 的技术基础，但它是一个新的产品方向——除非明确需要迁移桥接，我们不保留历史的文件结构、配置格式或 API 兼容性。
+
+- 以 **TUI 优先** 的工作流来设计和实现功能
+- 优先建设「组织协作、任务执行、审批治理、状态可观察」能力
+- 不把多 Agent 系统包装成单一 supervisor 的黑盒输出
+- 不把设计愿景描述成已经全部完成的现状
+
+---
+
+## 参考文档
+
+- [产品设计总览](docs/product-design/00-overview.md)（理念、组织架构、模块索引）
+- [Agent Company 产品 PRD](docs/Agent%20Company%20产品%20PRD.md)
 
 ---
 
@@ -221,8 +121,4 @@ AgentCompany 基于 [OpenCode](https://github.com/anomalyco/opencode) fork 构�
 
 ## 许可证
 
-源代码基于 [MIT 许可证](./LICENSE) 开源。
-
-使用 AgentCompany 还需遵守[使用限制](./USE_RESTRICTIONS.md)。
-使用小米 MiMo 托管服务须遵守 [MiMo 服务条款](https://platform.xiaomimimo.com/docs/terms/user-agreement)。
-使用 MiMo 名称、标志和商标须遵守 MiMo 商标政策。
+源代码基于 [MIT 许可证](./LICENSE) 开源。使用 Agent Company 还需遵守[使用限制](./USE_RESTRICTIONS.md)。

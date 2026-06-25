@@ -126,6 +126,17 @@ export async function initWorkspace(dataPath: string): Promise<void> {
   )
 }
 
+/**
+ * Wipe the entire workspace tree and recreate the empty three-layer skeleton.
+ * Used when disbanding the company — removes all org docs, agent profiles, and
+ * group/agent directories, then re-seeds the default files.
+ */
+export async function resetWorkspace(): Promise<void> {
+  const root = workspaceRoot()
+  await fs.rm(root, { recursive: true, force: true })
+  await initWorkspace(path.dirname(root))
+}
+
 // ---------------------------------------------------------------------------
 // Agent profile generation
 // ---------------------------------------------------------------------------
