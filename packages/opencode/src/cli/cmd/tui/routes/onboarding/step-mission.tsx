@@ -25,6 +25,11 @@ interface StepMissionProps {
 // main session view uses) so streamed replies show and update live — polling
 // the REST endpoint dropped messages. The founder ends the talk explicitly via
 // the "build the team" button rather than relying on a model-emitted marker.
+//
+// On mount we send a hidden kickstart message asking the assistant to generate
+// a personalised opening line. That line is shown in the speech bubble and
+// filtered from the visible transcript — the founder sees the AI-crafted
+// greeting, then types their first real message to begin.
 export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
@@ -36,9 +41,14 @@ export function StepMission(props: StepMissionProps) {
   const [ready, setReady] = createSignal(false)
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+  // The AI-generated opening line, shown in the speech bubble.
+  const [openingLine, setOpeningLine] = createSignal<string | null>(null)
+  // The id of the hidden kickstart user message, so we can filter it.
+  const [kickoffID, setKickoffID] = createSignal<string | null>(null)
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
+  const KICKOFF_TEXT = `[系统] 请根据以下创始人信息，用一两句话生成一句温暖、个性化的开场白，作为你和创始人对话的开始。不要加任何前缀或解释，直接说开场白。\n创始人名字：${props.userName}\n业务方向：${props.scopes.map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s).join("、")}`
 
   onMount(() => {
     dialog.setSize("large")
@@ -78,9 +88,20 @@ export function StepMission(props: StepMissionProps) {
         setError(t("onboarding.mission.error"))
         return
       }
-      setSessionID(res.data.id)
-      setReady(true)
-      focusInput()
+      const sid = res.data.id
+      setSessionID(sid)
+
+      // Send a hidden kickstart so the AI generates a personalised opening.
+      setSubmitting(true)
+      try {
+        await sdk.client.session.promptAsync({
+          sessionID: sid,
+          parts: [{ type: "text", text: KICKOFF_TEXT }],
+        })
+      } catch {
+        setError(t("onboarding.mission.error"))
+        return
+      }
     } catch {
       setError(t("onboarding.mission.error"))
     }
@@ -106,6 +127,7 @@ export function StepMission(props: StepMissionProps) {
     if (!sid) return []
     const buckets = sync.data.message[sid]
     if (!buckets) return []
+    const koID = kickoffID()
     return Object.values(buckets)
       .flat()
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -118,7 +140,38 @@ export function StepMission(props: StepMissionProps) {
           .map((p) => ("text" in p ? (p.text ?? "") : ""))
           .join(""),
       }))
-      .filter((m) => m.content.trim().length > 0)
+      .filter((m) => m.content.trim().length > 0 && m.id !== koID)
+  })
+
+  // Capture the kickstart user message id and the assistant's opening reply.
+  // Once both exist, we show the opening line in the speech bubble and mark
+  // the step as ready for the founder to type.
+  createMemo(() => {
+    const sid = sessionID()
+    if (!sid || ready()) return
+    const buckets = sync.data.message[sid]
+    if (!buckets) return
+    const all = Object.values(buckets).flat().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
+    // Find the kickstart user message (first user message).
+    const kickoff = all.find((m) => m.role === "user")
+    if (kickoff && !kickoffID()) setKickoffID(kickoff.id)
+
+    // Find the assistant reply to the kickstart.
+    const assistantReply = all.find((m) => m.role === "assistant" && m.time.completed)
+    if (assistantReply && kickoffID()) {
+      const text = (sync.data.part[assistantReply.id] ?? [])
+        .filter((p) => p.type === "text" && !p.synthetic && !p.ignored)
+        .map((p) => ("text" in p ? (p.text ?? "") : ""))
+        .join("")
+        .trim()
+      if (text) {
+        setOpeningLine(text)
+        setSubmitting(false)
+        setReady(true)
+        focusInput()
+      }
+    }
   })
 
   // Busy while the founder's prompt is in flight or the assistant is still
@@ -161,7 +214,7 @@ export function StepMission(props: StepMissionProps) {
       stepCount={props.stepCount}
       title={t("onboarding.mission.title")}
       speaker={{ name: props.assistantName, icon: "🌟" }}
-      speech={t("onboarding.mission.intro").replace("{{name}}", props.userName)}
+      speech={openingLine() ?? undefined}
       footer={
         <box flexDirection="column" gap={1}>
           <box flexDirection="row" alignItems="center" gap={1}>
@@ -208,8 +261,12 @@ export function StepMission(props: StepMissionProps) {
         <text fg={theme.error}>⚠ {error()}</text>
       </Show>
 
+      {/* Generating the opening line */}
       <Show when={!ready() && !error()}>
-        <Spinner color={theme.textMuted}>{t("onboarding.interview.preparing")}</Spinner>
+        <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
+          <Spinner color={theme.primary} />
+          <text fg={theme.textMuted}>{t("onboarding.mission.generating")}</text>
+        </box>
       </Show>
 
       {/* Transcript (last few turns) */}
@@ -240,4 +297,3 @@ export function StepMission(props: StepMissionProps) {
     </OnboardingFrame>
   )
 }
-
