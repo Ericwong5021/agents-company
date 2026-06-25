@@ -10,7 +10,7 @@ const run = <A>(effect: Effect.Effect<A, unknown, Ripgrep.Service>) =>
   effect.pipe(Effect.provide(Ripgrep.defaultLayer), Effect.runPromise)
 
 // Ripgrep respects parent .gitignore. When tmpdirs are under the repo,
-// patterns like `.mimocode/` in root .gitignore affect test results.
+// patterns like `.agentcompany/` in root .gitignore affect test results.
 function withTmpdirOutsideGit<T>(fn: () => Promise<T>): Promise<T> {
   const prev = process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
   delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
@@ -26,8 +26,8 @@ describe("file.ripgrep", () => {
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Bun.write(path.join(dir, "visible.txt"), "hello")
-          await fs.mkdir(path.join(dir, ".mimocode"), { recursive: true })
-          await Bun.write(path.join(dir, ".mimocode", "thing.json"), "{}")
+          await fs.mkdir(path.join(dir, ".agentcompany"), { recursive: true })
+          await Bun.write(path.join(dir, ".agentcompany", "thing.json"), "{}")
         },
       })
 
@@ -40,15 +40,15 @@ describe("file.ripgrep", () => {
         ),
       )
       expect(files.includes("visible.txt")).toBe(true)
-      expect(files.includes(path.join(".mimocode", "thing.json"))).toBe(true)
+      expect(files.includes(path.join(".agentcompany", "thing.json"))).toBe(true)
     }))
 
   test("hidden false excludes hidden", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Bun.write(path.join(dir, "visible.txt"), "hello")
-        await fs.mkdir(path.join(dir, ".mimocode"), { recursive: true })
-        await Bun.write(path.join(dir, ".mimocode", "thing.json"), "{}")
+        await fs.mkdir(path.join(dir, ".agentcompany"), { recursive: true })
+        await Bun.write(path.join(dir, ".agentcompany", "thing.json"), "{}")
       },
     })
 
@@ -61,7 +61,7 @@ describe("file.ripgrep", () => {
       ),
     )
     expect(files.includes("visible.txt")).toBe(true)
-    expect(files.includes(path.join(".mimocode", "thing.json"))).toBe(false)
+    expect(files.includes(path.join(".agentcompany", "thing.json"))).toBe(false)
   })
 
   test("search returns empty when nothing matches", async () => {

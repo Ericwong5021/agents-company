@@ -96,7 +96,7 @@ export const dict: Record<string, string> = {
   "tui.tips.subagent": "Use {highlight}@agent-name{/highlight} in prompts to invoke specialized subagents",
   "tui.tips.cycle_sessions": "Press {highlight}Ctrl+X Right/Left{/highlight} to cycle through parent and child sessions",
   "tui.tips.config_files":
-    "Create {highlight}mimocode.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
+    "Create {highlight}agentcompany.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
   "tui.tips.global_config": "Place TUI settings in {highlight}~/.config/mimocode/tui.json{/highlight} for global config",
   "tui.tips.schema": "Add {highlight}$schema{/highlight} to your config for autocomplete in your editor",
   "tui.tips.default_model": "Configure {highlight}model{/highlight} in config to set your default model",

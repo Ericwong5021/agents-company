@@ -23,7 +23,7 @@
     "db": "bun drizzle-kit"
   },
   "bin": {
-    "mimo": "./bin/mimo"
+    "agents": "./bin/agents"
   },
   "exports": {
     "./*": "./src/*.ts"

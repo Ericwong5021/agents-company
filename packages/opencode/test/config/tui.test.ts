@@ -40,7 +40,7 @@ afterEach(async () => {
 test("keeps server and tui plugin merge semantics aligned", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const local = path.join(dir, ".mimocode")
+      const local = path.join(dir, ".agentcompany")
       await fs.mkdir(local, { recursive: true })
 
       await Bun.write(
@@ -113,9 +113,9 @@ test("loads tui config with the same precedence order as server config paths", a
     init: async (dir) => {
       await Bun.write(path.join(Global.Path.config, "tui.json"), JSON.stringify({ theme: "global" }, null, 2))
       await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ theme: "project" }, null, 2))
-      await fs.mkdir(path.join(dir, ".mimocode"), { recursive: true })
+      await fs.mkdir(path.join(dir, ".agentcompany"), { recursive: true })
       await Bun.write(
-        path.join(dir, ".mimocode", "tui.json"),
+        path.join(dir, ".agentcompany", "tui.json"),
         JSON.stringify({ theme: "local", diff_style: "stacked" }, null, 2),
       )
     },
@@ -486,11 +486,11 @@ test("applies file substitutions when first identical token is in a commented li
   expect(config.theme).toBe("resolved-theme")
 })
 
-test("loads .mimocode/tui.json", async () => {
+test("loads .agentcompany/tui.json", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await fs.mkdir(path.join(dir, ".mimocode"), { recursive: true })
-      await Bun.write(path.join(dir, ".mimocode", "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
+      await fs.mkdir(path.join(dir, ".agentcompany"), { recursive: true })
+      await Bun.write(path.join(dir, ".agentcompany", "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
     },
   })
   const config = await getTuiConfig(tmp.path)

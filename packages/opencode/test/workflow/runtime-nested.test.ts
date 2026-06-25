@@ -118,8 +118,8 @@ describe("WorkflowRuntime workflow() by name + dataflow", () => {
           title: "wf nest named",
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         })
-        // Write two saved workflows into the project's .mimocode/workflows.
-        const wfDir = path.join(dir, ".mimocode", "workflows")
+        // Write two saved workflows into the project's .agentcompany/workflows.
+        const wfDir = path.join(dir, ".agentcompany", "workflows")
         mkdirSync(wfDir, { recursive: true })
         writeFileSync(
           path.join(wfDir, "produce.js"),
@@ -303,7 +303,7 @@ describe("WorkflowRuntime cycle + depth safety", () => {
           title: "wf cycle",
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         })
-        const wfDir = path.join(dir, ".mimocode", "workflows")
+        const wfDir = path.join(dir, ".agentcompany", "workflows")
         mkdirSync(wfDir, { recursive: true })
         // loop.js calls itself by name → cycle.
         writeFileSync(

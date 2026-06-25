@@ -61,8 +61,8 @@ describe("workflow-of-workflows real-LLM verification", () => {
               permission: [{ permission: "*", pattern: "*", action: "allow" }],
             })
 
-            // Two saved workflows on disk, resolved by name from .mimocode/workflows.
-            const wfDir = path.join(dir, ".mimocode", "workflows")
+            // Two saved workflows on disk, resolved by name from .agentcompany/workflows.
+            const wfDir = path.join(dir, ".agentcompany", "workflows")
             mkdirSync(wfDir, { recursive: true })
             // classify: a real agent returns a structured list of "units" to process.
             writeFileSync(

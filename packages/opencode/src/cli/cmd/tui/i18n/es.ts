@@ -112,7 +112,7 @@ export const dict = {
   "tui.tips.cycle_sessions":
     "Pulsa {highlight}Ctrl+X Right/Left{/highlight} para alternar entre sesiones padre e hija",
   "tui.tips.config_files":
-    "Crea {highlight}mimocode.json{/highlight} para la configuración del servidor y {highlight}tui.json{/highlight} para la TUI",
+    "Crea {highlight}agentcompany.json{/highlight} para la configuración del servidor y {highlight}tui.json{/highlight} para la TUI",
   "tui.tips.global_config":
     "Coloca la configuración de TUI en {highlight}~/.config/mimocode/tui.json{/highlight} como configuración global",
   "tui.tips.schema":

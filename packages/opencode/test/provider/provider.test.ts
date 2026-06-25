@@ -2519,7 +2519,7 @@ test("cloudflare-ai-gateway forwards config metadata options", async () => {
 test("plugin config providers persist after instance dispose", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const root = path.join(dir, ".mimocode", "plugin")
+      const root = path.join(dir, ".agentcompany", "plugin")
       await mkdir(root, { recursive: true })
       await Bun.write(
         path.join(root, "demo-provider.ts"),
@@ -2578,7 +2578,7 @@ test("plugin config providers persist after instance dispose", async () => {
 test("plugin config enabled and disabled providers are honored", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const root = path.join(dir, ".mimocode", "plugin")
+      const root = path.join(dir, ".agentcompany", "plugin")
       await mkdir(root, { recursive: true })
       await Bun.write(
         path.join(root, "provider-filter.ts"),

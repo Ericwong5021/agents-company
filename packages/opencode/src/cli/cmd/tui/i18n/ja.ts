@@ -99,7 +99,7 @@ export const dict = {
   "tui.tips.subagent": "プロンプト内で {highlight}@agent-name{/highlight} を使うと専用サブエージェントを呼び出します",
   "tui.tips.cycle_sessions": "{highlight}Ctrl+X Right/Left{/highlight} で親子セッション間を移動します",
   "tui.tips.config_files":
-    "サーバ設定は {highlight}mimocode.json{/highlight}、TUI 設定は {highlight}tui.json{/highlight} を作成します",
+    "サーバ設定は {highlight}agentcompany.json{/highlight}、TUI 設定は {highlight}tui.json{/highlight} を作成します",
   "tui.tips.global_config":
     "TUI 設定をグローバルに置くなら {highlight}~/.config/mimocode/tui.json{/highlight} を使います",
   "tui.tips.schema": "設定に {highlight}$schema{/highlight} を加えるとエディタで自動補完されます",

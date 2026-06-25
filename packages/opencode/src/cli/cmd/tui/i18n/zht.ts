@@ -88,7 +88,7 @@ export const dict = {
   "tui.tips.subagent": "在提示詞中使用 {highlight}@agent-name{/highlight} 呼叫專用子代理",
   "tui.tips.cycle_sessions": "按 {highlight}Ctrl+X Right/Left{/highlight} 在父子工作階段之間切換",
   "tui.tips.config_files":
-    "建立 {highlight}mimocode.json{/highlight} 用於伺服器端設定，{highlight}tui.json{/highlight} 用於 TUI 設定",
+    "建立 {highlight}agentcompany.json{/highlight} 用於伺服器端設定，{highlight}tui.json{/highlight} 用於 TUI 設定",
   "tui.tips.global_config": "把 TUI 設定放在 {highlight}~/.config/mimocode/tui.json{/highlight} 作為全域設定",
   "tui.tips.schema": "在設定中加入 {highlight}$schema{/highlight} 以便編輯器自動完成",
   "tui.tips.default_model": "在設定中設定 {highlight}model{/highlight} 來指定預設模型",

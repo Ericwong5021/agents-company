@@ -4,7 +4,7 @@ import { zod } from "@/util/effect-zod"
 import { Global } from "../global"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
 
-export const OAUTH_DUMMY_KEY = "mimocode-oauth-dummy-key"
+export const OAUTH_DUMMY_KEY = "agentcompany-oauth-dummy-key"
 
 const file = path.join(Global.Path.data, "auth.json")
 

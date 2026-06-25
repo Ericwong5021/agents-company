@@ -57,7 +57,7 @@ describe("resolveProjectId", () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "mimo-pid-nogit-new-"))
     const id = resolveProjectId(tmp)
     expect(id).toMatch(/^[0-9a-f]{8}-/i)
-    const cached = await fs.readFile(path.join(tmp, ".mimocode-project-id"), "utf-8")
+    const cached = await fs.readFile(path.join(tmp, ".agentcompany-project-id"), "utf-8")
     expect(cached.trim()).toBe(id)
     await fs.rm(tmp, { recursive: true })
   })
