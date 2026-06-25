@@ -1,6 +1,7 @@
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
+import { useSync } from "@tui/context/sync"
 import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
 import { Spinner } from "@tui/component/spinner"
@@ -17,26 +18,22 @@ interface StepMissionProps {
   onComplete: (data: { mission: string }) => void
 }
 
-interface ChatMessage {
-  id: string
-  role: "user" | "assistant"
-  content: string
-}
-
 // Conversational phase: the now-named assistant talks the founder through what
 // the company wants to build and which goals matter, using the default model.
-// Unlike the old version we don't depend on the model emitting control markers —
-// the founder explicitly clicks "build the team" when the talk feels done.
+// The transcript is derived from the reactive sync store (the same source the
+// main session view uses) so streamed replies show and update live — polling
+// the REST endpoint dropped messages. The founder ends the talk explicitly via
+// the "build the team" button rather than relying on a model-emitted marker.
 export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
+  const sync = useSync()
   const t = useLanguage().t
   const dialog = useDialog()
 
-  const [messages, setMessages] = createSignal<ChatMessage[]>([])
-  const [loading, setLoading] = createSignal(false)
   const [sessionID, setSessionID] = createSignal<string | null>(null)
   const [ready, setReady] = createSignal(false)
+  const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   let textarea: TextareaRenderable | undefined
 
@@ -85,65 +82,71 @@ export function StepMission(props: StepMissionProps) {
   }
 
   async function send(sid: string, text: string) {
-    setLoading(true)
-    setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: "user", content: text }])
+    setSubmitting(true)
     try {
       await sdk.client.session.promptAsync({ sessionID: sid, parts: [{ type: "text", text }] })
     } catch {
       setError(t("onboarding.mission.error"))
-      setLoading(false)
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  // Poll for assistant replies.
-  createEffect(() => {
+  // Derive the conversation from the reactive store: flatten every agent bucket
+  // for this session, order by message id (time-ordered), and join each
+  // message's visible text parts. Streaming deltas update parts in place, so
+  // this memo re-runs and the UI follows along.
+  const transcript = createMemo(() => {
     const sid = sessionID()
-    if (!sid) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await sdk.client.session.messages({ sessionID: sid })
-        if (!res.data) return
-        const assistantMsgs = res.data
-          .filter((m: any) => m.info?.role === "assistant")
-          .map((m: any) => ({
-            id: m.info?.id ?? `assistant-${Date.now()}`,
-            role: "assistant" as const,
-            content: m.parts
-              .filter((p: any) => p.type === "text")
-              .map((p: any) => p.text ?? "")
-              .join(""),
-          }))
-        setMessages((prev) => {
-          const ids = new Set(prev.map((m) => m.id))
-          return [...prev, ...assistantMsgs.filter((m: ChatMessage) => !ids.has(m.id))]
-        })
-        if (assistantMsgs.length > 0) setLoading(false)
-      } catch {
-        // transient; keep polling
-      }
-    }, 1000)
-    onCleanup(() => clearInterval(interval))
+    if (!sid) return []
+    const buckets = sync.data.message[sid]
+    if (!buckets) return []
+    return Object.values(buckets)
+      .flat()
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: (sync.data.part[m.id] ?? [])
+          .filter((p) => p.type === "text" && !p.synthetic && !p.ignored)
+          .map((p) => ("text" in p ? (p.text ?? "") : ""))
+          .join(""),
+      }))
+      .filter((m) => m.content.trim().length > 0 && m.content !== KICKOFF)
+  })
+
+  // Busy while the founder's prompt is in flight or the assistant is still
+  // generating its reply (last message is an assistant with no completed time).
+  const waiting = createMemo(() => {
+    if (submitting()) return true
+    const sid = sessionID()
+    if (!sid) return false
+    const buckets = sync.data.message[sid]
+    if (!buckets) return false
+    const last = Object.values(buckets)
+      .flat()
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .at(-1)
+    return !!last && last.role === "assistant" && !last.time.completed
   })
 
   function submit() {
     const text = (textarea?.plainText ?? "").trim()
-    if (!text || loading() || !sessionID()) return
+    if (!text || waiting() || !sessionID()) return
     textarea?.clear()
-    send(sessionID()!, text)
+    void send(sessionID()!, text)
     focusInput()
   }
 
   function finish() {
-    const mission = messages()
-      .filter((m) => m.role === "user" && m.content !== KICKOFF)
+    const mission = transcript()
+      .filter((m) => m.role === "user")
       .map((m) => m.content)
       .join("\n")
     props.onComplete({ mission })
   }
 
-  // Visible turns: drop the silent kickoff and any empty assistant chunks.
-  const transcript = () =>
-    messages().filter((m) => m.content.trim().length > 0 && m.content !== KICKOFF)
   const exchanged = () => transcript().some((m) => m.role === "user")
 
   return (
@@ -164,7 +167,7 @@ export function StepMission(props: StepMissionProps) {
             >
               <textarea
                 height={1}
-                keyBindings={loading() ? [] : [{ name: "return", action: "submit" }]}
+                keyBindings={waiting() ? [] : [{ name: "return", action: "submit" }]}
                 onSubmit={submit}
                 placeholder={t("onboarding.interview.placeholder.message")}
                 placeholderColor={theme.textMuted}
@@ -215,7 +218,7 @@ export function StepMission(props: StepMissionProps) {
               </box>
             )}
           </For>
-          <Show when={loading()}>
+          <Show when={waiting()}>
             <box paddingLeft={2}>
               <Spinner color={theme.textMuted} />
             </box>
