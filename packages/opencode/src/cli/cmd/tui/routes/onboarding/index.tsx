@@ -48,10 +48,16 @@ export function Onboarding() {
 
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
+      setExiting(true)
+      // Clear any existing dialogs first
+      if (dialog.stack.length > 0) {
+        dialog.clear()
+      }
       void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
         if (result) {
-          setExiting(true)
           void exit()
+        } else {
+          setExiting(false)
         }
       })
     }

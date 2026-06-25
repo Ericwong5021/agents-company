@@ -325,13 +325,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   useKeyboard((evt) => {
     if (evt.defaultPrevented) return
     if (!(evt.ctrl && evt.name === "c")) return
-    // Don't interfere if there's already a dialog open (DialogProvider handles that)
-    if (dialog.stack.length > 0) return
     // Don't interfere with text selection copy
     if (renderer.getSelection()?.getSelectedText()) return
 
     evt.preventDefault()
     evt.stopPropagation()
+
+    // Clear any existing dialogs first
+    if (dialog.stack.length > 0) {
+      dialog.clear()
+    }
 
     void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
       if (result) void exit()

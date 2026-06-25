@@ -88,8 +88,8 @@ function init() {
   useKeyboard((evt) => {
     if (store.stack.length === 0) return
     if (evt.defaultPrevented) return
-    if ((evt.name === "escape" || (evt.ctrl && evt.name === "c")) && renderer.getSelection()?.getSelectedText()) return
-    if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
+    if (evt.name === "escape" && renderer.getSelection()?.getSelectedText()) return
+    if (evt.name === "escape") {
       if (renderer.getSelection()) {
         renderer.clearSelection()
       }
