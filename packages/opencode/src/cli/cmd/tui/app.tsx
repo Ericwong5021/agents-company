@@ -21,6 +21,8 @@ import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { ErrorComponent } from "@tui/component/error-component"
 import { PluginRouteMissing } from "@tui/component/plugin-route-missing"
 import { ProjectProvider } from "@tui/context/project"
+import { RightSidebarProvider } from "@tui/context/right-sidebar"
+import { Shell } from "@tui/shell/shell"
 import { useEvent } from "@tui/context/event"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { StartupLoading } from "@tui/component/startup-loading"
@@ -47,6 +49,7 @@ import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { GroupSession } from "@tui/routes/group-session"
+import { Onboarding } from "@tui/routes/onboarding"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -179,6 +182,7 @@ export function tui(input: {
                         : undefined
                     }
                   >
+                    <RightSidebarProvider>
                     <TuiConfigProvider config={input.config}>
                       <SDKProvider
                         url={input.url}
@@ -212,6 +216,7 @@ export function tui(input: {
                         </ProjectProvider>
                       </SDKProvider>
                     </TuiConfigProvider>
+                    </RightSidebarProvider>
                   </RouteProvider>
                 </ToastProvider>
                   </UiI18nBridge>
@@ -1164,20 +1169,27 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       <Show when={Flag.MIMOCODE_SHOW_TTFD}>
         <TimeToFirstDraw />
       </Show>
-      <Show when={ready()}>
-        <Switch>
-          <Match when={route.data.type === "home"}>
-            <Home />
-          </Match>
-          <Match when={route.data.type === "session"}>
-            <Session />
-          </Match>
-          <Match when={route.data.type === "group-session"}>
-            <GroupSession />
-          </Match>
-        </Switch>
+      <Show
+        when={kv.get("onboarding_done", false)}
+        fallback={<Onboarding />}
+      >
+        <Shell>
+          <Show when={ready()}>
+            <Switch>
+              <Match when={route.data.type === "home"}>
+                <Home />
+              </Match>
+              <Match when={route.data.type === "session"}>
+                <Session />
+              </Match>
+              <Match when={route.data.type === "group-session"}>
+                <GroupSession />
+              </Match>
+            </Switch>
+          </Show>
+          {plugin()}
+        </Shell>
       </Show>
-      {plugin()}
       <TuiPluginRuntime.Slot name="app" />
       <StartupLoading ready={ready} />
     </box>
