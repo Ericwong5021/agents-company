@@ -56,6 +56,9 @@ import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { MockLLM, textReply, textWithToolReply } from "../lib/mock-llm"
 import { Inbox } from "../../src/inbox"
+import { AgentMessage } from "../../src/agent-message/agent-message"
+import { CompanyAgent } from "../../src/company-agent"
+import { Thread } from "../../src/thread/thread"
 
 void Log.init({ print: true })
 
@@ -137,6 +140,9 @@ function makeLayers() {
     AppFileSystem.defaultLayer,
     status,
     taskRegistry,
+    AgentMessage.defaultLayer,
+    CompanyAgent.defaultLayer,
+    Thread.defaultLayer,
   ).pipe(Layer.provideMerge(infra))
   const question = Question.layer.pipe(Layer.provideMerge(deps))
   const todo = Todo.layer.pipe(Layer.provideMerge(deps))
