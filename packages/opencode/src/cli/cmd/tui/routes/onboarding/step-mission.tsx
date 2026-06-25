@@ -19,17 +19,11 @@ interface StepMissionProps {
   onComplete: (data: { mission: string }) => void
 }
 
-// Conversational phase: the now-named assistant talks the founder through what
-// the company wants to build and which goals matter, using the default model.
-// The transcript is derived from the reactive sync store (the same source the
-// main session view uses) so streamed replies show and update live — polling
-// the REST endpoint dropped messages. The founder ends the talk explicitly via
-// the "build the team" button rather than relying on a model-emitted marker.
-//
-// On mount we send a hidden kickstart message asking the assistant to generate
-// a personalised opening line. That line is shown in the speech bubble and
-// filtered from the visible transcript — the founder sees the AI-crafted
-// greeting, then types their first real message to begin.
+// Short conversation to understand what business the founder wants to build.
+// The assistant generates a personalised opening line (shown in the speech
+// bubble), the founder replies — 1-2 turns is enough, and the founder can
+// skip at any time. The transcript filters out the hidden kickstart and its
+// reply so there's no double display.
 export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
@@ -41,10 +35,10 @@ export function StepMission(props: StepMissionProps) {
   const [ready, setReady] = createSignal(false)
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
-  // The AI-generated opening line, shown in the speech bubble.
   const [openingLine, setOpeningLine] = createSignal<string | null>(null)
-  // The id of the hidden kickstart user message, so we can filter it.
-  const [kickoffID, setKickoffID] = createSignal<string | null>(null)
+  // IDs of the hidden kickstart exchange — filtered from the visible transcript.
+  const [kickoffUserID, setKickoffUserID] = createSignal<string | null>(null)
+  const [kickoffAssistantID, setKickoffAssistantID] = createSignal<string | null>(null)
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
@@ -88,19 +82,17 @@ export function StepMission(props: StepMissionProps) {
         setError(t("onboarding.mission.error"))
         return
       }
-      const sid = res.data.id
-      setSessionID(sid)
+      setSessionID(res.data.id)
 
-      // Send a hidden kickstart so the AI generates a personalised opening.
+      // Send hidden kickstart so the AI generates a personalised opening.
       setSubmitting(true)
       try {
         await sdk.client.session.promptAsync({
-          sessionID: sid,
+          sessionID: res.data.id,
           parts: [{ type: "text", text: KICKOFF_TEXT }],
         })
       } catch {
         setError(t("onboarding.mission.error"))
-        return
       }
     } catch {
       setError(t("onboarding.mission.error"))
@@ -118,16 +110,14 @@ export function StepMission(props: StepMissionProps) {
     }
   }
 
-  // Derive the conversation from the reactive store: flatten every agent bucket
-  // for this session, order by message id (time-ordered), and join each
-  // message's visible text parts. Streaming deltas update parts in place, so
-  // this memo re-runs and the UI follows along.
+  // Visible transcript: real conversation only (kickstart exchange filtered out).
   const transcript = createMemo(() => {
     const sid = sessionID()
     if (!sid) return []
     const buckets = sync.data.message[sid]
     if (!buckets) return []
-    const koID = kickoffID()
+    const koUID = kickoffUserID()
+    const koAID = kickoffAssistantID()
     return Object.values(buckets)
       .flat()
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -140,12 +130,12 @@ export function StepMission(props: StepMissionProps) {
           .map((p) => ("text" in p ? (p.text ?? "") : ""))
           .join(""),
       }))
-      .filter((m) => m.content.trim().length > 0 && m.id !== koID)
+      .filter((m) => m.content.trim().length > 0 && m.id !== koUID && m.id !== koAID)
   })
 
-  // Capture the kickstart user message id and the assistant's opening reply.
-  // Once both exist, we show the opening line in the speech bubble and mark
-  // the step as ready for the founder to type.
+  // Capture the kickstart exchange: first user message → first completed
+  // assistant reply. Once both land, show the opening line in the speech
+  // bubble and mark the step as ready.
   createMemo(() => {
     const sid = sessionID()
     if (!sid || ready()) return
@@ -153,19 +143,18 @@ export function StepMission(props: StepMissionProps) {
     if (!buckets) return
     const all = Object.values(buckets).flat().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
 
-    // Find the kickstart user message (first user message).
     const kickoff = all.find((m) => m.role === "user")
-    if (kickoff && !kickoffID()) setKickoffID(kickoff.id)
+    if (kickoff && !kickoffUserID()) setKickoffUserID(kickoff.id)
 
-    // Find the assistant reply to the kickstart.
     const assistantReply = all.find((m) => m.role === "assistant" && m.time.completed)
-    if (assistantReply && kickoffID()) {
+    if (assistantReply && kickoffUserID()) {
       const text = (sync.data.part[assistantReply.id] ?? [])
         .filter((p) => p.type === "text" && !p.synthetic && !p.ignored)
         .map((p) => ("text" in p ? (p.text ?? "") : ""))
         .join("")
         .trim()
       if (text) {
+        setKickoffAssistantID(assistantReply.id)
         setOpeningLine(text)
         setSubmitting(false)
         setReady(true)
@@ -174,8 +163,6 @@ export function StepMission(props: StepMissionProps) {
     }
   })
 
-  // Busy while the founder's prompt is in flight or the assistant is still
-  // generating its reply (last message is an assistant with no completed time).
   const waiting = createMemo(() => {
     if (submitting()) return true
     const sid = sessionID()
@@ -197,6 +184,10 @@ export function StepMission(props: StepMissionProps) {
     focusInput()
   }
 
+  function skip() {
+    props.onComplete({ mission: "" })
+  }
+
   function finish() {
     const mission = transcript()
       .filter((m) => m.role === "user")
@@ -205,14 +196,14 @@ export function StepMission(props: StepMissionProps) {
     props.onComplete({ mission })
   }
 
-  const userTurns = () => transcript().filter((m) => m.role === "user").length
-  const enoughDepth = () => userTurns() >= 4
-
   return (
     <OnboardingFrame
       stepIndex={props.stepIndex}
       stepCount={props.stepCount}
       title={t("onboarding.mission.title")}
+      subtitle={
+        !ready() && !error() ? t("onboarding.mission.generating") : undefined
+      }
       speaker={{ name: props.assistantName, icon: "🌟" }}
       speech={openingLine() ?? undefined}
       footer={
@@ -241,14 +232,13 @@ export function StepMission(props: StepMissionProps) {
               <text fg={theme.background}>{t("onboarding.profile.next")}</text>
             </box>
           </box>
-          <box flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Show when={userTurns() > 0 && userTurns() < 4}>
-              <text fg={theme.textMuted}>
-                {t("onboarding.mission.hint").replace("{{n}}", String(4 - userTurns()))}
+          <box flexDirection="row" justifyContent="flex-end" gap={2}>
+            <Show when={ready()}>
+              <text fg={theme.textMuted} onMouseUp={skip}>
+                {t("onboarding.mission.skip")}
               </text>
             </Show>
-            <box />
-            <Show when={enoughDepth()}>
+            <Show when={transcript().some((m) => m.role === "user")}>
               <box backgroundColor={theme.success} paddingLeft={2} paddingRight={2} onMouseUp={finish}>
                 <text fg={theme.background}>{t("onboarding.mission.build")}</text>
               </box>
@@ -261,16 +251,15 @@ export function StepMission(props: StepMissionProps) {
         <text fg={theme.error}>⚠ {error()}</text>
       </Show>
 
-      {/* Generating the opening line */}
+      {/* Loading spinner while generating opening line */}
       <Show when={!ready() && !error()}>
         <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
           <Spinner color={theme.primary} />
-          <text fg={theme.textMuted}>{t("onboarding.mission.generating")}</text>
         </box>
       </Show>
 
-      {/* Transcript (last few turns) */}
-      <Show when={ready()}>
+      {/* Transcript — real conversation only */}
+      <Show when={ready() && transcript().length > 0}>
         <box flexDirection="column" gap={1}>
           <For each={transcript().slice(-6)}>
             {(msg) => (

@@ -41,8 +41,13 @@ export function Onboarding() {
   const [data, setData] = createSignal<OnboardingData>({})
   const [done, setDone] = createSignal(false)
 
+  const [exiting, setExiting] = createSignal(false)
+
   useKeyboard((evt) => {
-    if (keybind.match("app_exit", evt)) void exit()
+    if (keybind.match("app_exit", evt)) {
+      setExiting(true)
+      void exit()
+    }
   })
 
   // Card steps share a 4-dot progress indicator (provider, profile, mission, team).
@@ -141,6 +146,8 @@ export function Onboarding() {
   createEffect(() => {
     const s = step()
     const stackLen = dialog.stack.length
+
+    if (exiting()) return
 
     if (s === "welcome" || done()) {
       if (stackLen) dialog.clear()

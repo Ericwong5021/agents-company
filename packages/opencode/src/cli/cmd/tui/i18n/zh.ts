@@ -551,7 +551,7 @@ export const dict = {
   "onboarding.mission.subtitle": "{{assistant}} 准备好了，请输入你的第一句话来开启对话。",
   "onboarding.mission.kickoff": "你好，我准备好聊聊我的公司了。",
   "onboarding.mission.generating": "小助理正在翻阅你的资料……",
-  "onboarding.mission.hint": "再聊几轮吧（还剩 {{n}} 轮）……",
+  "onboarding.mission.skip": "暂时跳过 →",
   "onboarding.mission.build": "组建团队 →",
   "onboarding.mission.you": "你",
   "onboarding.mission.error": "出了点问题，请重试。",
