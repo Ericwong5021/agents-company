@@ -9,18 +9,19 @@ import {
 } from "solid-js"
 import { useRouteData, useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
+import { useEvent } from "@tui/context/event"
 import { useSDK } from "@tui/context/sdk"
 import { useTheme } from "@tui/context/theme"
 import { useToast } from "../../ui/toast"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
-import { useTerminalDimensions, useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { useKeybind } from "@tui/context/keybind"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useExit } from "@tui/context/exit"
 import { Autocomplete, type AutocompleteRef } from "@tui/component/prompt/autocomplete"
-import { Sidebar } from "../session/sidebar"
+import { useRightSidebar } from "@tui/context/right-sidebar"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../context/tui-config"
 import * as Clipboard from "../../util/clipboard"
@@ -64,10 +65,10 @@ export function GroupSession() {
   const fullRoute = useRoute()
   const navigate = fullRoute.navigate
   const sync = useSync()
+  const event = useEvent()
   const sdk = useSDK()
   const { theme } = useTheme()
   const toast = useToast()
-  const dimensions = useTerminalDimensions()
   const keybind = useKeybind()
   const tuiConfig = useTuiConfig()
   const command = useCommandDialog()
@@ -89,7 +90,9 @@ export function GroupSession() {
   // Autocomplete's slashCommandsOnly mode restricts the popup accordingly.
   const [autocompleteRef, setAutocompleteRef] = createSignal<AutocompleteRef | undefined>()
 
-  const wide = createMemo(() => dimensions().width > 120)
+  const rightSidebar = useRightSidebar()
+  // The right sidebar (member list + workspace) is now rendered by the shell;
+  // this route publishes its content (the shell decides visibility/width).
 
   // ---- fetch group session + messages + agents ----
   const [infoResource, { refetch: refetchInfo }] = createResource(() => route.groupSessionID, async (id) => {
@@ -158,6 +161,26 @@ export function GroupSession() {
   const groupBusy = createMemo(() => memberState().some((m) => m.busy))
   const anyMember = createMemo(() => memberState().length > 0)
 
+  // Publish the member-list sidebar to the shell's right column. Re-runs when
+  // info / member live state change so busy indicators stay current.
+  createEffect(() => {
+    const i = info()
+    const members = memberState()
+    if (!i) {
+      rightSidebar.set(null)
+      return
+    }
+    rightSidebar.set(() => (
+      <GroupSessionSidebar
+        title={i.title}
+        members={members}
+        onOpen={(sessionID) =>
+          navigate({ type: "session", sessionID, groupSessionID: route.groupSessionID })
+        }
+      />
+    ))
+  })
+
   // When the group becomes idle after being busy, reload messages to pick up
   // the finalized group-level agent responses.
   let wasBusy = false
@@ -168,6 +191,24 @@ export function GroupSession() {
       setMessagesRev((n) => n + 1)
     }
     wasBusy = busy
+  })
+
+  // F-ghost-busy: a member's busy→idle transition reaches the store only via
+  // the session.status SSE event, which is drop-oldest under streaming
+  // backpressure (event.ts AsyncQueue, capacity 10k). If that event is dropped
+  // the member card sticks on "working" until the user interrupts. The server
+  // re-asserts every member to idle when the round ends (group-session.ts),
+  // emitting fresh idle events then — but as a final catch-up, when we DO see
+  // any member session go idle we make sure the store is reconciled against the
+  // server's authoritative status map so a single missed event can't strand a
+  // sibling card in "busy". (The reconcile is cheap and idempotent.)
+  onMount(() => {
+    return event.subscribe((ev) => {
+      if (ev.type !== "session.idle") return
+      const i = info()
+      if (!i?.members.some((m) => m.sessionID === ev.properties.sessionID)) return
+      void sync.session.reconcileStatus()
+    })
   })
 
   function toBottom() {
@@ -326,9 +367,7 @@ export function GroupSession() {
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
 
   return (
-    <box flexDirection="row">
-      {/* main content area */}
-      <box flexGrow={1} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
+    <box flexGrow={1} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
         {/* header */}
         <box flexShrink={0} paddingTop={0} paddingBottom={0}>
           <text attributes={TextAttributes.BOLD} fg={theme.text}>
@@ -472,62 +511,51 @@ export function GroupSession() {
           </box>
         </Show>
       </box>
+  )
+}
 
-      {/* sidebar */}
-      <Show when={wide()}>
-        <box
-          backgroundColor={theme.backgroundPanel}
-          width={42}
-          height="100%"
-          paddingTop={1}
-          paddingBottom={1}
-          paddingLeft={2}
-          paddingRight={2}
-        >
-          <scrollbox flexGrow={1}>
-            <box flexShrink={0} gap={1} paddingRight={1}>
-              <box paddingRight={1}>
-                <text fg={theme.text}>
-                  <b>{info()?.title ?? "Group Session"}</b>
-                </text>
-                <text fg={theme.textMuted}>
-                  {memberState().length} agents in session
-                </text>
-              </box>
+// Right-sidebar content for the group-session route: title + member list with
+// live busy status. Rendered by the shell via the RightSidebarProvider.
+type MemberStateEntry = {
+  member: GroupMember
+  agent: CompanyAgentInfo | undefined
+  status: string
+  busy: boolean
+}
 
-              {/* member list */}
-              <For each={memberState()}>
-                {(s, i) => (
-                  <box
-                    gap={1}
-                    onMouseUp={() => navigate({ type: "session", sessionID: s.member.sessionID, groupSessionID: route.groupSessionID })}
-                  >
-                    <text fg={agentColor(theme, s.agent, i())}>
-                      <b>{s.agent?.icon ? s.agent.icon + " " : ""}{s.agent?.name ?? "Agent"}</b>
-                    </text>
-                    <Show when={s.busy}>
-                      <Spinner color={theme.textMuted}>working</Spinner>
-                    </Show>
-                    <Show when={!s.busy}>
-                      <text fg={theme.textMuted}>· click to open</text>
-                    </Show>
-                  </box>
-                )}
-              </For>
-            </box>
-          </scrollbox>
-
-          <box flexShrink={0} gap={1} paddingTop={1}>
-            <text fg={theme.textMuted}>
-              <span style={{ fg: theme.success }}>•</span> <b>Open</b>
-              <span style={{ fg: theme.text }}>
-                <b>Code</b>
-              </span>{" "}
-              <span>group-session</span>
+function GroupSessionSidebar(props: {
+  title: string
+  members: MemberStateEntry[]
+  onOpen: (sessionID: string) => void
+}) {
+  const { theme } = useTheme()
+  return (
+    <box height="100%" flexDirection="column">
+      <scrollbox flexGrow={1}>
+        <box flexShrink={0} gap={1} paddingRight={1}>
+          <box paddingRight={1}>
+            <text fg={theme.text}>
+              <b>{props.title ?? "Group Session"}</b>
             </text>
+            <text fg={theme.textMuted}>{props.members.length} agents in session</text>
           </box>
+          <For each={props.members}>
+            {(s, i) => (
+              <box gap={1} onMouseUp={() => props.onOpen(s.member.sessionID)}>
+                <text fg={agentColor(theme, s.agent, i())}>
+                  <b>{s.agent?.icon ? s.agent.icon + " " : ""}{s.agent?.name ?? "Agent"}</b>
+                </text>
+                <Show when={s.busy}>
+                  <Spinner color={theme.textMuted}>working</Spinner>
+                </Show>
+                <Show when={!s.busy}>
+                  <text fg={theme.textMuted}>· click to open</text>
+                </Show>
+              </box>
+            )}
+          </For>
         </box>
-      </Show>
+      </scrollbox>
     </box>
   )
 }
