@@ -765,6 +765,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         // the store back in sync with the server's in-memory status.
         async reconcileStatus() {
           try {
+            const workspace = project.workspace.current()
             const x = await sdk.client.session.status({ workspace })
             setStore("session_status", reconcile(x.data ?? {}))
           } catch {

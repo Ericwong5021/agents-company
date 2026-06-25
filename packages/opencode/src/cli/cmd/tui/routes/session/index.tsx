@@ -1223,8 +1223,8 @@ export function Session() {
               <Show when={session()?.parentID || currentAgentID() !== "main"}>
                 <SubagentFooter />
               </Show>
-              <Show when={fullRoute.data.type === "session" && fullRoute.data.groupSessionID}>
-                <GroupSessionMemberBar groupSessionID={fullRoute.data.groupSessionID} />
+              <Show when={fullRoute.data.type === "session" ? fullRoute.data.groupSessionID : undefined}>
+                {(gsid) => <GroupSessionMemberBar groupSessionID={gsid()} />}
               </Show>
               <Show when={visible()}>
                 <TuiPluginRuntime.Slot

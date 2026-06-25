@@ -24,7 +24,7 @@ export const SessionTable = sqliteTable(
     company_agent_id: text()
       .$type<CompanyAgentID>()
       .references(() => CompanyAgentTable.id)
-      .default("assistant"),
+      .default("assistant" as CompanyAgentID),
     workspace_id: text().$type<WorkspaceID>(),
     parent_id: text().$type<SessionID>(),
     context_from: text().$type<SessionID>(),

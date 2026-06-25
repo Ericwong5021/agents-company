@@ -134,7 +134,17 @@ export function Shell(props: { children: JSX.Element }) {
         <LeftNav
           overlay={leftOverlay()}
           collapsed={wide() && leftCollapsed()}
-          onToggle={toggleLeft}
+          onToggle={() => {
+            batch(() => {
+              if (!wide()) {
+                const isVisible = leftVisible()
+                setLeftPref(() => (isVisible ? "hide" : "auto"))
+                setLeftOpen(!isVisible)
+              } else {
+                setLeftCollapsed((c) => !c)
+              }
+            })
+          }}
         />
       </Show>
       <box flexGrow={1} flexDirection="column" height="100%" position="relative">
@@ -145,7 +155,17 @@ export function Shell(props: { children: JSX.Element }) {
         <RightSidebar
           overlay={rightOverlay()}
           collapsed={wide() && rightCollapsed()}
-          onToggle={toggleRight}
+          onToggle={() => {
+            batch(() => {
+              if (!wide()) {
+                const isVisible = rightVisible()
+                setRightPref(() => (isVisible ? "hide" : "auto"))
+                setRightOpen(!isVisible)
+              } else {
+                setRightCollapsed((c) => !c)
+              }
+            })
+          }}
         />
       </Show>
     </box>
