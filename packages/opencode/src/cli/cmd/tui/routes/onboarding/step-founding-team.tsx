@@ -24,6 +24,7 @@ interface Founder {
   id: string
   name: string
   description: string
+  shortDescription: string
   icon: string
   color: string
 }
@@ -40,6 +41,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
   const dialog = useDialog()
   const [founders, setFounders] = createSignal<Founder[]>([])
   const [done, setDone] = createSignal(false)
+  const [showAchievement, setShowAchievement] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   // Which role we're currently searching for (shown with a spinner).
   const [searching, setSearching] = createSignal<string | null>(null)
@@ -87,6 +89,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
       }
 
       setDone(true)
+      setShowAchievement(true)
 
       // Hot-swap the assistant's soul from guidance to butler now that the
       // founding team exists and the company profile is locked in.
@@ -120,6 +123,9 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     const color = template?.color ?? role.fallback.color
     const description = template?.description ?? role.fallback.description
 
+    // Generate a short description for the card display
+    const shortDescription = description.length > 30 ? description.slice(0, 30) + "…" : description
+
     const res = await sdk.fetch(`${sdk.url}/company-agent`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,7 +139,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
       }),
     })
     if (!res.ok) return null
-    return { id, name, description, icon, color }
+    return { id, name, description, shortDescription, icon, color }
   }
 
   async function searchTemplate(role: FoundingRoleSpec) {
@@ -200,8 +206,8 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
         </box>
       </Show>
 
-      {/* Achievement banner — shows once at least one founder is revealed */}
-      <Show when={founders().length > 0 && !error()}>
+      {/* Achievement banner — triggered when all founders are hired */}
+      <Show when={showAchievement() && !error()}>
         <box flexDirection="column" alignItems="center" gap={1}>
           <text fg={theme.warning ?? theme.primary} attributes={TextAttributes.BOLD} selectable={false}>
             🏆 {t("onboarding.achievement.title")}
@@ -228,6 +234,19 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
                 paddingLeft={1}
                 paddingRight={1}
                 gap={1}
+                onMouseUp={() => {
+                  dialog.replace(
+                    <box flexDirection="column" gap={1} padding={2}>
+                      <box flexDirection="row" gap={1} alignItems="center">
+                        <text>{f.icon}</text>
+                        <text fg={theme.text} attributes={TextAttributes.BOLD}>
+                          {f.name}
+                        </text>
+                      </box>
+                      <text fg={theme.text}>{f.description}</text>
+                    </box>
+                  )
+                }}
               >
                 <box flexDirection="row" gap={1}>
                   <text>{f.icon}</text>
@@ -235,7 +254,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
                     {f.name}
                   </text>
                 </box>
-                <text fg={theme.textMuted}>{f.description}</text>
+                <text fg={theme.textMuted}>{f.shortDescription}</text>
               </box>
             )}
           </For>
