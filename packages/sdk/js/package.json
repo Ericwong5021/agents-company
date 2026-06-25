@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@mimo-ai/sdk",
+  "name": "@agents-company/sdk",
   "version": "0.1.2",
   "description": "TypeScript SDK for the MiMoCode API",
   "keywords": ["mimo", "mimocode", "ai", "sdk", "coding-assistant"],
