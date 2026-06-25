@@ -39,7 +39,6 @@ export function StepMission(props: StepMissionProps) {
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
-  const KICKOFF = t("onboarding.mission.kickoff")
 
   onMount(() => {
     dialog.setSize("large")
@@ -82,7 +81,6 @@ export function StepMission(props: StepMissionProps) {
       setSessionID(res.data.id)
       setReady(true)
       focusInput()
-      await send(res.data.id, KICKOFF)
     } catch {
       setError(t("onboarding.mission.error"))
     }
@@ -120,7 +118,7 @@ export function StepMission(props: StepMissionProps) {
           .map((p) => ("text" in p ? (p.text ?? "") : ""))
           .join(""),
       }))
-      .filter((m) => m.content.trim().length > 0 && m.content !== KICKOFF)
+      .filter((m) => m.content.trim().length > 0)
   })
 
   // Busy while the founder's prompt is in flight or the assistant is still
@@ -162,8 +160,9 @@ export function StepMission(props: StepMissionProps) {
       stepIndex={props.stepIndex}
       stepCount={props.stepCount}
       title={t("onboarding.mission.title")}
-      speaker={{ name: props.assistantName, icon: "🌟" }}
-      speech={t("onboarding.mission.intro").replace("{{name}}", props.userName)}
+      subtitle={t("onboarding.mission.subtitle")
+        .replace("{{name}}", props.userName)
+        .replace("{{assistant}}", props.assistantName)}
       footer={
         <box flexDirection="column" gap={1}>
           <box flexDirection="row" alignItems="center" gap={1}>

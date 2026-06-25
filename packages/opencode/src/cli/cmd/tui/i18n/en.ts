@@ -562,6 +562,7 @@ export const dict: Record<string, string> = {
   "onboarding.profile.error.scope": "Please select at least one business scope.",
   "onboarding.mission.title": "Your Company Vision",
   "onboarding.mission.intro": "Let's talk, {{name}} — what do you want this company to do?",
+  "onboarding.mission.subtitle": "{{assistant}} is ready to listen. Type your first message to start the conversation.",
   "onboarding.mission.kickoff": "Hello, I'm ready to talk about my company.",
   "onboarding.mission.hint": "Let's talk a bit more ({{n}} more turns)…",
   "onboarding.mission.build": "Build the team →",

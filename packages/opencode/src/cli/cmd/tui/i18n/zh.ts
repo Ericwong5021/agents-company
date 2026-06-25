@@ -548,6 +548,7 @@ export const dict = {
   "onboarding.profile.error.scope": "请至少选择一个业务方向。",
   "onboarding.mission.title": "你的公司愿景",
   "onboarding.mission.intro": "我们聊聊吧，{{name}}——你想用这家公司做成什么事？",
+  "onboarding.mission.subtitle": "{{assistant}} 准备好了，请输入你的第一句话来开启对话。",
   "onboarding.mission.kickoff": "你好，我准备好聊聊我的公司了。",
   "onboarding.mission.hint": "再聊几轮吧（还剩 {{n}} 轮）……",
   "onboarding.mission.build": "组建团队 →",
