@@ -40,13 +40,45 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
               type: "home",
             }),
     )
+    // Navigation history for the shell's Back button. Each entry is a plain
+    // snapshot of the route before a navigate() (shallow-copied, with plugin
+    // route `data` shallow-copied too, since reconcile() replaces the store).
+    const history: Route[] = []
+    const HISTORY_MAX = 50
+
+    const snapshot = (r: Route): Route => {
+      if (r.type === "plugin" && r.data) return { ...r, data: { ...r.data } }
+      return { ...r }
+    }
 
     return {
       get data() {
         return store
       },
+      get history() {
+        return history
+      },
       navigate(route: Route) {
+        const prev = snapshot(store)
+        history.push(prev)
+        if (history.length > HISTORY_MAX) history.shift()
         setStore(reconcile(route))
+      },
+      // Replace the current route WITHOUT pushing onto history (used for
+      // mid-route param updates like switching agentID within a session).
+      replace(route: Route) {
+        setStore(reconcile(route))
+      },
+      // Pop history and restore the previous route. Returns the restored route
+      // or undefined if history was empty (caller should fall back to home).
+      back(): Route | undefined {
+        const prev = history.pop()
+        if (!prev) return undefined
+        setStore(reconcile(prev))
+        return prev
+      },
+      get canBack() {
+        return history.length > 0
       },
     }
   },

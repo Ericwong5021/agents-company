@@ -32,7 +32,8 @@ export function DialogSubagent(props: { sessionID: string }) {
       onSelect: (dialog: { clear: () => void }) => {
         if (a.mode === "subagent") {
           if (route.data.type === "session") {
-            route.navigate({ ...route.data, agentID: a.actor_id })
+            // Lateral subagent switch within the same session — don't stack history.
+            route.replace({ ...route.data, agentID: a.actor_id })
           }
         } else {
           // peer mode: navigate to the actor's own session, viewing its own slice
