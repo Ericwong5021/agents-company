@@ -36,6 +36,7 @@ import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
+import { DialogConfirm } from "../../ui/dialog-confirm"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { createFadeIn } from "../../util/signal"
@@ -1524,9 +1525,10 @@ export function Prompt(props: PromptProps) {
                       e.preventDefault()
                       return
                     }
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
                     e.preventDefault()
+                    void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+                      if (result) void exit()
+                    })
                     return
                   }
                 }

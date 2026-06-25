@@ -42,7 +42,10 @@ export function StepMission(props: StepMissionProps) {
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
-  const KICKOFF_TEXT = `[系统] 请根据以下创始人信息，用一两句话生成一句温暖、个性化的开场白，作为你和创始人对话的开始。不要加任何前缀或解释，直接说开场白。\n创始人名字：${props.userName}\n业务方向：${props.scopes.map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s).join("、")}`
+  const scopeLabels = props.scopes
+    .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
+    .join("、")
+  const KICKOFF_TEXT = `[系统] 请直接用一句话问创始人：「${props.userName}，你想创办一家什么样的「${scopeLabels}」公司？」。不要加任何前缀、解释或额外内容，直接输出这一句问话。`
 
   onMount(() => {
     dialog.setSize("large")
