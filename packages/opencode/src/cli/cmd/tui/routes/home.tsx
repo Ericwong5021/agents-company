@@ -1,5 +1,5 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createMemo, createSignal, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import path from "path"
 import { Logo } from "../component/logo"
 import { logoThin, logos, type LogoKey } from "@/cli/logo"
@@ -9,7 +9,11 @@ import { useProject } from "../context/project"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
-import { useRouteData } from "@tui/context/route"
+import { useRouteData, useRoute } from "@tui/context/route"
+import { useRightSidebar } from "@tui/context/right-sidebar"
+import { useTheme } from "../context/theme"
+import { Locale } from "@/util"
+import { Session as SessionApi } from "@/session"
 import { usePromptRef } from "../context/prompt"
 import { useLocal } from "../context/local"
 import { useKV } from "../context/kv"
@@ -17,6 +21,7 @@ import { useLanguage } from "@tui/context/language"
 import { TuiPluginRuntime } from "../plugin"
 import { Global } from "@/global"
 import { isPlainTerminal } from "../util/terminal"
+import { NavRow } from "../component/nav-row"
 
 let once = false
 
@@ -24,6 +29,9 @@ export function Home() {
   const sync = useSync()
   const project = useProject()
   const route = useRouteData("home")
+  const fullRoute = useRoute()
+  const rightSidebar = useRightSidebar()
+  const { theme } = useTheme()
   const promptRef = usePromptRef()
   const [ref, setRef] = createSignal<PromptRef | undefined>()
   const args = useArgs()
@@ -42,6 +50,49 @@ export function Home() {
   })
   // 所有 logo 变体(含默认的 thin 纤细半块)都显示流星特效。
   const showMeteor = () => true
+
+  // Publish the right-sidebar content for the home route: a recent-session
+  // history list. Clicking a row navigates to that session.
+  createEffect(() => {
+    const sessions = (sync.data.session ?? [])
+      .toSorted((a, b) => b.time.updated - a.time.updated)
+      .slice(0, 12)
+    rightSidebar.set(() => (
+      <box height="100%" flexDirection="column">
+        <box flexShrink={0} paddingRight={1} paddingBottom={1}>
+          <text fg={theme.textMuted}>
+            <b>{t("tui.shell.right.recent")}</b>
+          </text>
+        </box>
+        <scrollbox flexGrow={1}>
+          <box flexShrink={0} gap={1} paddingRight={1}>
+            <For each={sessions}>
+              {(s) => {
+                const title =
+                  s.title && !SessionApi.isDefaultTitle(s.title)
+                    ? s.title
+                    : s.id.slice(0, 8)
+                return (
+                  <NavRow
+                    onSelect={() => fullRoute.navigate({ type: "session", sessionID: s.id })}
+                    hint={<span style={{ fg: theme.textMuted }}>·</span>}
+                  >
+                    <text fg={theme.text}>{Locale.truncate(title, 30)}</text>
+                  </NavRow>
+                )
+              }}
+            </For>
+            <Show when={sessions.length === 0}>
+              <NavRow>
+                <text fg={theme.textMuted}>No recent sessions</text>
+              </NavRow>
+            </Show>
+          </box>
+        </scrollbox>
+      </box>
+    ))
+  })
+
   const placeholder = {
     get normal() {
       return [

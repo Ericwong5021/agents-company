@@ -20,7 +20,7 @@ function event(payload: Event, input: { directory: string; workspace?: string })
     directory: input.directory,
     workspace: input.workspace,
     payload,
-  }
+  } as GlobalEvent
 }
 
 function vcs(branch: string): Event {
@@ -29,7 +29,7 @@ function vcs(branch: string): Event {
     properties: {
       branch,
     },
-  }
+  } as Event
 }
 
 function update(version: string): Event {
@@ -38,7 +38,7 @@ function update(version: string): Event {
     properties: {
       version,
     },
-  }
+  } as Event
 }
 
 function createSource() {

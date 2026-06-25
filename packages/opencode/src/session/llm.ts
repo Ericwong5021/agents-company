@@ -272,6 +272,23 @@ const live: Layer.Layer<
         }
       }
 
+      // When a company agent persona (SOUL.md) is present, it is the agent's
+      // identity. The environment block prepended by SystemPrompt.environment
+      // otherwise declares "You are MiMo Code Agent, built by Xiaomi MiMo Team…",
+      // which directly contradicts the persona and lets the model fall back to
+      // the default MiMo Code Agent identity (observed: persona sessions reply
+      // "我是 MiMo Code Agent"). Strip that one identity line so only the
+      // persona speaks for who the agent is; the env metadata (cwd, date, …)
+      // and the language directive are kept. Only the first system element is
+      // the environment block (additions order is [env, skills?, ...instructions]).
+      const systemParts = input.system.slice()
+      if (companyAgentPrompt && systemParts[0]) {
+        systemParts[0] = systemParts[0]
+          .split("\n")
+          .filter((line) => !line.startsWith("You are MiMo Code Agent, built by Xiaomi MiMo Team"))
+          .join("\n")
+      }
+
       const system: string[] = []
       system.push(
         [
@@ -282,7 +299,7 @@ const live: Layer.Layer<
               ? [input.agent.prompt]
               : SystemPrompt.provider(input.model)),
           // any custom prompt passed into this call
-          ...input.system,
+          ...systemParts,
           // any custom prompt from last user message
           ...(input.user.system ? [input.user.system] : []),
         ]
