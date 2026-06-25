@@ -66,6 +66,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
+import { useRightSidebar } from "@tui/context/right-sidebar"
 import { SubagentFooter } from "./subagent-footer.tsx"
 import { DialogSubagent } from "./dialog-subagent.tsx"
 import { Flag } from "@/flag/flag"
@@ -160,8 +161,7 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
-  const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const rightSidebar = useRightSidebar()
   const [conceal, setConceal] = createSignal(true)
   const thinking = useThinkingMode()
   const thinkingMode = thinking.mode
@@ -186,16 +186,29 @@ export function Session() {
   const [_animationsEnabled, _setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
 
-  const wide = createMemo(() => dimensions().width > 120)
-  const sidebarVisible = createMemo(() => {
+  const showTimestamps = createMemo(() => timestamps() === "show")
+  // The right sidebar is now owned by the shell. The session route publishes
+  // <Sidebar> content for it (guarded: hide on subagent/child sessions, which
+  // replicates the old sidebarVisible rules). contentWidth subtracts the
+  // shell's right column when the shell shows it.
+  const rightShown = createMemo(() => {
     if (session()?.parentID) return false
     if (currentAgentID() !== "main") return false
-    if (sidebarOpen()) return true
-    if (sidebar() === "auto" && wide()) return true
-    return false
+    return rightSidebar.visible()
   })
-  const showTimestamps = createMemo(() => timestamps() === "show")
-  const contentWidth = createMemo(() => dimensions().width - (sidebarVisible() ? 42 : 0) - 4)
+  const contentWidth = createMemo(
+    () => dimensions().width - rightSidebar.effectiveWidth() - 4,
+  )
+  // Publish right-sidebar content to the shell. Subagent/child sessions
+  // publish null (shell hides the column), replicating the old sidebarVisible
+  // rules. Re-runs when session id / agent / visibility change.
+  createEffect(() => {
+    if (!rightShown()) {
+      rightSidebar.set(null)
+      return
+    }
+    rightSidebar.set(() => <Sidebar sessionID={route.sessionID} />)
+  })
   const providers = createMemo(() => Model.index(sync.data.provider))
 
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
@@ -405,7 +418,9 @@ export function Session() {
           ? 0
           : list.length - 1
         : (idx + direction + list.length) % list.length
-    navigate({ ...fullRoute.data, agentID: list[next].actor_id })
+    // Cycling subagents is lateral within the same session — use replace so
+    // the Back stack isn't filled with each intermediate subagent.
+    fullRoute.replace({ ...fullRoute.data, agentID: list[next].actor_id })
   }
 
   const command = useCommandDialog()
@@ -623,20 +638,6 @@ export function Session() {
           sessionID: route.sessionID,
           messageID: message.id,
         })
-      },
-    },
-    {
-      title: t(sidebarVisible() ? "tui.command.session.sidebar.hide" : "tui.command.session.sidebar.show"),
-      value: "session.sidebar.toggle",
-      keybind: "sidebar_toggle",
-      category: "session",
-      onSelect: (dialog) => {
-        batch(() => {
-          const isVisible = sidebarVisible()
-          setSidebar(() => (isVisible ? "hide" : "auto"))
-          setSidebarOpen(!isVisible)
-        })
-        dialog.clear()
       },
     },
     {
@@ -1251,26 +1252,6 @@ export function Session() {
           </Show>
           <Toast />
         </box>
-        <Show when={sidebarVisible()}>
-          <Switch>
-            <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
-            </Match>
-            <Match when={!wide()}>
-              <box
-                position="absolute"
-                top={0}
-                left={0}
-                right={0}
-                bottom={0}
-                alignItems="flex-end"
-                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
-              >
-                <Sidebar sessionID={route.sessionID} />
-              </box>
-            </Match>
-          </Switch>
-        </Show>
       </box>
     </context.Provider>
   )
