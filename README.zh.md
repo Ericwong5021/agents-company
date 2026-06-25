@@ -1,10 +1,10 @@
-<h1 align="center">MiMoCode</h1>
+<h1 align="center">AgentCompany</h1>
 
 <p align="center">
-  <img src="assets/readme/mimocode-banner.png" alt="MiMoCode" width="700">
+  <img src="assets/readme/mimocode-banner.png" alt="AgentCompany" width="700">
 </p>
 
-<p align="center"><strong>MiMo Code: Where Models and Agents Co-Evolve</strong></p>
+<p align="center"><strong>AgentCompany: Where Models and Agents Co-Evolve</strong></p>
 
 <p align="center">
   中文 | <a href="README.md">English</a>
@@ -16,7 +16,7 @@
 
 ---
 
-MiMoCode 是一个终端原生的 AI 编程助手。它能读写代码、执行命令、管理 Git，通过持久化记忆系统，在多次会话间保持对你项目的深度理解，并自我进化。
+AgentCompany 是一个终端原生的 AI 编程助手。它能读写代码、执行命令、管理 Git，通过持久化记忆系统，在多次会话间保持对你项目的深度理解，并自我进化。
 
 内置 MiMo Auto 限时免费通道——零配置即可开始使用。也支持接入各家主流 LLM 厂商 API。
 
@@ -29,7 +29,7 @@ MiMoCode 是一个终端原生的 AI 编程助手。它能读写代码、执行�
 curl -fsSL https://mimo.xiaomi.com/install | bash
 
 # 或通过 npm 安装
-npm install -g @mimo-ai/cli
+npm install -g @agents-company/cli
 
 # 运行
 mimo
@@ -179,7 +179,7 @@ export PULSE_SERVER=tcp:127.0.0.1:4713
 
 ## 配置
 
-通过项目目录下的 `.mimocode/mimocode.json`（或全局 `~/.config/mimocode/mimocode.json`）配置。主要选项包括：
+通过项目目录下的 `.agentcompany/agentcompany.json`（或全局 `~/.config/agentcompany/agentcompany.json`）配置。主要选项包括：
 
 - Provider 和模型选择
 - Agent 权限和自定义 Agent
@@ -203,7 +203,7 @@ bun turbo typecheck      # 类型检查
 
 ## 与 OpenCode 的关系
 
-MiMoCode 基于 [OpenCode](https://github.com/anomalyco/opencode) fork 构建，保留其全部核心能力（多 Provider、TUI、LSP、MCP、插件），并在此基础上构建了持久化记忆、智能上下文管理、子智能体编排、目标驱动的自主循环、Compose 工作流，以及通过 dream/distill 实现的自我进化。
+AgentCompany 基于 [OpenCode](https://github.com/anomalyco/opencode) fork 构建，保留其全部核心能力（多 Provider、TUI、LSP、MCP、插件），并在此基础上构建了持久化记忆、智能上下文管理、子智能体编排、目标驱动的自主循环、Compose 工作流，以及通过 dream/distill 实现的自我进化。
 
 ---
 
@@ -223,6 +223,6 @@ MiMoCode 基于 [OpenCode](https://github.com/anomalyco/opencode) fork 构建，
 
 源代码基于 [MIT 许可证](./LICENSE) 开源。
 
-使用 MiMoCode 还需遵守[使用限制](./USE_RESTRICTIONS.md)。
+使用 AgentCompany 还需遵守[使用限制](./USE_RESTRICTIONS.md)。
 使用小米 MiMo 托管服务须遵守 [MiMo 服务条款](https://platform.xiaomimimo.com/docs/terms/user-agreement)。
 使用 MiMo 名称、标志和商标须遵守 MiMo 商标政策。

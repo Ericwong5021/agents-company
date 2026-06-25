@@ -225,7 +225,7 @@ export const layer = Layer.effect(
           directory: ctx.directory,
           headers: Flag.AGENTCOMPANY_SERVER_PASSWORD
             ? {
-                Authorization: `Basic ${Buffer.from(`${Flag.AGENTCOMPANY_SERVER_USERNAME ?? "mimocode"}:${Flag.AGENTCOMPANY_SERVER_PASSWORD}`).toString("base64")}`,
+                Authorization: `Basic ${Buffer.from(`${Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany"}:${Flag.AGENTCOMPANY_SERVER_PASSWORD}`).toString("base64")}`,
               }
             : undefined,
           fetch: async (...args) => (await Server.Default()).app.fetch(...args),

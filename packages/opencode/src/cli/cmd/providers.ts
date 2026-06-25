@@ -425,7 +425,7 @@ export const ProvidersLoginCommand = cmd({
   builder: (yargs) =>
     yargs
       .positional("url", {
-        describe: "mimocode auth provider",
+        describe: "agentcompany auth provider",
         type: "string",
       })
       .option("provider", {

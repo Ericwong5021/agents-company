@@ -51,7 +51,7 @@ export async function getEnvInfo() {
       data: Global.Path.data,
       config: Global.Path.config,
     },
-    mimocode: {
+    agentcompany: {
       version: InstallationVersion,
       channel: InstallationChannel,
       installation_id: await getInstallationID(),

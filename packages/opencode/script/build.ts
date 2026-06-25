@@ -17,7 +17,7 @@ await import("./generate.ts")
 import { Script } from "@mimo-ai/script"
 import pkg from "../package.json"
 
-const BINARY_PREFIX = "mimocode"
+const BINARY_PREFIX = "agentcompany"
 
 // Load migrations from migration directories
 const migrationDirs = (
@@ -245,7 +245,7 @@ for (const item of targets) {
       autoloadPackageJson: true,
       target: name.replace(BINARY_PREFIX, "bun") as any,
       outfile: `dist/${name}/bin/mimo`,
-      execArgv: [`--user-agent=mimocode/${Script.version}`, "--use-system-ca", "--"],
+      execArgv: [`--user-agent=agentcompany/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
     files: embeddedFileMap ? { "opencode-web-ui.gen.ts": embeddedFileMap } : {},

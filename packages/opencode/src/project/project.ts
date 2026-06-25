@@ -224,7 +224,7 @@ export const layer: Layer.Layer<
 
         // Refuse to anchor snapshots at the user's home directory or a filesystem root.
         // Anchoring there makes git's pathspec walk cover the entire user tree on every
-        // turn, which has shipped as a bug for users opening mimocode in $HOME.
+        // turn, which has shipped as a bug for users opening agentcompany in $HOME.
         const candidate = pathSvc.dirname(dotgit)
         const home = process.env.HOME ?? process.env.USERPROFILE ?? nodeOs.homedir()
         if (candidate === home || nodePath.parse(candidate).root === candidate) {

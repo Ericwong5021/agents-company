@@ -53,7 +53,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       bugs: {
         url: "https://github.com/XiaomiMiMo/MiMo-Code/issues",
       },
-      keywords: ["ai", "cli", "code", "xiaomi", "mimo", "mimocode"],
+      keywords: ["ai", "cli", "code", "xiaomi", "mimo", "agentcompany"],
       bin: {
         mimo: "./bin/mimo",
       },

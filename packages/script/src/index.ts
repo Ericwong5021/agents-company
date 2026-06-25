@@ -59,4 +59,4 @@ export const Script = {
     return !!env.AGENTCOMPANY_RELEASE
   },
 }
-console.log(`mimocode script`, JSON.stringify(Script, null, 2))
+console.log(`agentcompany script`, JSON.stringify(Script, null, 2))

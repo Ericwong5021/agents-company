@@ -712,7 +712,7 @@ export const McpDebugCommand = cmd({
               params: {
                 protocolVersion: "2024-11-05",
                 capabilities: {},
-                clientInfo: { name: "mimocode-debug", version: InstallationVersion },
+                clientInfo: { name: "agentcompany-debug", version: InstallationVersion },
               },
               id: 1,
             }),
@@ -760,7 +760,7 @@ export const McpDebugCommand = cmd({
 
             try {
               const client = new Client({
-                name: "mimocode-debug",
+                name: "agentcompany-debug",
                 version: InstallationVersion,
               })
               await client.connect(transport)

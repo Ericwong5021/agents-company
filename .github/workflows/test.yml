@@ -26,8 +26,8 @@ jobs:
 
       - name: Configure git identity
         run: |
-          git config --global user.email "ci@mimo.ai"
-          git config --global user.name "mimo-ci"
+          git config --global user.email "ci@agentscompany.dev"
+          git config --global user.name "agents-company-ci"
 
       - name: Cache Turbo
         uses: actions/cache@v4

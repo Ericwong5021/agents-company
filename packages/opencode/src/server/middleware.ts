@@ -46,7 +46,7 @@ export const AuthMiddleware: MiddlewareHandler = (c, next) => {
   const path = new URL(c.req.url).pathname
   if (isPtyConnectPath(path) && c.req.query(PTY_CONNECT_TICKET_QUERY)) return next()
 
-  const username = Flag.AGENTCOMPANY_SERVER_USERNAME ?? "mimocode"
+  const username = Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany"
 
   if (c.req.query("auth_token")) c.req.raw.headers.set("authorization", `Basic ${c.req.query("auth_token")}`)
 

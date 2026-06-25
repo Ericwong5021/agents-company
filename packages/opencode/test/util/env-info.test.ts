@@ -3,7 +3,7 @@ import os from "os"
 import { getEnvInfo } from "../../src/util/env-info"
 
 describe("util.env-info", () => {
-  test("returns host, user, runtime, and mimocode metadata", async () => {
+  test("returns host, user, runtime, and agentcompany metadata", async () => {
     const info = await getEnvInfo()
 
     expect(info.os.platform).toBe(os.platform())

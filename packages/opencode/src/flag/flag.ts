@@ -19,7 +19,7 @@ function number(key: string) {
 
 const AGENTCOMPANY_EXPERIMENTAL = truthy("AGENTCOMPANY_EXPERIMENTAL")
 
-// Defaults to false. When enabled, mimocode runs in pure-mimo mode:
+// Defaults to false. When enabled, agentcompany runs in pure-mimo mode:
 //   — does NOT inherit Claude Code's settings (CLAUDE.md, ~/.claude/skills, etc.)
 //   — does NOT pick up provider API keys from environment variables
 //   — falls back to the mimo-auto model as the default

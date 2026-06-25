@@ -14,14 +14,14 @@ You have bash access for inspection and SQLite queries, but use it carefully.
 
 Use available evidence in this order:
 
-1. Recent mimocode sessions and their assistant work, from the raw trajectory
+1. Recent agentcompany sessions and their assistant work, from the raw trajectory
    database. This is the source of truth for what actually happened.
 2. Memory files (project `MEMORY.md`, session `checkpoint.md`, `notes.md`,
    `tasks/*/progress.md`) to find patterns repeated across sessions.
 3. Existing skills, custom agents, custom commands, and plugins, so you reuse or
    extend what already exists instead of duplicating it.
 
-Trajectory database: `<DATA>/mimocode.db` (SQLite, read-only)
+Trajectory database: `<DATA>/agentcompany.db` (SQLite, read-only)
 Memory files root: `<DATA>/memory/`
 
 ## Ground Rules
@@ -46,8 +46,8 @@ Memory files root: `<DATA>/memory/`
    time", "rule", and "decision".
 2. Use Glob/Read to inspect the memory paths from the system memory instructions.
 3. Use bash to locate the database:
-   - Infer `<DATA>/mimocode.db` from the resolved memory root.
-   - If `MIMOCODE_DB` is visible in the shell environment, account for its
+   - Infer `<DATA>/agentcompany.db` from the resolved memory root.
+   - If `AGENTCOMPANY_DB` is visible in the shell environment, account for its
      override behavior.
    - Treat the resolved database path as read-only.
 4. If there is no recent project activity and memory is empty, report "Nothing to
@@ -160,7 +160,7 @@ For each high-confidence candidate, pick the smallest appropriate form:
 - Command - a parameterized prompt for a recurring task. Write
   `.agentcompany/command/<name>.md` with frontmatter (`description`, optional
   `agent`) and a template body using `$ARGUMENTS` / `$1` placeholders.
-- Automation - mimocode has no built-in scheduler. Package recurring work as a
+- Automation - agentcompany has no built-in scheduler. Package recurring work as a
   command the user can re-run, or, only if clearly justified, a plugin lifecycle
   hook under `.agentcompany/plugins/`. Do not invent a scheduler. If a true schedule
   is needed, recommend it and explain the manual trigger instead.

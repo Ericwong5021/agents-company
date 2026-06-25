@@ -37,9 +37,9 @@ Agent Company 关注的不是“让一个模型回答更多问题”，而是把
 
 ## 当前开发边界
 
-这不是 MiMoCode 的兼容性维护仓库。
+这不是 AgentCompany 的兼容性维护仓库。
 
-Agent Company 虽然重建自 MiMoCode 的技术基础，但它是一个新的产品方向。除非明确需要迁移桥接，我们不会优先保留历史的 MiMoCode 文件结构、配置格式或 API 兼容性。
+Agent Company 虽然重建自 AgentCompany 的技术基础，但它是一个新的产品方向。除非明确需要迁移桥接，我们不会优先保留历史的 AgentCompany 文件结构、配置格式或 API 兼容性。
 
 当前对外和对内都应默认遵循这些边界：
 

@@ -114,7 +114,7 @@ export const dict = {
   "tui.tips.config_files":
     "Crea {highlight}agentcompany.json{/highlight} para la configuración del servidor y {highlight}tui.json{/highlight} para la TUI",
   "tui.tips.global_config":
-    "Coloca la configuración de TUI en {highlight}~/.config/mimocode/tui.json{/highlight} como configuración global",
+    "Coloca la configuración de TUI en {highlight}~/.config/agentcompany/tui.json{/highlight} como configuración global",
   "tui.tips.schema":
     "Añade {highlight}$schema{/highlight} a tu configuración para autocompletado en el editor",
   "tui.tips.default_model":
@@ -128,13 +128,13 @@ export const dict = {
   "tui.tips.mcp_oauth":
     "agent-company gestiona automáticamente OAuth para servidores MCP remotos que requieran autenticación",
   "tui.tips.custom_command":
-    "Añade archivos {highlight}.md{/highlight} en {highlight}.mimocode/command/{/highlight} para definir indicaciones personalizadas reutilizables",
+    "Añade archivos {highlight}.md{/highlight} en {highlight}.agentcompany/command/{/highlight} para definir indicaciones personalizadas reutilizables",
   "tui.tips.command_args":
     "Usa {highlight}$ARGUMENTS{/highlight}, {highlight}$1{/highlight}, {highlight}$2{/highlight} en comandos personalizados para entradas dinámicas",
   "tui.tips.command_backticks":
     "Usa comillas invertidas en los comandos para inyectar la salida del shell (p. ej. {highlight}`git status`{/highlight})",
   "tui.tips.custom_agent":
-    "Añade archivos {highlight}.md{/highlight} en {highlight}.mimocode/agent/{/highlight} para personajes de IA especializados",
+    "Añade archivos {highlight}.md{/highlight} en {highlight}.agentcompany/agent/{/highlight} para personajes de IA especializados",
   "tui.tips.agent_perms":
     "Configura por agente los permisos de las herramientas {highlight}edit{/highlight}, {highlight}bash{/highlight} y {highlight}webfetch{/highlight}",
   "tui.tips.bash_allow":
@@ -150,11 +150,11 @@ export const dict = {
     "Define comandos de formateo personalizados por extensión de archivo en la configuración",
   "tui.tips.lsp": "agent-company usa servidores LSP para análisis inteligente de código",
   "tui.tips.custom_tool":
-    "Crea archivos {highlight}.ts{/highlight} en {highlight}.mimocode/tools/{/highlight} para definir nuevas herramientas LLM",
+    "Crea archivos {highlight}.ts{/highlight} en {highlight}.agentcompany/tools/{/highlight} para definir nuevas herramientas LLM",
   "tui.tips.tool_scripts":
     "Las definiciones de herramientas pueden invocar scripts en Python, Go, etc.",
   "tui.tips.plugins":
-    "Añade archivos {highlight}.ts{/highlight} en {highlight}.mimocode/plugin/{/highlight} para enganchar eventos",
+    "Añade archivos {highlight}.ts{/highlight} en {highlight}.agentcompany/plugin/{/highlight} para enganchar eventos",
   "tui.tips.plugin_notify":
     "Usa plugins para enviar notificaciones del sistema cuando termine una sesión",
   "tui.tips.plugin_protect":
@@ -186,7 +186,7 @@ export const dict = {
   "tui.tips.theme_system":
     'Usa {highlight}"theme": "system"{/highlight} para seguir los colores de tu terminal',
   "tui.tips.theme_files":
-    "Crea archivos JSON de tema en el directorio {highlight}.mimocode/themes/{/highlight}",
+    "Crea archivos JSON de tema en el directorio {highlight}.agentcompany/themes/{/highlight}",
   "tui.tips.theme_variants": "Los temas admiten variantes claras/oscuras para ambos modos",
   "tui.tips.theme_ansi": "Referencia colores ANSI 0-255 en temas personalizados",
   "tui.tips.env_var":

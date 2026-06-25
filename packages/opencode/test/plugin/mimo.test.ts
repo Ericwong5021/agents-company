@@ -93,7 +93,7 @@ describe("MimoAuthPlugin", () => {
       expect(url.pathname).toContain("/authorize")
       expect(url.searchParams.get("pk")).toBeTruthy()
       expect(url.searchParams.get("redirect_uri")).toBeTruthy()
-      expect(url.searchParams.get("kn")).toBe("mimocode")
+      expect(url.searchParams.get("kn")).toBe("agentcompany")
       expect(url.searchParams.get("key_name")).toMatch(/^mimo-code-cli-key-/)
 
       await result.callback("invalid").catch(() => {})
@@ -223,7 +223,7 @@ describe("MimoAuthPlugin", () => {
       const hooks = await MimoAuthPlugin(fakeInput)
       const output = { headers: {} as Record<string, string> }
       await hooks["chat.headers"]!({ model: { providerID: "xiaomi" } } as any, output as any)
-      expect(output.headers["X-Mimo-Source"]).toBe("mimocode-cli")
+      expect(output.headers["X-Mimo-Source"]).toBe("agentcompany-cli")
     })
 
     test("does not add header for other providers", async () => {

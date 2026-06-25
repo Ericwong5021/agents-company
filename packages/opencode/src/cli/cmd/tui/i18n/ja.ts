@@ -101,7 +101,7 @@ export const dict = {
   "tui.tips.config_files":
     "サーバ設定は {highlight}agentcompany.json{/highlight}、TUI 設定は {highlight}tui.json{/highlight} を作成します",
   "tui.tips.global_config":
-    "TUI 設定をグローバルに置くなら {highlight}~/.config/mimocode/tui.json{/highlight} を使います",
+    "TUI 設定をグローバルに置くなら {highlight}~/.config/agentcompany/tui.json{/highlight} を使います",
   "tui.tips.schema": "設定に {highlight}$schema{/highlight} を加えるとエディタで自動補完されます",
   "tui.tips.default_model": "設定の {highlight}model{/highlight} でデフォルトモデルを指定します",
   "tui.tips.keybinds":
@@ -110,13 +110,13 @@ export const dict = {
   "tui.tips.mcp_config": "{highlight}mcp{/highlight} 設定セクションでローカル/リモート MCP サーバを設定します",
   "tui.tips.mcp_oauth": "agent-company は認証が必要なリモート MCP サーバの OAuth を自動処理します",
   "tui.tips.custom_command":
-    "{highlight}.mimocode/command/{/highlight} に {highlight}.md{/highlight} ファイルを追加すると再利用可能なカスタムプロンプトを定義できます",
+    "{highlight}.agentcompany/command/{/highlight} に {highlight}.md{/highlight} ファイルを追加すると再利用可能なカスタムプロンプトを定義できます",
   "tui.tips.command_args":
     "カスタムコマンドで {highlight}$ARGUMENTS{/highlight}、{highlight}$1{/highlight}、{highlight}$2{/highlight} を使うと動的な入力を受け取れます",
   "tui.tips.command_backticks":
     "コマンド内でバッククォートを使うとシェル出力を埋め込めます（例：{highlight}`git status`{/highlight}）",
   "tui.tips.custom_agent":
-    "{highlight}.mimocode/agent/{/highlight} に {highlight}.md{/highlight} ファイルを追加して専用 AI ペルソナを作れます",
+    "{highlight}.agentcompany/agent/{/highlight} に {highlight}.md{/highlight} ファイルを追加して専用 AI ペルソナを作れます",
   "tui.tips.agent_perms":
     "エージェントごとに {highlight}edit{/highlight}、{highlight}bash{/highlight}、{highlight}webfetch{/highlight} ツールの権限を設定できます",
   "tui.tips.bash_allow":
@@ -129,10 +129,10 @@ export const dict = {
   "tui.tips.custom_formatter": "拡張子ごとのカスタム整形コマンドを設定で定義できます",
   "tui.tips.lsp": "agent-company はインテリジェントなコード解析に LSP サーバを使います",
   "tui.tips.custom_tool":
-    "{highlight}.mimocode/tools/{/highlight} に {highlight}.ts{/highlight} ファイルを作って新しい LLM ツールを定義します",
+    "{highlight}.agentcompany/tools/{/highlight} に {highlight}.ts{/highlight} ファイルを作って新しい LLM ツールを定義します",
   "tui.tips.tool_scripts": "ツール定義から Python、Go などのスクリプトを呼び出せます",
   "tui.tips.plugins":
-    "{highlight}.mimocode/plugin/{/highlight} に {highlight}.ts{/highlight} ファイルを追加してイベントフックを実装できます",
+    "{highlight}.agentcompany/plugin/{/highlight} に {highlight}.ts{/highlight} ファイルを追加してイベントフックを実装できます",
   "tui.tips.plugin_notify": "プラグインでセッション完了時に OS 通知を送れます",
   "tui.tips.plugin_protect": "プラグインを書いて agent-company が機密ファイルを読まないようにできます",
   "tui.tips.run": "{highlight}mimo run{/highlight} で非対話的なスクリプト実行ができます",
@@ -148,7 +148,7 @@ export const dict = {
   "tui.tips.github_install": "{highlight}mimo github install{/highlight} で GitHub workflow を設定します",
   "tui.tips.github_oc": "PR のコード行に {highlight}/oc{/highlight} とコメントすると的を絞ったレビューが行われます",
   "tui.tips.theme_system": '{highlight}"theme": "system"{/highlight} でターミナルの配色に合わせます',
-  "tui.tips.theme_files": "{highlight}.mimocode/themes/{/highlight} ディレクトリに JSON テーマファイルを作成します",
+  "tui.tips.theme_files": "{highlight}.agentcompany/themes/{/highlight} ディレクトリに JSON テーマファイルを作成します",
   "tui.tips.theme_variants": "テーマはダーク/ライトのバリアントをサポートします",
   "tui.tips.theme_ansi": "カスタムテーマで ANSI カラー 0-255 を参照できます",
   "tui.tips.env_var":

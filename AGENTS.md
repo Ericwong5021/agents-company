@@ -1,10 +1,10 @@
-- Use MiMoCode Compose skills when available, otherwise use superpowers skill if installed.
+- Use AgentCompany Compose skills when available, otherwise use superpowers skill if installed.
 - To regenerate the JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
 - The default branch in this repo is `main`.
 - CI triggers on both `main` and `dev` branches.
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
-- Agent Company is a new product rebuilt from MiMoCode foundations, not a MiMoCode compatibility release. Do not preserve legacy MiMoCode filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
+- Agent Company is a new product rebuilt from AgentCompany foundations, not a AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
 ## Core Focus (as of 2025-06-18)
 

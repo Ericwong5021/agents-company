@@ -89,7 +89,7 @@ export const dict = {
   "tui.tips.cycle_sessions": "按 {highlight}Ctrl+X Right/Left{/highlight} 在父子工作階段之間切換",
   "tui.tips.config_files":
     "建立 {highlight}agentcompany.json{/highlight} 用於伺服器端設定，{highlight}tui.json{/highlight} 用於 TUI 設定",
-  "tui.tips.global_config": "把 TUI 設定放在 {highlight}~/.config/mimocode/tui.json{/highlight} 作為全域設定",
+  "tui.tips.global_config": "把 TUI 設定放在 {highlight}~/.config/agentcompany/tui.json{/highlight} 作為全域設定",
   "tui.tips.schema": "在設定中加入 {highlight}$schema{/highlight} 以便編輯器自動完成",
   "tui.tips.default_model": "在設定中設定 {highlight}model{/highlight} 來指定預設模型",
   "tui.tips.keybinds": "透過 {highlight}tui.json{/highlight} 的 {highlight}keybinds{/highlight} 區段覆寫任意按鍵",
@@ -97,12 +97,12 @@ export const dict = {
   "tui.tips.mcp_config": "在 {highlight}mcp{/highlight} 設定項中設定本機或遠端 MCP 伺服器",
   "tui.tips.mcp_oauth": "agent-company 自動處理需要驗證的遠端 MCP 伺服器的 OAuth",
   "tui.tips.custom_command":
-    "在 {highlight}.mimocode/command/{/highlight} 加入 {highlight}.md{/highlight} 檔案以定義可重用自訂提示",
+    "在 {highlight}.agentcompany/command/{/highlight} 加入 {highlight}.md{/highlight} 檔案以定義可重用自訂提示",
   "tui.tips.command_args":
     "在自訂指令中使用 {highlight}$ARGUMENTS{/highlight}、{highlight}$1{/highlight}、{highlight}$2{/highlight} 接收動態參數",
   "tui.tips.command_backticks": "在指令中使用反引號注入 shell 輸出（例如 {highlight}`git status`{/highlight}）",
   "tui.tips.custom_agent":
-    "在 {highlight}.mimocode/agent/{/highlight} 加入 {highlight}.md{/highlight} 檔案來建立專用 AI 角色",
+    "在 {highlight}.agentcompany/agent/{/highlight} 加入 {highlight}.md{/highlight} 檔案來建立專用 AI 角色",
   "tui.tips.agent_perms":
     "為每個智慧代理單獨設定 {highlight}edit{/highlight}、{highlight}bash{/highlight}、{highlight}webfetch{/highlight} 工具權限",
   "tui.tips.bash_allow": '使用 {highlight}"git *": "allow"{/highlight} 這類模式做精細 bash 權限',
@@ -113,10 +113,10 @@ export const dict = {
   "tui.tips.custom_formatter": "在設定中依檔案副檔名定義自訂格式化指令",
   "tui.tips.lsp": "agent-company 使用 LSP 伺服器進行智慧程式碼分析",
   "tui.tips.custom_tool":
-    "在 {highlight}.mimocode/tools/{/highlight} 建立 {highlight}.ts{/highlight} 檔案定義新的 LLM 工具",
+    "在 {highlight}.agentcompany/tools/{/highlight} 建立 {highlight}.ts{/highlight} 檔案定義新的 LLM 工具",
   "tui.tips.tool_scripts": "工具定義可呼叫 Python、Go 等指令稿",
   "tui.tips.plugins":
-    "在 {highlight}.mimocode/plugin/{/highlight} 加入 {highlight}.ts{/highlight} 檔案掛載事件勾點",
+    "在 {highlight}.agentcompany/plugin/{/highlight} 加入 {highlight}.ts{/highlight} 檔案掛載事件勾點",
   "tui.tips.plugin_notify": "用外掛在工作階段完成時傳送系統通知",
   "tui.tips.plugin_protect": "撰寫一個外掛阻止 agent-company 讀取敏感檔案",
   "tui.tips.run": "用 {highlight}mimo run{/highlight} 進行非互動式指令稿呼叫",
@@ -133,7 +133,7 @@ export const dict = {
   "tui.tips.github_oc": "在 PR 程式碼行上留言 {highlight}/oc{/highlight} 進行針對性程式碼審查",
   "tui.tips.theme_system": '使用 {highlight}"theme": "system"{/highlight} 跟隨終端機配色',
   "tui.tips.brand_color_note": "品牌色會自動同步對應的高光、光暈與陰影色",
-  "tui.tips.theme_files": "在 {highlight}.mimocode/themes/{/highlight} 目錄下建立 JSON 主題檔案",
+  "tui.tips.theme_files": "在 {highlight}.agentcompany/themes/{/highlight} 目錄下建立 JSON 主題檔案",
   "tui.tips.theme_variants": "主題支援深色／淺色雙模式變體",
   "tui.tips.theme_ansi": "自訂主題中可參照 ANSI 0-255 色號",
   "tui.tips.env_var": "在設定中用 {highlight}{env:VAR_NAME}{/highlight} 語法參照環境變數",

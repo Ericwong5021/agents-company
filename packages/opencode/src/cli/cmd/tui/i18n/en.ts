@@ -97,7 +97,7 @@ export const dict: Record<string, string> = {
   "tui.tips.cycle_sessions": "Press {highlight}Ctrl+X Right/Left{/highlight} to cycle through parent and child sessions",
   "tui.tips.config_files":
     "Create {highlight}agentcompany.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
-  "tui.tips.global_config": "Place TUI settings in {highlight}~/.config/mimocode/tui.json{/highlight} for global config",
+  "tui.tips.global_config": "Place TUI settings in {highlight}~/.config/agentcompany/tui.json{/highlight} for global config",
   "tui.tips.schema": "Add {highlight}$schema{/highlight} to your config for autocomplete in your editor",
   "tui.tips.default_model": "Configure {highlight}model{/highlight} in config to set your default model",
   "tui.tips.keybinds": "Override any keybind in {highlight}tui.json{/highlight} via the {highlight}keybinds{/highlight} section",
@@ -105,12 +105,12 @@ export const dict: Record<string, string> = {
   "tui.tips.mcp_config": "Configure local or remote MCP servers in the {highlight}mcp{/highlight} config section",
   "tui.tips.mcp_oauth": "agent-company auto-handles OAuth for remote MCP servers requiring auth",
   "tui.tips.custom_command":
-    "Add {highlight}.md{/highlight} files to {highlight}.mimocode/command/{/highlight} to define reusable custom prompts",
+    "Add {highlight}.md{/highlight} files to {highlight}.agentcompany/command/{/highlight} to define reusable custom prompts",
   "tui.tips.command_args":
     "Use {highlight}$ARGUMENTS{/highlight}, {highlight}$1{/highlight}, {highlight}$2{/highlight} in custom commands for dynamic input",
   "tui.tips.command_backticks": "Use backticks in commands to inject shell output (e.g., {highlight}`git status`{/highlight})",
   "tui.tips.custom_agent":
-    "Add {highlight}.md{/highlight} files to {highlight}.mimocode/agent/{/highlight} for specialized AI personas",
+    "Add {highlight}.md{/highlight} files to {highlight}.agentcompany/agent/{/highlight} for specialized AI personas",
   "tui.tips.agent_perms":
     "Configure per-agent permissions for {highlight}edit{/highlight}, {highlight}bash{/highlight}, and {highlight}webfetch{/highlight} tools",
   "tui.tips.bash_allow": 'Use patterns like {highlight}"git *": "allow"{/highlight} for granular bash permissions',
@@ -121,10 +121,10 @@ export const dict: Record<string, string> = {
   "tui.tips.custom_formatter": "Define custom formatter commands with file extensions in config",
   "tui.tips.lsp": "agent-company uses LSP servers for intelligent code analysis",
   "tui.tips.custom_tool":
-    "Create {highlight}.ts{/highlight} files in {highlight}.mimocode/tools/{/highlight} to define new LLM tools",
+    "Create {highlight}.ts{/highlight} files in {highlight}.agentcompany/tools/{/highlight} to define new LLM tools",
   "tui.tips.tool_scripts": "Tool definitions can invoke scripts written in Python, Go, etc",
   "tui.tips.plugins":
-    "Add {highlight}.ts{/highlight} files to {highlight}.mimocode/plugin/{/highlight} for event hooks",
+    "Add {highlight}.ts{/highlight} files to {highlight}.agentcompany/plugin/{/highlight} for event hooks",
   "tui.tips.plugin_notify": "Use plugins to send OS notifications when sessions complete",
   "tui.tips.plugin_protect": "Create a plugin to prevent agent-company from reading sensitive files",
   "tui.tips.run": "Use {highlight}mimo run{/highlight} for non-interactive scripting",
@@ -142,7 +142,7 @@ export const dict: Record<string, string> = {
   "tui.tips.theme_system": 'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
   "tui.tips.brand_color_note":
     "Brand colors automatically adjust the matching highlight, glow, and shadow tones",
-  "tui.tips.theme_files": "Create JSON theme files in {highlight}.mimocode/themes/{/highlight} directory",
+  "tui.tips.theme_files": "Create JSON theme files in {highlight}.agentcompany/themes/{/highlight} directory",
   "tui.tips.theme_variants": "Themes support dark/light variants for both modes",
   "tui.tips.theme_ansi": "Reference ANSI colors 0-255 in custom themes",
   "tui.tips.env_var": "Use {highlight}{env:VAR_NAME}{/highlight} syntax to reference environment variables in config",

@@ -25,7 +25,7 @@ interface RemovalTargets {
 
 export const UninstallCommand = {
   command: "uninstall",
-  describe: "uninstall mimocode and remove all related files",
+  describe: "uninstall agentcompany and remove all related files",
   builder: (yargs: Argv) =>
     yargs
       .option("keep-config", {
@@ -56,7 +56,7 @@ export const UninstallCommand = {
     UI.empty()
     UI.println(UI.logo("  "))
     UI.empty()
-    prompts.intro("Uninstall MiMoCode")
+    prompts.intro("Uninstall AgentCompany")
 
     const method = await AppRuntime.runPromise(Installation.Service.use((svc) => svc.method()))
     prompts.log.info(`Installation method: ${method}`)
@@ -133,10 +133,10 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
       npm: "npm uninstall -g @agents-company/cli",
       pnpm: "pnpm uninstall -g @agents-company/cli",
       bun: "bun remove -g @agents-company/cli",
-      // TODO(mimocode): uncomment when published to these channels
-      // brew: "brew uninstall mimocode",
-      // choco: "choco uninstall mimocode",
-      // scoop: "scoop uninstall mimocode",
+      // TODO(agentcompany): uncomment when published to these channels
+      // brew: "brew uninstall agentcompany",
+      // choco: "choco uninstall agentcompany",
+      // scoop: "scoop uninstall agentcompany",
     }
     prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
   }
@@ -184,10 +184,10 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
       npm: ["npm", "uninstall", "-g", "@agents-company/cli"],
       pnpm: ["pnpm", "uninstall", "-g", "@agents-company/cli"],
       bun: ["bun", "remove", "-g", "@agents-company/cli"],
-      // TODO(mimocode): uncomment when published to these channels
-      // brew: ["brew", "uninstall", "mimocode"],
-      // choco: ["choco", "uninstall", "mimocode"],
-      // scoop: ["scoop", "uninstall", "mimocode"],
+      // TODO(agentcompany): uncomment when published to these channels
+      // brew: ["brew", "uninstall", "agentcompany"],
+      // choco: ["choco", "uninstall", "agentcompany"],
+      // scoop: ["scoop", "uninstall", "agentcompany"],
     }
 
     const cmd = cmds[method]
@@ -227,7 +227,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   }
 
   UI.empty()
-  prompts.log.success("Thank you for using MiMoCode!")
+  prompts.log.success("Thank you for using AgentCompany!")
 }
 
 async function getShellConfigFile(): Promise<string | null> {

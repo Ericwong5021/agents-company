@@ -118,7 +118,7 @@ export const dict = {
   "tui.tips.config_files":
     "Создайте {highlight}agentcompany.json{/highlight} для серверных настроек и {highlight}tui.json{/highlight} для настроек TUI",
   "tui.tips.global_config":
-    "Поместите настройки TUI в {highlight}~/.config/mimocode/tui.json{/highlight} как глобальные",
+    "Поместите настройки TUI в {highlight}~/.config/agentcompany/tui.json{/highlight} как глобальные",
   "tui.tips.schema":
     "Добавьте {highlight}$schema{/highlight} в конфиг для автодополнения в редакторе",
   "tui.tips.default_model":
@@ -132,13 +132,13 @@ export const dict = {
   "tui.tips.mcp_oauth":
     "agent-company автоматически обрабатывает OAuth для удалённых MCP-серверов с авторизацией",
   "tui.tips.custom_command":
-    "Добавляйте файлы {highlight}.md{/highlight} в {highlight}.mimocode/command/{/highlight} для повторно используемых пользовательских команд",
+    "Добавляйте файлы {highlight}.md{/highlight} в {highlight}.agentcompany/command/{/highlight} для повторно используемых пользовательских команд",
   "tui.tips.command_args":
     "Используйте {highlight}$ARGUMENTS{/highlight}, {highlight}$1{/highlight}, {highlight}$2{/highlight} в командах для динамического ввода",
   "tui.tips.command_backticks":
     "Используйте обратные кавычки в командах, чтобы вставить вывод shell (например, {highlight}`git status`{/highlight})",
   "tui.tips.custom_agent":
-    "Добавляйте файлы {highlight}.md{/highlight} в {highlight}.mimocode/agent/{/highlight} для специализированных AI-персон",
+    "Добавляйте файлы {highlight}.md{/highlight} в {highlight}.agentcompany/agent/{/highlight} для специализированных AI-персон",
   "tui.tips.agent_perms":
     "Настройте для каждого агента отдельные права на инструменты {highlight}edit{/highlight}, {highlight}bash{/highlight} и {highlight}webfetch{/highlight}",
   "tui.tips.bash_allow":
@@ -155,11 +155,11 @@ export const dict = {
     "Определяйте собственные команды форматирования по расширениям файлов в конфиге",
   "tui.tips.lsp": "agent-company использует LSP-серверы для интеллектуального анализа кода",
   "tui.tips.custom_tool":
-    "Создавайте файлы {highlight}.ts{/highlight} в {highlight}.mimocode/tools/{/highlight}, чтобы определить новые LLM-инструменты",
+    "Создавайте файлы {highlight}.ts{/highlight} в {highlight}.agentcompany/tools/{/highlight}, чтобы определить новые LLM-инструменты",
   "tui.tips.tool_scripts":
     "Определения инструментов могут вызывать скрипты на Python, Go и других языках",
   "tui.tips.plugins":
-    "Добавляйте файлы {highlight}.ts{/highlight} в {highlight}.mimocode/plugin/{/highlight} для подключения хуков событий",
+    "Добавляйте файлы {highlight}.ts{/highlight} в {highlight}.agentcompany/plugin/{/highlight} для подключения хуков событий",
   "tui.tips.plugin_notify":
     "Используйте плагины, чтобы отправлять системные уведомления при завершении сессий",
   "tui.tips.plugin_protect":
@@ -191,7 +191,7 @@ export const dict = {
   "tui.tips.theme_system":
     'Используйте {highlight}"theme": "system"{/highlight}, чтобы соответствовать цветам терминала',
   "tui.tips.theme_files":
-    "Создавайте JSON-файлы тем в каталоге {highlight}.mimocode/themes/{/highlight}",
+    "Создавайте JSON-файлы тем в каталоге {highlight}.agentcompany/themes/{/highlight}",
   "tui.tips.theme_variants":
     "Темы поддерживают тёмные и светлые варианты для обоих режимов",
   "tui.tips.theme_ansi": "Ссылайтесь на ANSI-цвета 0-255 в собственных темах",

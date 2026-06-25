@@ -10,15 +10,15 @@
 // Env:
 //   MIMO_FDS_AK / MIMO_FDS_SK            credentials (required to upload)
 //   MIMO_FDS_ENDPOINT                    upload+signing host (default cnbj1 prod)
-//   MIMO_FDS_BUCKET / MIMO_FDS_PREFIX    object layout (default mimocode/mimocode)
+//   MIMO_FDS_BUCKET / MIMO_FDS_PREFIX    object layout (default agentcompany/agentcompany)
 //
 // CLI: bun script/fds-upload.ts <localFile> <objectSubPath> [--content-type=...]
 //   objectSubPath is relative to "<bucket>/<prefix>/", e.g. "releases/latest".
 import crypto from "node:crypto"
 
 export const FDS_ENDPOINT = process.env.MIMO_FDS_ENDPOINT || "cnbj1-fds.api.xiaomi.net"
-export const FDS_BUCKET = process.env.MIMO_FDS_BUCKET || "mimocode"
-export const FDS_PREFIX = process.env.MIMO_FDS_PREFIX || "mimocode"
+export const FDS_BUCKET = process.env.MIMO_FDS_BUCKET || "agentcompany"
+export const FDS_PREFIX = process.env.MIMO_FDS_PREFIX || "agentcompany"
 
 // signer.py SubResource.get_all_subresource: only these query keys are signed.
 const SUBRESOURCES = new Set(["acl", "quota", "uploads", "partNumber", "uploadId", "storageAccessToken", "metadata"])
@@ -74,7 +74,7 @@ function publicReadAclBody(accessKey: string) {
   }
 }
 
-// Full object name under the bucket, e.g. "mimocode/releases/latest".
+// Full object name under the bucket, e.g. "agentcompany/releases/latest".
 export function objectName(subPath: string) {
   return `${FDS_PREFIX}/${subPath.replace(/^\/+/, "")}`
 }

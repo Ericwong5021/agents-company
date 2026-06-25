@@ -21,7 +21,7 @@ afterEach(async () => {
 // inherit a parent .git. We temporarily set Flag.AGENTCOMPANY_SERVER_PASSWORD to
 // bypass the middleware cwd containment check and include auth headers.
 const TEST_PASSWORD = "init-git-test"
-const authHeader = `Basic ${Buffer.from(`mimocode:${TEST_PASSWORD}`).toString("base64")}`
+const authHeader = `Basic ${Buffer.from(`agentcompany:${TEST_PASSWORD}`).toString("base64")}`
 
 describe("project.initGit endpoint", () => {
   test("initializes git and reloads immediately", async () => {
@@ -44,7 +44,7 @@ describe("project.initGit endpoint", () => {
         const init = await app.request("/project/git/init", {
           method: "POST",
           headers: {
-            "x-mimocode-directory": tmp.path,
+            "x-agentcompany-directory": tmp.path,
             "authorization": authHeader,
           },
         })
@@ -60,11 +60,11 @@ describe("project.initGit endpoint", () => {
         expect(seen.some((evt) => evt.directory === tmp.path && evt.payload.type === "server.instance.disposed")).toBe(
           true,
         )
-        expect(await Filesystem.exists(path.join(tmp.path, ".git", "mimocode"))).toBe(false)
+        expect(await Filesystem.exists(path.join(tmp.path, ".git", "agentcompany"))).toBe(false)
 
         const current = await app.request("/project/current", {
           headers: {
-            "x-mimocode-directory": tmp.path,
+            "x-agentcompany-directory": tmp.path,
             "authorization": authHeader,
           },
         })
@@ -109,7 +109,7 @@ describe("project.initGit endpoint", () => {
       const init = await app.request("/project/git/init", {
         method: "POST",
         headers: {
-          "x-mimocode-directory": tmp.path,
+          "x-agentcompany-directory": tmp.path,
         },
       })
       expect(init.status).toBe(200)
@@ -124,7 +124,7 @@ describe("project.initGit endpoint", () => {
 
       const current = await app.request("/project/current", {
         headers: {
-          "x-mimocode-directory": tmp.path,
+          "x-agentcompany-directory": tmp.path,
         },
       })
       expect(current.status).toBe(200)

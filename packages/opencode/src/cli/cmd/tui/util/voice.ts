@@ -213,7 +213,7 @@ export async function transcribeAudio(opts: {
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${opts.apiKey}`,
-      "X-Mimo-Source": "mimocode-cli",
+      "X-Mimo-Source": "agentcompany-cli",
     },
     body: JSON.stringify({
       model,
@@ -412,7 +412,7 @@ export async function processVoiceControl(opts: {
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${opts.apiKey}`,
-      "X-Mimo-Source": "mimocode-cli",
+      "X-Mimo-Source": "agentcompany-cli",
     },
     body: JSON.stringify({
       model,
