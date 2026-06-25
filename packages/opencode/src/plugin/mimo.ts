@@ -17,7 +17,7 @@ function getKeyName(): string {
     const existing = fs.readFileSync(filePath, "utf-8").trim()
     if (existing) return existing
   } catch {}
-  const name = `mimo-code-cli-key-${crypto.randomBytes(4).toString("hex")}`
+  const name = `agents-company-cli-key-${crypto.randomBytes(4).toString("hex")}`
   fs.writeFileSync(filePath, name)
   return name
 }

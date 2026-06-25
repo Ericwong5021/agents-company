@@ -7,6 +7,7 @@ import { useLanguage } from "../../context/language"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { useSDK } from "../../context/sdk"
+import { useKV } from "../../context/kv"
 
 const id = "internal:org-disband"
 
@@ -16,6 +17,7 @@ function DisbandDialog() {
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
+  const kv = useKV()
 
   // Two steps: initial yes/no, then the red irreversible warning.
   const [stage, setStage] = createSignal<"confirm" | "warning">("confirm")
@@ -31,7 +33,7 @@ function DisbandDialog() {
       return
     }
     toast.show({ variant: "success", message: t("tui.org.disband.done") })
-    dialog.clear()
+    kv.set("onboarding_done", false)
   }
 
   useKeyboard((evt) => {
@@ -76,7 +78,7 @@ function DisbandDialog() {
           </text>
         </box>
         <text fg={theme.textMuted}>{t("tui.org.disband.confirm")}</text>
-        <box flexDirection="row" gap={2} paddingTop={1}>
+        <box flexDirection="row" justifyContent="center" gap={2} paddingTop={1}>
           <text fg={theme.error} onMouseUp={() => setStage("warning")}>
             {t("tui.org.disband.yes")}
           </text>
@@ -105,7 +107,7 @@ function DisbandDialog() {
             when={!busy()}
             fallback={<text fg={theme.textMuted}>{t("tui.org.disband.running")}</text>}
           >
-            <box flexDirection="row" gap={2} paddingTop={1}>
+            <box flexDirection="row" justifyContent="center" gap={2} paddingTop={1}>
               <text attributes={TextAttributes.BOLD} fg={theme.error} onMouseUp={() => void doDisband()}>
                 {t("tui.org.disband.warning.confirm")}
               </text>

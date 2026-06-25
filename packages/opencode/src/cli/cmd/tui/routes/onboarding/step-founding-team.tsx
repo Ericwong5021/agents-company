@@ -29,18 +29,20 @@ interface Founder {
 }
 
 // Deterministically assembles the founding team from the bundled template
-// library. The assistant's "create agent" capability is exercised here: for each
-// resolved role we pull the best-matching template and create a Company Agent
-// with a company-contextualised system prompt. No reliance on model output.
+// library. Each role is searched and revealed one by one with ceremony: a
+// "searching for…" animation plays, then the founder card fades in, then a
+// short pause before the next role — giving the whole moment weight and
+// a sense that a real team is being born.
 export function StepFoundingTeam(props: StepFoundingTeamProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const t = useLanguage().t
   const dialog = useDialog()
   const [founders, setFounders] = createSignal<Founder[]>([])
-  const [building, setBuilding] = createSignal(true)
-  const [visible, setVisible] = createSignal(0)
+  const [done, setDone] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+  // Which role we're currently searching for (shown with a spinner).
+  const [searching, setSearching] = createSignal<string | null>(null)
 
   onMount(() => {
     dialog.setSize("large")
@@ -49,24 +51,42 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
 
   async function build() {
     setError(null)
-    setBuilding(true)
+    setDone(false)
     setFounders([])
-    setVisible(0)
 
     try {
+      const roles = resolveFoundingRoles(props.scopes)
       const created: Founder[] = []
-      for (const role of resolveFoundingRoles(props.scopes)) {
-        const founder = await createFounder(role)
-        if (founder) created.push(founder)
+
+      for (let i = 0; i < roles.length; i++) {
+        const role = roles[i]
+
+        // Show "searching for [role label]…" animation.
+        setSearching(role.fallback.name)
+
+        // The search + creation takes ~0.5-2s naturally (network). Add a
+        // short floor so the animation always plays long enough to feel real.
+        const [founder] = await Promise.all([
+          createFounder(role),
+          delay(1800),
+        ])
+
+        if (!founder) {
+          setSearching(null)
+          setError(t("onboarding.founding_team.error"))
+          return
+        }
+
+        // Reveal the card and clear the search spinner.
+        created.push(founder)
+        setFounders([...created])
+        setSearching(null)
+
+        // Pause between cards so each reveal lands individually.
+        if (i < roles.length - 1) await delay(800)
       }
 
-      if (created.length === 0) {
-        setError(t("onboarding.founding_team.error"))
-        return
-      }
-
-      setFounders(created)
-      setBuilding(false)
+      setDone(true)
 
       // Hot-swap the assistant's soul from guidance to butler now that the
       // founding team exists and the company profile is locked in.
@@ -87,9 +107,6 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
           }),
         }),
       }).catch(() => undefined)
-
-      // Stagger the reveal of the founder cards for the achievement moment.
-      created.forEach((_, i) => setTimeout(() => setVisible((v) => v + 1), 400 * (i + 1)))
     } catch {
       setError(t("onboarding.founding_team.error"))
     }
@@ -131,15 +148,21 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     }
   }
 
-  const revealed = () => !building() && visible() >= founders().length
-
   return (
     <OnboardingFrame
       stepIndex={props.stepIndex}
       stepCount={props.stepCount}
       title={t("onboarding.founding_team.title")}
+      speaker={{ name: props.assistantName, icon: "🌟" }}
+      speech={
+        searching()
+          ? t("onboarding.founding_team.searching").replace("{{role}}", searching()!)
+          : done()
+            ? t("onboarding.founding_team.complete_speech").replace("{{name}}", props.userName)
+            : undefined
+      }
       footer={
-        <Show when={revealed()}>
+        <Show when={done()}>
           <box flexDirection="column" alignItems="center" gap={1}>
             <text fg={theme.textMuted}>
               {t("onboarding.founding_team.ready").replace("{{assistant}}", props.assistantName)}
@@ -167,14 +190,18 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
         </box>
       </Show>
 
-      <Show when={building() && !error()}>
-        <box alignItems="center" paddingTop={1} paddingBottom={1}>
-          <Spinner color={theme.primary}>{t("onboarding.founding_team.assembling")}</Spinner>
+      {/* Searching animation: spinner + role label */}
+      <Show when={searching()}>
+        <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
+          <Spinner color={theme.primary} />
+          <text fg={theme.textMuted}>
+            {t("onboarding.founding_team.matching").replace("{{role}}", searching()!)}
+          </text>
         </box>
       </Show>
 
-      {/* Achievement banner */}
-      <Show when={!building() && !error()}>
+      {/* Achievement banner — shows once at least one founder is revealed */}
+      <Show when={founders().length > 0 && !error()}>
         <box flexDirection="column" alignItems="center" gap={1}>
           <text fg={theme.warning ?? theme.primary} attributes={TextAttributes.BOLD} selectable={false}>
             🏆 {t("onboarding.achievement.title")}
@@ -183,48 +210,52 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
             {t("onboarding.achievement.desc").replace("{{name}}", props.userName)}
           </text>
         </box>
+      </Show>
 
-        {/* Founder identity cards */}
+      {/* Founder identity cards — revealed one by one as they're created */}
+      <Show when={founders().length > 0}>
         <box flexDirection="row" gap={2} flexWrap="wrap" justifyContent="center" paddingTop={1}>
           <For each={founders()}>
-            {(f, index) => (
-              <Show when={index() < visible()}>
-                <box
-                  flexDirection="column"
-                  width={22}
-                  backgroundColor={theme.backgroundElement}
-                  border
-                  borderColor={theme.border}
-                  paddingTop={1}
-                  paddingBottom={1}
-                  paddingLeft={1}
-                  paddingRight={1}
-                  gap={1}
-                >
-                  <box flexDirection="row" gap={1}>
-                    <text>{f.icon}</text>
-                    <text fg={theme.text} attributes={TextAttributes.BOLD}>
-                      {f.name}
-                    </text>
-                  </box>
-                  <text fg={theme.textMuted}>{f.description}</text>
+            {(f) => (
+              <box
+                flexDirection="column"
+                width={22}
+                backgroundColor={theme.backgroundElement}
+                border
+                borderColor={theme.border}
+                paddingTop={1}
+                paddingBottom={1}
+                paddingLeft={1}
+                paddingRight={1}
+                gap={1}
+              >
+                <box flexDirection="row" gap={1}>
+                  <text>{f.icon}</text>
+                  <text fg={theme.text} attributes={TextAttributes.BOLD}>
+                    {f.name}
+                  </text>
                 </box>
-              </Show>
+                <text fg={theme.textMuted}>{f.description}</text>
+              </box>
             )}
           </For>
         </box>
+      </Show>
 
-        <Show when={revealed()}>
-          <text fg={theme.textMuted}>
-            {t("onboarding.scope.selected")}{" "}
-            {props.scopes
-              .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
-              .join("、")}
-          </text>
-        </Show>
+      <Show when={done()}>
+        <text fg={theme.textMuted}>
+          {t("onboarding.scope.selected")}{" "}
+          {props.scopes
+            .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
+            .join("、")}
+        </text>
       </Show>
     </OnboardingFrame>
   )
+}
+
+function delay(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
 }
 
 function buildFounderPrompt(props: StepFoundingTeamProps, roleName: string, base?: string) {

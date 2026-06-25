@@ -161,7 +161,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(
       ProviderTransform.maxOutputTokens({
         ...baseModel,
-        id: ModelID.make("mimo-coder"),
+        id: ModelID.make("agents-company-coder"),
         providerID: ProviderID.make("xiaomi"),
       }),
     ).toBe(128_000)

@@ -2,19 +2,19 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@agents-company/plugin",
   "version": "0.1.2",
-  "description": "Plugin SDK for extending MiMoCode",
-  "keywords": ["mimo", "mimocode", "ai", "plugin", "coding-assistant"],
+  "description": "Plugin SDK for extending Agent Company",
+  "keywords": ["agent-company", "ai", "plugin", "coding-assistant"],
   "type": "module",
   "license": "MIT",
   "author": "Xiaomi MiMo Team",
   "homepage": "https://mimo.xiaomi.com/coder",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XiaomiMiMo/MiMo-Code.git",
+    "url": "git+https://github.com/Ericwong5021/agents-company.git",
     "directory": "packages/plugin"
   },
   "bugs": {
-    "url": "https://github.com/XiaomiMiMo/MiMo-Code/issues"
+    "url": "https://github.com/Ericwong5021/agents-company/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -94,7 +94,7 @@ describe("MimoAuthPlugin", () => {
       expect(url.searchParams.get("pk")).toBeTruthy()
       expect(url.searchParams.get("redirect_uri")).toBeTruthy()
       expect(url.searchParams.get("kn")).toBe("agentcompany")
-      expect(url.searchParams.get("key_name")).toMatch(/^mimo-code-cli-key-/)
+      expect(url.searchParams.get("key_name")).toMatch(/^agents-company-cli-key-/)
 
       await result.callback("invalid").catch(() => {})
     })

@@ -161,8 +161,8 @@ describe("installation", () => {
       const layer = testLayer(
         () => jsonResponse({}),
         (cmd, args) => {
-          if (cmd === "curl" && args.includes("https://github.com/XiaomiMiMo/MiMo-Code/releases/latest"))
-            return "HTTP/2 302\r\nlocation: https://github.com/XiaomiMiMo/MiMo-Code/releases/tag/v0.1.1\r\n"
+          if (cmd === "curl" && args.includes("https://github.com/Ericwong5021/agents-company/releases/latest"))
+            return "HTTP/2 302\r\nlocation: https://github.com/Ericwong5021/agents-company/releases/tag/v0.1.1\r\n"
           return ""
         },
       )

@@ -2,19 +2,19 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@agents-company/sdk",
   "version": "0.1.2",
-  "description": "TypeScript SDK for the MiMoCode API",
-  "keywords": ["mimo", "mimocode", "ai", "sdk", "coding-assistant"],
+  "description": "TypeScript SDK for the Agent Company API",
+  "keywords": ["agent-company", "ai", "sdk", "coding-assistant"],
   "type": "module",
   "license": "MIT",
   "author": "Xiaomi MiMo Team",
   "homepage": "https://mimo.xiaomi.com/coder",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XiaomiMiMo/MiMo-Code.git",
+    "url": "git+https://github.com/Ericwong5021/agents-company.git",
     "directory": "packages/sdk/js"
   },
   "bugs": {
-    "url": "https://github.com/XiaomiMiMo/MiMo-Code/issues"
+    "url": "https://github.com/Ericwong5021/agents-company/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -48,10 +48,10 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       homepage: "https://mimo.xiaomi.com/coder",
       repository: {
         type: "git",
-        url: "git+https://github.com/XiaomiMiMo/MiMo-Code.git",
+        url: "git+https://github.com/Ericwong5021/agents-company.git",
       },
       bugs: {
-        url: "https://github.com/XiaomiMiMo/MiMo-Code/issues",
+        url: "https://github.com/Ericwong5021/agents-company/issues",
       },
       keywords: ["ai", "cli", "code", "xiaomi", "mimo", "agentcompany"],
       bin: {

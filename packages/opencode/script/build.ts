@@ -288,7 +288,7 @@ for (const item of targets) {
         homepage: "https://mimo.xiaomi.com/coder",
         repository: {
           type: "git",
-          url: "git+https://github.com/XiaomiMiMo/MiMo-Code.git",
+          url: "git+https://github.com/Ericwong5021/agents-company.git",
         },
         keywords: ["ai", "coding", "agent", "cli", "mimo"],
         os: [item.os],

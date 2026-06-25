@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APP=mimocode
+APP=agents-company
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 usage() {
     cat <<EOF
-MiMoCode Installer
+Agent Company Installer
 
 Usage: install.sh [options]
 
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-INSTALL_DIR=$HOME/.mimocode/bin
+INSTALL_DIR=$HOME/.agents-company/bin
 mkdir -p "$INSTALL_DIR"
 
 # If --binary is provided, skip all download/detection logic
@@ -283,7 +283,7 @@ download_with_progress() {
     fi
 
     local tmp_dir=${TMPDIR:-/tmp}
-    local basename="${tmp_dir}/mimocode_install_$$"
+    local basename="${tmp_dir}/agents_company_install_$$"
     local tracefile="${basename}.trace"
 
     rm -f "$tracefile"
@@ -333,8 +333,8 @@ download_with_progress() {
 }
 
 download_and_install() {
-    print_message info "\n${MUTED}Installing ${NC}mimocode ${MUTED}version: ${NC}$specific_version"
-    local tmp_dir="${TMPDIR:-/tmp}/mimocode_install_$$"
+    print_message info "\n${MUTED}Installing ${NC}agents-company ${MUTED}version: ${NC}$specific_version"
+    local tmp_dir="${TMPDIR:-/tmp}/agents_company_install_$$"
     mkdir -p "$tmp_dir"
 
     if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
@@ -354,7 +354,7 @@ download_and_install() {
 }
 
 install_from_binary() {
-    print_message info "\n${MUTED}Installing ${NC}mimocode ${MUTED}from: ${NC}$binary_path"
+    print_message info "\n${MUTED}Installing ${NC}agents-company ${MUTED}from: ${NC}$binary_path"
     cp "$binary_path" "${INSTALL_DIR}/mimo"
     chmod 755 "${INSTALL_DIR}/mimo"
 }
@@ -374,9 +374,9 @@ add_to_path() {
     if grep -Fxq "$command" "$config_file"; then
         print_message info "Command already exists in $config_file, skipping write."
     elif [[ -w $config_file ]]; then
-        echo -e "\n# mimocode" >> "$config_file"
+        echo -e "\n# agents-company" >> "$config_file"
         echo "$command" >> "$config_file"
-        print_message info "${MUTED}Successfully added ${NC}mimocode ${MUTED}to \$PATH in ${NC}$config_file"
+        print_message info "${MUTED}Successfully added ${NC}agents-company ${MUTED}to \$PATH in ${NC}$config_file"
     else
         print_message warning "Manually add the directory to $config_file (or similar):"
         print_message info "  $command"
