@@ -4,6 +4,8 @@ import { useKV } from "@tui/context/kv"
 import { useKeybind } from "@tui/context/keybind"
 import { useExit } from "@tui/context/exit"
 import { useDialog } from "@tui/ui/dialog"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import { useLanguage } from "@tui/context/language"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { StarryBackground } from "@tui/component/starry-background"
@@ -35,6 +37,7 @@ export function Onboarding() {
   const keybind = useKeybind()
   const exit = useExit()
   const dialog = useDialog()
+  const t = useLanguage().t
   const local = useLocal()
   const sync = useSync()
   const [step, setStep] = createSignal<Step>("welcome")
@@ -45,8 +48,12 @@ export function Onboarding() {
 
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
-      setExiting(true)
-      void exit()
+      void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+        if (result) {
+          setExiting(true)
+          void exit()
+        }
+      })
     }
   })
 

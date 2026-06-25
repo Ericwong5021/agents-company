@@ -20,6 +20,9 @@ import { TextAttributes } from "@opentui/core"
 import { useKeybind } from "@tui/context/keybind"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useExit } from "@tui/context/exit"
+import { useDialog } from "../../ui/dialog"
+import { DialogConfirm } from "../../ui/dialog-confirm"
+import { useLanguage } from "../../context/language"
 import { Autocomplete, type AutocompleteRef } from "@tui/component/prompt/autocomplete"
 import { useRightSidebar } from "@tui/context/right-sidebar"
 import { getScrollAcceleration } from "../../util/scroll"
@@ -74,6 +77,8 @@ export function GroupSession() {
   const tuiConfig = useTuiConfig()
   const command = useCommandDialog()
   const exit = useExit()
+  const dialog = useDialog()
+  const t = useLanguage().t
   const { syntax } = useTheme()
 
   let scroll: any
@@ -412,14 +417,16 @@ export function GroupSession() {
     await sdk.fetch(`${sdk.url}/group-session/${route.groupSessionID}/interrupt`, { method: "POST" })
   }
 
-  // Ctrl+C (app_exit): first press interrupts busy agents, second press exits
+  // Ctrl+C (app_exit): first press interrupts busy agents, second press shows exit dialog
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
       if (groupBusy()) {
         void interrupt()
         return
       }
-      void exit()
+      void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+        if (result) void exit()
+      })
     }
   })
 

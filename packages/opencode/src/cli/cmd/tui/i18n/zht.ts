@@ -248,6 +248,8 @@ export const dict = {
   "tui.dialog.ok": "確定",
   "tui.dialog.confirm.cancel": "取消",
   "tui.dialog.confirm.confirm": "確認",
+  "tui.dialog.exit.title": "退出確認",
+  "tui.dialog.exit.message": "確定要退出應用嗎？",
   "tui.dialog.agreement.title": "服務協議與隱私政策",
   "tui.dialog.agreement.message": "請閱讀並同意後繼續使用。",
   "tui.dialog.agreement.confirm": "同意並繼續",

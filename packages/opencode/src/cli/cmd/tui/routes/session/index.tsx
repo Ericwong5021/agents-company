@@ -317,7 +317,9 @@ export function Session() {
         void sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
         return
       }
-      void exit()
+      void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+        if (result) void exit()
+      })
     }
   })
 

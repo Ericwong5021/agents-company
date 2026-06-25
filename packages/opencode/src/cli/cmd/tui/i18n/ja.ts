@@ -260,6 +260,8 @@ export const dict = {
   "tui.dialog.ok": "OK",
   "tui.dialog.confirm.cancel": "キャンセル",
   "tui.dialog.confirm.confirm": "確認",
+  "tui.dialog.exit.title": "終了確認",
+  "tui.dialog.exit.message": "終了してもよろしいですか？",
   "tui.dialog.agreement.title": "利用規約とプライバシー",
   "tui.dialog.agreement.message": "内容を確認し、同意のうえで続行してください。",
   "tui.dialog.agreement.confirm": "同意して続行",

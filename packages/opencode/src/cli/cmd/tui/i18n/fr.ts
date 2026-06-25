@@ -309,6 +309,8 @@ export const dict = {
   "tui.dialog.ok": "OK",
   "tui.dialog.confirm.cancel": "Annuler",
   "tui.dialog.confirm.confirm": "Confirmer",
+  "tui.dialog.exit.title": "Confirmer la sortie",
+  "tui.dialog.exit.message": "Êtes-vous sûr de vouloir quitter ?",
   "tui.dialog.agreement.title": "Conditions et confidentialité",
   "tui.dialog.agreement.message": "Veuillez les lire et les accepter pour continuer.",
   "tui.dialog.agreement.confirm": "Accepter et continuer",
