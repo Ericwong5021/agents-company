@@ -1,171 +1,89 @@
-import { createEffect, createSignal, onMount, Show } from "solid-js"
+import { createSignal, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogProvider } from "@tui/component/dialog-provider"
 import { DialogModel } from "@tui/component/dialog-model"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
+import { useLanguage } from "@tui/context/language"
 import { Spinner } from "@tui/component/spinner"
-import { TextAttributes } from "@opentui/core"
+import { OnboardingFrame } from "./frame"
 
 interface StepProviderProps {
   key?: number
+  stepIndex: number
+  stepCount: number
   onComplete: (data: { providerID: string; modelID: string }) => void
 }
 
+// Provider + default-model selection. We reuse the app's provider/model dialogs
+// for the actual connection (auth flows are non-trivial) but frame the step in
+// card style and only advance once a model is actually chosen.
 export function StepProvider(props: StepProviderProps) {
   const { theme } = useTheme()
   const dialog = useDialog()
   const local = useLocal()
   const sync = useSync()
-  const [started, setStarted] = createSignal(false)
+  const t = useLanguage().t
   const [waiting, setWaiting] = createSignal(false)
-  const [dismissed, setDismissed] = createSignal(false)
-  const [attemptCount, setAttemptCount] = createSignal(0)
+  const [needsRetry, setNeedsRetry] = createSignal(false)
 
-  onMount(() => {
-    // Check if there's already a connected provider with models
-    const connectedProviders = sync.data.provider_next.connected
-    const hasConnectedModels = connectedProviders.some((providerID) => {
-      const provider = sync.data.provider.find((p) => p.id === providerID)
+  function hasConnectedModels() {
+    return sync.data.provider_next.connected.some((id) => {
+      const provider = sync.data.provider.find((p) => p.id === id)
       return provider && Object.keys(provider.models).length > 0
     })
+  }
 
-    // If there's already a connected provider with models, show model selection directly
-    if (hasConnectedModels) {
-      setStarted(true)
-      showModelDialog()
-    } else {
-      // Small delay to let the UI settle before showing the dialog
-      setTimeout(() => {
-        setStarted(true)
-        showProviderDialog()
-      }, 300)
-    }
-  })
+  onMount(() => setTimeout(open, 300))
 
-  function showModelDialog() {
-    setAttemptCount((c) => c + 1)
-    setDismissed(false)
-
-    // Show model dialog directly with connected providers
+  function open() {
+    setNeedsRetry(false)
+    // Jump straight to model selection when a provider is already connected.
     dialog.replace(
-      () => <DialogModel />,
-      () => {
-        // Dialog was dismissed (Esc) - check if a model was already selected
-        const current = local.model.current()
-        if (!current) {
-          // User dismissed without selecting - mark as dismissed
-          setDismissed(true)
-        } else {
-          checkCompletion()
-        }
-      },
+      () => (hasConnectedModels() ? <DialogModel /> : <DialogProvider />),
+      onDialogClosed,
     )
   }
 
-  function showProviderDialog() {
-    setAttemptCount((c) => c + 1)
-    setDismissed(false)
-
-    dialog.replace(
-      () => <DialogProvider />,
-      () => {
-        // Dialog was dismissed (Esc) - check if a model was already selected
-        const current = local.model.current()
-        if (!current) {
-          // User dismissed without selecting - mark as dismissed
-          setDismissed(true)
-        } else {
-          checkCompletion()
-        }
-      },
-    )
-  }
-
-  function checkCompletion() {
+  function onDialogClosed() {
     const current = local.model.current()
-    if (current && current.providerID && current.modelID) {
+    if (current?.providerID && current?.modelID) {
       setWaiting(true)
-      // Brief pause to show the "Setting up..." state
-      setTimeout(() => {
-        props.onComplete({
-          providerID: current.providerID,
-          modelID: current.modelID,
-        })
-      }, 800)
-    } else {
-      // Invalid state - no model selected
-      setDismissed(true)
+      setTimeout(() => props.onComplete({ providerID: current.providerID, modelID: current.modelID }), 600)
+      return
     }
+    setNeedsRetry(true)
   }
-
-  function handleRetry() {
-    setDismissed(false)
-    showProviderDialog()
-  }
-
-  // Watch for model selection changes
-  createEffect(() => {
-    const current = local.model.current()
-    if (current && started() && !dismissed()) {
-      setWaiting(true)
-      setTimeout(() => {
-        props.onComplete({
-          providerID: current.providerID,
-          modelID: current.modelID,
-        })
-      }, 800)
-    }
-  })
 
   return (
-    <box
-      flexDirection="column"
-      justifyContent="center"
-      alignItems="center"
-      width="100%"
-      height="100%"
-      gap={2}
+    <OnboardingFrame
+      stepIndex={props.stepIndex}
+      stepCount={props.stepCount}
+      title={t("onboarding.provider.title")}
+      subtitle={t("onboarding.provider.description")}
     >
       <Show when={waiting()}>
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <Spinner color={theme.textMuted}>Setting up your model...</Spinner>
-        </box>
+        <Spinner color={theme.textMuted}>{t("onboarding.provider.setting_up")}</Spinner>
       </Show>
-      <Show when={dismissed()}>
-        <box flexDirection="column" alignItems="center" gap={2}>
-          <text fg={theme.error} attributes={TextAttributes.BOLD}>
-            ⚠ Provider Setup Required
-          </text>
-          <text fg={theme.textMuted}>
-            You need to connect a provider and select a model to continue.
-          </text>
-          <text fg={theme.textMuted}>
-            Attempt {attemptCount()} - Please complete the setup.
-          </text>
+      <Show when={needsRetry()}>
+        <box flexDirection="column" gap={1}>
+          <text fg={theme.error}>⚠ {t("onboarding.provider.required")}</text>
           <box
             backgroundColor={theme.primary}
             paddingLeft={3}
             paddingRight={3}
             paddingTop={1}
             paddingBottom={1}
-            onMouseUp={handleRetry}
+            onMouseUp={open}
           >
-            <text fg={theme.background}>Try Again ↻</text>
+            <text fg={theme.background}>{t("onboarding.provider.retry")}</text>
           </box>
         </box>
       </Show>
-      <Show when={!started() && !waiting() && !dismissed()}>
-        <box flexDirection="column" alignItems="center" gap={1}>
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            Connect to AI
-          </text>
-          <text fg={theme.textMuted}>
-            Choose a provider and model to power your agents
-          </text>
-        </box>
+      <Show when={!waiting() && !needsRetry()}>
+        <Spinner color={theme.textMuted}>{t("onboarding.provider.description")}</Spinner>
       </Show>
-    </box>
+    </OnboardingFrame>
   )
 }
