@@ -993,8 +993,8 @@ async function load(input: { api: Api; config: TuiConfig.Info }) {
     await Instance.provide({
       directory: cwd,
       fn: async () => {
-        const records = Flag.MIMOCODE_PURE ? [] : (config.plugin_origins ?? [])
-        if (Flag.MIMOCODE_PURE && config.plugin_origins?.length) {
+        const records = Flag.AGENTCOMPANY_PURE ? [] : (config.plugin_origins ?? [])
+        if (Flag.AGENTCOMPANY_PURE && config.plugin_origins?.length) {
           log.info("skipping external tui plugins in pure mode", { count: config.plugin_origins.length })
         }
 

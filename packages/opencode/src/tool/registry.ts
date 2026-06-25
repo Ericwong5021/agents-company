@@ -204,7 +204,7 @@ export const layer = Layer.effect(
 
         yield* config.get()
         const questionEnabled =
-          ["app", "cli", "desktop"].includes(Flag.MIMOCODE_CLIENT) || Flag.MIMOCODE_ENABLE_QUESTION_TOOL
+          ["app", "cli", "desktop"].includes(Flag.AGENTCOMPANY_CLIENT) || Flag.AGENTCOMPANY_ENABLE_QUESTION_TOOL
 
         const tool = yield* Effect.all({
           invalid: Tool.init(invalid),
@@ -251,13 +251,13 @@ export const layer = Layer.effect(
             tool.skill,
             tool.patch,
             tool.changedir,
-            ...(Flag.MIMOCODE_EXPERIMENTAL_LSP_TOOL ? [tool.lsp] : []),
+            ...(Flag.AGENTCOMPANY_EXPERIMENTAL_LSP_TOOL ? [tool.lsp] : []),
             tool.planexit,
             tool.planenter,
             tool.memory,
             tool.history,
             tool.task,
-            ...(Flag.MIMOCODE_EXPERIMENTAL_WORKFLOW_TOOL ? [tool.workflow] : []),
+            ...(Flag.AGENTCOMPANY_EXPERIMENTAL_WORKFLOW_TOOL ? [tool.workflow] : []),
           ],
           actor: tool.actor,
           read: tool.read,
@@ -323,10 +323,10 @@ export const layer = Layer.effect(
             return (
               input.providerID === ProviderID.opencode ||
               input.providerID === "xiaomi" ||
-              Flag.MIMOCODE_ENABLE_EXA
+              Flag.AGENTCOMPANY_ENABLE_EXA
             )
           }
-          return input.providerID === ProviderID.opencode || Flag.MIMOCODE_ENABLE_EXA
+          return input.providerID === ProviderID.opencode || Flag.AGENTCOMPANY_ENABLE_EXA
         }
 
         const usePatch =

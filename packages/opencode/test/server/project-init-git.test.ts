@@ -18,17 +18,17 @@ afterEach(async () => {
 })
 
 // This test needs a tmpdir OUTSIDE any git repo so project detection doesn't
-// inherit a parent .git. We temporarily set Flag.MIMOCODE_SERVER_PASSWORD to
+// inherit a parent .git. We temporarily set Flag.AGENTCOMPANY_SERVER_PASSWORD to
 // bypass the middleware cwd containment check and include auth headers.
 const TEST_PASSWORD = "init-git-test"
 const authHeader = `Basic ${Buffer.from(`mimocode:${TEST_PASSWORD}`).toString("base64")}`
 
 describe("project.initGit endpoint", () => {
   test("initializes git and reloads immediately", async () => {
-    const prevFlag = (Flag as any).MIMOCODE_SERVER_PASSWORD
-    const prevRoot = process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
-    ;(Flag as any).MIMOCODE_SERVER_PASSWORD = TEST_PASSWORD
-    delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+    const prevFlag = (Flag as any).AGENTCOMPANY_SERVER_PASSWORD
+    const prevRoot = process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
+    ;(Flag as any).AGENTCOMPANY_SERVER_PASSWORD = TEST_PASSWORD
+    delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
     try {
       await using tmp = await tmpdir()
       const app = Server.Default().app
@@ -88,9 +88,9 @@ describe("project.initGit endpoint", () => {
         GlobalBus.off("event", fn)
       }
     } finally {
-      ;(Flag as any).MIMOCODE_SERVER_PASSWORD = prevFlag
-      if (prevRoot !== undefined) process.env["MIMOCODE_TEST_TMPDIR_ROOT"] = prevRoot
-      else delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+      ;(Flag as any).AGENTCOMPANY_SERVER_PASSWORD = prevFlag
+      if (prevRoot !== undefined) process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] = prevRoot
+      else delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
     }
   })
 

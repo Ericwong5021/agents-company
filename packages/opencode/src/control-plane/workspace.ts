@@ -113,8 +113,8 @@ export const create = fn(CreateInput, async (input) => {
 
   const env = {
     AGENTCOMPANY_AUTH_CONTENT: JSON.stringify(await AppRuntime.runPromise(Auth.Service.use((auth) => auth.all()))),
-    MIMOCODE_WORKSPACE_ID: config.id,
-    MIMOCODE_EXPERIMENTAL_WORKSPACES: "true",
+    AGENTCOMPANY_WORKSPACE_ID: config.id,
+    AGENTCOMPANY_EXPERIMENTAL_WORKSPACES: "true",
     OTEL_EXPORTER_OTLP_HEADERS: process.env.OTEL_EXPORTER_OTLP_HEADERS,
     OTEL_EXPORTER_OTLP_ENDPOINT: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     OTEL_RESOURCE_ATTRIBUTES: process.env.OTEL_RESOURCE_ATTRIBUTES,
@@ -561,7 +561,7 @@ async function syncWorkspaceLoop(space: Info, signal: AbortSignal) {
 }
 
 async function startSync(space: Info) {
-  if (!Flag.MIMOCODE_EXPERIMENTAL_WORKSPACES) return
+  if (!Flag.AGENTCOMPANY_EXPERIMENTAL_WORKSPACES) return
 
   const adaptor = await getAdaptor(space.projectID, space.type)
   const target = await adaptor.target(space)

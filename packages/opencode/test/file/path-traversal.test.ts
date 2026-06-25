@@ -50,11 +50,11 @@ describe("Filesystem.contains", () => {
 // sets worktree="/" (the non-git sentinel). Otherwise containsPath falls through
 // to the worktree check and allows paths within the parent repo.
 function withTmpdirOutsideGit<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
-  delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+  const prev = process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
+  delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
   return fn().finally(() => {
-    if (prev !== undefined) process.env["MIMOCODE_TEST_TMPDIR_ROOT"] = prev
-    else delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+    if (prev !== undefined) process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] = prev
+    else delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
   })
 }
 

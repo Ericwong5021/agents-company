@@ -181,7 +181,7 @@ export const layer: Layer.Layer<
         }),
       )
 
-    const fakeVcs = Schema.decodeUnknownSync(Schema.optional(ProjectVcs))(Flag.MIMOCODE_FAKE_VCS)
+    const fakeVcs = Schema.decodeUnknownSync(Schema.optional(ProjectVcs))(Flag.AGENTCOMPANY_FAKE_VCS)
 
     const resolveGitPath = (cwd: string, name: string) => {
       if (!name) return cwd
@@ -201,7 +201,7 @@ export const layer: Layer.Layer<
       type DiscoveryResult = { id: ProjectID; worktree: string; sandbox: string; vcs: Info["vcs"] }
 
       const data: DiscoveryResult = yield* Effect.gen(function* () {
-        if (Flag.MIMOCODE_DISABLE_GIT) {
+        if (Flag.AGENTCOMPANY_DISABLE_GIT) {
           return {
             id: ProjectID.global,
             worktree: directory,
@@ -295,7 +295,7 @@ export const layer: Layer.Layer<
             time: { created: Date.now(), updated: Date.now() },
           }
 
-      if (Flag.MIMOCODE_EXPERIMENTAL_ICON_DISCOVERY) yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
+      if (Flag.AGENTCOMPANY_EXPERIMENTAL_ICON_DISCOVERY) yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
 
       const result: Info = {
         ...existing,

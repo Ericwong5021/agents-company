@@ -28,7 +28,7 @@ export const NotFoundError = NamedError.create(
 const log = Log.create({ service: "db" })
 
 export function getChannelPath() {
-  if (["latest", "beta", "prod"].includes(InstallationChannel) || Flag.MIMOCODE_DISABLE_CHANNEL_DB)
+  if (["latest", "beta", "prod"].includes(InstallationChannel) || Flag.AGENTCOMPANY_DISABLE_CHANNEL_DB)
     return path.join(Global.Path.data, "agent-company.db")
   const safe = InstallationChannel.replace(/[^a-zA-Z0-9._-]/g, "-")
   return path.join(Global.Path.data, `agent-company-${safe}.db`)
@@ -103,7 +103,7 @@ export const Client = lazy(() => {
       count: entries.length,
       mode: typeof OPENCODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
     })
-    if (Flag.MIMOCODE_SKIP_MIGRATIONS) {
+    if (Flag.AGENTCOMPANY_SKIP_MIGRATIONS) {
       for (const item of entries) {
         item.sql = "select 1;"
       }

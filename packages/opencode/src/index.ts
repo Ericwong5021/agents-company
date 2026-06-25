@@ -91,7 +91,7 @@ const cli = yargs(args)
   })
   .middleware(async (opts) => {
     if (opts.pure) {
-      process.env.MIMOCODE_PURE = "1"
+      process.env.AGENTCOMPANY_PURE = "1"
     }
 
     await Log.init({
@@ -108,7 +108,7 @@ const cli = yargs(args)
 
     process.env.AGENT = "1"
     process.env.MIMOCODE = "1"
-    process.env.MIMOCODE_PID = String(process.pid)
+    process.env.AGENTCOMPANY_PID = String(process.pid)
 
     Log.Default.info("mimocode", {
       version: InstallationVersion,
@@ -157,8 +157,8 @@ const cli = yargs(args)
     // Idempotently import Claude Code sessions into SQLite. Runs once per process
     // tree (the env guard is inherited by spawned children) and is best-effort:
     // a failure here must never block command startup.
-    if (!process.env.MIMOCODE_DISABLE_CLAUDE_IMPORT && !process.env.MIMOCODE_CLAUDE_IMPORTED) {
-      process.env.MIMOCODE_CLAUDE_IMPORTED = "1"
+    if (!process.env.AGENTCOMPANY_DISABLE_CLAUDE_IMPORT && !process.env.AGENTCOMPANY_CLAUDE_IMPORTED) {
+      process.env.AGENTCOMPANY_CLAUDE_IMPORTED = "1"
       try {
         await ClaudeImport.run()
       } catch (e) {

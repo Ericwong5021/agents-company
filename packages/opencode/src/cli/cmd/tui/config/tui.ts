@@ -95,7 +95,7 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
   const directories = yield* ConfigPaths.directories(ctx.directory)
   yield* Effect.promise(() => migrateTuiConfig({ directories, cwd: ctx.directory }))
 
-  const projectFiles = Flag.MIMOCODE_DISABLE_PROJECT_CONFIG ? [] : yield* ConfigPaths.files("tui", ctx.directory)
+  const projectFiles = Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG ? [] : yield* ConfigPaths.files("tui", ctx.directory)
 
   const acc: Acc = {
     result: {},
@@ -107,8 +107,8 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
   }
 
   // 2. Explicit TUI config override, if set.
-  if (Flag.MIMOCODE_TUI_CONFIG) {
-    const configFile = Flag.MIMOCODE_TUI_CONFIG
+  if (Flag.AGENTCOMPANY_TUI_CONFIG) {
+    const configFile = Flag.AGENTCOMPANY_TUI_CONFIG
     yield* Effect.promise(() => mergeFile(acc, configFile, ctx)).pipe(Effect.orDie)
     log.debug("loaded custom tui config", { path: configFile })
   }

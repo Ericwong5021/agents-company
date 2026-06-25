@@ -9,7 +9,7 @@ import fs from "fs"
 
 const log = Log.create({ service: "plugin.mimo" })
 
-const PLATFORM_URL = process.env.MIMO_PLATFORM_URL || "https://platform.xiaomimimo.com"
+const PLATFORM_URL = process.env.AGENTCOMPANY_PLATFORM_URL || "https://platform.xiaomimimo.com"
 
 function getKeyName(): string {
   const filePath = path.join(Global.Path.data, "mimo-key-name")

@@ -57,7 +57,7 @@ type TmpDirOptions<T> = {
 }
 export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   const dirpath = sanitizePath(
-    path.join(process.env["MIMOCODE_TEST_TMPDIR_ROOT"] ?? os.tmpdir(), "mimocode-test-" + Math.random().toString(36).slice(2)),
+    path.join(process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] ?? os.tmpdir(), "mimocode-test-" + Math.random().toString(36).slice(2)),
   )
   await fs.mkdir(dirpath, { recursive: true })
   if (options?.git) {
@@ -99,7 +99,7 @@ export function tmpdirScoped(options?: { git?: boolean; config?: Partial<Config.
   return Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const dirpath = sanitizePath(
-      path.join(process.env["MIMOCODE_TEST_TMPDIR_ROOT"] ?? os.tmpdir(), "mimocode-test-" + Math.random().toString(36).slice(2)),
+      path.join(process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] ?? os.tmpdir(), "mimocode-test-" + Math.random().toString(36).slice(2)),
     )
     yield* Effect.promise(() => fs.mkdir(dirpath, { recursive: true }))
     const dir = sanitizePath(yield* Effect.promise(() => fs.realpath(dirpath)))

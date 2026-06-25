@@ -11,14 +11,14 @@ export const ServeCommand = cmd({
     const opts = await resolveNetworkOptions(args)
     const isLoopback = opts.hostname === "127.0.0.1" || opts.hostname === "localhost" || opts.hostname === "::1"
 
-    if (!isLoopback && !Flag.MIMOCODE_SERVER_PASSWORD && !opts.noAuth) {
-      console.error("ERROR: Binding to non-loopback address without MIMOCODE_SERVER_PASSWORD is not allowed.")
-      console.error("Set MIMOCODE_SERVER_PASSWORD or pass --no-auth to override (DANGEROUS).")
+    if (!isLoopback && !Flag.AGENTCOMPANY_SERVER_PASSWORD && !opts.noAuth) {
+      console.error("ERROR: Binding to non-loopback address without AGENTCOMPANY_SERVER_PASSWORD is not allowed.")
+      console.error("Set AGENTCOMPANY_SERVER_PASSWORD or pass --no-auth to override (DANGEROUS).")
       process.exit(1)
     }
 
-    if (!Flag.MIMOCODE_SERVER_PASSWORD) {
-      console.log("Warning: MIMOCODE_SERVER_PASSWORD is not set; server is unsecured.")
+    if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) {
+      console.log("Warning: AGENTCOMPANY_SERVER_PASSWORD is not set; server is unsecured.")
     }
 
     const server = await Server.listen(opts)

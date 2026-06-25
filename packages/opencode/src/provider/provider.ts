@@ -1250,7 +1250,7 @@ const layer: Layer.Layer<
         }
 
         // load env (skipped in mimo-only mode so ANTHROPIC_API_KEY etc. don't auto-light other providers)
-        if (!Flag.MIMOCODE_DISABLE_PROVIDER_ENV) {
+        if (!Flag.AGENTCOMPANY_DISABLE_PROVIDER_ENV) {
           const envs = yield* env.all()
           for (const [id, provider] of Object.entries(database)) {
             const providerID = ProviderID.make(id)
@@ -1386,7 +1386,7 @@ const layer: Layer.Layer<
               (providerID === ProviderID.openrouter && modelID === "openai/gpt-5-chat")
             )
               delete provider.models[modelID]
-            if (model.status === "alpha" && !Flag.MIMOCODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
+            if (model.status === "alpha" && !Flag.AGENTCOMPANY_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
             if (model.status === "deprecated") delete provider.models[modelID]
             if (
               (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||

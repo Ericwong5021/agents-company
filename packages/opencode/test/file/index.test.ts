@@ -16,11 +16,11 @@ afterEach(async () => {
 // Otherwise project detection finds the parent .git, sets worktree to the repo
 // root, and containsPath allows "../" paths that stay within the worktree.
 function withTmpdirOutsideGit<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
-  delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+  const prev = process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
+  delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
   return fn().finally(() => {
-    if (prev !== undefined) process.env["MIMOCODE_TEST_TMPDIR_ROOT"] = prev
-    else delete process.env["MIMOCODE_TEST_TMPDIR_ROOT"]
+    if (prev !== undefined) process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] = prev
+    else delete process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"]
   })
 }
 

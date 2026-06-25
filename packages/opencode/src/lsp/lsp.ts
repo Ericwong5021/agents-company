@@ -116,9 +116,9 @@ const kinds = [
 ]
 
 const filterExperimentalServers = (servers: Record<string, LSPServer.Info>) => {
-  if (Flag.MIMOCODE_EXPERIMENTAL_LSP_TY) {
+  if (Flag.AGENTCOMPANY_EXPERIMENTAL_LSP_TY) {
     if (servers["pyright"]) {
-      log.info("LSP server pyright is disabled because MIMOCODE_EXPERIMENTAL_LSP_TY is enabled")
+      log.info("LSP server pyright is disabled because AGENTCOMPANY_EXPERIMENTAL_LSP_TY is enabled")
       delete servers["pyright"]
     }
   } else {

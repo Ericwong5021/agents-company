@@ -22,7 +22,7 @@ import { extractBuiltinBundle } from "./builtin/extract"
 const log = Log.create({ service: "skill" })
 const EXTERNAL_DIRS = [".claude", ".agents", ".codex", ".opencode"]
 const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
-const MIMOCODE_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
+const AGENTCOMPANY_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
 const SKILL_PATTERN = "**/SKILL.md"
 
 export const Info = z.object({
@@ -156,7 +156,7 @@ const discoverSkills = Effect.fnUntraced(function* (
   const state: ScanState = { matches: new Set(), dirs: new Set() }
 
   // Extract builtin skills to disk first (user skills with same name override)
-  if (!Flag.MIMOCODE_DISABLE_BUILTIN_SKILLS) {
+  if (!Flag.AGENTCOMPANY_DISABLE_BUILTIN_SKILLS) {
     const builtinSkillRoot = yield* extractBuiltinBundle(fsys).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     )
@@ -166,7 +166,7 @@ const discoverSkills = Effect.fnUntraced(function* (
   }
 
   // Extract compose skills to disk (user skills with same name override)
-  if (!Flag.MIMOCODE_DISABLE_COMPOSE_SKILLS) {
+  if (!Flag.AGENTCOMPANY_DISABLE_COMPOSE_SKILLS) {
     const composeSkillRoot = yield* extractComposeBundle(fsys).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     )
@@ -175,11 +175,11 @@ const discoverSkills = Effect.fnUntraced(function* (
     }
   }
 
-  if (!Flag.MIMOCODE_DISABLE_EXTERNAL_SKILLS) {
+  if (!Flag.AGENTCOMPANY_DISABLE_EXTERNAL_SKILLS) {
     const externalDirs = EXTERNAL_DIRS.filter((dir) => {
-      if (dir === ".claude" && Flag.MIMOCODE_DISABLE_CLAUDE_CODE_SKILLS) return false
-      if (dir === ".codex" && Flag.MIMOCODE_DISABLE_CODEX_SKILLS) return false
-      if (dir === ".opencode" && Flag.MIMOCODE_DISABLE_OPENCODE_SKILLS) return false
+      if (dir === ".claude" && Flag.AGENTCOMPANY_DISABLE_CLAUDE_CODE_SKILLS) return false
+      if (dir === ".codex" && Flag.AGENTCOMPANY_DISABLE_CODEX_SKILLS) return false
+      if (dir === ".opencode" && Flag.AGENTCOMPANY_DISABLE_OPENCODE_SKILLS) return false
       return true
     })
 
@@ -200,7 +200,7 @@ const discoverSkills = Effect.fnUntraced(function* (
 
   const configDirs = yield* config.directories()
   for (const dir of configDirs) {
-    yield* scan(state, dir, MIMOCODE_SKILL_PATTERN)
+    yield* scan(state, dir, AGENTCOMPANY_SKILL_PATTERN)
   }
 
   const cfg = yield* config.get()

@@ -755,7 +755,7 @@ export const layer = Layer.effect(
           log.debug("loaded custom config", { path: Flag.AGENTCOMPANY_CONFIG })
         }
 
-        if (!Flag.MIMOCODE_DISABLE_PROJECT_CONFIG) {
+        if (!Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG) {
           for (const file of yield* ConfigPaths.files("agent-company", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
             yield* merge(file, yield* loadFile(file), "local")
           }
@@ -847,8 +847,8 @@ export const layer = Layer.effect(
               { concurrency: 2 },
             )
             if (Option.isSome(tokenOpt)) {
-              process.env["MIMOCODE_CONSOLE_TOKEN"] = tokenOpt.value
-              yield* env.set("MIMOCODE_CONSOLE_TOKEN", tokenOpt.value)
+              process.env["AGENTCOMPANY_CONSOLE_TOKEN"] = tokenOpt.value
+              yield* env.set("AGENTCOMPANY_CONSOLE_TOKEN", tokenOpt.value)
             }
 
             if (Option.isSome(configOpt)) {
@@ -892,7 +892,7 @@ export const layer = Layer.effect(
           mergeMcpOrigins(managed.source, next, "opencode")
         }
 
-        if (!Flag.MIMOCODE_DISABLE_CLAUDE_CODE_MCP) {
+        if (!Flag.AGENTCOMPANY_DISABLE_CLAUDE_CODE_MCP) {
           yield* mergeClaudeMcp(path.join(Global.Path.home, ".claude.json"))
           yield* mergeClaudeMcp(path.join(ctx.directory, ".claude.json"))
         }
@@ -929,10 +929,10 @@ export const layer = Layer.effect(
           result.share = "auto"
         }
 
-        if (Flag.MIMOCODE_DISABLE_AUTOCOMPACT) {
+        if (Flag.AGENTCOMPANY_DISABLE_AUTOCOMPACT) {
           result.compaction = { ...result.compaction, auto: false }
         }
-        if (Flag.MIMOCODE_DISABLE_PRUNE) {
+        if (Flag.AGENTCOMPANY_DISABLE_PRUNE) {
           result.compaction = { ...result.compaction, prune: false }
         }
 

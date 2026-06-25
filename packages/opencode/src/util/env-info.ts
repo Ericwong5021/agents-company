@@ -2,7 +2,7 @@ import os from "os"
 import { Global } from "@/global"
 import { InstallationChannel, InstallationVersion } from "@/installation/version"
 import { getInstallationID } from "@/metrics/installation"
-import { MIMOCODE_PROCESS_ROLE, MIMOCODE_RUN_ID } from "./mimo-process"
+import { AGENTCOMPANY_PROCESS_ROLE, AGENTCOMPANY_RUN_ID } from "./mimo-process"
 
 function username() {
   if (process.env.USER) return process.env.USER
@@ -55,8 +55,8 @@ export async function getEnvInfo() {
       version: InstallationVersion,
       channel: InstallationChannel,
       installation_id: await getInstallationID(),
-      run_id: MIMOCODE_RUN_ID,
-      process_role: MIMOCODE_PROCESS_ROLE,
+      run_id: AGENTCOMPANY_RUN_ID,
+      process_role: AGENTCOMPANY_PROCESS_ROLE,
     },
   }
 }

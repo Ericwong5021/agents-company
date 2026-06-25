@@ -35,11 +35,11 @@ export const claudeCommandDirectories = Effect.fn("ConfigPaths.claudeCommandDire
   directory: string,
   worktree?: string,
 ) {
-  if (Flag.MIMOCODE_DISABLE_CLAUDE_CODE_COMMANDS) return []
+  if (Flag.AGENTCOMPANY_DISABLE_CLAUDE_CODE_COMMANDS) return []
   const afs = yield* AppFileSystem.Service
   return unique([
     path.join(Global.Path.home, ".claude"),
-    ...(!Flag.MIMOCODE_DISABLE_PROJECT_CONFIG
+    ...(!Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG
       ? yield* afs.up({
           targets: [".claude"],
           start: directory,

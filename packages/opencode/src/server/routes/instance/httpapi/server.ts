@@ -71,13 +71,13 @@ const auth = Layer.succeed(
   Authorization.of({
     basic: (effect, { credential }) =>
       Effect.gen(function* () {
-        if (!Flag.MIMOCODE_SERVER_PASSWORD) return yield* effect
+        if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) return yield* effect
 
-        const user = Flag.MIMOCODE_SERVER_USERNAME ?? "mimocode"
+        const user = Flag.AGENTCOMPANY_SERVER_USERNAME ?? "mimocode"
         if (credential.username !== user) {
           return yield* new Unauthorized({ message: "Unauthorized" })
         }
-        if (Redacted.value(credential.password) !== Flag.MIMOCODE_SERVER_PASSWORD) {
+        if (Redacted.value(credential.password) !== Flag.AGENTCOMPANY_SERVER_PASSWORD) {
           return yield* new Unauthorized({ message: "Unauthorized" })
         }
         return yield* effect
@@ -101,7 +101,7 @@ const instance = HttpRouter.middleware()(
         const workspace = query.workspace || undefined
         const directory = Filesystem.resolve(decode(raw))
 
-        if (!Flag.MIMOCODE_SERVER_PASSWORD) {
+        if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) {
           const cwd = Filesystem.resolve(process.cwd())
           if (!Filesystem.contains(cwd, directory)) {
             return yield* new DirectoryAccessDenied({

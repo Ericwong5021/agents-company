@@ -182,8 +182,8 @@ const PREDICT_SYSTEM = `You predict the single most likely next message a user w
 
 const PREDICT_NUDGE = `Based on the conversation above, write the user's most likely next message:`
 
-const OUTPUT_LENGTH_CONTINUATION_LIMIT = Flag.MIMOCODE_OUTPUT_LENGTH_CONTINUATION_LIMIT
-const INVALID_OUTPUT_CONTINUATION_LIMIT = Flag.MIMOCODE_INVALID_OUTPUT_CONTINUATION_LIMIT
+const OUTPUT_LENGTH_CONTINUATION_LIMIT = Flag.AGENTCOMPANY_OUTPUT_LENGTH_CONTINUATION_LIMIT
+const INVALID_OUTPUT_CONTINUATION_LIMIT = Flag.AGENTCOMPANY_INVALID_OUTPUT_CONTINUATION_LIMIT
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -1886,7 +1886,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               sessionID,
               phase,
               task_type: taskType,
-              surface: Flag.MIMOCODE_CLIENT,
+              surface: Flag.AGENTCOMPANY_CLIENT,
               total_tokens_in: agentMetrics.tokens_in,
               total_tokens_out: agentMetrics.tokens_out,
               files_changed: agentMetrics.files_changed,
