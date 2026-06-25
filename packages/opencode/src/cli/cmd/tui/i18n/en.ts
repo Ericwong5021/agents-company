@@ -564,7 +564,7 @@ export const dict: Record<string, string> = {
   "onboarding.mission.intro": "Let's talk, {{name}} — what do you want this company to do?",
   "onboarding.mission.subtitle": "{{assistant}} is ready to listen. Type your first message to start the conversation.",
   "onboarding.mission.kickoff": "Hello, I'm ready to talk about my company.",
-  "onboarding.mission.generating": "Preparing a personalised greeting…",
+  "onboarding.mission.generating": "Reviewing your profile…",
   "onboarding.mission.hint": "Let's talk a bit more ({{n}} more turns)…",
   "onboarding.mission.build": "Build the team →",
   "onboarding.mission.you": "You",
