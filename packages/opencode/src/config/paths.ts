@@ -7,7 +7,7 @@ import { Global } from "@/global"
 import { unique } from "remeda"
 import { JsonError } from "./error"
 import * as Effect from "effect/Effect"
-import { AppFileSystem } from "@mimo-ai/shared/filesystem"
+import { AppFileSystem } from "@agents-company/shared/filesystem"
 
 export const directories = Effect.fn("ConfigPaths.directories")(function* (_directory: string, _worktree?: string) {
   return unique([

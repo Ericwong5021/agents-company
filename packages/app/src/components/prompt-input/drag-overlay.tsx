@@ -1,5 +1,5 @@
 import { Component, Show } from "solid-js"
-import { Icon } from "@mimo-ai/ui/icon"
+import { Icon } from "@agents-company/ui/icon"
 
 type PromptDragOverlayProps = {
   type: "image" | "@mention" | null

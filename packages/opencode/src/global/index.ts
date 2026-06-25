@@ -2,8 +2,8 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util"
-import { Flock } from "@mimo-ai/shared/util/flock"
-import { resolveAgentCompanyHome } from "@mimo-ai/shared/global"
+import { Flock } from "@agents-company/shared/util/flock"
+import { resolveAgentCompanyHome } from "@agents-company/shared/global"
 
 const { data, cache, config, state } = resolveAgentCompanyHome()
 

@@ -1,4 +1,4 @@
-import { Binary } from "@mimo-ai/shared/util/binary"
+import { Binary } from "@agents-company/shared/util/binary"
 import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type {
   Message,
@@ -10,7 +10,7 @@ import type {
   SessionStatus,
   SnapshotFileDiff,
   Todo,
-} from "@mimo-ai/sdk/v2/client"
+} from "@agents-company/sdk/v2/client"
 import type { State, VcsCache } from "./types"
 import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"

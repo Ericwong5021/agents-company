@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@mimo-ai/sdk/v2"
-import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
+import type { AssistantMessage } from "@agents-company/sdk/v2"
+import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@agents-company/plugin/tui"
 import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { completedTPS, formatTPS, streamingTPS } from "./tps"
 import { Card } from "../../component/card"

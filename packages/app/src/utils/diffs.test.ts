@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { SnapshotFileDiff } from "@mimo-ai/sdk/v2"
-import type { Message } from "@mimo-ai/sdk/v2/client"
+import type { SnapshotFileDiff } from "@agents-company/sdk/v2"
+import type { Message } from "@agents-company/sdk/v2/client"
 import { diffs, message } from "./diffs"
 
 const item = {

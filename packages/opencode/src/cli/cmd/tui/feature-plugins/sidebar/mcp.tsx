@@ -1,4 +1,4 @@
-import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@mimo-ai/plugin/tui"
+import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@agents-company/plugin/tui"
 import { createMemo, For, Match, Show, Switch, createSignal } from "solid-js"
 import { Card } from "../../component/card"
 

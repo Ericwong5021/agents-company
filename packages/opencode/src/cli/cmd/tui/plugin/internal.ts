@@ -12,7 +12,7 @@ import SidebarFiles from "../feature-plugins/sidebar/files"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
 import PluginManager from "../feature-plugins/system/plugins"
 import { NavOrgChart, NavProjectManagement, NavAgentManagement, NavSettings } from "../feature-plugins/nav"
-import type { TuiPlugin, TuiPluginModule } from "@mimo-ai/plugin/tui"
+import type { TuiPlugin, TuiPluginModule } from "@agents-company/plugin/tui"
 
 export type InternalTuiPlugin = TuiPluginModule & {
   id: string

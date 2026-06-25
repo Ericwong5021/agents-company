@@ -33,7 +33,7 @@ import type {
   UserMessage,
   TextPart,
   ReasoningPart,
-} from "@mimo-ai/sdk/v2"
+} from "@agents-company/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util"
 import type { Tool } from "@/tool"
