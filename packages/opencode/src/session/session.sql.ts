@@ -22,6 +22,9 @@ export const SessionTable = sqliteTable(
       .$type<ProjectID>()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    company_id: text()
+      .$type<ProjectID>()
+      .references(() => ProjectTable.id),
     company_agent_id: text()
       .$type<CompanyAgentID>()
       .references(() => CompanyAgentTable.id)
@@ -54,6 +57,7 @@ export const SessionTable = sqliteTable(
     index("session_parent_idx").on(table.parent_id),
     index("session_context_from_idx").on(table.context_from),
     index("session_company_agent_idx").on(table.company_agent_id, table.project_id),
+    index("session_company_idx").on(table.company_id),
     index("session_thread_idx").on(table.thread_id),
   ],
 )

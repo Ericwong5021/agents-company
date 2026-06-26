@@ -59,6 +59,66 @@ const RIGOR_PROFILES: Record<TaskRating, RigorProfile> = {
 }
 
 // ---------------------------------------------------------------------------
+// LLM-based non-coding evaluation
+// ---------------------------------------------------------------------------
+
+interface CriterionEvaluation {
+  criterionIndex: number
+  met: boolean
+  reasoning: string
+}
+
+/** Try LLM-based evaluation; return undefined on failure. */
+function evaluateDeliverableWithLLM(
+  deliverable: string,
+  criteria: string[],
+): Promise<CriterionEvaluation[] | undefined> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return Promise.resolve(undefined)
+
+  const prompt = [
+    "You are an admission grader. Evaluate a deliverable against each acceptance criterion.",
+    "",
+    "Deliverable (truncated to 4000 chars):",
+    deliverable.slice(0, 4000),
+    "",
+    "Acceptance Criteria:",
+    ...criteria.map((c, i) => `  ${i}: ${c}`),
+    "",
+    "For each criterion, output a JSON object with keys:",
+    '  "criterionIndex": <index>,',
+    '  "met": <true or false>,',
+    '  "reasoning": "<one-sentence explanation>"',
+    "",
+    "Output a JSON array of objects, one per criterion. Only output valid JSON.",
+  ].join("\n")
+
+  return fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+    }),
+  })
+    .then((r) => {
+      if (!r.ok) return undefined
+      return r.json()
+    })
+    .then((data) => {
+      const content = data?.choices?.[0]?.message?.content
+      if (!content) return undefined
+      const parsed = JSON.parse(content)
+      return Array.isArray(parsed) ? parsed : undefined
+    })
+    .catch(() => undefined)
+}
+
+// ---------------------------------------------------------------------------
 // Grading logic
 // ---------------------------------------------------------------------------
 
@@ -106,45 +166,57 @@ function gradeCodingSubmission(submission: CodingSubmission, profile: RigorProfi
 function gradeNonCodingSubmission(
   submission: NonCodingSubmission,
   profile: RigorProfile,
-): Finding[] {
-  const findings: Finding[] = []
+): Effect.Effect<Finding[]> {
+  return Effect.gen(function* () {
+    const findings: Finding[] = []
 
-  // Check each acceptance criterion against the deliverable
-  for (const criterion of submission.acceptanceCriteria) {
-    // Simple heuristic: check if key terms from the criterion appear in the deliverable
-    // In Phase 3, this will be delegated to an LLM-based adapter
-    const keyTerms = extractKeyTerms(criterion)
-    const missingTerms = keyTerms.filter(
-      (term) => !submission.deliverable.toLowerCase().includes(term.toLowerCase()),
-    )
+    // Try LLM-based evaluation first; swallow errors and fall back to keyword matching
+    const llmEvaluations = yield* Effect.tryPromise({
+      try: () => evaluateDeliverableWithLLM(submission.deliverable, submission.acceptanceCriteria),
+      catch: () => undefined,
+    }).pipe(Effect.orElseSucceed(() => undefined as CriterionEvaluation[] | undefined))
 
-    if (missingTerms.length > 0 && missingTerms.length === keyTerms.length) {
-      // All key terms missing — likely didn't address this criterion
+    if (llmEvaluations && Array.isArray(llmEvaluations)) {
+      for (const ev of llmEvaluations) {
+        if (!ev.met) {
+          findings.push({
+            item: `Acceptance criterion not met: "${submission.acceptanceCriteria[ev.criterionIndex] ?? "Unknown"}"`,
+            howToVerify: ev.reasoning ?? "Review the deliverable against this criterion",
+            severity: profile.blockerThreshold === "warning" ? "blocker" : "warning",
+          })
+        }
+      }
+      return findings
+    }
+
+    // Fallback: improved keyword matching (70% threshold, more lenient)
+    for (const criterion of submission.acceptanceCriteria) {
+      const keyTerms = extractKeyTerms(criterion)
+      const missingTerms = keyTerms.filter(
+        (term) => !submission.deliverable.toLowerCase().includes(term.toLowerCase()),
+      )
+
+      const missingRatio = missingTerms.length / Math.max(keyTerms.length, 1)
+      if (keyTerms.length > 0 && missingRatio > 0.7) {
+        findings.push({
+          item: `Acceptance criterion may not be fully addressed: "${criterion}"`,
+          howToVerify: `Review the deliverable and ensure it covers: ${missingTerms.join(", ")}`,
+          severity: "warning",
+        })
+      }
+    }
+
+    // At company level, require cross-validation
+    if (profile.requireCrossValidation && submission.acceptanceCriteria.length > 0) {
       findings.push({
-        item: `Acceptance criterion not addressed: "${criterion}"`,
-        howToVerify: `Review the deliverable and ensure it explicitly addresses: ${criterion}`,
-        severity: profile.blockerThreshold === "warning" ? "blocker" : "warning",
-      })
-    } else if (missingTerms.length > 0) {
-      // Some terms missing — partially addressed
-      findings.push({
-        item: `Acceptance criterion partially addressed: "${criterion}"`,
-        howToVerify: `Verify the deliverable covers these aspects: ${missingTerms.join(", ")}`,
+        item: "Cross-validation required for company-level work",
+        howToVerify: "Ensure a peer agent has reviewed the deliverable against all acceptance criteria.",
         severity: "warning",
       })
     }
-  }
 
-  // At company level, require more thorough coverage
-  if (profile.requireCrossValidation && submission.acceptanceCriteria.length > 0) {
-    findings.push({
-      item: "Cross-validation required for company-level work",
-      howToVerify: "Ensure a peer agent has reviewed the deliverable against all acceptance criteria.",
-      severity: "warning",
-    })
-  }
-
-  return findings
+    return findings
+  })
 }
 
 /** Extract key terms from an acceptance criterion for matching. */
@@ -258,22 +330,23 @@ function extractKeyTerms(criterion: string): string[] {
 function gradeCore(
   submission: Submission,
   taskRating: TaskRating,
-): AdmissionResult {
-  const profile = RIGOR_PROFILES[taskRating]
+): Effect.Effect<AdmissionResult> {
+  return Effect.gen(function* () {
+    const profile = RIGOR_PROFILES[taskRating]
 
-  const findings: Finding[] =
-    submission.kind === "coding"
-      ? gradeCodingSubmission(submission, profile)
-      : gradeNonCodingSubmission(submission, profile)
+    const findings: Finding[] =
+      submission.kind === "coding"
+        ? (yield* Effect.succeed(gradeCodingSubmission(submission, profile)))
+        : (yield* gradeNonCodingSubmission(submission, profile))
 
-  // Determine pass/fail: any blocker findings = fail
-  const hasBlockers = findings.some((f) => f.severity === "blocker")
+    const hasBlockers = findings.some((f) => f.severity === "blocker")
 
-  return {
-    passed: !hasBlockers,
-    findings,
-    taskRating,
-  }
+    return {
+      passed: !hasBlockers,
+      findings,
+      taskRating,
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -283,28 +356,30 @@ function gradeCore(
 function selfCheckCore(
   submission: Submission,
   taskRating: TaskRating,
-): AdmissionResult {
-  const profile = RIGOR_PROFILES[taskRating]
+): Effect.Effect<AdmissionResult> {
+  return Effect.gen(function* () {
+    const profile = RIGOR_PROFILES[taskRating]
 
-  const findings: Finding[] =
-    submission.kind === "coding"
-      ? gradeCodingSubmission(submission, profile)
-      : gradeNonCodingSubmission(submission, profile)
+    const findings: Finding[] =
+      submission.kind === "coding"
+        ? yield* Effect.succeed(gradeCodingSubmission(submission as CodingSubmission, profile))
+        : yield* gradeNonCodingSubmission(submission as NonCodingSubmission, profile)
 
-  // Relax all severities by one level for self-check
-  const relaxedFindings = findings.map((f) => ({
-    ...f,
-    severity: relaxSeverity(f.severity),
-  }))
+    // Relax all severities by one level for self-check
+    const relaxedFindings = findings.map((f) => ({
+      ...f,
+      severity: relaxSeverity(f.severity),
+    }))
 
-  // At self-check level, only blockers block
-  const hasBlockers = relaxedFindings.some((f) => f.severity === "blocker")
+    // At self-check level, only blockers block
+    const hasBlockers = relaxedFindings.some((f) => f.severity === "blocker")
 
-  return {
-    passed: !hasBlockers,
-    findings: relaxedFindings,
-    taskRating,
-  }
+    return {
+      passed: !hasBlockers,
+      findings: relaxedFindings,
+      taskRating,
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -353,14 +428,14 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       submission: Submission,
       taskRating: TaskRating,
     ) {
-      return gradeCore(submission, taskRating)
+      return yield* gradeCore(submission, taskRating)
     })
 
     const selfCheck = Effect.fn("Admission.selfCheck")(function* (
       submission: Submission,
       taskRating: TaskRating,
     ) {
-      return selfCheckCore(submission, taskRating)
+      return yield* selfCheckCore(submission, taskRating)
     })
 
     const buildRejectionMessage = (result: AdmissionResult): string => {

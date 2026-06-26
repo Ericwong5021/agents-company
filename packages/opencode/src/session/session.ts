@@ -78,6 +78,7 @@ export function fromRow(row: SessionRow): Info {
     share,
     revert,
     permission: row.permission ?? undefined,
+    companyID: row.company_id ?? undefined,
     companyAgentID: (row.company_agent_id ?? undefined) as CompanyAgentID | undefined,
     threadID: row.thread_id ?? undefined,
     time: {
@@ -93,6 +94,7 @@ export function toRow(info: Info) {
   return {
     id: info.id,
     project_id: info.projectID,
+    company_id: info.companyID ?? null,
     workspace_id: info.workspaceID,
     parent_id: info.parentID,
     context_from: info.contextFrom,
@@ -132,6 +134,7 @@ export const Info = z
     id: SessionID.zod,
     slug: z.string(),
     projectID: ProjectID.zod,
+    companyID: ProjectID.zod.optional(),
     workspaceID: WorkspaceID.zod.optional(),
     directory: z.string(),
     parentID: SessionID.zod.optional(),
@@ -201,6 +204,7 @@ export const CreateInput = z
     title: z.string().optional(),
     permission: Info.shape.permission,
     workspaceID: WorkspaceID.zod.optional(),
+    companyID: ProjectID.zod.optional(),
     companyAgentID: CompanyAgentID.zod.optional(),
     threadID: z.string().optional(),
   })
@@ -367,6 +371,7 @@ export interface Interface {
     title?: string
     permission?: Permission.Ruleset
     workspaceID?: WorkspaceID
+    companyID?: ProjectID
     companyAgentID?: CompanyAgentID
     threadID?: string
   }) => Effect.Effect<Info>
@@ -455,6 +460,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       workspaceID?: WorkspaceID
       directory: string
       permission?: Permission.Ruleset
+      companyID?: ProjectID
       companyAgentID?: CompanyAgentID
       threadID?: string
     }) {
@@ -468,6 +474,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         slug: Slug.create(),
         version: InstallationVersion,
         projectID: ctx.project.id,
+        companyID: input.companyID ?? ctx.project.id,
         directory: input.directory,
         workspaceID: input.workspaceID,
         parentID: input.parentID,
@@ -603,6 +610,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       title?: string
       permission?: Permission.Ruleset
       workspaceID?: WorkspaceID
+      companyID?: ProjectID
       companyAgentID?: CompanyAgentID
       threadID?: string
     }) {
@@ -616,6 +624,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         title: input?.title,
         permission: input?.permission,
         workspaceID: workspace,
+        companyID: input?.companyID,
         companyAgentID: input?.companyAgentID,
         threadID: input?.threadID,
       })
@@ -629,6 +638,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
         directory,
         workspaceID: original.workspaceID,
         title,
+        companyID: original.companyID,
       })
       const msgs = yield* messages({ sessionID: input.sessionID, agentID: "*" })
       const idMap = new Map<string, MessageID>()
