@@ -150,15 +150,15 @@ function fromRow(row: Row): Info {
 // ---------------------------------------------------------------------------
 
 export interface Interface {
-  readonly create: (input: CreateInput) => Effect.Effect<Info>
+  readonly create: (input: CreateInput) => Effect.Effect<Info, PrimaryThreadExists | ReactiveRateLimited>
   readonly get: (id: ThreadID) => Effect.Effect<Info | undefined>
   readonly listByAgent: (agentID: string) => Effect.Effect<Info[]>
   readonly listActive: () => Effect.Effect<Info[]>
-  readonly update: (input: UpdateInput) => Effect.Effect<Info>
-  readonly complete: (id: ThreadID) => Effect.Effect<Info>
+  readonly update: (input: UpdateInput) => Effect.Effect<Info, ThreadNotFound | InvalidTransition>
+  readonly complete: (id: ThreadID) => Effect.Effect<Info, ThreadNotFound | InvalidTransition>
   /** Check if agent can accept new work of given kind. */
   readonly canAccept: (agentID: string, kind: ThreadKind) => Effect.Effect<boolean>
-  readonly addTokens: (id: ThreadID, tokens: number) => Effect.Effect<Info>
+  readonly addTokens: (id: ThreadID, tokens: number) => Effect.Effect<Info, ThreadNotFound | InvalidTransition>
   /** Agent-level rollup: idle | busy | paused. */
   readonly agentStatus: (agentID: string) => Effect.Effect<"idle" | "busy" | "paused">
   /** Per-agent activity summary for the activity registry. */

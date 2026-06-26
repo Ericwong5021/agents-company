@@ -6,7 +6,7 @@ import { CompanyAgent } from "@/company-agent/company-agent"
 import z from "zod"
 import { Effect } from "effect"
 import { lazy } from "@/util/lazy"
-import { runRequest } from "./trace"
+import { jsonRequest } from "./trace"
 
 // ---------------------------------------------------------------------------
 // Response schemas
@@ -69,7 +69,7 @@ export const WorkstationRoutes = lazy(() =>
       },
     }),
     async (c) =>
-      runRequest("WorkstationRoutes.status", c, function* () {
+      jsonRequest("WorkstationRoutes.status", c, function* () {
         const agentSvc = yield* CompanyAgent.Service
         const threadSvc = yield* Thread.Service
 
@@ -78,25 +78,27 @@ export const WorkstationRoutes = lazy(() =>
 
         // Build per-agent data
         const agents = yield* Effect.all(
-          agentList.map(function* (agent) {
-            const agentThreads = allThreads.filter((t) => t.agentID === agent.id)
-            const status = yield* threadSvc.agentStatus(agent.id)
+          agentList.map((agent) =>
+            Effect.gen(function* () {
+              const agentThreads = allThreads.filter((t) => t.agentID === agent.id)
+              const status = yield* threadSvc.agentStatus(agent.id)
 
-            return {
-              id: agent.id,
-              name: agent.name,
-              org_layer: deriveOrgLayer(agent.id),
-              status,
-              threads: agentThreads.map((t) => ({
-                id: t.id,
-                kind: t.kind,
-                status: t.status,
-                task_summary: t.description,
-                budget_tokens: t.budgetTokens,
-                spent_tokens: t.spentTokens,
-              })),
-            }
-          }),
+              return {
+                id: agent.id,
+                name: agent.name,
+                org_layer: deriveOrgLayer(agent.id),
+                status,
+                threads: agentThreads.map((t) => ({
+                  id: t.id,
+                  kind: t.kind,
+                  status: t.status,
+                  task_summary: t.description,
+                  budget_tokens: t.budgetTokens,
+                  spent_tokens: t.spentTokens,
+                })),
+              }
+            }),
+          ),
           { concurrency: 5 },
         )
 
