@@ -10,6 +10,7 @@ import { lazy } from "@/util/lazy"
 import { runRequest } from "./trace"
 
 const ThreadInfoSchema = Thread.Info
+const AgentActivitySchema = Thread.AgentActivity
 
 export const ThreadRoutes = lazy(() =>
   new Hono()
@@ -184,7 +185,7 @@ export const ThreadRoutes = lazy(() =>
           200: {
             description: "Agent status",
             content: {
-              "application/json": { schema: resolver(z.object({ status: z.enum(["idle", "busy", "focused"]) })) },
+              "application/json": { schema: resolver(z.object({ status: z.enum(["idle", "busy", "paused"]) })) },
             },
           },
         },
@@ -201,6 +202,33 @@ export const ThreadRoutes = lazy(() =>
           }),
         )
         return c.json({ status })
+      },
+    )
+    .get(
+      "/agent/:agentID/activity",
+      describeRoute({
+        summary: "Get agent activity",
+        description: "Get the full activity summary for an agent, including per-thread details.",
+        operationId: "thread.agentActivity",
+        responses: {
+          200: {
+            description: "Agent activity summary",
+            content: { "application/json": { schema: resolver(AgentActivitySchema) } },
+          },
+        },
+      }),
+      validator("param", z.object({ agentID: z.string() })),
+      async (c) => {
+        const agentID = c.req.valid("param").agentID
+        const activity = await runRequest(
+          "ThreadRoutes.agentActivity",
+          c,
+          Effect.gen(function* () {
+            const svc = yield* Thread.Service
+            return yield* svc.agentActivity(agentID)
+          }),
+        )
+        return c.json(activity)
       },
     )
 )

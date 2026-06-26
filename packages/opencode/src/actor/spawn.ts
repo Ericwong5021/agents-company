@@ -597,6 +597,13 @@ export const layer = Layer.effect(
       })
 
     const spawnPeer = Effect.fn("Actor.spawnPeer")(function* (input: SpawnInput) {
+      // Check thread constraints before spawning
+      const canSpawn = yield* threadService.canAccept(input.agentType, "reactive")
+      if (!canSpawn) {
+        log.warn("spawnPeer rejected: agent cannot accept reactive thread", {
+          agentType: input.agentType,
+        })
+      }
       // Create or attach to a thread for the peer agent
       const peerThread = yield* threadService.create({
         agentID: input.agentType,

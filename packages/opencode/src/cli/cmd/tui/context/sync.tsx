@@ -190,7 +190,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         [agentID: string]: ThreadInfo[]
       }
       agentStatus: {
-        [agentID: string]: "idle" | "busy" | "focused"
+        [agentID: string]: "idle" | "busy" | "paused"
       }
     }>({
       provider_next: {
@@ -239,8 +239,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         setStore("agentStatus", agentID, "idle")
         return
       }
-      const hasPrimary = threads.some((t) => t.kind === "primary")
-      setStore("agentStatus", agentID, hasPrimary ? "focused" : "busy")
+      const active = threads.filter((t) => t.status === "active")
+      if (active.length > 0) {
+        setStore("agentStatus", agentID, "busy")
+        return
+      }
+      const paused = threads.filter((t) => t.status === "paused")
+      setStore("agentStatus", agentID, paused.length > 0 ? "paused" : "idle")
     }
 
     const fullSyncedSessions = new Set<string>()
@@ -940,7 +945,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       resumeWorkflow(runID: string) {
         return sdk.client.workflow.resume({ runID })
       },
-      getAgentStatus(agentID: string): "idle" | "busy" | "focused" {
+      getAgentStatus(agentID: string): "idle" | "busy" | "paused" {
         return store.agentStatus[agentID] ?? "idle"
       },
       getThreads(agentID: string): ThreadInfo[] {

@@ -372,6 +372,8 @@ export interface Interface {
   }) => Effect.Effect<Info>
   readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info>
   readonly getThread: (sessionID: SessionID) => Effect.Effect<ThreadInfo | undefined>
+  /** List sessions bound to a given thread (Thread 1:N Session). */
+  readonly listByThread: (threadID: string) => Effect.Effect<Info[]>
   readonly touch: (sessionID: SessionID) => Effect.Effect<void>
   readonly get: (id: SessionID) => Effect.Effect<Info>
   readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void>
@@ -802,12 +804,24 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       } as unknown as ThreadInfo
     })
 
+    const listByThread = Effect.fn("Session.listByThread")(function* (threadID: string) {
+      const rows = yield* db((d) =>
+        d
+          .select()
+          .from(SessionTable)
+          .where(eq(SessionTable.thread_id, threadID))
+          .all(),
+      )
+      return rows.map(fromRow)
+    })
+
     return Service.of({
       create,
       fork,
       touch,
       get,
       getThread,
+      listByThread,
       setTitle,
       setArchived,
       setPermission,

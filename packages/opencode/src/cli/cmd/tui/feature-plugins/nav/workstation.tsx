@@ -31,12 +31,12 @@ interface ThreadInfo {
   time: { created: number; updated: number }
 }
 
-type AgentStatus = "idle" | "busy" | "focused"
+type AgentStatus = "idle" | "busy" | "paused"
 
 const STATUS_ICON: Record<AgentStatus, string> = {
   idle: "○",
-  busy: "◐",
-  focused: "◉",
+  busy: "◉",
+  paused: "◐",
 }
 
 function formatTokens(n: number): string {
