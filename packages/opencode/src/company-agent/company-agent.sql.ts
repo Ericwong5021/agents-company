@@ -9,5 +9,9 @@ export const CompanyAgentTable = sqliteTable("company_agent", {
   model: text(),
   color: text(),
   icon: text(),
+  org_layer: text(),
+  department: text(),
+  reports_to: text(),
+  responsibilities: text(), // JSON-encoded string[]
   ...Timestamps,
 })

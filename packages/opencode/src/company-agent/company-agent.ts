@@ -38,6 +38,10 @@ export const Info = Schema.Struct({
   model: Schema.optional(Schema.String),
   color: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.String),
+  org_layer: Schema.optional(Schema.String),
+  department: Schema.optional(Schema.String),
+  reports_to: Schema.optional(Schema.String),
+  responsibilities: Schema.optional(Schema.Array(Schema.String)),
   time: Schema.Struct({
     created: Schema.Number,
     updated: Schema.Number,
@@ -61,6 +65,10 @@ export const CreateInput = z.object({
   model: z.string().optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
+  org_layer: z.enum(["board", "department", "project", "execution", "tool"]).optional(),
+  department: z.string().optional(),
+  reports_to: z.string().optional(),
+  responsibilities: z.array(z.string()).optional(),
 })
 export type CreateInput = z.infer<typeof CreateInput>
 
@@ -75,6 +83,10 @@ export const UpdateInput = z.object({
   model: z.string().optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
+  org_layer: z.enum(["board", "department", "project", "execution", "tool"]).optional(),
+  department: z.string().optional(),
+  reports_to: z.string().optional(),
+  responsibilities: z.array(z.string()).optional(),
 })
 export type UpdateInput = z.infer<typeof UpdateInput>
 
@@ -110,6 +122,10 @@ function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
     description: row.description ?? undefined,
     color: row.color ?? undefined,
     icon: row.icon ?? undefined,
+    org_layer: row.org_layer ?? undefined,
+    department: row.department ?? undefined,
+    reports_to: row.reports_to ?? undefined,
+    responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -152,8 +168,16 @@ async function readSkillNames(id: CompanyAgentID): Promise<string[]> {
 
 async function fromRowWithFiles(row: Row): Promise<Info> {
   const id = row.id as CompanyAgentID
+  const org: OrgContext | undefined = row.org_layer
+    ? {
+        org_layer: row.org_layer ?? undefined,
+        department: row.department ?? undefined,
+        reports_to: row.reports_to ?? undefined,
+        responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : undefined,
+      }
+    : undefined
   // Validate file bundle on every read — recreates any missing files
-  await validateFileBundle(id, row.name)
+  await validateFileBundle(id, row.name, org)
   const [soul, settings, instruct, relationships, kanban, skills] = await Promise.all([
     readSoul(id),
     readSettings(id),
@@ -173,11 +197,125 @@ async function fromRowWithFiles(row: Row): Promise<Info> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Org-aware template helpers
+// ---------------------------------------------------------------------------
+
+interface OrgContext {
+  org_layer?: string
+  department?: string
+  reports_to?: string
+  responsibilities?: string[]
+}
+
+const WORK_STYLE_BY_LAYER: Record<string, string> = {
+  board:
+    "Set strategic direction. Review proposals from departments. Make high-level decisions on resource allocation and organizational priorities. Communicate decisions clearly with rationale.",
+  department:
+    "Coordinate across project teams within your department. Translate board-level strategy into actionable plans. Remove blockers for your project teams. Report progress and risks upward.",
+  project:
+    "Own delivery of a specific project or feature set. Coordinate execution agents. Break down work into tasks. Track progress and escalate blockers to your department lead.",
+  execution:
+    "Execute assigned tasks with precision. Report progress frequently. Ask for clarification when requirements are ambiguous. Escalate blockers after attempting 2 approaches.",
+  tool:
+    "Perform specific, well-defined operations. Return structured results. Report errors clearly. Do not make assumptions about intent — ask if unclear.",
+}
+
+function generateSoulTemplate(name: string, org: OrgContext): string {
+  const lines: string[] = [`# ${name}`, ""]
+
+  lines.push("## Identity")
+  lines.push(`- **Role**: ${org.org_layer ? `Organization ${org.org_layer} layer agent` : "General-purpose agent"}`)
+  if (org.org_layer) lines.push(`- **Organization Layer**: ${org.org_layer}`)
+  if (org.department) lines.push(`- **Department**: ${org.department}`)
+  if (org.reports_to) lines.push(`- **Reports To**: ${org.reports_to}`)
+  lines.push("")
+
+  if (org.responsibilities && org.responsibilities.length > 0) {
+    lines.push("## Responsibilities")
+    for (const r of org.responsibilities) {
+      lines.push(`- ${r}`)
+    }
+    lines.push("")
+  }
+
+  lines.push("## Work Style")
+  const workStyle = org.org_layer ? WORK_STYLE_BY_LAYER[org.org_layer] ?? WORK_STYLE_BY_LAYER["execution"] : "Be helpful, thorough, and proactive. Adapt communication style to the situation."
+  lines.push(workStyle)
+  lines.push("")
+
+  lines.push("## Core Principles")
+  lines.push("- Follow organizational hierarchy — do not skip levels")
+  lines.push("- Escalate failures after 2 approach attempts")
+  lines.push("- Document decisions and reasoning")
+  lines.push("- Respect scope boundaries — only access authorized information")
+  lines.push("")
+
+  return lines.join("\n")
+}
+
+function generateInstructTemplate(name: string, org: OrgContext): string {
+  const lines: string[] = [
+    `---`,
+    `agent: ${name}`,
+    `type: instruct`,
+    `version: 2`,
+    `---`,
+    "",
+    `# Instructions for ${name}`,
+    "",
+  ]
+
+  lines.push("## Communication Protocol")
+  lines.push("- When receiving a task: acknowledge, clarify requirements, estimate effort")
+  lines.push("- When completing a task: report results, artifacts produced, any blockers encountered")
+  lines.push("- When stuck: attempt 2 different approaches before escalating")
+  lines.push("- When escalating: carry all findings and attempted approaches to superior")
+  lines.push("")
+
+  lines.push("## Decision Framework")
+  if (org.org_layer === "board") {
+    lines.push("- You have full authority within strategic decisions")
+    lines.push("- Propose resource allocation changes with cost-benefit analysis")
+    lines.push("- Critical safety/budget decisions: consult with peers before committing")
+  } else if (org.org_layer === "department") {
+    lines.push("- Within department authority: decide and execute")
+    lines.push("- Cross-department: coordinate with peer department leads")
+    lines.push("- Critical (safety/budget): escalate to board")
+  } else if (org.org_layer === "project") {
+    lines.push("- Within project scope: decide and execute")
+  } else if (org.org_layer === "tool") {
+    lines.push("- Execute exactly as specified; do not interpret or extrapolate")
+    lines.push("- If instructions are ambiguous, ask for clarification before proceeding")
+  } else {
+    lines.push("- Within authority: decide and execute")
+    lines.push("- Outside authority: propose to superior with recommendation")
+    lines.push("- Critical (safety/budget): always escalate, never self-decide")
+  }
+  lines.push("")
+
+  lines.push("## Collaboration Rules")
+  lines.push("- Address colleagues by name")
+  lines.push("- Keep messages focused and actionable")
+  lines.push("- Respect others' scope — don't interfere with their tasks")
+  lines.push("- Share relevant context proactively")
+  lines.push("")
+
+  lines.push("## Escalation Triggers")
+  lines.push("- Task blocked after 2 fix attempts")
+  lines.push("- Resource requirement exceeds budget")
+  lines.push("- Scope conflict with another team")
+  lines.push("- Safety or policy red line approached")
+  lines.push("")
+
+  return lines.join("\n")
+}
+
 /**
  * Initialize the agent directory and create any missing files.
  * Safe to call on every list/get — all writes are idempotent (no-overwrite).
  */
-async function initAgentDir(id: CompanyAgentID, name: string): Promise<void> {
+async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext): Promise<void> {
   await fs.mkdir(agentDir(id), { recursive: true })
 
   // MEMORY.md — create placeholder if absent
@@ -198,44 +336,58 @@ async function initAgentDir(id: CompanyAgentID, name: string): Promise<void> {
     await fs.writeFile(settingsPath, "{}\n", "utf-8")
   }
 
-  // INSTRUCT.md — evolvable instructions if absent
+  // SOUL.md — create from template if absent (org-aware when fields present)
+  const soulPath = agentSoulPath(id)
+  const soulExists = await Bun.file(soulPath).exists()
+  if (!soulExists) {
+    const soulContent = org?.org_layer
+      ? generateSoulTemplate(name, org)
+      : [
+          `# ${name}`,
+          "",
+          `General-purpose agent. Edit this file to define the agent's identity, role, and behavior.`,
+          "",
+        ].join("\n")
+    await fs.writeFile(soulPath, soulContent, "utf-8")
+  }
+
+  // INSTRUCT.md — evolvable instructions if absent (org-aware when fields present)
   const instructPath = agentInstructPath(id)
   const instructExists = await Bun.file(instructPath).exists()
   if (!instructExists) {
-    await fs.writeFile(
-      instructPath,
-      [
-        `---`,
-        `agent: ${id}`,
-        `type: instruct`,
-        `version: 1`,
-        `---`,
-        ``,
-        `# ${name} — Instructions`,
-        ``,
-        `_How to judge, communicate, and when to escalate. Edit this file to evolve agent behavior._`,
-        ``,
-        `## Communication Style`,
-        ``,
-        `- Be concise and direct`,
-        `- Explain reasoning briefly before actions`,
-        `- Ask clarifying questions when requirements are ambiguous`,
-        ``,
-        `## Decision Framework`,
-        ``,
-        `- Prioritize correctness over speed`,
-        `- Prefer existing patterns in the codebase`,
-        `- Escalate to the user when assumptions would be risky`,
-        ``,
-        `## Escalation Rules`,
-        ``,
-        `- When in doubt, ask the user`,
-        `- If a task requires permissions you don't have, request them`,
-        `- If blocked by missing information, state what's needed`,
-        ``,
-      ].join("\n"),
-      "utf-8",
-    )
+    const instructContent = org?.org_layer
+      ? generateInstructTemplate(name, org)
+      : [
+          `---`,
+          `agent: ${id}`,
+          `type: instruct`,
+          `version: 1`,
+          `---`,
+          ``,
+          `# ${name} — Instructions`,
+          ``,
+          `_How to judge, communicate, and when to escalate. Edit this file to evolve agent behavior._`,
+          ``,
+          `## Communication Style`,
+          ``,
+          `- Be concise and direct`,
+          `- Explain reasoning briefly before actions`,
+          `- Ask clarifying questions when requirements are ambiguous`,
+          ``,
+          `## Decision Framework`,
+          ``,
+          `- Prioritize correctness over speed`,
+          `- Prefer existing patterns in the codebase`,
+          `- Escalate to the user when assumptions would be risky`,
+          ``,
+          `## Escalation Rules`,
+          ``,
+          `- When in doubt, ask the user`,
+          `- If a task requires permissions you don't have, request them`,
+          `- If blocked by missing information, state what's needed`,
+          ``,
+        ].join("\n")
+    await fs.writeFile(instructPath, instructContent, "utf-8")
   }
 
   // relationships.md — colleague relationships if absent
@@ -310,11 +462,11 @@ async function initAgentDir(id: CompanyAgentID, name: string): Promise<void> {
  * Ensures all required files exist with valid content. Recovers from
  * partial corruption or manual deletion.
  */
-async function validateFileBundle(id: CompanyAgentID, name: string): Promise<void> {
+async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgContext): Promise<void> {
   const dir = agentDir(id)
   const dirExists = await Bun.file(dir).exists()
   if (!dirExists) {
-    await initAgentDir(id, name)
+    await initAgentDir(id, name, org)
     return
   }
 
@@ -322,6 +474,7 @@ async function validateFileBundle(id: CompanyAgentID, name: string): Promise<voi
   const requiredPaths = [
     companyAgentMemoryPath(id),
     agentSettingsPath(id),
+    agentSoulPath(id),
     agentInstructPath(id),
     agentRelationshipsPath(id),
     agentKanbanPath(id),
@@ -332,7 +485,7 @@ async function validateFileBundle(id: CompanyAgentID, name: string): Promise<voi
 
   if (missing.length > 0) {
     // Re-run init to recreate missing files (idempotent — won't overwrite existing)
-    await initAgentDir(id, name)
+    await initAgentDir(id, name, org)
   }
 
   // Ensure subdirectories exist
@@ -402,15 +555,27 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               description: input.description ?? null,
               color: input.color ?? null,
               icon: input.icon ?? null,
+              org_layer: input.org_layer ?? null,
+              department: input.department ?? null,
+              reports_to: input.reports_to ?? null,
+              responsibilities: input.responsibilities ? JSON.stringify(input.responsibilities) : null,
               time_created: now,
               time_updated: now,
             })
             .run(),
         ),
       )
+      const org: OrgContext | undefined = input.org_layer
+        ? {
+            org_layer: input.org_layer,
+            department: input.department,
+            reports_to: input.reports_to,
+            responsibilities: input.responsibilities,
+          }
+        : undefined
       yield* Effect.promise(() =>
         Promise.all([
-          initAgentDir(input.id as CompanyAgentID, input.name),
+          initAgentDir(input.id as CompanyAgentID, input.name, org),
           writeAgentFiles(input.id as CompanyAgentID, {
             system_prompt: input.system_prompt,
             instruct: input.instruct,
@@ -456,6 +621,10 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (input.description !== undefined) dbPatch.description = input.description
       if (input.color !== undefined) dbPatch.color = input.color
       if (input.icon !== undefined) dbPatch.icon = input.icon
+      if (input.org_layer !== undefined) dbPatch.org_layer = input.org_layer
+      if (input.department !== undefined) dbPatch.department = input.department
+      if (input.reports_to !== undefined) dbPatch.reports_to = input.reports_to
+      if (input.responsibilities !== undefined) dbPatch.responsibilities = JSON.stringify(input.responsibilities)
 
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
