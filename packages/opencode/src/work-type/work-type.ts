@@ -221,36 +221,136 @@ const research = makeWorkType(
   researchVerify,
 )
 
-// -- Stub adapters (TODO: implement fully) ---------------------------------
+// -- Non-coding adapters (structured verification) -----------------------
+
+interface WritingSubmission {
+  content: string
+  sections?: string[]
+  wordCount?: number
+}
+
+interface DesignSubmission {
+  artifacts: Array<{ type: string; description: string }>
+  constraints: string[]
+  notes?: string
+}
+
+interface AnalysisSubmission {
+  question: string
+  dataSources: string[]
+  methodology: string
+  findings: string[]
+  conclusions: string[]
+  limitations?: string[]
+}
+
+const writingVerify: VerifyFn = (input) =>
+  Effect.gen(function* () {
+    const sub = input.submission as WritingSubmission
+    const findings: string[] = []
+
+    if (!sub.content || sub.content.trim().length < 100) {
+      findings.push("Document content is too short — expand to at least 100 characters with substantive content")
+    }
+
+    // Check for basic structure (headings or numbered sections)
+    const hasStructure = /^#{1,6}\s+/m.test(sub.content) || /^(Section|Chapter|\d+\.)/m.test(sub.content)
+    if (!hasStructure) {
+      findings.push("Document lacks structure — add Markdown headings, numbered sections, or clear chapter breaks")
+    }
+
+    // Check for readability (basic: average sentence length)
+    const sentences = sub.content.split(/[.!?]+/).filter((s: string) => s.trim().length > 0)
+    if (sentences.length > 3) {
+      const avgWords = sentences.reduce((sum: number, s: string) => sum + s.trim().split(/\s+/).length, 0) / sentences.length
+      if (avgWords > 30) {
+        findings.push("Sentences are very long (avg >30 words) — break them up for readability")
+      }
+    }
+
+    return { passed: findings.length === 0, findings }
+  })
 
 const writing = makeWorkType(
   "writing",
   "Writing",
   [TOOL.websearch, TOOL.webfetch, TOOL.read_doc, TOOL.read, TOOL.memory],
   "document",
-  "Document creation: technical writing, documentation, reports, and content generation. TODO: implement verification.",
-  // TODO: implement writing verification (readability, completeness, style)
-  () => Effect.succeed({ passed: true, findings: [] }),
+  "Document creation: technical writing, documentation, reports, and content generation.",
+  writingVerify,
 )
+
+const designVerify: VerifyFn = (input) =>
+  Effect.gen(function* () {
+    const sub = input.submission as DesignSubmission
+    const findings: string[] = []
+
+    if (!sub.artifacts || sub.artifacts.length === 0) {
+      findings.push("Design has no artifacts — describe each design output (type, description)")
+    }
+
+    // Each artifact must have a description
+    for (const art of sub.artifacts ?? []) {
+      if (!art.description || art.description.trim().length < 10) {
+        findings.push(`Artifact "${art.type}" needs a fuller description (min 10 chars)`)
+      }
+    }
+
+    if (!sub.constraints || sub.constraints.length === 0) {
+      findings.push("Design constraints not documented — list technical, business, and user constraints")
+    }
+
+    return { passed: findings.length === 0, findings }
+  })
 
 const design = makeWorkType(
   "design",
   "Design",
   [TOOL.websearch, TOOL.webfetch, TOOL.read_doc, TOOL.read, TOOL.memory, TOOL.glob],
   "design",
-  "Design work: architecture diagrams, UI/UX designs, system designs. TODO: implement verification.",
-  // TODO: implement design verification (completeness, consistency, constraints)
-  () => Effect.succeed({ passed: true, findings: [] }),
+  "Design work: architecture diagrams, UI/UX designs, system designs.",
+  designVerify,
 )
+
+const analysisVerify: VerifyFn = (input) =>
+  Effect.gen(function* () {
+    const sub = input.submission as AnalysisSubmission
+    const findings: string[] = []
+
+    if (!sub.dataSources || sub.dataSources.length === 0) {
+      findings.push("Analysis has no data sources — list the data, datasets, or inputs used")
+    }
+
+    if (!sub.methodology || sub.methodology.trim().length < 20) {
+      findings.push("Methodology is missing or too brief — explain how the analysis was performed")
+    }
+
+    if (!sub.findings || sub.findings.length === 0) {
+      findings.push("Analysis has no findings — document concrete discoveries or patterns")
+    }
+
+    if (!sub.conclusions || sub.conclusions.length === 0) {
+      findings.push("Analysis has no conclusions — state what the findings imply")
+    }
+
+    // Findings should be substantively described
+    for (const finding of sub.findings ?? []) {
+      if (typeof finding === "string" && finding.trim().length < 15) {
+        findings.push("Each finding should be substantively described (min ~15 chars)")
+        break
+      }
+    }
+
+    return { passed: findings.length === 0, findings }
+  })
 
 const analysis = makeWorkType(
   "analysis",
   "Analysis",
   [TOOL.websearch, TOOL.webfetch, TOOL.read_doc, TOOL.read, TOOL.glob, TOOL.grep, TOOL.memory],
   "analysis",
-  "Data analysis: code analysis, metrics analysis, market research synthesis. TODO: implement verification.",
-  // TODO: implement analysis verification (data quality, methodology, conclusions)
-  () => Effect.succeed({ passed: true, findings: [] }),
+  "Data analysis: code analysis, metrics analysis, market research synthesis.",
+  analysisVerify,
 )
 
 // ---------------------------------------------------------------------------

@@ -2,13 +2,15 @@ import path from "path"
 import fs from "fs/promises"
 import { Context, Effect, Layer } from "effect"
 import { sql } from "drizzle-orm"
-import { Database } from "../storage"
+import { Database, eq, or, isNull } from "../storage"
 import { Global } from "../global"
 import { Config } from "@/config"
 import { resetWorkspace } from "../workspace/workspace"
 import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
 import { Log } from "@/util"
+import { InstanceState } from "@/effect"
+import type { ProjectID } from "../project/schema"
 import z from "zod"
 
 import { CompanyAgentTable } from "../company-agent/company-agent.sql"
@@ -96,6 +98,27 @@ const COMPANY_TABLES = [
   CompanyAgentTable,
 ] as const
 
+// Tables to wipe without company_id filtering (everything except SessionTable).
+const OTHER_TABLES = [
+  AgentMessageTable,
+  GroupMessageTable,
+  GroupSessionMemberTable,
+  GroupSessionTable,
+  TaskEventTable,
+  TaskTable,
+  InboxTable,
+  WorkflowRunTable,
+  SessionShareTable,
+  ExternalImportTable,
+  PermissionTable,
+  TodoTable,
+  PartTable,
+  MessageTable,
+  ThreadTable,
+  ActorRegistryTable,
+  CompanyAgentTable,
+] as const
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -167,7 +190,33 @@ export const layer: Layer.Layer<Service, never, Config.Service> = Layer.effect(
       log.warn("disbanding company — wiping all org/company data")
       // Delete each table independently so a virtual/FTS quirk on one table
       // does not abort the whole sweep.
-      for (const table of COMPANY_TABLES) {
+      // SessionTable: delete by company_id so sessions in other projects survive.
+      const project = yield* InstanceState.context.pipe(Effect.catch(() => Effect.succeed(undefined)))
+      const projectId: ProjectID | undefined = project?.project?.id
+      if (projectId) {
+        yield* Effect.try({
+          try: () =>
+            Database.use((db) =>
+              db
+                .delete(SessionTable)
+                .where(
+                  or(
+                    eq(SessionTable.company_id, projectId),
+                    isNull(SessionTable.company_id),
+                  ),
+                )
+                .run(),
+            ),
+          catch: (err) => log.error("failed to clear session table", { error: err }),
+        }).pipe(Effect.catch(() => Effect.void))
+      } else {
+        // No instance context — fall back to full delete
+        yield* Effect.try({
+          try: () => Database.use((db) => db.delete(SessionTable).run()),
+          catch: (err) => log.error("failed to clear session table", { error: err }),
+        }).pipe(Effect.catch(() => Effect.void))
+      }
+      for (const table of OTHER_TABLES) {
         yield* Effect.try({
           try: () => Database.use((db) => db.delete(table).run()),
           catch: (err) => log.error("failed to clear table", { error: err }),
