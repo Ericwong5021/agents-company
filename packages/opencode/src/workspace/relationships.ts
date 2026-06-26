@@ -42,24 +42,32 @@ const edges: RelationshipEdge[] = []
 /**
  * Add a relationship edge to the store.
  * If no clearanceModifier is provided, uses the default for that kind.
+ * Duplicate edges (same from/to/kind) are rejected — returns the existing edge.
  */
-export function addEdge(edge: Omit<RelationshipEdge, "clearanceModifier"> & { clearanceModifier?: number }): RelationshipEdge {
+export function addEdge(edge: Omit<RelationshipEdge, "clearanceModifier"> & { clearanceModifier?: number }): { edge: RelationshipEdge; created: boolean } {
+  const existing = edges.find(
+    (e) => e.fromAgentId === edge.fromAgentId && e.toAgentId === edge.toAgentId && e.kind === edge.kind,
+  )
+  if (existing) return { edge: existing, created: false }
+
   const full: RelationshipEdge = {
     ...edge,
     clearanceModifier: edge.clearanceModifier ?? DefaultModifiers[edge.kind],
   }
   edges.push(full)
-  return full
+  return { edge: full, created: true }
 }
 
 /**
  * Remove edges matching the given from/to pair.
+ * If kind is specified, only removes edges of that kind.
  * Returns the number of edges removed.
  */
-export function removeEdge(fromAgentId: string, toAgentId: string): number {
+export function removeEdge(fromAgentId: string, toAgentId: string, kind?: RelationshipKind): number {
   const before = edges.length
   for (let i = edges.length - 1; i >= 0; i--) {
-    if (edges[i].fromAgentId === fromAgentId && edges[i].toAgentId === toAgentId) {
+    const e = edges[i]
+    if (e.fromAgentId === fromAgentId && e.toAgentId === toAgentId && (!kind || e.kind === kind)) {
       edges.splice(i, 1)
     }
   }
@@ -104,6 +112,26 @@ export function getEffectiveClearance(
   const modifier = incoming.reduce((sum, e) => sum + e.clearanceModifier, 0)
   const effective = base + modifier
   return Math.max(ClearanceLevel.public, Math.min(ClearanceLevel.restricted, effective))
+}
+
+// ---------------------------------------------------------------------------
+// Delegation access check
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a callback that checks whether agentId has delegation access
+ * to a given scopeOwnerId. Returns true if a delegation edge exists
+ * from scopeOwnerId to agentId.
+ *
+ * Use with canSeeDocEnhanced's canDelegateAccess parameter.
+ */
+export function makeDelegationChecker(
+  agentId: string,
+  edgeList?: RelationshipEdge[],
+): (scopeOwnerId: string) => boolean {
+  const list = edgeList ?? edges
+  return (scopeOwnerId: string) =>
+    list.some((e) => e.fromAgentId === scopeOwnerId && e.toAgentId === agentId && e.kind === "delegation")
 }
 
 // ---------------------------------------------------------------------------

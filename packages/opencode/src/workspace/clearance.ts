@@ -123,12 +123,17 @@ function clampedClearance(baseClearance: number, modifier: number): number {
 /**
  * Check whether an agent matches the document's scope.
  * Shared helper used by canSeeDoc and canSeeDocEnhanced.
+ *
+ * @param canDelegateAccess - Callback that returns true if agentId has delegation
+ *   access to the given scope owner. Used for "agent:<X>" scope: if agentId can
+ *   delegate access to X, they can see X's scoped docs.
  */
 function checkScope(
   agentId: string,
   scope: string,
   org: OrgStructure,
   isGroupMember?: (groupId: string) => boolean,
+  canDelegateAccess?: (scopeOwnerId: string) => boolean,
 ): boolean {
   if (scope === "public") return true
   if (scope === "org") return agentId in org.agents
@@ -139,7 +144,8 @@ function checkScope(
   }
 
   if (scope.startsWith("agent:")) {
-    return scope.slice(6) === agentId
+    const ownerId = scope.slice(6)
+    return ownerId === agentId || (canDelegateAccess?.(ownerId) ?? false)
   }
 
   if (scope.startsWith("group:")) {
@@ -157,6 +163,7 @@ function checkScope(
  * Extends the basic canSeeDoc() logic with:
  * - Relationship clearance modifiers (clamped to [public, restricted])
  * - Group scope resolution via membership callback
+ * - Delegation scope: agent:<X> visible if a delegation edge exists from X to agentId
  */
 export function canSeeDocEnhanced(
   agentId: string,
@@ -164,6 +171,7 @@ export function canSeeDocEnhanced(
   org: OrgStructure,
   relationshipModifier: number = 0,
   isGroupMember?: (groupId: string) => boolean,
+  canDelegateAccess?: (scopeOwnerId: string) => boolean,
 ): boolean {
   // 1. Clearance check with relationship modifier
   const classification = doc.classification ?? "public"
@@ -173,5 +181,5 @@ export function canSeeDocEnhanced(
 
   // 2. Scope check (delegates to shared helper)
   const scope = doc.scope ?? "public"
-  return checkScope(agentId, scope, org, isGroupMember)
+  return checkScope(agentId, scope, org, isGroupMember, canDelegateAccess)
 }

@@ -115,6 +115,7 @@ export function resolve(
   org?: OrgStructure,
   relationshipModifier?: number,
   isGroupMember?: (groupId: string) => boolean,
+  canDelegateAccess?: (scopeOwnerId: string) => boolean,
 ): Effect.Effect<ResolvedContext, Error> {
   return Effect.gen(function* () {
     const root = workspaceRoot()
@@ -140,9 +141,9 @@ export function resolve(
 
       // If org is provided, check access; otherwise treat as public
       if (org) {
-        const hasEnhancedArgs = relationshipModifier !== undefined || isGroupMember !== undefined
+        const hasEnhancedArgs = relationshipModifier !== undefined || isGroupMember !== undefined || canDelegateAccess !== undefined
         const visible = hasEnhancedArgs
-          ? canSeeDocEnhanced(agentId, doc.frontMatter, org, relationshipModifier ?? 0, isGroupMember)
+          ? canSeeDocEnhanced(agentId, doc.frontMatter, org, relationshipModifier ?? 0, isGroupMember, canDelegateAccess)
           : canSeeDoc(agentId, doc.frontMatter, org)
         if (!visible) continue
       }
