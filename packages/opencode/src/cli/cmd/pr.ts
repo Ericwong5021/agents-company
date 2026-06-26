@@ -101,7 +101,7 @@ export const PrCommand = cmd({
                 UI.println(`Found agentcompany session: ${sessionUrl}`)
                 UI.println(`Importing session...`)
 
-                const importResult = await Process.text(["mimo", "import", sessionUrl], {
+                const importResult = await Process.text(["agents", "import", sessionUrl], {
                   nothrow: true,
                 })
                 if (importResult.code === 0) {
@@ -123,15 +123,15 @@ export const PrCommand = cmd({
         UI.println("Starting agentcompany...")
         UI.println()
 
-        const mimoArgs = sessionId ? ["-s", sessionId] : []
-        const mimoProcess = Process.spawn(["mimo", ...mimoArgs], {
+        const agentsArgs = sessionId ? ["-s", sessionId] : []
+        const agentsProcess = Process.spawn(["agents", ...agentsArgs], {
           stdin: "inherit",
           stdout: "inherit",
           stderr: "inherit",
           cwd: process.cwd(),
         })
-        const code = await mimoProcess.exited
-        if (code !== 0) throw new Error(`mimo exited with code ${code}`)
+        const code = await agentsProcess.exited
+        if (code !== 0) throw new Error(`agents exited with code ${code}`)
       },
     })
   },

@@ -32,7 +32,7 @@ export function FormatError(input: unknown) {
     return [
       `Model not found: ${data?.providerID}/${data?.modelID}`,
       ...(suggestions.length ? ["Did you mean: " + suggestions.join(", ")] : []),
-      `Try: \`mimo models\` to list available models`,
+      `Try: \`agents models\` to list available models`,
       `Or check your config (agent-company.json) provider/model names`,
     ].join("\n")
   }

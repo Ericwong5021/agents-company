@@ -19,10 +19,10 @@ function number(key: string) {
 
 const AGENTCOMPANY_EXPERIMENTAL = truthy("AGENTCOMPANY_EXPERIMENTAL")
 
-// Defaults to false. When enabled, agentcompany runs in pure-mimo mode:
+// Defaults to false. When enabled, agentcompany runs in agents-only mode:
 //   — does NOT inherit Claude Code's settings (CLAUDE.md, ~/.claude/skills, etc.)
 //   — does NOT pick up provider API keys from environment variables
-//   — falls back to the mimo-auto model as the default
+//   — falls back to the agents-auto model as the default
 // Set AGENTCOMPANY_MIMO_ONLY=true to disable .claude inheritance and env-based
 // provider auto-detection.
 const AGENTCOMPANY_MIMO_ONLY = truthy("AGENTCOMPANY_MIMO_ONLY")
@@ -85,14 +85,14 @@ export const Flag = {
   AGENTCOMPANY_DISABLE_PROVIDER_ENV: AGENTCOMPANY_MIMO_ONLY || truthy("AGENTCOMPANY_DISABLE_PROVIDER_ENV"),
   AGENTCOMPANY_DISABLE_CLAUDE_CODE,
   get AGENTCOMPANY_DISABLE_CLAUDE_CODE_MCP() {
-    // MCP compatibility stays on in mimo-only mode so users can reuse Claude Code
+    // MCP compatibility stays on in agents-only mode so users can reuse Claude Code
     // MCP servers without inheriting prompts, skills, or provider env keys.
     return AGENTCOMPANY_DISABLE_CLAUDE_CODE_ENV || truthy("AGENTCOMPANY_DISABLE_CLAUDE_CODE_MCP")
   },
   AGENTCOMPANY_DISABLE_CLAUDE_CODE_PROMPT: AGENTCOMPANY_DISABLE_CLAUDE_CODE || truthy("AGENTCOMPANY_DISABLE_CLAUDE_CODE_PROMPT"),
   // Defaults to false (enabled): markdown commands under ~/.claude/commands and
   // {project}/.claude/commands load as slash commands. Independent of the
-  // mimo-only master switch. Set AGENTCOMPANY_DISABLE_CLAUDE_CODE_COMMANDS=true to disable.
+  // agents-only master switch. Set AGENTCOMPANY_DISABLE_CLAUDE_CODE_COMMANDS=true to disable.
   AGENTCOMPANY_DISABLE_CLAUDE_CODE_COMMANDS: truthy("AGENTCOMPANY_DISABLE_CLAUDE_CODE_COMMANDS"),
   AGENTCOMPANY_DISABLE_CLAUDE_CODE_SKILLS,
   AGENTCOMPANY_DISABLE_EXTERNAL_SKILLS,

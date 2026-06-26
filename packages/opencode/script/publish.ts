@@ -42,9 +42,9 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
     {
       name: pkg.name,
       version: version,
-      description: "MiMo Code: Where Models and Agents Co-Evolve",
+      description: "Agent Company: Where Models and Agents Co-Evolve",
       license: "MIT",
-      author: "Xiaomi MiMo Team",
+      author: "Agents Company Team",
       homepage: "https://mimo.xiaomi.com/coder",
       repository: {
         type: "git",
@@ -53,9 +53,9 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       bugs: {
         url: "https://github.com/Ericwong5021/agents-company/issues",
       },
-      keywords: ["ai", "cli", "code", "xiaomi", "mimo", "agentcompany"],
+      keywords: ["ai", "cli", "code", "agents-company", "agentcompany"],
       bin: {
-        mimo: "./bin/mimo",
+        agents: "./bin/agents",
       },
       scripts: {
         postinstall: "bun ./postinstall.mjs || node ./postinstall.mjs",

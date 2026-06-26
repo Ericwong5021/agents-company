@@ -244,7 +244,7 @@ for (const item of targets) {
       autoloadTsconfig: true,
       autoloadPackageJson: true,
       target: name.replace(BINARY_PREFIX, "bun") as any,
-      outfile: `dist/${name}/bin/mimo`,
+      outfile: `dist/${name}/bin/agents`,
       execArgv: [`--user-agent=agentcompany/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
@@ -262,7 +262,7 @@ for (const item of targets) {
 
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/mimo`
+    const binaryPath = `dist/${name}/bin/agents`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
@@ -284,13 +284,13 @@ for (const item of targets) {
         version: Script.version,
         description: "Platform-specific binary for @agents-company/cli.",
         license: "MIT",
-        author: "Xiaomi MiMo Team",
+        author: "Agents Company Team",
         homepage: "https://mimo.xiaomi.com/coder",
         repository: {
           type: "git",
           url: "git+https://github.com/Ericwong5021/agents-company.git",
         },
-        keywords: ["ai", "coding", "agent", "cli", "mimo"],
+        keywords: ["ai", "coding", "agent", "cli", "agents-company"],
         os: [item.os],
         cpu: [item.arch],
       },

@@ -971,7 +971,7 @@ export const SessionRoutes = lazy(() =>
         c.header("Content-Type", "application/json")
         return stream(c, async (stream) => {
           const body = c.req.valid("json")
-          // If the HTTP client gives up (TUI exits, driver kills its `mimo run`
+          // If the HTTP client gives up (TUI exits, driver kills its `agents run`
           // client on its own per-turn timeout, network drop), we have to drive
           // the server-side runner to Idle ourselves. Otherwise the prompt
           // fiber keeps running with no consumer, and any next POST attaches
