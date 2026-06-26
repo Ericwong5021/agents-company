@@ -66,6 +66,12 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     setDone(false)
     setFounders([])
 
+    // Validate required fields before starting.
+    if (!props.userName || !props.assistantName) {
+      setError(t("onboarding.founding_team.error"))
+      return
+    }
+
     try {
       // Resolve roles: template path (preferred) or legacy scope path.
       const roles = props.templateId
@@ -134,23 +140,27 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     const description = template?.description ?? role.fallback.description
     const shortDescription = description.length > 28 ? description.slice(0, 28) + "…" : description
 
-    const res = await sdk.fetch(`${sdk.url}/company-agent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        name,
-        description,
-        color,
-        icon,
-        system_prompt: buildFounderPrompt(props, name, template?.system_prompt),
-      }),
-    })
-    if (!res.ok) return null
-    return {
-      id, name, description, shortDescription, icon, color,
-      level: role.level,
-      divisionName: role.divisionName ?? role.division,
+    try {
+      const res = await sdk.fetch(`${sdk.url}/company-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          name,
+          description,
+          color,
+          icon,
+          system_prompt: buildFounderPrompt(props, name, template?.system_prompt),
+        }),
+      })
+      if (!res.ok) return null
+      return {
+        id, name, description, shortDescription, icon, color,
+        level: role.level,
+        divisionName: role.divisionName ?? role.division,
+      }
+    } catch {
+      return null
     }
   }
 
