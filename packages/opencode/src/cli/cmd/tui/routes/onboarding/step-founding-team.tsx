@@ -3,6 +3,9 @@ import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
+import { useToast } from "@tui/ui/toast"
+import { useKeyboard } from "@opentui/solid"
+import * as Clipboard from "@tui/util/clipboard"
 import { TextAttributes } from "@opentui/core"
 import { Spinner } from "@tui/component/spinner"
 import { OnboardingFrame } from "./frame"
@@ -10,6 +13,9 @@ import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
 import { resolveTemplateRoles, resolveFoundingRoles, type FoundingRoleSpec } from "./founding-roles"
 import { OrgTemplateService } from "@/company-agent/org-templates"
 import { buildButlerPrompt } from "./prompts"
+import fs from "fs/promises"
+import path from "path"
+import { Global } from "@/global"
 
 interface StepFoundingTeamProps {
   stepIndex: number
@@ -42,11 +48,20 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
   const sdk = useSDK()
   const t = useLanguage().t
   const dialog = useDialog()
+  const toast = useToast()
   const [founders, setFounders] = createSignal<Founder[]>([])
   const [done, setDone] = createSignal(false)
   const [showAchievement, setShowAchievement] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   const [searching, setSearching] = createSignal<string | null>(null)
+  const [logFilePath, setLogFilePath] = createSignal<string | null>(null)
+
+  useKeyboard((evt) => {
+    if (evt.name === "return") {
+      if (done()) props.onComplete(founders().map((f) => f.id), founders().map((f) => f.name))
+      else if (error()) build()
+    }
+  })
 
   const templateName = () => {
     if (props.templateId) {
@@ -79,23 +94,32 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
         : resolveFoundingRoles(props.scopes)
 
       const created: Founder[] = []
+      const errors: string[] = []
 
       for (let i = 0; i < roles.length; i++) {
         const role = roles[i]
         setSearching(role.fallback.name)
 
-        const [founder] = await Promise.all([
+        const [result] = await Promise.all([
           createFounder(role),
           delay(1500),
         ])
 
-        if (!founder) {
+        if (!result.founder) {
           setSearching(null)
-          setError(t("onboarding.founding_team.error"))
+          if (result.error) {
+            errors.push(`[${role.fallback.name}] ${result.error}`)
+          }
+          const allErrors = errors.join("\n\n---\n\n")
+          const logFile = await saveErrorLog(allErrors)
+          const errorMessage = logFile
+            ? `${t("onboarding.founding_team.error")}\n\n日志已保存到: ${logFile}`
+            : t("onboarding.founding_team.error")
+          setError(errorMessage)
           return
         }
 
-        created.push(founder)
+        created.push(result.founder)
         setFounders([...created])
         setSearching(null)
 
@@ -117,6 +141,7 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
         body: JSON.stringify({
           id: "onboarding-assistant",
           name: props.assistantName,
+          org_layer: "board",
           system_prompt: buildButlerPrompt({
             userName: props.userName,
             assistantName: props.assistantName,
@@ -126,12 +151,17 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
           }),
         }),
       }).catch(() => undefined)
-    } catch {
-      setError(t("onboarding.founding_team.error"))
+    } catch (err) {
+      const errorDetails = `异常错误: ${err instanceof Error ? err.message : String(err)}\n堆栈: ${err instanceof Error ? err.stack : "无堆栈信息"}`
+      const logFile = await saveErrorLog(errorDetails)
+      const errorMessage = logFile
+        ? `${t("onboarding.founding_team.error")}\n\n日志已保存到: ${logFile}`
+        : t("onboarding.founding_team.error")
+      setError(errorMessage)
     }
   }
 
-  async function createFounder(role: FoundingRoleSpec): Promise<Founder | null> {
+  async function createFounder(role: FoundingRoleSpec): Promise<{ founder: Founder | null; error?: string }> {
     const template = await searchTemplate(role)
     const id = `${role.division}-${role.key}-founder`
     const name = template?.name ?? role.fallback.name
@@ -139,6 +169,10 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     const color = template?.color ?? role.fallback.color
     const description = template?.description ?? role.fallback.description
     const shortDescription = description.length > 28 ? description.slice(0, 28) + "…" : description
+
+    // Delete any existing agent with this ID first, so retry won't hit
+    // UNIQUE constraint on company_agent.id.
+    await sdk.fetch(`${sdk.url}/company-agent/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined)
 
     try {
       const res = await sdk.fetch(`${sdk.url}/company-agent`, {
@@ -150,15 +184,44 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
           description,
           color,
           icon,
+          org_layer: role.level === "c-suite" ? "board" : role.level === "lead" ? "department" : "execution",
+          department: role.divisionName ?? role.division,
+          reports_to: "onboarding-assistant",
           system_prompt: buildFounderPrompt(props, name, template?.system_prompt),
         }),
       })
-      if (!res.ok) return null
-      return {
-        id, name, description, shortDescription, icon, color,
-        level: role.level,
-        divisionName: role.divisionName ?? role.division,
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "无法读取响应内容")
+        return {
+          founder: null,
+          error: `API 请求失败: ${res.status} ${res.statusText}\n响应内容: ${errorText}\n请求 URL: ${sdk.url}/company-agent\n请求参数: ${JSON.stringify({ id, name, description, color, icon }, null, 2)}`,
+        }
       }
+      return {
+        founder: {
+          id, name, description, shortDescription, icon, color,
+          level: role.level,
+          divisionName: role.divisionName ?? role.division,
+        },
+      }
+    } catch (err) {
+      return {
+        founder: null,
+        error: `异常错误: ${err instanceof Error ? err.message : String(err)}\n堆栈: ${err instanceof Error ? err.stack : "无堆栈信息"}\n角色信息: ${JSON.stringify(role, null, 2)}`,
+      }
+    }
+  }
+
+  async function saveErrorLog(errorDetails: string) {
+    try {
+      const dir = Global.Path.log
+      await fs.mkdir(dir, { recursive: true })
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const file = path.join(dir, `onboarding-error-${timestamp}.log`)
+      const content = `[${new Date().toISOString()}] 创始团队组建失败\n\n${errorDetails}\n\n---\n用户信息: ${JSON.stringify({ userName: props.userName, assistantName: props.assistantName, templateId: props.templateId, scopes: props.scopes }, null, 2)}`
+      await fs.writeFile(file, content, "utf-8")
+      setLogFilePath(file)
+      return file
     } catch {
       return null
     }
@@ -174,22 +237,6 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
     } catch {
       return null
     }
-  }
-
-  // Group founders by division for the org-chart style display.
-  function groupedFounders() {
-    const groups = new Map<string, Founder[]>()
-    for (const f of founders()) {
-      const list = groups.get(f.divisionName) ?? []
-      list.push(f)
-      groups.set(f.divisionName, list)
-    }
-    return groups
-  }
-
-  // Level indicator for hierarchy display.
-  function levelIcon(level: string) {
-    return level === "c-suite" ? "👑" : level === "lead" ? "⭐" : "·"
   }
 
   return (
@@ -228,8 +275,26 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
       <Show when={error()}>
         <box flexDirection="column" alignItems="center" gap={1}>
           <text fg={theme.error}>⚠ {error()}</text>
-          <box backgroundColor={theme.primary} paddingLeft={3} paddingRight={3} onMouseUp={build}>
-            <text fg={theme.background}>{t("onboarding.provider.retry")}</text>
+          <box flexDirection="row" gap={2}>
+            <box backgroundColor={theme.backgroundElement} paddingLeft={3} paddingRight={3} onMouseUp={async () => {
+              const path = logFilePath() ?? error()?.match(/日志已保存到: (.+)/)?.[1]
+              if (path) {
+                try {
+                  const content = await fs.readFile(path, "utf-8")
+                  await Clipboard.copy(content)
+                } catch {
+                  await Clipboard.copy(error() ?? "")
+                }
+              } else {
+                await Clipboard.copy(error() ?? "")
+              }
+              toast.show({ message: t("tui.toast.copied_to_clipboard"), variant: "info" })
+            }}>
+              <text fg={theme.text}>{t("onboarding.founding_team.copy_error")}</text>
+            </box>
+            <box backgroundColor={theme.primary} paddingLeft={3} paddingRight={3} onMouseUp={build}>
+              <text fg={theme.background}>{t("onboarding.provider.retry")}</text>
+            </box>
           </box>
         </box>
       </Show>
@@ -254,41 +319,14 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
         </box>
       </Show>
 
-      {/* Founder cards — grouped by division when using org templates */}
       <Show when={founders().length > 0}>
-        <Show
-          when={props.templateId}
-          fallback={
-            // Legacy flat card layout for scope-based flow
-            <box flexDirection="row" gap={2} flexWrap="wrap" justifyContent="center" paddingTop={1}>
-              <For each={founders()}>
-                {(f) => (
-                  <FounderCard founder={f} theme={theme} dialog={dialog} />
-                )}
-              </For>
-            </box>
-          }
-        >
-          {/* Org-chart style: grouped by division */}
-          <box flexDirection="column" gap={0} paddingTop={1}>
-            <For each={Array.from(groupedFounders())}>
-              {([divName, members]) => (
-                <box flexDirection="row" gap={2} alignItems="center">
-                  <text fg={theme.primary} attributes={TextAttributes.BOLD} minWidth={10}>
-                    {divName}
-                  </text>
-                  <box flexDirection="row" gap={2} flexWrap="wrap">
-                    <For each={members}>
-                      {(f) => (
-                        <FounderCard founder={f} theme={theme} dialog={dialog} />
-                      )}
-                    </For>
-                  </box>
-                </box>
-              )}
-            </For>
-          </box>
-        </Show>
+        <box flexDirection="row" gap={2} flexWrap="wrap" justifyContent="center" paddingTop={1}>
+          <For each={founders()}>
+            {(f) => (
+              <FounderCard founder={f} theme={theme} dialog={dialog} />
+            )}
+          </For>
+        </box>
       </Show>
 
       <Show when={done()}>
@@ -304,42 +342,42 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
   )
 }
 
-// Shared founder card component.
+// Shared founder card component — name above, compact horizontal body below.
 function FounderCard(props: { founder: Founder; theme: any; dialog: any }) {
   return (
-    <box
-      flexDirection="column"
-      width={22}
-      backgroundColor={props.theme.backgroundElement}
-      border
-      borderColor={props.theme.border}
-      paddingTop={1}
-      paddingBottom={1}
-      paddingLeft={1}
-      paddingRight={1}
-      gap={1}
-      onMouseUp={() => {
-        props.dialog.replace(
-          <box flexDirection="column" gap={1} padding={2}>
-            <box flexDirection="row" gap={1} alignItems="center">
-              <text>{props.founder.icon}</text>
-              <text fg={props.theme.text} attributes={TextAttributes.BOLD}>
-                {props.founder.name}
-              </text>
+    <box flexDirection="column" gap={0} alignItems="center" width={22}>
+      <text fg={props.theme.text} attributes={TextAttributes.BOLD}>
+        {props.founder.name}
+      </text>
+      <box
+        flexDirection="row"
+        backgroundColor={props.theme.backgroundElement}
+        border
+        borderColor={props.theme.border}
+        paddingTop={1}
+        paddingBottom={1}
+        paddingLeft={1}
+        paddingRight={1}
+        gap={1}
+        width={22}
+        onMouseUp={() => {
+          props.dialog.replace(
+            <box flexDirection="column" gap={1} padding={2}>
+              <box flexDirection="row" gap={1} alignItems="center">
+                <text>{props.founder.icon}</text>
+                <text fg={props.theme.text} attributes={TextAttributes.BOLD}>
+                  {props.founder.name}
+                </text>
+              </box>
+              <text fg={props.theme.text}>{props.founder.description}</text>
             </box>
-            <text fg={props.theme.text}>{props.founder.description}</text>
-          </box>
-        )
-      }}
-    >
-      <box flexDirection="row" gap={1} alignItems="center">
+          )
+        }}
+      >
         <text>{props.founder.level === "c-suite" ? "👑" : props.founder.level === "lead" ? "⭐" : " "}</text>
         <text>{props.founder.icon}</text>
-        <text fg={props.theme.text} attributes={TextAttributes.BOLD}>
-          {props.founder.name}
-        </text>
+        <text fg={props.theme.textMuted}>{props.founder.shortDescription}</text>
       </box>
-      <text fg={props.theme.textMuted}>{props.founder.shortDescription}</text>
     </box>
   )
 }

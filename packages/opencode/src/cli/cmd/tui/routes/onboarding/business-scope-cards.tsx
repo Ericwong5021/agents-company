@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
+import { useKeyboard } from "@opentui/solid"
 import { TextAttributes, TextareaRenderable } from "@opentui/core"
 
 export interface BusinessScopeOption {
@@ -49,6 +50,10 @@ interface BusinessScopeCardsProps {
 export function BusinessScopeCards(props: BusinessScopeCardsProps) {
   const { theme } = useTheme()
   const [selected, setSelected] = createSignal<Set<string>>(new Set())
+
+  useKeyboard((evt) => {
+    if (evt.name === "return" && selected().size > 0) confirm()
+  })
   const [hovered, setHovered] = createSignal<string | null>(null)
   const [showCustomInput, setShowCustomInput] = createSignal(false)
   let customInput: TextareaRenderable | undefined

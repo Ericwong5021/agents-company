@@ -2,6 +2,7 @@ import { createSignal, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useLanguage } from "@tui/context/language"
+import { useKeyboard } from "@opentui/solid"
 import { Logo } from "@tui/component/logo"
 import { Spinner } from "@tui/component/spinner"
 import { TextAttributes } from "@opentui/core"
@@ -21,6 +22,10 @@ export function StepWelcome(props: StepWelcomeProps) {
   const [error, setError] = createSignal<string | null>(null)
   const [hovered, setHovered] = createSignal<string | null>(null)
 
+  useKeyboard((evt) => {
+    if (evt.name === "return" && ready()) props.onComplete()
+  })
+
   onMount(() => void runPreload())
 
   async function runPreload() {
@@ -36,6 +41,10 @@ export function StepWelcome(props: StepWelcomeProps) {
     const elapsed = Date.now() - started
     if (elapsed < 1200) await new Promise((r) => setTimeout(r, 1200 - elapsed))
     setReady(true)
+
+    if (process.env["ONBOARDING_DEV"]) {
+      setTimeout(() => props.onComplete(), 300)
+    }
   }
 
   return (

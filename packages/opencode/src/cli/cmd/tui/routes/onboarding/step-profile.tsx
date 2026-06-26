@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show } from "solid-js"
+import { createSignal, createEffect, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
@@ -9,10 +9,11 @@ import { BusinessScopeCards } from "./business-scope-cards"
 interface StepProfileProps {
   stepIndex: number
   stepCount: number
-  onComplete: (data: { userName: string; assistantName: string; scopes: string[] }) => void
+  skipScope?: boolean
+  onComplete: (data: { userName: string; assistantName: string; companyName: string; scopes: string[] }) => void
 }
 
-type Phase = "user-name" | "assistant-name" | "scope"
+type Phase = "user-name" | "assistant-name" | "scope" | "company-name"
 
 // Deterministic, card-driven profile capture led by the (not-yet-named) helper.
 // Replacing the old free-chat name detection removes the main source of
@@ -23,18 +24,39 @@ export function StepProfile(props: StepProfileProps) {
   const dialog = useDialog()
   const [phase, setPhase] = createSignal<Phase>("user-name")
   const [userName, setUserName] = createSignal("")
+  const [companyName, setCompanyName] = createSignal("")
   const [assistantName, setAssistantName] = createSignal("")
   const [errorMsg, setErrorMsg] = createSignal("")
   let textarea: TextareaRenderable | undefined
+
+  const DEFAULTS: Partial<Record<Phase, string>> = {
+    "user-name": "大东",
+    "assistant-name": "可可",
+    "company-name": "大东科技有限公司",
+  }
 
   onMount(() => {
     dialog.setSize("medium")
     focusInput()
   })
 
+  // Auto-advance the scope phase with defaults.
+  createEffect(() => {
+    if (phase() === "scope") {
+      setTimeout(() => onScopeConfirm(["saas"]), 200)
+    }
+  })
+
   function focusInput() {
     setTimeout(() => {
-      if (textarea && !textarea.isDestroyed) textarea.focus()
+      if (textarea && !textarea.isDestroyed) {
+        textarea.focus()
+        // Pre-fill default text so the user just presses Enter / clicks Next.
+        const def = DEFAULTS[phase()]
+        if (def && textarea.plainText === "") {
+          textarea.insertText(def)
+        }
+      }
     }, 1)
   }
 
@@ -57,19 +79,47 @@ export function StepProfile(props: StepProfileProps) {
         return setErrorMsg(t("onboarding.profile.error.assistant_same"))
       setAssistantName(text)
       textarea?.clear()
-      setPhase("scope")
+      if (props.skipScope) {
+        setPhase("company-name")
+      } else {
+        setPhase("scope")
+      }
+      focusInput()
     }
   }
 
   function onScopeConfirm(scopes: string[]) {
     if (scopes.length === 0) return setErrorMsg(t("onboarding.profile.error.scope"))
-    props.onComplete({ userName: userName(), assistantName: assistantName(), scopes })
+    setPhase("company-name")
+    focusInput()
+  }
+
+  function onCompanyNameSubmit() {
+    const text = (textarea?.plainText ?? "").trim()
+    if (text.length < 1 || text.length > 50) return setErrorMsg(t("onboarding.profile.error.company"))
+    setCompanyName(text)
+    props.onComplete({ userName: userName(), assistantName: assistantName(), companyName: text, scopes: [] })
   }
 
   function speech() {
     if (phase() === "user-name") return t("onboarding.profile.ask_name")
     if (phase() === "assistant-name") return t("onboarding.profile.ask_assistant").replace("{{name}}", userName())
-    return t("onboarding.profile.ask_scope").replace("{{name}}", userName())
+    if (phase() === "scope") return t("onboarding.profile.ask_scope").replace("{{name}}", userName())
+    return t("onboarding.profile.ask_company").replace("{{name}}", userName())
+  }
+
+  function placeholder() {
+    if (phase() === "user-name") return t("onboarding.interview.placeholder.name")
+    if (phase() === "assistant-name") return t("onboarding.interview.placeholder.assistant")
+    return t("onboarding.interview.placeholder.company")
+  }
+
+  function submitCurrent() {
+    if (phase() === "company-name") {
+      onCompanyNameSubmit()
+    } else {
+      submitText()
+    }
   }
 
   return (
@@ -84,7 +134,7 @@ export function StepProfile(props: StepProfileProps) {
         <text fg={theme.error}>⚠ {errorMsg()}</text>
       </Show>
 
-      <Show when={phase() !== "scope"}>
+      <Show when={phase() === "user-name" || phase() === "assistant-name" || phase() === "company-name"}>
         <box flexDirection="row" gap={1} alignItems="center">
           <box
             flexGrow={1}
@@ -95,12 +145,8 @@ export function StepProfile(props: StepProfileProps) {
             <textarea
               height={1}
               keyBindings={[{ name: "return", action: "submit" }]}
-              onSubmit={submitText}
-              placeholder={
-                phase() === "user-name"
-                  ? t("onboarding.interview.placeholder.name")
-                  : t("onboarding.interview.placeholder.assistant")
-              }
+              onSubmit={submitCurrent}
+              placeholder={placeholder()}
               placeholderColor={theme.textMuted}
               textColor={theme.text}
               focusedTextColor={theme.text}
@@ -109,7 +155,7 @@ export function StepProfile(props: StepProfileProps) {
               ref={(r: TextareaRenderable) => (textarea = r)}
             />
           </box>
-          <box backgroundColor={theme.primary} paddingLeft={2} paddingRight={2} onMouseUp={submitText}>
+          <box backgroundColor={theme.primary} paddingLeft={2} paddingRight={2} onMouseUp={submitCurrent}>
             <text fg={theme.background}>{t("onboarding.profile.next")}</text>
           </box>
         </box>

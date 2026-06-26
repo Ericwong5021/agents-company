@@ -2,6 +2,7 @@ import { createSignal, For, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
+import { useKeyboard } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { OnboardingFrame } from "./frame"
 import { OrgTemplateService, type FlatRole } from "@/company-agent/org-templates"
@@ -21,7 +22,18 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
   const t = useLanguage().t
   const dialog = useDialog()
 
-  onMount(() => dialog.setSize("large"))
+  useKeyboard((evt) => {
+    if (evt.name === "return" && selected()) confirm()
+  })
+
+  onMount(() => {
+    dialog.setSize("large")
+
+    if (process.env["ONBOARDING_DEV"] && starters.length > 0) {
+      setSelected(starters[0]!.id)
+      setTimeout(() => props.onComplete(starters[0]!.id), 500)
+    }
+  })
   const [selected, setSelected] = createSignal<string | null>(null)
   const [hovered, setHovered] = createSignal<string | null>(null)
 

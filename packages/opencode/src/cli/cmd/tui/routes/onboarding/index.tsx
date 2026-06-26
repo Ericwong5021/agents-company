@@ -1,6 +1,7 @@
 import { createEffect, createSignal, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { useKV } from "@tui/context/kv"
+import { useRoute } from "@tui/context/route"
 import { useKeybind } from "@tui/context/keybind"
 import { useExit } from "@tui/context/exit"
 import { useDialog } from "@tui/ui/dialog"
@@ -13,7 +14,7 @@ import { DialogProvider } from "@tui/component/dialog-provider"
 import { DialogModel } from "@tui/component/dialog-model"
 import { StepWelcome } from "./step-welcome"
 import { StepTemplateSelect } from "./step-template-select"
-import { StepCustomize } from "./step-customize"
+import { StepProfile } from "./step-profile"
 import { StepMission } from "./step-mission"
 import { StepFoundingTeam } from "./step-founding-team"
 
@@ -25,6 +26,7 @@ interface OnboardingData {
   templateId?: string
   userName?: string
   assistantName?: string
+  companyName?: string
   scopes?: string[]
   mission?: string
 }
@@ -38,6 +40,7 @@ interface OnboardingData {
 // Flow: welcome → provider → template → customize → mission → team
 export function Onboarding() {
   const kv = useKV()
+  const route = useRoute()
   const keybind = useKeybind()
   const exit = useExit()
   const dialog = useDialog()
@@ -87,6 +90,7 @@ export function Onboarding() {
     })
     kv.set("onboarding_done", true)
     dialog.clear()
+    route.navigate({ type: "home" })
   }
 
   // Push the dialog content for a given step into the shared window.
@@ -111,7 +115,8 @@ export function Onboarding() {
           stepIndex={1}
           stepCount={STEP_COUNT}
           onComplete={(templateId) => {
-            setData((p) => ({ ...p, templateId }))
+            // Derive scopes from templateId — the template key matches the scope key
+            setData((p) => ({ ...p, templateId, scopes: [templateId] }))
             setStep("customize")
           }}
         />
@@ -121,12 +126,12 @@ export function Onboarding() {
 
     if (s === "customize") {
       dialog.replace(() => (
-        <StepCustomize
+        <StepProfile
           stepIndex={2}
           stepCount={STEP_COUNT}
-          templateName={data().templateId ?? ""}
+          skipScope={true}
           onComplete={(r) => {
-            setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName }))
+            setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName, companyName: r.companyName }))
             setStep("mission")
           }}
         />
