@@ -20,6 +20,8 @@ export const Info = z.object({
   rootNeedID: z.string().optional(),
   inReplyTo: z.string().optional(),
   kind: AgentMessageKind,
+  depth: z.number().int().nonnegative(),
+  spawnedIssueID: z.string().optional(),
   body: z.string(),
   taskSummary: z.string().optional(),
   outcome: z.string().optional(),
@@ -36,12 +38,15 @@ export type Info = z.infer<typeof Info>
 // ---------------------------------------------------------------------------
 
 export const CreateInput = z.object({
+  id: z.string().optional(),
   fromAgentID: z.string().min(1),
   toAgentID: z.string().min(1),
   threadID: z.string().optional(),
   rootNeedID: z.string().optional(),
   inReplyTo: z.string().optional(),
   kind: AgentMessageKind,
+  depth: z.number().int().nonnegative().optional(),
+  spawnedIssueID: z.string().optional(),
   body: z.string().min(1),
   taskSummary: z.string().optional(),
   outcome: z.string().optional(),
@@ -79,6 +84,8 @@ function fromRow(row: Row): Info {
     rootNeedID: row.root_need_id ?? undefined,
     inReplyTo: row.in_reply_to ?? undefined,
     kind: row.kind,
+    depth: row.depth,
+    spawnedIssueID: row.spawned_issue_id ?? undefined,
     body: row.body,
     taskSummary: row.task_summary ?? undefined,
     outcome: row.outcome ?? undefined,
@@ -98,6 +105,7 @@ export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: string) => Effect.Effect<Info | undefined>
   readonly listByAgent: (agentId: string, opts?: ListByAgentOpts) => Effect.Effect<Info[]>
+  readonly listByRootNeed: (rootNeedId: string) => Effect.Effect<Info[]>
   readonly markRead: (id: string) => Effect.Effect<Info>
   readonly getByThread: (threadId: string) => Effect.Effect<Info[]>
 }
@@ -113,7 +121,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
   Effect.gen(function* () {
     const create = Effect.fn("AgentMessage.create")(function* (input: CreateInput) {
       const now = Date.now()
-      const id = Identifier.ascending("message")
+      const id = input.id ?? Identifier.ascending("message")
 
       yield* Effect.sync(() =>
         Database.use((db) =>
@@ -127,6 +135,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               root_need_id: input.rootNeedID ?? null,
               in_reply_to: input.inReplyTo ?? null,
               kind: input.kind,
+              depth: input.depth ?? 0,
+              spawned_issue_id: input.spawnedIssueID ?? null,
               body: input.body,
               task_summary: input.taskSummary ?? null,
               outcome: input.outcome ?? null,
@@ -214,7 +224,21 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return rows.map(fromRow)
     })
 
-    return { create, get, listByAgent, markRead, getByThread }
+    const listByRootNeed = Effect.fn("AgentMessage.listByRootNeed")(function* (rootNeedId: string) {
+      const rows = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(AgentMessageTable)
+            .where(eq(AgentMessageTable.root_need_id, rootNeedId))
+            .orderBy(AgentMessageTable.time_created)
+            .all(),
+        ),
+      )
+      return rows.map(fromRow)
+    })
+
+    return { create, get, listByAgent, listByRootNeed, markRead, getByThread }
   }),
 )
 

@@ -64,6 +64,7 @@ function installMockSpawn(onSpawn?: (input: SpawnInput) => void) {
 
           return { actorID, sessionID: input.sessionID, outcome }
         }),
+      spawnForDelegation: () => Effect.die("spawnForDelegation not stubbed"),
       cancel: () => Effect.void,
       getForkContext: () => Effect.succeed(undefined),
     }

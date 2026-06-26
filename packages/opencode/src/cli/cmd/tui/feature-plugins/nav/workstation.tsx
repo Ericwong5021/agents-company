@@ -1,12 +1,14 @@
 import type { TuiPlugin, TuiPluginModule } from "@agents-company/plugin/tui"
-import { createMemo, createResource, createSignal, createEffect, For, Show, onCleanup } from "solid-js"
+import { createMemo, createResource, createSignal, createEffect, For, Show } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useLanguage } from "../../context/language"
 import { useSDK } from "../../context/sdk"
 import { useRoute } from "../../context/route"
 import { useRightSidebar } from "../../context/right-sidebar"
 import { useEvent } from "../../context/event"
+import { useToast } from "../../ui/toast"
 import { Card } from "../../component/card"
+import { AgentCard, type AgentCardData, type AgentStatus, type ThreadInfo } from "./agent-card"
 
 const id = "internal:nav-workstation"
 
@@ -21,55 +23,8 @@ interface CompanyAgentInfo {
   color?: string
   icon?: string
   model?: string
-}
-
-interface ThreadInfo {
-  id: string
-  agentID: string
-  kind: "primary" | "reactive" | "ambient"
-  status: "active" | "paused" | "completed"
-  sessionID?: string
-  description?: string
-  budgetTokens?: number
-  spentTokens: number
-  time: { created: number; updated: number }
-}
-
-type AgentStatus = "idle" | "busy" | "paused"
-
-const STATUS_ICON: Record<AgentStatus, string> = {
-  idle: "○",
-  busy: "◉",
-  paused: "◐",
-}
-
-interface WorkstationAgent {
-  id: string
-  name: string
-  icon?: string
-  color?: string
-  description?: string
-  model?: string
-  orgLayer: "board" | "execution"
-  status: AgentStatus
-  threads: ThreadInfo[]
-  totalTokens: number
-}
-
-// ---------------------------------------------------------------------------
-// Status indicators with colors
-// ---------------------------------------------------------------------------
-
-const STATUS_CONFIG: Record<AgentStatus, { icon: string; colorKey: "success" | "warning" | "textMuted" | "error" }> = {
-  idle: { icon: "●", colorKey: "success" },
-  busy: { icon: "◉", colorKey: "warning" },
-  paused: { icon: "◐", colorKey: "textMuted" },
-}
-
-const THREAD_KIND_LABEL: Record<string, string> = {
-  primary: "[primary]",
-  reactive: "[reactive]",
-  ambient: "[ambient]",
+  org_layer?: string
+  department?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -80,13 +35,6 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return `${n}`
-}
-
-/** Derive org layer from agent ID heuristic. CEO/CTO/CFO = board, others = execution */
-function deriveOrgLayer(agentID: string): "board" | "execution" {
-  const boardIDs = ["ceo", "cto", "cfo", "coo", "cmo", "board"]
-  if (boardIDs.includes(agentID.toLowerCase())) return "board"
-  return "execution"
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +48,7 @@ function WorkstationView() {
   const route = useRoute()
   const rightSidebar = useRightSidebar()
   const event = useEvent()
+  const toast = useToast()
 
   const [refetch, setRefetch] = createSignal(0)
 
@@ -144,12 +93,62 @@ function WorkstationView() {
   event.on("thread.completed", bump)
 
   // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
+
+  const handleStart = async (agentID: string) => {
+    const res = await sdk.fetch(`${sdk.url}/thread`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentID,
+        kind: "primary",
+        description: t("tui.workstation.action.start_description"),
+      }),
+    })
+    if (!res.ok) {
+      toast.show({ variant: "error", message: t("tui.workstation.action.start_failed") })
+    } else {
+      toast.show({ variant: "info", message: t("tui.workstation.action.start_success") })
+      bump()
+    }
+  }
+
+  const handleStop = async (agentID: string) => {
+    const threads = (allThreads() ?? []).filter(
+      (t) => t.agentID === agentID && t.status === "active",
+    )
+    if (threads.length === 0) return
+
+    const results = await Promise.all(
+      threads.map(async (thread) => {
+        const res = await sdk.fetch(`${sdk.url}/thread/${thread.id}/complete`, {
+          method: "POST",
+        })
+        return res.ok
+      }),
+    )
+
+    const allOk = results.every(Boolean)
+    if (!allOk) {
+      toast.show({ variant: "error", message: t("tui.workstation.action.stop_failed") })
+    } else {
+      toast.show({ variant: "info", message: t("tui.workstation.action.stop_success") })
+      bump()
+    }
+  }
+
+  const handleConfigure = (agentID: string) => {
+    route.navigate({ type: "plugin", id: "agent-management", data: { agentID } })
+  }
+
+  // -------------------------------------------------------------------------
   // Derived data
   // -------------------------------------------------------------------------
 
   const activeThreads = createMemo(() => (allThreads() ?? []).filter((t) => t.status === "active"))
 
-  const workstationAgents = createMemo<WorkstationAgent[]>(() => {
+  const workstationAgents = createMemo<AgentCardData[]>(() => {
     const list = agents() ?? []
     const statuses = agentStatuses() ?? {}
     const threads = allThreads() ?? []
@@ -164,7 +163,8 @@ function WorkstationView() {
         color: a.color,
         description: a.description,
         model: a.model,
-        orgLayer: deriveOrgLayer(a.id),
+        orgLayer: a.org_layer,
+        department: a.department,
         status: statuses[a.id] ?? "idle",
         threads: agentThreads,
         totalTokens,
@@ -173,11 +173,11 @@ function WorkstationView() {
   })
 
   const summary = createMemo(() => {
-    const agents = workstationAgents()
-    const totalAgents = agents.length
-    const activeAgents = agents.filter((a) => a.status !== "idle").length
-    const totalThreads = agents.reduce((sum, a) => sum + a.threads.length, 0)
-    const openTasks = agents.reduce(
+    const list = workstationAgents()
+    const totalAgents = list.length
+    const activeAgents = list.filter((a) => a.status !== "idle").length
+    const totalThreads = list.reduce((sum, a) => sum + a.threads.length, 0)
+    const openTasks = list.reduce(
       (sum, a) => sum + a.threads.filter((t) => t.kind === "primary").length,
       0,
     )
@@ -189,7 +189,7 @@ function WorkstationView() {
   // -------------------------------------------------------------------------
 
   createEffect(() => {
-    const agents = workstationAgents()
+    const list = workstationAgents()
     const s = summary()
 
     rightSidebar.set(() => (
@@ -204,13 +204,13 @@ function WorkstationView() {
         <Card flush>
           <box flexDirection="column" gap={0} paddingLeft={1} paddingRight={1}>
             <text fg={theme.text}>
-              Active: <text fg={theme.accent}>{s.activeAgents}</text>/{s.totalAgents} agents
+              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{s.activeAgents}</text>/{s.totalAgents}
             </text>
             <text fg={theme.text}>
-              Threads: <text fg={theme.accent}>{s.totalThreads}</text>
+              {t("tui.workstation.summary.threads")}: <text fg={theme.accent}>{s.totalThreads}</text>
             </text>
             <text fg={theme.text}>
-              Tasks: <text fg={theme.accent}>{s.openTasks}</text> open
+              {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{s.openTasks}</text>
             </text>
           </box>
         </Card>
@@ -218,22 +218,25 @@ function WorkstationView() {
         {/* Agent list */}
         <box flexShrink={0} paddingTop={1} paddingBottom={0}>
           <text fg={theme.textMuted}>
-            <b>Agents</b>
+            <b>{t("tui.workstation.agents")}</b>
           </text>
         </box>
         <scrollbox flexGrow={1}>
           <box flexShrink={0} gap={0} paddingRight={1}>
-            <For each={agents}>
+            <For each={list}>
               {(a) => {
-                const cfg = STATUS_CONFIG[a.status]
+                const statusConfig = {
+                  idle: { icon: "●", colorKey: "success" as const },
+                  busy: { icon: "◉", colorKey: "warning" as const },
+                  paused: { icon: "◐", colorKey: "textMuted" as const },
+                }
+                const cfg = statusConfig[a.status]
                 return (
                   <box
                     flexShrink={0}
                     paddingTop={0}
                     paddingBottom={0}
-                    onMouseUp={() =>
-                      route.navigate({ type: "plugin", id: "agent-management", data: { agentID: a.id } })
-                    }
+                    onMouseUp={() => handleConfigure(a.id)}
                   >
                     <text>
                       <text fg={theme[cfg.colorKey]}>{cfg.icon}</text>
@@ -242,7 +245,9 @@ function WorkstationView() {
                         {a.icon ? a.icon + " " : ""}
                         {a.name}
                       </text>
-                      <text fg={theme.textMuted}> ({a.orgLayer})</text>
+                      <Show when={a.department}>
+                        <text fg={theme.textMuted}> ({a.department})</text>
+                      </Show>
                     </text>
                   </box>
                 )
@@ -254,7 +259,7 @@ function WorkstationView() {
         {/* Quick actions */}
         <box flexShrink={0} paddingTop={1} border={["top"]} borderColor={theme.border}>
           <box onMouseUp={() => route.navigate({ type: "plugin", id: "agent-management" })}>
-            <text fg={theme.accent}>+ Create Agent</text>
+            <text fg={theme.accent}>+ {t("tui.workstation.create_agent")}</text>
           </box>
         </box>
       </box>
@@ -272,9 +277,13 @@ function WorkstationView() {
         <text fg={theme.text}>
           <b>{t("tui.shell.route.workstation")}</b>
         </text>
+        <text fg={theme.textMuted}>({summary().totalAgents})</text>
         <box flexGrow={1} />
         <box onMouseUp={bump}>
-          <text fg={theme.accent}>Refresh</text>
+          <text fg={theme.accent}>{t("tui.workstation.refresh")}</text>
+        </box>
+        <box onMouseUp={() => route.navigate({ type: "plugin", id: "agent-management" })}>
+          <text fg={theme.accent}>+ {t("tui.workstation.add_agent")}</text>
         </box>
       </box>
 
@@ -294,81 +303,33 @@ function WorkstationView() {
             borderColor={theme.border}
           >
             <text fg={theme.text}>
-              Active: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents} agents
+              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents}
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
-              Threads: <text fg={theme.accent}>{summary().totalThreads}</text>
+              {t("tui.workstation.summary.threads")}: <text fg={theme.accent}>{summary().totalThreads}</text>
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
-              Tasks: <text fg={theme.accent}>{summary().openTasks}</text> open
+              {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{summary().openTasks}</text>
             </text>
           </box>
 
-          {/* Agent list with threads */}
+          {/* Agent cards */}
           <box flexShrink={0} flexDirection="column" gap={1}>
             <For each={workstationAgents()}>
-              {(agent) => {
-                const cfg = STATUS_CONFIG[agent.status]
-                return (
-                  <box
-                    flexShrink={0}
-                    flexDirection="column"
-                    gap={0}
-                    border={["left"]}
-                    borderColor={agent.color ?? theme.border}
-                    onMouseUp={() =>
-                      route.navigate({ type: "plugin", id: "agent-management", data: { agentID: agent.id } })
-                    }
-                  >
-                    {/* Agent header */}
-                    <box flexShrink={0} flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
-                      <text fg={theme[cfg.colorKey]}>{cfg.icon}</text>
-                      <text fg={theme.text}>
-                        <b>{agent.icon ? agent.icon + " " : ""}{agent.name}</b>
-                      </text>
-                      <text fg={theme.textMuted}>({agent.orgLayer})</text>
-                      <box flexGrow={1} />
-                      <text fg={theme[cfg.colorKey]}>{agent.status}</text>
-                    </box>
-
-                    {/* Threads */}
-                    <box flexShrink={0} flexDirection="column" paddingLeft={3}>
-                      <Show
-                        when={agent.threads.length > 0}
-                        fallback={<text fg={theme.textMuted}>{"  └─ No active threads"}</text>}
-                      >
-                        <For each={agent.threads}>
-                          {(thread, idx) => {
-                            const isLast = () => idx() === agent.threads.length - 1
-                            const connector = () => (isLast() ? "  └─ " : "  ├─ ")
-                            const kindLabel = THREAD_KIND_LABEL[thread.kind] ?? `[${thread.kind}]`
-                            const taskSummary = thread.description ?? "Working..."
-                            return (
-                              <text fg={theme.textMuted}>
-                                {connector()}
-                                <text fg={theme.accent}>{kindLabel}</text>
-                                {" "}
-                                {taskSummary}
-                                <text fg={theme.textMuted}>
-                                  {" "}
-                                  ({formatTokens(thread.spentTokens)}
-                                  {thread.budgetTokens ? `/${formatTokens(thread.budgetTokens)}` : ""})
-                                </text>
-                              </text>
-                            )
-                          }}
-                        </For>
-                      </Show>
-                    </box>
-                  </box>
-                )
-              }}
+              {(agent) => (
+                <AgentCard
+                  agent={agent}
+                  onStart={handleStart}
+                  onStop={handleStop}
+                  onConfigure={handleConfigure}
+                />
+              )}
             </For>
 
             <Show when={workstationAgents().length === 0}>
-              <text fg={theme.textMuted}>No agents configured yet. Create one from the Agents page.</text>
+              <text fg={theme.textMuted}>{t("tui.workstation.empty")}</text>
             </Show>
           </box>
 
@@ -380,15 +341,15 @@ function WorkstationView() {
           </box>
           <box flexShrink={0} flexDirection="row" gap={2}>
             <text fg={theme.text}>
-              Active: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents} agents
+              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents}
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
-              Threads: <text fg={theme.accent}>{summary().totalThreads}</text>
+              {t("tui.workstation.summary.threads")}: <text fg={theme.accent}>{summary().totalThreads}</text>
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
-              Tasks: <text fg={theme.accent}>{summary().openTasks}</text> open
+              {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{summary().openTasks}</text>
             </text>
           </box>
         </box>

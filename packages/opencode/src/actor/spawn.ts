@@ -167,16 +167,45 @@ export interface SpawnInput {
    * Swallowed on failure (best-effort, same as onActorID).
    */
   onReady?: (info: { actorID: string; sessionID: SessionID }) => Effect.Effect<void>
+  /**
+   * Optional delegation message ID linking this actor to a delegation request.
+   * Stored on the actor registry entry and injected into the spawned agent's
+   * system context so it can reference the delegation chain.
+   */
+  delegationMessageID?: string
+  /**
+   * Current delegation depth (0 = top-level). Used by delegation-aware spawns
+   * to enforce MAX_DELEGATION_DEPTH and inject depth context into the agent
+   * prompt. Defaults to 0.
+   */
+  depth?: number
 }
 
 export interface SpawnResult {
   actorID: string
   sessionID: SessionID
   outcome: Deferred.Deferred<AgentOutcome>
+  threadID?: ThreadID
+}
+
+export interface SpawnDelegationInput {
+  /** Spawn input — mode is always "subagent" for delegation spawns. */
+  readonly spawn: Omit<SpawnInput, "mode" | "delegationMessageID" | "depth"> & {
+    delegationMessageID: string
+    depth: number
+  }
+  /** Delegation context to inject into the agent's task prompt. */
+  readonly delegationContext: {
+    readonly depth: number
+    readonly rootNeedID?: string
+    readonly acceptanceCriteria?: string
+    readonly taskSummary?: string
+  }
 }
 
 export interface Interface {
   readonly spawn: (input: SpawnInput) => Effect.Effect<SpawnResult>
+  readonly spawnForDelegation: (input: SpawnDelegationInput) => Effect.Effect<SpawnResult>
   readonly cancel: (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") => Effect.Effect<void>
   readonly getForkContext: (actorID: string) => Effect.Effect<ForkContext | undefined>
 }
@@ -264,6 +293,8 @@ export const layer = Layer.effect(
       // gate; specialized/system agents and peers create no user tasks.
       gateEligible?: boolean
       format?: MessageV2.OutputFormat
+      /** Thread ID for thread-aware lifecycle management (P1.3). */
+      threadID?: ThreadID
     }) =>
       Effect.gen(function* () {
         const outcome = yield* Deferred.make<AgentOutcome>()
@@ -577,6 +608,10 @@ export const layer = Layer.effect(
                   lastFinalText = newTurn.finalText
                 }
 
+                // Complete the thread on successful actor finish (P1.3)
+                if (input.threadID) {
+                  yield* threadService.complete(input.threadID).pipe(Effect.ignore)
+                }
                 yield* Effect.sync(() => forkContexts.delete(input.actorID))
               }),
             onFailure: (cause) =>
@@ -588,6 +623,10 @@ export const layer = Layer.effect(
                   outcome,
                   cancelled ? { status: "cancelled" as const } : { status: "failure" as const, error },
                 )
+                // Complete the thread on cancel/failure (P1.3)
+                if (input.threadID) {
+                  yield* threadService.complete(input.threadID).pipe(Effect.ignore)
+                }
                 yield* Effect.sync(() => forkContexts.delete(input.actorID))
               }),
           }),
@@ -597,12 +636,10 @@ export const layer = Layer.effect(
       })
 
     const spawnPeer = Effect.fn("Actor.spawnPeer")(function* (input: SpawnInput) {
-      // Check thread constraints before spawning
+      // Check thread constraints before spawning (P1.3)
       const canSpawn = yield* threadService.canAccept(input.agentType, "reactive")
       if (!canSpawn) {
-        log.warn("spawnPeer rejected: agent cannot accept reactive thread", {
-          agentType: input.agentType,
-        })
+        yield* Effect.fail(new Error(`Agent ${input.agentType} cannot accept reactive thread work`))
       }
       // Create or attach to a thread for the peer agent
       const peerThread = yield* threadService.create({
@@ -645,17 +682,27 @@ export const layer = Layer.effect(
         lifecycle: input.lifecycle ?? "persistent",
         task_id: input.task_id,
         format: input.format,
+        threadID: peerThread.id,
       })
       if (!input.background) yield* Fiber.join(fiber).pipe(Effect.ignore)
-      return { actorID: child.id, sessionID: child.id, outcome }
+      return { actorID: child.id, sessionID: child.id, outcome, threadID: peerThread.id as ThreadID }
     })
 
     const spawnSubagent = Effect.fn("Actor.spawnSubagent")(function* (input: SpawnInput) {
       const actorID = yield* actorReg.allocateActorID(input.sessionID, input.agentType)
 
-      // Inherit parent's thread_id for subagents
-      const parentSession = yield* session.get(input.sessionID)
-      const threadID = parentSession.threadID
+      // Check thread constraints before spawning (P1.3)
+      const canSpawn = yield* threadService.canAccept(input.agentType, "primary")
+      if (!canSpawn) {
+        yield* Effect.fail(new Error(`Agent ${input.agentType} cannot accept primary thread work`))
+      }
+
+      // Create a primary thread for the subagent (P1.3)
+      const thread = yield* threadService.create({
+        agentID: input.agentType,
+        kind: "primary",
+        description: `${input.agentType}: ${input.task.slice(0, 40)}`,
+      })
 
       const watermark = input.context === "full" ? yield* session.lastMainMessageID(input.sessionID) : undefined
 
@@ -705,15 +752,74 @@ export const layer = Layer.effect(
         task_id: input.task_id,
         gateEligible,
         format: input.format,
+        threadID: thread.id,
       })
       if (input.onReady) yield* Effect.ignore(input.onReady({ actorID, sessionID: input.sessionID }))
       if (!input.background) yield* Fiber.join(fiber).pipe(Effect.ignore)
-      return { actorID, sessionID: input.sessionID, outcome }
+      return { actorID, sessionID: input.sessionID, outcome, threadID: thread.id }
     })
 
     const spawn = Effect.fn("Actor.spawn")(function* (input: SpawnInput) {
       if (input.mode === "peer") return yield* spawnPeer(input)
       return yield* spawnSubagent(input)
+    })
+
+    const spawnForDelegation = Effect.fn("Actor.spawnForDelegation")(function* (input: SpawnDelegationInput) {
+      // Build delegation-enriched task prompt
+      const ctxParts: string[] = [
+        "",
+        "---",
+        "## Delegation Context",
+        `- **Depth**: ${input.delegationContext.depth}`,
+      ]
+      if (input.delegationContext.rootNeedID) {
+        ctxParts.push(`- **Root Need ID**: ${input.delegationContext.rootNeedID}`)
+      }
+      if (input.delegationContext.taskSummary) {
+        ctxParts.push(`- **Task Summary**: ${input.delegationContext.taskSummary}`)
+      }
+      if (input.delegationContext.acceptanceCriteria) {
+        ctxParts.push("", "## Acceptance Criteria", input.delegationContext.acceptanceCriteria)
+      }
+      ctxParts.push(
+        "",
+        "When complete, reply with a delegation reply message using the message_agent tool.",
+        "---",
+      )
+
+      const enrichedTask = input.spawn.task + ctxParts.join("\n")
+
+      // Delegate to spawnSubagent with delegation metadata attached
+      const result = yield* spawnSubagent({
+        ...input.spawn,
+        mode: "subagent",
+        task: enrichedTask,
+        delegationMessageID: input.spawn.delegationMessageID,
+        depth: input.spawn.depth,
+      })
+
+      // Wire outcome to auto-trigger admission check / escalation.
+      // Fork a fiber that awaits the outcome and publishes a bus event so the
+      // delegation service (or plugins) can trigger admission. We don't import
+      // Delegation here to avoid layer cycles — the event consumer handles it.
+      // Best-effort: failures are logged, not propagated.
+      yield* Effect.gen(function* () {
+        const outcome = yield* Deferred.await(result.outcome)
+        if (outcome.status === "success" && outcome.finalText) {
+          yield* bus
+            .publish(HookEvent.ReActReentered, {
+              phase: "post" as const,
+              actorID: result.actorID,
+              agentType: input.spawn.agentType,
+              iteration: 0,
+              triggeredByPlugins: ["delegation-admission"],
+              reasonPreview: `admission check for delegation message ${input.spawn.delegationMessageID}`,
+            })
+            .pipe(Effect.ignore)
+        }
+      }).pipe(Effect.catch(() => Effect.void), Effect.forkIn(scope))
+
+      return result
     })
 
     const cancel: (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") => Effect.Effect<void> =
@@ -734,7 +840,7 @@ export const layer = Layer.effect(
       return forkContexts.get(actorID)
     })
 
-    const impl = Service.of({ spawn, cancel, getForkContext })
+    const impl = Service.of({ spawn, spawnForDelegation, cancel, getForkContext } as Interface)
     // Late-bind the impl so SessionCheckpoint.tryStartCheckpointWriter can resolve it
     // without forming a layer cycle. See spawn-ref.ts for rationale.
     spawnRef.current = impl

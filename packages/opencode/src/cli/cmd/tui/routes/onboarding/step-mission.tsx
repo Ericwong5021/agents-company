@@ -20,10 +20,9 @@ interface StepMissionProps {
 }
 
 // Short conversation to understand what business the founder wants to build.
-// The assistant generates a personalised opening via a hidden kickstart; that
-// reply appears as the first message in the chat transcript (same style as all
-// subsequent turns — no separate speech bubble). The hidden kickstart user
-// message is filtered out. The founder can skip at any time.
+// The opening question is generated locally (no LLM dependency) so it appears
+// instantly. Subsequent turns use real LLM conversation. The founder can skip
+// at any time — the skip button is prominent and always visible.
 export function StepMission(props: StepMissionProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
@@ -35,15 +34,17 @@ export function StepMission(props: StepMissionProps) {
   const [ready, setReady] = createSignal(false)
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
-  // ID of the hidden kickstart user message — filtered from the visible transcript.
-  const [kickoffUserID, setKickoffUserID] = createSignal<string | null>(null)
   let textarea: TextareaRenderable | undefined
 
   const agentID = "onboarding-assistant"
   const scopeLabels = props.scopes
     .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
     .join("、")
-  const KICKOFF_TEXT = `[系统] 请直接用一句话问创始人：「${props.userName}，你想创办一家什么样的「${scopeLabels}」公司？」。不要加任何前缀、解释或额外内容，直接输出这一句问话。`
+
+  // Local opening question — no LLM call needed.
+  const openingQuestion = t("onboarding.mission.opening")
+    .replace("{{name}}", props.userName)
+    .replace("{{scope}}", scopeLabels)
 
   onMount(() => {
     dialog.setSize("large")
@@ -82,17 +83,7 @@ export function StepMission(props: StepMissionProps) {
         return
       }
       setSessionID(res.data.id)
-
-      // Send hidden kickstart so the AI generates a personalised opening.
-      setSubmitting(true)
-      try {
-        await sdk.client.session.promptAsync({
-          sessionID: res.data.id,
-          parts: [{ type: "text", text: KICKOFF_TEXT }],
-        })
-      } catch {
-        setError(t("onboarding.mission.error"))
-      }
+      setReady(true)
     } catch {
       setError(t("onboarding.mission.error"))
     }
@@ -109,15 +100,12 @@ export function StepMission(props: StepMissionProps) {
     }
   }
 
-  // Visible transcript: the hidden kickstart user message is filtered out, but
-  // the assistant's opening reply stays — it appears as the first chat message
-  // in the same style as all subsequent turns.
+  // Visible transcript: all messages in chat style.
   const transcript = createMemo(() => {
     const sid = sessionID()
     if (!sid) return []
     const buckets = sync.data.message[sid]
     if (!buckets) return []
-    const koUID = kickoffUserID()
     return Object.values(buckets)
       .flat()
       .filter((m) => m.role === "user" || m.role === "assistant")
@@ -130,34 +118,7 @@ export function StepMission(props: StepMissionProps) {
           .map((p) => ("text" in p ? (p.text ?? "") : ""))
           .join(""),
       }))
-      .filter((m) => m.content.trim().length > 0 && m.id !== koUID)
-  })
-
-  // Once the opening line lands (first completed assistant message), mark the
-  // step as ready and capture the kickstart user message id for filtering.
-  createMemo(() => {
-    const sid = sessionID()
-    if (!sid || ready()) return
-    const buckets = sync.data.message[sid]
-    if (!buckets) return
-    const all = Object.values(buckets).flat().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-
-    const kickoff = all.find((m) => m.role === "user")
-    if (kickoff && !kickoffUserID()) setKickoffUserID(kickoff.id)
-
-    const assistantReply = all.find((m) => m.role === "assistant" && m.time.completed)
-    if (assistantReply && kickoffUserID()) {
-      const text = (sync.data.part[assistantReply.id] ?? [])
-        .filter((p) => p.type === "text" && !p.synthetic && !p.ignored)
-        .map((p) => ("text" in p ? (p.text ?? "") : ""))
-        .join("")
-        .trim()
-      if (text) {
-        setSubmitting(false)
-        setReady(true)
-        focusInput()
-      }
-    }
+      .filter((m) => m.content.trim().length > 0)
   })
 
   const waiting = createMemo(() => {
@@ -229,12 +190,17 @@ export function StepMission(props: StepMissionProps) {
               <text fg={theme.background}>{t("onboarding.profile.next")}</text>
             </box>
           </box>
-          <box flexDirection="row" justifyContent="flex-end" gap={2}>
-            <Show when={ready()}>
-              <text fg={theme.textMuted} onMouseUp={skip}>
-                {t("onboarding.mission.skip")}
-              </text>
-            </Show>
+          <box flexDirection="row" justifyContent="space-between" alignItems="center">
+            {/* Prominent skip — always visible, left-aligned */}
+            <box
+              flexDirection="row"
+              gap={1}
+              alignItems="center"
+              onMouseUp={skip}
+            >
+              <text fg={theme.textMuted}>→</text>
+              <text fg={theme.textMuted}>{t("onboarding.mission.skip")}</text>
+            </box>
             <Show when={transcript().some((m) => m.role === "user")}>
               <box backgroundColor={theme.success} paddingLeft={2} paddingRight={2} onMouseUp={finish}>
                 <text fg={theme.background}>{t("onboarding.mission.build")}</text>
@@ -248,16 +214,26 @@ export function StepMission(props: StepMissionProps) {
         <text fg={theme.error}>⚠ {error()}</text>
       </Show>
 
-      {/* Loading while generating opening line */}
+      {/* Loading while session initializes */}
       <Show when={!ready() && !error()}>
         <box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
           <Spinner color={theme.primary} />
         </box>
       </Show>
 
-      {/* Chat transcript — all messages in the same style */}
-      <Show when={ready() && transcript().length > 0}>
+      {/* Chat transcript */}
+      <Show when={ready()}>
         <box flexDirection="column" gap={1}>
+          {/* Local opening question as the first assistant message */}
+          <box flexDirection="column">
+            <text fg={theme.success} attributes={TextAttributes.BOLD}>
+              {props.assistantName}
+            </text>
+            <box paddingLeft={2}>
+              <text fg={theme.text}>{openingQuestion}</text>
+            </box>
+          </box>
+          {/* LLM conversation */}
           <For each={transcript().slice(-6)}>
             {(msg) => (
               <box flexDirection="column">

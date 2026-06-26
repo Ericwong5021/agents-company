@@ -46,6 +46,7 @@ const hangingActor = Layer.effect(
             outcome,
           }
         }),
+      spawnForDelegation: () => Effect.die("spawnForDelegation not stubbed"),
       cancel: () => Effect.void,
       getForkContext: () => Effect.succeed(undefined),
     })

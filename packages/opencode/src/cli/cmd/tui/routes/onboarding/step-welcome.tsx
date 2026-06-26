@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onMount, Show } from "solid-js"
+import { createSignal, onMount, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useSDK } from "@tui/context/sdk"
 import { useLanguage } from "@tui/context/language"
@@ -10,16 +10,16 @@ interface StepWelcomeProps {
   onComplete: () => void
 }
 
-// Pure logo-and-background welcome screen. While it shows, we warm the things
-// the rest of onboarding depends on — the agent template library and the
-// company-agent store (which touches the DB and filesystem) — so later steps
-// feel instant. The starry background is provided by the parent.
+// Welcome screen for the full onboarding flow.
+// While showing, we warm the template library and company-agent store so
+// later steps feel instant. The starry background is provided by the parent.
 export function StepWelcome(props: StepWelcomeProps) {
   const { theme } = useTheme()
   const sdk = useSDK()
   const t = useLanguage().t
   const [ready, setReady] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+  const [hovered, setHovered] = createSignal<string | null>(null)
 
   onMount(() => void runPreload())
 
@@ -27,24 +27,16 @@ export function StepWelcome(props: StepWelcomeProps) {
     setError(null)
     setReady(false)
 
-    // Warm caches in parallel; ignore individual failures so a cold endpoint
-    // doesn't block onboarding (the steps that need them re-fetch anyway).
     const started = Date.now()
     await Promise.allSettled([
       sdk.fetch(`${sdk.url}/company-agent`),
       sdk.fetch(`${sdk.url}/company-agent/templates`),
     ]).catch(() => undefined)
 
-    // Keep the welcome on screen long enough to not flash.
     const elapsed = Date.now() - started
     if (elapsed < 1200) await new Promise((r) => setTimeout(r, 1200 - elapsed))
     setReady(true)
   }
-
-  // Auto-advance once preloading is done.
-  createEffect(() => {
-    if (ready() && !error()) setTimeout(() => props.onComplete(), 600)
-  })
 
   return (
     <box position="absolute" top={0} left={0} right={0} bottom={0}>
@@ -78,6 +70,33 @@ export function StepWelcome(props: StepWelcomeProps) {
             <text fg={theme.textMuted}>{t("onboarding.welcome.ready")}</text>
           </Show>
         </box>
+
+        {/* Entry buttons — shown after preloading */}
+        <Show when={ready() && !error()}>
+          <box flexDirection="column" gap={1} paddingTop={2} alignItems="center">
+            {/* Primary: full onboarding */}
+            <box
+              backgroundColor={hovered() === "start" ? theme.primary : theme.backgroundPanel}
+              border
+              borderColor={hovered() === "start" ? theme.primary : theme.border}
+              paddingLeft={4}
+              paddingRight={4}
+              paddingTop={1}
+              paddingBottom={1}
+              flexDirection="row"
+              justifyContent="center"
+              width={36}
+              onMouseOver={() => setHovered("start")}
+              onMouseOut={() => setHovered(null)}
+              onMouseUp={() => props.onComplete()}
+            >
+              <text fg={hovered() === "start" ? theme.background : theme.text} attributes={TextAttributes.BOLD}>
+                🚀 {t("onboarding.welcome.start")}
+              </text>
+            </box>
+            <text fg={theme.textMuted}>{t("onboarding.welcome.start_desc")}</text>
+          </box>
+        </Show>
       </box>
 
       {/* Bottom-right loading indicator */}

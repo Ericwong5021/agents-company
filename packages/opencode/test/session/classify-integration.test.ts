@@ -370,6 +370,7 @@ describe("classifier routing — integration", () => {
               spawnRef.current = {
                 getForkContext: (id: string) => Effect.succeed(id === forkActorID ? forkCtx : undefined),
                 spawn: () => Effect.die("spawn not used in fork-gate test"),
+                spawnForDelegation: () => Effect.die("spawnForDelegation not stubbed"),
                 cancel: () => Effect.die("cancel not used in fork-gate test"),
               } as unknown as NonNullable<typeof spawnRef.current>
 
@@ -445,6 +446,7 @@ describe("classifier routing — integration", () => {
               spawnRef.current = {
                 getForkContext: (id: string) => Effect.succeed(id === forkActorID ? forkCtx : undefined),
                 spawn: () => Effect.die("spawn not used in fork content-filter test"),
+                spawnForDelegation: () => Effect.die("spawnForDelegation not stubbed"),
                 cancel: () => Effect.die("cancel not used in fork content-filter test"),
               } as unknown as NonNullable<typeof spawnRef.current>
 

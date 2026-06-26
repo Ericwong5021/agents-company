@@ -11,6 +11,8 @@ export const AgentMessageTable = sqliteTable(
     root_need_id: text(),
     in_reply_to: text(),
     kind: text().$type<"fyi" | "request" | "reply" | "proposal">().notNull(),
+    depth: integer().notNull().default(0),
+    spawned_issue_id: text(),
     body: text().notNull(),
     task_summary: text(),
     outcome: text(),
@@ -24,6 +26,7 @@ export const AgentMessageTable = sqliteTable(
     index("agent_message_root_need_idx").on(table.root_need_id),
     index("agent_message_kind_idx").on(table.kind),
     index("agent_message_to_read_idx").on(table.to_agent_id, table.read),
+    index("agent_message_depth_idx").on(table.depth),
   ],
 )
 

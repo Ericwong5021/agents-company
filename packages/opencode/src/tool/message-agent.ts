@@ -2,9 +2,10 @@ import * as Tool from "./tool"
 import DESCRIPTION from "./message-agent.txt"
 import z from "zod"
 import { Effect } from "effect"
-import { messageAgent, delegate, reply } from "@/agent-message/primitives"
+import { messageAgent, delegate, propose, reply } from "@/agent-message/primitives"
 import { AgentMessage } from "@/agent-message/agent-message"
 import { CompanyAgent } from "@/company-agent"
+import { spawnRef } from "@/actor/spawn-ref"
 
 const id = "message_agent"
 
@@ -24,6 +25,16 @@ const delegateOperation = z.strictObject({
   thread_id: z.string().optional().describe("Thread ID for conversation tracking."),
   root_need_id: z.string().optional().describe("Root need ID for delegation chains."),
   depth: z.number().int().min(0).optional().describe("Current delegation depth (default 0)."),
+  auto_spawn: z.boolean().optional().describe("Auto-spawn an actor to handle the delegated task (default false)."),
+})
+
+const proposeOperation = z.strictObject({
+  action: z.literal("propose"),
+  body: z.string().min(1).describe("The proposal content."),
+  rationale: z.string().min(1).describe("Why this proposal should be adopted."),
+  thread_id: z.string().optional().describe("Thread ID for conversation tracking."),
+  root_need_id: z.string().optional().describe("Root need ID for delegation chains."),
+  depth: z.number().int().min(0).optional().describe("Current proposal depth (default 0)."),
 })
 
 const replyOperation = z.strictObject({
@@ -35,7 +46,7 @@ const replyOperation = z.strictObject({
 
 const parameters = z.strictObject({
   operation: z
-    .discriminatedUnion("action", [fyiOperation, delegateOperation, replyOperation])
+    .discriminatedUnion("action", [fyiOperation, delegateOperation, proposeOperation, replyOperation])
     .meta({ type: "object" }),
 })
 
@@ -45,6 +56,7 @@ type Metadata = {
   action?: string
   messageID?: string
   toAgentID?: string
+  spawnedActorID?: string
 }
 
 export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMessage.Service | CompanyAgent.Service>(
@@ -93,10 +105,63 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
               companyAgentSvc,
               agentMessageSvc,
             )
+
+            let spawnedActorID: string | undefined
+            if (op.auto_spawn) {
+              const actor = spawnRef.current
+              if (actor) {
+                const spawned = yield* actor.spawnForDelegation({
+                  spawn: {
+                    sessionID: ctx.sessionID as any,
+                    agentType: result.toAgentID,
+                    task: op.body,
+                    context: "none",
+                    tools: "INHERIT",
+                    background: true,
+                    parentActorID: ctx.agent,
+                    delegationMessageID: result.messageID,
+                    depth: result.depth,
+                  },
+                  delegationContext: {
+                    depth: result.depth,
+                    rootNeedID: op.root_need_id,
+                    taskSummary: op.task_summary,
+                  },
+                })
+                spawnedActorID = spawned.actorID
+              }
+            }
+
+            const actorSuffix = spawnedActorID ? ` Actor spawned: ${spawnedActorID}.` : ""
             return {
               title: `Delegated to ${result.toAgentName}`,
-              output: `Task delegated to ${result.toAgentName} (${result.toAgentID}). Message ID: ${result.messageID}. Task: ${result.taskSummary}. Depth: ${result.depth}`,
-              metadata: { action: "delegate", messageID: result.messageID, toAgentID: result.toAgentID } as Metadata,
+              output: `Task delegated to ${result.toAgentName} (${result.toAgentID}). Message ID: ${result.messageID}. Task: ${result.taskSummary}. Depth: ${result.depth}.${actorSuffix}`,
+              metadata: {
+                action: "delegate",
+                messageID: result.messageID,
+                toAgentID: result.toAgentID,
+                ...(spawnedActorID ? { spawnedActorID } : {}),
+              } as Metadata,
+            }
+          }
+
+          if (op.action === "propose") {
+            const result = yield* propose(
+              {
+                fromId: ctx.agent,
+                body: op.body,
+                rationale: op.rationale,
+                threadID: op.thread_id,
+                rootNeedID: op.root_need_id,
+                depth: op.depth,
+              },
+              companyAgentSvc,
+              agentMessageSvc,
+            )
+            return {
+              title: `Proposal sent to ${result.toAgentName}`,
+              output: `Proposal sent to ${result.toAgentName} (${result.toAgentID}). Message ID: ${result.messageID}. Depth: ${result.depth}`,
+              metadata: { action: "propose", messageID: result.messageID, toAgentID: result.toAgentID } as Metadata,
             }
           }
 

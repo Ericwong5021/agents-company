@@ -62,6 +62,7 @@ let installedRegistry: ActorRegistry.Interface | undefined
 beforeAll(() => {
   spawnRef.current = {
     spawn: () => Effect.die("spawn not used in cancel tests"),
+    spawnForDelegation: () => Effect.die("spawnForDelegation not used in cancel tests"),
     cancel: (sessionID, actorID, mode) =>
       Effect.gen(function* () {
         cancelled.push({ sessionID, actorID, mode })

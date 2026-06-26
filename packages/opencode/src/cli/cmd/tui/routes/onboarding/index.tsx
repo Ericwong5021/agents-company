@@ -12,15 +12,17 @@ import { StarryBackground } from "@tui/component/starry-background"
 import { DialogProvider } from "@tui/component/dialog-provider"
 import { DialogModel } from "@tui/component/dialog-model"
 import { StepWelcome } from "./step-welcome"
-import { StepProfile } from "./step-profile"
+import { StepTemplateSelect } from "./step-template-select"
+import { StepCustomize } from "./step-customize"
 import { StepMission } from "./step-mission"
 import { StepFoundingTeam } from "./step-founding-team"
 
-type Step = "welcome" | "provider" | "profile" | "mission" | "team"
+type Step = "welcome" | "provider" | "template" | "customize" | "mission" | "team"
 
 interface OnboardingData {
   providerID?: string
   modelID?: string
+  templateId?: string
   userName?: string
   assistantName?: string
   scopes?: string[]
@@ -32,6 +34,8 @@ interface OnboardingData {
 // provider/model selector — one consistent window form, no second shell. The
 // starry background stays underneath. Completion is gated on the persisted
 // `onboarding_done` flag (see app.tsx) and the captured profile is saved to KV.
+//
+// Flow: welcome → provider → template → customize → mission → team
 export function Onboarding() {
   const kv = useKV()
   const keybind = useKeybind()
@@ -63,8 +67,8 @@ export function Onboarding() {
     }
   })
 
-  // Card steps share a 4-dot progress indicator (provider, profile, mission, team).
-  const STEP_COUNT = 4
+  // Card steps share a 5-dot progress indicator (provider, template, customize, mission, team).
+  const STEP_COUNT = 5
 
   function hasConnectedModels() {
     return sync.data.provider_next.connected.some((id) => {
@@ -88,29 +92,41 @@ export function Onboarding() {
   // Push the dialog content for a given step into the shared window.
   function renderStep(s: Step) {
     if (s === "provider") {
-      // Reuse the app's native provider/model selector verbatim. Advance once a
-      // model is actually chosen; on Esc the dialog empties and the effect below
-      // simply re-renders this step (so the founder can't slip past model-less).
       dialog.replace(
         () => (hasConnectedModels() ? <DialogModel /> : <DialogProvider />),
         () => {
           const current = local.model.current()
           if (current?.providerID && current?.modelID) {
             setData((p) => ({ ...p, providerID: current.providerID, modelID: current.modelID }))
-            setStep("profile")
+            setStep("template")
           }
         },
       )
       return
     }
 
-    if (s === "profile") {
+    if (s === "template") {
       dialog.replace(() => (
-        <StepProfile
+        <StepTemplateSelect
           stepIndex={1}
           stepCount={STEP_COUNT}
+          onComplete={(templateId) => {
+            setData((p) => ({ ...p, templateId }))
+            setStep("customize")
+          }}
+        />
+      ))
+      return
+    }
+
+    if (s === "customize") {
+      dialog.replace(() => (
+        <StepCustomize
+          stepIndex={2}
+          stepCount={STEP_COUNT}
+          templateName={data().templateId ?? ""}
           onComplete={(r) => {
-            setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName, scopes: r.scopes }))
+            setData((p) => ({ ...p, userName: r.userName, assistantName: r.assistantName }))
             setStep("mission")
           }}
         />
@@ -121,7 +137,7 @@ export function Onboarding() {
     if (s === "mission") {
       dialog.replace(() => (
         <StepMission
-          stepIndex={2}
+          stepIndex={3}
           stepCount={STEP_COUNT}
           userName={data().userName ?? ""}
           assistantName={data().assistantName ?? ""}
@@ -138,10 +154,11 @@ export function Onboarding() {
     if (s === "team") {
       dialog.replace(() => (
         <StepFoundingTeam
-          stepIndex={3}
+          stepIndex={4}
           stepCount={STEP_COUNT}
           userName={data().userName ?? ""}
           assistantName={data().assistantName ?? ""}
+          templateId={data().templateId}
           scopes={data().scopes ?? []}
           mission={data().mission ?? ""}
           onComplete={finish}
@@ -150,11 +167,7 @@ export function Onboarding() {
     }
   }
 
-  // Single source of truth for what occupies the dialog window. Re-renders the
-  // current step when the step changes, or when the stack is emptied by an Esc
-  // dismiss mid-flow (tracked via the reactive stack length). Doing this from an
-  // effect — rather than from a dialog onClose handler — avoids the
-  // replace/close re-entrancy that would otherwise recurse.
+  // Single source of truth for what occupies the dialog window.
   let rendered: Step | null = null
   createEffect(() => {
     const s = step()
