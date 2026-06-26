@@ -18,4 +18,4 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Run oxlint
-        run: bun lint
+        run: bun oxlint packages/opencode/src packages/opencode/test
