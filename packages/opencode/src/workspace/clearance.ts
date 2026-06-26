@@ -108,21 +108,70 @@ export function canSeeDoc(agentId: string, doc: FrontMatter, org: OrgStructure):
   const agentClearance = getAgentClearance(agentId, org)
   if (!canAccess(agentClearance, classification)) return false
 
-  // 2. Scope check
+  // 2. Scope check (group: falls through to false — use canSeeDocEnhanced for group support)
   const scope = doc.scope ?? "public"
+  return checkScope(agentId, scope, org)
+}
+
+/**
+ * Compute effective clearance with relationship modifier, clamped to valid range.
+ */
+function clampedClearance(baseClearance: number, modifier: number): number {
+  return Math.max(ClearanceLevel.public, Math.min(ClearanceLevel.restricted, baseClearance + modifier))
+}
+
+/**
+ * Check whether an agent matches the document's scope.
+ * Shared helper used by canSeeDoc and canSeeDocEnhanced.
+ */
+function checkScope(
+  agentId: string,
+  scope: string,
+  org: OrgStructure,
+  isGroupMember?: (groupId: string) => boolean,
+): boolean {
   if (scope === "public") return true
   if (scope === "org") return agentId in org.agents
 
   if (scope.startsWith("dept:")) {
     const dept = scope.slice(5)
-    const assignment = org.agents[agentId]
-    return assignment?.department === dept
+    return org.agents[agentId]?.department === dept
   }
 
   if (scope.startsWith("agent:")) {
     return scope.slice(6) === agentId
   }
 
+  if (scope.startsWith("group:")) {
+    if (!isGroupMember) return false
+    return isGroupMember(scope.slice(6))
+  }
+
   // Unknown scope — deny by default
   return false
+}
+
+/**
+ * Enhanced access check with relationship edges and group membership.
+ *
+ * Extends the basic canSeeDoc() logic with:
+ * - Relationship clearance modifiers (clamped to [public, restricted])
+ * - Group scope resolution via membership callback
+ */
+export function canSeeDocEnhanced(
+  agentId: string,
+  doc: FrontMatter,
+  org: OrgStructure,
+  relationshipModifier: number = 0,
+  isGroupMember?: (groupId: string) => boolean,
+): boolean {
+  // 1. Clearance check with relationship modifier
+  const classification = doc.classification ?? "public"
+  const baseClearance = getAgentClearance(agentId, org)
+  const effectiveClearance = clampedClearance(baseClearance, relationshipModifier)
+  if (!canAccess(effectiveClearance, classification)) return false
+
+  // 2. Scope check (delegates to shared helper)
+  const scope = doc.scope ?? "public"
+  return checkScope(agentId, scope, org, isGroupMember)
 }

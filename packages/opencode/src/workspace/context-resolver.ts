@@ -12,7 +12,7 @@ import fs from "fs/promises"
 import path from "path"
 import { Effect } from "effect"
 import { parseFrontMatter, type FrontMatter } from "./front-matter"
-import { canSeeDoc, getAgentClearance, clearanceLevelName, type OrgStructure } from "./clearance"
+import { canSeeDoc, canSeeDocEnhanced, getAgentClearance, clearanceLevelName, type OrgStructure } from "./clearance"
 import { workspaceRoot } from "./workspace"
 import { Log } from "@/util"
 
@@ -110,7 +110,12 @@ async function readWorkspaceDoc(relativePath: string): Promise<{
  * @param org - Optional org structure from config. When omitted, all docs
  *              are treated as publicly accessible.
  */
-export function resolve(agentId: string, org?: OrgStructure): Effect.Effect<ResolvedContext, Error> {
+export function resolve(
+  agentId: string,
+  org?: OrgStructure,
+  relationshipModifier?: number,
+  isGroupMember?: (groupId: string) => boolean,
+): Effect.Effect<ResolvedContext, Error> {
   return Effect.gen(function* () {
     const root = workspaceRoot()
     const publicDir = path.join(root, "public")
@@ -135,7 +140,10 @@ export function resolve(agentId: string, org?: OrgStructure): Effect.Effect<Reso
 
       // If org is provided, check access; otherwise treat as public
       if (org) {
-        const visible = canSeeDoc(agentId, doc.frontMatter, org)
+        const hasEnhancedArgs = relationshipModifier !== undefined || isGroupMember !== undefined
+        const visible = hasEnhancedArgs
+          ? canSeeDocEnhanced(agentId, doc.frontMatter, org, relationshipModifier ?? 0, isGroupMember)
+          : canSeeDoc(agentId, doc.frontMatter, org)
         if (!visible) continue
       }
 
