@@ -1,5 +1,6 @@
 import type { TuiPlugin, TuiPluginModule } from "@agents-company/plugin/tui"
-import { createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { useLanguage } from "../../context/language"
 import { useSDK } from "../../context/sdk"
@@ -21,6 +22,9 @@ interface CompanyAgentInfo {
   color?: string
   icon?: string
   model?: string
+  org_layer?: string
+  department?: string
+  reports_to?: string
 }
 
 interface ThreadInfo {
@@ -49,6 +53,70 @@ function formatTokens(n: number): string {
   return `${n}`
 }
 
+const ORG_LAYER_ORDER = ["board", "department", "project", "execution"]
+
+const ORG_LAYER_LABELS: Record<string, string> = {
+  board: "决策层",
+  department: "部门层",
+  project: "项目层",
+  execution: "执行层",
+}
+
+const ORG_LAYER_ICONS: Record<string, string> = {
+  board: "👑",
+  department: "⭐",
+  project: "▸",
+  execution: "▹",
+}
+
+// Group agents by org_layer → department, keeping unclassified separate.
+function groupAgents(list: CompanyAgentInfo[]) {
+  const classified: CompanyAgentInfo[] = []
+  const unclassified: CompanyAgentInfo[] = []
+  for (const a of list) {
+    if (a.org_layer) classified.push(a)
+    else unclassified.push(a)
+  }
+  const layerMap = new Map<string, Map<string, CompanyAgentInfo[]>>()
+  for (const a of classified) {
+    const layer = a.org_layer!
+    const dept = a.department || "未分组"
+    if (!layerMap.has(layer)) layerMap.set(layer, new Map())
+    const deptMap = layerMap.get(layer)!
+    if (!deptMap.has(dept)) deptMap.set(dept, [])
+    deptMap.get(dept)!.push(a)
+  }
+  const layers: {
+    layer: string
+    label: string
+    icon: string
+    departments: { dept: string; agents: CompanyAgentInfo[] }[]
+    totalCount: number
+  }[] = []
+  for (const layer of ORG_LAYER_ORDER) {
+    const deptMap = layerMap.get(layer)
+    if (!deptMap) continue
+    const departments: { dept: string; agents: CompanyAgentInfo[] }[] = []
+    let totalCount = 0
+    for (const [dept, group] of deptMap) {
+      departments.push({ dept, agents: group })
+      totalCount += group.length
+    }
+    layers.push({ layer, label: ORG_LAYER_LABELS[layer] ?? layer, icon: ORG_LAYER_ICONS[layer] ?? "▸", departments, totalCount })
+  }
+  for (const [layer, deptMap] of layerMap) {
+    if (ORG_LAYER_ORDER.includes(layer)) continue
+    const departments: { dept: string; agents: CompanyAgentInfo[] }[] = []
+    let totalCount = 0
+    for (const [dept, group] of deptMap) {
+      departments.push({ dept, agents: group })
+      totalCount += group.length
+    }
+    layers.push({ layer, label: ORG_LAYER_LABELS[layer] ?? layer, icon: ORG_LAYER_ICONS[layer] ?? "▸", departments, totalCount })
+  }
+  return { layers, unclassified }
+}
+
 function AgentManagementView(props: { params?: Record<string, unknown> }) {
   const { theme } = useTheme()
   const t = useLanguage().t
@@ -63,6 +131,17 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
   const [selectedID, setSelectedID] = createSignal<string | undefined>((props.params?.agentID as string) ?? undefined)
   const [confirmDelete, setConfirmDelete] = createSignal<string>()
   const [editing, setEditing] = createSignal(false)
+
+  // Detail view toggle — separate from selection so clicking an agent in the
+  // hierarchy highlights it + shows the right sidebar without leaving the tree.
+  const [showDetail, setShowDetail] = createSignal(!!props.params?.agentID)
+
+  // Collapsible group state: keys are "layer:<layer>" or "dept:<layer>:<dept>"
+  const [collapsed, setCollapsed] = createStore<Record<string, boolean>>({})
+  const toggle = (key: string) => setCollapsed(key, (prev) => !prev)
+  const isCollapsed = (key: string) => collapsed[key] ?? false
+
+  const [hoveredID, setHoveredID] = createSignal<string | undefined>()
 
   const [agents] = createResource(refetch, async () => {
     const res = await sdk.fetch(`${sdk.url}/company-agent`)
@@ -97,6 +176,39 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
     return (agents() ?? []).find((a) => a.id === sid) ?? null
   })
 
+  const grouped = createMemo(() => groupAgents(agents() ?? []))
+
+  createEffect(() => {
+    const incoming = props.params?.agentID as string | undefined
+    if (incoming !== undefined && incoming !== selectedID()) {
+      setSelectedID(incoming)
+      setShowDetail(true)
+    }
+  })
+
+  const goToAgent = (id: string) => {
+    const agent = (agents() ?? []).find((a) => a.id === id)
+    setSelectedID(id)
+    setShowDetail(true)
+    route.replace({
+      type: "plugin",
+      id: "agent-management",
+      data: { agentID: id, subLabel: agent?.name ?? id.slice(0, 8) },
+    })
+  }
+
+  const goToList = () => {
+    setSelectedID(undefined)
+    setShowDetail(false)
+    route.replace({ type: "plugin", id: "agent-management" })
+  }
+
+  // Select an agent in the hierarchy — highlights it + shows the right sidebar.
+  const selectAgent = (id: string) => {
+    setSelectedID(id)
+    setShowDetail(false)
+  }
+
   const openCreate = () => {
     dialog.replace(() => (
       <DialogCompanyAgentCreate
@@ -114,7 +226,10 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
       toast.show({ variant: "error", message: "Failed to delete agent" })
     } else {
       setRefetch((n) => n + 1)
-      if (selectedID() === agentID) setSelectedID(undefined)
+      if (selectedID() === agentID) {
+        setSelectedID(undefined)
+        setShowDetail(false)
+      }
     }
     setConfirmDelete(undefined)
   }
@@ -141,82 +256,198 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
     }
   }
 
-  // Right sidebar: agent quick-jump list with status.
+  // Right sidebar: contextual menu for the selected agent.
   createMemo(() => {
-    const list = agents() ?? []
-    const statuses = agentStatuses() ?? {}
+    const agent = selected()
+    if (!agent) {
+      rightSidebar.set(null)
+      return
+    }
+    const status = (agentStatuses() ?? {})[agent.id] ?? "idle"
     rightSidebar.set(() => (
-      <box height="100%" flexDirection="column">
-        <box flexShrink={0} paddingRight={1} paddingBottom={1}>
-          <text fg={theme.textMuted}>
-            <b>{t("tui.shell.right.agents")}</b>
+      <box height="100%" flexDirection="column" gap={1}>
+        {/* Agent identity */}
+        <box flexShrink={0} flexDirection="row" alignItems="center" gap={1}>
+          <text fg={theme[status === "busy" ? "warning" : status === "paused" ? "textMuted" : "success"]}>
+            {STATUS_ICON[status]}
+          </text>
+          <text fg={theme.text}>
+            {agent.icon ? agent.icon + " " : ""}
+            <b>{agent.name}</b>
           </text>
         </box>
-        <scrollbox flexGrow={1}>
-          <box flexShrink={0} gap={0} paddingRight={1}>
-            <For each={list}>
-              {(a) => {
-                const status = () => statuses[a.id] ?? "idle"
-                return (
-                  <box flexShrink={0} onMouseUp={() => setSelectedID(a.id)}>
-                    <text fg={a.id === selectedID() ? theme.accent : theme.text}>
-                      {STATUS_ICON[status()]}{" "}
-                      {a.icon ? a.icon + " " : ""}
-                      {a.name}
-                    </text>
-                  </box>
-                )
-              }}
-            </For>
+
+        {/* Department / org layer */}
+        <Show when={agent.department || agent.org_layer}>
+          <box flexShrink={0} paddingLeft={2}>
+            <text fg={theme.textMuted}>
+              {[agent.department, agent.org_layer ? ORG_LAYER_LABELS[agent.org_layer] ?? agent.org_layer : ""].filter(Boolean).join(" · ")}
+            </text>
           </box>
-        </scrollbox>
+        </Show>
+
+        <Show when={agent.description}>
+          <box flexShrink={0} paddingLeft={2}>
+            <text fg={theme.textMuted}>{agent.description}</text>
+          </box>
+        </Show>
+
+        <Show when={agent.model}>
+          <box flexShrink={0} paddingLeft={2}>
+            <text fg={theme.textMuted}>model: {agent.model}</text>
+          </box>
+        </Show>
+
+        {/* Separator */}
+        <box flexShrink={0} paddingTop={1} paddingBottom={1}>
+          <text fg={theme.border}>{"─".repeat(26)}</text>
+        </box>
+
+        {/* Actions */}
+        <box flexShrink={0} flexDirection="column" gap={1} paddingLeft={1}>
+          <box onMouseUp={() => goToAgent(agent.id)}>
+            <text fg={theme.accent}>📋 查看详情</text>
+          </box>
+          <box
+            onMouseUp={() =>
+              route.navigate({ type: "session", sessionID: `new-${Date.now()}`, agentID: agent.id })
+            }
+          >
+            <text fg={theme.success}>💬 开始对话</text>
+          </box>
+        </box>
       </box>
     ))
   })
 
   return (
     <box flexDirection="column" flexGrow={1} paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
-      <box flexShrink={0} flexDirection="row" alignItems="center" gap={1} paddingTop={1}>
-        <text fg={theme.text}>
-          <b>{t("tui.shell.route.agent-management")}</b>
-        </text>
-        <box flexGrow={1} />
-        <box onMouseUp={openCreate}>
-          <text fg={theme.accent}>+ new agent</text>
-        </box>
-      </box>
-
       <Show
-        when={selected()}
+        when={showDetail() && selected()}
         fallback={
           <scrollbox flexGrow={1}>
             <box flexDirection="column" gap={1} paddingTop={1}>
-              <For each={agents() ?? []}>
-                {(a) => {
-                  const status = () => (agentStatuses() ?? {})[a.id] ?? "idle"
-                  return (
-                    <box
-                      border={["left"]}
-                      borderColor={a.color ?? theme.border}
-                      flexShrink={0}
-                      onMouseUp={() => setSelectedID(a.id)}
-                    >
-                      <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
-                        <text fg={theme.text}>
-                          {STATUS_ICON[status()]}{" "}
-                          {a.icon ? a.icon + " " : ""}
-                          <b>{a.name}</b>
-                        </text>
-                        <Show when={a.description}>
-                          <text fg={theme.textMuted}>{a.description}</text>
+              <box flexShrink={0} flexDirection="row" justifyContent="flex-end">
+                <box onMouseUp={openCreate}>
+                  <text fg={theme.accent}>+ new agent</text>
+                </box>
+              </box>
+
+              <Show
+                when={(agents() ?? []).length > 0}
+                fallback={<text fg={theme.textMuted}>No agents yet — create one with "+ new agent".</text>}
+              >
+                {/* ── Hierarchical tree ───────────────────────── */}
+                <For each={grouped().layers}>
+                  {(layer) => {
+                    const layerKey = `layer:${layer.layer}`
+                    const layerCollapsed = isCollapsed(layerKey)
+                    return (
+                      <box flexDirection="column" gap={0}>
+                        {/* Layer header */}
+                        <box
+                          flexShrink={0}
+                          flexDirection="row"
+                          alignItems="center"
+                          gap={1}
+                          onMouseUp={() => toggle(layerKey)}
+                        >
+                          <text fg={theme.textMuted}>{layerCollapsed ? "▶" : "▼"}</text>
+                          <text fg={theme.text}>
+                            {layer.icon} <b>{layer.label}</b>
+                          </text>
+                          <text fg={theme.textMuted}>({layer.totalCount})</text>
+                        </box>
+
+                        <Show when={!layerCollapsed}>
+                          <For each={layer.departments}>
+                            {(dept) => {
+                              const deptKey = `dept:${layer.layer}:${dept.dept}`
+                              const deptCollapsed = isCollapsed(deptKey)
+                              return (
+                                <box flexDirection="column" gap={0} paddingLeft={2}>
+                                  {/* Department header */}
+                                  <box
+                                    flexShrink={0}
+                                    flexDirection="row"
+                                    alignItems="center"
+                                    gap={1}
+                                    onMouseUp={() => toggle(deptKey)}
+                                  >
+                                    <text fg={theme.textMuted}>{deptCollapsed ? "▶" : "▼"}</text>
+                                    <text fg={theme.textMuted}>
+                                      <b>{dept.dept}</b>
+                                    </text>
+                                    <text fg={theme.textMuted}>({dept.agents.length})</text>
+                                  </box>
+
+                                  <Show when={!deptCollapsed}>
+                                    <For each={dept.agents}>
+                                      {(a) => {
+                                        const status = () => (agentStatuses() ?? {})[a.id] ?? "idle"
+                                        const hover = () => hoveredID() === a.id
+                                        const isSelected = () => a.id === selectedID()
+                                        return (
+                                          <box
+                                            paddingLeft={3}
+                                            flexShrink={0}
+                                            onMouseUp={() => selectAgent(a.id)}
+                                            onMouseOver={() => setHoveredID(a.id)}
+                                            onMouseOut={() => setHoveredID(undefined)}
+                                            backgroundColor={hover() ? theme.backgroundElement : undefined}
+                                          >
+                                            <text fg={isSelected() ? theme.accent : theme.text}>
+                                              {STATUS_ICON[status()]}{" "}
+                                              {a.icon ? a.icon + " " : ""}
+                                              {a.name}
+                                            </text>
+                                          </box>
+                                        )
+                                      }}
+                                    </For>
+                                  </Show>
+                                </box>
+                              )
+                            }}
+                          </For>
                         </Show>
                       </box>
-                    </box>
-                  )
-                }}
-              </For>
-              <Show when={(agents() ?? []).length === 0}>
-                <text fg={theme.textMuted}>No agents yet — create one with "+ new agent".</text>
+                    )
+                  }}
+                </For>
+
+                {/* ── Unclassified agents ──────────────────────── */}
+                <Show when={grouped().unclassified.length > 0}>
+                  <box flexShrink={0} paddingTop={1} paddingBottom={1}>
+                    <text fg={theme.border}>{"─".repeat(30)}</text>
+                  </box>
+                  <box flexShrink={0} flexDirection="column" gap={0}>
+                    <text fg={theme.textMuted}>未分类</text>
+                    <For each={grouped().unclassified}>
+                      {(a) => {
+                        const status = () => (agentStatuses() ?? {})[a.id] ?? "idle"
+                        const hover = () => hoveredID() === a.id
+                        const isSelected = () => a.id === selectedID()
+                        return (
+                          <box
+                            paddingLeft={2}
+                            flexShrink={0}
+                            onMouseUp={() => selectAgent(a.id)}
+                            onMouseOver={() => setHoveredID(a.id)}
+                            onMouseOut={() => setHoveredID(undefined)}
+                            backgroundColor={hover() ? theme.backgroundElement : undefined}
+                          >
+                            <text fg={isSelected() ? theme.accent : theme.text}>
+                              {STATUS_ICON[status()]}{" "}
+                              {a.icon ? a.icon + " " : ""}
+                              {a.name}
+                            </text>
+                          </box>
+                        )
+                      }}
+                    </For>
+                  </box>
+                </Show>
               </Show>
             </box>
           </scrollbox>
@@ -225,9 +456,9 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
         {(agent) => (
           <scrollbox flexGrow={1}>
             <box flexDirection="column" gap={1} paddingTop={1}>
-              {/* Header row */}
+              {/* Back button */}
               <box flexShrink={0} flexDirection="row" alignItems="center" gap={1}>
-                <box onMouseUp={() => setSelectedID(undefined)}>
+                <box onMouseUp={goToList}>
                   <text fg={theme.accent}>← list</text>
                 </box>
                 <text fg={theme.text}>
@@ -239,6 +470,20 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
                   <text fg={theme.textMuted}>· {agent().model}</text>
                 </Show>
               </box>
+
+              {/* Org info */}
+              <Show when={agent().org_layer || agent().department}>
+                <box flexShrink={0} paddingLeft={2} flexDirection="row" gap={2}>
+                  <Show when={agent().org_layer}>
+                    <text fg={theme.textMuted}>
+                      layer: {ORG_LAYER_LABELS[agent().org_layer!] ?? agent().org_layer}
+                    </text>
+                  </Show>
+                  <Show when={agent().department}>
+                    <text fg={theme.textMuted}>dept: {agent().department}</text>
+                  </Show>
+                </box>
+              </Show>
 
               <Show when={agent().description}>
                 <box flexShrink={0} paddingLeft={2}>

@@ -74,6 +74,15 @@ function buildBreadcrumb(
   for (const node of chain) {
     items.push({ route: node, label: routeLabel(node, t, sync) })
   }
+
+  // For plugin routes with a sub-label (e.g. agent-management > agent detail),
+  // add an additional breadcrumb level so the page doesn't render its own title bar.
+  if (r.type === "plugin" && r.data?.subLabel) {
+    const listRoute: Route = { type: "plugin", id: r.id }
+    items[items.length - 1] = { route: listRoute, label: routeLabel(listRoute, t, sync) }
+    items.push({ route: r, label: String(r.data.subLabel) })
+  }
+
   return items
 }
 
