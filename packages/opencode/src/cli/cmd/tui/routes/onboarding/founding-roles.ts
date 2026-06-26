@@ -1,11 +1,19 @@
-// Maps a business scope to the founding roles we recruit for it. Each role is
-// resolved against the bundled agent-template library via a keyword search in a
-// division, so we never hardcode template slugs that might drift. A fallback is
-// used when the library has no match, guaranteeing the founding team always
-// assembles even offline.
+// Maps a business scope or org template to the founding roles we recruit.
+// Each role is resolved against the bundled agent-template library via a
+// keyword search in a division, so we never hardcode template slugs that
+// might drift. A fallback is used when the library has no match, guaranteeing
+// the founding team always assembles even offline.
+//
+// Two resolution paths:
+//   1. Template-based (new): OrgTemplateService.flatRoles(template) — preferred
+//   2. Scope-based (legacy): resolveFoundingRoles(scopes) — still works for custom flows
 
-export interface FoundingRoleSpec {
-  // Stable key so the same role isn't recruited twice across overlapping scopes.
+import { OrgTemplateService, type FlatRole } from "@/company-agent/org-templates"
+
+export type { FlatRole as FoundingRoleSpec }
+
+// Re-export the old interface shape for backward compat.
+export interface LegacyFoundingRoleSpec {
   key: string
   division: string
   query: string
@@ -20,7 +28,7 @@ export interface FoundingRoleSpec {
 // Business scopes shown to the user are the presets in business-scope-cards.tsx
 // (saas / content / consulting / ecommerce / agency) plus any free-form custom
 // scope. Custom scopes fall back to the generalist founders below.
-const SCOPE_ROLES: Record<string, FoundingRoleSpec[]> = {
+const SCOPE_ROLES: Record<string, LegacyFoundingRoleSpec[]> = {
   saas: [
     {
       key: "cto",
@@ -94,7 +102,7 @@ const SCOPE_ROLES: Record<string, FoundingRoleSpec[]> = {
 }
 
 // Generalist founders for custom / unknown scopes — a builder and a strategist.
-const DEFAULT_ROLES: FoundingRoleSpec[] = [
+const DEFAULT_ROLES: LegacyFoundingRoleSpec[] = [
   {
     key: "chief-of-staff",
     division: "specialized",
@@ -109,14 +117,53 @@ const DEFAULT_ROLES: FoundingRoleSpec[] = [
   },
 ]
 
-// Resolve the founding roles for the selected scopes: union across scopes,
-// deduped by key, clamped to a tight 2-3 person core team.
-export function resolveFoundingRoles(scopes: string[]): FoundingRoleSpec[] {
+// Map legacy scope keys to org template IDs for smooth migration.
+const SCOPE_TO_TEMPLATE: Record<string, string> = {
+  saas: "startup-saas",
+  content: "startup-content",
+  consulting: "consulting-boutique",
+  ecommerce: "ecommerce-dtc",
+  agency: "agency-digital",
+}
+
+/**
+ * Resolve founding roles from an org template ID. Preferred path for the
+ * new onboarding flow. Returns null if the template doesn't exist.
+ */
+export function resolveTemplateRoles(templateId: string): FlatRole[] | null {
+  const tpl = OrgTemplateService.get(templateId)
+  if (!tpl) return null
+  return OrgTemplateService.flatRoles(tpl)
+}
+
+/**
+ * Resolve founding roles from business scopes (legacy path).
+ * Tries to map each scope to an org template first; falls back to
+ * the hardcoded SCOPE_ROLES for custom/unknown scopes.
+ */
+export function resolveFoundingRoles(scopes: string[]): FlatRole[] {
+  // Try template-based resolution first for known scopes.
+  const templateIds = scopes.map((s) => SCOPE_TO_TEMPLATE[s]).filter(Boolean)
+  if (templateIds.length > 0) {
+    const tpl = OrgTemplateService.get(templateIds[0]!)
+    if (tpl) return OrgTemplateService.flatRoles(tpl)
+  }
+
+  // Fallback: legacy scope-based resolution, wrapped to match FlatRole.
   const seen = new Set<string>()
   const roles = scopes
     .flatMap((scope) => SCOPE_ROLES[scope] ?? DEFAULT_ROLES)
     .filter((role) => (seen.has(role.key) ? false : (seen.add(role.key), true)))
 
   const picked = roles.length >= 2 ? roles : [...roles, ...DEFAULT_ROLES.filter((r) => !seen.has(r.key))]
-  return picked.slice(0, 3)
+  return picked.slice(0, 3).map((r) => ({
+    key: r.key,
+    division: r.division,
+    query: r.query,
+    fallback: r.fallback,
+    level: "lead" as const,
+    reportsTo: null,
+    divisionName: r.division,
+    divisionNameEn: r.division,
+  }))
 }

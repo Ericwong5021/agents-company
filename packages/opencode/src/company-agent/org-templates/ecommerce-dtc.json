@@ -1,0 +1,92 @@
+{
+  "id": "ecommerce-dtc",
+  "name": "DTC 电商品牌",
+  "nameEn": "DTC E-commerce Brand",
+  "description": "直接面向消费者的电商品牌，供应链与增长并重",
+  "descriptionEn": "Direct-to-consumer brand balancing supply chain and growth",
+  "icon": "🛒",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "运营",
+      "nameEn": "Operations",
+      "roles": [
+        {
+          "key": "ops-lead",
+          "division": "project-management",
+          "templateQuery": "operations supply chain",
+          "fallback": {
+            "name": "运营负责人",
+            "nameEn": "Operations Lead",
+            "description": "打理供应链、库存与日常运营，确保履约效率",
+            "descriptionEn": "Manages supply chain, inventory, and fulfillment operations",
+            "icon": "📦",
+            "color": "#0EA5E9"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "增长",
+      "nameEn": "Growth",
+      "roles": [
+        {
+          "key": "growth-lead",
+          "division": "marketing",
+          "templateQuery": "growth acquisition ecommerce",
+          "fallback": {
+            "name": "增长负责人",
+            "nameEn": "Growth Lead",
+            "description": "负责获客投放、转化优化与用户复购策略",
+            "descriptionEn": "Owns acquisition, conversion optimization, and retention",
+            "icon": "📈",
+            "color": "#10B981"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "产品",
+      "nameEn": "Product",
+      "roles": [
+        {
+          "key": "product-lead",
+          "division": "product",
+          "templateQuery": "product manager ecommerce",
+          "fallback": {
+            "name": "产品负责人",
+            "nameEn": "Product Lead",
+            "description": "规划产品线、定价策略与用户体验优化",
+            "descriptionEn": "Plans product lines, pricing strategy, and UX optimization",
+            "icon": "🧭",
+            "color": "#8B5CF6"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "优化选品与定价策略",
+      "titleEn": "Optimize product selection and pricing",
+      "description": "分析销售数据，调整 SKU 组合和定价",
+      "descriptionEn": "Analyze sales data to adjust SKU mix and pricing",
+      "assigneeRoleKey": "product-lead",
+      "status": "in-progress"
+    },
+    {
+      "title": "搭建自动化投放体系",
+      "titleEn": "Build automated ad system",
+      "description": "设置广告投放规则、A/B 测试框架和 ROI 监控",
+      "descriptionEn": "Set up ad rules, A/B testing framework, and ROI monitoring",
+      "assigneeRoleKey": "growth-lead",
+      "status": "todo"
+    }
+  ]
+}

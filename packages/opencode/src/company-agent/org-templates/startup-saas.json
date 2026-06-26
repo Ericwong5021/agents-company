@@ -1,0 +1,121 @@
+{
+  "id": "startup-saas",
+  "name": "SaaS 创业公司",
+  "nameEn": "SaaS Startup",
+  "description": "快速迭代的软件即服务公司，技术与产品驱动",
+  "descriptionEn": "Fast-moving SaaS company driven by engineering and product",
+  "icon": "🚀",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "技术",
+      "nameEn": "Engineering",
+      "roles": [
+        {
+          "key": "cto",
+          "division": "engineering",
+          "templateQuery": "engineering lead architect",
+          "fallback": {
+            "name": "技术合伙人 (CTO)",
+            "nameEn": "Co-founder & CTO",
+            "description": "负责产品架构与技术方向，带领技术团队实现产品愿景",
+            "descriptionEn": "Leads product architecture and technical direction",
+            "icon": "🛠",
+            "color": "#3B82F6"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "产品",
+      "nameEn": "Product",
+      "roles": [
+        {
+          "key": "cpo",
+          "division": "product",
+          "templateQuery": "product manager strategy",
+          "fallback": {
+            "name": "产品负责人 (CPO)",
+            "nameEn": "Head of Product",
+            "description": "把握产品定位与路线图，将用户需求转化为产品方案",
+            "descriptionEn": "Owns product vision, roadmap, and user experience",
+            "icon": "🧭",
+            "color": "#8B5CF6"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "增长",
+      "nameEn": "Growth",
+      "roles": [
+        {
+          "key": "growth-lead",
+          "division": "marketing",
+          "templateQuery": "growth acquisition funnel",
+          "fallback": {
+            "name": "增长负责人",
+            "nameEn": "Growth Lead",
+            "description": "负责获客漏斗、渠道增长与用户留存策略",
+            "descriptionEn": "Owns acquisition funnels, channel growth, and retention",
+            "icon": "📈",
+            "color": "#10B981"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "设计",
+      "nameEn": "Design",
+      "roles": [
+        {
+          "key": "designer",
+          "division": "design",
+          "templateQuery": "ui ux designer",
+          "fallback": {
+            "name": "产品设计师",
+            "nameEn": "Product Designer",
+            "description": "负责用户体验与界面设计，让产品既好用又好看",
+            "descriptionEn": "Crafts user experience and visual design",
+            "icon": "🎨",
+            "color": "#EC4899"
+          },
+          "level": "ic",
+          "reportsTo": "cpo"
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "定义 MVP 核心功能列表",
+      "titleEn": "Define MVP core feature list",
+      "description": "梳理第一批上线必须包含的功能，明确优先级",
+      "descriptionEn": "Identify must-have features for the first release",
+      "assigneeRoleKey": "cpo",
+      "status": "in-progress"
+    },
+    {
+      "title": "搭建技术脚手架",
+      "titleEn": "Set up technical scaffold",
+      "description": "初始化项目结构、CI/CD 流水线、数据库 schema",
+      "descriptionEn": "Initialize project structure, CI/CD, and database schema",
+      "assigneeRoleKey": "cto",
+      "status": "todo"
+    },
+    {
+      "title": "设计落地页与注册流程",
+      "titleEn": "Design landing page and signup flow",
+      "description": "设计产品官网和新用户注册引导流程",
+      "descriptionEn": "Design the marketing site and new-user onboarding",
+      "assigneeRoleKey": "designer",
+      "status": "todo"
+    }
+  ]
+}

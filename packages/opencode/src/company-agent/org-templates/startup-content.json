@@ -1,0 +1,92 @@
+{
+  "id": "startup-content",
+  "name": "内容创业公司",
+  "nameEn": "Content Startup",
+  "description": "内容驱动的增长公司，以优质内容获取和留存用户",
+  "descriptionEn": "Content-driven growth company using quality content for user acquisition",
+  "icon": "✍️",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "内容",
+      "nameEn": "Content",
+      "roles": [
+        {
+          "key": "content-lead",
+          "division": "marketing",
+          "templateQuery": "content strategy editor",
+          "fallback": {
+            "name": "内容主理人",
+            "nameEn": "Content Lead",
+            "description": "策划内容方向与选题，把控内容质量与品牌调性",
+            "descriptionEn": "Defines content strategy, editorial direction, and brand voice",
+            "icon": "✍",
+            "color": "#F59E0B"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "增长",
+      "nameEn": "Growth",
+      "roles": [
+        {
+          "key": "growth-lead",
+          "division": "marketing",
+          "templateQuery": "growth audience community",
+          "fallback": {
+            "name": "增长负责人",
+            "nameEn": "Growth Lead",
+            "description": "负责获客渠道、社群运营与用户增长",
+            "descriptionEn": "Owns acquisition channels, community, and audience growth",
+            "icon": "📈",
+            "color": "#10B981"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "制作",
+      "nameEn": "Production",
+      "roles": [
+        {
+          "key": "producer",
+          "division": "design",
+          "templateQuery": "creative producer multimedia",
+          "fallback": {
+            "name": "内容制作人",
+            "nameEn": "Content Producer",
+            "description": "负责内容制作执行，包括视频、图文、播客等多媒体",
+            "descriptionEn": "Executes content production across video, text, and audio",
+            "icon": "🎬",
+            "color": "#EC4899"
+          },
+          "level": "ic",
+          "reportsTo": "content-lead"
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "制定内容日历",
+      "titleEn": "Create content calendar",
+      "description": "规划未来 4 周的内容发布计划，覆盖主要渠道",
+      "descriptionEn": "Plan 4-week content schedule across key channels",
+      "assigneeRoleKey": "content-lead",
+      "status": "in-progress"
+    },
+    {
+      "title": "分析竞品内容策略",
+      "titleEn": "Analyze competitor content strategy",
+      "description": "研究 3-5 个竞品的内容方向、频率和互动数据",
+      "descriptionEn": "Research 3-5 competitors' content approach and engagement",
+      "assigneeRoleKey": "growth-lead",
+      "status": "todo"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "solo-creator",
+  "name": "独立创作者",
+  "nameEn": "Solo Creator",
+  "description": "最小团队配置，一个助手加一个专才就够了",
+  "descriptionEn": "Minimal team — just an assistant and one specialist",
+  "icon": "👤",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "专才",
+      "nameEn": "Specialist",
+      "roles": [
+        {
+          "key": "all-rounder",
+          "division": "specialized",
+          "templateQuery": "general assistant versatile",
+          "fallback": {
+            "name": "全能助手",
+            "nameEn": "All-Round Assistant",
+            "description": "能写能查能分析，是创作者的第二双手",
+            "descriptionEn": "Writes, researches, and analyzes — the creator's second pair of hands",
+            "icon": "⚡",
+            "color": "#6366F1"
+          },
+          "level": "ic",
+          "reportsTo": null
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "整理创作素材库",
+      "titleEn": "Organize creative material library",
+      "description": "收集和分类常用的图片、文案模板和参考案例",
+      "descriptionEn": "Collect and categorize images, copy templates, and references",
+      "assigneeRoleKey": "all-rounder",
+      "status": "in-progress"
+    }
+  ]
+}

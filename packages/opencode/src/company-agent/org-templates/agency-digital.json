@@ -1,0 +1,92 @@
+{
+  "id": "agency-digital",
+  "name": "数字代理商",
+  "nameEn": "Digital Agency",
+  "description": "营销、设计或开发代理，以创意和执行力服务客户",
+  "descriptionEn": "Marketing, design, or dev agency serving clients with creativity and execution",
+  "icon": "🎨",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "创意",
+      "nameEn": "Creative",
+      "roles": [
+        {
+          "key": "creative-director",
+          "division": "design",
+          "templateQuery": "creative director brand",
+          "fallback": {
+            "name": "创意总监",
+            "nameEn": "Creative Director",
+            "description": "把控创意方向与品牌表达，确保出品质量",
+            "descriptionEn": "Owns creative direction and brand expression quality",
+            "icon": "🎨",
+            "color": "#EC4899"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "客户",
+      "nameEn": "Accounts",
+      "roles": [
+        {
+          "key": "account-exec",
+          "division": "sales",
+          "templateQuery": "account executive client management",
+          "fallback": {
+            "name": "客户总监",
+            "nameEn": "Account Director",
+            "description": "拓展客户关系与商务合作，确保客户满意度",
+            "descriptionEn": "Develops client relationships and ensures satisfaction",
+            "icon": "🤝",
+            "color": "#F97316"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "项目",
+      "nameEn": "Project Management",
+      "roles": [
+        {
+          "key": "pm",
+          "division": "project-management",
+          "templateQuery": "project manager delivery",
+          "fallback": {
+            "name": "项目经理",
+            "nameEn": "Project Manager",
+            "description": "管理项目进度与资源分配，确保按时交付",
+            "descriptionEn": "Manages project timelines, resources, and delivery",
+            "icon": "📋",
+            "color": "#0EA5E9"
+          },
+          "level": "ic",
+          "reportsTo": "creative-director"
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "制定客户服务手册",
+      "titleEn": "Create client service playbook",
+      "description": "标准化从接洽到交付的全流程，提升服务质量",
+      "descriptionEn": "Standardize the full client journey from pitch to delivery",
+      "assigneeRoleKey": "account-exec",
+      "status": "in-progress"
+    },
+    {
+      "title": "建立创意资产库",
+      "titleEn": "Build creative asset library",
+      "description": "整理设计模板、品牌指南和案例作品集",
+      "descriptionEn": "Organize design templates, brand guidelines, and portfolio",
+      "assigneeRoleKey": "creative-director",
+      "status": "todo"
+    }
+  ]
+}

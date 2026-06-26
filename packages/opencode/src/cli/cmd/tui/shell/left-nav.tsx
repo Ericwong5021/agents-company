@@ -111,6 +111,12 @@ export function LeftNav(props: { overlay?: boolean; collapsed?: boolean; onToggl
       },
       {
         kind: "nav",
+        label: t("tui.shell.nav.workstation"),
+        active: isCurrentNav("workstation"),
+        onSelect: () => navToPlugin("workstation"),
+      },
+      {
+        kind: "nav",
         label: t("tui.shell.nav.settings"),
         active: isCurrentNav("settings"),
         onSelect: () => navToPlugin("settings"),

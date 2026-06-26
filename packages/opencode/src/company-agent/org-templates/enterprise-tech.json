@@ -1,0 +1,144 @@
+{
+  "id": "enterprise-tech",
+  "name": "企业级科技公司",
+  "nameEn": "Enterprise Tech Company",
+  "description": "企业级科技公司，多部门协作，流程规范化",
+  "descriptionEn": "Enterprise tech company with cross-department collaboration and formal processes",
+  "icon": "🏢",
+  "tier": "advanced",
+  "divisions": [
+    {
+      "name": "技术",
+      "nameEn": "Engineering",
+      "roles": [
+        {
+          "key": "vp-eng",
+          "division": "engineering",
+          "templateQuery": "vp engineering architecture",
+          "fallback": {
+            "name": "技术副总裁 (VP Eng)",
+            "nameEn": "VP of Engineering",
+            "description": "统筹技术团队与架构决策，确保系统可靠性与可扩展性",
+            "descriptionEn": "Leads engineering org, architecture decisions, and system reliability",
+            "icon": "🛠",
+            "color": "#3B82F6"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        },
+        {
+          "key": "devops-lead",
+          "division": "engineering",
+          "templateQuery": "devops infrastructure cloud",
+          "fallback": {
+            "name": "DevOps 负责人",
+            "nameEn": "DevOps Lead",
+            "description": "负责基础设施、CI/CD 流水线与生产环境运维",
+            "descriptionEn": "Owns infrastructure, CI/CD pipelines, and production operations",
+            "icon": "⚙️",
+            "color": "#6366F1"
+          },
+          "level": "lead",
+          "reportsTo": "vp-eng"
+        }
+      ]
+    },
+    {
+      "name": "产品",
+      "nameEn": "Product",
+      "roles": [
+        {
+          "key": "vp-product",
+          "division": "product",
+          "templateQuery": "vp product strategy",
+          "fallback": {
+            "name": "产品副总裁 (VP Product)",
+            "nameEn": "VP of Product",
+            "description": "制定产品战略与路线图，平衡用户需求与商业目标",
+            "descriptionEn": "Sets product strategy and roadmap, balancing user and business needs",
+            "icon": "🧭",
+            "color": "#8B5CF6"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "质量",
+      "nameEn": "Quality Assurance",
+      "roles": [
+        {
+          "key": "qa-lead",
+          "division": "testing",
+          "templateQuery": "qa lead testing automation",
+          "fallback": {
+            "name": "QA 负责人",
+            "nameEn": "QA Lead",
+            "description": "负责质量保障体系、自动化测试与发布验收",
+            "descriptionEn": "Owns quality assurance, test automation, and release validation",
+            "icon": "🔍",
+            "color": "#F59E0B"
+          },
+          "level": "lead",
+          "reportsTo": "vp-eng"
+        }
+      ]
+    },
+    {
+      "name": "安全",
+      "nameEn": "Security",
+      "roles": [
+        {
+          "key": "security-lead",
+          "division": "security",
+          "templateQuery": "security engineer compliance",
+          "fallback": {
+            "name": "安全负责人",
+            "nameEn": "Security Lead",
+            "description": "负责应用安全、合规审计与威胁防护",
+            "descriptionEn": "Owns application security, compliance, and threat protection",
+            "icon": "🛡",
+            "color": "#EF4444"
+          },
+          "level": "lead",
+          "reportsTo": "vp-eng"
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "制定季度 OKR",
+      "titleEn": "Define quarterly OKRs",
+      "description": "协调各部门制定 Q3 目标与关键结果",
+      "descriptionEn": "Coordinate Q3 objectives and key results across departments",
+      "assigneeRoleKey": "vp-product",
+      "status": "in-progress"
+    },
+    {
+      "title": "建立安全审计流程",
+      "titleEn": "Establish security audit process",
+      "description": "制定代码审计、依赖扫描和渗透测试的标准流程",
+      "descriptionEn": "Define code review, dependency scanning, and pen-test standards",
+      "assigneeRoleKey": "security-lead",
+      "status": "todo"
+    },
+    {
+      "title": "优化部署流水线",
+      "titleEn": "Optimize deployment pipeline",
+      "description": "将部署时间从 30 分钟缩短到 10 分钟，增加灰度发布能力",
+      "descriptionEn": "Reduce deploy time from 30min to 10min, add canary releases",
+      "assigneeRoleKey": "devops-lead",
+      "status": "todo"
+    },
+    {
+      "title": "搭建 E2E 测试框架",
+      "titleEn": "Build E2E test framework",
+      "description": "建立端到端自动化测试覆盖核心业务流程",
+      "descriptionEn": "Establish E2E automation covering core business flows",
+      "assigneeRoleKey": "qa-lead",
+      "status": "todo"
+    }
+  ]
+}

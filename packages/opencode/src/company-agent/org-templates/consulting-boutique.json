@@ -1,0 +1,92 @@
+{
+  "id": "consulting-boutique",
+  "name": "精品咨询公司",
+  "nameEn": "Boutique Consulting Firm",
+  "description": "专业咨询与顾问服务，以深度专业能力服务客户",
+  "descriptionEn": "Professional consulting firm delivering deep expertise to clients",
+  "icon": "💼",
+  "tier": "starter",
+  "divisions": [
+    {
+      "name": "运营",
+      "nameEn": "Operations",
+      "roles": [
+        {
+          "key": "chief-of-staff",
+          "division": "specialized",
+          "templateQuery": "chief of staff operations",
+          "fallback": {
+            "name": "幕僚长",
+            "nameEn": "Chief of Staff",
+            "description": "统筹运营与重大决策，是公司的中枢协调者",
+            "descriptionEn": "Coordinates operations and major decisions",
+            "icon": "🗂",
+            "color": "#6366F1"
+          },
+          "level": "c-suite",
+          "reportsTo": null
+        }
+      ]
+    },
+    {
+      "name": "分析",
+      "nameEn": "Analytics",
+      "roles": [
+        {
+          "key": "analyst",
+          "division": "finance",
+          "templateQuery": "financial analyst research",
+          "fallback": {
+            "name": "高级分析师",
+            "nameEn": "Senior Analyst",
+            "description": "深度数据分析与行业研究，为客户提供洞察",
+            "descriptionEn": "Delivers data analysis and industry research insights",
+            "icon": "📊",
+            "color": "#22C55E"
+          },
+          "level": "ic",
+          "reportsTo": "chief-of-staff"
+        }
+      ]
+    },
+    {
+      "name": "商务",
+      "nameEn": "Business Development",
+      "roles": [
+        {
+          "key": "bd-lead",
+          "division": "sales",
+          "templateQuery": "business development client",
+          "fallback": {
+            "name": "商务拓展",
+            "nameEn": "BD Lead",
+            "description": "拓展客户关系与商务合作，维护核心客户",
+            "descriptionEn": "Develops client relationships and business partnerships",
+            "icon": "🤝",
+            "color": "#F97316"
+          },
+          "level": "lead",
+          "reportsTo": null
+        }
+      ]
+    }
+  ],
+  "sampleTasks": [
+    {
+      "title": "准备客户提案模板",
+      "titleEn": "Prepare client proposal template",
+      "description": "创建标准化的咨询提案模板，包含方法论和案例",
+      "descriptionEn": "Create standardized proposal template with methodology and cases",
+      "assigneeRoleKey": "chief-of-staff",
+      "status": "in-progress"
+    },
+    {
+      "title": "建立行业研究知识库",
+      "titleEn": "Build industry research knowledge base",
+      "description": "整理核心行业的数据源、分析框架和报告模板",
+      "descriptionEn": "Organize data sources, frameworks, and report templates",
+      "assigneeRoleKey": "analyst",
+      "status": "todo"
+    }
+  ]
+}
