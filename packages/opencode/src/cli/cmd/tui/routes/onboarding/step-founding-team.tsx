@@ -260,14 +260,14 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
           }
         >
           {/* Org-chart style: grouped by division */}
-          <box flexDirection="column" gap={1} paddingTop={1}>
+          <box flexDirection="column" gap={0} paddingTop={1}>
             <For each={Array.from(groupedFounders())}>
               {([divName, members]) => (
-                <box flexDirection="column" gap={0}>
-                  <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                    📁 {divName}
+                <box flexDirection="row" gap={2} alignItems="center">
+                  <text fg={theme.primary} attributes={TextAttributes.BOLD} minWidth={10}>
+                    {divName}
                   </text>
-                  <box flexDirection="row" gap={2} flexWrap="wrap" paddingLeft={2}>
+                  <box flexDirection="row" gap={2} flexWrap="wrap">
                     <For each={members}>
                       {(f) => (
                         <FounderCard founder={f} theme={theme} dialog={dialog} />
