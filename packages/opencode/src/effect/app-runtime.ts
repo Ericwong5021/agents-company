@@ -62,6 +62,7 @@ import { CompanyAgent } from "@/company-agent"
 import { GroupSession } from "@/group-session"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
+import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -129,6 +130,7 @@ export const AppLayer = Layer.suspend(() =>
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     Org.defaultLayer,
+    ReputationLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 
