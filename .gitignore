@@ -33,6 +33,8 @@ a.out
 # Local tooling state
 .codex
 .claude/
+.codebuddy/
+.workbuddy/
 .agents-company/
 .mimo-worktrees
 **/.serena
