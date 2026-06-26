@@ -35,12 +35,12 @@ interface ThreadInfo {
   time: { created: number; updated: number }
 }
 
-type AgentStatus = "idle" | "busy" | "focused"
+type AgentStatus = "idle" | "busy" | "paused"
 
 const STATUS_ICON: Record<AgentStatus, string> = {
   idle: "○",
-  busy: "◐",
-  focused: "◉",
+  busy: "◉",
+  paused: "◐",
 }
 
 function formatTokens(n: number): string {
@@ -231,7 +231,7 @@ function AgentManagementView(props: { params?: Record<string, unknown> }) {
                   <text fg={theme.accent}>← list</text>
                 </box>
                 <text fg={theme.text}>
-                  {(agentStatuses() ?? {})[agent().id] === "focused" ? STATUS_ICON.focused : (agentStatuses() ?? {})[agent().id] === "busy" ? STATUS_ICON.busy : STATUS_ICON.idle}{" "}
+                  {(agentStatuses() ?? {})[agent().id] === "busy" ? STATUS_ICON.busy : (agentStatuses() ?? {})[agent().id] === "paused" ? STATUS_ICON.paused : STATUS_ICON.idle}{" "}
                   {agent().icon ? agent().icon + " " : ""}
                   <b>{agent().name}</b>
                 </text>

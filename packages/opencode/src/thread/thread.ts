@@ -1,6 +1,6 @@
 import z from "zod"
 import { eq, and } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { Database } from "../storage"
 import { ThreadTable } from "./thread.sql"
 import { ThreadID, ThreadKind, ThreadStatus } from "./schema"
@@ -8,6 +8,47 @@ import type { SessionID } from "../session/schema"
 import { Identifier } from "@/id/id"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
+import { Log } from "@/util"
+
+const log = Log.create({ service: "thread" })
+
+// ---------------------------------------------------------------------------
+// Error types
+// ---------------------------------------------------------------------------
+
+export class PrimaryThreadExists extends Schema.TaggedErrorClass<PrimaryThreadExists>()("PrimaryThreadExists", {
+  agentID: Schema.String,
+  existingThreadID: Schema.String,
+}) {}
+
+export class ReactiveRateLimited extends Schema.TaggedErrorClass<ReactiveRateLimited>()("ReactiveRateLimited", {
+  agentID: Schema.String,
+  count: Schema.Number,
+  limit: Schema.Number,
+}) {}
+
+export class ThreadNotFound extends Schema.TaggedErrorClass<ThreadNotFound>()("ThreadNotFound", {
+  id: Schema.String,
+}) {}
+
+export class InvalidTransition extends Schema.TaggedErrorClass<InvalidTransition>()("InvalidTransition", {
+  from: Schema.String,
+  to: Schema.String,
+}) {}
+
+// ---------------------------------------------------------------------------
+// Rate limits
+// ---------------------------------------------------------------------------
+
+/** Max concurrent active reactive threads per agent. */
+export const REACTIVE_RATE_LIMIT = 3
+
+// Valid status transitions: from → allowed-to[]
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  active: ["paused", "completed"],
+  paused: ["active", "completed"],
+  completed: [], // terminal state
+}
 
 // ---------------------------------------------------------------------------
 // Info schema
@@ -55,6 +96,21 @@ export const UpdateInput = z.object({
 export type UpdateInput = z.infer<typeof UpdateInput>
 
 // ---------------------------------------------------------------------------
+// Agent activity (activity registry)
+// ---------------------------------------------------------------------------
+
+export const AgentActivity = z.object({
+  agentID: z.string(),
+  activeThreads: z.array(Info),
+  primaryCount: z.number(),
+  reactiveCount: z.number(),
+  ambientCount: z.number(),
+  totalBudgetSpent: z.number(),
+  isBusy: z.boolean(),
+})
+export type AgentActivity = z.infer<typeof AgentActivity>
+
+// ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
 
@@ -100,9 +156,13 @@ export interface Interface {
   readonly listActive: () => Effect.Effect<Info[]>
   readonly update: (input: UpdateInput) => Effect.Effect<Info>
   readonly complete: (id: ThreadID) => Effect.Effect<Info>
-  readonly canAssign: (agentID: string, kind: ThreadKind) => Effect.Effect<boolean>
+  /** Check if agent can accept new work of given kind. */
+  readonly canAccept: (agentID: string, kind: ThreadKind) => Effect.Effect<boolean>
   readonly addTokens: (id: ThreadID, tokens: number) => Effect.Effect<Info>
-  readonly agentStatus: (agentID: string) => Effect.Effect<"idle" | "busy" | "focused">
+  /** Agent-level rollup: idle | busy | paused. */
+  readonly agentStatus: (agentID: string) => Effect.Effect<"idle" | "busy" | "paused">
+  /** Per-agent activity summary for the activity registry. */
+  readonly agentActivity: (agentID: string) => Effect.Effect<AgentActivity>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Thread") {}
@@ -127,7 +187,36 @@ export const layer: Layer.Layer<Service> = Layer.effect(
           ),
         )
         if (existing.length > 0)
-          yield* Effect.die(new Error(`Thread.create: agent "${input.agentID}" already has an active primary thread`))
+          yield* new PrimaryThreadExists({
+            agentID: input.agentID,
+            existingThreadID: existing[0].id,
+          })
+      }
+
+      // Reactive rate limit: cap concurrent active reactive threads per agent
+      if (input.kind === "reactive") {
+        const activeReactive = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select()
+              .from(ThreadTable)
+              .where(
+                and(
+                  eq(ThreadTable.agent_id, input.agentID),
+                  eq(ThreadTable.kind, "reactive"),
+                  eq(ThreadTable.status, "active"),
+                ),
+              )
+              .all(),
+          ),
+        )
+        if (activeReactive.length >= REACTIVE_RATE_LIMIT) {
+          yield* new ReactiveRateLimited({
+            agentID: input.agentID,
+            count: activeReactive.length,
+            limit: REACTIVE_RATE_LIMIT,
+          })
+        }
       }
 
       const now = Date.now()
@@ -190,6 +279,16 @@ export const layer: Layer.Layer<Service> = Layer.effect(
     })
 
     const update = Effect.fn("Thread.update")(function* (input: UpdateInput) {
+      // Validate status transition if status is being changed
+      if (input.status !== undefined) {
+        const current = yield* get(input.id)
+        if (!current) yield* new ThreadNotFound({ id: input.id })
+        const allowed = VALID_TRANSITIONS[current!.status] ?? []
+        if (!allowed.includes(input.status)) {
+          yield* new InvalidTransition({ from: current!.status, to: input.status })
+        }
+      }
+
       const now = Date.now()
       const patch: Record<string, unknown> = { time_updated: now }
       if (input.status !== undefined) patch.status = input.status
@@ -234,7 +333,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return yield* update({ id, spentTokens: newSpent } as UpdateInput)
     })
 
-    const canAssign = Effect.fn("Thread.canAssign")(function* (agentID: string, kind: ThreadKind) {
+    const canAccept = Effect.fn("Thread.canAccept")(function* (agentID: string, kind: ThreadKind) {
       if (kind === "primary") {
         const existing = yield* Effect.sync(() =>
           Database.use((db) =>
@@ -247,7 +346,25 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         )
         return existing.length === 0
       }
-      // reactive and ambient: check budget if set
+      if (kind === "reactive") {
+        const activeReactive = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select()
+              .from(ThreadTable)
+              .where(
+                and(
+                  eq(ThreadTable.agent_id, agentID),
+                  eq(ThreadTable.kind, "reactive"),
+                  eq(ThreadTable.status, "active"),
+                ),
+              )
+              .all(),
+          ),
+        )
+        if (activeReactive.length >= REACTIVE_RATE_LIMIT) return false
+      }
+      // Check budget constraints on all active threads
       const threads = yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -271,19 +388,56 @@ export const layer: Layer.Layer<Service> = Layer.effect(
           db
             .select()
             .from(ThreadTable)
-            .where(and(eq(ThreadTable.agent_id, agentID), eq(ThreadTable.status, "active")))
+            .where(eq(ThreadTable.agent_id, agentID))
             .all(),
         ),
       )
-      if (threads.length === 0) return "idle" as const
-      const hasPrimary = threads.some((t) => t.kind === "primary")
-      if (hasPrimary) return "focused" as const
-      return "busy" as const
+      return rollupAgentStatus(threads.map(fromRow))
     })
 
-    return { create, get, listByAgent, listActive, update, complete, canAssign, addTokens, agentStatus }
+    const agentActivity = Effect.fn("Thread.agentActivity")(function* (agentID: string) {
+      const allThreads = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(ThreadTable)
+            .where(eq(ThreadTable.agent_id, agentID))
+            .all(),
+        ),
+      )
+      const infos = allThreads.map(fromRow)
+      const active = infos.filter((t) => t.status === "active")
+      const primaryCount = active.filter((t) => t.kind === "primary").length
+      const reactiveCount = active.filter((t) => t.kind === "reactive").length
+      const ambientCount = active.filter((t) => t.kind === "ambient").length
+      const totalBudgetSpent = infos.reduce((sum, t) => sum + (t.spentTokens ?? 0), 0)
+      return {
+        agentID,
+        activeThreads: active,
+        primaryCount,
+        reactiveCount,
+        ambientCount,
+        totalBudgetSpent,
+        isBusy: primaryCount > 0,
+      }
+    })
+
+    return { create, get, listByAgent, listActive, update, complete, canAccept, addTokens, agentStatus, agentActivity }
   }),
 )
+
+// ---------------------------------------------------------------------------
+// Agent status rollup
+// ---------------------------------------------------------------------------
+
+/** Compute agent-level status from all its threads. */
+export function rollupAgentStatus(threads: Info[]): "idle" | "busy" | "paused" {
+  const active = threads.filter((t) => t.status === "active")
+  if (active.length > 0) return "busy"
+  const paused = threads.filter((t) => t.status === "paused")
+  if (paused.length > 0 && active.length === 0) return "paused"
+  return "idle"
+}
 
 export const defaultLayer = layer
 
