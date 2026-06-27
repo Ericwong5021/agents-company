@@ -1,51 +1,140 @@
-<h1 align="center">Agent Company</h1>
-
-<p align="center"><strong>全球首个 Agent 公司操作系统——让每个人都能拥有自己的第一家 Agent 公司。</strong></p>
+<h1 align="center">
+  <br>
+  Agent Company
+  <br>
+</h1>
 
 <p align="center">
-  中文 | <a href="README.md">English</a>
+  <strong>AI 公司操作系统</strong><br>
+  <em>给自己开一家 AI 公司——不是聊天机器人，是真正的组织。</em>
+</p>
+
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="README.md">English</a> ·
+  <a href="docs/product-design/00-overview.md">设计文档</a> ·
+  <a href="docs/Agent%20Company%20产品%20PRD.md">产品 PRD</a>
 </p>
 
 ---
 
-Agent Company 是一间由 AI Agent 组成的可治理虚拟公司。
+## 什么是 Agent Company？
 
-你不是在「使用一个聊天机器人」，而是在经营一套可以分工、协作、观察、审批和持续沉淀经验的数字员工组织。需求会在组织中流动，被理解、拆解、分派、执行、审查，再回到你做关键决策。
+你不是在"用聊天机器人"。你在**经营一家虚拟公司**。
 
-> 你把目标说清楚，公司自己推进；需要你拍板的时候，再来请求审批。
+Agent Company 是一个多智能体操作系统：AI Agent 组成一个真实的组织——有董事会、部门、项目组和执行团队。你告诉公司你想要什么，它会拆解目标、沿组织架构逐层委派、执行、审查，然后把需要你拍板的决策带回来。
+
+> **你定方向，公司自己推。需要你的时候，它会来找你。**
+
+```
+你 ←→ 🏢 董事会（CEO / CTO / CFO / CMO）
+           ↓
+        📋 部门层 — 拆目标 + 定验收标准
+           ↓
+        👥 项目组 — 拆解为可执行规格
+           ↓
+        ⚙️ 执行层 — 驱动工具，产出制品
+```
+
+**严格不越级。** 每个需求都走完整个组织链路，4-5 层深度。只有工具层直接产出制品（代码/文档/数据/设计稿），其余都是规划、编排和治理。
 
 ---
 
-## 核心理念
+## 为什么是"公司"而不是"框架"？
 
-整个系统是一棵**递归的「拆解—委派—准入/升级」树**：用户与董事会圆桌讨论，需求逐层向下拆解委派，**只有叶子节点（工具层）直接产出制品**（代码/文档/数据/设计稿），非叶节点做的是决策 → 规划 → 规格 → 编排的逐层转化，结果逐层向上准入（成功）或升级（失败）。
+| | 多 Agent 框架 | Agent Company |
+|---|---|---|
+| 隐喻 | "套壳的 Prompt 模板" | 有真实层级的虚拟组织 |
+| 协作 | Agent 互相聊天 | Agent 有**角色、汇报关系和问责** |
+| 治理 | 无或手动 | **内置审批关卡、升级机制、审计链路** |
+| 身份 | 无状态 Prompt | **持久化 Agent 文件**：soul、memory、skills、relationships |
+| 用户体验 | 写代码来编排 | **告诉公司你想要什么就行** |
 
-- **递归委托** — 固定层级的递归委托树，每个非叶节点都做同一件事：拆解目标、招募/委派、准入校验、失败升级。
-- **身份与执行解耦** — Agent 是一束持久文件（谁），Model 是把文件跑起来的执行引擎（在做什么）；并发计量单位是 Thread，不是 Agent。
-- **信息即文件** — 规章、战略、项目、记忆、关系都是文件系统中的文档，访问由作用域 × 密级 × 清除级别三维控制。
-- **注意力即成本** — 四种注意力模式（空闲/响应/发散/专注）同时决定注入什么上下文、用哪档模型；空闲用廉价模型，专注用强模型。
-- **治理靠记录** — 涌现式系统不追求复现，每次跨 Agent 的访问、消息、准入、升级都是审计事件，轨迹即这次的「源代码」。
-- **自底向上提案** — 想法可自底向上冒，董事会从「生成任务」转为「筛选提案」。
+---
+
+## 核心能力
+
+### 🏛️ 董事会界面
+入口是一场与董事会的会议——CEO、CTO、 CFO、 CMO。讨论目标、设定优先级、审查进度。不需要 Prompt 工程。
+
+### 🔄 递归委派
+任务沿组织架构自然分解：董事会 → 部门 → 项目组 → 执行层 → 工具层。每一层只做一件事。
+
+### 🎯 竞标调度器
+Agent 根据相关性、专业度和轮转权利竞标发言。没有人垄断，没有声音被淹没。调度器确保高效、平衡的多 Agent 对话。
+
+### 🧠 持久化身份
+每个 Agent 不只是 Prompt——而是一束持久化文件：**soul**（身份）、**memory**（记忆）、**skills**（技能）、**relationships**（关系）。
+
+### 📋 任务与制品管理
+通过组织架构追踪工作。制品经由**关卡**向上流转——通过则升级，失败则重试。每个决策可追溯。
+
+### 🔒 治理优先
+每个层级都有审批检查点。信任随表现增长。系统记录一切——因为不可追溯的系统不可治理。
+
+### 🖥️ 终端 UI
+基于 SolidJS + Ink 的精美 TUI。不是 Web 应用，不是桌面包装器——而是面向终端开发者的**原生终端体验**。
+
+---
+
+## 快速开始
+
+### 安装
+
+```bash
+# npm
+npm install -g @agents-company/cli
+
+# Bun（推荐）
+bun install -g @agents-company/cli
+```
+
+### 运行
+
+```bash
+agents
+```
+
+就这样。引导向导会带你完成：
+1. 设置你的 AI 公司（名称、行业、团队规模）
+2. 创建创始团队（CEO、CTO、CFO、CMO）
+3. 进入董事会
+
+### 本地开发
+
+```bash
+git clone https://github.com/Ericwong5021/agents-company.git
+cd agents-company
+bun install
+bun run dev
+```
+
+> **当前核心开发重点是 TUI**，位于 `packages/opencode/src/cli/cmd/tui/`。Web 和 App 不是当前主线。
+
+---
+
+## 架构
+
+```
+用户 ←→ 董事会（CEO/CTO/CFO/CMO）    ← 系统入口 = 一场会议
+        ↓
+     部门层（业务 + 基建）
+        ↓
+     项目组（Leader）
+        ↓
+     执行层
+        ↓
+     工具层                              ← 唯一直接产出制品的层
+```
+
+**核心理念：**
+- **递归委托** — 每个非叶节点：拆解 → 委派 → 准入校验
+- **身份 ≠ 执行** — Agent 文件是"谁"，Model 是"怎么跑"
+- **信息即文件** — 规章、战略、记忆都是文档，由作用域 × 密级控制
+- **注意力即成本** — 四种模式（空闲/响应/发散/专注）选择模型档位
+- **治理靠记录** — 每次跨 Agent 操作都是审计事件
 
 详见 [产品设计总览](docs/product-design/00-overview.md)。
-
----
-
-## 组织架构
-
-```
-用户 ←→ 董事会圆桌（CEO/CTO/CFO/CMO）   ← 系统入口 = 一场会议
-        ↓
-     部门层（业务部门 + 基建部门）       ← 拆目标 + 定验收标准 + 组团队
-        ↓
-     项目组（Leader）                    ← 拆解为可执行规格 + 招募成员 + 管准入
-        ↓
-     执行层                              ← 匹配预定义工作流 + 细化规格 + 驱动工具
-        ↓
-     工具层                              ← 唯一直接产出制品的层（编码/检索/写作/设计/分析）
-```
-
-**严格不可越级**：无论任务大小，每层必须经过，不设跳步；委派深度约 4–5 层。
 
 ---
 
@@ -53,35 +142,49 @@ Agent Company 是一间由 AI Agent 组成的可治理虚拟公司。
 
 | 对象 | 说明 |
 |------|------|
-| **Workspace** | 公司空间，承载组织、任务、会议、产出、规则和历史 |
-| **Agent** | 具有持续身份的数字员工（soul/instruct/memory/skills/relationships/kanban），而不是 prompt 模板 |
-| **Thread** | 并发执行单元：主线（专注/发散）、响应线（碎片）、环境线（空闲探索） |
-| **Group / Meeting** | 可治理的协作房间，而不只是群聊 |
-| **Task** | 可追踪、可验收、可审查的工作单 |
-| **Artifact** | 工具层直接产出的制品（代码/文档/数据/设计稿），经 Gate 向上流转 |
-| **Gate** | 每层向上流转的验收关卡，通过则升级，打回则重试或升级 |
-| **Decision** | 带理由、可追溯的组织决策（DRI 拍板，不投票表决） |
-| **Proposal** | Agent 自下而上的建议和改进提案 |
+| **Workspace** | 公司空间：组织、任务、会议、制品、规则、历史 |
+| **Agent** | 数字员工：soul/instruct/memory/skills/relationships/kanban |
+| **Thread** | 并发单元：专注/发散/响应/环境 |
+| **Group / Meeting** | 可治理的协作房间，不只是群聊 |
+| **Task** | 可追踪、可审查、可验收的工作单元 |
+| **Artifact** | 工具层产出的制品，经关卡向上流转 |
+| **Gate** | 验收关卡：通过则升级，失败则重试 |
+| **Decision** | 可追溯的组织决策（DRI 拍板，不投票） |
+| **Proposal** | Agent 自下而上的建议和提案 |
 
 ---
 
-## 快速开始
+## 内置 Agent
+
+| Agent | 角色 | 说明 |
+|-------|------|------|
+| `build` | 🔨 工程师 | 基于权限执行工具 |
+| `plan` | 📐 规划师 | 只读规划模式——建议但不修改 |
+| `compose` | 🎼 编排者 | 管理工作流和编排技能 |
+| `explore` | 🔍 研究员 | 快速代码库探索和分析 |
+| `general` | 🤖 通才 | 通用多用途 Agent |
+
+自定义 Agent 可通过配置文件或 `.agentcompany/agent/` 目录创建。
+
+---
+
+## 技术栈
+
+- **运行时**：[Bun](https://bun.sh) + TypeScript
+- **TUI**：SolidJS + Ink（终端渲染）
+- **状态管理**：Effect-TS（函数式 Effect 系统）
+- **存储**：Drizzle ORM + SQLite
+- **构建**：Turborepo（monorepo）
+- **模型**：任意 LLM 服务商（OpenAI、Anthropic、Google、本地模型...）
+
+---
+
+## 参与贡献
+
+欢迎贡献！请先阅读 [AGENTS.md](AGENTS.md) 了解编码规范。
 
 ```bash
-# 安装依赖
-bun install
-
-# 从仓库根目录启动主开发入口
-bun run dev
-```
-
-> 当前仓库核心开发重点是 **TUI（Terminal UI）**，主实现位于 [packages/opencode/src/cli/cmd/tui](packages/opencode/src/cli/cmd/tui)。Web 和 App 不是当前主线。
->
-> 当前 CLI 入口仍为 `mimo`，品牌与命令名会在后续逐步收敛。
-
-类型检查与测试请在具体 package 目录中执行（不要从仓库根目录运行）：
-
-```bash
+# 在 package 目录下运行（不要在仓库根目录）
 cd packages/opencode
 bun typecheck
 bun test
@@ -89,33 +192,10 @@ bun test
 
 ---
 
-## 当前开发边界
-
-这不是 AgentCompany 的兼容性维护仓库。Agent Company 虽然重建自 AgentCompany 的技术基础，但它是一个新的产品方向——除非明确需要迁移桥接，我们不保留历史的文件结构、配置格式或 API 兼容性。
-
-- 以 **TUI 优先** 的工作流来设计和实现功能
-- 优先建设「组织协作、任务执行、审批治理、状态可观察」能力
-- 不把多 Agent 系统包装成单一 supervisor 的黑盒输出
-- 不把设计愿景描述成已经全部完成的现状
-
----
-
-## 参考文档
-
-- [产品设计总览](docs/product-design/00-overview.md)（理念、组织架构、模块索引）
-- [Agent Company 产品 PRD](docs/Agent%20Company%20产品%20PRD.md)
-
----
-
 ## 社区
 
-扫描二维码加入社区群聊：
-
-<p align="center">
-  <img src="assets/readme/community-qrcode-1.jpg" alt="社区群聊二维码 1" width="240">
-  &nbsp;&nbsp;
-  <img src="assets/readme/community-qrcode-2.jpg" alt="社区群聊二维码 2" width="240">
-</p>
+- [GitHub Discussions](https://github.com/Ericwong5021/agents-company/discussions) — 提问、交流
+- [Issues](https://github.com/Ericwong5021/agents-company/issues) — 报 Bug、提需求
 
 ---
 
