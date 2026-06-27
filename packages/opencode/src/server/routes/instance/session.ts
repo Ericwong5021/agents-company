@@ -403,6 +403,7 @@ export const SessionRoutes = lazy(() =>
             id: taskID,
             event_summary: body.event_summary,
           })
+        }),
     )
     .get(
       "/:sessionID/task/:taskID/events",
