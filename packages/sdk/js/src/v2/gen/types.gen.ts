@@ -785,6 +785,41 @@ export type EventGroupSessionAgentCompleted = {
   }
 }
 
+export type EventGroupSessionBiddingStarted = {
+  type: "group_session.bidding_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionBiddingCompleted = {
+  type: "group_session.bidding_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    winnerId: string | null
+    bids: Array<{
+      agentId: string
+      level: "must" | "want" | "could" | "pass"
+      type: "objection" | "answer" | "question" | "claim" | "info" | "support"
+      addressedAs: "direct" | "mention" | "none"
+      reason: string
+      score: number
+      eligible: boolean
+    }>
+  }
+}
+
+export type EventGroupSessionTurnYielded = {
+  type: "group_session.turn_yielded"
+  properties: {
+    groupSessionID: string
+    consecutiveAgentTurns: number
+    reason: "budget_K_reached" | "all_pass" | "no_bid_over_threshold"
+  }
+}
+
 export type ThreadInfo = {
   id: string
   agentID: string
@@ -2803,6 +2838,9 @@ export type Event =
   | EventGroupSessionUserMessagePersisted
   | EventGroupSessionAgentStarted
   | EventGroupSessionAgentCompleted
+  | EventGroupSessionBiddingStarted
+  | EventGroupSessionBiddingCompleted
+  | EventGroupSessionTurnYielded
   | EventThreadCreated
   | EventThreadUpdated
   | EventThreadCompleted
