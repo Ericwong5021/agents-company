@@ -164,7 +164,7 @@ function WorkstationView() {
         description: a.description,
         model: a.model,
         orgLayer: a.org_layer,
-        department: a.department,
+        department: typeof a.department === "string" ? a.department : undefined,
         status: statuses[a.id] ?? "idle",
         threads: agentThreads,
         totalTokens,
