@@ -30,9 +30,9 @@ export function StepProfile(props: StepProfileProps) {
   let textarea: TextareaRenderable | undefined
 
   const DEFAULTS: Partial<Record<Phase, string>> = {
-    "user-name": "大东",
-    "assistant-name": "可可",
-    "company-name": "大东科技有限公司",
+    "user-name": "创始人",
+    "assistant-name": "助理",
+    "company-name": "我的公司",
   }
 
   onMount(() => {
@@ -51,17 +51,13 @@ export function StepProfile(props: StepProfileProps) {
     setTimeout(() => {
       if (textarea && !textarea.isDestroyed) {
         textarea.focus()
-        // Pre-fill default text so the user just presses Enter / clicks Next.
-        const def = DEFAULTS[phase()]
-        if (def && textarea.plainText === "") {
-          textarea.insertText(def)
-        }
       }
     }, 1)
   }
 
   function submitText() {
-    const text = (textarea?.plainText ?? "").trim()
+    const raw = (textarea?.plainText ?? "").trim()
+    const text = raw.length > 0 ? raw : (DEFAULTS[phase()] ?? "")
     setErrorMsg("")
 
     if (phase() === "user-name") {
@@ -95,8 +91,9 @@ export function StepProfile(props: StepProfileProps) {
   }
 
   function onCompanyNameSubmit() {
-    const text = (textarea?.plainText ?? "").trim()
-    if (text.length < 1 || text.length > 50) return setErrorMsg(t("onboarding.profile.error.company"))
+    const raw = (textarea?.plainText ?? "").trim()
+    const text = raw.length > 0 ? raw : (DEFAULTS["company-name"] ?? "")
+    if (text.length > 50) return setErrorMsg(t("onboarding.profile.error.company"))
     setCompanyName(text)
     props.onComplete({ userName: userName(), assistantName: assistantName(), companyName: text, scopes: [] })
   }
@@ -109,9 +106,7 @@ export function StepProfile(props: StepProfileProps) {
   }
 
   function placeholder() {
-    if (phase() === "user-name") return t("onboarding.interview.placeholder.name")
-    if (phase() === "assistant-name") return t("onboarding.interview.placeholder.assistant")
-    return t("onboarding.interview.placeholder.company")
+    return DEFAULTS[phase()] ?? ""
   }
 
   function submitCurrent() {
