@@ -1,0 +1,10 @@
+Recruit a new Company Agent into the company by hiring from the agent template library.
+
+Use this when the company has a concrete, settled need for a capability that no current team member covers — for example, once the founding direction is clear and it's time to bring in a specialist (an engineer, a designer, a growth lead, etc.).
+
+How it works:
+- You describe the role you need via `query` (and optionally narrow by `division`).
+- The best-matching template is selected from the library and a new Company Agent is created from it, reporting to you.
+- Hiring is a real, consequential action, so the founder is asked to confirm before the new member is created. Always pass a clear `reason` so they can decide.
+
+Do NOT use this to talk to an existing agent (use message-agent for that), and do NOT recruit speculatively. Recruit only when there is a specific job for the new hire to start on.
