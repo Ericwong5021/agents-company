@@ -31,6 +31,9 @@ export const Info = z.object({
   location: z.string(),
   content: z.string(),
   hidden: z.boolean().optional(),
+  // Owning company agent id, when this is a private per-agent skill discovered
+  // under <data>/agents/<id>/skills/. Undefined for global/shared skills.
+  agentID: z.string().optional(),
 })
 export type Info = z.infer<typeof Info>
 
@@ -68,10 +71,10 @@ type ScanState = {
 }
 
 export interface Interface {
-  readonly get: (name: string) => Effect.Effect<Info | undefined>
+  readonly get: (name: string, companyAgentID?: string) => Effect.Effect<Info | undefined>
   readonly all: () => Effect.Effect<Info[]>
   readonly dirs: () => Effect.Effect<string[]>
-  readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
+  readonly available: (agent?: Agent.Info, companyAgentID?: string) => Effect.Effect<Info[]>
   readonly reload: () => Effect.Effect<void>
 }
 
@@ -98,21 +101,33 @@ const add = Effect.fnUntraced(function* (state: State, match: string, bus: Bus.I
   const parsed = Info.pick({ name: true, description: true, hidden: true }).safeParse(md.data)
   if (!parsed.success) return
 
-  if (state.skills[parsed.data.name]) {
+  // Private per-agent skills live under <data>/agents/<id>/skills/. Owning agent
+  // is derived from the path; these are keyed by "<agentID>:::<name>" so the same
+  // skill name can exist for multiple agents (and alongside a global one). Anchor
+  // to the real agents root so an unrelated skill whose path merely contains
+  // ".../agents/x/skills/..." is not mis-scoped.
+  const agentsRoot = path.join(Global.Path.data, "agents") + path.sep
+  const agentID = match.startsWith(agentsRoot)
+    ? match.slice(agentsRoot.length).match(/^([^/\\]+)[/\\]skills[/\\]/)?.[1]
+    : undefined
+  const key = agentID ? `${agentID}:::${parsed.data.name}` : parsed.data.name
+
+  if (state.skills[key]) {
     log.warn("duplicate skill name", {
       name: parsed.data.name,
-      existing: state.skills[parsed.data.name].location,
+      existing: state.skills[key].location,
       duplicate: match,
     })
   }
 
   state.dirs.add(path.dirname(match))
-  state.skills[parsed.data.name] = {
+  state.skills[key] = {
     name: parsed.data.name,
     description: parsed.data.description,
     location: match,
     content: md.content,
     hidden: parsed.data.hidden,
+    agentID,
   }
 })
 
@@ -222,6 +237,14 @@ const discoverSkills = Effect.fnUntraced(function* (
     }
   }
 
+  // Private per-agent skills: <data>/agents/<id>/skills/**/SKILL.md. Each company
+  // agent's folder carries its own crystallized capabilities; the owning agent id
+  // is recovered from the path in add() and used to scope visibility.
+  const agentsRoot = path.join(Global.Path.data, "agents")
+  if (yield* fsys.isDir(agentsRoot)) {
+    yield* scan(state, agentsRoot, "*/skills/**/SKILL.md", { scope: "agent" })
+  }
+
   return {
     matches: Array.from(state.matches),
     dirs: Array.from(state.dirs),
@@ -259,9 +282,10 @@ export const layer = Layer.effect(
       }),
     )
 
-    const get = Effect.fn("Skill.get")(function* (name: string) {
+    const get = Effect.fn("Skill.get")(function* (name: string, companyAgentID?: string) {
       const s = yield* InstanceState.get(state)
-      return s.skills[name]
+      // Prefer the caller's own private skill, then fall back to a global one.
+      return (companyAgentID ? s.skills[`${companyAgentID}:::${name}`] : undefined) ?? s.skills[name]
     })
 
     const all = Effect.fn("Skill.all")(function* () {
@@ -273,10 +297,13 @@ export const layer = Layer.effect(
       return (yield* InstanceState.get(discovered)).dirs
     })
 
-    const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
+    const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info, companyAgentID?: string) {
       const s = yield* InstanceState.get(state)
       let list: Info[] = Object.values(s.skills)
         .filter((sk) => !sk.hidden)
+        // Private per-agent skills are only visible to their owner. Global skills
+        // (no agentID) are visible to everyone.
+        .filter((sk) => !sk.agentID || sk.agentID === companyAgentID)
 
       list = list.toSorted((a, b) => a.name.localeCompare(b.name))
       if (!agent) return list

@@ -5,6 +5,8 @@ import { Effect } from "effect"
 import * as Stream from "effect/Stream"
 import { Ripgrep } from "../file/ripgrep"
 import { Skill } from "../skill"
+import { Session } from "@/session"
+import { SessionID } from "@/session/schema"
 import * as Tool from "./tool"
 import DESCRIPTION from "./skill.txt"
 
@@ -17,13 +19,21 @@ export const SkillTool = Tool.define(
   Effect.gen(function* () {
     const skill = yield* Skill.Service
     const rg = yield* Ripgrep.Service
+    const sessionSvc = yield* Session.Service
 
     return {
       description: DESCRIPTION,
       parameters: Parameters,
       execute: (params: z.infer<typeof Parameters>, ctx: Tool.Context) =>
         Effect.gen(function* () {
-          const info = yield* skill.get(params.name)
+          // Resolve the caller's company agent so private per-agent skills resolve.
+          const companyAgentID = yield* sessionSvc
+            .get(SessionID.make(ctx.sessionID))
+            .pipe(
+              Effect.map((s) => s.companyAgentID),
+              Effect.catch(() => Effect.succeed(undefined)),
+            )
+          const info = yield* skill.get(params.name, companyAgentID)
           if (!info) {
             const all = yield* skill.all()
             const available = all.map((item) => item.name).join(", ")
