@@ -18,21 +18,30 @@ let lastDreamSpawnTime = 0
 let lastDistillSpawnTime = 0
 
 export const DREAM_TASK = [
-  "Run one automatic dream memory consolidation pass for the current project.",
+  "Run one automatic dream memory consolidation pass for the current company.",
   "",
   "Use the memory files as the working index and the raw agentcompany trajectory database as the source of truth.",
   "Use bash for read-only SQLite and filesystem inspection. Do not modify the database.",
   "Consolidate only durable, verified information into project memory.",
+  "",
+  "IMPORTANT — scope: Only consider sessions that are company agent conversations.",
+  "Filter to sessions where company_agent_id IS NOT NULL and references a real company agent",
+  "(look up the company_agent table to verify). Ignore all other sessions — they are",
+  "development or user chats, not the company's internal agent discourse.",
 ].join("\n")
 
 export const DISTILL_TASK = [
-  "Run one automatic distill pass for the current project.",
+  "Run one automatic distill pass for the current company.",
   "",
-  "Review the past month of sessions and identify repeated manual workflows worth packaging.",
+  "Review the past month of company agent sessions and identify repeated manual workflows worth packaging.",
   "Use the raw agentcompany trajectory database as the source of truth and memory files to spot cross-session patterns.",
   "Inventory existing skills, agents, and commands first so you reuse or extend instead of duplicating.",
   "Use bash for read-only SQLite and filesystem inspection. Do not modify the database.",
   "Produce a compact shortlist, then create only the high-confidence missing assets.",
+  "",
+  "IMPORTANT — scope: Only consider sessions that are company agent conversations.",
+  "Filter to sessions where company_agent_id IS NOT NULL and references a real company agent",
+  "(look up the company_agent table to verify). Ignore all other sessions.",
 ].join("\n")
 
 function shouldAutoRun(input: {
