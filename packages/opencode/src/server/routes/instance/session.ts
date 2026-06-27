@@ -20,7 +20,7 @@ import { Command } from "@/command"
 import { Log } from "@/util"
 import { ActorRegistry } from "@/actor/registry"
 import { TaskRegistry } from "@/task/registry"
-import { Task } from "@/task/schema"
+import { Task, TaskEvent } from "@/task/schema"
 import { Permission } from "@/permission"
 import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
@@ -403,6 +403,39 @@ export const SessionRoutes = lazy(() =>
             id: taskID,
             event_summary: body.event_summary,
           })
+    )
+    .get(
+      "/:sessionID/task/:taskID/events",
+      describeRoute({
+        summary: "List task events",
+        description: "List the event timeline for a specific task.",
+        operationId: "session.task.events",
+        responses: {
+          200: {
+            description: "Task event list",
+            content: {
+              "application/json": {
+                schema: resolver(TaskEvent.array()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+          taskID: z.string(),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("SessionRoutes.taskEvents", c, function* () {
+          const { sessionID, taskID } = c.req.valid("param")
+          const session = yield* Session.Service
+          yield* session.get(sessionID)
+          const reg = yield* TaskRegistry.Service
+          return yield* reg.events({ session_id: sessionID, task_id: taskID })
         }),
     )
     .post(
