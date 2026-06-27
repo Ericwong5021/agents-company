@@ -64,6 +64,7 @@ function View(props: { api: TuiPluginApi; session_id: string }) {
                 summary={item().summary}
                 owner={item().owner ?? undefined}
                 depth={depthOf(item().id)}
+                sessionID={props.session_id}
               />
             )}
           </Index>
