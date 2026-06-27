@@ -1,0 +1,147 @@
+name: 发布 CLI 到 npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 版本类型
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: 自定义版本号（如 0.2.0，会覆盖版本类型）
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set release environment
+        run: |
+          echo "AGENTCOMPANY_CHANNEL=latest" >> "$GITHUB_ENV"
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "AGENTCOMPANY_VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          else
+            echo "AGENTCOMPANY_BUMP=${{ inputs.bump }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install cross-platform native deps
+        working-directory: packages/opencode
+        run: |
+          OTUI_VER=$(node -p "require('./package.json').dependencies['@opentui/core']")
+          WATCHER_VER=$(node -p "require('./package.json').dependencies['@parcel/watcher']")
+          bun install --os="*" --cpu="*" "@opentui/core@$OTUI_VER"
+          bun install --os="*" --cpu="*" "@parcel/watcher@$WATCHER_VER"
+
+      - name: Build all platform binaries
+        working-directory: packages/opencode
+        run: bun run script/build.ts --skip-install
+
+      - name: Extract built version
+        id: version
+        working-directory: packages/opencode
+        run: |
+          VERSION=$(dist/*/bin/agents --version 2>/dev/null || echo "")
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Built version: $VERSION"
+
+      - name: List platform packages
+        id: platforms
+        working-directory: packages/opencode
+        run: |
+          dirs=()
+          for dir in dist/agentcompany-*/; do
+            name=$(basename "$dir")
+            dirs+=("$name")
+          done
+          echo "Platform packages: ${dirs[*]}"
+          echo "names=${dirs[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure npm auth
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - name: Publish platform binary packages
+        working-directory: packages/opencode
+        run: |
+          for dir in dist/agentcompany-*/; do
+            echo "Publishing $(basename "$dir")..."
+            cd "$dir"
+            npm publish --access public
+            cd -
+          done
+
+      - name: Prepare and publish CLI package
+        working-directory: packages/opencode
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # 收集所有平台包名，构造 optionalDependencies
+          OPT_DEPS=""
+          for dir in dist/agentcompany-*/; do
+            name=$(basename "$dir")
+            [ -n "$OPT_DEPS" ] && OPT_DEPS="$OPT_DEPS,"
+            OPT_DEPS="$OPT_DEPS\"@agents-company/$name\": \"$VERSION\""
+          done
+
+          # 创建发布用目录
+          mkdir -p dist/cli/bin
+
+          # 复制入口脚本（重命名 .cjs 避免 ESM 模式下的 require 错误）
+          cp bin/agents dist/cli/bin/agents.cjs
+          chmod +x dist/cli/bin/agents.cjs
+
+          # 生成发布用的 package.json
+          cat > dist/cli/package.json << EOF
+          {
+            "name": "@agents-company/cli",
+            "version": "$VERSION",
+            "description": "Agent Company CLI — AI-powered development tool",
+            "type": "commonjs",
+            "license": "MIT",
+            "author": "Agents Company Team",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/Ericwong5021/agents-company.git"
+            },
+            "keywords": ["ai", "coding", "agent", "cli", "agents-company"],
+            "bin": {
+              "agents": "./bin/agents.cjs"
+            },
+            "files": [
+              "bin",
+              "README.md"
+            ],
+            "optionalDependencies": {
+              $OPT_DEPS
+            },
+            "publishConfig": {
+              "access": "public"
+            }
+          }
+          EOF
+
+          # 复制 README
+          cp README.md dist/cli/
+
+          # 发布
+          cd dist/cli
+          npm publish --access public
+          echo "Published @agents-company/cli@$VERSION"
