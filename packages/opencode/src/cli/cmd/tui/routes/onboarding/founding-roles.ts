@@ -101,19 +101,33 @@ const SCOPE_ROLES: Record<string, LegacyFoundingRoleSpec[]> = {
   ],
 }
 
-// Generalist founders for custom / unknown scopes — a builder and a strategist.
+// The default opening team is two generalist co-founders — a strategist who
+// shapes the company thesis and a builder who ships the first real thing —
+// NOT vertical specialists. Specialists are recruited later, once the direction
+// is settled. These resolve to the cofounder-* templates in the specialized
+// division (see templates/specialized/cofounder-*.md).
 const DEFAULT_ROLES: LegacyFoundingRoleSpec[] = [
   {
-    key: "chief-of-staff",
+    key: "strategist",
     division: "specialized",
-    query: "chief of staff operations",
-    fallback: { name: "幕僚长", description: "统筹运营与重大决策", icon: "🗂", color: "#6366F1" },
+    query: "联合创始人 谋士 方向",
+    fallback: {
+      name: "联合创始人 · 谋士",
+      description: "在出方案前，先帮创始人把「为谁、解决什么、凭什么是我们」想清楚",
+      icon: "🧭",
+      color: "#8B5CF6",
+    },
   },
   {
-    key: "growth",
-    division: "marketing",
-    query: "growth strategy",
-    fallback: { name: "增长负责人", description: "负责获客与渠道增长", icon: "📈", color: "#10B981" },
+    key: "builder",
+    division: "specialized",
+    query: "联合创始人 操盘手 落地",
+    fallback: {
+      name: "联合创始人 · 操盘手",
+      description: "不写宏伟架构，先做出能跑的最小真东西来验证方向",
+      icon: "🔨",
+      color: "#3B82F6",
+    },
   },
 ]
 
@@ -141,27 +155,19 @@ export function resolveTemplateRoles(templateId: string): FlatRole[] | null {
  * Tries to map each scope to an org template first; falls back to
  * the hardcoded SCOPE_ROLES for custom/unknown scopes.
  */
-export function resolveFoundingRoles(scopes: string[]): FlatRole[] {
-  // Try template-based resolution first for known scopes.
-  const templateIds = scopes.map((s) => SCOPE_TO_TEMPLATE[s]).filter(Boolean)
-  if (templateIds.length > 0) {
-    const tpl = OrgTemplateService.get(templateIds[0]!)
-    if (tpl) return OrgTemplateService.flatRoles(tpl)
-  }
-
-  // Fallback: legacy scope-based resolution, wrapped to match FlatRole.
-  const seen = new Set<string>()
-  const roles = scopes
-    .flatMap((scope) => SCOPE_ROLES[scope] ?? DEFAULT_ROLES)
-    .filter((role) => (seen.has(role.key) ? false : (seen.add(role.key), true)))
-
-  const picked = roles.length >= 2 ? roles : [...roles, ...DEFAULT_ROLES.filter((r) => !seen.has(r.key))]
-  return picked.slice(0, 3).map((r) => ({
+export function resolveFoundingRoles(_scopes: string[]): FlatRole[] {
+  // Co-founder-first: regardless of business scope, the opening team is the two
+  // generalist co-founders. Their job is to help the founder figure out what the
+  // company actually does; vertical specialists are recruited later. The scope
+  // only flavours each agent's prompt (injected downstream), it no longer picks
+  // the roles. SCOPE_ROLES / SCOPE_TO_TEMPLATE remain available for the explicit
+  // org-template selection path (resolveTemplateRoles).
+  return DEFAULT_ROLES.map((r) => ({
     key: r.key,
     division: r.division,
     query: r.query,
     fallback: r.fallback,
-    level: "lead" as const,
+    level: "c-suite" as const,
     reportsTo: null,
     divisionName: r.division,
     divisionNameEn: r.division,

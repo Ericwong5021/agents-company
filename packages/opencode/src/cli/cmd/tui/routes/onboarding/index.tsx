@@ -9,6 +9,8 @@ import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useLanguage } from "@tui/context/language"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
+import { useSDK } from "@tui/context/sdk"
+import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
 import { StarryBackground } from "@tui/component/starry-background"
 import { DialogProvider } from "@tui/component/dialog-provider"
 import { DialogModel } from "@tui/component/dialog-model"
@@ -47,6 +49,7 @@ export function Onboarding() {
   const t = useLanguage().t
   const local = useLocal()
   const sync = useSync()
+  const sdk = useSDK()
   const [step, setStep] = createSignal<Step>("welcome")
   const [data, setData] = createSignal<OnboardingData>({})
   const [done, setDone] = createSignal(false)
@@ -80,7 +83,7 @@ export function Onboarding() {
     })
   }
 
-  function finish(agentIDs: string[], teamNames: string[]) {
+  async function finish(agentIDs: string[], teamNames: string[]) {
     setDone(true)
     kv.set("onboarding_profile", {
       ...data(),
@@ -90,7 +93,48 @@ export function Onboarding() {
     })
     kv.set("onboarding_done", true)
     dialog.clear()
-    route.navigate({ type: "home" })
+
+    // Drop the founder straight into a kickoff session with the two co-founders.
+    // Their job (baked into the cofounder-* personas) is to interview the founder
+    // and converge on a company thesis before any vertical work begins. If the
+    // session can't be created, fall back to home so onboarding still completes.
+    const groupSessionID = await startKickoff(agentIDs)
+    route.navigate(groupSessionID ? { type: "group-session", groupSessionID } : { type: "home" })
+  }
+
+  // Creates a group session with the founding team and seeds an opening message
+  // in the founder's voice that hands the floor to the co-founders. Returns the
+  // new group session ID, or null on any failure.
+  async function startKickoff(agentIDs: string[]): Promise<string | null> {
+    if (agentIDs.length === 0) return null
+    const scopeLabels = (data().scopes ?? [])
+      .map((s) => BUSINESS_SCOPE_PRESETS.find((p) => p.key === s)?.title ?? s)
+      .join("、")
+    const mission = data().mission?.trim()
+    const kickoff = [
+      `我们第一次正式碰头。公司刚建起来${scopeLabels ? `，我选的方向是【${scopeLabels}】` : ""}。`,
+      mission ? `我现在的想法是：${mission}` : `说实话，具体要做成什么样，我心里还很模糊。`,
+      `先别急着给方案——帮我把「我们到底为谁、解决什么、凭什么是我们」理清楚。`,
+    ].join("\n")
+    try {
+      const res = await sdk.fetch(`${sdk.url}/group-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `${data().companyName || data().userName || "我们"} · 创始对齐`, agentIDs }),
+      })
+      if (!res.ok) return null
+      const info = (await res.json()) as { id: string }
+      await sdk
+        .fetch(`${sdk.url}/group-session/${encodeURIComponent(info.id)}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: kickoff }),
+        })
+        .catch(() => undefined)
+      return info.id
+    } catch {
+      return null
+    }
   }
 
   // Push the dialog content for a given step into the shared window.

@@ -16,6 +16,9 @@ import { buildButlerPrompt } from "./prompts"
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "@/global"
+import { agentSkillsDir } from "@/session/checkpoint-paths"
+import type { CompanyAgentID } from "@/company-agent/schema"
+import { COFOUNDER_RECRUIT_SKILL } from "./cofounder-recruit-skill"
 
 interface StepFoundingTeamProps {
   stepIndex: number
@@ -197,6 +200,12 @@ export function StepFoundingTeam(props: StepFoundingTeamProps) {
           error: `API 请求失败: ${res.status} ${res.statusText}\n响应内容: ${errorText}\n请求 URL: ${sdk.url}/company-agent\n请求参数: ${JSON.stringify({ id, name, description, color, icon }, null, 2)}`,
         }
       }
+
+      // Seed the co-founders' private recruit skill so they can autonomously
+      // bring in vertical specialists once the direction is settled. Best-effort:
+      // a failure here must not block the founding team from assembling.
+      await seedCofounderRecruitSkill(id).catch(() => undefined)
+
       return {
         founder: {
           id, name, description, shortDescription, icon, color,
@@ -384,6 +393,15 @@ function FounderCard(props: { founder: Founder; theme: any; dialog: any }) {
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+// Write the recruit skill into a co-founder's private skills/ folder so the
+// skill system discovers it (scoped to this agent) and the co-founder can hire
+// specialists via the `recruit` tool once the direction is settled.
+async function seedCofounderRecruitSkill(id: string) {
+  const dir = path.join(agentSkillsDir(id as CompanyAgentID), "recruit-teammate")
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, "SKILL.md"), COFOUNDER_RECRUIT_SKILL, "utf-8")
 }
 
 function buildFounderPrompt(props: StepFoundingTeamProps, roleName: string, base?: string) {
