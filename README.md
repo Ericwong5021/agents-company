@@ -1,36 +1,31 @@
-<h1 align="center">
-  <br>
-  Agent Company
-  <br>
-</h1>
+<div align="center">
 
-<p align="center">
-  <strong>The AI Company Operating System</strong><br>
-  <em>Give yourself a company of AI employees — not a chatbot, an organization.</em>
-</p>
+# Agent Company
 
-<p align="center">
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="README.zh.md">中文</a> ·
-  <a href="docs/product-design/00-overview.md">Design Docs</a> ·
-  <a href="docs/Agent%20Company%20产品%20PRD.md">PRD</a>
-</p>
+**The AI Company Operating System**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
-  <img src="https://img.shields.io/badge/language-TypeScript-blue" alt="TypeScript">
-  <img src="https://img.shields.io/badge/terminal-TUI-green" alt="TUI">
-</p>
+*Give yourself a company of AI employees — not a chatbot, an organization.*
+
+[![npm version](https://img.shields.io/npm/v/@agents-company/cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agents-company/cli)
+[![npm downloads](https://img.shields.io/npm/dm/@agents-company/cli?color=cb3837)](https://www.npmjs.com/package/@agents-company/cli)
+[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![runtime](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh)
+[![language](https://img.shields.io/badge/language-TypeScript-3178c6?logo=typescript&logoColor=fff)](https://www.typescriptlang.org)
+[![TUI](https://img.shields.io/badge/interface-TUI-00d111)](#quick-start)
+
+[Quick Start](#quick-start) · [English](README.md) · [中文](README.zh.md) · [Design Docs](docs/product-design/00-overview.md) · [PRD](docs/Agent%20Company%20产品%20PRD.md) · [Roadmap](#roadmap)
+
+</div>
 
 ---
 
-## What is Agent Company?
+## The Pitch
+
+> **You set the direction. The company drives it forward. When it's your call, it comes back.**
 
 You're not "using a chatbot." You're **running a virtual company**.
 
 Agent Company is a multi-agent operating system where AI agents form a real organization — with a boardroom, departments, project squads, and execution teams. You tell the company what you want. It decomposes the goal, delegates down through the org chart, executes, reviews, and brings key decisions back to you.
-
-> **You set the direction. The company drives it forward. When it's your call, it comes back.**
 
 ```
 You ←→ 🏢 Boardroom (CEO / CTO / CFO / CMO)
@@ -60,26 +55,65 @@ You ←→ 🏢 Boardroom (CEO / CTO / CFO / CMO)
 
 ## Features
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
 ### 🏛️ Boardroom Interface
+
 Your entry point is a meeting with the board — CEO, CTO, CFO, CMO. Discuss goals, set priorities, review progress. No prompt engineering required.
 
+</td>
+<td width="50%" valign="top">
+
 ### 🔄 Recursive Delegation
+
 Tasks decompose naturally through the org chart: Boardroom → Departments → Project Squads → Execution → Tool Layer. Each layer does exactly one thing well.
 
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
 ### 🎯 Bidding Scheduler
-Agents bid to speak based on relevance, expertise, and turn rights. No agent dominates; no voice is lost. The scheduler ensures productive, balanced multi-agent conversations.
+
+Agents bid to speak based on relevance, expertise, and turn rights. No central host, no agent dominates, no voice is lost. A decentralized alternative to LLM-moderated turn-taking.
+
+</td>
+<td width="50%" valign="top">
 
 ### 🧠 Persistent Identity
+
 Each agent is more than a prompt — they're a bundle of persistent files: **soul** (who they are), **memory** (what they've learned), **skills** (what they can do), and **relationships** (who they work with).
 
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
 ### 📋 Task & Artifact Management
+
 Track work through the org. Artifacts flow upward through **gates** — approved or escalated. Every decision is traceable.
 
+</td>
+<td width="50%" valign="top">
+
 ### 🔒 Governance by Design
+
 Approval checkpoints at every level. Trust scales with performance. The system records everything — because an untraceable system is an ungovernable one.
 
-### 🖥️ Terminal UI
-Beautiful TUI built with SolidJS + Ink. Not a web app, not a desktop wrapper — a **native terminal experience** for developers who live in the command line.
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+
+### 🖥️ Terminal-Native UI
+
+Beautiful TUI built with SolidJS + OpenTUI. Not a web app, not a desktop wrapper — a **native terminal experience** for developers who live in the command line.
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -102,9 +136,10 @@ agents
 ```
 
 That's it. The onboarding flow walks you through:
-1. Setting up your AI company (name, industry, team size)
-2. Creating your founding team (CEO, CTO, CFO, CMO)
-3. Entering the boardroom
+
+1. **Set up your AI company** — name, industry, team size
+2. **Create your founding team** — CEO, CTO, CFO, CMO
+3. **Enter the boardroom** — start giving directions
 
 ### Development
 
@@ -134,11 +169,14 @@ User ←→ Boardroom (CEO/CTO/CFO/CMO)     ← system entry = a meeting
 ```
 
 **Key principles:**
-- **Recursive delegation** — every non-leaf node decomposes → delegates → gates results
-- **Identity ≠ Execution** — Agent files are "who"; Model is "how they run"
-- **Information as files** — policies, strategy, memory are all documents, governed by scope × clearance
-- **Attention as cost** — four modes (idle/reactive/divergent/focused) select model tier and context depth
-- **Governance through records** — every cross-agent action is an audit event
+
+| Principle | What it means |
+|-----------|---------------|
+| **Recursive delegation** | Every non-leaf node decomposes → delegates → gates results |
+| **Identity ≠ Execution** | Agent files are "who"; Model is "how they run" |
+| **Information as files** | Policies, strategy, memory are all documents, governed by scope × clearance |
+| **Attention as cost** | Four modes (idle/reactive/divergent/focused) select model tier and context depth |
+| **Governance through records** | Every cross-agent action is an audit event |
 
 See the [Product Design Overview](docs/product-design/00-overview.md) for the full architecture.
 
@@ -176,12 +214,27 @@ Custom agents can be defined via config or `.agentcompany/agent/` files.
 
 ## Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh) + TypeScript
-- **TUI**: SolidJS + Ink (terminal rendering)
-- **State**: Effect-TS (functional effect system)
-- **Storage**: Drizzle ORM + SQLite
-- **Build**: Turborepo (monorepo)
-- **Models**: Any LLM provider (OpenAI, Anthropic, Google, local models...)
+| Layer | Technology |
+|-------|-----------|
+| Runtime | [Bun](https://bun.sh) + TypeScript |
+| TUI | SolidJS + OpenTUI (terminal rendering) |
+| State | [Effect-TS](https://effect.website) (functional effect system) |
+| Storage | Drizzle ORM + SQLite |
+| Build | Turborepo (monorepo) |
+| Models | Any LLM provider (OpenAI, Anthropic, Google, local models...) |
+
+---
+
+## Roadmap
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| **P0** — Execution Foundation | ✅ Done | Single-task chain, structured activity contracts, real delivery, approval, cancel |
+| **P1** — Execution Model + Multi-Agent | 🔨 In Progress | Agent=file-bundle, model=engine, concurrency=thread, presence registry |
+| **P2** — Org Context Foundation | 📋 Planned | Context resolver, scope × clearance, role-based visibility, delegate/message primitives |
+| **P3** — Interaction + Recursive Delegation | 📋 Planned | A2A alignment, recursive delegation, failure protocols, admission grading |
+| **P4** — Governance + Learning | 📋 Planned | Reputation, org changes, proposal loop, experience→skill crystallization |
+| **P5** — Experience & Spatial Loop | 📋 Planned | Differentiated rendering, living office, org tree + thread visualization |
 
 ---
 
@@ -201,10 +254,18 @@ bun test
 ## Community
 
 - [GitHub Discussions](https://github.com/Ericwong5021/agents-company/discussions) — Ask questions, share ideas
-- [Issues](https://github.com/Ericwong5021/agents-company/issues) — Report bugs, request features
+- [GitHub Issues](https://github.com/Ericwong5021/agents-company/issues) — Report bugs, request features
 
 ---
 
 ## License
 
 Source code is licensed under the [MIT License](./LICENSE). Use of Agent Company is also subject to the [Use Restrictions](./USE_RESTRICTIONS.md).
+
+---
+
+<div align="center">
+
+<sub>Built with the philosophy that AI should work <strong>like an organization</strong>, not like a chatbot.</sub>
+
+</div>
