@@ -1,44 +1,41 @@
-import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, For, Show } from "solid-js"
 import path from "path"
 import { Logo } from "../component/logo"
 import { logoThin, logos, type LogoKey } from "@/cli/logo"
 import { StarryBackground } from "../component/starry-background"
 import { BackgroundImage } from "../component/background-image"
-import { useProject } from "../context/project"
 import { useSync } from "../context/sync"
-import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useRouteData, useRoute } from "@tui/context/route"
 import { useRightSidebar } from "@tui/context/right-sidebar"
 import { useTheme } from "../context/theme"
 import { Locale } from "@/util"
 import { Session as SessionApi } from "@/session"
-import { usePromptRef } from "../context/prompt"
 import { useLocal } from "../context/local"
 import { useKV } from "../context/kv"
+import { useSDK } from "../context/sdk"
 import { useLanguage } from "@tui/context/language"
 import { TuiPluginRuntime } from "../plugin"
 import { Global } from "@/global"
 import { isPlainTerminal } from "../util/terminal"
 import { NavRow } from "../component/nav-row"
-
-let once = false
+import { HomeBoardPrompt } from "../component/home-board-prompt"
+import { Toast, useToast } from "../ui/toast"
 
 export function Home() {
   const sync = useSync()
-  const project = useProject()
   const route = useRouteData("home")
   const fullRoute = useRoute()
   const rightSidebar = useRightSidebar()
   const { theme } = useTheme()
-  const promptRef = usePromptRef()
-  const [ref, setRef] = createSignal<PromptRef | undefined>()
   const args = useArgs()
   const local = useLocal()
   const kv = useKV()
   const t = useLanguage().t
+  const sdk = useSDK()
+  const toast = useToast()
   const plainTerminal = isPlainTerminal()
+
   const bgImagePath = createMemo(() => {
     const filename = kv.get("background_image")
     if (!filename || typeof filename !== "string") return undefined
@@ -48,11 +45,9 @@ export function Home() {
     const key = kv.get("logo_design")
     return typeof key === "string" && key in logos ? (key as LogoKey) : "classic"
   })
-  // 所有 logo 变体(含默认的 thin 纤细半块)都显示流星特效。
   const showMeteor = () => true
 
-  // Publish the right-sidebar content for the home route: a recent-session
-  // history list. Clicking a row navigates to that session.
+  // ── Right sidebar: recent sessions ──────────────────────────────────────────
   createEffect(() => {
     const sessions = (sync.data.session ?? [])
       .toSorted((a, b) => b.time.updated - a.time.updated)
@@ -93,42 +88,47 @@ export function Home() {
     ))
   })
 
-  const placeholder = {
-    get normal() {
-      return [
-        t("tui.home.placeholder.example.todo"),
-        t("tui.home.placeholder.example.stack"),
-        t("tui.home.placeholder.example.tests"),
-      ]
-    },
-    shell: ["ls -la", "git status", "pwd"],
-  }
-  let sent = false
-
-  const bind = (r: PromptRef | undefined) => {
-    setRef(r)
-    promptRef.set(r)
-    if (once || !r) return
-    if (route.prompt) {
-      r.set(route.prompt)
-      once = true
-      return
-    }
-    if (!args.prompt) return
-    r.set({ input: args.prompt, parts: [] })
-    once = true
-  }
-
-  // Wait for sync and model store to be ready before auto-submitting --prompt
+  // ── Handle --prompt CLI arg: auto-send to board group session ───────────────
   createEffect(() => {
-    const r = ref()
-    if (sent) return
-    if (!r) return
     if (!sync.ready || !local.model.ready) return
     if (!args.prompt) return
-    if (r.current.input !== args.prompt) return
-    sent = true
-    r.submit()
+    const sent = kv.get("_home_prompt_auto_sent")
+    if (sent) return
+    kv.set("_home_prompt_auto_sent", true)
+    setTimeout(async () => {
+      try {
+        const existing = kv.get("board_group_session_id")
+        let gsid: string | undefined =
+          typeof existing === "string" ? existing : undefined
+        if (gsid) {
+          const check = await sdk.fetch(`${sdk.url}/group-session/${gsid}`)
+          if (!check.ok) gsid = undefined
+        }
+        if (!gsid) {
+          const res = await sdk.fetch(`${sdk.url}/company-agent`)
+          const agentList = (await res.json()) as Array<{ id: string }>
+          const agentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
+          const profile = kv.get("onboarding_profile") as Record<string, any> | undefined
+          const companyName = (profile?.companyName as string) || (profile?.userName as string) || ""
+          const createRes = await sdk.fetch(`${sdk.url}/group-session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: `董事会圆桌 · ${companyName}`, agentIDs }),
+          })
+          const info = (await createRes.json()) as { id: string }
+          gsid = info.id
+          kv.set("board_group_session_id", gsid)
+        }
+        await sdk.fetch(`${sdk.url}/group-session/${gsid}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: args.prompt }),
+        })
+        fullRoute.navigate({ type: "group-session", groupSessionID: gsid })
+      } catch {
+        toast.show({ variant: "error", message: "Failed to auto-send prompt" })
+      }
+    }, 100)
   })
 
   return (
@@ -163,37 +163,8 @@ export function Home() {
           </Show>
         </box>
         <box height={1} minHeight={0} flexShrink={1} />
-        <box
-          width="100%"
-          maxWidth={75}
-          zIndex={1000}
-          paddingTop={1}
-          flexShrink={0}
-        >
-          <Show
-            when={plainTerminal}
-            fallback={
-              <TuiPluginRuntime.Slot
-                name="home_prompt"
-                mode="replace"
-                workspace_id={project.workspace.current()}
-                ref={bind}
-              >
-                <Prompt
-                  ref={bind}
-                  workspaceID={project.workspace.current()}
-                  right={<TuiPluginRuntime.Slot name="home_prompt_right" workspace_id={project.workspace.current()} />}
-                  placeholders={placeholder}
-                />
-              </TuiPluginRuntime.Slot>
-            }
-          >
-            <Prompt
-              ref={bind}
-              workspaceID={project.workspace.current()}
-              placeholders={placeholder}
-            />
-          </Show>
+        <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
+          <HomeBoardPrompt />
         </box>
         <Show when={plainTerminal}>
           <box paddingTop={1} flexShrink={0}>
