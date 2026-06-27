@@ -64,6 +64,23 @@ interface GroupMessage {
   time: { created: number; updated: number }
 }
 
+interface BiddingBidEntry {
+  agentId: string
+  level: "must" | "want" | "could" | "pass"
+  type: "objection" | "answer" | "question" | "claim" | "info" | "support"
+  addressedAs: "direct" | "mention" | "none"
+  reason: string
+  score: number
+  eligible: boolean
+}
+
+interface BiddingRoundDisplay {
+  roundNum: number
+  status: "probing" | "resolved"
+  winnerId: string | null
+  bids: BiddingBidEntry[]
+}
+
 export function GroupSession() {
   const route = useRouteData("group-session")
   const fullRoute = useRoute()
@@ -150,6 +167,15 @@ export function GroupSession() {
     Record<string, { companyAgentID: string; roundNum: number }>
   >({})
 
+  // ---- bidding phase state (driven by group_session.bidding_* events) ----
+  const [biddingRounds, setBiddingRounds] = createSignal<BiddingRoundDisplay[]>([])
+  const [biddingActive, setBiddingActive] = createSignal(false)
+
+  const currentBiddingRound = createMemo(() => {
+    const rounds = biddingRounds()
+    return rounds.length > 0 ? rounds[rounds.length - 1] : undefined
+  })
+
   // ---- per-member live state derived from sync store ----
   // Only depends on session_status, which flips on busy/idle transitions —
   // NOT on message/part deltas. This keeps the memo (and the <For> over it)
@@ -184,7 +210,7 @@ export function GroupSession() {
     })
   })
 
-  const groupBusy = createMemo(() => workingEntries().length > 0 || memberState().some((m) => m.busy))
+  const groupBusy = createMemo(() => biddingActive() || workingEntries().length > 0 || memberState().some((m) => m.busy))
   const anyMember = createMemo(() => memberState().length > 0)
 
   // Publish the member-list sidebar to the shell's right column. Re-runs when
@@ -239,12 +265,51 @@ export function GroupSession() {
           void sync.session.reconcileStatus()
           break
         }
-        // User message persisted → clear optimistic bubble, refetch real data
+        // User message persisted → clear optimistic bubble, clear bidding state, refetch real data
         case "group_session.user_message_persisted": {
           if (ev.properties.groupSessionID !== route.groupSessionID) return
           setOptimisticUser(null)
+          setBiddingRounds([])
+          setBiddingActive(false)
           void refetchMessages()
           toBottom()
+          break
+        }
+        // Bidding round started → add a probing entry
+        case "group_session.bidding_started": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setBiddingActive(true)
+          setBiddingRounds((prev) => [
+            ...prev,
+            {
+              roundNum: ev.properties.roundNum,
+              status: "probing",
+              winnerId: null,
+              bids: [],
+            },
+          ])
+          break
+        }
+        // Bidding round completed → fill in bids + winner on the last entry
+        case "group_session.bidding_completed": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setBiddingRounds((prev) => {
+            if (prev.length === 0) return prev
+            const next = [...prev]
+            next[next.length - 1] = {
+              roundNum: next[next.length - 1].roundNum,
+              status: "resolved",
+              winnerId: ev.properties.winnerId,
+              bids: ev.properties.bids,
+            }
+            return next
+          })
+          break
+        }
+        // Turn yielded → bidding phase is over
+        case "group_session.turn_yielded": {
+          if (ev.properties.groupSessionID !== route.groupSessionID) return
+          setBiddingActive(false)
           break
         }
         // Agent started → add to workingAgents
@@ -274,6 +339,16 @@ export function GroupSession() {
       }
     })
   })
+
+  function openBiddingDialog() {
+    const rounds = biddingRounds()
+    if (rounds.length === 0) return
+    const agents = agentByID()
+    dialog.setSize("xlarge")
+    dialog.replace(
+      <BiddingDetailsDialog rounds={rounds} agentByID={agents} />,
+    )
+  }
 
   function toBottom() {
     setTimeout(() => {
@@ -376,6 +451,9 @@ export function GroupSession() {
     // The server persists the user message and returns roundNum, then the
     // UserMessagePersisted event clears the optimistic bubble and refetches
     // the real data.
+    // Reset bidding state for the new user turn.
+    setBiddingRounds([])
+    setBiddingActive(false)
     const now = Date.now()
     setOptimisticUser({
       id: `optimistic-${now}`,
@@ -536,22 +614,33 @@ export function GroupSession() {
               )}
             </Show>
 
-            {/* live cards for the current (in-progress) round */}
-            <Show when={workingEntries().length > 0}>
-              <box marginTop={1} flexDirection="column" gap={1}>
-                <For each={workingEntries()}>
-                  {(w, i) => (
-                    <LiveCard
-                      agent={w.agent}
-                      color={agentColor(theme, w.agent, i())}
-                      status="busy"
-                      onClick={() => navigate({ type: "session", sessionID: w.sessionID, groupSessionID: route.groupSessionID })}
-                    />
-                  )}
-                </For>
-              </box>
-            </Show>
           </scrollbox>
+
+          {/* ---- status bar area (below scrollbox, always at bottom) ---- */}
+          <Show when={currentBiddingRound()}>
+            {(round) => (
+              <box flexShrink={0}>
+                <BiddingStatusBar
+                  round={round()}
+                  onClick={openBiddingDialog}
+                />
+              </box>
+            )}
+          </Show>
+          <Show when={workingEntries().length > 0}>
+            <box flexShrink={0} flexDirection="column" gap={1}>
+              <For each={workingEntries()}>
+                {(w, i) => (
+                  <LiveCard
+                    agent={w.agent}
+                    color={agentColor(theme, w.agent, i())}
+                    status="busy"
+                    onClick={() => navigate({ type: "session", sessionID: w.sessionID, groupSessionID: route.groupSessionID })}
+                  />
+                )}
+              </For>
+            </box>
+          </Show>
 
           {/* input footer */}
           <box flexShrink={0} paddingBottom={1} paddingTop={1} gap={1}>
@@ -777,4 +866,164 @@ function agentColor(theme: any, agent: CompanyAgentInfo | undefined, fallbackInd
   }
   const palette = [theme.secondary, theme.accent, theme.success, theme.warning, theme.primary, theme.info]
   return palette[fallbackIndex % palette.length]
+}
+
+// ---------------------------------------------------------------------------
+// Bidding status bar – shown during / after each bidding round
+// ---------------------------------------------------------------------------
+
+function BiddingStatusBar(props: {
+  round: BiddingRoundDisplay
+  onClick: () => void
+}) {
+  const { theme } = useTheme()
+  const r = props.round
+
+  if (r.status === "probing") {
+    return (
+      <box
+        border={["left"]}
+        borderColor={theme.info}
+        customBorderChars={SplitBorder.customBorderChars}
+      >
+        <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
+          <box flexDirection="row" gap={1}>
+            <text fg={theme.info}>⚡ Bidding round {r.roundNum}…</text>
+            <Spinner color={theme.textMuted}>probing</Spinner>
+          </box>
+        </box>
+        <box onMouseUp={props.onClick} />
+      </box>
+    )
+  }
+
+  return (
+    <box
+      border={["left"]}
+      borderColor={r.winnerId ? (theme.success) : (theme.textMuted)}
+      customBorderChars={SplitBorder.customBorderChars}
+    >
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
+        <box flexDirection="row" gap={1}>
+          <Show when={r.winnerId} fallback={
+            <text fg={theme.textMuted}>⏸ Round {r.roundNum}: no speaker selected</text>
+          }>
+            <text fg={theme.textMuted}>
+              <span style={{ fg: theme.success }}>🏆</span>
+              {" "}Round {r.roundNum}: {r.winnerId} won{" "}
+              <span style={{ fg: theme.textMuted }}>
+                ({r.bids.length} bids){" "}
+                <span style={{ fg: theme.textMuted }}>· Click for details</span>
+              </span>
+            </text>
+          </Show>
+        </box>
+      </box>
+      <box onMouseUp={props.onClick} />
+    </box>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Bidding details dialog – shows full bid table per round
+// ---------------------------------------------------------------------------
+
+function BiddingDetailsDialog(props: {
+  rounds: BiddingRoundDisplay[]
+  agentByID: Record<string, CompanyAgentInfo>
+}) {
+  const { theme } = useTheme()
+
+  return (
+    <box padding={2} flexDirection="column" gap={0}>
+      {/* header */}
+      <text fg={theme.text} attributes={TextAttributes.BOLD}>
+        Bidding Details{" "}
+      </text>
+      <text fg={theme.textMuted}>
+        {props.rounds.length} round{props.rounds.length > 1 ? "s" : ""} · click outside or Esc to close
+      </text>
+
+      <box height={1} />
+
+      {/* round list */}
+      <For each={props.rounds}>
+        {(round) => (
+          <box flexDirection="column" gap={0} marginTop={1}>
+            {/* round header */}
+            <Show when={round.status === "resolved" && round.winnerId} fallback={
+              <text fg={theme.textMuted}>
+                Round {round.roundNum}: probing in progress…
+              </text>
+            }>
+              <text fg={theme.success} attributes={TextAttributes.BOLD}>
+                Round {round.roundNum} — Winner: {round.winnerId}
+              </text>
+            </Show>
+
+            {/* bid table (only when resolved) */}
+            <Show when={round.status === "resolved" && round.bids.length > 0}>
+              <box flexDirection="column" gap={0} marginTop={0} paddingLeft={2}>
+                {/* header row */}
+                <box flexDirection="row" gap={3} paddingTop={0}>
+                  <text fg={theme.textMuted} width={3}> </text>
+                  <text fg={theme.textMuted} width={14}>Agent</text>
+                  <text fg={theme.textMuted} width={7}>Level</text>
+                  <text fg={theme.textMuted} width={10}>Type</text>
+                  <text fg={theme.textMuted} width={12}>Addressed</text>
+                  <text fg={theme.textMuted} width={6}>Score</text>
+                </box>
+                <text fg={theme.textMuted}>
+                  {"  "}{"─".repeat(52)}
+                </text>
+                <For each={round.bids}>
+                  {(bid) => (
+                    <box flexDirection="row" gap={3}>
+                      <text width={3} fg={bid.agentId === round.winnerId ? (theme.warning) : (theme.textMuted)}>
+                        {bid.agentId === round.winnerId ? "🏆" : "  "}
+                      </text>
+                      <text
+                        width={14}
+                        fg={bid.agentId === round.winnerId ? (theme.text) : (theme.textMuted)}
+                        attributes={bid.agentId === round.winnerId ? TextAttributes.BOLD : undefined}
+                      >
+                        {bid.agentId}
+                      </text>
+                      <text
+                        width={7}
+                        fg={bid.eligible ? (theme.text) : (theme.textMuted)}
+                      >
+                        {bid.level}
+                      </text>
+                      <text width={10} fg={bid.eligible ? (theme.text) : (theme.textMuted)}>
+                        {bid.type}
+                      </text>
+                      <text width={12} fg={bid.eligible ? (theme.text) : (theme.textMuted)}>
+                        {bid.addressedAs}
+                      </text>
+                      <text
+                        width={6}
+                        fg={bid.eligible ? (bid.agentId === round.winnerId ? (theme.success) : (theme.text)) : (theme.textMuted)}
+                        attributes={bid.agentId === round.winnerId ? TextAttributes.BOLD : undefined}
+                      >
+                        {bid.eligible ? String(bid.score) : "—"}
+                      </text>
+                    </box>
+                  )}
+                </For>
+              </box>
+            </Show>
+
+            {/* reason summary for winner */}
+            <Show when={round.status === "resolved" && round.winnerId}>
+              <text fg={theme.textMuted} paddingLeft={5}>
+                Winner bid:{" "}
+                {round.bids.find((b) => b.agentId === round.winnerId)?.reason ?? ""}
+              </text>
+            </Show>
+          </box>
+        )}
+      </For>
+    </box>
+  )
 }
