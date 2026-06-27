@@ -35,6 +35,12 @@ export const dict = {
   "tui.home.agreement.privacy": "Politique de confidentialité",
   "tui.home.agreement.suffix": "",
 
+  // Board chat (home prompt → group chat)
+  "tui.home.board_chat.title": "Conseil d'administration",
+  "tui.home.board_chat.placeholder": "Envoyer un message à tous les membres du conseil...",
+  "tui.home.board_chat.hint": "Entrée pour envoyer · / pour les commandes",
+  "tui.home.board_chat.sending": "envoi...",
+
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "joindre un fichier",
   "tui.prompt.hint.subagent": "sous-agent",

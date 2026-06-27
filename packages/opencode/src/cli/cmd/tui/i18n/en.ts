@@ -34,6 +34,12 @@ export const dict: Record<string, string> = {
   "tui.home.agreement.privacy": "Privacy Policy",
   "tui.home.agreement.suffix": "",
 
+  // Board chat (home prompt → group chat)
+  "tui.home.board_chat.title": "Board Chat",
+  "tui.home.board_chat.placeholder": "Message all board members...",
+  "tui.home.board_chat.hint": "Enter to send · / for commands",
+  "tui.home.board_chat.sending": "sending...",
+
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "attach file",
   "tui.prompt.hint.subagent": "subagent",

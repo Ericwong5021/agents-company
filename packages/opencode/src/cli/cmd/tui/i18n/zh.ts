@@ -38,6 +38,12 @@ export const dict = {
   "tui.home.agreement.privacy": "隐私政策",
   "tui.home.agreement.suffix": "",
 
+  // Board chat (home prompt → group chat)
+  "tui.home.board_chat.title": "董事会群聊",
+  "tui.home.board_chat.placeholder": "向所有董事会成员发送消息...",
+  "tui.home.board_chat.hint": "Enter 发送 · / 唤起命令",
+  "tui.home.board_chat.sending": "发送中...",
+
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "添加文件",
   "tui.prompt.hint.subagent": "子智能体",

@@ -38,6 +38,12 @@ export const dict = {
   "tui.home.agreement.privacy": "プライバシーポリシー",
   "tui.home.agreement.suffix": "に同意したものとみなされます",
 
+  // Board chat (home prompt → group chat)
+  "tui.home.board_chat.title": "役員会チャット",
+  "tui.home.board_chat.placeholder": "全ての役員にメッセージを送信...",
+  "tui.home.board_chat.hint": "Enter で送信 · / でコマンド",
+  "tui.home.board_chat.sending": "送信中...",
+
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "ファイル添付",
   "tui.prompt.hint.subagent": "サブエージェント",
