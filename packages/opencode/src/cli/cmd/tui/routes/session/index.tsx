@@ -65,6 +65,7 @@ import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
+import { DialogTaskCreate } from "../../component/dialog-task-create"
 import { Sidebar } from "./sidebar"
 import { useRightSidebar } from "@tui/context/right-sidebar"
 import { SubagentFooter } from "./subagent-footer.tsx"
@@ -478,6 +479,18 @@ export function Session() {
       },
       onSelect: (dialog) => {
         dialog.replace(() => <DialogSessionRename session={route.sessionID} />)
+      },
+    },
+    {
+      title: "New Task",
+      value: "session.task_create",
+      keybind: "session_task_create",
+      category: "session",
+      slash: {
+        name: "task",
+      },
+      onSelect: (dialog) => {
+        dialog.replace(() => <DialogTaskCreate sessionID={route.sessionID} />)
       },
     },
     {
