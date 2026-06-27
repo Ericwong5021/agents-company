@@ -1,5 +1,5 @@
 import z from "zod"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Ref, Stream } from "effect"
 import { Database, eq, and, desc } from "../storage"
 import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "./group-session.sql"
 import { GroupSessionID } from "./schema"
@@ -15,6 +15,15 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
+import { BiddingScheduler } from "./scheduler/BiddingScheduler"
+import { probeOne } from "./scheduler/probe"
+import type { ProbeInput } from "./scheduler/probe"
+import type { Bid, ScoredBid } from "./scheduler/bidding.types"
+import { CompanyAgent } from "@/company-agent"
+import { Memory } from "@/memory"
+import { Agent } from "@/agent/agent"
+import { Provider } from "@/provider"
+import { LLM } from "@/session/llm"
 
 // ---------------------------------------------------------------------------
 // Info types
@@ -123,6 +132,42 @@ export const Event = {
       sessionID: z.string(),
       companyAgentID: z.string(),
       statusSummary: z.enum(["done", "error", "interrupted"]),
+    }),
+  ),
+  TurnYielded: BusEvent.define(
+    "group_session.turn_yielded",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      consecutiveAgentTurns: z.number(),
+      reason: z.enum(["budget_K_reached", "all_pass", "no_bid_over_threshold"]),
+    }),
+  ),
+  // Fires when a bidding round starts probing all members.
+  BiddingStarted: BusEvent.define(
+    "group_session.bidding_started",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      roundNum: z.number(),
+    }),
+  ),
+  // Fires when a bidding round completes (probe + arbitrate) with full details.
+  BiddingCompleted: BusEvent.define(
+    "group_session.bidding_completed",
+    z.object({
+      groupSessionID: GroupSessionID.zod,
+      roundNum: z.number(),
+      winnerId: z.string().nullable(),
+      bids: z.array(
+        z.object({
+          agentId: z.string(),
+          level: z.enum(["must", "want", "could", "pass"]),
+          type: z.enum(["objection", "answer", "question", "claim", "info", "support"]),
+          addressedAs: z.enum(["direct", "mention", "none"]),
+          reason: z.string(),
+          score: z.number(),
+          eligible: z.boolean(),
+        }),
+      ),
     }),
   ),
 }
@@ -279,11 +324,31 @@ function insertGroupMessage(input: {
   )
 }
 
+function extractMessageText(msg: { parts: ReadonlyArray<{ type: string; text?: string }> }): string {
+  return msg.parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text" && !!p.text)
+    .map((p) => p.text)
+    .join("") || "(no output)"
+}
+
 // ---------------------------------------------------------------------------
 // Layer
 // ---------------------------------------------------------------------------
 
-export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.Service | SessionStatus.Service | SessionRunState.Service | Bus.Service> =
+export const layer: Layer.Layer<
+  Service,
+  never,
+  | Session.Service
+  | SessionPrompt.Service
+  | SessionStatus.Service
+  | SessionRunState.Service
+  | Bus.Service
+  | CompanyAgent.Service
+  | Memory.Service
+  | Agent.Service
+  | Provider.Service
+  | LLM.Service
+> =
   Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -292,6 +357,12 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
       const statusSvc = yield* SessionStatus.Service
       const runState = yield* SessionRunState.Service
       const bus = yield* Bus.Service
+      const companyAgentSvc = yield* CompanyAgent.Service
+      const memorySvc = yield* Memory.Service
+      const agentSvc = yield* Agent.Service
+      const provider = yield* Provider.Service
+      const llmSvc = yield* LLM.Service
+      const activeSchedulers = yield* Ref.make(new Set<string>())
 
       // --- create ---
 
@@ -388,6 +459,8 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
       // --- isBusy ---
 
       const isBusy = Effect.fn("GroupSession.isBusy")(function* (id: GroupSessionID) {
+        const active = yield* Ref.get(activeSchedulers)
+        if (active.has(id)) return true
         const info = yield* get(id)
         const statuses = yield* Effect.forEach(
           info.members,
@@ -395,6 +468,59 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           { concurrency: "unbounded" },
         )
         return statuses.some((s) => s.type === "busy")
+      })
+
+      // --- probe helpers ---
+
+      const loadCompanyAgent = Effect.fn("GroupSession.loadCompanyAgent")(function* (agentID: CompanyAgentID) {
+        return yield* companyAgentSvc.get(agentID)
+      })
+
+      const searchPrivateMemory = Effect.fn("GroupSession.searchPrivateMemory")(function* (agentID: string) {
+        const results = yield* memorySvc.search({
+          query: "",
+          scope: "agents",
+          scope_id: agentID,
+        }).pipe(Effect.orElseSucceed(() => []))
+        return results.slice(0, 5).map((r) => r.snippet).join("\n\n")
+      })
+
+      /**
+       * Build the prompt text for a specific speaker.
+       * Injects: group context (shared history) + current trigger message + private memories + turn directive.
+       */
+      const buildSpeakerPrompt = Effect.fn("GroupSession.buildSpeakerPrompt")(function* (params: {
+        groupID: GroupSessionID
+        speakerID: CompanyAgentID
+        speakerName: string
+        speakerRole: string
+        speakerDescription: string
+        currentMessage: string
+        roundNum: number
+      }) {
+        const groupContext = yield* Effect.sync(() => buildGroupContext(params.groupID, params.roundNum))
+        const privateMemories = yield* searchPrivateMemory(params.speakerID)
+
+        const parts: string[] = []
+        if (groupContext) parts.push(groupContext)
+        parts.push(`<current_message>\n${params.currentMessage}\n</current_message>`)
+        if (privateMemories) {
+          parts.push(`<your_private_context>\n${privateMemories}\n</your_private_context>`)
+        }
+        parts.push(
+          `<persona>\n` +
+          `Name: ${params.speakerName}\n` +
+          `Role: ${params.speakerRole}\n` +
+          `Description: ${params.speakerDescription}\n` +
+          `</persona>\n\n` +
+          `[INSTRUCTION]\n` +
+          `You are ${params.speakerName} (${params.speakerRole}) in a group discussion.\n` +
+          `Use the shared context above to understand what has been said.\n` +
+          `Do not repeat points others have already made.\n` +
+          `Speak naturally in your own voice based on your persona and role.\n` +
+          `[/INSTRUCTION]`,
+        )
+        return parts.join("\n\n")
       })
 
       // --- chat ---
@@ -416,13 +542,6 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           }),
         )
 
-        // Build context from previous rounds (not this round — agents are blind to each other)
-        const groupContext = yield* Effect.sync(() => buildGroupContext(input.groupSessionID, roundNum))
-
-        const promptText = groupContext
-          ? `${groupContext}\n\n${input.text}`
-          : input.text
-
         const memberSessionIDs = info.members.map((m) => m.sessionID)
 
         yield* bus.publish(Event.ChatSent, {
@@ -431,99 +550,28 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           memberSessionIDs,
         })
 
-        // Emit user message persisted — TUI uses this to show the user bubble
         yield* bus.publish(Event.UserMessagePersisted, {
           groupSessionID: input.groupSessionID,
           roundNum,
         })
 
-        // Fan-out: fire each member session concurrently in the background.
-        // Each member's lifecycle publishes AgentStarted/AgentCompleted events
-        // so the TUI can show working → content bubble transitions per-agent.
-        // The fan-out is fork-detached so chat() returns immediately after
-        // publishing UserMessagePersisted, letting the TUI show the user bubble
-        // without waiting for agents to finish.
-        yield* Effect.forEach(
-          info.members,
-          (member) =>
-            Effect.gen(function* () {
-              // Signal that this agent is starting
-              yield* bus.publish(Event.AgentStarted, {
-                groupSessionID: input.groupSessionID,
-                roundNum,
-                sessionID: member.sessionID,
-                companyAgentID: member.companyAgentID,
-              })
+        // Mark this group as having an active scheduler
+        yield* Ref.update(activeSchedulers, (s) => new Set(s).add(input.groupSessionID))
 
-              // Run the agent prompt
-              yield* promptSvc.prompt({
-                sessionID: member.sessionID as SessionID,
-                agentID: "main",
-                source: "user",
-                parts: [{ type: "text", text: promptText }],
-              }).pipe(
-                Effect.matchEffect({
-                  onSuccess: (msg) => {
-                    const chatText =
-                      msg.parts
-                        .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
-                        .map((p) => p.text)
-                        .join("") || "(no output)"
-                    return Effect.gen(function* () {
-                      yield* Effect.sync(() =>
-                        insertGroupMessage({
-                          groupSessionID: input.groupSessionID,
-                          roundNum,
-                          role: "agent",
-                          companyAgentID: member.companyAgentID as CompanyAgentID,
-                          sessionID: member.sessionID as SessionID,
-                          content: chatText,
-                          statusSummary: "done",
-                        }),
-                      )
-                      yield* bus.publish(Event.AgentCompleted, {
-                        groupSessionID: input.groupSessionID,
-                        roundNum,
-                        sessionID: member.sessionID,
-                        companyAgentID: member.companyAgentID,
-                        statusSummary: "done",
-                      })
-                    })
-                  },
-                  onFailure: () =>
-                    Effect.gen(function* () {
-                      yield* Effect.sync(() =>
-                        insertGroupMessage({
-                          groupSessionID: input.groupSessionID,
-                          roundNum,
-                          role: "agent",
-                          companyAgentID: member.companyAgentID as CompanyAgentID,
-                          sessionID: member.sessionID as SessionID,
-                          content: "",
-                          statusSummary: "error",
-                        }),
-                      )
-                      yield* bus.publish(Event.AgentCompleted, {
-                        groupSessionID: input.groupSessionID,
-                        roundNum,
-                        sessionID: member.sessionID,
-                        companyAgentID: member.companyAgentID,
-                        statusSummary: "error",
-                      })
-                    }),
-                }),
-              )
-            }),
-          { concurrency: "unbounded", discard: true },
-        ).pipe(
-          // After all agents finish: re-assert idle + emit RoundComplete
+        // Fork-detach the bidding loop so chat() returns immediately.
+        yield* runBiddingLoop({
+          info,
+          roundNum,
+          groupSessionID: input.groupSessionID,
+          userText: input.text,
+        }).pipe(
           Effect.ensuring(
             Effect.gen(function* () {
-              yield* Effect.forEach(
-                info.members,
-                (m) => statusSvc.set(m.sessionID as SessionID, { type: "idle" }),
-                { concurrency: "unbounded", discard: true },
-              )
+              yield* Ref.update(activeSchedulers, (s) => {
+                const next = new Set(s)
+                next.delete(input.groupSessionID)
+                return next
+              })
               const completedAt = Date.now()
               yield* Effect.sync(() =>
                 Database.use((db) =>
@@ -534,14 +582,250 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
                     .run(),
                 ),
               )
-              yield* bus.publish(Event.RoundComplete, {
-                groupSessionID: input.groupSessionID,
-                roundNum,
-              })
             }),
           ),
           Effect.forkDetach,
         )
+      })
+
+      /**
+       * The core bidding loop:
+       * 1. Parallel probe all members
+       * 2. Arbitrate to select a speaker
+       * 3. If idle: human fallback (if user-msg triggered) or natural stop
+       * 4. If yield: publish TurnYielded and stop
+       * 5. If winner: prompt the speaker, save response, settle rights, re-bid
+       */
+      const runBiddingLoop = Effect.fn("GroupSession.runBiddingLoop")(function* (params: {
+        info: Info
+        roundNum: number
+        groupSessionID: GroupSessionID
+        userText: string
+      }) {
+        const memberIds = params.info.members.map((m) => m.companyAgentID)
+        const scheduler = new BiddingScheduler(params.groupSessionID, memberIds)
+
+        // Load all company agents for persona info
+        const agentInfos: Record<string, CompanyAgent.Info> = {}
+        for (const m of params.info.members) {
+          const ag = yield* loadCompanyAgent(m.companyAgentID as CompanyAgentID)
+          if (ag) agentInfos[m.companyAgentID] = ag
+        }
+
+        // Resolve probe dependencies (from closure)
+        const probeAgent = yield* agentSvc.get("probe").pipe(Effect.orElseSucceed(() => undefined))
+        if (!probeAgent) return
+
+        const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent }
+
+        // Round 1: triggered by user message
+        let lastMessage = params.userText
+        const speakersThisTurn = new Set<string>()
+        const minSpeakers = Math.min(2, params.info.members.length)
+
+        yield* bus.publish(Event.BiddingStarted, {
+          groupSessionID: params.groupSessionID,
+          roundNum: scheduler.state.round + 1,
+        })
+
+        let bids = yield* Effect.forEach(
+          params.info.members,
+          (member) =>
+            Effect.gen(function* () {
+              const agent = agentInfos[member.companyAgentID]
+              const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID, params.roundNum))
+              const probeInput: ProbeInput = {
+                persona: {
+                  name: agent?.name ?? member.companyAgentID,
+                  role: member.companyAgentID,
+                  description: agent?.description ?? "",
+                },
+                lastEvent: `User sent a new message: ${params.userText}`,
+                transcript,
+                members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
+                groupSessionID: params.groupSessionID,
+              }
+              const bid = yield* probeOne(probeCtx, probeInput)
+              return { agentId: member.companyAgentID, bid }
+            }),
+          { concurrency: "unbounded" },
+        )
+
+        let selection = scheduler.decide(bids)
+
+        // Emit BiddingCompleted with full scored-bid data
+        {
+          const arb = scheduler.lastArbitration
+          if (arb) {
+            yield* bus.publish(Event.BiddingCompleted, {
+              groupSessionID: params.groupSessionID,
+              roundNum: scheduler.state.round,
+              winnerId: arb.winnerId,
+              bids: arb.scored.map((s) => ({
+                agentId: s.agentId,
+                level: s.bid.level,
+                type: s.bid.type,
+                addressedAs: s.bid.addressedAs,
+                reason: s.bid.reason,
+                score: s.score,
+                eligible: s.eligible,
+              })),
+            })
+          }
+        }
+
+        // Re-bid loop
+        while (true) {
+          if (selection.type === "yielded") {
+            yield* bus.publish(Event.TurnYielded, {
+              groupSessionID: params.groupSessionID,
+              consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
+              reason: "budget_K_reached",
+            })
+            yield* bus.publish(Event.RoundComplete, {
+              groupSessionID: params.groupSessionID,
+              roundNum: params.roundNum,
+            })
+            return
+          }
+
+          if (selection.type === "idle") {
+            // Ensure enough agents get a chance to speak per user turn
+            if (speakersThisTurn.size < minSpeakers || lastMessage === params.userText) {
+              selection = { type: "human_fallback", agentId: scheduler.decideFallback().agentId }
+            } else {
+              yield* bus.publish(Event.TurnYielded, {
+                groupSessionID: params.groupSessionID,
+                consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
+                reason: selection.reason === "none_over_threshold" ? "no_bid_over_threshold" : "all_pass",
+              })
+              yield* bus.publish(Event.RoundComplete, {
+                groupSessionID: params.groupSessionID,
+                roundNum: params.roundNum,
+              })
+              return
+            }
+          }
+
+          if (selection.type === "winner" || selection.type === "human_fallback") {
+            const speakerId = selection.agentId
+
+            const member = params.info.members.find((m) => m.companyAgentID === speakerId)
+            if (!member) break
+
+            const agentInfo = agentInfos[speakerId]
+            const speakerName = agentInfo?.name ?? speakerId
+
+            yield* bus.publish(Event.AgentStarted, {
+              groupSessionID: params.groupSessionID,
+              roundNum: params.roundNum,
+              sessionID: member.sessionID,
+              companyAgentID: speakerId,
+            })
+
+            const speakerPrompt = yield* buildSpeakerPrompt({
+              groupID: params.groupSessionID,
+              speakerID: speakerId as CompanyAgentID,
+              speakerName,
+              speakerRole: agentInfo?.name ?? speakerId,
+              speakerDescription: agentInfo?.description ?? "",
+              currentMessage: lastMessage,
+              roundNum: params.roundNum,
+            })
+
+            const result = yield* promptSvc.prompt({
+              sessionID: member.sessionID as SessionID,
+              agentID: "main",
+              source: "user",
+              parts: [{ type: "text", text: speakerPrompt }],
+            }).pipe(
+              Effect.matchEffect({
+                onSuccess: (msg) => Effect.succeed(extractMessageText(msg as any)),
+                onFailure: () => Effect.succeed(""),
+              }),
+            )
+
+            yield* Effect.sync(() =>
+              insertGroupMessage({
+                groupSessionID: params.groupSessionID,
+                roundNum: params.roundNum,
+                role: "agent",
+                companyAgentID: speakerId as CompanyAgentID,
+                sessionID: member.sessionID as SessionID,
+                content: result || "",
+                statusSummary: result ? "done" : "error",
+              }),
+            )
+
+            yield* bus.publish(Event.AgentCompleted, {
+              groupSessionID: params.groupSessionID,
+              roundNum: params.roundNum,
+              sessionID: member.sessionID,
+              companyAgentID: speakerId,
+              statusSummary: result ? "done" : "error",
+            })
+
+            scheduler.afterSpeak(speakerId)
+            speakersThisTurn.add(speakerId)
+
+            lastMessage = result || ""
+
+            yield* bus.publish(Event.BiddingStarted, {
+              groupSessionID: params.groupSessionID,
+              roundNum: scheduler.state.round + 1,
+            })
+
+            bids = yield* Effect.forEach(
+              params.info.members,
+              (member) =>
+                Effect.gen(function* () {
+                  const agent = agentInfos[member.companyAgentID]
+                  const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID, params.roundNum))
+                  const probeInput: ProbeInput = {
+                    persona: {
+                      name: agent?.name ?? member.companyAgentID,
+                      role: member.companyAgentID,
+                      description: agent?.description ?? "",
+                    },
+                    lastEvent: `Agent ${speakerName} just spoke: ${lastMessage.slice(0, 200)}`,
+                    transcript,
+                    members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
+                    groupSessionID: params.groupSessionID,
+                  }
+                  const bid = yield* probeOne(probeCtx, probeInput)
+                  return { agentId: member.companyAgentID, bid }
+                }),
+              { concurrency: "unbounded" },
+            )
+            selection = scheduler.decide(bids)
+
+            // Emit BiddingCompleted for the re-bid round
+            {
+              const arb = scheduler.lastArbitration
+              if (arb) {
+                yield* bus.publish(Event.BiddingCompleted, {
+                  groupSessionID: params.groupSessionID,
+                  roundNum: scheduler.state.round,
+                  winnerId: arb.winnerId,
+                  bids: arb.scored.map((s) => ({
+                    agentId: s.agentId,
+                    level: s.bid.level,
+                    type: s.bid.type,
+                    addressedAs: s.bid.addressedAs,
+                    reason: s.bid.reason,
+                    score: s.score,
+                    eligible: s.eligible,
+                  })),
+                })
+              }
+            }
+          }
+        }
+
+        yield* bus.publish(Event.RoundComplete, {
+          groupSessionID: params.groupSessionID,
+          roundNum: params.roundNum,
+        })
       })
 
       // --- interrupt ---
@@ -553,6 +837,11 @@ export const layer: Layer.Layer<Service, never, Session.Service | SessionPrompt.
           (m) => runState.cancel(m.sessionID as SessionID).pipe(Effect.ignore),
           { concurrency: "unbounded", discard: true },
         )
+        yield* Ref.update(activeSchedulers, (s) => {
+          const next = new Set(s)
+          next.delete(id)
+          return next
+        })
       })
 
       // --- messages ---
@@ -612,6 +901,11 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(SessionStatus.defaultLayer),
     Layer.provide(SessionRunState.defaultLayer),
     Layer.provide(Bus.layer),
+    Layer.provide(CompanyAgent.defaultLayer),
+    Layer.provide(Memory.defaultLayer),
+    Layer.provide(Agent.defaultLayer),
+    Layer.provide(Provider.defaultLayer),
+    Layer.provide(LLM.defaultLayer),
   ),
 )
 
