@@ -273,6 +273,139 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/task",
+      describeRoute({
+        summary: "Create session task",
+        description: "Create a new task (work-item) in a session.",
+        operationId: "session.task.create",
+        responses: {
+          ...errors(400, 404),
+          200: {
+            description: "Created task",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          summary: z.string().min(1),
+          parent_id: z.string().optional(),
+          owner: z.string().optional(),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("SessionRoutes.taskCreate", c, function* () {
+          const { sessionID } = c.req.valid("param")
+          const body = c.req.valid("json")
+          const session = yield* Session.Service
+          yield* session.get(sessionID)
+          const reg = yield* TaskRegistry.Service
+          return yield* reg.create({
+            session_id: sessionID,
+            summary: body.summary,
+            parent_id: body.parent_id,
+            owner: body.owner,
+          })
+        }),
+    )
+    .post(
+      "/:sessionID/task/:taskID/abandon",
+      describeRoute({
+        summary: "Abandon session task",
+        description: "Mark a task as abandoned (cancelled).",
+        operationId: "session.task.abandon",
+        responses: {
+          ...errors(400, 404),
+          200: {
+            description: "Abandoned task",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+          taskID: z.string(),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          event_summary: z.string().optional(),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("SessionRoutes.taskAbandon", c, function* () {
+          const { sessionID, taskID } = c.req.valid("param")
+          const body = c.req.valid("json")
+          const reg = yield* TaskRegistry.Service
+          return yield* reg.abandon({
+            session_id: sessionID,
+            id: taskID,
+            event_summary: body.event_summary,
+          })
+        }),
+    )
+    .post(
+      "/:sessionID/task/:taskID/done",
+      describeRoute({
+        summary: "Complete session task",
+        description: "Mark a task as done (completed).",
+        operationId: "session.task.done",
+        responses: {
+          ...errors(400, 404),
+          200: {
+            description: "Completed task",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+          taskID: z.string(),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          event_summary: z.string().optional(),
+        }),
+      ),
+      async (c) =>
+        jsonRequest("SessionRoutes.taskDone", c, function* () {
+          const { sessionID, taskID } = c.req.valid("param")
+          const body = c.req.valid("json")
+          const reg = yield* TaskRegistry.Service
+          return yield* reg.done({
+            session_id: sessionID,
+            id: taskID,
+            event_summary: body.event_summary,
+          })
+        }),
+    )
+    .post(
       "/",
       describeRoute({
         summary: "Create session",
