@@ -285,7 +285,7 @@ for (const item of targets) {
         description: "Platform-specific binary for @agents-company/cli.",
         license: "MIT",
         author: "Agents Company Team",
-        homepage: "https://mimo.xiaomi.com/coder",
+        homepage: "https://github.com/Ericwong5021/agents-company",
         repository: {
           type: "git",
           url: "git+https://github.com/Ericwong5021/agents-company.git",

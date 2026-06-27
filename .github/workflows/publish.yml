@@ -138,8 +138,8 @@ jobs:
           }
           EOF
 
-          # 复制 README
-          cp README.md dist/cli/
+          # 复制 README（使用 npm 版 README）
+          cp ../../README_npm.md dist/cli/README.md || cp README.md dist/cli/
 
           # 发布
           cd dist/cli
