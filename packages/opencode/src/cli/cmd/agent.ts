@@ -15,6 +15,7 @@ import { HermesProfileCompiler } from "../../runtime/hermes/compiler"
 import { FileBindingStore } from "../../runtime/hermes/binding-store"
 import type { AgentProfile } from "../../runtime/interface"
 import type { Argv } from "yargs"
+import { printSuccess } from "../output"
 
 type AgentMode = "all" | "primary" | "subagent"
 
@@ -243,7 +244,7 @@ const AgentCreateCommand = cmd({
 const AgentListCommand = cmd({
   command: "list",
   describe: "list all available agents",
-  async handler() {
+  async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -254,6 +255,11 @@ const AgentListCommand = cmd({
           }
           return a.name.localeCompare(b.name)
         })
+
+        if (args.json) {
+          printSuccess(args, "agent.list", sortedAgents)
+          return
+        }
 
         for (const agent of sortedAgents) {
           process.stdout.write(`${agent.name} (${agent.mode})` + EOL)

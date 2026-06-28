@@ -19,6 +19,7 @@ import { Filesystem } from "../../util"
 import { Bus } from "../../bus"
 import { AppRuntime } from "../../effect/app-runtime"
 import { Effect } from "effect"
+import { printSuccess } from "../output"
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -121,15 +122,28 @@ export const McpListCommand = cmd({
   command: "list",
   aliases: ["ls"],
   describe: "list MCP servers and their status",
-  async handler() {
+  async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        UI.empty()
-        prompts.intro("MCP Servers")
-
         const { config, statuses, stored } = await listState()
         const servers = configuredServers(config)
+
+        if (args.json) {
+          printSuccess(args, "mcp.list", {
+            servers: servers.map(([name, serverConfig]) => ({
+              name,
+              source: sourceLabel(config, name),
+              config: serverConfig,
+              status: statuses[name],
+              stored: stored[name],
+            })),
+          })
+          return
+        }
+
+        UI.empty()
+        prompts.intro("MCP Servers")
 
         if (servers.length === 0) {
           prompts.log.warn("No MCP servers configured")

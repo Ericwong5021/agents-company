@@ -1,6 +1,7 @@
 import { Global } from "../../../global"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
+import { printSuccess } from "../../output"
 import { ConfigCommand } from "./config"
 import { FileCommand } from "./file"
 import { LSPCommand } from "./lsp"
@@ -40,7 +41,12 @@ export const DebugCommand = cmd({
 const PathsCommand = cmd({
   command: "paths",
   describe: "show global paths (data, config, cache, state)",
-  handler() {
+  handler(args) {
+    if (args.json) {
+      printSuccess(args, "debug.paths", Global.Path)
+      return
+    }
+
     for (const [key, value] of Object.entries(Global.Path)) {
       console.log(key.padEnd(10), value)
     }
