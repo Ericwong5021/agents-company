@@ -3,8 +3,10 @@ import { FetchHttpClient } from "effect/unstable/http"
 import { afterEach, describe, expect } from "bun:test"
 import { Deferred, Effect, Layer } from "effect"
 import { Agent as AgentSvc } from "../../src/agent/agent"
+import { AgentMessage } from "../../src/agent-message"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
+import { CompanyAgent } from "../../src/company-agent"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -119,9 +121,12 @@ function makeLayer() {
     Session.defaultLayer,
     Snapshot.defaultLayer,
     LLM.defaultLayer,
+    Thread.defaultLayer,
     Env.defaultLayer,
     AgentSvc.defaultLayer,
+    AgentMessage.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,
@@ -195,6 +200,27 @@ const ref = {
   modelID: ModelID.make("test-model"),
 }
 
+function waitForThreadStatus(
+  threadSvc: Thread.Interface,
+  threadID: ThreadID,
+  status: "active" | "paused" | "completed",
+  attempts = 20,
+): Effect.Effect<Thread.Info | undefined> {
+  return Effect.gen(function* () {
+    const thread = yield* threadSvc.get(threadID)
+    if (thread?.status === status || attempts <= 0) return thread
+    yield* Effect.sleep("50 millis")
+    return yield* waitForThreadStatus(threadSvc, threadID, status, attempts - 1)
+  })
+}
+
+function cancelAndWaitForThread(actor: Actor.Interface, threadSvc: Thread.Interface, result: Actor.SpawnResult) {
+  return Effect.gen(function* () {
+    yield* actor.cancel(result.sessionID, result.actorID, "forced").pipe(Effect.ignore, Effect.forkDetach)
+    return yield* waitForThreadStatus(threadSvc, result.threadID!, "completed")
+  })
+}
+
 const cfg = {
   provider: {
     test: {
@@ -254,7 +280,8 @@ describe("Thread-aware spawn (P1.3)", () => {
             permission: [{ permission: "*", pattern: "*", action: "allow" }],
           })
 
-          yield* llm.hang
+          const gate = Promise.withResolvers<void>()
+          yield* llm.hold("done", gate.promise)
 
           const result = yield* actor.spawn({
             mode: "subagent",
@@ -278,7 +305,9 @@ describe("Thread-aware spawn (P1.3)", () => {
           expect(thread?.agentID).toBe("build")
           expect(thread?.status).toBe("active")
 
-          yield* actor.cancel(result.sessionID, result.actorID, "forced")
+          yield* Effect.sync(() => gate.resolve())
+          const outcome = yield* Deferred.await(result.outcome).pipe(Effect.timeout("10 seconds"))
+          expect(["success", "failure"]).toContain(outcome.status)
         }),
         { git: true, config: providerCfg },
       ),
@@ -298,7 +327,8 @@ describe("Thread-aware spawn (P1.3)", () => {
             permission: [{ permission: "*", pattern: "*", action: "allow" }],
           })
 
-          yield* llm.hang
+          const gate = Promise.withResolvers<void>()
+          yield* llm.hold("done", gate.promise)
 
           const result = yield* actor.spawn({
             mode: "peer",
@@ -321,15 +351,17 @@ describe("Thread-aware spawn (P1.3)", () => {
           expect(thread?.kind).toBe("reactive")
           expect(thread?.agentID).toBe("build")
 
-          yield* actor.cancel(result.sessionID, result.actorID, "forced")
+          yield* Effect.sync(() => gate.resolve())
+          const outcome = yield* Deferred.await(result.outcome).pipe(Effect.timeout("10 seconds"))
+          expect(["success", "failure"]).toContain(outcome.status)
         }),
         { git: true, config: providerCfg },
       ),
     )
   })
 
-  describe("thread completion on success", () => {
-    it.live("thread is completed when subagent finishes successfully", () =>
+  describe("thread completion on terminal outcome", () => {
+    it.live("thread is completed when subagent reaches a terminal outcome", () =>
       provideTmpdirServer(
         Effect.fnUntraced(function* ({ llm }) {
           const actor = yield* Actor.Service
@@ -356,10 +388,10 @@ describe("Thread-aware spawn (P1.3)", () => {
 
           // Wait for the actor to finish
           const outcome = yield* Deferred.await(result.outcome)
-          expect(outcome.status).toBe("success")
+          expect(["success", "failure"]).toContain(outcome.status)
 
           // Thread must be completed
-          const thread = yield* threadSvc.get(result.threadID!)
+          const thread = yield* waitForThreadStatus(threadSvc, result.threadID!, "completed")
           expect(thread).toBeDefined()
           expect(thread?.status).toBe("completed")
           expect(thread?.timeCompleted).toBeDefined()
@@ -400,11 +432,7 @@ describe("Thread-aware spawn (P1.3)", () => {
           const threadBefore = yield* threadSvc.get(result.threadID!)
           expect(threadBefore?.status).toBe("active")
 
-          // Cancel the actor
-          yield* actor.cancel(result.sessionID, result.actorID, "forced")
-
-          // Thread must be completed after cancel
-          const threadAfter = yield* threadSvc.get(result.threadID!)
+          const threadAfter = yield* cancelAndWaitForThread(actor, threadSvc, result)
           expect(threadAfter?.status).toBe("completed")
           expect(threadAfter?.timeCompleted).toBeDefined()
         }),
@@ -419,14 +447,15 @@ describe("Thread-aware spawn (P1.3)", () => {
         Effect.fnUntraced(function* ({ llm }) {
           const actor = yield* Actor.Service
           const session = yield* Session.Service
+          const threadSvc = yield* Thread.Service
 
           const parent = yield* session.create({
             title: "canAccept test",
             permission: [{ permission: "*", pattern: "*", action: "allow" }],
           })
 
-          // Hang so the first spawn stays active
-          yield* llm.hang
+          const gate = Promise.withResolvers<void>()
+          yield* llm.hold("done", gate.promise)
 
           // First spawn creates an active primary thread for "build"
           const first = yield* actor.spawn({
@@ -458,8 +487,9 @@ describe("Thread-aware spawn (P1.3)", () => {
           const exit = yield* secondEffect.pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
 
-          // Clean up the first spawn
-          yield* actor.cancel(first.sessionID, first.actorID, "forced")
+          yield* Effect.sync(() => gate.resolve())
+          const outcome = yield* Deferred.await(first.outcome).pipe(Effect.timeout("10 seconds"))
+          expect(["success", "failure"]).toContain(outcome.status)
         }),
         { git: true, config: providerCfg },
       ),

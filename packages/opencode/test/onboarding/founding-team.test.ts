@@ -3,8 +3,9 @@ import { Effect, Layer } from "effect"
 import path from "path"
 import fs from "fs/promises"
 import { Skill } from "../../src/skill"
-import { Global } from "../../src/global"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
+import type { CompanyAgentID } from "../../src/company-agent/schema"
+import { agentDir, agentSkillsDir } from "../../src/session/checkpoint-paths"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { resolveFoundingRoles } from "../../src/cli/cmd/tui/routes/onboarding/founding-roles"
@@ -43,7 +44,7 @@ describe("onboarding founding team", () => {
     const owner = "specialized-strategist-founder-test"
     const other = "engineering-cto-test"
     const skillPath = (id: string) =>
-      path.join(Global.Path.data, "agents", id, "skills", "recruit-teammate", "SKILL.md")
+      path.join(agentSkillsDir(id as CompanyAgentID), "recruit-teammate", "SKILL.md")
 
     return provideTmpdirInstance(
       () =>
@@ -71,11 +72,11 @@ describe("onboarding founding team", () => {
           expect(yield* skill.get("recruit-teammate", other)).toBeUndefined()
           expect(yield* skill.get("recruit-teammate")).toBeUndefined()
         }).pipe(
-          // data/agents is process-global; remove the seeded dir so it can't leak
+          // data/workspace/agents is process-global; remove the seeded dir so it can't leak
           // into other skill tests' discovery (some assert exact skill counts).
           Effect.ensuring(
             Effect.promise(() =>
-              fs.rm(path.join(Global.Path.data, "agents", owner), { recursive: true, force: true }),
+              fs.rm(agentDir(owner as CompanyAgentID), { recursive: true, force: true }),
             ),
           ),
         ),

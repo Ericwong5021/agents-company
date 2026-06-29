@@ -1,8 +1,17 @@
 import { describe, it, expect } from "bun:test"
 import { Cause, Effect, Exit, Layer } from "effect"
-import { delegate, propose, canDelegate, MAX_DELEGATION_DEPTH } from "../../src/agent-message/primitives"
+import {
+  delegate,
+  propose,
+  canDelegate,
+  MAX_DELEGATION_DEPTH,
+  messageAgent,
+  reply,
+  drainUnread,
+} from "../../src/agent-message/primitives"
 import { CompanyAgent } from "../../src/company-agent"
 import { AgentMessage } from "../../src/agent-message/agent-message"
+import * as Admission from "../../src/admission/admission"
 import { TaskRegistry } from "../../src/task/registry"
 import { Delegation } from "../../src/delegation/delegation"
 import type { CompanyAgentID } from "../../src/company-agent/schema"
@@ -38,6 +47,8 @@ interface RecordedMessage {
   outcome?: string
   spawnedIssueID?: string
   id?: string
+  read: boolean
+  time: { created: number; updated: number }
 }
 
 function makeMockAgentMessageService(recorded: RecordedMessage[]) {
@@ -46,6 +57,7 @@ function makeMockAgentMessageService(recorded: RecordedMessage[]) {
     create: (input) => {
       counter++
       const id = input.id ?? `msg_${counter}`
+      const time = { created: Date.now(), updated: Date.now() }
       recorded.push({
         id,
         fromAgentID: input.fromAgentID,
@@ -59,6 +71,8 @@ function makeMockAgentMessageService(recorded: RecordedMessage[]) {
         inReplyTo: input.inReplyTo,
         outcome: input.outcome,
         spawnedIssueID: input.spawnedIssueID,
+        read: false,
+        time,
       })
       return Effect.succeed({
         id,
@@ -74,7 +88,7 @@ function makeMockAgentMessageService(recorded: RecordedMessage[]) {
         outcome: input.outcome,
         spawnedIssueID: input.spawnedIssueID,
         read: false,
-        time: { created: Date.now(), updated: Date.now() },
+        time,
       } as AgentMessage.Info)
     },
     get: (id: string) => {
@@ -83,23 +97,35 @@ function makeMockAgentMessageService(recorded: RecordedMessage[]) {
       return Effect.succeed({
         ...found,
         id: found.id!,
-        read: false,
-        time: { created: Date.now(), updated: Date.now() },
+        read: found.read,
+        time: found.time,
       } as AgentMessage.Info)
     },
-    listByAgent: () => Effect.succeed([]),
+    updateSpawnedIssue: (id: string, spawnedIssueID: string) => {
+      const found = recorded.find((m) => m.id === id)
+      if (!found) return Effect.die(new Error(`mock updateSpawnedIssue: not found id="${id}"`))
+      found.spawnedIssueID = spawnedIssueID
+      found.time = { ...found.time, updated: Date.now() }
+      return Effect.succeed(found as AgentMessage.Info)
+    },
+    listByAgent: (agentId, opts) =>
+      Effect.succeed(
+        recorded
+          .filter((msg) => msg.toAgentID === agentId)
+          .filter((msg) => (opts?.unreadOnly ? !msg.read : true))
+          .filter((msg) => (opts?.kind ? msg.kind === opts.kind : true))
+          .sort((a, b) => b.time.created - a.time.created)
+          .slice(0, opts?.limit ?? 1000)
+          .map((msg) => msg as AgentMessage.Info),
+      ),
     listByRootNeed: () => Effect.succeed([]),
-    markRead: (id: string) =>
-      Effect.succeed({
-        id,
-        fromAgentID: "",
-        toAgentID: "",
-        kind: "fyi" as const,
-        body: "",
-        depth: 0,
-        read: true,
-        time: { created: Date.now(), updated: Date.now() },
-      } as AgentMessage.Info),
+    markRead: (id: string) => {
+      const found = recorded.find((m) => m.id === id)
+      if (!found) return Effect.die(new Error(`mock markRead: not found id="${id}"`))
+      found.read = true
+      found.time = { ...found.time, updated: Date.now() }
+      return Effect.succeed(found as AgentMessage.Info)
+    },
     getByThread: () => Effect.succeed([]),
   })
 }
@@ -120,6 +146,15 @@ const mockTaskRegistryImpl = TaskRegistry.Service.of({
   rename: () => Effect.die("noop" as any),
   events: () => Effect.die("noop" as any),
 })
+
+function provideDelegation(agentSvc: CompanyAgent.Interface, msgSvc: AgentMessage.Interface) {
+  return Delegation.layer.pipe(
+    Layer.provide(Layer.succeed(CompanyAgent.Service, agentSvc)),
+    Layer.provide(Layer.succeed(AgentMessage.Service, msgSvc)),
+    Layer.provide(Layer.succeed(TaskRegistry.Service, mockTaskRegistryImpl)),
+    Layer.provide(Admission.defaultLayer),
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -180,6 +215,125 @@ const allAgents = [boardAgent, departmentAgent, projectAgent, executionAgent, to
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("message_agent and unread delivery", () => {
+  it("messageAgent resolves a target by name and creates an unread FYI", async () => {
+    const recorded: RecordedMessage[] = []
+    const agentSvc = makeMockCompanyAgentService(allAgents)
+    const msgSvc = makeMockAgentMessageService(recorded)
+
+    const result = await Effect.runPromise(
+      messageAgent(
+        {
+          fromId: "board-lead",
+          toId: "department head",
+          body: "Please review the new roadmap.",
+          threadID: "thr_strategy",
+          rootNeedID: "need_strategy",
+        },
+        agentSvc,
+        msgSvc,
+      ),
+    )
+
+    expect(result.toAgentID).toBe(departmentAgent.id)
+    expect(result.toAgentName).toBe("Department Head")
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0]).toMatchObject({
+      fromAgentID: "board-lead",
+      toAgentID: "dept-head",
+      kind: "fyi",
+      body: "Please review the new roadmap.",
+      threadID: "thr_strategy",
+      rootNeedID: "need_strategy",
+      read: false,
+    })
+  })
+
+  it("reply sends an unread message back to the original requester", async () => {
+    const recorded: RecordedMessage[] = []
+    const msgSvc = makeMockAgentMessageService(recorded)
+    const original = await Effect.runPromise(
+      msgSvc.create({
+        fromAgentID: "board-lead",
+        toAgentID: "dept-head",
+        kind: "request",
+        body: "Prepare a launch plan.",
+        taskSummary: "Launch plan",
+        threadID: "thr_launch",
+        rootNeedID: "need_launch",
+        depth: 2,
+      }),
+    )
+
+    const result = await Effect.runPromise(
+      reply(
+        {
+          fromId: "dept-head",
+          originalMessageId: original.id,
+          body: "Launch plan is ready.",
+          outcome: "completed",
+        },
+        msgSvc,
+      ),
+    )
+
+    expect(result.toAgentID).toBe("board-lead")
+    expect(result.inReplyTo).toBe(original.id)
+    expect(recorded[1]).toMatchObject({
+      fromAgentID: "dept-head",
+      toAgentID: "board-lead",
+      kind: "reply",
+      body: "Launch plan is ready.",
+      inReplyTo: original.id,
+      threadID: "thr_launch",
+      rootNeedID: "need_launch",
+      depth: 2,
+      outcome: "completed",
+      read: false,
+    })
+  })
+
+  it("drainUnread renders context and marks messages as read", async () => {
+    const recorded: RecordedMessage[] = []
+    const msgSvc = makeMockAgentMessageService(recorded)
+    const first = await Effect.runPromise(
+      msgSvc.create({
+        fromAgentID: "board-lead",
+        toAgentID: "dept-head",
+        kind: "fyi",
+        body: "Board note.",
+      }),
+    )
+    await Effect.runPromise(
+      msgSvc.create({
+        fromAgentID: "proj-manager",
+        toAgentID: "dept-head",
+        kind: "request",
+        body: "Can you review this?",
+        taskSummary: "Review request",
+      }),
+    )
+    await Effect.runPromise(
+      msgSvc.create({
+        fromAgentID: "board-lead",
+        toAgentID: "executor",
+        kind: "fyi",
+        body: "Not for department head.",
+      }),
+    )
+
+    const block = await Effect.runPromise(drainUnread("dept-head", msgSvc))
+
+    expect(block).toContain("## Unread messages (2)")
+    expect(block).toContain("[fyi] from=board-lead")
+    expect(block).toContain("Board note.")
+    expect(block).toContain("Task: Review request")
+    expect((await Effect.runPromise(msgSvc.get(first.id)))?.read).toBe(true)
+    expect(await Effect.runPromise(msgSvc.listByAgent("dept-head", { unreadOnly: true }))).toHaveLength(0)
+    expect(await Effect.runPromise(msgSvc.listByAgent("executor", { unreadOnly: true }))).toHaveLength(1)
+  })
+})
 
 describe("delegate: message creation", () => {
   it("creates message with correct depth", async () => {
@@ -310,6 +464,31 @@ describe("delegate: self-delegation rejection", () => {
 })
 
 describe("delegate: org_layer validation", () => {
+  it("rejects skip-level delegation", async () => {
+    const recorded: RecordedMessage[] = []
+    const agentSvc = makeMockCompanyAgentService(allAgents)
+    const msgSvc = makeMockAgentMessageService(recorded)
+
+    const exit = await Effect.runPromise(
+      delegate(
+        {
+          fromId: "board-lead",
+          toId: "proj-manager",
+          body: "Skip directly to project",
+          taskSummary: "Skip-level delegation",
+        },
+        agentSvc,
+        msgSvc,
+      ).pipe(Effect.exit),
+    )
+
+    expect(Exit.isFailure(exit)).toBe(true)
+    if (Exit.isFailure(exit)) {
+      expect(Cause.pretty(exit.cause)).toContain("exactly one org layer below")
+    }
+    expect(recorded).toHaveLength(0)
+  })
+
   it("tool agent cannot delegate to execution agent", async () => {
     const recorded: RecordedMessage[] = []
     const agentSvc = makeMockCompanyAgentService(allAgents)
@@ -420,17 +599,20 @@ describe("propose: creates upward message", () => {
 })
 
 describe("canDelegate: org layer hierarchy", () => {
-  it("board can delegate to anyone", () => {
+  it("allows delegation only to the exact next layer", () => {
     expect(canDelegate("board", "department")).toBe(true)
-    expect(canDelegate("board", "project")).toBe(true)
-    expect(canDelegate("board", "execution")).toBe(true)
-    expect(canDelegate("board", "tool")).toBe(true)
+    expect(canDelegate("department", "project")).toBe(true)
+    expect(canDelegate("project", "execution")).toBe(true)
+    expect(canDelegate("execution", "tool")).toBe(true)
   })
 
-  it("department can delegate to project, execution, tool", () => {
-    expect(canDelegate("department", "project")).toBe(true)
-    expect(canDelegate("department", "execution")).toBe(true)
-    expect(canDelegate("department", "tool")).toBe(true)
+  it("blocks skip-level delegation", () => {
+    expect(canDelegate("board", "project")).toBe(false)
+    expect(canDelegate("board", "execution")).toBe(false)
+    expect(canDelegate("board", "tool")).toBe(false)
+    expect(canDelegate("department", "execution")).toBe(false)
+    expect(canDelegate("department", "tool")).toBe(false)
+    expect(canDelegate("project", "tool")).toBe(false)
   })
 
   it("department cannot delegate to board or department", () => {
@@ -452,20 +634,98 @@ describe("canDelegate: org layer hierarchy", () => {
 })
 
 describe("admission grading", () => {
-  it("admission evaluates result as accepted", () => {
-    const admissionResult = { accepted: true, findings: [] as string[] }
-    expect(admissionResult.accepted).toBe(true)
-    expect(admissionResult.findings).toHaveLength(0)
+  it("submitForAdmission accepts a passing submission and creates success reply", async () => {
+    const recorded: RecordedMessage[] = []
+    const agentSvc = makeMockCompanyAgentService(allAgents)
+    const msgSvc = makeMockAgentMessageService(recorded)
+
+    const request = await Effect.runPromise(
+      msgSvc.create({
+        id: "msg_review_accept",
+        fromAgentID: "dept-head",
+        toAgentID: "proj-manager",
+        kind: "request",
+        body: "Prepare release plan",
+        taskSummary: "Release plan",
+        threadID: "thr_release",
+        rootNeedID: "need_release",
+        depth: 1,
+      }),
+    )
+    const delegationSvc = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* Delegation.Service
+      }).pipe(Effect.provide(provideDelegation(agentSvc, msgSvc))),
+    )
+
+    const result = await Effect.runPromise(
+      delegationSvc.submitForAdmission({
+        delegationMessage: request,
+        submission: {
+          kind: "coding",
+          testsPassed: true,
+          lintClean: true,
+          buildSucceeds: true,
+        },
+      }),
+    )
+
+    expect(result.accepted).toBe(true)
+    expect(result.admission.taskRating).toBe("project")
+    expect(result.reply).toMatchObject({
+      fromAgentID: "proj-manager",
+      toAgentID: "dept-head",
+      kind: "reply",
+      inReplyTo: request.id,
+      threadID: "thr_release",
+      rootNeedID: "need_release",
+      depth: 1,
+      outcome: "success",
+    })
   })
 
-  it("admission evaluates result as rejected with findings", () => {
-    const admissionResult = {
-      accepted: false,
-      findings: ["Missing error handling", "No unit tests provided"],
-    }
-    expect(admissionResult.accepted).toBe(false)
-    expect(admissionResult.findings).toHaveLength(2)
-    expect(admissionResult.findings[0]).toBe("Missing error handling")
+  it("submitForAdmission rejects a failing submission with actionable findings", async () => {
+    const recorded: RecordedMessage[] = []
+    const agentSvc = makeMockCompanyAgentService(allAgents)
+    const msgSvc = makeMockAgentMessageService(recorded)
+
+    const request = await Effect.runPromise(
+      msgSvc.create({
+        id: "msg_review_reject",
+        fromAgentID: "dept-head",
+        toAgentID: "proj-manager",
+        kind: "request",
+        body: "Prepare release plan",
+        taskSummary: "Release plan",
+        threadID: "thr_release",
+        rootNeedID: "need_release",
+        depth: 1,
+      }),
+    )
+    const delegationSvc = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* Delegation.Service
+      }).pipe(Effect.provide(provideDelegation(agentSvc, msgSvc))),
+    )
+
+    const result = await Effect.runPromise(
+      delegationSvc.submitForAdmission({
+        delegationMessage: request,
+        submission: {
+          kind: "coding",
+          testsPassed: false,
+          lintClean: true,
+          buildSucceeds: true,
+          testOutput: "unit tests failed",
+        },
+      }),
+    )
+
+    expect(result.accepted).toBe(false)
+    expect(result.admission.findings.some((finding) => finding.item === "Tests failing")).toBe(true)
+    expect(result.reply.outcome).toBe("failed")
+    expect(result.reply.body).toContain("Submission rejected")
+    expect(result.reply.body).toContain("How to verify")
   })
 })
 
@@ -478,15 +738,7 @@ describe("escalation after failed approaches", () => {
     const delegationSvc = await Effect.runPromise(
       Effect.gen(function* () {
         return yield* Delegation.Service
-      }).pipe(
-        Effect.provide(
-          Delegation.layer.pipe(
-            Layer.provide(Layer.succeed(CompanyAgent.Service, agentSvc)),
-            Layer.provide(Layer.succeed(AgentMessage.Service, msgSvc)),
-            Layer.provide(Layer.succeed(TaskRegistry.Service, mockTaskRegistryImpl)),
-          ),
-        ),
-      ),
+      }).pipe(Effect.provide(provideDelegation(agentSvc, msgSvc))),
     )
 
     const result = await Effect.runPromise(
@@ -517,15 +769,7 @@ describe("escalation after failed approaches", () => {
     const delegationSvc = await Effect.runPromise(
       Effect.gen(function* () {
         return yield* Delegation.Service
-      }).pipe(
-        Effect.provide(
-          Delegation.layer.pipe(
-            Layer.provide(Layer.succeed(CompanyAgent.Service, agentSvc)),
-            Layer.provide(Layer.succeed(AgentMessage.Service, msgSvc)),
-            Layer.provide(Layer.succeed(TaskRegistry.Service, mockTaskRegistryImpl)),
-          ),
-        ),
-      ),
+      }).pipe(Effect.provide(provideDelegation(agentSvc, msgSvc))),
     )
 
     const result = await Effect.runPromise(
