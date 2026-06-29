@@ -802,16 +802,21 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Storage.Service | 
       const row = yield* db((d) => d.select().from(ThreadTable).where(eq(ThreadTable.id, session.threadID as ThreadID)).get())
       if (!row) return undefined
       return {
-        id: row.id,
+        id: row.id as ThreadID,
         agentID: row.agent_id,
         kind: row.kind,
         status: row.status,
         sessionID: row.session_id ?? undefined,
         description: row.description ?? undefined,
         budgetTokens: row.budget_tokens ?? undefined,
-        spentTokens: row.spent_tokens ?? undefined,
-        time: { started: row.time_started, completed: row.time_completed ?? undefined },
-      } as unknown as ThreadInfo
+        spentTokens: row.spent_tokens ?? 0,
+        timeStarted: row.time_started ?? undefined,
+        timeCompleted: row.time_completed ?? undefined,
+        time: {
+          created: row.time_created,
+          updated: row.time_updated,
+        },
+      } satisfies ThreadInfo
     })
 
     const listByThread = Effect.fn("Session.listByThread")(function* (threadID: string) {

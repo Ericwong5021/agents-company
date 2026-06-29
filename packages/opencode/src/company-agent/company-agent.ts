@@ -21,6 +21,7 @@ import { GlobalBus } from "@/bus/global"
 import { withStatics } from "@/util/schema"
 import { zod } from "@/util/effect-zod"
 import { generateAgentProfile } from "@/workspace/workspace"
+import { parseFrontMatter, stringifyFrontMatter, type FrontMatter } from "@/workspace/front-matter"
 
 // ---------------------------------------------------------------------------
 // Info schema
@@ -57,7 +58,10 @@ export type Info = Types.DeepMutable<Schema.Schema.Type<typeof Info>>
 // ---------------------------------------------------------------------------
 
 export const CreateInput = z.object({
-  id: z.string().min(1).regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with dashes"),
+  id: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with dashes"),
   name: z.string().min(1),
   description: z.string().optional(),
   system_prompt: z.string().optional(),
@@ -109,11 +113,93 @@ const AgentSettings = z.object({
 })
 type AgentSettings = z.infer<typeof AgentSettings>
 
+type AgentDocumentType = "soul" | "memory" | "instruct" | "relationships" | "kanban"
+
+interface OrgContext {
+  org_layer?: string
+  department?: string
+  reports_to?: string
+  responsibilities?: string[]
+}
+
+function orgFrontMatter(org?: OrgContext): FrontMatter {
+  if (!org?.org_layer) return {}
+  return {
+    org_layer: org.org_layer,
+    department: org.department,
+    reports_to: org.reports_to,
+    responsibilities: org.responsibilities?.length ? org.responsibilities.join("; ") : undefined,
+  }
+}
+
+function agentDocumentFrontMatter(
+  id: CompanyAgentID,
+  type: AgentDocumentType,
+  existing?: FrontMatter,
+  org?: OrgContext,
+): FrontMatter {
+  const base = { ...existing }
+  if (type === "soul" && org?.org_layer) {
+    delete base.org_layer
+    delete base.department
+    delete base.reports_to
+    delete base.responsibilities
+  }
+
+  return {
+    ...base,
+    scope: existing?.scope ?? `agent:${id}`,
+    classification: existing?.classification ?? "internal",
+    owner: existing?.owner ?? id,
+    updatedBy: existing?.updatedBy ?? "system",
+    type: existing?.type ?? type,
+    version: existing?.version ?? "1",
+    ...(type === "soul" ? orgFrontMatter(org) : {}),
+  }
+}
+
+function agentDocument(id: CompanyAgentID, type: AgentDocumentType, body: string, org?: OrgContext): string {
+  return stringifyFrontMatter(agentDocumentFrontMatter(id, type, undefined, org), body)
+}
+
+async function readMarkdownBody(filePath: string): Promise<string | undefined> {
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) return undefined
+  const content = await file.text()
+  const parsed = parseFrontMatter(content)
+  return parsed.body.trim() || undefined
+}
+
+async function ensureAgentDocumentFrontMatter(
+  id: CompanyAgentID,
+  filePath: string,
+  type: AgentDocumentType,
+  org?: OrgContext,
+): Promise<void> {
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) return
+  const parsed = parseFrontMatter(await file.text())
+  const next = agentDocumentFrontMatter(id, type, parsed.frontMatter, org)
+  const complete = next.scope && next.classification && next.owner && next.updatedBy && next.type && next.version
+  if (complete && JSON.stringify(next) === JSON.stringify(parsed.frontMatter)) return
+  await Bun.write(filePath, stringifyFrontMatter(next, parsed.body))
+}
+
 // ---------------------------------------------------------------------------
 // Row mapping
 // ---------------------------------------------------------------------------
 
 type Row = typeof CompanyAgentTable.$inferSelect
+
+function orgContextFromRow(row: Row): OrgContext | undefined {
+  if (!row.org_layer) return undefined
+  return {
+    org_layer: row.org_layer ?? undefined,
+    department: row.department ?? undefined,
+    reports_to: row.reports_to ?? undefined,
+    responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : undefined,
+  }
+}
 
 function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
   return {
@@ -138,10 +224,7 @@ function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
 // ---------------------------------------------------------------------------
 
 async function readSoul(id: CompanyAgentID): Promise<string | undefined> {
-  const file = Bun.file(agentSoulPath(id))
-  if (!(await file.exists())) return undefined
-  const content = await file.text()
-  return content.trim() || undefined
+  return readMarkdownBody(agentSoulPath(id))
 }
 
 async function readSettings(id: CompanyAgentID): Promise<AgentSettings> {
@@ -152,10 +235,7 @@ async function readSettings(id: CompanyAgentID): Promise<AgentSettings> {
 }
 
 async function readFileIfExists(filePath: string): Promise<string | undefined> {
-  const file = Bun.file(filePath)
-  if (!(await file.exists())) return undefined
-  const content = await file.text()
-  return content.trim() || undefined
+  return readMarkdownBody(filePath)
 }
 
 async function readSkillNames(id: CompanyAgentID): Promise<string[]> {
@@ -168,14 +248,7 @@ async function readSkillNames(id: CompanyAgentID): Promise<string[]> {
 
 async function fromRowWithFiles(row: Row): Promise<Info> {
   const id = row.id as CompanyAgentID
-  const org: OrgContext | undefined = row.org_layer
-    ? {
-        org_layer: row.org_layer ?? undefined,
-        department: row.department ?? undefined,
-        reports_to: row.reports_to ?? undefined,
-        responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : undefined,
-      }
-    : undefined
+  const org = orgContextFromRow(row)
   // Validate file bundle on every read — recreates any missing files
   await validateFileBundle(id, row.name, org)
   const [soul, settings, instruct, relationships, kanban, skills] = await Promise.all([
@@ -201,13 +274,6 @@ async function fromRowWithFiles(row: Row): Promise<Info> {
 // Org-aware template helpers
 // ---------------------------------------------------------------------------
 
-interface OrgContext {
-  org_layer?: string
-  department?: string
-  reports_to?: string
-  responsibilities?: string[]
-}
-
 const WORK_STYLE_BY_LAYER: Record<string, string> = {
   board:
     "Set strategic direction. Review proposals from departments. Make high-level decisions on resource allocation and organizational priorities. Communicate decisions clearly with rationale.",
@@ -217,8 +283,7 @@ const WORK_STYLE_BY_LAYER: Record<string, string> = {
     "Own delivery of a specific project or feature set. Coordinate execution agents. Break down work into tasks. Track progress and escalate blockers to your department lead.",
   execution:
     "Execute assigned tasks with precision. Report progress frequently. Ask for clarification when requirements are ambiguous. Escalate blockers after attempting 2 approaches.",
-  tool:
-    "Perform specific, well-defined operations. Return structured results. Report errors clearly. Do not make assumptions about intent — ask if unclear.",
+  tool: "Perform specific, well-defined operations. Return structured results. Report errors clearly. Do not make assumptions about intent — ask if unclear.",
 }
 
 function generateSoulTemplate(name: string, org: OrgContext): string {
@@ -240,7 +305,9 @@ function generateSoulTemplate(name: string, org: OrgContext): string {
   }
 
   lines.push("## Work Style")
-  const workStyle = org.org_layer ? WORK_STYLE_BY_LAYER[org.org_layer] ?? WORK_STYLE_BY_LAYER["execution"] : "Be helpful, thorough, and proactive. Adapt communication style to the situation."
+  const workStyle = org.org_layer
+    ? (WORK_STYLE_BY_LAYER[org.org_layer] ?? WORK_STYLE_BY_LAYER["execution"])
+    : "Be helpful, thorough, and proactive. Adapt communication style to the situation."
   lines.push(workStyle)
   lines.push("")
 
@@ -324,7 +391,11 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
   if (!memExists) {
     await fs.writeFile(
       memPath,
-      `# ${name}\n\n_Long-term memory for this agent. Add cross-project facts, preferences, and learned patterns here._\n`,
+      agentDocument(
+        id,
+        "memory",
+        `# ${name}\n\n_Long-term memory for this agent. Add cross-project facts, preferences, and learned patterns here._\n`,
+      ),
       "utf-8",
     )
   }
@@ -348,7 +419,7 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
           `General-purpose agent. Edit this file to define the agent's identity, role, and behavior.`,
           "",
         ].join("\n")
-    await fs.writeFile(soulPath, soulContent, "utf-8")
+    await fs.writeFile(soulPath, agentDocument(id, "soul", soulContent, org), "utf-8")
   }
 
   // INSTRUCT.md — evolvable instructions if absent (org-aware when fields present)
@@ -358,12 +429,6 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
     const instructContent = org?.org_layer
       ? generateInstructTemplate(name, org)
       : [
-          `---`,
-          `agent: ${id}`,
-          `type: instruct`,
-          `version: 1`,
-          `---`,
-          ``,
           `# ${name} — Instructions`,
           ``,
           `_How to judge, communicate, and when to escalate. Edit this file to evolve agent behavior._`,
@@ -387,7 +452,7 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
           `- If blocked by missing information, state what's needed`,
           ``,
         ].join("\n")
-    await fs.writeFile(instructPath, instructContent, "utf-8")
+    await fs.writeFile(instructPath, agentDocument(id, "instruct", instructContent), "utf-8")
   }
 
   // relationships.md — colleague relationships if absent
@@ -396,28 +461,26 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
   if (!relExists) {
     await fs.writeFile(
       relPath,
-      [
-        `---`,
-        `agent: ${id}`,
-        `type: relationships`,
-        `version: 1`,
-        `---`,
-        ``,
-        `# ${name} — Relationships`,
-        ``,
-        `_Colleague relationships: collaboration preferences, communication style, trust level._`,
-        ``,
-        `## Format`,
-        ``,
-        `<!-- Add entries like:`,
-        ``,
-        `### Agent Name`,
-        `- **Collaboration style**: ...`,
-        `- **Communication preference**: ...`,
-        `- **Trust level**: ...`,
-        `-->`,
-        ``,
-      ].join("\n"),
+      agentDocument(
+        id,
+        "relationships",
+        [
+          `# ${name} — Relationships`,
+          ``,
+          `_Colleague relationships: collaboration preferences, communication style, trust level._`,
+          ``,
+          `## Format`,
+          ``,
+          `<!-- Add entries like:`,
+          ``,
+          `### Agent Name`,
+          `- **Collaboration style**: ...`,
+          `- **Communication preference**: ...`,
+          `- **Trust level**: ...`,
+          `-->`,
+          ``,
+        ].join("\n"),
+      ),
       "utf-8",
     )
   }
@@ -428,24 +491,22 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
   if (!kanbanExists) {
     await fs.writeFile(
       kanbanPath,
-      [
-        `---`,
-        `agent: ${id}`,
-        `type: kanban`,
-        `version: 1`,
-        `---`,
-        ``,
-        `# ${name} — Kanban`,
-        ``,
-        `_Personal task view: current projects, todos, progress._`,
-        ``,
-        `## In Progress`,
-        ``,
-        `## Todo`,
-        ``,
-        `## Done`,
-        ``,
-      ].join("\n"),
+      agentDocument(
+        id,
+        "kanban",
+        [
+          `# ${name} — Kanban`,
+          ``,
+          `_Personal task view: current projects, todos, progress._`,
+          ``,
+          `## In Progress`,
+          ``,
+          `## Todo`,
+          ``,
+          `## Done`,
+          ``,
+        ].join("\n"),
+      ),
       "utf-8",
     )
   }
@@ -464,10 +525,12 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
  */
 async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgContext): Promise<void> {
   const dir = agentDir(id)
-  const dirExists = await Bun.file(dir).exists()
+  const dirExists = await fs.stat(dir).then(
+    (stat) => stat.isDirectory(),
+    () => false,
+  )
   if (!dirExists) {
     await initAgentDir(id, name, org)
-    return
   }
 
   // Check each required file; re-init missing ones
@@ -479,39 +542,51 @@ async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgCon
     agentRelationshipsPath(id),
     agentKanbanPath(id),
   ]
-  const missing = (await Promise.all(requiredPaths.map(async (p) => (!(await Bun.file(p).exists()) ? p : null)))).filter(
-    (p): p is string => p !== null,
-  )
+  const missing = (
+    await Promise.all(requiredPaths.map(async (p) => (!(await Bun.file(p).exists()) ? p : null)))
+  ).filter((p): p is string => p !== null)
 
   if (missing.length > 0) {
     // Re-run init to recreate missing files (idempotent — won't overwrite existing)
     await initAgentDir(id, name, org)
   }
 
+  await Promise.all([
+    ensureAgentDocumentFrontMatter(id, companyAgentMemoryPath(id), "memory"),
+    ensureAgentDocumentFrontMatter(id, agentSoulPath(id), "soul", org),
+    ensureAgentDocumentFrontMatter(id, agentInstructPath(id), "instruct"),
+    ensureAgentDocumentFrontMatter(id, agentRelationshipsPath(id), "relationships"),
+    ensureAgentDocumentFrontMatter(id, agentKanbanPath(id), "kanban"),
+  ])
+
   // Ensure subdirectories exist
-  await Promise.all([fs.mkdir(agentSkillsDir(id), { recursive: true }), fs.mkdir(agentMemoryDir(id), { recursive: true })])
+  await Promise.all([
+    fs.mkdir(agentSkillsDir(id), { recursive: true }),
+    fs.mkdir(agentMemoryDir(id), { recursive: true }),
+  ])
 }
 
 async function writeAgentFiles(
   id: CompanyAgentID,
   patch: { system_prompt?: string; instruct?: string; relationships?: string; kanban?: string; model?: string },
+  org?: OrgContext,
 ): Promise<void> {
   await fs.mkdir(agentDir(id), { recursive: true })
 
   if (patch.system_prompt !== undefined) {
-    await Bun.write(agentSoulPath(id), patch.system_prompt)
+    await Bun.write(agentSoulPath(id), agentDocument(id, "soul", patch.system_prompt, org))
   }
 
   if (patch.instruct !== undefined) {
-    await Bun.write(agentInstructPath(id), patch.instruct)
+    await Bun.write(agentInstructPath(id), agentDocument(id, "instruct", patch.instruct))
   }
 
   if (patch.relationships !== undefined) {
-    await Bun.write(agentRelationshipsPath(id), patch.relationships)
+    await Bun.write(agentRelationshipsPath(id), agentDocument(id, "relationships", patch.relationships))
   }
 
   if (patch.kanban !== undefined) {
-    await Bun.write(agentKanbanPath(id), patch.kanban)
+    await Bun.write(agentKanbanPath(id), agentDocument(id, "kanban", patch.kanban))
   }
 
   if (patch.model !== undefined) {
@@ -573,19 +648,21 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             responsibilities: input.responsibilities,
           }
         : undefined
-      yield* Effect.promise(() =>
-        Promise.all([
-          initAgentDir(input.id as CompanyAgentID, input.name, org),
-          writeAgentFiles(input.id as CompanyAgentID, {
+      yield* Effect.promise(async () => {
+        await initAgentDir(input.id as CompanyAgentID, input.name, org)
+        await writeAgentFiles(
+          input.id as CompanyAgentID,
+          {
             system_prompt: input.system_prompt,
             instruct: input.instruct,
             model: input.model,
-          }),
-          generateAgentProfile(input.id, input.name, "agent", "general", [
-            input.description ?? "General-purpose agent",
-          ]),
-        ]),
-      )
+          },
+          org,
+        )
+        await generateAgentProfile(input.id, input.name, "agent", "general", [
+          input.description ?? "General-purpose agent",
+        ])
+      })
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, input.id)).get()),
       )
@@ -641,13 +718,17 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         input.model !== undefined
       if (hasFileUpdates) {
         yield* Effect.promise(() =>
-          writeAgentFiles(input.id, {
-            ...(input.system_prompt !== undefined && { system_prompt: input.system_prompt }),
-            ...(input.instruct !== undefined && { instruct: input.instruct }),
-            ...(input.relationships !== undefined && { relationships: input.relationships }),
-            ...(input.kanban !== undefined && { kanban: input.kanban }),
-            ...(input.model !== undefined && { model: input.model }),
-          }),
+          writeAgentFiles(
+            input.id,
+            {
+              ...(input.system_prompt !== undefined && { system_prompt: input.system_prompt }),
+              ...(input.instruct !== undefined && { instruct: input.instruct }),
+              ...(input.relationships !== undefined && { relationships: input.relationships }),
+              ...(input.kanban !== undefined && { kanban: input.kanban }),
+              ...(input.model !== undefined && { model: input.model }),
+            },
+            orgContextFromRow(row!),
+          ),
         )
       }
 

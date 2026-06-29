@@ -7,6 +7,7 @@ import type { Actor, ActorStatus, ActorOutcome, ContextMode, Lifecycle, SpawnMod
 import * as Events from "./events"
 import { Log } from "@/util"
 import { SYSTEM_SPAWNED_AGENT_TYPES } from "@/agent/config"
+import type { ThreadID } from "@/thread/schema"
 
 const log = Log.create({ service: "actor.registry" })
 
@@ -28,6 +29,7 @@ function fromRow(row: ActorRow): Actor {
     description: row.description,
     contextMode: row.context_mode,
     contextWatermark: row.context_watermark ?? undefined,
+    threadID: row.thread_id ?? undefined,
     background: Boolean(row.background),
     tools: row.tools ?? undefined,
     lastTurnTime: row.last_turn_time,
@@ -51,6 +53,7 @@ export interface Interface {
     description: string
     contextMode: ContextMode
     contextWatermark?: MessageID
+    threadID?: ThreadID
     background: boolean
     lifecycle: Lifecycle
     tools?: ToolWhitelist
@@ -94,6 +97,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
       description: string
       contextMode: ContextMode
       contextWatermark?: MessageID
+      threadID?: ThreadID
       background: boolean
       lifecycle: Lifecycle
       tools?: ToolWhitelist
@@ -111,6 +115,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
         description: input.description,
         context_mode: input.contextMode,
         context_watermark: input.contextWatermark ?? null,
+        thread_id: input.threadID ?? null,
         background: input.background,
         tools: input.tools ?? null,
         last_turn_time: now,
@@ -157,9 +162,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
           db
             .update(ActorRegistryTable)
             .set(set)
-            .where(
-              and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)),
-            )
+            .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)))
             .run(),
         ),
       )
@@ -171,9 +174,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
           db
             .select()
             .from(ActorRegistryTable)
-            .where(
-              and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)),
-            )
+            .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)))
             .get(),
         ),
       )
@@ -200,9 +201,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
               turn_count: sql`${ActorRegistryTable.turn_count} + 1`,
               time_updated: now,
             })
-            .where(
-              and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)),
-            )
+            .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)))
             .run(),
         ),
       )
@@ -214,9 +213,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
           db
             .select()
             .from(ActorRegistryTable)
-            .where(
-              and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)),
-            )
+            .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.actor_id, actorID)))
             .get(),
         ),
       )
@@ -239,10 +236,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
             .select()
             .from(ActorRegistryTable)
             .where(
-              and(
-                inArray(ActorRegistryTable.status, ["pending", "running"]),
-                eq(ActorRegistryTable.background, true),
-              ),
+              and(inArray(ActorRegistryTable.status, ["pending", "running"]), eq(ActorRegistryTable.background, true)),
             )
             .all(),
         ),
@@ -260,10 +254,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
             .select()
             .from(ActorRegistryTable)
             .where(
-              and(
-                eq(ActorRegistryTable.session_id, sessionID),
-                eq(ActorRegistryTable.parent_actor_id, parentActorID),
-              ),
+              and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.parent_actor_id, parentActorID)),
             )
             .all(),
         ),
@@ -273,7 +264,9 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
 
     const renderForAgent = Effect.fn("ActorRegistry.renderForAgent")(function* (sessionID: SessionID) {
       const actors = yield* listBySession(sessionID)
-      const active = actors.filter((actor) => actor.background && (actor.status === "pending" || actor.status === "running"))
+      const active = actors.filter(
+        (actor) => actor.background && (actor.status === "pending" || actor.status === "running"),
+      )
       if (active.length === 0) return ""
 
       const lines: string[] = []
@@ -292,10 +285,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
       return lines.join("\n")
     })
 
-    const agentTypeFor = Effect.fn("ActorRegistry.agentTypeFor")(function* (
-      sessionID: SessionID,
-      actorID: string,
-    ) {
+    const agentTypeFor = Effect.fn("ActorRegistry.agentTypeFor")(function* (sessionID: SessionID, actorID: string) {
       if (actorID === "main") return "main"
       const actor = yield* get(sessionID, actorID)
       return actor?.agent ?? "main"
@@ -363,12 +353,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
           db
             .select()
             .from(ActorRegistryTable)
-            .where(
-              and(
-                eq(ActorRegistryTable.status, "running"),
-                lte(ActorRegistryTable.last_turn_time, cutoff),
-              ),
-            )
+            .where(and(eq(ActorRegistryTable.status, "running"), lte(ActorRegistryTable.last_turn_time, cutoff)))
             .all(),
         ),
       )
@@ -385,11 +370,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
     })
 
     // Fork stuck detection fiber in the layer scope
-    yield* scanStuck.pipe(
-      Effect.repeat(Schedule.fixed(SCAN_INTERVAL_MS)),
-      Effect.ignore,
-      Effect.forkScoped,
-    )
+    yield* scanStuck.pipe(Effect.repeat(Schedule.fixed(SCAN_INTERVAL_MS)), Effect.ignore, Effect.forkScoped)
 
     return Service.of({
       register,

@@ -89,7 +89,7 @@ export function getAgentClearance(agentId: string, org: OrgStructure): number {
  */
 export function canAccess(agentClearance: number, docClassification: string): boolean {
   const docLevel = parseClearanceLevel(docClassification)
-  if (docLevel === undefined) return true // unknown classification = permissive
+  if (docLevel === undefined) return false
   return agentClearance >= docLevel
 }
 
@@ -111,6 +111,23 @@ export function canSeeDoc(agentId: string, doc: FrontMatter, org: OrgStructure):
   // 2. Scope check (group: falls through to false — use canSeeDocEnhanced for group support)
   const scope = doc.scope ?? "public"
   return checkScope(agentId, scope, org)
+}
+
+/**
+ * Conservative fallback when no org structure is configured yet.
+ *
+ * Agents receive internal-level clearance for public docs and can see only
+ * their own `agent:<id>` private scope. Group, department, and org scopes need
+ * an explicit org tree or membership snapshot.
+ */
+export function canSeeDocWithoutOrg(agentId: string, doc: FrontMatter): boolean {
+  const classification = doc.classification ?? "public"
+  if (!canAccess(ClearanceLevel.internal, classification)) return false
+
+  const scope = doc.scope ?? "public"
+  if (scope === "public") return true
+  if (scope.startsWith("agent:")) return scope.slice(6) === agentId
+  return false
 }
 
 /**

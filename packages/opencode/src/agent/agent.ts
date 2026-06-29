@@ -342,8 +342,8 @@ export const layer = Layer.effect(
                 memory: "allow",
                 bash: "allow",
                 external_directory: {
-                  [path.join(Global.Path.data, "agents")]: "allow",
-                  [path.join(Global.Path.data, "agents", "*")]: "allow",
+                  [path.join(Global.Path.data, "workspace", "agents")]: "allow",
+                  [path.join(Global.Path.data, "workspace", "agents", "*")]: "allow",
                   [path.join(Global.Path.data, "projects")]: "allow",
                   [path.join(Global.Path.data, "projects", "*")]: "allow",
                   [path.join(Global.Path.data, "sessions")]: "allow",
@@ -375,8 +375,8 @@ export const layer = Layer.effect(
                 memory: "allow",
                 bash: "allow",
                 external_directory: {
-                  [path.join(Global.Path.data, "agents")]: "allow",
-                  [path.join(Global.Path.data, "agents", "*")]: "allow",
+                  [path.join(Global.Path.data, "workspace", "agents")]: "allow",
+                  [path.join(Global.Path.data, "workspace", "agents", "*")]: "allow",
                   [path.join(Global.Path.data, "projects")]: "allow",
                   [path.join(Global.Path.data, "projects", "*")]: "allow",
                   [path.join(Global.Path.data, "sessions")]: "allow",

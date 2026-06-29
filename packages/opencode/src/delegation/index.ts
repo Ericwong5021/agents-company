@@ -4,6 +4,8 @@ export type {
   DecomposeInput,
   DelegateSubtasksInput,
   AdmitResultInput,
+  SubmitForAdmissionInput,
+  SubmitForAdmissionResult,
   EscalateInput,
   EscalateResult,
   ApproachAttempt,
@@ -18,7 +20,11 @@ export type {
   ChainOutcome,
 } from "./delegation"
 export { SubTask, DelegationChain, DelegationResult, AdmissionResult } from "./schema"
-export type { SubTask as SubTaskType, DelegationResult as DelegationResultType, AdmissionResult as AdmissionResultType } from "./schema"
+export type {
+  SubTask as SubTaskType,
+  DelegationResult as DelegationResultType,
+  AdmissionResult as AdmissionResultType,
+} from "./schema"
 export {
   messageAgent,
   delegate,

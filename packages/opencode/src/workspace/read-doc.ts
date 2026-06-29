@@ -1,7 +1,8 @@
 import path from "path"
 import { Effect } from "effect"
 import { parseFrontMatter } from "./front-matter"
-import { canAccess, getAgentClearance, type OrgStructure } from "./clearance"
+import { canSeeDocEnhanced, canSeeDocWithoutOrg, type OrgStructure } from "./clearance"
+import { isGroupMember, listEdges, makeDelegationChecker } from "./relationships"
 import { workspaceRoot } from "./workspace"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -37,11 +38,28 @@ export interface ReadDocResult {
   granted: boolean
 }
 
+function usableOrg(org?: OrgStructure) {
+  if (!org?.departments || !org.agents) return
+  return org
+}
+
 export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error> {
   return Effect.gen(function* () {
-    const fullPath = path.isAbsolute(input.docPath)
-      ? input.docPath
-      : path.join(workspaceRoot(), input.docPath)
+    const root = path.resolve(workspaceRoot())
+    const fullPath = path.resolve(path.isAbsolute(input.docPath) ? input.docPath : path.join(root, input.docPath))
+    const relativePath = path.relative(root, fullPath)
+    if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      yield* Effect.sync(() =>
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: {
+            type: ReadDocAudit.type,
+            properties: { agentId: input.agentId, docPath: input.docPath, granted: false },
+          },
+        }),
+      )
+      return yield* Effect.fail(new Error(`read_doc: path outside workspace: ${input.docPath}`))
+    }
 
     const file = Bun.file(fullPath)
     const exists = yield* Effect.promise(() => file.exists())
@@ -62,27 +80,20 @@ export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error
     const { frontMatter, body } = parseFrontMatter(content)
     const classification = frontMatter.classification ?? "public"
 
-    // If no org structure provided, default to permissive (public access)
-    if (!input.org) {
-      yield* Effect.sync(() =>
-        GlobalBus.emit("event", {
-          directory: "global",
-          payload: {
-            type: ReadDocAudit.type,
-            properties: {
-              agentId: input.agentId,
-              docPath: input.docPath,
-              granted: true,
-              classification,
-            },
-          },
-        }),
-      )
-      return { content: body, frontMatter, granted: true }
-    }
-
-    const agentClearance = getAgentClearance(input.agentId, input.org)
-    const granted = canAccess(agentClearance, classification)
+    const org = usableOrg(input.org)
+    const edges = listEdges(input.agentId)
+    const granted = org
+      ? canSeeDocEnhanced(
+          input.agentId,
+          frontMatter,
+          org,
+          edges
+            .filter((edge) => edge.toAgentId === input.agentId)
+            .reduce((sum, edge) => sum + edge.clearanceModifier, 0),
+          (groupId) => isGroupMember(groupId, input.agentId),
+          makeDelegationChecker(input.agentId, edges),
+        )
+      : canSeeDocWithoutOrg(input.agentId, frontMatter)
 
     yield* Effect.sync(() =>
       GlobalBus.emit("event", {
@@ -101,7 +112,9 @@ export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error
 
     if (!granted) {
       return yield* Effect.fail(
-        new Error(`read_doc: access denied for agent "${input.agentId}" to "${input.docPath}" (classification: ${classification})`),
+        new Error(
+          `read_doc: access denied for agent "${input.agentId}" to "${input.docPath}" (classification: ${classification})`,
+        ),
       )
     }
 

@@ -12,7 +12,14 @@ import fs from "fs/promises"
 import path from "path"
 import { Effect } from "effect"
 import { parseFrontMatter, type FrontMatter } from "./front-matter"
-import { canSeeDoc, canSeeDocEnhanced, getAgentClearance, clearanceLevelName, type OrgStructure } from "./clearance"
+import {
+  canSeeDoc,
+  canSeeDocEnhanced,
+  canSeeDocWithoutOrg,
+  getAgentClearance,
+  clearanceLevelName,
+  type OrgStructure,
+} from "./clearance"
 import { workspaceRoot } from "./workspace"
 import { Log } from "@/util"
 
@@ -68,10 +75,7 @@ function extractSummary(body: string): string {
  */
 async function scanMdFiles(dir: string, relativeTo: string): Promise<string[]> {
   const results: string[] = []
-  const exists = await Bun.file(dir).exists()
-  if (!exists) return results
-
-  const entries = await fs.readdir(dir, { withFileTypes: true })
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
@@ -121,6 +125,7 @@ export function resolve(
     const root = workspaceRoot()
     const publicDir = path.join(root, "public")
     const groupsDir = path.join(root, "groups")
+    const agentsDir = path.join(root, "agents")
 
     // 1. Scan public/ for .md files
     const publicFiles = yield* Effect.promise(() => scanMdFiles(publicDir, root))
@@ -128,8 +133,11 @@ export function resolve(
     // 2. Scan groups/ for .md files (project-level docs)
     const groupFiles = yield* Effect.promise(() => scanMdFiles(groupsDir, root))
 
-    // 3. Filter and build visible docs
-    const allFiles = [...publicFiles, ...groupFiles]
+    // 3. Scan agents/ for private per-agent docs
+    const agentFiles = yield* Effect.promise(() => scanMdFiles(agentsDir, root))
+
+    // 4. Filter and build visible docs
+    const allFiles = [...publicFiles, ...groupFiles, ...agentFiles]
     const visibleDocs: VisibleDoc[] = []
 
     for (const relPath of allFiles) {
@@ -139,14 +147,13 @@ export function resolve(
       const scope = doc.frontMatter.scope ?? "public"
       const classification = doc.frontMatter.classification ?? "public"
 
-      // If org is provided, check access; otherwise treat as public
-      if (org) {
-        const hasEnhancedArgs = relationshipModifier !== undefined || isGroupMember !== undefined || canDelegateAccess !== undefined
-        const visible = hasEnhancedArgs
+      const hasEnhancedArgs = relationshipModifier !== undefined || isGroupMember !== undefined || canDelegateAccess !== undefined
+      const visible = org
+        ? hasEnhancedArgs
           ? canSeeDocEnhanced(agentId, doc.frontMatter, org, relationshipModifier ?? 0, isGroupMember, canDelegateAccess)
           : canSeeDoc(agentId, doc.frontMatter, org)
-        if (!visible) continue
-      }
+        : canSeeDocWithoutOrg(agentId, doc.frontMatter)
+      if (!visible) continue
 
       visibleDocs.push({
         path: relPath,
@@ -156,12 +163,12 @@ export function resolve(
       })
     }
 
-    // 4. Build agent profile summary
+    // 5. Build agent profile summary
     const profilePath = path.join("public", "org", "profiles", `${agentId}.md`)
     const profileDoc = yield* Effect.promise(() => readWorkspaceDoc(profilePath))
     const agentProfile = profileDoc ? extractSummary(profileDoc.body) : undefined
 
-    // 5. Build standing summary
+    // 6. Build standing summary
     const standingSummary = buildStandingSummary(agentId, visibleDocs, org)
 
     log.info("context resolved", {

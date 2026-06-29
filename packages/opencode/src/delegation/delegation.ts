@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import { spawnRef } from "@/actor/spawn-ref"
 import { AgentMessage } from "@/agent-message/agent-message"
+import * as Admission from "@/admission/admission"
 import { CompanyAgent } from "@/company-agent/company-agent"
 import { TaskRegistry } from "@/task/registry"
 import { Identifier } from "@/id/id"
@@ -10,6 +11,7 @@ import { stringifyFrontMatter } from "@/workspace/front-matter"
 import { workspaceRoot } from "@/workspace/workspace"
 import { canDelegate, parseOrgLayer, OrgLayer, MAX_DELEGATION_DEPTH } from "./primitives"
 import type { SubTask, DelegationResult, AdmissionResult } from "./schema"
+import type { AdmissionResult as GradedAdmissionResult, Submission } from "@/admission/schema"
 import { Log } from "@/util"
 
 const log = Log.create({ service: "delegation" })
@@ -105,6 +107,19 @@ export interface AdmitResultInput {
   readonly result: string
   /** Session for spawning the evaluation actor. */
   readonly sessionID: string
+}
+
+export interface SubmitForAdmissionInput {
+  /** The original delegation request message. */
+  readonly delegationMessage: AgentMessage.Info
+  /** Structured submission from the assignee. */
+  readonly submission: Submission
+}
+
+export interface SubmitForAdmissionResult {
+  readonly accepted: boolean
+  readonly admission: GradedAdmissionResult
+  readonly reply: AgentMessage.Info
 }
 
 export interface EscalateInput {
@@ -320,9 +335,7 @@ function buildRetryInstruction(
   currentAttempt: number,
 ): string {
   const previousApproaches =
-    approaches.length > 0
-      ? approaches.map((a) => `- ${a.approach}: ${a.findings}`).join("\n")
-      : "(none recorded)"
+    approaches.length > 0 ? approaches.map((a) => `- ${a.approach}: ${a.findings}`).join("\n") : "(none recorded)"
 
   return [
     `## Retry Instruction (Attempt ${currentAttempt + 1} of ${MAX_APPROACH_ATTEMPTS})`,
@@ -625,13 +638,11 @@ function evaluateFailureBubbleImpl(
     const agents = yield* companyAgentSvc.list()
     const receiver = agents.find((a) => a.id === input.receiverId)
     if (!receiver) {
-      return yield* Effect.fail(
-        new Error(`evaluateFailureBubble: receiver agent "${input.receiverId}" not found`),
-      )
+      return yield* Effect.fail(new Error(`evaluateFailureBubble: receiver agent "${input.receiverId}" not found`))
     }
 
     const receiverLayer = receiver.org_layer
-      ? parseOrgLayer(receiver.org_layer) ?? OrgLayer.execution
+      ? (parseOrgLayer(receiver.org_layer) ?? OrgLayer.execution)
       : OrgLayer.execution
 
     const availableDecisions: BubbleDecision[] = []
@@ -651,9 +662,7 @@ function evaluateFailureBubbleImpl(
 
     const subordinates = agents.filter(
       (a) =>
-        a.reports_to === input.receiverId &&
-        a.id !== input.receiverId &&
-        canDelegate(receiver.org_layer, a.org_layer),
+        a.reports_to === input.receiverId && a.id !== input.receiverId && canDelegate(receiver.org_layer, a.org_layer),
     )
     if (subordinates.length > 0) {
       availableDecisions.push({
@@ -686,9 +695,7 @@ function buildFullChainReportImpl(
   return Effect.gen(function* () {
     const messages = yield* agentMessageSvc.listByRootNeed(rootNeedID)
     if (messages.length === 0) {
-      return yield* Effect.fail(
-        new Error(`buildFullChainReport: no messages found for rootNeedID "${rootNeedID}"`),
-      )
+      return yield* Effect.fail(new Error(`buildFullChainReport: no messages found for rootNeedID "${rootNeedID}"`))
     }
 
     const agents = yield* companyAgentSvc.list()
@@ -801,6 +808,8 @@ export interface Interface {
   readonly delegateSubtasks: (input: DelegateSubtasksInput) => Effect.Effect<DelegationResult[], Error>
   /** Evaluate a delegated result against its acceptance criteria (focused attention). */
   readonly admitResult: (input: AdmitResultInput) => Effect.Effect<AdmissionResult, Error>
+  /** Grade a structured submission and create the corresponding reply message. */
+  readonly submitForAdmission: (input: SubmitForAdmissionInput) => Effect.Effect<SubmitForAdmissionResult, Error>
   /** Handle admission failure: retry with a different approach or escalate to superior. */
   readonly escalate: (input: EscalateInput) => Effect.Effect<EscalateResult, Error>
   /** Low-level failure handler: returns retry instruction or escalation decision. */
@@ -824,6 +833,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const agentMessageSvc = yield* AgentMessage.Service
     const companyAgentSvc = yield* CompanyAgent.Service
+    const admissionSvc = yield* Admission.Service
 
     // ---- decompose ----
 
@@ -868,15 +878,11 @@ export const layer = Layer.effect(
 
     // ---- delegateSubtasks ----
 
-    const delegateSubtasks = Effect.fn("Delegation.delegateSubtasks")(function* (
-      input: DelegateSubtasksInput,
-    ) {
+    const delegateSubtasks = Effect.fn("Delegation.delegateSubtasks")(function* (input: DelegateSubtasksInput) {
       const agents = yield* companyAgentSvc.list()
       const delegator = agents.find((a) => a.id === input.delegatorAgentID)
       if (!delegator) {
-        return yield* Effect.fail(
-          new Error(`delegateSubtasks: delegator "${input.delegatorAgentID}" not found`),
-        )
+        return yield* Effect.fail(new Error(`delegateSubtasks: delegator "${input.delegatorAgentID}" not found`))
       }
 
       const results: DelegationResult[] = []
@@ -912,34 +918,14 @@ export const layer = Layer.effect(
           continue
         }
 
-        // 4. Spawn an actor to handle the sub-task using spawnForDelegation
+        // 4. Ensure an actor is available before creating a request message.
         const actor = spawnRef.current
         if (!actor) {
           results.push({ messageID: "", actorID: "", status: "failed" })
           continue
         }
 
-        const spawned = yield* actor.spawnForDelegation({
-          spawn: {
-            sessionID: input.sessionID as any,
-            agentType: target.id,
-            task: buildSubtaskPrompt(subTask),
-            context: "none",
-            tools: "INHERIT",
-            background: true,
-            parentActorID: input.delegatorAgentID,
-            delegationMessageID: "", // filled below after message creation
-            depth: input.depth + 1,
-          },
-          delegationContext: {
-            depth: input.depth + 1,
-            rootNeedID: input.rootNeedID,
-            taskSummary: subTask.summary,
-            acceptanceCriteria: subTask.acceptanceCriteria,
-          },
-        })
-
-        // 5. Create the delegation message with spawnedIssueID
+        // 5. Create the delegation message first so the child actor can carry its ID.
         const msgId = Identifier.ascending("message")
         const rootNeedID = input.rootNeedID || msgId
 
@@ -953,17 +939,39 @@ export const layer = Layer.effect(
           threadID: input.threadID,
           rootNeedID,
           depth: input.depth,
-          spawnedIssueID: spawned.actorID,
         })
 
+        // 6. Spawn an actor to handle the sub-task using spawnForDelegation.
+        const spawned = yield* actor.spawnForDelegation({
+          spawn: {
+            sessionID: input.sessionID as any,
+            agentType: target.id,
+            task: buildSubtaskPrompt(subTask),
+            context: "none",
+            tools: "INHERIT",
+            background: true,
+            parentActorID: input.delegatorAgentID,
+            delegationMessageID: msg.id,
+            depth: input.depth + 1,
+          },
+          delegationContext: {
+            depth: input.depth + 1,
+            rootNeedID: input.rootNeedID,
+            taskSummary: subTask.summary,
+            acceptanceCriteria: subTask.acceptanceCriteria,
+          },
+        })
+
+        const linkedMsg = yield* agentMessageSvc.updateSpawnedIssue(msg.id, spawned.actorID)
+
         log.info("delegateSubtasks: delegated sub-task", {
-          messageID: msg.id,
+          messageID: linkedMsg.id,
           actorID: spawned.actorID,
           target: target.name,
         })
 
         results.push({
-          messageID: msg.id,
+          messageID: linkedMsg.id,
           actorID: spawned.actorID,
           status: "spawned",
         })
@@ -1018,6 +1026,38 @@ export const layer = Layer.effect(
         findingsCount: parsed.findings.length,
       })
       return parsed
+    })
+
+    // ---- submitForAdmission ----
+
+    const submitForAdmission = Effect.fn("Delegation.submitForAdmission")(function* (input: SubmitForAdmissionInput) {
+      const agents = yield* companyAgentSvc.list()
+      const reviewer = agents.find((a) => a.id === input.delegationMessage.fromAgentID)
+      const taskRating = admissionSvc.resolveRating(reviewer?.org_layer)
+      const admission = yield* admissionSvc.grade(input.submission, taskRating)
+      const accepted = admission.passed
+      const body = accepted
+        ? [
+            "Admission passed.",
+            "",
+            `Task rating: ${admission.taskRating}`,
+            `Submission kind: ${input.submission.kind}`,
+          ].join("\n")
+        : admissionSvc.buildRejectionMessage(admission)
+
+      const reply = yield* agentMessageSvc.create({
+        fromAgentID: input.delegationMessage.toAgentID,
+        toAgentID: input.delegationMessage.fromAgentID,
+        kind: "reply",
+        body,
+        inReplyTo: input.delegationMessage.id,
+        threadID: input.delegationMessage.threadID,
+        rootNeedID: input.delegationMessage.rootNeedID,
+        depth: input.delegationMessage.depth,
+        outcome: accepted ? "success" : "failed",
+      })
+
+      return { accepted, admission, reply }
     })
 
     // ---- escalate ----
@@ -1189,11 +1229,11 @@ export const layer = Layer.effect(
       decompose,
       delegateSubtasks,
       admitResult,
+      submitForAdmission,
       escalate,
       handleFailure: (input) => handleFailureImpl(input, companyAgentSvc, agentMessageSvc),
       evaluateFailureBubble: (input) => evaluateFailureBubbleImpl(input, companyAgentSvc, agentMessageSvc),
-      buildFullChainReport: (rootNeedID) =>
-        buildFullChainReportImpl(rootNeedID, agentMessageSvc, companyAgentSvc),
+      buildFullChainReport: (rootNeedID) => buildFullChainReportImpl(rootNeedID, agentMessageSvc, companyAgentSvc),
       saveChainReport: (report) => saveChainReportImpl(report),
     })
   }),
@@ -1206,6 +1246,7 @@ export const layer = Layer.effect(
 export const defaultLayer = Layer.suspend(() =>
   layer.pipe(
     Layer.provide(AgentMessage.defaultLayer),
+    Layer.provide(Admission.defaultLayer),
     Layer.provide(CompanyAgent.defaultLayer),
     Layer.provide(TaskRegistry.defaultLayer),
   ),

@@ -104,6 +104,7 @@ function fromRow(row: Row): Info {
 export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: string) => Effect.Effect<Info | undefined>
+  readonly updateSpawnedIssue: (id: string, spawnedIssueID: string) => Effect.Effect<Info>
   readonly listByAgent: (agentId: string, opts?: ListByAgentOpts) => Effect.Effect<Info[]>
   readonly listByRootNeed: (rootNeedId: string) => Effect.Effect<Info[]>
   readonly markRead: (id: string) => Effect.Effect<Info>
@@ -167,6 +168,24 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         Database.use((db) => db.select().from(AgentMessageTable).where(eq(AgentMessageTable.id, id)).get()),
       )
       return row ? fromRow(row) : undefined
+    })
+
+    const updateSpawnedIssue = Effect.fn("AgentMessage.updateSpawnedIssue")(function* (
+      id: string,
+      spawnedIssueID: string,
+    ) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(AgentMessageTable)
+            .set({ spawned_issue_id: spawnedIssueID, time_updated: Date.now() })
+            .where(eq(AgentMessageTable.id, id))
+            .returning()
+            .get(),
+        ),
+      )
+      if (!row) yield* Effect.die(new Error(`AgentMessage.updateSpawnedIssue: not found id="${id}"`))
+      return fromRow(row!)
     })
 
     const listByAgent = Effect.fn("AgentMessage.listByAgent")(function* (agentId: string, opts?: ListByAgentOpts) {
@@ -238,7 +257,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return rows.map(fromRow)
     })
 
-    return { create, get, listByAgent, listByRootNeed, markRead, getByThread }
+    return { create, get, updateSpawnedIssue, listByAgent, listByRootNeed, markRead, getByThread }
   }),
 )
 

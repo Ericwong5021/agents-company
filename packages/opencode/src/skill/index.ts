@@ -32,7 +32,7 @@ export const Info = z.object({
   content: z.string(),
   hidden: z.boolean().optional(),
   // Owning company agent id, when this is a private per-agent skill discovered
-  // under <data>/agents/<id>/skills/. Undefined for global/shared skills.
+  // under <data>/workspace/agents/<id>/skills/. Undefined for global/shared skills.
   agentID: z.string().optional(),
 })
 export type Info = z.infer<typeof Info>
@@ -101,12 +101,12 @@ const add = Effect.fnUntraced(function* (state: State, match: string, bus: Bus.I
   const parsed = Info.pick({ name: true, description: true, hidden: true }).safeParse(md.data)
   if (!parsed.success) return
 
-  // Private per-agent skills live under <data>/agents/<id>/skills/. Owning agent
+  // Private per-agent skills live under <data>/workspace/agents/<id>/skills/. Owning agent
   // is derived from the path; these are keyed by "<agentID>:::<name>" so the same
   // skill name can exist for multiple agents (and alongside a global one). Anchor
   // to the real agents root so an unrelated skill whose path merely contains
   // ".../agents/x/skills/..." is not mis-scoped.
-  const agentsRoot = path.join(Global.Path.data, "agents") + path.sep
+  const agentsRoot = path.join(Global.Path.data, "workspace", "agents") + path.sep
   const agentID = match.startsWith(agentsRoot)
     ? match.slice(agentsRoot.length).match(/^([^/\\]+)[/\\]skills[/\\]/)?.[1]
     : undefined
@@ -237,10 +237,10 @@ const discoverSkills = Effect.fnUntraced(function* (
     }
   }
 
-  // Private per-agent skills: <data>/agents/<id>/skills/**/SKILL.md. Each company
+  // Private per-agent skills: <data>/workspace/agents/<id>/skills/**/SKILL.md. Each company
   // agent's folder carries its own crystallized capabilities; the owning agent id
   // is recovered from the path in add() and used to scope visibility.
-  const agentsRoot = path.join(Global.Path.data, "agents")
+  const agentsRoot = path.join(Global.Path.data, "workspace", "agents")
   if (yield* fsys.isDir(agentsRoot)) {
     yield* scan(state, agentsRoot, "*/skills/**/SKILL.md", { scope: "agent" })
   }

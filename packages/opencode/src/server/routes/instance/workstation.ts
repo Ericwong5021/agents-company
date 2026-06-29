@@ -21,11 +21,13 @@ const ThreadStatusSchema = z.object({
   spent_tokens: z.number(),
 })
 
+const OrgLayerSchema = z.enum(["board", "department", "project", "execution", "tool"])
+
 const AgentStatusSchema = z.object({
   id: z.string(),
   name: z.string(),
-  org_layer: z.enum(["board", "execution"]),
-  status: z.enum(["idle", "busy", "focused"]),
+  org_layer: OrgLayerSchema,
+  status: z.enum(["idle", "busy", "paused"]),
   threads: z.array(ThreadStatusSchema),
 })
 
@@ -43,10 +45,16 @@ const WorkstationStatusSchema = z.object({
 // Helper: derive org layer from agent ID
 // ---------------------------------------------------------------------------
 
-function deriveOrgLayer(agentID: string): "board" | "execution" {
+function deriveOrgLayer(agentID: string): z.infer<typeof OrgLayerSchema> {
   const boardIDs = ["ceo", "cto", "cfo", "coo", "cmo", "board"]
   if (boardIDs.includes(agentID.toLowerCase())) return "board"
   return "execution"
+}
+
+function orgLayer(agent: CompanyAgent.Info): z.infer<typeof OrgLayerSchema> {
+  const parsed = OrgLayerSchema.safeParse(agent.org_layer)
+  if (parsed.success) return parsed.data
+  return deriveOrgLayer(agent.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +94,7 @@ export const WorkstationRoutes = lazy(() =>
               return {
                 id: agent.id,
                 name: agent.name,
-                org_layer: deriveOrgLayer(agent.id),
+                org_layer: orgLayer(agent),
                 status,
                 threads: agentThreads.map((t) => ({
                   id: t.id,

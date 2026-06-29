@@ -33,15 +33,15 @@ export function memoryPath(projectID: ProjectID): string {
 }
 
 /**
- * Root directory for a company agent at `<data>/agents/<aid>/`.
+ * Root directory for a company agent at `<data>/workspace/agents/<aid>/`.
  * Houses SOUL.md, settings.json, MEMORY.md, and per-project memory.
  */
 export function agentDir(agentID: CompanyAgentID): string {
-  return path.join(Global.Path.data, "agents", agentID)
+  return path.join(Global.Path.data, "workspace", "agents", agentID)
 }
 
 /**
- * Agent persona file at `<data>/agents/<aid>/SOUL.md`.
+ * Agent persona file at `<data>/workspace/agents/<aid>/SOUL.md`.
  * Contains the raw system_prompt text; edit directly to change agent personality.
  */
 export function agentSoulPath(agentID: CompanyAgentID): string {
@@ -49,7 +49,7 @@ export function agentSoulPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent config file at `<data>/agents/<aid>/settings.json`.
+ * Agent config file at `<data>/workspace/agents/<aid>/settings.json`.
  * Stores model override, and will expand to include skills and MCP config.
  */
 export function agentSettingsPath(agentID: CompanyAgentID): string {
@@ -57,7 +57,7 @@ export function agentSettingsPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Per-company-agent memory at `<data>/agents/<aid>/MEMORY.md`.
+ * Per-company-agent memory at `<data>/workspace/agents/<aid>/MEMORY.md`.
  * Cross-project long-term memory scoped to one company agent.
  */
 export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
@@ -65,7 +65,7 @@ export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent instruct file at `<data>/agents/<aid>/INSTRUCT.md`.
+ * Agent instruct file at `<data>/workspace/agents/<aid>/INSTRUCT.md`.
  * Evolvable instructions: how to judge, communicate, when to escalate.
  */
 export function agentInstructPath(agentID: CompanyAgentID): string {
@@ -73,7 +73,7 @@ export function agentInstructPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent relationships file at `<data>/agents/<aid>/relationships.md`.
+ * Agent relationships file at `<data>/workspace/agents/<aid>/relationships.md`.
  * Colleague relationships: collaboration preferences, communication style, trust level.
  */
 export function agentRelationshipsPath(agentID: CompanyAgentID): string {
@@ -81,7 +81,7 @@ export function agentRelationshipsPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent kanban file at `<data>/agents/<aid>/kanban.md`.
+ * Agent kanban file at `<data>/workspace/agents/<aid>/kanban.md`.
  * Personal task view: current projects, todos, progress.
  */
 export function agentKanbanPath(agentID: CompanyAgentID): string {
@@ -89,7 +89,7 @@ export function agentKanbanPath(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent skills directory at `<data>/agents/<aid>/skills/`.
+ * Agent skills directory at `<data>/workspace/agents/<aid>/skills/`.
  * Private skills: reusable capabilities crystallized from experience.
  */
 export function agentSkillsDir(agentID: CompanyAgentID): string {
@@ -97,7 +97,7 @@ export function agentSkillsDir(agentID: CompanyAgentID): string {
 }
 
 /**
- * Agent memory directory at `<data>/agents/<aid>/memory/`.
+ * Agent memory directory at `<data>/workspace/agents/<aid>/memory/`.
  * Houses per-agent memory files indexed by the FTS5 search system.
  */
 export function agentMemoryDir(agentID: CompanyAgentID): string {
@@ -106,7 +106,7 @@ export function agentMemoryDir(agentID: CompanyAgentID): string {
 
 /**
  * Per-company-agent × per-project memory at
- * `<data>/agents/<aid>/projects/<pid>/MEMORY.md`.
+ * `<data>/workspace/agents/<aid>/projects/<pid>/MEMORY.md`.
  * Captures knowledge this agent accumulated specifically within one project.
  */
 export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID: ProjectID): string {

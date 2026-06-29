@@ -1,5 +1,6 @@
 import z from "zod"
 import { SessionID, MessageID } from "@/session/schema"
+import { ThreadID } from "@/thread/schema"
 
 export const ActorStatus = z.enum(["pending", "running", "idle"])
 export type ActorStatus = z.infer<typeof ActorStatus>
@@ -32,6 +33,7 @@ export const Actor = z
     description: z.string(),
     contextMode: ContextMode,
     contextWatermark: MessageID.zod.optional(),
+    threadID: ThreadID.optional(),
     background: z.boolean(),
     tools: ToolWhitelist.optional(),
     lastTurnTime: z.number(),

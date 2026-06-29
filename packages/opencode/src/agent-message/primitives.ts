@@ -30,27 +30,27 @@ export function parseOrgLayer(name: string): number | undefined {
 
 /**
  * Check whether a delegator at fromLayer can delegate to a target at toLayer.
- * Lower numeric value = higher authority. Delegator must be at a higher
- * authority layer (strictly lower number) than the target.
+ * Lower numeric value = higher authority. Delegation must move exactly one
+ * layer down the fixed organization tree; skip-level delegation is blocked.
  *
- * board(0) -> anyone OK
+ * board(0) -> department(1) OK
+ * department(1) -> project(2) OK
+ * project(2) -> execution(3) OK
+ * execution(3) -> tool(4) OK
  * tool(4) -> anyone BLOCKED (no lower layer exists)
  * Agents without an assigned org_layer are treated as execution(3).
  */
 export function canDelegate(fromLayer: string | undefined, toLayer: string | undefined): boolean {
-  const from = fromLayer ? parseOrgLayer(fromLayer) ?? OrgLayer.execution : OrgLayer.execution
-  const to = toLayer ? parseOrgLayer(toLayer) ?? OrgLayer.execution : OrgLayer.execution
-  return from < to
+  const from = fromLayer ? (parseOrgLayer(fromLayer) ?? OrgLayer.execution) : OrgLayer.execution
+  const to = toLayer ? (parseOrgLayer(toLayer) ?? OrgLayer.execution) : OrgLayer.execution
+  return to === from + 1
 }
 
 // ---------------------------------------------------------------------------
 // Resolve target agent by name or ID
 // ---------------------------------------------------------------------------
 
-function resolveTarget(
-  target: string,
-  agents: CompanyAgent.Info[],
-): CompanyAgent.Info | undefined {
+function resolveTarget(target: string, agents: CompanyAgent.Info[]): CompanyAgent.Info | undefined {
   // Try exact ID match first
   const byId = agents.find((a) => a.id === target)
   if (byId) return byId
@@ -120,9 +120,7 @@ export function delegate(
   return Effect.gen(function* () {
     const depth = input.depth ?? 0
     if (depth >= MAX_DELEGATION_DEPTH) {
-      return yield* Effect.fail(
-        new Error(`delegate: max delegation depth (${MAX_DELEGATION_DEPTH}) exceeded`),
-      )
+      return yield* Effect.fail(new Error(`delegate: max delegation depth (${MAX_DELEGATION_DEPTH}) exceeded`))
     }
     if (input.fromId === input.toId) {
       return yield* Effect.fail(new Error("delegate: cannot delegate to self"))
@@ -139,7 +137,7 @@ export function delegate(
       const toLayer = target.org_layer ?? "execution"
       return yield* Effect.fail(
         new Error(
-          `delegate: agent "${delegator.name}" (${fromLayer}) cannot delegate to "${target.name}" (${toLayer}) — delegator must be at a higher org layer`,
+          `delegate: agent "${delegator.name}" (${fromLayer}) cannot delegate to "${target.name}" (${toLayer}) — target must be exactly one org layer below delegator`,
         ),
       )
     }
@@ -188,16 +186,11 @@ export interface ReplyInput {
   outcome?: string
 }
 
-export function reply(
-  input: ReplyInput,
-  agentMessageSvc: AgentMessage.Interface,
-) {
+export function reply(input: ReplyInput, agentMessageSvc: AgentMessage.Interface) {
   return Effect.gen(function* () {
     const original = yield* agentMessageSvc.get(input.originalMessageId)
     if (!original) {
-      return yield* Effect.fail(
-        new Error(`reply: original message "${input.originalMessageId}" not found`),
-      )
+      return yield* Effect.fail(new Error(`reply: original message "${input.originalMessageId}" not found`))
     }
 
     const msg = yield* agentMessageSvc.create({
@@ -241,9 +234,7 @@ export function propose(
   return Effect.gen(function* () {
     const depth = input.depth ?? 0
     if (depth >= MAX_DELEGATION_DEPTH) {
-      return yield* Effect.fail(
-        new Error(`propose: max proposal depth (${MAX_DELEGATION_DEPTH}) exceeded`),
-      )
+      return yield* Effect.fail(new Error(`propose: max proposal depth (${MAX_DELEGATION_DEPTH}) exceeded`))
     }
 
     const agents = yield* companyAgentSvc.list()
@@ -258,9 +249,7 @@ export function propose(
 
     const superior = agents.find((a) => a.id === sender.reports_to)
     if (!superior) {
-      return yield* Effect.fail(
-        new Error(`propose: superior agent "${sender.reports_to}" not found`),
-      )
+      return yield* Effect.fail(new Error(`propose: superior agent "${sender.reports_to}" not found`))
     }
 
     if (input.fromId === superior.id) {
@@ -296,10 +285,7 @@ export function propose(
 // Drain unread messages for an agent (for session-start injection)
 // ---------------------------------------------------------------------------
 
-export function drainUnread(
-  agentId: string,
-  agentMessageSvc: AgentMessage.Interface,
-) {
+export function drainUnread(agentId: string, agentMessageSvc: AgentMessage.Interface) {
   return Effect.gen(function* () {
     const unread = yield* agentMessageSvc.listByAgent(agentId, { unreadOnly: true, limit: 100 })
     if (unread.length === 0) return ""

@@ -19,7 +19,7 @@
 
 import fs from "fs/promises"
 import path from "path"
-import { stringifyFrontMatter, type FrontMatter } from "./front-matter"
+import { parseFrontMatter, stringifyFrontMatter, type FrontMatter } from "./front-matter"
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -52,41 +52,64 @@ interface FileDef {
 const FILES: FileDef[] = [
   {
     path: ["public", "org", "structure.md"],
-    frontMatter: { scope: "org", classification: "internal", owner: "system" },
+    frontMatter: { scope: "public", classification: "internal", owner: "system", updatedBy: "system" },
     title: "Organization Structure",
     body: `_Org chart, departments, roles, and reporting lines._\n\n## Departments\n\n_Update this file to reflect the current organization._\n`,
   },
   {
     path: ["public", "policy", "safety-redlines.md"],
-    frontMatter: { scope: "public", classification: "internal", owner: "system" },
+    frontMatter: { scope: "public", classification: "internal", owner: "system", updatedBy: "system" },
     title: "Safety Red Lines",
     body: `_Non-negotiable safety constraints that all agents must follow._\n\n## Rules\n\n1. Never expose credentials or secrets in output.\n2. Never execute destructive commands without explicit user confirmation.\n3. Always respect file access boundaries defined by clearance level.\n`,
   },
   {
     path: ["public", "policy", "collaboration.md"],
-    frontMatter: { scope: "public", classification: "internal", owner: "system" },
+    frontMatter: { scope: "public", classification: "internal", owner: "system", updatedBy: "system" },
     title: "Collaboration Policy",
     body: `_Guidelines for inter-agent collaboration._\n\n## Principles\n\n- Communicate intent before taking action.\n- Share relevant context with collaborating agents.\n- Respect thread boundaries and budget limits.\n`,
   },
   {
     path: ["public", "facilities", "skills.md"],
-    frontMatter: { scope: "public", classification: "public", owner: "system" },
+    frontMatter: { scope: "public", classification: "public", owner: "system", updatedBy: "system" },
     title: "Shared Skills Registry",
     body: `_Catalog of shared skills available to all agents._\n\n## Available Skills\n\n_Add skills here as they are developed._\n`,
   },
   {
     path: ["public", "board", "strategy.md"],
-    frontMatter: { scope: "org", classification: "confidential", owner: "system" },
+    frontMatter: { scope: "public", classification: "confidential", owner: "system", updatedBy: "system" },
     title: "Company Strategy",
     body: `_High-level strategic direction and goals._\n\n## Vision\n\n_Update with current strategic priorities._\n`,
   },
   {
     path: ["public", "board", "projects.md"],
-    frontMatter: { scope: "org", classification: "internal", owner: "system" },
+    frontMatter: { scope: "public", classification: "internal", owner: "system", updatedBy: "system" },
     title: "Active Projects",
     body: `_Overview of active projects and their status._\n\n## Projects\n\n_Add projects as they are initiated._\n`,
   },
 ]
+
+function normalizeFrontMatter(existing: FrontMatter, defaults: FrontMatter): FrontMatter {
+  return {
+    ...existing,
+    scope: existing.scope === "org" ? defaults.scope : (existing.scope ?? defaults.scope),
+    classification: existing.classification ?? defaults.classification,
+    owner: existing.owner ?? defaults.owner,
+    updatedBy: existing.updatedBy ?? defaults.updatedBy,
+  }
+}
+
+async function writeOrRepairMarkdown(filePath: string, defaults: FrontMatter, body: string): Promise<void> {
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) {
+    await Bun.write(filePath, stringifyFrontMatter(defaults, body))
+    return
+  }
+
+  const parsed = parseFrontMatter(await file.text())
+  const next = normalizeFrontMatter(parsed.frontMatter, defaults)
+  if (JSON.stringify(next) === JSON.stringify(parsed.frontMatter)) return
+  await Bun.write(filePath, stringifyFrontMatter(next, parsed.body))
+}
 
 // ---------------------------------------------------------------------------
 // Init & Bootstrap
@@ -118,10 +141,7 @@ export async function initWorkspace(dataPath: string): Promise<void> {
   await Promise.all(
     FILES.map(async (def) => {
       const filePath = ws(...def.path)
-      const exists = await Bun.file(filePath).exists()
-      if (exists) return
-      const content = stringifyFrontMatter(def.frontMatter, `# ${def.title}\n\n${def.body}`)
-      await Bun.write(filePath, content)
+      await writeOrRepairMarkdown(filePath, def.frontMatter, `# ${def.title}\n\n${def.body}`)
     }),
   )
 }
@@ -153,13 +173,12 @@ export async function generateAgentProfile(
   capabilities: string[],
 ): Promise<void> {
   const filePath = ws("public", "org", "profiles", `${agentId}.md`)
-  const exists = await Bun.file(filePath).exists()
-  if (exists) return
 
   const frontMatter: FrontMatter = {
-    scope: "org",
+    scope: "public",
     classification: "internal",
     owner: agentId,
+    updatedBy: "system",
   }
 
   const body = [
@@ -177,7 +196,7 @@ export async function generateAgentProfile(
     "",
   ].join("\n")
 
-  await Bun.write(filePath, stringifyFrontMatter(frontMatter, body))
+  await writeOrRepairMarkdown(filePath, frontMatter, body)
 }
 
 export * as Workspace from "./workspace"

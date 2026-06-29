@@ -662,6 +662,7 @@ export const layer = Layer.effect(
         description: input.description ?? input.agentType,
         contextMode: input.context,
         contextWatermark: undefined,
+        threadID: peerThread.id,
         background: input.background,
         lifecycle: input.lifecycle ?? "persistent",
         tools: input.tools,
@@ -715,6 +716,7 @@ export const layer = Layer.effect(
         description: input.description ?? input.agentType,
         contextMode: input.context,
         contextWatermark: watermark,
+        threadID: thread.id,
         background: input.background,
         lifecycle: input.lifecycle ?? "ephemeral",
         tools: input.tools,
@@ -766,12 +768,7 @@ export const layer = Layer.effect(
 
     const spawnForDelegation = Effect.fn("Actor.spawnForDelegation")(function* (input: SpawnDelegationInput) {
       // Build delegation-enriched task prompt
-      const ctxParts: string[] = [
-        "",
-        "---",
-        "## Delegation Context",
-        `- **Depth**: ${input.delegationContext.depth}`,
-      ]
+      const ctxParts: string[] = ["", "---", "## Delegation Context", `- **Depth**: ${input.delegationContext.depth}`]
       if (input.delegationContext.rootNeedID) {
         ctxParts.push(`- **Root Need ID**: ${input.delegationContext.rootNeedID}`)
       }
@@ -781,11 +778,7 @@ export const layer = Layer.effect(
       if (input.delegationContext.acceptanceCriteria) {
         ctxParts.push("", "## Acceptance Criteria", input.delegationContext.acceptanceCriteria)
       }
-      ctxParts.push(
-        "",
-        "When complete, reply with a delegation reply message using the message_agent tool.",
-        "---",
-      )
+      ctxParts.push("", "When complete, reply with a delegation reply message using the message_agent tool.", "---")
 
       const enrichedTask = input.spawn.task + ctxParts.join("\n")
 
@@ -817,13 +810,18 @@ export const layer = Layer.effect(
             })
             .pipe(Effect.ignore)
         }
-      }).pipe(Effect.catch(() => Effect.void), Effect.forkIn(scope))
+      }).pipe(
+        Effect.catch(() => Effect.void),
+        Effect.forkIn(scope),
+      )
 
       return result
     })
 
     const cancel: (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") => Effect.Effect<void> =
       Effect.fn("Actor.cancel")(function* (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") {
+        const actor = yield* actorReg.get(sessionID, actorID)
+        if (actor?.threadID) yield* threadService.complete(actor.threadID).pipe(Effect.ignore)
         const children = yield* actorReg.listByParent(sessionID, actorID)
         yield* Effect.forEach(children, (c) => cancel(sessionID, c.actorID, mode), {
           concurrency: "unbounded",
