@@ -4,308 +4,6 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventActorRegistered = {
-  type: "actor.registered"
-  properties: {
-    sessionID: string
-    actorID: string
-    mode: "peer" | "subagent" | "main"
-    parentActorID?: string
-    description: string
-    agent: string
-    background: boolean
-  }
-}
-
-export type EventActorStatus = {
-  type: "actor.status"
-  properties: {
-    sessionID: string
-    actorID: string
-    status: "pending" | "running" | "idle"
-    lastOutcome?: "success" | "failure" | "cancelled"
-    turnCount: number
-    lastTurnTime: number
-    error?: string
-  }
-}
-
-export type EventActorStuck = {
-  type: "actor.stuck"
-  properties: {
-    sessionID: string
-    actorID: string
-    description: string
-    lastTurnTime: number
-    stuckDuration: number
-  }
-}
-
-export type EventWriterCachePerf = {
-  type: "writer.cache_perf"
-  properties: {
-    sessionID: string
-    writerActorID: string
-    status: "completed" | "failed"
-    total_input_tokens: number
-    cache_read_tokens: number
-    cache_write_tokens: number
-    cache_hit_rate: number
-    num_llm_calls: number
-  }
-}
-
-export type EventInboxArrived = {
-  type: "inbox.arrived"
-  properties: {
-    receiverSessionID: string
-    receiverActorID: string
-    senderSessionID?: string
-    senderActorID?: string
-    inboxID: string
-    type: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    sessionID: string
-    task: {
-      id: string
-      session_id: string
-      parent_task_id?: string
-      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
-      summary: string
-      owner?: string
-      created_at: number
-      last_event_at: number
-      ended_at?: number
-      cleanup_after?: number
-    }
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    sessionID: string
-    task: {
-      id: string
-      session_id: string
-      parent_task_id?: string
-      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
-      summary: string
-      owner?: string
-      created_at: number
-      last_event_at: number
-      ended_at?: number
-      cleanup_after?: number
-    }
-    kind: "started" | "unstarted" | "blocked" | "unblocked" | "done" | "abandoned" | "renamed"
-  }
-}
-
-export type EventTeamCreated = {
-  type: "team.created"
-  properties: {
-    teamID: string
-    creatorSessionID: string
-  }
-}
-
-export type EventTeamMemberJoined = {
-  type: "team.member.joined"
-  properties: {
-    teamID: string
-    sessionID: string
-    agent: string
-    role: string
-  }
-}
-
-export type EventMetricsModelCall = {
-  type: "metrics.model_call"
-  properties: {
-    sessionID: string
-    finish_reason: string
-    ttft_ms?: number
-    latency_ms: number
-    cached_read_tokens: number
-    model_id: string
-    provider: string
-    total_tokens_in: number
-    total_tokens_out: number
-  }
-}
-
-export type EventMetricsToolCall = {
-  type: "metrics.tool_call"
-  properties: {
-    sessionID: string
-    tool_name: string
-    input_bytes: number
-    output_bytes: number
-    tool_call_id: string
-    tool_call_status: "success" | "error" | "cancelled"
-  }
-}
-
-export type EventMetricsAgentRequest = {
-  type: "metrics.agent_request"
-  properties: {
-    sessionID: string
-    phase: string
-    task_type: string
-    surface: string
-    total_tokens_in: number
-    total_tokens_out: number
-    files_changed: number
-    validation_status: string
-  }
-}
-
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
-export type EventTuiInstructionsLoaded = {
-  type: "tui.instructions.loaded"
-  properties: {
-    /**
-     * Display labels of loaded instruction files: worktree-relative path, ~-path, or absolute
-     */
-    files: Array<string>
-  }
-}
-
-export type EventWorkflowPhase = {
-  type: "workflow.phase"
-  properties: {
-    sessionID: string
-    runID: string
-    title: string
-  }
-}
-
-export type EventWorkflowLog = {
-  type: "workflow.log"
-  properties: {
-    sessionID: string
-    runID: string
-    message: string
-  }
-}
-
-export type EventWorkflowStarted = {
-  type: "workflow.started"
-  properties: {
-    sessionID: string
-    runID: string
-    name: string
-  }
-}
-
-export type EventWorkflowFinished = {
-  type: "workflow.finished"
-  properties: {
-    sessionID: string
-    runID: string
-    status: "completed" | "failed" | "cancelled"
-    error?: string
-  }
-}
-
-export type EventWorkflowAgentFailed = {
-  type: "workflow.agent_failed"
-  properties: {
-    sessionID: string
-    runID: string
-    actorID?: string
-    agentType: string
-    label?: string
-    phase?: string
-    reason: "over-cap" | "spawn-reject" | "timeout" | "actor-error" | "no-deliverable"
-    errorMessage?: string
-  }
-}
-
-export type EventWorkflowChildFailed = {
-  type: "workflow.child_failed"
-  properties: {
-    sessionID: string
-    runID: string
-    childRunID: string
-    name: string
-    status: "failed" | "cancelled"
-    error?: string
-  }
-}
-
 export type Project = {
   id: string
   worktree: string
@@ -326,6 +24,12 @@ export type Project = {
     created: number
     updated: number
     initialized?: number
+    blocked?: number
+  }
+  block?: {
+    reason: string
+    byAgentID?: string
+    time: number
   }
   sandboxes: Array<string>
 }
@@ -339,6 +43,20 @@ export type EventServerInstanceDisposed = {
   type: "server.instance.disposed"
   properties: {
     directory: string
+  }
+}
+
+export type EventServerConnected = {
+  type: "server.connected"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventGlobalDisposed = {
+  type: "global.disposed"
+  properties: {
+    [key: string]: unknown
   }
 }
 
@@ -423,6 +141,69 @@ export type EventPermissionReplied = {
     sessionID: string
     requestID: string
     reply: "once" | "always" | "reject"
+  }
+}
+
+export type EventActorRegistered = {
+  type: "actor.registered"
+  properties: {
+    sessionID: string
+    actorID: string
+    mode: "peer" | "subagent" | "main"
+    parentActorID?: string
+    description: string
+    agent: string
+    background: boolean
+  }
+}
+
+export type EventActorStatus = {
+  type: "actor.status"
+  properties: {
+    sessionID: string
+    actorID: string
+    status: "pending" | "running" | "idle"
+    lastOutcome?: "success" | "failure" | "cancelled"
+    turnCount: number
+    lastTurnTime: number
+    error?: string
+  }
+}
+
+export type EventActorStuck = {
+  type: "actor.stuck"
+  properties: {
+    sessionID: string
+    actorID: string
+    description: string
+    lastTurnTime: number
+    stuckDuration: number
+  }
+}
+
+export type EventWriterCachePerf = {
+  type: "writer.cache_perf"
+  properties: {
+    sessionID: string
+    writerActorID: string
+    status: "completed" | "failed"
+    total_input_tokens: number
+    cache_read_tokens: number
+    cache_write_tokens: number
+    cache_hit_rate: number
+    num_llm_calls: number
+  }
+}
+
+export type EventInboxArrived = {
+  type: "inbox.arrived"
+  properties: {
+    receiverSessionID: string
+    receiverActorID: string
+    senderSessionID?: string
+    senderActorID?: string
+    inboxID: string
+    type: string
   }
 }
 
@@ -707,6 +488,84 @@ export type EventBashInteractiveReplied = {
   }
 }
 
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    sessionID: string
+    task: {
+      id: string
+      session_id: string
+      parent_task_id?: string
+      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+      summary: string
+      owner?: string
+      created_at: number
+      last_event_at: number
+      ended_at?: number
+      cleanup_after?: number
+    }
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    sessionID: string
+    task: {
+      id: string
+      session_id: string
+      parent_task_id?: string
+      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+      summary: string
+      owner?: string
+      created_at: number
+      last_event_at: number
+      ended_at?: number
+      cleanup_after?: number
+    }
+    kind: "started" | "unstarted" | "blocked" | "unblocked" | "done" | "abandoned" | "renamed"
+  }
+}
+
+export type CompanyAgent = {
+  id: string
+  name: string
+  description?: string
+  system_prompt?: string
+  instruct?: string
+  relationships?: string
+  kanban?: string
+  skills?: Array<string>
+  model?: string
+  color?: string
+  icon?: string
+  org_layer?: string
+  department?: string
+  reports_to?: string
+  responsibilities?: Array<string>
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export type EventCompanyAgentCreated = {
+  type: "company_agent.created"
+  properties: CompanyAgent
+}
+
+export type EventCompanyAgentUpdated = {
+  type: "company_agent.updated"
+  properties: CompanyAgent
+}
+
+export type EventCompanyAgentDeleted = {
+  type: "company_agent.deleted"
+  properties: {
+    id: string
+  }
+}
+
 export type Todo = {
   /**
    * Brief description of the task
@@ -723,6 +582,102 @@ export type EventTodoUpdated = {
   properties: {
     sessionID: string
     todos: Array<Todo>
+  }
+}
+
+export type EventTeamCreated = {
+  type: "team.created"
+  properties: {
+    teamID: string
+    creatorSessionID: string
+  }
+}
+
+export type EventTeamMemberJoined = {
+  type: "team.member.joined"
+  properties: {
+    teamID: string
+    sessionID: string
+    agent: string
+    role: string
+  }
+}
+
+export type EventAuditEventRecorded = {
+  type: "audit_event.recorded"
+  properties: {
+    id: string
+    rootNeedID?: string
+    kind: "access" | "message" | "admission" | "escalation"
+    action: string
+    actorAgentID?: string
+    targetAgentID?: string
+    subjectID?: string
+    subjectType?: string
+    granted?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventAgentMessageCreated = {
+  type: "agent_message.created"
+  properties: {
+    id: string
+    fromAgentID: string
+    toAgentID: string
+    threadID?: string
+    rootNeedID?: string
+    inReplyTo?: string
+    kind: "fyi" | "request" | "reply" | "proposal"
+    depth: number
+    spawnedIssueID?: string
+    body: string
+    taskSummary?: string
+    outcome?: string
+    read: boolean
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventAgentMessageRead = {
+  type: "agent_message.read"
+  properties: {
+    id: string
+    fromAgentID: string
+    toAgentID: string
+    threadID?: string
+    rootNeedID?: string
+    inReplyTo?: string
+    kind: "fyi" | "request" | "reply" | "proposal"
+    depth: number
+    spawnedIssueID?: string
+    body: string
+    taskSummary?: string
+    outcome?: string
+    read: boolean
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventWorkspaceReadDoc = {
+  type: "workspace.read_doc"
+  properties: {
+    agentId: string
+    docPath: string
+    granted: boolean
+    classification?: string
   }
 }
 
@@ -756,102 +711,6 @@ export type EventSessionIdle = {
   }
 }
 
-export type EventGroupSessionUserMessagePersisted = {
-  type: "group_session.user_message_persisted"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-  }
-}
-
-export type EventGroupSessionAgentStarted = {
-  type: "group_session.agent_started"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    sessionID: string
-    companyAgentID: string
-  }
-}
-
-export type EventGroupSessionAgentCompleted = {
-  type: "group_session.agent_completed"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    sessionID: string
-    companyAgentID: string
-    statusSummary: "done" | "error" | "interrupted"
-  }
-}
-
-export type EventGroupSessionBiddingStarted = {
-  type: "group_session.bidding_started"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-  }
-}
-
-export type EventGroupSessionBiddingCompleted = {
-  type: "group_session.bidding_completed"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    winnerId: string | null
-    bids: Array<{
-      agentId: string
-      level: "must" | "want" | "could" | "pass"
-      type: "objection" | "answer" | "question" | "claim" | "info" | "support"
-      addressedAs: "direct" | "mention" | "none"
-      reason: string
-      score: number
-      eligible: boolean
-    }>
-  }
-}
-
-export type EventGroupSessionTurnYielded = {
-  type: "group_session.turn_yielded"
-  properties: {
-    groupSessionID: string
-    consecutiveAgentTurns: number
-    reason: "budget_K_reached" | "all_pass" | "no_bid_over_threshold"
-  }
-}
-
-export type ThreadInfo = {
-  id: string
-  agentID: string
-  kind: "primary" | "reactive" | "ambient"
-  status: "active" | "paused" | "completed"
-  sessionID?: string
-  description?: string
-  budgetTokens?: number
-  spentTokens: number
-  timeStarted?: number
-  timeCompleted?: number
-  time: {
-    created: number
-    updated: number
-  }
-}
-
-export type EventThreadCreated = {
-  type: "thread.created"
-  properties: ThreadInfo
-}
-
-export type EventThreadUpdated = {
-  type: "thread.updated"
-  properties: ThreadInfo
-}
-
-export type EventThreadCompleted = {
-  type: "thread.completed"
-  properties: ThreadInfo
-}
-
 export type EventSessionGoal = {
   type: "session.goal"
   properties: {
@@ -870,10 +729,115 @@ export type EventSessionGoal = {
   }
 }
 
+export type EventMetricsModelCall = {
+  type: "metrics.model_call"
+  properties: {
+    sessionID: string
+    finish_reason: string
+    ttft_ms?: number
+    latency_ms: number
+    cached_read_tokens: number
+    model_id: string
+    provider: string
+    total_tokens_in: number
+    total_tokens_out: number
+  }
+}
+
+export type EventMetricsToolCall = {
+  type: "metrics.tool_call"
+  properties: {
+    sessionID: string
+    tool_name: string
+    input_bytes: number
+    output_bytes: number
+    tool_call_id: string
+    tool_call_status: "success" | "error" | "cancelled"
+  }
+}
+
+export type EventMetricsAgentRequest = {
+  type: "metrics.agent_request"
+  properties: {
+    sessionID: string
+    phase: string
+    task_type: string
+    surface: string
+    total_tokens_in: number
+    total_tokens_out: number
+    files_changed: number
+    validation_status: string
+  }
+}
+
 export type EventSessionCompacted = {
   type: "session.compacted"
   properties: {
     sessionID: string
+  }
+}
+
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.share"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventTuiInstructionsLoaded = {
+  type: "tui.instructions.loaded"
+  properties: {
+    /**
+     * Display labels of loaded instruction files: worktree-relative path, ~-path, or absolute
+     */
+    files: Array<string>
   }
 }
 
@@ -899,6 +863,66 @@ export type EventCommandExecuted = {
     sessionID: string
     arguments: string
     messageID: string
+  }
+}
+
+export type EventThreadCreated = {
+  type: "thread.created"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventThreadUpdated = {
+  type: "thread.updated"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventThreadCompleted = {
+  type: "thread.completed"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
   }
 }
 
@@ -960,6 +984,202 @@ export type EventPtyDeleted = {
   type: "pty.deleted"
   properties: {
     id: string
+  }
+}
+
+export type EventWorkflowPhase = {
+  type: "workflow.phase"
+  properties: {
+    sessionID: string
+    runID: string
+    title: string
+  }
+}
+
+export type EventWorkflowLog = {
+  type: "workflow.log"
+  properties: {
+    sessionID: string
+    runID: string
+    message: string
+  }
+}
+
+export type EventWorkflowStarted = {
+  type: "workflow.started"
+  properties: {
+    sessionID: string
+    runID: string
+    name: string
+  }
+}
+
+export type EventWorkflowFinished = {
+  type: "workflow.finished"
+  properties: {
+    sessionID: string
+    runID: string
+    status: "completed" | "failed" | "cancelled"
+    error?: string
+  }
+}
+
+export type EventWorkflowAgentFailed = {
+  type: "workflow.agent_failed"
+  properties: {
+    sessionID: string
+    runID: string
+    actorID?: string
+    agentType: string
+    label?: string
+    phase?: string
+    reason: "over-cap" | "spawn-reject" | "timeout" | "actor-error" | "no-deliverable"
+    errorMessage?: string
+  }
+}
+
+export type EventWorkflowChildFailed = {
+  type: "workflow.child_failed"
+  properties: {
+    sessionID: string
+    runID: string
+    childRunID: string
+    name: string
+    status: "failed" | "cancelled"
+    error?: string
+  }
+}
+
+export type EventGroupSessionCreated = {
+  type: "group_session.created"
+  properties: {
+    id: string
+    projectID: string
+    title: string
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type EventGroupSessionUpdated = {
+  type: "group_session.updated"
+  properties: {
+    id: string
+    projectID: string
+    title: string
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type EventGroupSessionDeleted = {
+  type: "group_session.deleted"
+  properties: {
+    id: string
+  }
+}
+
+export type EventGroupSessionChatSent = {
+  type: "group_session.chat_sent"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    memberSessionIDs: Array<string>
+  }
+}
+
+export type EventGroupSessionRoundComplete = {
+  type: "group_session.round_complete"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionUserMessagePersisted = {
+  type: "group_session.user_message_persisted"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionAgentStarted = {
+  type: "group_session.agent_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+  }
+}
+
+export type EventGroupSessionAgentCompleted = {
+  type: "group_session.agent_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+    statusSummary: "done" | "error" | "interrupted"
+  }
+}
+
+export type EventGroupSessionTurnYielded = {
+  type: "group_session.turn_yielded"
+  properties: {
+    groupSessionID: string
+    consecutiveAgentTurns: number
+    reason: "budget_K_reached" | "all_pass" | "no_bid_over_threshold"
+  }
+}
+
+export type EventGroupSessionBiddingStarted = {
+  type: "group_session.bidding_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionBiddingCompleted = {
+  type: "group_session.bidding_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    winnerId: string | null
+    bids: Array<{
+      agentId: string
+      level: "must" | "want" | "could" | "pass"
+      type: "objection" | "answer" | "question" | "claim" | "info" | "support"
+      addressedAs: "direct" | "mention" | "none"
+      reason: string
+      score: number
+      eligible: boolean
+    }>
+  }
+}
+
+export type EventOrgDisbanded = {
+  type: "org.disbanded"
+  properties: {
+    [key: string]: unknown
   }
 }
 
@@ -1415,6 +1635,7 @@ export type Session = {
   id: string
   slug: string
   projectID: string
+  companyID?: string
   workspaceID?: string
   directory: string
   parentID?: string
@@ -1438,6 +1659,8 @@ export type Session = {
     archived?: number
   }
   permission?: PermissionRuleset
+  companyAgentID?: string
+  threadID?: string
   revert?: {
     messageID: string
     partID?: string
@@ -1544,6 +1767,7 @@ export type SyncEventSessionUpdated = {
       id: string | null
       slug: string | null
       projectID: string | null
+      companyID: string | null
       workspaceID: string | null
       directory: string | null
       parentID: string | null
@@ -1567,6 +1791,8 @@ export type SyncEventSessionUpdated = {
         archived: number | null
       }
       permission: PermissionRuleset | null
+      companyAgentID: string | null
+      threadID: string | null
       revert: {
         messageID: string
         partID?: string
@@ -1594,33 +1820,10 @@ export type GlobalEvent = {
   project?: string
   workspace?: string
   payload:
-    | EventServerConnected
-    | EventGlobalDisposed
-    | EventActorRegistered
-    | EventActorStatus
-    | EventActorStuck
-    | EventWriterCachePerf
-    | EventInboxArrived
-    | EventTaskCreated
-    | EventTaskUpdated
-    | EventTeamCreated
-    | EventTeamMemberJoined
-    | EventMetricsModelCall
-    | EventMetricsToolCall
-    | EventMetricsAgentRequest
-    | EventTuiPromptAppend
-    | EventTuiCommandExecute
-    | EventTuiToastShow
-    | EventTuiSessionSelect
-    | EventTuiInstructionsLoaded
-    | EventWorkflowPhase
-    | EventWorkflowLog
-    | EventWorkflowStarted
-    | EventWorkflowFinished
-    | EventWorkflowAgentFailed
-    | EventWorkflowChildFailed
     | EventProjectUpdated
     | EventServerInstanceDisposed
+    | EventServerConnected
+    | EventGlobalDisposed
     | EventFileEdited
     | EventFileWatcherUpdated
     | EventLspClientDiagnostics
@@ -1630,6 +1833,11 @@ export type GlobalEvent = {
     | EventMessagePartDelta
     | EventPermissionAsked
     | EventPermissionReplied
+    | EventActorRegistered
+    | EventActorStatus
+    | EventActorStuck
+    | EventWriterCachePerf
+    | EventInboxArrived
     | EventSessionDiff
     | EventSessionError
     | EventSessionRetryAttempt
@@ -1642,14 +1850,36 @@ export type GlobalEvent = {
     | EventSessionCwd
     | EventBashInteractiveAsked
     | EventBashInteractiveReplied
+    | EventTaskCreated
+    | EventTaskUpdated
+    | EventCompanyAgentCreated
+    | EventCompanyAgentUpdated
+    | EventCompanyAgentDeleted
     | EventTodoUpdated
+    | EventTeamCreated
+    | EventTeamMemberJoined
+    | EventAuditEventRecorded
+    | EventAgentMessageCreated
+    | EventAgentMessageRead
+    | EventWorkspaceReadDoc
     | EventSessionStatus
     | EventSessionIdle
     | EventSessionGoal
+    | EventMetricsModelCall
+    | EventMetricsToolCall
+    | EventMetricsAgentRequest
     | EventSessionCompacted
+    | EventTuiPromptAppend
+    | EventTuiCommandExecute
+    | EventTuiToastShow
+    | EventTuiSessionSelect
+    | EventTuiInstructionsLoaded
     | EventMcpToolsChanged
     | EventMcpBrowserOpenFailed
     | EventCommandExecuted
+    | EventThreadCreated
+    | EventThreadUpdated
+    | EventThreadCompleted
     | EventVcsBranchUpdated
     | EventWorktreeReady
     | EventWorktreeFailed
@@ -1657,6 +1887,24 @@ export type GlobalEvent = {
     | EventPtyUpdated
     | EventPtyExited
     | EventPtyDeleted
+    | EventWorkflowPhase
+    | EventWorkflowLog
+    | EventWorkflowStarted
+    | EventWorkflowFinished
+    | EventWorkflowAgentFailed
+    | EventWorkflowChildFailed
+    | EventGroupSessionCreated
+    | EventGroupSessionUpdated
+    | EventGroupSessionDeleted
+    | EventGroupSessionChatSent
+    | EventGroupSessionRoundComplete
+    | EventGroupSessionUserMessagePersisted
+    | EventGroupSessionAgentStarted
+    | EventGroupSessionAgentCompleted
+    | EventGroupSessionTurnYielded
+    | EventGroupSessionBiddingStarted
+    | EventGroupSessionBiddingCompleted
+    | EventOrgDisbanded
     | EventWorkspaceReady
     | EventWorkspaceFailed
     | EventWorkspaceRestore
@@ -1675,9 +1923,6 @@ export type GlobalEvent = {
     | SyncEventSessionCreated
     | SyncEventSessionUpdated
     | SyncEventSessionDeleted
-    | EventThreadCreated
-    | EventThreadUpdated
-    | EventThreadCompleted
 }
 
 /**
@@ -1686,7 +1931,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for mimo serve and web commands
+ * Server configuration for agents serve and web commands
  */
 export type ServerConfig = {
   /**
@@ -2025,6 +2270,19 @@ export type Config = {
      */
     urls?: Array<string>
   }
+  /**
+   * Compose mode configuration
+   */
+  compose?: {
+    /**
+     * Directory where compose skills save specs, plans, and reports. Relative paths are passed to the agent prompt verbatim; set docs_absolute: true to anchor them to the project root. Defaults to docs/compose.
+     */
+    docs?: string
+    /**
+     * Whether the docs directory injected into the compose prompt is an absolute path. When false (default), a relative `docs` value is passed through verbatim. When true, a relative `docs` is resolved against the active worktree root so it is unambiguous regardless of the agent's working directory. Ignored when `docs` is already absolute.
+     */
+    docs_absolute?: boolean
+  }
   watcher?: {
     ignore?: Array<string>
   }
@@ -2270,6 +2528,14 @@ export type Config = {
        * Token cap for §11 Open notes section of checkpoint.md (writer-side budget validation). Default: 800.
        */
       open_notes?: number
+      /**
+       * Token cap for the recent user input section (verbatim user messages from the live DB, FIFO eviction). Default: 16000. Set 0 to disable.
+       */
+      recent_user?: number
+      /**
+       * Per-message cap inside recent user input section; oversized messages get head/tail truncation with messageID elision marker. Default: 2000.
+       */
+      recent_user_per_msg?: number
     }
     /**
      * Number of days after task done/abandoned before it's filtered out of `list({include_archived: false})`. Rows are NOT deleted — see v9 for true GC. Default: 7.
@@ -2393,6 +2659,49 @@ export type Config = {
      */
     scriptDeadlineMs?: number
   }
+  /**
+   * Organization structure: departments, roles, clearance levels, and agent assignments. Used by the workspace clearance system to control document access.
+   */
+  org?: {
+    /**
+     * Departments with their roles and clearance levels
+     */
+    departments?: {
+      [key: string]: {
+        /**
+         * Default clearance level for this department
+         */
+        clearance?: "public" | "internal" | "confidential" | "restricted"
+        roles?: {
+          [key: string]: {
+            /**
+             * Clearance level for this role
+             */
+            clearance?: "public" | "internal" | "confidential" | "restricted"
+            /**
+             * Department this role belongs to (redundant if keyed under department)
+             */
+            department?: string
+          }
+        }
+      }
+    }
+    /**
+     * Agent-to-department/role assignments
+     */
+    agents?: {
+      [key: string]: {
+        /**
+         * Department the agent belongs to
+         */
+        department: string
+        /**
+         * Role of the agent within the department
+         */
+        role: string
+      }
+    }
+  }
 }
 
 export type BadRequestError = {
@@ -2442,6 +2751,68 @@ export type NotFoundError = {
   name: "NotFoundError"
   data: {
     message: string
+  }
+}
+
+export type AgentTemplateDivision = {
+  slug: string
+  label: string
+  icon: string
+  color: string
+  count: number
+}
+
+export type AgentTemplate = {
+  slug: string
+  division: string
+  name: string
+  description: string
+  color: string
+  emoji: string
+  vibe: string
+  system_prompt: string
+}
+
+export type GroupSessionStatus = {
+  busy: boolean
+}
+
+export type GroupSessionChatResult = {
+  roundNum: number
+}
+
+export type ConflictError = {
+  name: "UnknownError"
+  data: {
+    message: string
+  }
+}
+
+export type WorkstationCollaborationNode = {
+  id: string
+  kind: "fyi" | "request" | "reply" | "proposal"
+  from_agent_id: string
+  to_agent_id: string
+  task_summary?: string
+  outcome?: string
+  depth: number
+  time_created: number
+  children: Array<WorkstationCollaborationNode>
+}
+
+export type Org = {
+  name?: string
+  departments: Array<{
+    name: string
+    clearance?: string
+    roles: Array<string>
+  }>
+  counts: {
+    agents: number
+    threads: number
+    sessions: number
+    groupSessions: number
+    tasks: number
   }
 }
 
@@ -2580,6 +2951,7 @@ export type GlobalSession = {
   id: string
   slug: string
   projectID: string
+  companyID?: string
   workspaceID?: string
   directory: string
   parentID?: string
@@ -2603,6 +2975,8 @@ export type GlobalSession = {
     archived?: number
   }
   permission?: PermissionRuleset
+  companyAgentID?: string
+  threadID?: string
   revert?: {
     messageID: string
     partID?: string
@@ -2618,13 +2992,6 @@ export type McpResource = {
   description?: string
   mimeType?: string
   client: string
-}
-
-export type ConflictError = {
-  name: "UnknownError"
-  data: {
-    message: string
-  }
 }
 
 export type TextPartInput = {
@@ -2761,33 +3128,10 @@ export type File = {
 }
 
 export type Event =
-  | EventServerConnected
-  | EventGlobalDisposed
-  | EventActorRegistered
-  | EventActorStatus
-  | EventActorStuck
-  | EventWriterCachePerf
-  | EventInboxArrived
-  | EventTaskCreated
-  | EventTaskUpdated
-  | EventTeamCreated
-  | EventTeamMemberJoined
-  | EventMetricsModelCall
-  | EventMetricsToolCall
-  | EventMetricsAgentRequest
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
-  | EventTuiInstructionsLoaded
-  | EventWorkflowPhase
-  | EventWorkflowLog
-  | EventWorkflowStarted
-  | EventWorkflowFinished
-  | EventWorkflowAgentFailed
-  | EventWorkflowChildFailed
   | EventProjectUpdated
   | EventServerInstanceDisposed
+  | EventServerConnected
+  | EventGlobalDisposed
   | EventFileEdited
   | EventFileWatcherUpdated
   | EventLspClientDiagnostics
@@ -2797,6 +3141,11 @@ export type Event =
   | EventMessagePartDelta
   | EventPermissionAsked
   | EventPermissionReplied
+  | EventActorRegistered
+  | EventActorStatus
+  | EventActorStuck
+  | EventWriterCachePerf
+  | EventInboxArrived
   | EventSessionDiff
   | EventSessionError
   | EventSessionRetryAttempt
@@ -2809,14 +3158,36 @@ export type Event =
   | EventSessionCwd
   | EventBashInteractiveAsked
   | EventBashInteractiveReplied
+  | EventTaskCreated
+  | EventTaskUpdated
+  | EventCompanyAgentCreated
+  | EventCompanyAgentUpdated
+  | EventCompanyAgentDeleted
   | EventTodoUpdated
+  | EventTeamCreated
+  | EventTeamMemberJoined
+  | EventAuditEventRecorded
+  | EventAgentMessageCreated
+  | EventAgentMessageRead
+  | EventWorkspaceReadDoc
   | EventSessionStatus
   | EventSessionIdle
   | EventSessionGoal
+  | EventMetricsModelCall
+  | EventMetricsToolCall
+  | EventMetricsAgentRequest
   | EventSessionCompacted
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventTuiInstructionsLoaded
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
+  | EventThreadCreated
+  | EventThreadUpdated
+  | EventThreadCompleted
   | EventVcsBranchUpdated
   | EventWorktreeReady
   | EventWorktreeFailed
@@ -2824,6 +3195,24 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
+  | EventWorkflowPhase
+  | EventWorkflowLog
+  | EventWorkflowStarted
+  | EventWorkflowFinished
+  | EventWorkflowAgentFailed
+  | EventWorkflowChildFailed
+  | EventGroupSessionCreated
+  | EventGroupSessionUpdated
+  | EventGroupSessionDeleted
+  | EventGroupSessionChatSent
+  | EventGroupSessionRoundComplete
+  | EventGroupSessionUserMessagePersisted
+  | EventGroupSessionAgentStarted
+  | EventGroupSessionAgentCompleted
+  | EventGroupSessionTurnYielded
+  | EventGroupSessionBiddingStarted
+  | EventGroupSessionBiddingCompleted
+  | EventOrgDisbanded
   | EventWorkspaceReady
   | EventWorkspaceFailed
   | EventWorkspaceRestore
@@ -2835,15 +3224,6 @@ export type Event =
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
-  | EventGroupSessionUserMessagePersisted
-  | EventGroupSessionAgentStarted
-  | EventGroupSessionAgentCompleted
-  | EventGroupSessionBiddingStarted
-  | EventGroupSessionBiddingCompleted
-  | EventGroupSessionTurnYielded
-  | EventThreadCreated
-  | EventThreadUpdated
-  | EventThreadCompleted
 
 export type McpStatusConnected = {
   status: "connected"
@@ -2947,6 +3327,8 @@ export type FormatterStatus = {
   extensions: Array<string>
   enabled: boolean
 }
+
+export type Schema0 = WorkstationCollaborationNode
 
 export type GlobalHealthData = {
   body?: never
@@ -3442,6 +3824,140 @@ export type ProjectCurrentResponses = {
 
 export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
 
+export type ProjectRootNeedTokenStatsData = {
+  body?: never
+  path: {
+    rootNeedID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/token-stats/root-need/{rootNeedID}"
+}
+
+export type ProjectRootNeedTokenStatsResponses = {
+  /**
+   * RootNeed token usage report
+   */
+  200: {
+    rootNeedID: string
+    messageCount: number
+    trackedSpentTokens: number
+    observedTokens: {
+      total: number
+      input: number
+      output: number
+      reasoning: number
+      cacheRead: number
+      cacheWrite: number
+      cost: number
+    }
+    threads: Array<{
+      threadID: string
+      agentID: string
+      kind: string
+      status: string
+      budgetTokens?: number
+      trackedSpentTokens: number
+      observedTokens: {
+        total: number
+        input: number
+        output: number
+        reasoning: number
+        cacheRead: number
+        cacheWrite: number
+        cost: number
+      }
+      sessionIDs: Array<string>
+    }>
+    levels: Array<{
+      depth: number
+      messageCount: number
+      trackedSpentTokens: number
+      observedTokens: {
+        total: number
+        input: number
+        output: number
+        reasoning: number
+        cacheRead: number
+        cacheWrite: number
+        cost: number
+      }
+      threadIDs: Array<string>
+      agentIDs: Array<string>
+    }>
+  }
+}
+
+export type ProjectRootNeedTokenStatsResponse =
+  ProjectRootNeedTokenStatsResponses[keyof ProjectRootNeedTokenStatsResponses]
+
+export type ProjectTokenStatsData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/{projectID}/token-stats"
+}
+
+export type ProjectTokenStatsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectTokenStatsError = ProjectTokenStatsErrors[keyof ProjectTokenStatsErrors]
+
+export type ProjectTokenStatsResponses = {
+  /**
+   * Project token usage report
+   */
+  200: {
+    projectID: string
+    sessionCount: number
+    trackedSpentTokens: number
+    observedTokens: {
+      total: number
+      input: number
+      output: number
+      reasoning: number
+      cacheRead: number
+      cacheWrite: number
+      cost: number
+    }
+    threads: Array<{
+      threadID: string
+      agentID: string
+      kind: string
+      status: string
+      budgetTokens?: number
+      trackedSpentTokens: number
+      observedTokens: {
+        total: number
+        input: number
+        output: number
+        reasoning: number
+        cacheRead: number
+        cacheWrite: number
+        cost: number
+      }
+      sessionIDs: Array<string>
+    }>
+  }
+}
+
+export type ProjectTokenStatsResponse = ProjectTokenStatsResponses[keyof ProjectTokenStatsResponses]
+
 export type ProjectInitGitData = {
   body?: never
   path?: never
@@ -3507,6 +4023,1301 @@ export type ProjectUpdateResponses = {
 }
 
 export type ProjectUpdateResponse = ProjectUpdateResponses[keyof ProjectUpdateResponses]
+
+export type ProjectBlockData = {
+  body?: {
+    reason: string
+    byAgentID?: string
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/{projectID}/block"
+}
+
+export type ProjectBlockErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectBlockError = ProjectBlockErrors[keyof ProjectBlockErrors]
+
+export type ProjectBlockResponses = {
+  /**
+   * Blocked project information
+   */
+  200: Project
+}
+
+export type ProjectBlockResponse = ProjectBlockResponses[keyof ProjectBlockResponses]
+
+export type ProjectUnblockData = {
+  body?: {
+    reason?: string
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/project/{projectID}/unblock"
+}
+
+export type ProjectUnblockErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectUnblockError = ProjectUnblockErrors[keyof ProjectUnblockErrors]
+
+export type ProjectUnblockResponses = {
+  /**
+   * Unblocked project information
+   */
+  200: Project
+}
+
+export type ProjectUnblockResponse = ProjectUnblockResponses[keyof ProjectUnblockResponses]
+
+export type CompanyAgentListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent"
+}
+
+export type CompanyAgentListResponses = {
+  /**
+   * List of company agents
+   */
+  200: Array<CompanyAgent>
+}
+
+export type CompanyAgentListResponse = CompanyAgentListResponses[keyof CompanyAgentListResponses]
+
+export type CompanyAgentCreateData = {
+  body?: {
+    id: string
+    name: string
+    description?: string
+    system_prompt?: string
+    instruct?: string
+    model?: string
+    color?: string
+    icon?: string
+    org_layer?: "board" | "department" | "project" | "execution" | "tool"
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent"
+}
+
+export type CompanyAgentCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type CompanyAgentCreateError = CompanyAgentCreateErrors[keyof CompanyAgentCreateErrors]
+
+export type CompanyAgentCreateResponses = {
+  /**
+   * Created company agent
+   */
+  200: CompanyAgent
+}
+
+export type CompanyAgentCreateResponse = CompanyAgentCreateResponses[keyof CompanyAgentCreateResponses]
+
+export type CompanyAgentDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/{id}"
+}
+
+export type CompanyAgentDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentDeleteError = CompanyAgentDeleteErrors[keyof CompanyAgentDeleteErrors]
+
+export type CompanyAgentDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: boolean
+}
+
+export type CompanyAgentDeleteResponse = CompanyAgentDeleteResponses[keyof CompanyAgentDeleteResponses]
+
+export type CompanyAgentGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/{id}"
+}
+
+export type CompanyAgentGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentGetError = CompanyAgentGetErrors[keyof CompanyAgentGetErrors]
+
+export type CompanyAgentGetResponses = {
+  /**
+   * Company agent
+   */
+  200: CompanyAgent
+}
+
+export type CompanyAgentGetResponse = CompanyAgentGetResponses[keyof CompanyAgentGetResponses]
+
+export type CompanyAgentUpdateData = {
+  body?: {
+    name?: string
+    description?: string
+    system_prompt?: string
+    instruct?: string
+    relationships?: string
+    kanban?: string
+    model?: string
+    color?: string
+    icon?: string
+    org_layer?: "board" | "department" | "project" | "execution" | "tool"
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/{id}"
+}
+
+export type CompanyAgentUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentUpdateError = CompanyAgentUpdateErrors[keyof CompanyAgentUpdateErrors]
+
+export type CompanyAgentUpdateResponses = {
+  /**
+   * Updated company agent
+   */
+  200: CompanyAgent
+}
+
+export type CompanyAgentUpdateResponse = CompanyAgentUpdateResponses[keyof CompanyAgentUpdateResponses]
+
+export type CompanyAgentTemplatesDivisionsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/templates"
+}
+
+export type CompanyAgentTemplatesDivisionsResponses = {
+  /**
+   * List of divisions
+   */
+  200: Array<AgentTemplateDivision>
+}
+
+export type CompanyAgentTemplatesDivisionsResponse =
+  CompanyAgentTemplatesDivisionsResponses[keyof CompanyAgentTemplatesDivisionsResponses]
+
+export type CompanyAgentTemplatesSearchData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    q?: string
+    division?: string
+    limit?: number
+  }
+  url: "/company-agent/templates/search"
+}
+
+export type CompanyAgentTemplatesSearchResponses = {
+  /**
+   * Matching agent templates
+   */
+  200: Array<AgentTemplate>
+}
+
+export type CompanyAgentTemplatesSearchResponse =
+  CompanyAgentTemplatesSearchResponses[keyof CompanyAgentTemplatesSearchResponses]
+
+export type CompanyAgentTemplatesByDivisionData = {
+  body?: never
+  path: {
+    division: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/templates/{division}"
+}
+
+export type CompanyAgentTemplatesByDivisionErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentTemplatesByDivisionError =
+  CompanyAgentTemplatesByDivisionErrors[keyof CompanyAgentTemplatesByDivisionErrors]
+
+export type CompanyAgentTemplatesByDivisionResponses = {
+  /**
+   * Agent templates in division
+   */
+  200: Array<AgentTemplate>
+}
+
+export type CompanyAgentTemplatesByDivisionResponse =
+  CompanyAgentTemplatesByDivisionResponses[keyof CompanyAgentTemplatesByDivisionResponses]
+
+export type CompanyAgentTemplatesGetData = {
+  body?: never
+  path: {
+    division: string
+    slug: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/templates/{division}/{slug}"
+}
+
+export type CompanyAgentTemplatesGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentTemplatesGetError = CompanyAgentTemplatesGetErrors[keyof CompanyAgentTemplatesGetErrors]
+
+export type CompanyAgentTemplatesGetResponses = {
+  /**
+   * Agent template
+   */
+  200: AgentTemplate
+}
+
+export type CompanyAgentTemplatesGetResponse =
+  CompanyAgentTemplatesGetResponses[keyof CompanyAgentTemplatesGetResponses]
+
+export type GroupSessionListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session"
+}
+
+export type GroupSessionListResponses = {
+  /**
+   * List of group sessions
+   */
+  200: Array<{
+    id: string
+    projectID: string
+    title: string
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }>
+}
+
+export type GroupSessionListResponse = GroupSessionListResponses[keyof GroupSessionListResponses]
+
+export type GroupSessionCreateData = {
+  body?: {
+    title: string
+    agentIDs: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session"
+}
+
+export type GroupSessionCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GroupSessionCreateError = GroupSessionCreateErrors[keyof GroupSessionCreateErrors]
+
+export type GroupSessionCreateResponses = {
+  /**
+   * Created group session
+   */
+  200: {
+    id: string
+    projectID: string
+    title: string
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type GroupSessionCreateResponse = GroupSessionCreateResponses[keyof GroupSessionCreateResponses]
+
+export type GroupSessionDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}"
+}
+
+export type GroupSessionDeleteErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GroupSessionDeleteError = GroupSessionDeleteErrors[keyof GroupSessionDeleteErrors]
+
+export type GroupSessionDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: boolean
+}
+
+export type GroupSessionDeleteResponse = GroupSessionDeleteResponses[keyof GroupSessionDeleteResponses]
+
+export type GroupSessionGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}"
+}
+
+export type GroupSessionGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GroupSessionGetError = GroupSessionGetErrors[keyof GroupSessionGetErrors]
+
+export type GroupSessionGetResponses = {
+  /**
+   * Group session
+   */
+  200: {
+    id: string
+    projectID: string
+    title: string
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type GroupSessionGetResponse = GroupSessionGetResponses[keyof GroupSessionGetResponses]
+
+export type GroupSessionMessagesData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}/messages"
+}
+
+export type GroupSessionMessagesErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GroupSessionMessagesError = GroupSessionMessagesErrors[keyof GroupSessionMessagesErrors]
+
+export type GroupSessionMessagesResponses = {
+  /**
+   * Group messages
+   */
+  200: Array<{
+    id: string
+    groupSessionID: string
+    roundNum: number
+    role: "user" | "agent"
+    companyAgentID?: string
+    sessionID?: string
+    content: string
+    statusSummary?: string
+    time: {
+      created: number
+      updated: number
+    }
+  }>
+}
+
+export type GroupSessionMessagesResponse = GroupSessionMessagesResponses[keyof GroupSessionMessagesResponses]
+
+export type GroupSessionStatusData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}/status"
+}
+
+export type GroupSessionStatusResponses = {
+  /**
+   * Status
+   */
+  200: GroupSessionStatus
+}
+
+export type GroupSessionStatusResponse = GroupSessionStatusResponses[keyof GroupSessionStatusResponses]
+
+export type GroupSessionChatData = {
+  body?: {
+    text: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}/chat"
+}
+
+export type GroupSessionChatErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Conflict — session resource is busy
+   */
+  409: ConflictError
+}
+
+export type GroupSessionChatError = GroupSessionChatErrors[keyof GroupSessionChatErrors]
+
+export type GroupSessionChatResponses = {
+  /**
+   * Message accepted — roundNum of the newly created round
+   */
+  200: GroupSessionChatResult
+}
+
+export type GroupSessionChatResponse = GroupSessionChatResponses[keyof GroupSessionChatResponses]
+
+export type GroupSessionInterruptData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/group-session/{id}/interrupt"
+}
+
+export type GroupSessionInterruptResponses = {
+  /**
+   * Interrupted
+   */
+  200: boolean
+}
+
+export type GroupSessionInterruptResponse = GroupSessionInterruptResponses[keyof GroupSessionInterruptResponses]
+
+export type ThreadListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    agentID?: string
+  }
+  url: "/thread"
+}
+
+export type ThreadListResponses = {
+  /**
+   * List of threads
+   */
+  200: Array<{
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }>
+}
+
+export type ThreadListResponse = ThreadListResponses[keyof ThreadListResponses]
+
+export type ThreadCreateData = {
+  body?: {
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread"
+}
+
+export type ThreadCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ThreadCreateError = ThreadCreateErrors[keyof ThreadCreateErrors]
+
+export type ThreadCreateResponses = {
+  /**
+   * Created thread
+   */
+  200: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type ThreadCreateResponse = ThreadCreateResponses[keyof ThreadCreateResponses]
+
+export type ThreadGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread/{id}"
+}
+
+export type ThreadGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ThreadGetError = ThreadGetErrors[keyof ThreadGetErrors]
+
+export type ThreadGetResponses = {
+  /**
+   * Thread details
+   */
+  200: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type ThreadGetResponse = ThreadGetResponses[keyof ThreadGetResponses]
+
+export type ThreadUpdateData = {
+  body?: {
+    status?: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    spentTokens?: number
+    budgetTokens?: number
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread/{id}"
+}
+
+export type ThreadUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ThreadUpdateError = ThreadUpdateErrors[keyof ThreadUpdateErrors]
+
+export type ThreadUpdateResponses = {
+  /**
+   * Updated thread
+   */
+  200: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type ThreadUpdateResponse = ThreadUpdateResponses[keyof ThreadUpdateResponses]
+
+export type ThreadCompleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread/{id}/complete"
+}
+
+export type ThreadCompleteErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ThreadCompleteError = ThreadCompleteErrors[keyof ThreadCompleteErrors]
+
+export type ThreadCompleteResponses = {
+  /**
+   * Completed thread
+   */
+  200: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type ThreadCompleteResponse = ThreadCompleteResponses[keyof ThreadCompleteResponses]
+
+export type ThreadAgentStatusData = {
+  body?: never
+  path: {
+    agentID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread/agent/{agentID}/status"
+}
+
+export type ThreadAgentStatusResponses = {
+  /**
+   * Agent status
+   */
+  200: {
+    status: "idle" | "busy" | "paused"
+  }
+}
+
+export type ThreadAgentStatusResponse = ThreadAgentStatusResponses[keyof ThreadAgentStatusResponses]
+
+export type ThreadAgentActivityData = {
+  body?: never
+  path: {
+    agentID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/thread/agent/{agentID}/activity"
+}
+
+export type ThreadAgentActivityResponses = {
+  /**
+   * Agent activity summary
+   */
+  200: {
+    agentID: string
+    activeThreads: Array<{
+      id: string
+      agentID: string
+      kind: "primary" | "reactive" | "ambient"
+      status: "active" | "paused" | "completed"
+      sessionID?: string
+      description?: string
+      budgetTokens?: number
+      spentTokens?: number
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    primaryCount: number
+    reactiveCount: number
+    ambientCount: number
+    totalBudgetSpent: number
+    isBusy: boolean
+  }
+}
+
+export type ThreadAgentActivityResponse = ThreadAgentActivityResponses[keyof ThreadAgentActivityResponses]
+
+export type AgentLifecycleStartData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agents/{id}/start"
+}
+
+export type AgentLifecycleStartErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+  /**
+   * Conflict — session resource is busy
+   */
+  409: ConflictError
+}
+
+export type AgentLifecycleStartError = AgentLifecycleStartErrors[keyof AgentLifecycleStartErrors]
+
+export type AgentLifecycleStartResponses = {
+  /**
+   * Agent started with primary thread created
+   */
+  200: {
+    agent: CompanyAgent
+    thread: {
+      id: string
+      agentID: string
+      kind: "primary" | "reactive" | "ambient"
+      status: "active" | "paused" | "completed"
+      sessionID?: string
+      description?: string
+      budgetTokens?: number
+      spentTokens?: number
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated: number
+      }
+    }
+  }
+}
+
+export type AgentLifecycleStartResponse = AgentLifecycleStartResponses[keyof AgentLifecycleStartResponses]
+
+export type AgentLifecycleStopData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agents/{id}/stop"
+}
+
+export type AgentLifecycleStopErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type AgentLifecycleStopError = AgentLifecycleStopErrors[keyof AgentLifecycleStopErrors]
+
+export type AgentLifecycleStopResponses = {
+  /**
+   * Agent stopped, active threads completed
+   */
+  200: {
+    completedCount: number
+    threads: Array<{
+      id: string
+      agentID: string
+      kind: "primary" | "reactive" | "ambient"
+      status: "active" | "paused" | "completed"
+      sessionID?: string
+      description?: string
+      budgetTokens?: number
+      spentTokens?: number
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+  }
+}
+
+export type AgentLifecycleStopResponse = AgentLifecycleStopResponses[keyof AgentLifecycleStopResponses]
+
+export type AgentLifecycleStatusData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agents/{id}/status"
+}
+
+export type AgentLifecycleStatusErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type AgentLifecycleStatusError = AgentLifecycleStatusErrors[keyof AgentLifecycleStatusErrors]
+
+export type AgentLifecycleStatusResponses = {
+  /**
+   * Agent status with activity rollup
+   */
+  200: {
+    agent: CompanyAgent
+    activity: {
+      agentID: string
+      activeThreads: Array<{
+        id: string
+        agentID: string
+        kind: "primary" | "reactive" | "ambient"
+        status: "active" | "paused" | "completed"
+        sessionID?: string
+        description?: string
+        budgetTokens?: number
+        spentTokens?: number
+        timeStarted?: number
+        timeCompleted?: number
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      primaryCount: number
+      reactiveCount: number
+      ambientCount: number
+      totalBudgetSpent: number
+      isBusy: boolean
+    }
+    status: "idle" | "busy" | "paused"
+  }
+}
+
+export type AgentLifecycleStatusResponse = AgentLifecycleStatusResponses[keyof AgentLifecycleStatusResponses]
+
+export type AgentLifecycleStatusAllData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agents/status"
+}
+
+export type AgentLifecycleStatusAllResponses = {
+  /**
+   * All agents' status with activity rollup
+   */
+  200: {
+    agents: Array<{
+      agent: CompanyAgent
+      activity: {
+        agentID: string
+        activeThreads: Array<{
+          id: string
+          agentID: string
+          kind: "primary" | "reactive" | "ambient"
+          status: "active" | "paused" | "completed"
+          sessionID?: string
+          description?: string
+          budgetTokens?: number
+          spentTokens?: number
+          timeStarted?: number
+          timeCompleted?: number
+          time: {
+            created: number
+            updated: number
+          }
+        }>
+        primaryCount: number
+        reactiveCount: number
+        ambientCount: number
+        totalBudgetSpent: number
+        isBusy: boolean
+      }
+      status: "idle" | "busy" | "paused"
+    }>
+  }
+}
+
+export type AgentLifecycleStatusAllResponse = AgentLifecycleStatusAllResponses[keyof AgentLifecycleStatusAllResponses]
+
+export type WorkstationStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/workstation/status"
+}
+
+export type WorkstationStatusResponses = {
+  /**
+   * Workstation status
+   */
+  200: {
+    project: {
+      id: string
+      blocked: boolean
+      blocked_reason?: string
+      blocked_by_agent_id?: string
+      time_blocked?: number
+    }
+    agents: Array<{
+      id: string
+      name: string
+      org_layer: "board" | "department" | "project" | "execution" | "tool"
+      status: "idle" | "busy" | "paused"
+      threads: Array<{
+        id: string
+        kind: "primary" | "reactive" | "ambient"
+        status: "active" | "paused" | "completed"
+        task_summary?: string
+        budget_tokens?: number
+        spent_tokens: number
+      }>
+    }>
+    summary: {
+      total_agents: number
+      active_agents: number
+      total_threads: number
+      open_tasks: number
+      pending_approvals: number
+    }
+    approvals: Array<{
+      id: string
+      from_agent_id: string
+      to_agent_id: string
+      root_need_id?: string
+      thread_id?: string
+      in_reply_to?: string
+      task_summary?: string
+      body: string
+      depth: number
+      time_created: number
+    }>
+    collaboration_trees: Array<{
+      root_need_id: string
+      total_messages: number
+      max_depth: number
+      nodes: Array<WorkstationCollaborationNode>
+    }>
+  }
+}
+
+export type WorkstationStatusResponse = WorkstationStatusResponses[keyof WorkstationStatusResponses]
+
+export type WorkstationResolveApprovalData = {
+  body?: {
+    decision: "approve" | "reject"
+    actorAgentID?: string
+    reason?: string
+  }
+  path: {
+    messageID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/workstation/approval/{messageID}/resolve"
+}
+
+export type WorkstationResolveApprovalResponses = {
+  /**
+   * Resolved approval message
+   */
+  200: {
+    id: string
+    fromAgentID: string
+    toAgentID: string
+    threadID?: string
+    rootNeedID?: string
+    inReplyTo?: string
+    kind: "fyi" | "request" | "reply" | "proposal"
+    depth: number
+    spawnedIssueID?: string
+    body: string
+    taskSummary?: string
+    outcome?: string
+    read: boolean
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type WorkstationResolveApprovalResponse =
+  WorkstationResolveApprovalResponses[keyof WorkstationResolveApprovalResponses]
+
+export type OrgGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/org"
+}
+
+export type OrgGetResponses = {
+  /**
+   * Organization overview
+   */
+  200: Org
+}
+
+export type OrgGetResponse = OrgGetResponses[keyof OrgGetResponses]
+
+export type OrgUpdateData = {
+  body?: {
+    org: unknown
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/org"
+}
+
+export type OrgUpdateResponses = {
+  /**
+   * Updated organization overview
+   */
+  200: Org
+}
+
+export type OrgUpdateResponse = OrgUpdateResponses[keyof OrgUpdateResponses]
+
+export type OrgDisbandData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/org/disband"
+}
+
+export type OrgDisbandResponses = {
+  /**
+   * Organization disbanded
+   */
+  200: boolean
+}
+
+export type OrgDisbandResponse = OrgDisbandResponses[keyof OrgDisbandResponses]
 
 export type PtyListData = {
   body?: never
@@ -4143,7 +5954,9 @@ export type SessionCreateData = {
     title?: string
     permission?: PermissionRuleset
     workspaceID?: string
+    companyID?: string
     companyAgentID?: string
+    threadID?: string
   }
   path?: never
   query?: {
@@ -4421,6 +6234,192 @@ export type SessionTaskResponses = {
 }
 
 export type SessionTaskResponse = SessionTaskResponses[keyof SessionTaskResponses]
+
+export type SessionTaskCreateData = {
+  body?: {
+    summary: string
+    parent_id?: string
+    owner?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/task"
+}
+
+export type SessionTaskCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionTaskCreateError = SessionTaskCreateErrors[keyof SessionTaskCreateErrors]
+
+export type SessionTaskCreateResponses = {
+  /**
+   * Created task
+   */
+  200: {
+    id: string
+    session_id: string
+    parent_task_id?: string
+    status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+    summary: string
+    owner?: string
+    created_at: number
+    last_event_at: number
+    ended_at?: number
+    cleanup_after?: number
+  }
+}
+
+export type SessionTaskCreateResponse = SessionTaskCreateResponses[keyof SessionTaskCreateResponses]
+
+export type SessionTaskAbandonData = {
+  body?: {
+    event_summary?: string
+  }
+  path: {
+    sessionID: string
+    taskID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/task/{taskID}/abandon"
+}
+
+export type SessionTaskAbandonErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionTaskAbandonError = SessionTaskAbandonErrors[keyof SessionTaskAbandonErrors]
+
+export type SessionTaskAbandonResponses = {
+  /**
+   * Abandoned task
+   */
+  200: {
+    id: string
+    session_id: string
+    parent_task_id?: string
+    status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+    summary: string
+    owner?: string
+    created_at: number
+    last_event_at: number
+    ended_at?: number
+    cleanup_after?: number
+  }
+}
+
+export type SessionTaskAbandonResponse = SessionTaskAbandonResponses[keyof SessionTaskAbandonResponses]
+
+export type SessionTaskDoneData = {
+  body?: {
+    event_summary?: string
+  }
+  path: {
+    sessionID: string
+    taskID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/task/{taskID}/done"
+}
+
+export type SessionTaskDoneErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionTaskDoneError = SessionTaskDoneErrors[keyof SessionTaskDoneErrors]
+
+export type SessionTaskDoneResponses = {
+  /**
+   * Completed task
+   */
+  200: {
+    id: string
+    session_id: string
+    parent_task_id?: string
+    status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+    summary: string
+    owner?: string
+    created_at: number
+    last_event_at: number
+    ended_at?: number
+    cleanup_after?: number
+  }
+}
+
+export type SessionTaskDoneResponse = SessionTaskDoneResponses[keyof SessionTaskDoneResponses]
+
+export type SessionTaskEventsData = {
+  body?: never
+  path: {
+    sessionID: string
+    taskID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/session/{sessionID}/task/{taskID}/events"
+}
+
+export type SessionTaskEventsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionTaskEventsError = SessionTaskEventsErrors[keyof SessionTaskEventsErrors]
+
+export type SessionTaskEventsResponses = {
+  /**
+   * Task event list
+   */
+  200: Array<{
+    id: number
+    task_id: string
+    at: number
+    kind: "created" | "started" | "unstarted" | "blocked" | "unblocked" | "done" | "abandoned" | "renamed"
+    summary?: string
+  }>
+}
+
+export type SessionTaskEventsResponse = SessionTaskEventsResponses[keyof SessionTaskEventsResponses]
 
 export type SessionInitData = {
   body?: {
@@ -6631,6 +8630,7 @@ export type AppSkillsResponses = {
     location: string
     content: string
     hidden?: boolean
+    agentID?: string
   }>
 }
 

@@ -73,7 +73,7 @@ const CollaborationNodeSchema: z.ZodType<CollaborationNode> = z.lazy(() =>
     time_created: z.number(),
     children: z.array(CollaborationNodeSchema),
   }),
-)
+).meta({ ref: "WorkstationCollaborationNode" })
 
 const CollaborationTreeSchema = z.object({
   root_need_id: z.string(),

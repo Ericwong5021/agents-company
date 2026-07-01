@@ -3,6 +3,13 @@
 import { client } from "./client.gen.js"
 import { buildClientParams, type Client, type Options as Options2, type TDataShape } from "./client/index.js"
 import type {
+  AgentLifecycleStartErrors,
+  AgentLifecycleStartResponses,
+  AgentLifecycleStatusAllResponses,
+  AgentLifecycleStatusErrors,
+  AgentLifecycleStatusResponses,
+  AgentLifecycleStopErrors,
+  AgentLifecycleStopResponses,
   AgentPartInput,
   AppAgentsResponses,
   AppLogErrors,
@@ -17,6 +24,21 @@ import type {
   BashInteractiveReplyErrors,
   BashInteractiveReplyResponses,
   CommandListResponses,
+  CompanyAgentCreateErrors,
+  CompanyAgentCreateResponses,
+  CompanyAgentDeleteErrors,
+  CompanyAgentDeleteResponses,
+  CompanyAgentGetErrors,
+  CompanyAgentGetResponses,
+  CompanyAgentListResponses,
+  CompanyAgentTemplatesByDivisionErrors,
+  CompanyAgentTemplatesByDivisionResponses,
+  CompanyAgentTemplatesDivisionsResponses,
+  CompanyAgentTemplatesGetErrors,
+  CompanyAgentTemplatesGetResponses,
+  CompanyAgentTemplatesSearchResponses,
+  CompanyAgentUpdateErrors,
+  CompanyAgentUpdateResponses,
   Config as Config3,
   ConfigGetResponses,
   ConfigProvidersResponses,
@@ -62,6 +84,19 @@ import type {
   GlobalImportScanResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
+  GroupSessionChatErrors,
+  GroupSessionChatResponses,
+  GroupSessionCreateErrors,
+  GroupSessionCreateResponses,
+  GroupSessionDeleteErrors,
+  GroupSessionDeleteResponses,
+  GroupSessionGetErrors,
+  GroupSessionGetResponses,
+  GroupSessionInterruptResponses,
+  GroupSessionListResponses,
+  GroupSessionMessagesErrors,
+  GroupSessionMessagesResponses,
+  GroupSessionStatusResponses,
   InstanceDisposeResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -79,6 +114,9 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  OrgDisbandResponses,
+  OrgGetResponses,
+  OrgUpdateResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -92,9 +130,16 @@ import type {
   PermissionRespondErrors,
   PermissionRespondResponses,
   PermissionRuleset,
+  ProjectBlockErrors,
+  ProjectBlockResponses,
   ProjectCurrentResponses,
   ProjectInitGitResponses,
   ProjectListResponses,
+  ProjectRootNeedTokenStatsResponses,
+  ProjectTokenStatsErrors,
+  ProjectTokenStatsResponses,
+  ProjectUnblockErrors,
+  ProjectUnblockResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
   Provenance,
@@ -167,7 +212,15 @@ import type {
   SessionStatusResponses,
   SessionSummarizeErrors,
   SessionSummarizeResponses,
+  SessionTaskAbandonErrors,
+  SessionTaskAbandonResponses,
+  SessionTaskCreateErrors,
+  SessionTaskCreateResponses,
+  SessionTaskDoneErrors,
+  SessionTaskDoneResponses,
   SessionTaskErrors,
+  SessionTaskEventsErrors,
+  SessionTaskEventsResponses,
   SessionTaskResponses,
   SessionTodoErrors,
   SessionTodoResponses,
@@ -184,6 +237,17 @@ import type {
   SyncReplayResponses,
   SyncStartResponses,
   TextPartInput,
+  ThreadAgentActivityResponses,
+  ThreadAgentStatusResponses,
+  ThreadCompleteErrors,
+  ThreadCompleteResponses,
+  ThreadCreateErrors,
+  ThreadCreateResponses,
+  ThreadGetErrors,
+  ThreadGetResponses,
+  ThreadListResponses,
+  ThreadUpdateErrors,
+  ThreadUpdateResponses,
   ToolIdsErrors,
   ToolIdsResponses,
   ToolListErrors,
@@ -209,6 +273,8 @@ import type {
   VcsGetResponses,
   WorkflowListResponses,
   WorkflowResumeResponses,
+  WorkstationResolveApprovalResponses,
+  WorkstationStatusResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -1072,6 +1138,70 @@ export class Project extends HeyApiClient {
   }
 
   /**
+   * Get RootNeed token stats
+   *
+   * Return full-chain token usage threaded by RootNeedID across delegation levels and execution threads.
+   */
+  public rootNeedTokenStats<ThrowOnError extends boolean = false>(
+    parameters: {
+      rootNeedID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "rootNeedID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProjectRootNeedTokenStatsResponses, unknown, ThrowOnError>({
+      url: "/project/token-stats/root-need/{rootNeedID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get project token stats
+   *
+   * Return token usage for all sessions and execution threads in a project.
+   */
+  public tokenStats<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProjectTokenStatsResponses, ProjectTokenStatsErrors, ThrowOnError>({
+      url: "/project/{projectID}/token-stats",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Initialize git repository
    *
    * Create a git repository for the current project and return the refreshed project info.
@@ -1150,6 +1280,1291 @@ export class Project extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Block project
+   *
+   * Emergency-stop a project when token usage or execution risk is out of control.
+   */
+  public block<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      reason?: string
+      byAgentID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "reason" },
+            { in: "body", key: "byAgentID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectBlockResponses, ProjectBlockErrors, ThrowOnError>({
+      url: "/project/{projectID}/block",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Unblock project
+   *
+   * Clear a project emergency stop after the blocking condition has been resolved.
+   */
+  public unblock<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProjectUnblockResponses, ProjectUnblockErrors, ThrowOnError>({
+      url: "/project/{projectID}/unblock",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Templates extends HeyApiClient {
+  /**
+   * List template divisions
+   *
+   * Get all agent template divisions with agent counts.
+   */
+  public divisions<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyAgentTemplatesDivisionsResponses, unknown, ThrowOnError>({
+      url: "/company-agent/templates",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Search agent templates
+   *
+   * Full-text search across all agent templates by name, description, vibe, and division.
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      q?: string
+      division?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "q" },
+            { in: "query", key: "division" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyAgentTemplatesSearchResponses, unknown, ThrowOnError>({
+      url: "/company-agent/templates/search",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List agents in a division
+   *
+   * Get all agent templates within a specific division.
+   */
+  public byDivision<ThrowOnError extends boolean = false>(
+    parameters: {
+      division: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "division" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyAgentTemplatesByDivisionResponses,
+      CompanyAgentTemplatesByDivisionErrors,
+      ThrowOnError
+    >({
+      url: "/company-agent/templates/{division}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get agent template
+   *
+   * Get a single agent template including its full system prompt.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      division: string
+      slug: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "division" },
+            { in: "path", key: "slug" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyAgentTemplatesGetResponses,
+      CompanyAgentTemplatesGetErrors,
+      ThrowOnError
+    >({
+      url: "/company-agent/templates/{division}/{slug}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class CompanyAgent extends HeyApiClient {
+  /**
+   * List company agents
+   *
+   * Get a list of all company agents in the system.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyAgentListResponses, unknown, ThrowOnError>({
+      url: "/company-agent",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create company agent
+   *
+   * Create a new company agent.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      id?: string
+      name?: string
+      description?: string
+      system_prompt?: string
+      instruct?: string
+      model?: string
+      color?: string
+      icon?: string
+      org_layer?: "board" | "department" | "project" | "execution" | "tool"
+      department?: string
+      reports_to?: string
+      responsibilities?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "id" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "system_prompt" },
+            { in: "body", key: "instruct" },
+            { in: "body", key: "model" },
+            { in: "body", key: "color" },
+            { in: "body", key: "icon" },
+            { in: "body", key: "org_layer" },
+            { in: "body", key: "department" },
+            { in: "body", key: "reports_to" },
+            { in: "body", key: "responsibilities" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyAgentCreateResponses, CompanyAgentCreateErrors, ThrowOnError>({
+      url: "/company-agent",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete company agent
+   *
+   * Delete a company agent. The default 'assistant' agent cannot be deleted.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<CompanyAgentDeleteResponses, CompanyAgentDeleteErrors, ThrowOnError>(
+      {
+        url: "/company-agent/{id}",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Get company agent
+   *
+   * Get a company agent by ID.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyAgentGetResponses, CompanyAgentGetErrors, ThrowOnError>({
+      url: "/company-agent/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update company agent
+   *
+   * Update properties of an existing company agent.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      name?: string
+      description?: string
+      system_prompt?: string
+      instruct?: string
+      relationships?: string
+      kanban?: string
+      model?: string
+      color?: string
+      icon?: string
+      org_layer?: "board" | "department" | "project" | "execution" | "tool"
+      department?: string
+      reports_to?: string
+      responsibilities?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "system_prompt" },
+            { in: "body", key: "instruct" },
+            { in: "body", key: "relationships" },
+            { in: "body", key: "kanban" },
+            { in: "body", key: "model" },
+            { in: "body", key: "color" },
+            { in: "body", key: "icon" },
+            { in: "body", key: "org_layer" },
+            { in: "body", key: "department" },
+            { in: "body", key: "reports_to" },
+            { in: "body", key: "responsibilities" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<CompanyAgentUpdateResponses, CompanyAgentUpdateErrors, ThrowOnError>({
+      url: "/company-agent/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  private _templates?: Templates
+  get templates(): Templates {
+    return (this._templates ??= new Templates({ client: this.client }))
+  }
+}
+
+export class GroupSession extends HeyApiClient {
+  /**
+   * List group sessions
+   *
+   * Get all group sessions for the current project.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GroupSessionListResponses, unknown, ThrowOnError>({
+      url: "/group-session",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create group session
+   *
+   * Create a new group session. One member session is created per agentID.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      title?: string
+      agentIDs?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "title" },
+            { in: "body", key: "agentIDs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GroupSessionCreateResponses, GroupSessionCreateErrors, ThrowOnError>({
+      url: "/group-session",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete group session
+   *
+   * Delete a group session and all its member sessions.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<GroupSessionDeleteResponses, GroupSessionDeleteErrors, ThrowOnError>(
+      {
+        url: "/group-session/{id}",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Get group session
+   *
+   * Get a group session by ID, including its member sessions.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GroupSessionGetResponses, GroupSessionGetErrors, ThrowOnError>({
+      url: "/group-session/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get group messages
+   *
+   * Get the group-level visible conversation history (user messages + agent visible responses).
+   */
+  public messages<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      GroupSessionMessagesResponses,
+      GroupSessionMessagesErrors,
+      ThrowOnError
+    >({
+      url: "/group-session/{id}/messages",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get group session busy status
+   *
+   * Returns whether the group session is busy (any member session is processing).
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GroupSessionStatusResponses, unknown, ThrowOnError>({
+      url: "/group-session/{id}/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Send message to group session
+   *
+   * Persist a user message and fan-out to all member sessions in the background. Returns immediately with the roundNum (200) or 409 if busy. Agent responses arrive via group_session.agent_started / agent_completed events.
+   */
+  public chat<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      text?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "text" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GroupSessionChatResponses, GroupSessionChatErrors, ThrowOnError>({
+      url: "/group-session/{id}/chat",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Interrupt all agents
+   *
+   * Gracefully cancel all running member sessions in the group.
+   */
+  public interrupt<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GroupSessionInterruptResponses, unknown, ThrowOnError>({
+      url: "/group-session/{id}/interrupt",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Thread extends HeyApiClient {
+  /**
+   * List threads
+   *
+   * Get a list of all active threads, optionally filtered by agent ID.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      agentID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "agentID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ThreadListResponses, unknown, ThrowOnError>({
+      url: "/thread",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create thread
+   *
+   * Create a new thread for an agent.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      agentID?: string
+      kind?: "primary" | "reactive" | "ambient"
+      sessionID?: string
+      description?: string
+      budgetTokens?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "agentID" },
+            { in: "body", key: "kind" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "description" },
+            { in: "body", key: "budgetTokens" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ThreadCreateResponses, ThreadCreateErrors, ThrowOnError>({
+      url: "/thread",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get thread
+   *
+   * Get a thread by ID.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ThreadGetResponses, ThreadGetErrors, ThrowOnError>({
+      url: "/thread/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update thread
+   *
+   * Update a thread's status, description, or token tracking.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      status?: "active" | "paused" | "completed"
+      sessionID?: string
+      description?: string
+      spentTokens?: number
+      budgetTokens?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "status" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "description" },
+            { in: "body", key: "spentTokens" },
+            { in: "body", key: "budgetTokens" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<ThreadUpdateResponses, ThreadUpdateErrors, ThrowOnError>({
+      url: "/thread/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Complete thread
+   *
+   * Mark a thread as completed.
+   */
+  public complete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ThreadCompleteResponses, ThreadCompleteErrors, ThrowOnError>({
+      url: "/thread/{id}/complete",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get agent status
+   *
+   * Get the aggregated status of an agent based on its active threads.
+   */
+  public agentStatus<ThrowOnError extends boolean = false>(
+    parameters: {
+      agentID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "agentID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ThreadAgentStatusResponses, unknown, ThrowOnError>({
+      url: "/thread/agent/{agentID}/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get agent activity
+   *
+   * Get the full activity summary for an agent, including per-thread details.
+   */
+  public agentActivity<ThrowOnError extends boolean = false>(
+    parameters: {
+      agentID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "agentID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ThreadAgentActivityResponses, unknown, ThrowOnError>({
+      url: "/thread/agent/{agentID}/activity",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class AgentLifecycle extends HeyApiClient {
+  /**
+   * Start an agent
+   *
+   * Start a company agent by creating a primary thread. Returns 404 if the agent does not exist, 409 if the agent already has an active primary thread.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AgentLifecycleStartResponses, AgentLifecycleStartErrors, ThrowOnError>(
+      {
+        url: "/agents/{id}/start",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Stop an agent
+   *
+   * Stop a company agent by completing all its active threads. Returns 404 if the agent does not exist.
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AgentLifecycleStopResponses, AgentLifecycleStopErrors, ThrowOnError>({
+      url: "/agents/{id}/stop",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get agent status
+   *
+   * Get the status of a specific company agent, including thread activity rollup. Returns 404 if the agent does not exist.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      AgentLifecycleStatusResponses,
+      AgentLifecycleStatusErrors,
+      ThrowOnError
+    >({
+      url: "/agents/{id}/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get all agents' status
+   *
+   * Get the status of all company agents, including thread activity rollup for each. Designed for the workstation view.
+   */
+  public statusAll<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AgentLifecycleStatusAllResponses, unknown, ThrowOnError>({
+      url: "/agents/status",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Workstation extends HeyApiClient {
+  /**
+   * Get workstation status
+   *
+   * Returns aggregated workstation data: all agents with their current status, active threads, approval prompts, and summary counts.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorkstationStatusResponses, unknown, ThrowOnError>({
+      url: "/workstation/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resolve workstation approval
+   *
+   * Approve or reject an admission message that is waiting for user approval.
+   */
+  public resolveApproval<ThrowOnError extends boolean = false>(
+    parameters: {
+      messageID: string
+      directory?: string
+      workspace?: string
+      decision?: "approve" | "reject"
+      actorAgentID?: string
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "messageID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "decision" },
+            { in: "body", key: "actorAgentID" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkstationResolveApprovalResponses, unknown, ThrowOnError>({
+      url: "/workstation/approval/{messageID}/resolve",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Org extends HeyApiClient {
+  /**
+   * Get organization
+   *
+   * Get the current organization overview: structure and data counts.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<OrgGetResponses, unknown, ThrowOnError>({
+      url: "/org",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update organization structure
+   *
+   * Update the organization structure (departments, roles, agent assignments).
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      org?: unknown
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "org" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<OrgUpdateResponses, unknown, ThrowOnError>({
+      url: "/org",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Disband organization
+   *
+   * Permanently delete all company/org data: agents, threads, sessions, group sessions, tasks, inbox, workflow runs, and the workspace files. Login and app configuration are preserved. This is irreversible.
+   */
+  public disband<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<OrgDisbandResponses, unknown, ThrowOnError>({
+      url: "/org/disband",
+      ...options,
+      ...params,
     })
   }
 }
@@ -1713,6 +3128,167 @@ export class Worktree extends HeyApiClient {
   }
 }
 
+export class Task extends HeyApiClient {
+  /**
+   * Create session task
+   *
+   * Create a new task (work-item) in a session.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      workspace?: string
+      summary?: string
+      parent_id?: string
+      owner?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "summary" },
+            { in: "body", key: "parent_id" },
+            { in: "body", key: "owner" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionTaskCreateResponses, SessionTaskCreateErrors, ThrowOnError>({
+      url: "/session/{sessionID}/task",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Abandon session task
+   *
+   * Mark a task as abandoned (cancelled).
+   */
+  public abandon<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      taskID: string
+      directory?: string
+      workspace?: string
+      event_summary?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "event_summary" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionTaskAbandonResponses, SessionTaskAbandonErrors, ThrowOnError>({
+      url: "/session/{sessionID}/task/{taskID}/abandon",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Complete session task
+   *
+   * Mark a task as done (completed).
+   */
+  public done<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      taskID: string
+      directory?: string
+      workspace?: string
+      event_summary?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "event_summary" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionTaskDoneResponses, SessionTaskDoneErrors, ThrowOnError>({
+      url: "/session/{sessionID}/task/{taskID}/done",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List task events
+   *
+   * List the event timeline for a specific task.
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      taskID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionTaskEventsResponses, SessionTaskEventsErrors, ThrowOnError>({
+      url: "/session/{sessionID}/task/{taskID}/events",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Session2 extends HeyApiClient {
   /**
    * List sessions
@@ -1767,7 +3343,9 @@ export class Session2 extends HeyApiClient {
       title?: string
       permission?: PermissionRuleset
       workspaceID?: string
+      companyID?: string
       companyAgentID?: string
+      threadID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1784,7 +3362,9 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
             { in: "body", key: "workspaceID" },
+            { in: "body", key: "companyID" },
             { in: "body", key: "companyAgentID" },
+            { in: "body", key: "threadID" },
           ],
         },
       ],
@@ -2784,6 +4364,11 @@ export class Session2 extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _task?: Task
+  get task2(): Task {
+    return (this._task ??= new Task({ client: this.client }))
   }
 }
 
@@ -4810,6 +6395,36 @@ export class OpencodeClient extends HeyApiClient {
   private _project?: Project
   get project(): Project {
     return (this._project ??= new Project({ client: this.client }))
+  }
+
+  private _companyAgent?: CompanyAgent
+  get companyAgent(): CompanyAgent {
+    return (this._companyAgent ??= new CompanyAgent({ client: this.client }))
+  }
+
+  private _groupSession?: GroupSession
+  get groupSession(): GroupSession {
+    return (this._groupSession ??= new GroupSession({ client: this.client }))
+  }
+
+  private _thread?: Thread
+  get thread(): Thread {
+    return (this._thread ??= new Thread({ client: this.client }))
+  }
+
+  private _agentLifecycle?: AgentLifecycle
+  get agentLifecycle(): AgentLifecycle {
+    return (this._agentLifecycle ??= new AgentLifecycle({ client: this.client }))
+  }
+
+  private _workstation?: Workstation
+  get workstation(): Workstation {
+    return (this._workstation ??= new Workstation({ client: this.client }))
+  }
+
+  private _org?: Org
+  get org(): Org {
+    return (this._org ??= new Org({ client: this.client }))
   }
 
   private _pty?: Pty

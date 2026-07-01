@@ -11,6 +11,34 @@ import { createClient } from "@hey-api/openapi-ts"
 
 await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../opencode"))
 
+const openapiPath = path.join(dir, "openapi.json")
+const openapi = await Bun.file(openapiPath).json()
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function promoteLocalDefs(value: unknown) {
+  if (!isRecord(value)) return
+
+  const components = isRecord(openapi.components) ? openapi.components : {}
+  openapi.components = components
+  const schemas = isRecord(components.schemas) ? components.schemas : {}
+  components.schemas = schemas
+
+  if (isRecord(value.$defs)) {
+    Object.entries(value.$defs).map(([key, schema]) => {
+      if (schemas[key] === undefined) schemas[key] = schema
+    })
+    delete value.$defs
+  }
+
+  Object.values(value).map(promoteLocalDefs)
+}
+
+promoteLocalDefs(openapi)
+await Bun.write(openapiPath, JSON.stringify(openapi, null, 2))
+
 await createClient({
   input: "./openapi.json",
   output: {
