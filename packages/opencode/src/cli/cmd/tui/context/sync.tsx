@@ -18,8 +18,22 @@ import type {
   ProviderListResponse,
   ProviderAuthMethod,
   VcsInfo,
-  ThreadInfo,
 } from "@agents-company/sdk/v2"
+
+/** Thread info type — matches the thread list/get response schema. */
+export interface ThreadInfo {
+  id: string
+  agentID: string
+  kind: "primary" | "reactive" | "ambient"
+  status: "active" | "paused" | "completed"
+  sessionID?: string
+  description?: string
+  budgetTokens?: number
+  spentTokens?: number
+  timeStarted?: number
+  timeCompleted?: number
+  time: { created: number; updated: number }
+}
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useProject } from "@tui/context/project"
 import { useEvent } from "@tui/context/event"
