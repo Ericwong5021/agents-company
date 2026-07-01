@@ -277,22 +277,28 @@ for (const item of targets) {
   await Bun.file(`dist/${name}/README.md`).write(
     `This is the ${item.os}-${item.arch} binary for [@agents-company/cli](https://www.npmjs.com/package/@agents-company/cli). Install that package directly.\n`,
   )
+  await Bun.file(`dist/${name}/LICENSE`).write(await Bun.file(path.join(dir, "../../LICENSE")).text())
   await Bun.file(`dist/${name}/package.json`).write(
     JSON.stringify(
       {
         name: `@agents-company/${name}`,
         version: Script.version,
         description: "Platform-specific binary for @agents-company/cli.",
-        license: "MIT",
+        license: "Apache-2.0",
         author: "Agents Company Team",
-        homepage: "https://github.com/Ericwong5021/agents-company",
+        homepage: "https://github.com/Ericwong5021/agents-company#readme",
         repository: {
           type: "git",
           url: "git+https://github.com/Ericwong5021/agents-company.git",
+          directory: `packages/opencode/dist/${name}`,
+        },
+        bugs: {
+          url: "https://github.com/Ericwong5021/agents-company/issues",
         },
         keywords: ["ai", "coding", "agent", "cli", "agents-company"],
         os: [item.os],
         cpu: [item.arch],
+        files: ["bin", "README.md", "LICENSE"],
       },
       null,
       2,

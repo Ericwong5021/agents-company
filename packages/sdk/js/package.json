@@ -5,7 +5,7 @@
   "description": "TypeScript SDK for the Agent Company API",
   "keywords": ["agent-company", "ai", "sdk", "coding-assistant"],
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Xiaomi MiMo Team",
   "homepage": "https://mimo.xiaomi.com/coder",
   "repository": {

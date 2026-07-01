@@ -8,34 +8,19 @@ import { useRightSidebar } from "../../context/right-sidebar"
 import { useEvent } from "../../context/event"
 import { useToast } from "../../ui/toast"
 import { Card } from "../../component/card"
-import { AgentCard, type AgentCardData, type AgentStatus, type ThreadInfo } from "./agent-card"
+import { AgentCard } from "./agent-card"
+import {
+  buildOfficeModel,
+  flattenCollaborationNodes,
+  formatTokens,
+  type AgentStatus,
+  type CompanyAgentInfo,
+  type ProjectTokenStats,
+  type ThreadInfo,
+  type WorkstationStatus,
+} from "./workstation-model"
 
 const id = "internal:nav-workstation"
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface CompanyAgentInfo {
-  id: string
-  name: string
-  description?: string
-  color?: string
-  icon?: string
-  model?: string
-  org_layer?: string
-  department?: string
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return `${n}`
-}
 
 // ---------------------------------------------------------------------------
 // WorkstationView
@@ -67,6 +52,22 @@ function WorkstationView() {
     if (!res.ok) return [] as ThreadInfo[]
     return (await res.json()) as ThreadInfo[]
   })
+
+  const [workstationStatus] = createResource(refetch, async () => {
+    const res = await sdk.fetch(`${sdk.url}/workstation/status`)
+    if (!res.ok) return undefined
+    return (await res.json()) as WorkstationStatus
+  })
+
+  const [projectTokenStats] = createResource(
+    () => workstationStatus()?.project.id,
+    async (projectID) => {
+      if (!projectID) return undefined
+      const res = await sdk.fetch(`${sdk.url}/project/${encodeURIComponent(projectID)}/token-stats`)
+      if (!res.ok) return undefined
+      return (await res.json()) as ProjectTokenStats
+    },
+  )
 
   const [agentStatuses] = createResource(refetch, async () => {
     const list = agents()
@@ -142,47 +143,38 @@ function WorkstationView() {
     route.navigate({ type: "plugin", id: "agent-management", data: { agentID } })
   }
 
+  const handleApproval = async (messageID: string, decision: "approve" | "reject") => {
+    const res = await sdk.fetch(`${sdk.url}/workstation/approval/${encodeURIComponent(messageID)}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision, actorAgentID: "user" }),
+    })
+    if (!res.ok) {
+      toast.show({ variant: "error", message: t("tui.workstation.approval.failed") })
+      return
+    }
+    toast.show({
+      variant: "info",
+      message: decision === "approve" ? t("tui.workstation.approval.approved") : t("tui.workstation.approval.rejected"),
+    })
+    bump()
+  }
+
   // -------------------------------------------------------------------------
   // Derived data
   // -------------------------------------------------------------------------
 
-  const activeThreads = createMemo(() => (allThreads() ?? []).filter((t) => t.status === "active"))
-
-  const workstationAgents = createMemo<AgentCardData[]>(() => {
-    const list = agents() ?? []
-    const statuses = agentStatuses() ?? {}
-    const threads = allThreads() ?? []
-
-    return list.map((a) => {
-      const agentThreads = threads.filter((t) => t.agentID === a.id && t.status === "active")
-      const totalTokens = agentThreads.reduce((sum, t) => sum + t.spentTokens, 0)
-      return {
-        id: a.id,
-        name: a.name,
-        icon: a.icon,
-        color: a.color,
-        description: a.description,
-        model: a.model,
-        orgLayer: a.org_layer,
-        department: typeof a.department === "string" ? a.department : undefined,
-        status: statuses[a.id] ?? "idle",
-        threads: agentThreads,
-        totalTokens,
-      }
-    })
-  })
-
-  const summary = createMemo(() => {
-    const list = workstationAgents()
-    const totalAgents = list.length
-    const activeAgents = list.filter((a) => a.status !== "idle").length
-    const totalThreads = list.reduce((sum, a) => sum + a.threads.length, 0)
-    const openTasks = list.reduce(
-      (sum, a) => sum + a.threads.filter((t) => t.kind === "primary").length,
-      0,
-    )
-    return { totalAgents, activeAgents, totalThreads, openTasks }
-  })
+  const office = createMemo(() =>
+    buildOfficeModel({
+      agents: agents() ?? [],
+      statuses: agentStatuses() ?? {},
+      threads: allThreads() ?? [],
+      workstation: workstationStatus(),
+      tokenStats: projectTokenStats(),
+    }),
+  )
+  const workstationAgents = createMemo(() => office().agents)
+  const summary = createMemo(() => office().summary)
 
   // -------------------------------------------------------------------------
   // Right sidebar
@@ -212,8 +204,25 @@ function WorkstationView() {
             <text fg={theme.text}>
               {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{s.openTasks}</text>
             </text>
+            <text fg={theme.text}>
+              {t("tui.workstation.summary.tokens")}: <text fg={theme.accent}>{formatTokens(s.trackedTokens)}</text>
+            </text>
+            <Show when={s.pendingApprovals > 0}>
+              <text fg={theme.warning}>
+                {t("tui.workstation.summary.approvals")}: {s.pendingApprovals}
+              </text>
+            </Show>
           </box>
         </Card>
+
+        <Show when={office().project?.blocked}>
+          <Card flush>
+            <box flexDirection="column" gap={0} paddingLeft={1} paddingRight={1}>
+              <text fg={theme.error}>{t("tui.workstation.project.blocked")}</text>
+              <text fg={theme.textMuted}>{office().project?.blocked_reason}</text>
+            </box>
+          </Card>
+        </Show>
 
         {/* Agent list */}
         <box flexShrink={0} paddingTop={1} paddingBottom={0}>
@@ -313,7 +322,108 @@ function WorkstationView() {
             <text fg={theme.text}>
               {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{summary().openTasks}</text>
             </text>
+            <text fg={theme.textMuted}>{"│"}</text>
+            <text fg={summary().pendingApprovals > 0 ? theme.warning : theme.text}>
+              {t("tui.workstation.summary.approvals")}: <text fg={theme.accent}>{summary().pendingApprovals}</text>
+            </text>
+            <text fg={theme.textMuted}>{"│"}</text>
+            <text fg={summary().blocked ? theme.error : theme.text}>
+              {summary().blocked ? t("tui.workstation.project.blocked") : t("tui.workstation.project.running")}
+            </text>
           </box>
+
+          <box
+            flexShrink={0}
+            flexDirection="row"
+            gap={2}
+            paddingLeft={1}
+            paddingRight={1}
+            backgroundColor={theme.backgroundElement}
+            border={["left", "right", "bottom"]}
+            borderColor={theme.border}
+          >
+            <text fg={theme.text}>
+              {t("tui.workstation.presence.busy")}: <text fg={theme.warning}>{office().presence.busy}</text>
+            </text>
+            <text fg={theme.text}>
+              {t("tui.workstation.presence.idle")}: <text fg={theme.success}>{office().presence.idle}</text>
+            </text>
+            <text fg={theme.text}>
+              {t("tui.workstation.summary.tokens")}: <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
+            </text>
+            <Show when={summary().observedTokens > 0}>
+              <text fg={theme.text}>
+                {t("tui.workstation.summary.observed")}: <text fg={theme.accent}>{formatTokens(summary().observedTokens)}</text>
+              </text>
+            </Show>
+          </box>
+
+          <Show when={office().approvals.length > 0}>
+            <box flexShrink={0} flexDirection="column" gap={0}>
+              <text fg={theme.warning}>
+                <b>{t("tui.workstation.approval.title")}</b>
+              </text>
+              <For each={office().approvals}>
+                {(approval) => (
+                  <box
+                    flexShrink={0}
+                    flexDirection="column"
+                    paddingLeft={1}
+                    paddingRight={1}
+                    border={["left"]}
+                    borderColor={theme.warning}
+                  >
+                    <text fg={theme.text}>
+                      {approval.from_agent_id} → {approval.to_agent_id}
+                      <Show when={approval.task_summary}>
+                        <text fg={theme.textMuted}> · {approval.task_summary}</text>
+                      </Show>
+                    </text>
+                    <text fg={theme.textMuted}>{approval.body.split("\n")[0]}</text>
+                    <box flexDirection="row" gap={2}>
+                      <box onMouseUp={() => handleApproval(approval.id, "approve")}>
+                        <text fg={theme.success}>{t("tui.workstation.approval.approve")}</text>
+                      </box>
+                      <box onMouseUp={() => handleApproval(approval.id, "reject")}>
+                        <text fg={theme.error}>{t("tui.workstation.approval.reject")}</text>
+                      </box>
+                    </box>
+                  </box>
+                )}
+              </For>
+            </box>
+          </Show>
+
+          <Show when={office().collaborationTrees.length > 0}>
+            <box flexShrink={0} flexDirection="column" gap={0}>
+              <text fg={theme.text}>
+                <b>{t("tui.workstation.collaboration.title")}</b>
+              </text>
+              <For each={office().collaborationTrees}>
+                {(tree) => (
+                  <box flexShrink={0} flexDirection="column" paddingLeft={1} border={["left"]} borderColor={theme.border}>
+                    <text fg={theme.textMuted}>
+                      {tree.root_need_id} · {tree.total_messages} {t("tui.workstation.collaboration.messages")}
+                    </text>
+                    <For each={flattenCollaborationNodes(tree.nodes)}>
+                      {(row) => (
+                        <text fg={row.node.outcome === "needs_approval" ? theme.warning : theme.textMuted}>
+                          {"  ".repeat(row.level)}
+                          {row.node.kind}: {row.node.from_agent_id} → {row.node.to_agent_id}
+                          <Show when={row.node.task_summary}>
+                            <text fg={theme.text}> · {row.node.task_summary}</text>
+                          </Show>
+                          <Show when={row.node.outcome}>
+                            <text fg={theme.accent}> [{row.node.outcome}]</text>
+                          </Show>
+                        </text>
+                      )}
+                    </For>
+                  </box>
+                )}
+              </For>
+            </box>
+          </Show>
 
           {/* Agent cards */}
           <box flexShrink={0} flexDirection="column" gap={1}>
@@ -350,6 +460,14 @@ function WorkstationView() {
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
               {t("tui.workstation.summary.tasks")}: <text fg={theme.accent}>{summary().openTasks}</text>
+            </text>
+            <text fg={theme.textMuted}>{"│"}</text>
+            <text fg={theme.text}>
+              {t("tui.workstation.summary.approvals")}: <text fg={theme.accent}>{summary().pendingApprovals}</text>
+            </text>
+            <text fg={theme.textMuted}>{"│"}</text>
+            <text fg={theme.text}>
+              {t("tui.workstation.summary.tokens")}: <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
             </text>
           </box>
         </box>

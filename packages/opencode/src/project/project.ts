@@ -72,6 +72,13 @@ const ProjectTime = Schema.Struct({
   created: Schema.Number,
   updated: Schema.Number,
   initialized: Schema.optional(Schema.Number),
+  blocked: Schema.optional(Schema.Number),
+})
+
+const ProjectBlock = Schema.Struct({
+  reason: Schema.String,
+  byAgentID: Schema.optional(Schema.String),
+  time: Schema.Number,
 })
 
 export const Info = Schema.Struct({
@@ -82,6 +89,7 @@ export const Info = Schema.Struct({
   icon: Schema.optional(ProjectIcon),
   commands: Schema.optional(ProjectCommands),
   time: ProjectTime,
+  block: Schema.optional(ProjectBlock),
   sandboxes: Schema.Array(Schema.String),
 })
   .annotate({ identifier: "Project" })
@@ -107,7 +115,16 @@ export function fromRow(row: Row): Info {
       created: row.time_created,
       updated: row.time_updated,
       initialized: row.time_initialized ?? undefined,
+      blocked: row.time_blocked ?? undefined,
     },
+    block:
+      row.time_blocked && row.blocked_reason
+        ? {
+            reason: row.blocked_reason,
+            byAgentID: row.blocked_by_agent_id ?? undefined,
+            time: row.time_blocked,
+          }
+        : undefined,
     sandboxes: row.sandboxes,
     commands: row.commands ?? undefined,
   }
@@ -121,6 +138,19 @@ export const UpdateInput = z.object({
 })
 export type UpdateInput = z.infer<typeof UpdateInput>
 
+export const BlockInput = z.object({
+  projectID: ProjectID.zod,
+  reason: z.string().min(1),
+  byAgentID: z.string().optional(),
+})
+export type BlockInput = z.infer<typeof BlockInput>
+
+export const UnblockInput = z.object({
+  projectID: ProjectID.zod,
+  reason: z.string().optional(),
+})
+export type UnblockInput = z.infer<typeof UnblockInput>
+
 // ---------------------------------------------------------------------------
 // Effect service
 // ---------------------------------------------------------------------------
@@ -131,6 +161,8 @@ export interface Interface {
   readonly list: () => Effect.Effect<Info[]>
   readonly get: (id: ProjectID) => Effect.Effect<Info | undefined>
   readonly update: (input: UpdateInput) => Effect.Effect<Info>
+  readonly block: (input: BlockInput) => Effect.Effect<Info>
+  readonly unblock: (input: UnblockInput) => Effect.Effect<Info>
   readonly initGit: (input: { directory: string; project: Info }) => Effect.Effect<Info>
   readonly setInitialized: (id: ProjectID) => Effect.Effect<void>
   readonly sandboxes: (id: ProjectID) => Effect.Effect<string[]>
@@ -295,7 +327,8 @@ export const layer: Layer.Layer<
             time: { created: Date.now(), updated: Date.now() },
           }
 
-      if (Flag.AGENTCOMPANY_EXPERIMENTAL_ICON_DISCOVERY) yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
+      if (Flag.AGENTCOMPANY_EXPERIMENTAL_ICON_DISCOVERY)
+        yield* discover(existing).pipe(Effect.ignore, Effect.forkIn(scope))
 
       const result: Info = {
         ...existing,
@@ -328,6 +361,9 @@ export const layer: Layer.Layer<
             time_created: result.time.created,
             time_updated: result.time.updated,
             time_initialized: result.time.initialized,
+            time_blocked: result.time.blocked,
+            blocked_reason: result.block?.reason,
+            blocked_by_agent_id: result.block?.byAgentID,
             sandboxes: result.sandboxes,
             commands: result.commands,
           })
@@ -341,6 +377,9 @@ export const layer: Layer.Layer<
               icon_color: result.icon?.color,
               time_updated: result.time.updated,
               time_initialized: result.time.initialized,
+              time_blocked: result.time.blocked,
+              blocked_reason: result.block?.reason,
+              blocked_by_agent_id: result.block?.byAgentID,
               sandboxes: result.sandboxes,
               commands: result.commands,
             },
@@ -403,6 +442,48 @@ export const layer: Layer.Layer<
             icon_color: input.icon?.color,
             commands: input.commands,
             time_updated: Date.now(),
+          })
+          .where(eq(ProjectTable.id, input.projectID))
+          .returning()
+          .get(),
+      )
+      if (!result) throw new Error(`Project not found: ${input.projectID}`)
+      const data = fromRow(result)
+      yield* emitUpdated(data)
+      return data
+    })
+
+    const block = Effect.fn("Project.block")(function* (input: BlockInput) {
+      const now = Date.now()
+      const result = yield* db((d) =>
+        d
+          .update(ProjectTable)
+          .set({
+            time_blocked: now,
+            blocked_reason: input.reason,
+            blocked_by_agent_id: input.byAgentID,
+            time_updated: now,
+          })
+          .where(eq(ProjectTable.id, input.projectID))
+          .returning()
+          .get(),
+      )
+      if (!result) throw new Error(`Project not found: ${input.projectID}`)
+      const data = fromRow(result)
+      yield* emitUpdated(data)
+      return data
+    })
+
+    const unblock = Effect.fn("Project.unblock")(function* (input: UnblockInput) {
+      const now = Date.now()
+      const result = yield* db((d) =>
+        d
+          .update(ProjectTable)
+          .set({
+            time_blocked: null,
+            blocked_reason: null,
+            blocked_by_agent_id: null,
+            time_updated: now,
           })
           .where(eq(ProjectTable.id, input.projectID))
           .returning()
@@ -485,6 +566,8 @@ export const layer: Layer.Layer<
       list,
       get,
       update,
+      block,
+      unblock,
       initGit,
       setInitialized,
       sandboxes,

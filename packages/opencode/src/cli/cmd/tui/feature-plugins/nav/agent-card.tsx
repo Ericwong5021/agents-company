@@ -1,38 +1,11 @@
 import { createSignal, Show, For, type JSX } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useLanguage } from "../../context/language"
+import { formatTokens, type AgentCardData, type AgentStatus, type ThreadInfo } from "./workstation-model"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type AgentStatus = "idle" | "busy" | "paused"
-
-export interface ThreadInfo {
-  id: string
-  agentID: string
-  kind: "primary" | "reactive" | "ambient"
-  status: "active" | "paused" | "completed"
-  sessionID?: string
-  description?: string
-  budgetTokens?: number
-  spentTokens: number
-  time: { created: number; updated: number }
-}
-
-export interface AgentCardData {
-  id: string
-  name: string
-  icon?: string
-  color?: string
-  description?: string
-  model?: string
-  orgLayer?: string
-  department?: string
-  status: AgentStatus
-  threads: ThreadInfo[]
-  totalTokens: number
-}
 
 export interface AgentCardProps {
   agent: AgentCardData
@@ -55,16 +28,6 @@ const THREAD_KIND_LABEL: Record<string, string> = {
   primary: "[primary]",
   reactive: "[reactive]",
   ambient: "[ambient]",
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return `${n}`
 }
 
 // ---------------------------------------------------------------------------

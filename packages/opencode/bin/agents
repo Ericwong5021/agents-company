@@ -170,9 +170,24 @@ function findBinary(startDir) {
 const resolved = findBinary(scriptDir)
 if (!resolved) {
   console.error(
-    "It seems that your package manager failed to install the right version of the agentcompany CLI for your platform. You can try manually installing " +
-      names.map((n) => `\"${n}\"`).join(" or ") +
-      " package",
+    `
+Agent Company could not find the optional platform binary for this machine.
+
+Tried:
+${names.map((name) => `  - ${name}`).join("\n")}
+
+This usually happens when optional dependencies were skipped during install.
+
+Try:
+  npm uninstall -g @agents-company/cli
+  npm install -g @agents-company/cli
+
+Do not install with:
+  npm install -g @agents-company/cli --omit=optional
+
+If your package manager intentionally skips optional dependencies, install the matching binary package manually:
+  npm install -g ${names[0]}
+`,
   )
   process.exit(1)
 }

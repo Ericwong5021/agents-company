@@ -6,6 +6,7 @@ import { isGroupMember, listEdges, makeDelegationChecker } from "./relationships
 import { workspaceRoot } from "./workspace"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
+import { AuditEvent } from "@/audit-event/audit-event"
 import z from "zod"
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,15 @@ export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error
           },
         }),
       )
+      yield* AuditEvent.record({
+        kind: "access",
+        action: "read_doc",
+        actorAgentID: input.agentId,
+        subjectID: input.docPath,
+        subjectType: "workspace_doc",
+        granted: false,
+        metadata: { reason: "outside_workspace" },
+      })
       return yield* Effect.fail(new Error(`read_doc: path outside workspace: ${input.docPath}`))
     }
 
@@ -73,6 +83,15 @@ export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error
           },
         }),
       )
+      yield* AuditEvent.record({
+        kind: "access",
+        action: "read_doc",
+        actorAgentID: input.agentId,
+        subjectID: input.docPath,
+        subjectType: "workspace_doc",
+        granted: false,
+        metadata: { reason: "missing" },
+      })
       return yield* Effect.fail(new Error(`read_doc: file not found: ${input.docPath}`))
     }
 
@@ -109,6 +128,18 @@ export function readDoc(input: ReadDocInput): Effect.Effect<ReadDocResult, Error
         },
       }),
     )
+    yield* AuditEvent.record({
+      kind: "access",
+      action: "read_doc",
+      actorAgentID: input.agentId,
+      subjectID: input.docPath,
+      subjectType: "workspace_doc",
+      granted,
+      metadata: {
+        classification,
+        scope: frontMatter.scope ?? "public",
+      },
+    })
 
     if (!granted) {
       return yield* Effect.fail(

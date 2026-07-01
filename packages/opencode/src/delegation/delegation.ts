@@ -5,13 +5,19 @@ import { spawnRef } from "@/actor/spawn-ref"
 import { AgentMessage } from "@/agent-message/agent-message"
 import * as Admission from "@/admission/admission"
 import { CompanyAgent } from "@/company-agent/company-agent"
+import * as Reputation from "@/reputation/reputation"
 import { TaskRegistry } from "@/task/registry"
 import { Identifier } from "@/id/id"
+import { AuditEvent } from "@/audit-event/audit-event"
+import { TrustDial } from "@/trust-dial/trust-dial"
 import { stringifyFrontMatter } from "@/workspace/front-matter"
 import { workspaceRoot } from "@/workspace/workspace"
 import { canDelegate, parseOrgLayer, OrgLayer, MAX_DELEGATION_DEPTH } from "./primitives"
 import type { SubTask, DelegationResult, AdmissionResult } from "./schema"
 import type { AdmissionResult as GradedAdmissionResult, Submission } from "@/admission/schema"
+import type { ReputationInfo } from "@/reputation/schema"
+import type { SessionID } from "@/session/schema"
+import type { Task } from "@/task/schema"
 import { Log } from "@/util"
 
 const log = Log.create({ service: "delegation" })
@@ -120,6 +126,66 @@ export interface SubmitForAdmissionResult {
   readonly accepted: boolean
   readonly admission: GradedAdmissionResult
   readonly reply: AgentMessage.Info
+  readonly reputation: ReputationInfo
+  readonly trust: TrustDial.Decision
+}
+
+export interface ResolveProposalInput {
+  readonly proposalMessage: AgentMessage.Info
+  readonly resolverAgentID: string
+  readonly decision: "adopt" | "shelve" | "reject"
+  readonly reason: string
+  readonly sessionID: SessionID
+  readonly taskSummary?: string
+  readonly parentTaskID?: string
+}
+
+export interface ResolveProposalResult {
+  readonly decision: "adopt" | "shelve" | "reject"
+  readonly reply: AgentMessage.Info
+  readonly task?: Task
+}
+
+export interface DecisionOption {
+  readonly id: string
+  readonly title: string
+}
+
+export interface AdvisoryVoteInput {
+  readonly agentID: string
+  readonly optionID: string
+  readonly rationale?: string
+}
+
+export interface WeightedAdvisoryVote {
+  readonly agentID: string
+  readonly agentName: string
+  readonly optionID: string
+  readonly rationale?: string
+  readonly reputationScore: number
+  readonly weight: number
+}
+
+export interface RecordDecisionInput {
+  readonly domain: string
+  readonly question: string
+  readonly driAgentID: string
+  readonly selectedOptionID: string
+  readonly options: readonly DecisionOption[]
+  readonly rationale: string
+  readonly votes?: readonly AdvisoryVoteInput[]
+  readonly rootNeedID?: string
+  readonly currentRound?: number
+  readonly maxRounds?: number
+}
+
+export interface RecordDecisionResult {
+  readonly decisionID: string
+  readonly selectedOptionID: string
+  readonly minutesPath: string
+  readonly advisoryTotals: Readonly<Record<string, number>>
+  readonly weightedVotes: readonly WeightedAdvisoryVote[]
+  readonly dissent: readonly WeightedAdvisoryVote[]
 }
 
 export interface EscalateInput {
@@ -586,6 +652,20 @@ function handleFailureImpl(
         depth: input.depth ?? 0,
         outcome: "failed",
       })
+      yield* AuditEvent.record({
+        rootNeedID: input.rootNeedID,
+        kind: "escalation",
+        action: "terminal_failure",
+        actorAgentID: input.agentId,
+        targetAgentID: input.agentId,
+        subjectID: msg.id,
+        subjectType: "agent_message",
+        metadata: {
+          attemptCount: input.attemptCount,
+          approachCount: input.approaches.length,
+          originalMessageId: input.originalMessageId,
+        },
+      })
       return {
         action: "terminal_failure" as const,
         reason: `Agent ${failingAgent.name} has no superior — terminal failure at top of hierarchy`,
@@ -618,6 +698,20 @@ function handleFailureImpl(
       rootNeedID: input.rootNeedID,
       depth: input.depth ?? 0,
       outcome: "escalated",
+    })
+    yield* AuditEvent.record({
+      rootNeedID: input.rootNeedID,
+      kind: "escalation",
+      action: "escalated",
+      actorAgentID: input.agentId,
+      targetAgentID: superior.id,
+      subjectID: msg.id,
+      subjectType: "agent_message",
+      metadata: {
+        attemptCount: input.attemptCount,
+        approachCount: input.approaches.length,
+        originalMessageId: input.originalMessageId,
+      },
     })
 
     return {
@@ -797,6 +891,99 @@ function saveChainReportImpl(report: FullChainReport): Effect.Effect<string> {
   })
 }
 
+function safeFilenamePart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48)
+}
+
+function saveDecisionMinutesImpl(input: {
+  decisionID: string
+  decision: RecordDecisionInput
+  driName: string
+  selectedOptionTitle: string
+  advisoryTotals: Readonly<Record<string, number>>
+  weightedVotes: readonly WeightedAdvisoryVote[]
+  dissent: readonly WeightedAdvisoryVote[]
+}): Effect.Effect<string> {
+  return Effect.gen(function* () {
+    const minutesDir = path.join(workspaceRoot(), "public", "minutes")
+    yield* Effect.promise(() => fs.mkdir(minutesDir, { recursive: true }))
+
+    const date = new Date().toISOString().split("T")[0]
+    const filename = `decision-${date}-${safeFilenamePart(input.decision.domain) || "general"}-${input.decisionID.slice(-8)}.md`
+    const filePath = path.join(minutesDir, filename)
+    const options = input.decision.options
+      .map((option) => `- ${option.id}: ${option.title} (advisory weight: ${input.advisoryTotals[option.id] ?? 0})`)
+      .join("\n")
+    const votes =
+      input.weightedVotes.length === 0
+        ? "_No advisory votes recorded._"
+        : input.weightedVotes
+            .map(
+              (vote) =>
+                `- ${vote.agentName} (${vote.agentID}) -> ${vote.optionID}, weight ${vote.weight}` +
+                (vote.rationale ? `; ${vote.rationale}` : ""),
+            )
+            .join("\n")
+    const dissent =
+      input.dissent.length === 0
+        ? "_No dissent recorded._"
+        : input.dissent
+            .map(
+              (vote) =>
+                `- ${vote.agentName} (${vote.agentID}) supported ${vote.optionID}` +
+                (vote.rationale ? `: ${vote.rationale}` : ""),
+            )
+            .join("\n")
+
+    yield* Effect.promise(() =>
+      Bun.write(
+        filePath,
+        stringifyFrontMatter(
+          {
+            scope: "org",
+            classification: "internal",
+            owner: input.decision.driAgentID,
+            updatedBy: input.decision.driAgentID,
+          },
+          [
+            `# Decision: ${input.decision.question}`,
+            "",
+            `- Decision ID: ${input.decisionID}`,
+            `- Domain: ${input.decision.domain}`,
+            `- DRI: ${input.driName} (${input.decision.driAgentID})`,
+            `- Selected: ${input.decision.selectedOptionID} — ${input.selectedOptionTitle}`,
+            `- Root need: ${input.decision.rootNeedID ?? "n/a"}`,
+            `- Debate round: ${input.decision.currentRound ?? "n/a"} / ${input.decision.maxRounds ?? "n/a"}`,
+            "",
+            "## Rationale",
+            "",
+            input.decision.rationale,
+            "",
+            "## Options",
+            "",
+            options,
+            "",
+            "## Advisory Votes",
+            "",
+            votes,
+            "",
+            "## Dissent",
+            "",
+            dissent,
+            "",
+          ].join("\n"),
+        ),
+      ),
+    )
+
+    return filePath
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Service interface
 // ---------------------------------------------------------------------------
@@ -810,6 +997,10 @@ export interface Interface {
   readonly admitResult: (input: AdmitResultInput) => Effect.Effect<AdmissionResult, Error>
   /** Grade a structured submission and create the corresponding reply message. */
   readonly submitForAdmission: (input: SubmitForAdmissionInput) => Effect.Effect<SubmitForAdmissionResult, Error>
+  /** Resolve an upward proposal; adopted proposals become executable tasks. */
+  readonly resolveProposal: (input: ResolveProposalInput) => Effect.Effect<ResolveProposalResult, Error>
+  /** Record a DRI decision with reputation-weighted advisory input and minutes. */
+  readonly recordDecision: (input: RecordDecisionInput) => Effect.Effect<RecordDecisionResult, Error>
   /** Handle admission failure: retry with a different approach or escalate to superior. */
   readonly escalate: (input: EscalateInput) => Effect.Effect<EscalateResult, Error>
   /** Low-level failure handler: returns retry instruction or escalation decision. */
@@ -834,6 +1025,9 @@ export const layer = Layer.effect(
     const agentMessageSvc = yield* AgentMessage.Service
     const companyAgentSvc = yield* CompanyAgent.Service
     const admissionSvc = yield* Admission.Service
+    const reputationSvc = yield* Reputation.Service
+    const trustDialSvc = yield* TrustDial.Service
+    const taskRegistrySvc = yield* TaskRegistry.Service
 
     // ---- decompose ----
 
@@ -1036,14 +1230,34 @@ export const layer = Layer.effect(
       const taskRating = admissionSvc.resolveRating(reviewer?.org_layer)
       const admission = yield* admissionSvc.grade(input.submission, taskRating)
       const accepted = admission.passed
+      const reputation = yield* reputationSvc.updateFromAdmission(
+        input.delegationMessage.toAgentID,
+        accepted,
+        admission.findings,
+        admission.taskRating,
+      )
+      const trust = yield* trustDialSvc.evaluate({
+        agentID: input.delegationMessage.toAgentID,
+        taskRating: admission.taskRating,
+        accepted,
+        findings: admission.findings,
+      })
       const body = accepted
         ? [
             "Admission passed.",
             "",
             `Task rating: ${admission.taskRating}`,
             `Submission kind: ${input.submission.kind}`,
+            `Trust level: ${trust.level} (${trust.score})`,
+            ...(trust.approvalRequired
+              ? [
+                  `Approval required: ${trust.minimumApprovals}`,
+                  `Reason: ${trust.reason}`,
+                ]
+              : ["Auto-admitted: yes"]),
           ].join("\n")
         : admissionSvc.buildRejectionMessage(admission)
+      const outcome = accepted ? (trust.approvalRequired ? "needs_approval" : "success") : "failed"
 
       const reply = yield* agentMessageSvc.create({
         fromAgentID: input.delegationMessage.toAgentID,
@@ -1054,10 +1268,145 @@ export const layer = Layer.effect(
         threadID: input.delegationMessage.threadID,
         rootNeedID: input.delegationMessage.rootNeedID,
         depth: input.delegationMessage.depth,
-        outcome: accepted ? "success" : "failed",
+        outcome,
+      })
+      yield* AuditEvent.record({
+        rootNeedID: input.delegationMessage.rootNeedID,
+        kind: "admission",
+        action: accepted ? (trust.approvalRequired ? "needs_approval" : "passed") : "failed",
+        actorAgentID: input.delegationMessage.fromAgentID,
+        targetAgentID: input.delegationMessage.toAgentID,
+        subjectID: reply.id,
+        subjectType: "agent_message",
+        granted: accepted && !trust.approvalRequired,
+        metadata: {
+          taskRating: admission.taskRating,
+          findingCount: admission.findings.length,
+          submissionKind: input.submission.kind,
+          delegationMessageID: input.delegationMessage.id,
+          trustLevel: trust.level,
+          approvalRequired: trust.approvalRequired,
+          minimumApprovals: trust.minimumApprovals,
+        },
       })
 
-      return { accepted, admission, reply }
+      return { accepted, admission, reply, reputation, trust }
+    })
+
+    // ---- resolveProposal ----
+
+    const resolveProposal = Effect.fn("Delegation.resolveProposal")(function* (input: ResolveProposalInput) {
+      if (input.proposalMessage.kind !== "proposal") {
+        return yield* Effect.fail(new Error(`resolveProposal: message "${input.proposalMessage.id}" is not a proposal`))
+      }
+      if (input.proposalMessage.toAgentID !== input.resolverAgentID) {
+        return yield* Effect.fail(
+          new Error(
+            `resolveProposal: agent "${input.resolverAgentID}" cannot resolve proposal "${input.proposalMessage.id}"`,
+          ),
+        )
+      }
+
+      const task =
+        input.decision === "adopt"
+          ? yield* taskRegistrySvc.create({
+              session_id: input.sessionID,
+              parent_id: input.parentTaskID,
+              owner: input.proposalMessage.fromAgentID,
+              summary:
+                input.taskSummary ??
+                input.proposalMessage.taskSummary ??
+                input.proposalMessage.body.split("\n").find((line) => line.trim().length > 0) ??
+                "Adopted proposal",
+            })
+          : undefined
+
+      const reply = yield* agentMessageSvc.create({
+        fromAgentID: input.resolverAgentID,
+        toAgentID: input.proposalMessage.fromAgentID,
+        kind: "reply",
+        body: [
+          `Proposal ${input.decision === "adopt" ? "adopted" : input.decision === "shelve" ? "shelved" : "rejected"}.`,
+          "",
+          `Reason: ${input.reason}`,
+          ...(task ? ["", `Task: ${task.id}`, `Owner: ${task.owner ?? input.proposalMessage.fromAgentID}`] : []),
+        ].join("\n"),
+        inReplyTo: input.proposalMessage.id,
+        threadID: input.proposalMessage.threadID,
+        rootNeedID: input.proposalMessage.rootNeedID,
+        depth: input.proposalMessage.depth,
+        outcome: input.decision === "adopt" ? "adopted" : input.decision,
+      })
+
+      return { decision: input.decision, reply, task }
+    })
+
+    // ---- recordDecision ----
+
+    const recordDecision = Effect.fn("Delegation.recordDecision")(function* (input: RecordDecisionInput) {
+      const agents = yield* companyAgentSvc.list()
+      const dri = agents.find((agent) => agent.id === input.driAgentID)
+      if (!dri) return yield* Effect.fail(new Error(`recordDecision: DRI agent "${input.driAgentID}" not found`))
+      if (input.options.length === 0)
+        return yield* Effect.fail(new Error("recordDecision: at least one option is required"))
+
+      const selectedOption = input.options.find((option) => option.id === input.selectedOptionID)
+      if (!selectedOption) {
+        return yield* Effect.fail(
+          new Error(`recordDecision: selected option "${input.selectedOptionID}" is not in options`),
+        )
+      }
+
+      const weightedVotes = yield* Effect.forEach(
+        input.votes ?? [],
+        (vote): Effect.Effect<WeightedAdvisoryVote, Error> =>
+          Effect.gen(function* () {
+            const voter = agents.find((agent) => agent.id === vote.agentID)
+            if (!voter) return yield* Effect.fail(new Error(`recordDecision: voter "${vote.agentID}" not found`))
+            if (!input.options.some((option) => option.id === vote.optionID)) {
+              return yield* Effect.fail(new Error(`recordDecision: vote option "${vote.optionID}" is not in options`))
+            }
+            const reputation = yield* reputationSvc.get(vote.agentID)
+            return {
+              agentID: vote.agentID,
+              agentName: voter.name,
+              optionID: vote.optionID,
+              rationale: vote.rationale,
+              reputationScore: reputation.score,
+              weight: Math.max(1, reputation.score),
+            }
+          }),
+        { concurrency: "unbounded" },
+      )
+      const advisoryTotals = Object.fromEntries(
+        input.options.map((option) => [
+          option.id,
+          weightedVotes
+            .filter((vote) => vote.optionID === option.id)
+            .map((vote) => vote.weight)
+            .reduce((total, weight) => total + weight, 0),
+        ]),
+      )
+      const dissent = weightedVotes.filter((vote) => vote.optionID !== input.selectedOptionID)
+      const decisionID = Identifier.create("dec", "ascending")
+      const minutesPath = yield* saveDecisionMinutesImpl({
+        decisionID,
+        decision: input,
+        driName: dri.name,
+        selectedOptionTitle: selectedOption.title,
+        advisoryTotals,
+        weightedVotes,
+        dissent,
+      })
+
+      return {
+        decisionID,
+        selectedOptionID: input.selectedOptionID,
+        minutesPath,
+        advisoryTotals,
+        weightedVotes,
+        dissent,
+      }
     })
 
     // ---- escalate ----
@@ -1230,6 +1579,8 @@ export const layer = Layer.effect(
       delegateSubtasks,
       admitResult,
       submitForAdmission,
+      resolveProposal,
+      recordDecision,
       escalate,
       handleFailure: (input) => handleFailureImpl(input, companyAgentSvc, agentMessageSvc),
       evaluateFailureBubble: (input) => evaluateFailureBubbleImpl(input, companyAgentSvc, agentMessageSvc),
@@ -1247,6 +1598,8 @@ export const defaultLayer = Layer.suspend(() =>
   layer.pipe(
     Layer.provide(AgentMessage.defaultLayer),
     Layer.provide(Admission.defaultLayer),
+    Layer.provide(Reputation.defaultLayer),
+    Layer.provide(TrustDial.defaultLayer),
     Layer.provide(CompanyAgent.defaultLayer),
     Layer.provide(TaskRegistry.defaultLayer),
   ),

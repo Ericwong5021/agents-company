@@ -15,6 +15,7 @@ import z from "zod"
 
 import { CompanyAgentTable } from "../company-agent/company-agent.sql"
 import { AgentMessageTable } from "../agent-message/agent-message.sql"
+import { AuditEventTable } from "../audit-event/audit-event.sql"
 import { ThreadTable } from "../thread/thread.sql"
 import { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"
 import { ExternalImportTable } from "../session/external-import.sql"
@@ -79,6 +80,7 @@ export type UpdateInput = z.infer<typeof UpdateInput>
 
 const COMPANY_TABLES = [
   AgentMessageTable,
+  AuditEventTable,
   GroupMessageTable,
   GroupSessionMemberTable,
   GroupSessionTable,
@@ -101,6 +103,7 @@ const COMPANY_TABLES = [
 // Tables to wipe without company_id filtering (everything except SessionTable).
 const OTHER_TABLES = [
   AgentMessageTable,
+  AuditEventTable,
   GroupMessageTable,
   GroupSessionMemberTable,
   GroupSessionTable,

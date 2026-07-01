@@ -93,13 +93,13 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # 收集所有平台包名，构造 optionalDependencies
-          OPT_DEPS=""
+          PLATFORM_NAMES=""
           for dir in dist/agentcompany-*/; do
             name=$(basename "$dir")
-            [ -n "$OPT_DEPS" ] && OPT_DEPS="$OPT_DEPS,"
-            OPT_DEPS="$OPT_DEPS\"@agents-company/$name\": \"$VERSION\""
+            PLATFORM_NAMES="$PLATFORM_NAMES $name"
           done
+          export VERSION
+          export PLATFORM_NAMES
 
           # 创建发布用目录
           mkdir -p dist/cli/bin
@@ -107,41 +107,103 @@ jobs:
           # 复制入口脚本（重命名 .cjs 避免 ESM 模式下的 require 错误）
           cp bin/agents dist/cli/bin/agents.cjs
           chmod +x dist/cli/bin/agents.cjs
+          cp postinstall.cjs dist/cli/postinstall.cjs
 
           # 生成发布用的 package.json
-          cat > dist/cli/package.json << EOF
-          {
-            "name": "@agents-company/cli",
-            "version": "$VERSION",
-            "description": "Agent Company CLI — AI-powered development tool",
-            "type": "commonjs",
-            "license": "MIT",
-            "author": "Agents Company Team",
-            "repository": {
-              "type": "git",
-              "url": "git+https://github.com/Ericwong5021/agents-company.git"
-            },
-            "keywords": ["ai", "coding", "agent", "cli", "agents-company"],
-            "bin": {
-              "agents": "./bin/agents.cjs"
-            },
-            "files": [
-              "bin",
-              "README.md"
-            ],
-            "optionalDependencies": {
-              $OPT_DEPS
-            },
-            "publishConfig": {
-              "access": "public"
-            }
-          }
-          EOF
+          node <<'NODE'
+          const fs = require("fs")
+          const platformNames = process.env.PLATFORM_NAMES.trim().split(/\s+/).filter(Boolean).sort()
+          if (!platformNames.length) throw new Error("No platform packages found in dist/agentcompany-*")
 
-          # 复制 README（使用 npm 版 README）
-          cp ../../README_npm.md dist/cli/README.md || cp README.md dist/cli/
+          fs.writeFileSync(
+            "dist/cli/package.json",
+            JSON.stringify(
+              {
+                name: "@agents-company/cli",
+                version: process.env.VERSION,
+                description: "Agent Company CLI - run an AI company from your terminal",
+                type: "commonjs",
+                license: "Apache-2.0",
+                author: "Agents Company Team",
+                homepage: "https://github.com/Ericwong5021/agents-company#readme",
+                repository: {
+                  type: "git",
+                  url: "git+https://github.com/Ericwong5021/agents-company.git",
+                  directory: "packages/opencode",
+                },
+                bugs: {
+                  url: "https://github.com/Ericwong5021/agents-company/issues",
+                },
+                keywords: [
+                  "ai",
+                  "agent",
+                  "agents",
+                  "agents-company",
+                  "cli",
+                  "coding",
+                  "developer-tools",
+                  "terminal",
+                  "tui",
+                ],
+                bin: {
+                  agents: "./bin/agents.cjs",
+                },
+                scripts: {
+                  postinstall: "node postinstall.cjs",
+                },
+                files: ["bin", "postinstall.cjs", "README.md", "LICENSE"],
+                optionalDependencies: Object.fromEntries(
+                  platformNames.map((name) => [`@agents-company/${name}`, process.env.VERSION]),
+                ),
+                publishConfig: {
+                  access: "public",
+                },
+              },
+              null,
+              2,
+            ),
+          )
+          NODE
+
+          # 复制 README 和 LICENSE
+          cp ../../README_npm.md dist/cli/README.md
+          cp ../../LICENSE dist/cli/LICENSE
+
+          # 发布前校验 npm 包内容，防止模板 README、错误许可证或缺文件进入 npm
+          cd dist/cli
+          npm pack --dry-run --json > pack.json
+          node <<'NODE'
+          const fs = require("fs")
+
+          const pkg = require("./package.json")
+          const readme = fs.readFileSync("README.md", "utf8")
+          const license = fs.readFileSync("LICENSE", "utf8")
+          const pack = JSON.parse(fs.readFileSync("pack.json", "utf8"))[0]
+          const files = new Set(pack.files.map((file) => file.path))
+          const platformCount = process.env.PLATFORM_NAMES.trim().split(/\s+/).filter(Boolean).length
+
+          function assert(condition, message) {
+            if (!condition) throw new Error(message)
+          }
+
+          assert(readme.length > 5000, "README.md must be larger than 5KB")
+          assert(!/Bun init|bun init/i.test(readme), "README.md still looks like a Bun init template")
+          assert(license.includes("Apache License") && license.includes("Version 2.0"), "LICENSE must be Apache License 2.0")
+          assert(pkg.description === "Agent Company CLI - run an AI company from your terminal", "description is not release-ready")
+          assert(pkg.license === "Apache-2.0", "license field must be Apache-2.0")
+          assert(pkg.repository?.url && pkg.repository?.directory, "repository metadata must include url and directory")
+          assert(pkg.homepage, "homepage is required")
+          assert(pkg.bugs?.url, "bugs.url is required")
+          assert(Array.isArray(pkg.keywords) && pkg.keywords.length >= 5, "keywords are required")
+          assert(pkg.bin?.agents === "./bin/agents.cjs", "bin.agents must point to ./bin/agents.cjs")
+          assert(pkg.scripts?.postinstall === "node postinstall.cjs", "postinstall script is required")
+          assert(Object.keys(pkg.optionalDependencies || {}).length === platformCount, "optionalDependencies must match built platform packages")
+          assert(files.has("README.md"), "README.md missing from npm pack")
+          assert(files.has("LICENSE"), "LICENSE missing from npm pack")
+          assert(files.has("bin/agents.cjs"), "bin/agents.cjs missing from npm pack")
+          assert(files.has("postinstall.cjs"), "postinstall.cjs missing from npm pack")
+          NODE
 
           # 发布
-          cd dist/cli
           npm publish --access public
           echo "Published @agents-company/cli@$VERSION"

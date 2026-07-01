@@ -1,7 +1,7 @@
 // The recruit skill seeded into each co-founder's private skills/ folder during
 // onboarding. It carries the *judgment* (when to hire, which role, how to brief)
 // while the `recruit` tool carries the action. Kept as a string so onboarding can
-// write it to <data>/agents/<id>/skills/recruit-teammate/SKILL.md.
+// write it to <data>/workspace/agents/<id>/skills/recruit-teammate/SKILL.md.
 export const COFOUNDER_RECRUIT_SKILL = `---
 name: recruit-teammate
 description: Bring a new specialist into the company once the direction is settled and a concrete capability gap appears. Use when you find yourself wishing a real expert (engineer, designer, growth lead, etc.) were on the team to take the next step.

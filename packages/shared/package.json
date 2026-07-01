@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "name": "@agents-company/shared",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

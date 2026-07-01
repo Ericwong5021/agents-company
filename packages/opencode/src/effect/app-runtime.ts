@@ -49,6 +49,7 @@ import { Pty } from "@/pty"
 import { Installation } from "@/installation"
 import { ShareNext } from "@/share"
 import { AgentMessage } from "@/agent-message/agent-message"
+import { AuditEvent } from "@/audit-event/audit-event"
 import { SessionShare } from "@/share"
 import { Npm } from "@/npm"
 import { ActorRegistry } from "@/actor/registry"
@@ -63,6 +64,8 @@ import { GroupSession } from "@/group-session"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
 import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
+import { TokenGovernance } from "@/token-governance/token-governance"
+import { TrustDial } from "@/trust-dial/trust-dial"
 import * as BashInteractive from "@/tool/bash-interactive"
 import { memoMap } from "./memo-map"
 
@@ -129,8 +132,11 @@ export const AppLayer = Layer.suspend(() =>
     GroupSession.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
+    AuditEvent.defaultLayer,
     Org.defaultLayer,
     ReputationLayer,
+    TokenGovernance.defaultLayer,
+    TrustDial.defaultLayer,
   ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
 )
 

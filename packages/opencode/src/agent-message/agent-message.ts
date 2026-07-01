@@ -7,6 +7,7 @@ import { AgentMessageID, AgentMessageKind } from "./schema"
 import { Identifier } from "@/id/id"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
+import { AuditEvent } from "@/audit-event/audit-event"
 
 // ---------------------------------------------------------------------------
 // Info schema
@@ -60,6 +61,18 @@ export const ListByAgentOpts = z.object({
 })
 export type ListByAgentOpts = z.infer<typeof ListByAgentOpts>
 
+export const ListPendingApprovalsOpts = z.object({
+  limit: z.number().int().positive().optional(),
+})
+export type ListPendingApprovalsOpts = z.infer<typeof ListPendingApprovalsOpts>
+
+export const UpdateOutcomeInput = z.object({
+  id: z.string().min(1),
+  outcome: z.string().min(1),
+  read: z.boolean().optional(),
+})
+export type UpdateOutcomeInput = z.infer<typeof UpdateOutcomeInput>
+
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
@@ -105,7 +118,9 @@ export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: string) => Effect.Effect<Info | undefined>
   readonly updateSpawnedIssue: (id: string, spawnedIssueID: string) => Effect.Effect<Info>
+  readonly updateOutcome: (input: UpdateOutcomeInput) => Effect.Effect<Info>
   readonly listByAgent: (agentId: string, opts?: ListByAgentOpts) => Effect.Effect<Info[]>
+  readonly listPendingApprovals: (opts?: ListPendingApprovalsOpts) => Effect.Effect<Info[]>
   readonly listByRootNeed: (rootNeedId: string) => Effect.Effect<Info[]>
   readonly markRead: (id: string) => Effect.Effect<Info>
   readonly getByThread: (threadId: string) => Effect.Effect<Info[]>
@@ -154,6 +169,21 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       )
       if (!row) yield* Effect.die(new Error(`AgentMessage.create: insert failed for id="${id}"`))
       const info = fromRow(row!)
+      yield* AuditEvent.record({
+        rootNeedID: info.rootNeedID,
+        kind: "message",
+        action: info.kind,
+        actorAgentID: info.fromAgentID,
+        targetAgentID: info.toAgentID,
+        subjectID: info.id,
+        subjectType: "agent_message",
+        metadata: {
+          threadID: info.threadID,
+          depth: info.depth,
+          outcome: info.outcome,
+          inReplyTo: info.inReplyTo,
+        },
+      })
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
@@ -207,6 +237,42 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return rows.map(fromRow)
     })
 
+    const listPendingApprovals = Effect.fn("AgentMessage.listPendingApprovals")(function* (
+      opts?: ListPendingApprovalsOpts,
+    ) {
+      const rows = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(AgentMessageTable)
+            .where(and(eq(AgentMessageTable.kind, "reply"), eq(AgentMessageTable.outcome, "needs_approval")))
+            .orderBy(desc(AgentMessageTable.time_created))
+            .limit(opts?.limit ?? 100)
+            .all(),
+        ),
+      )
+      return rows.map(fromRow)
+    })
+
+    const updateOutcome = Effect.fn("AgentMessage.updateOutcome")(function* (input: UpdateOutcomeInput) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(AgentMessageTable)
+            .set({
+              outcome: input.outcome,
+              read: input.read ?? true,
+              time_updated: Date.now(),
+            })
+            .where(eq(AgentMessageTable.id, input.id))
+            .returning()
+            .get(),
+        ),
+      )
+      if (!row) yield* Effect.die(new Error(`AgentMessage.updateOutcome: not found id="${input.id}"`))
+      return fromRow(row!)
+    })
+
     const markRead = Effect.fn("AgentMessage.markRead")(function* (id: string) {
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
@@ -257,7 +323,17 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return rows.map(fromRow)
     })
 
-    return { create, get, updateSpawnedIssue, listByAgent, listByRootNeed, markRead, getByThread }
+    return {
+      create,
+      get,
+      updateSpawnedIssue,
+      updateOutcome,
+      listByAgent,
+      listPendingApprovals,
+      listByRootNeed,
+      markRead,
+      getByThread,
+    }
   }),
 )
 

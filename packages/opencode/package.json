@@ -2,8 +2,30 @@
   "$schema": "https://json.schemastore.org/package.json",
   "version": "0.1.2",
   "name": "@agents-company/cli",
+  "description": "Agent Company CLI - run an AI company from your terminal",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "author": "Agents Company Team",
+  "homepage": "https://github.com/Ericwong5021/agents-company#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ericwong5021/agents-company.git",
+    "directory": "packages/opencode"
+  },
+  "bugs": {
+    "url": "https://github.com/Ericwong5021/agents-company/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "agents",
+    "agents-company",
+    "cli",
+    "coding",
+    "developer-tools",
+    "terminal",
+    "tui"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -25,6 +47,12 @@
   "bin": {
     "agents": "./bin/agents"
   },
+  "files": [
+    "bin",
+    "postinstall.cjs",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     "./*": "./src/*.ts"
   },

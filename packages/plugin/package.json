@@ -5,7 +5,7 @@
   "description": "Plugin SDK for extending Agent Company",
   "keywords": ["agent-company", "ai", "plugin", "coding-assistant"],
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Xiaomi MiMo Team",
   "homepage": "https://mimo.xiaomi.com/coder",
   "repository": {
