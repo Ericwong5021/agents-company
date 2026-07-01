@@ -18,6 +18,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
+function rewriteRefs(value: unknown) {
+  if (!isRecord(value)) return
+  if (typeof value.$ref === "string" && value.$ref.startsWith("#/$defs/")) {
+    value.$ref = value.$ref.replace("#/$defs/", "#/components/schemas/")
+  }
+  Object.values(value).map(rewriteRefs)
+}
+
 function promoteLocalDefs(value: unknown) {
   if (!isRecord(value)) return
 
@@ -37,6 +45,7 @@ function promoteLocalDefs(value: unknown) {
 }
 
 promoteLocalDefs(openapi)
+rewriteRefs(openapi)
 await Bun.write(openapiPath, JSON.stringify(openapi, null, 2))
 
 await createClient({
