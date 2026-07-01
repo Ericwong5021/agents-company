@@ -1,0 +1,32 @@
+name: package-check
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build temporary platform package
+        working-directory: packages/opencode
+        env:
+          AGENTCOMPANY_VERSION: 0.0.0-package-check
+          AGENTCOMPANY_CHANNEL: latest
+        run: bun run script/build.ts --single --skip-install
+
+      - name: Prepare and validate CLI package
+        working-directory: packages/opencode
+        run: bun run script/prepare-npm-package.ts --version 0.0.0-package-check
