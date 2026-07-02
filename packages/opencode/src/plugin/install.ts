@@ -331,7 +331,9 @@ export async function readPluginManifest(target: string): Promise<ManifestResult
 }
 
 function patchDir(input: PatchInput) {
-  return input.config ?? Global.Path.config
+  if (input.config) return input.config
+  if (input.global) return Global.Path.config
+  return path.join(input.vcs === "git" && input.worktree !== "/" ? input.worktree : input.directory, ".agentcompany")
 }
 
 function patchName(kind: Kind): "agent-company" | "tui" {

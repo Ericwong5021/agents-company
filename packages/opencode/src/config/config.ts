@@ -794,10 +794,14 @@ export const layer = Layer.effect(
           log.debug("loaded custom config", { path: Flag.AGENTCOMPANY_CONFIG })
         }
 
-        if (!Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG) {
-          for (const file of yield* ConfigPaths.files("agent-company", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
-            yield* merge(file, yield* loadFile(file), "local")
-          }
+        const globalConfigFiles = new Set([
+          ...ConfigPaths.fileInDirectory(Global.Path.config, "agent-company"),
+          ...(Flag.AGENTCOMPANY_CONFIG_DIR
+            ? ConfigPaths.fileInDirectory(Flag.AGENTCOMPANY_CONFIG_DIR, "agent-company")
+            : []),
+        ])
+        for (const file of yield* ConfigPaths.files("agent-company", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
+          yield* merge(file, yield* loadFile(file), globalConfigFiles.has(file) ? "global" : "local")
         }
 
         result.agent = result.agent || {}
@@ -818,7 +822,7 @@ export const layer = Layer.effect(
         }
 
         for (const dir of directories) {
-          if (ConfigPaths.isLocalConfigDir(dir) || dir === Flag.AGENTCOMPANY_CONFIG_DIR) {
+          if (!ConfigPaths.isLocalConfigDir(dir)) {
             for (const file of ["agent-company.json", "agent-company.jsonc"]) {
               const source = path.join(dir, file)
               log.debug(`loading config from ${source}`)
@@ -829,30 +833,32 @@ export const layer = Layer.effect(
             }
           }
 
-          yield* ensureGitignore(dir).pipe(Effect.orDie)
+          if (ConfigPaths.isLocalConfigDir(dir)) {
+            yield* ensureGitignore(dir).pipe(Effect.orDie)
 
-          const dep = yield* npmSvc
-            .install(dir, {
-              add: [
-                {
-                  name: "@agents-company/plugin",
-                  version: InstallationLocal ? undefined : InstallationVersion,
-                },
-              ],
-            })
-            .pipe(
-              Effect.exit,
-              Effect.tap((exit) =>
-                Exit.isFailure(exit)
-                  ? Effect.sync(() => {
-                      log.warn("background dependency install failed", { dir, error: String(exit.cause) })
-                    })
-                  : Effect.void,
-              ),
-              Effect.asVoid,
-              Effect.forkDetach,
-            )
-          deps.push(dep)
+            const dep = yield* npmSvc
+              .install(dir, {
+                add: [
+                  {
+                    name: "@agents-company/plugin",
+                    version: InstallationLocal ? undefined : InstallationVersion,
+                  },
+                ],
+              })
+              .pipe(
+                Effect.exit,
+                Effect.tap((exit) =>
+                  Exit.isFailure(exit)
+                    ? Effect.sync(() => {
+                        log.warn("background dependency install failed", { dir, error: String(exit.cause) })
+                      })
+                    : Effect.void,
+                ),
+                Effect.asVoid,
+                Effect.forkDetach,
+              )
+            deps.push(dep)
+          }
 
           result.command = mergeDeep(result.command ?? {}, yield* Effect.promise(() => ConfigCommand.load(dir)))
           result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.load(dir)))

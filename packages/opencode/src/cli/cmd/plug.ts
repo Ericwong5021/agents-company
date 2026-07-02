@@ -140,7 +140,7 @@ export function createPlugTask(input: PlugInput, dep: PlugDeps = defaultPlugDeps
         vcs: ctx.vcs,
         worktree: ctx.worktree,
         directory: ctx.directory,
-        config: dep.global,
+        config: global ? dep.global : undefined,
       },
       dep,
     )

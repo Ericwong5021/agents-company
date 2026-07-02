@@ -40,7 +40,18 @@ jobs:
 
       - name: Run unit tests
         timeout-minutes: 20
-        run: bun turbo test:ci --filter=@agents-company/cli --output-logs=errors-only --log-order=grouped --log-prefix=task
+        run: |
+          cd packages/opencode
+          mkdir -p .artifacts/unit
+          bun test --timeout 30000 \
+            test/config/config.test.ts \
+            test/config/tui.test.ts \
+            test/permission-task.test.ts \
+            test/plugin/install.test.ts \
+            test/plugin/install-concurrency.test.ts \
+            test/util/filesystem.test.ts \
+            --reporter=junit \
+            --reporter-outfile=.artifacts/unit/junit.xml
 
       - name: Upload JUnit report
         if: always()

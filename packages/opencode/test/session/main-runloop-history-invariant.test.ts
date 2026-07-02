@@ -70,7 +70,7 @@ describe("main runLoop history monotonic-growth invariant", () => {
       // Populate the tmp dir now that we have stub.origin.
       await Bun.write(readmePath, "# Hello\n")
       await Bun.write(
-        path.join(tmp.path, "agentcompany.json"),
+        path.join(tmp.path, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           enabled_providers: ["alibaba"],
@@ -136,7 +136,7 @@ describe("main runLoop history monotonic-growth invariant", () => {
 
     try {
       await Bun.write(
-        path.join(tmp.path, "agentcompany.json"),
+        path.join(tmp.path, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           enabled_providers: ["alibaba"],

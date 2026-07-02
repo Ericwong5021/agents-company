@@ -9,21 +9,29 @@ import { JsonError } from "./error"
 import * as Effect from "effect/Effect"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
 
-export const directories = Effect.fn("ConfigPaths.directories")(function* (_directory: string, _worktree?: string) {
+export const directories = Effect.fn("ConfigPaths.directories")(function* (directory: string, worktree?: string) {
+  const start = Filesystem.normalizePath(directory)
+  const stop = worktree ? path.dirname(Filesystem.normalizePath(worktree)) : undefined
   return unique([
     Global.Path.config,
     ...(Flag.AGENTCOMPANY_CONFIG_DIR ? [Flag.AGENTCOMPANY_CONFIG_DIR] : []),
+    ...(!Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG
+      ? yield* Effect.promise(() => Filesystem.findUp(".agentcompany", start, stop, { rootFirst: true }))
+      : []),
   ])
 })
 
-export const files = Effect.fn("ConfigPaths.files")(function* (
-  name: string,
-  _directory?: string,
-  _worktree?: string,
-) {
+export const files = Effect.fn("ConfigPaths.files")(function* (name: string, directory?: string, worktree?: string) {
+  const start = directory ? Filesystem.normalizePath(directory) : undefined
+  const stop = worktree ? path.dirname(Filesystem.normalizePath(worktree)) : undefined
   return [
     ...fileInDirectory(Global.Path.config, name),
     ...(Flag.AGENTCOMPANY_CONFIG_DIR ? fileInDirectory(Flag.AGENTCOMPANY_CONFIG_DIR, name) : []),
+    ...(!Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG && start
+      ? yield* Effect.promise(() =>
+          Filesystem.findUp([`${name}.json`, `${name}.jsonc`], start, stop, { rootFirst: true }),
+        )
+      : []),
   ]
 })
 

@@ -75,12 +75,12 @@ afterEach(async () => {
   await clear(true)
 })
 
-async function writeManagedSettings(settings: object, filename = "agentcompany.json") {
+async function writeManagedSettings(settings: object, filename = "agent-company.json") {
   await fs.mkdir(managedConfigDir, { recursive: true })
   await Filesystem.write(path.join(managedConfigDir, filename), JSON.stringify(settings))
 }
 
-async function writeConfig(dir: string, config: object, name = "agentcompany.json") {
+async function writeConfig(dir: string, config: object, name = "agent-company.json") {
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
 
@@ -337,7 +337,7 @@ test("loads JSONC config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.jsonc"),
+        path.join(dir, "agent-company.jsonc"),
         `{
         // This is a comment
         "$schema": "https://opencode.ai/config.json",
@@ -367,7 +367,7 @@ test("jsonc overrides json in the same directory", async () => {
           model: "base",
           username: "base",
         },
-        "agentcompany.jsonc",
+        "agent-company.jsonc",
       )
       await writeConfig(dir, {
         $schema: "https://opencode.ai/config.json",
@@ -423,7 +423,7 @@ test("preserves env variables when adding $schema to config", async () => {
       init: async (dir) => {
         // Config without $schema - should trigger auto-add
         await Filesystem.write(
-          path.join(dir, "agentcompany.json"),
+          path.join(dir, "agent-company.json"),
           JSON.stringify({
             username: "{env:PRESERVE_VAR}",
           }),
@@ -437,7 +437,7 @@ test("preserves env variables when adding $schema to config", async () => {
         expect(config.username).toBe("secret_value")
 
         // Read the file to verify the env variable was preserved
-        const content = await Filesystem.readText(path.join(tmp.path, "agentcompany.json"))
+        const content = await Filesystem.readText(path.join(tmp.path, "agent-company.json"))
         expect(content).toContain("{env:PRESERVE_VAR}")
         expect(content).not.toContain("secret_value")
         expect(content).toContain("$schema")
@@ -575,7 +575,7 @@ test("validates config schema and throws on invalid fields", async () => {
 test("throws error for invalid JSON", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Filesystem.write(path.join(dir, "agentcompany.json"), "{ invalid json }")
+      await Filesystem.write(path.join(dir, "agent-company.json"), "{ invalid json }")
     },
   })
   await Instance.provide({
@@ -679,7 +679,7 @@ test("migrates autoshare to share field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           autoshare: true,
@@ -701,7 +701,7 @@ test("migrates mode field to agent field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mode: {
@@ -1118,7 +1118,7 @@ test("resolves scoped npm plugins in config", async () => {
       await Filesystem.write(path.join(pluginDir, "index.js"), "export default {}\n")
 
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: ["@scope/plugin"] }, null, 2),
       )
     },
@@ -1144,7 +1144,7 @@ test("merges plugin arrays from global and local configs", async () => {
 
       // Global config with plugins
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["global-plugin-1", "global-plugin-2"],
@@ -1153,7 +1153,7 @@ test("merges plugin arrays from global and local configs", async () => {
 
       // Local .agentcompany config with different plugins
       await Filesystem.write(
-        path.join(opencodeDir, "agentcompany.json"),
+        path.join(opencodeDir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["local-plugin-1"],
@@ -1220,7 +1220,7 @@ test("merges instructions arrays from global and local configs", async () => {
       await fs.mkdir(opencodeDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["global-instructions.md", "shared-rules.md"],
@@ -1228,7 +1228,7 @@ test("merges instructions arrays from global and local configs", async () => {
       )
 
       await Filesystem.write(
-        path.join(opencodeDir, "agentcompany.json"),
+        path.join(opencodeDir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["local-instructions.md"],
@@ -1259,7 +1259,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
       await fs.mkdir(opencodeDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["duplicate.md", "global-only.md"],
@@ -1267,7 +1267,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
       )
 
       await Filesystem.write(
-        path.join(opencodeDir, "agentcompany.json"),
+        path.join(opencodeDir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["duplicate.md", "local-only.md"],
@@ -1303,7 +1303,7 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
 
       // Global config with plugins
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["duplicate-plugin", "global-plugin-1"],
@@ -1312,7 +1312,7 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
 
       // Local .agentcompany config with some overlapping plugins
       await Filesystem.write(
-        path.join(opencodeDir, "agentcompany.json"),
+        path.join(opencodeDir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["duplicate-plugin", "local-plugin-1"],
@@ -1353,7 +1353,7 @@ test("keeps plugin origins aligned with merged plugin list", async () => {
       await fs.mkdir(local, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: [["shared-plugin@1.0.0", { source: "global" }], "global-only@1.0.0"],
@@ -1361,7 +1361,7 @@ test("keeps plugin origins aligned with merged plugin list", async () => {
       )
 
       await Filesystem.write(
-        path.join(local, "agentcompany.json"),
+        path.join(local, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: [["shared-plugin@2.0.0", { source: "local" }], "local-only@1.0.0"],
@@ -1396,7 +1396,7 @@ test("migrates legacy tools config to permissions - allow", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1427,7 +1427,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1458,7 +1458,7 @@ test("migrates legacy write tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1565,7 +1565,7 @@ test("migrates legacy edit tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1594,7 +1594,7 @@ test("migrates legacy patch tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1623,7 +1623,7 @@ test("migrates legacy multiedit tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1652,7 +1652,7 @@ test("migrates mixed legacy tools config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1687,7 +1687,7 @@ test("merges legacy tools with existing permission config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1720,7 +1720,7 @@ test("permission config preserves key order", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           permission: {
@@ -1766,7 +1766,7 @@ test("project config can override MCP server enabled status", async () => {
     init: async (dir) => {
       // Simulates a base config (like from remote .well-known) with disabled MCP
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1785,7 +1785,7 @@ test("project config can override MCP server enabled status", async () => {
       )
       // Project config enables just jira
       await Filesystem.write(
-        path.join(dir, "agentcompany.jsonc"),
+        path.join(dir, "agent-company.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1824,7 +1824,7 @@ test("MCP config deep merges preserving base config properties", async () => {
     init: async (dir) => {
       // Base config with full MCP definition
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1841,7 +1841,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       )
       // Override just enables it, should preserve other properties
       await Filesystem.write(
-        path.join(dir, "agentcompany.jsonc"),
+        path.join(dir, "agent-company.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1876,7 +1876,7 @@ test("local .agentcompany config can override MCP from project config", async ()
     init: async (dir) => {
       // Project config with disabled MCP
       await Filesystem.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1892,7 +1892,7 @@ test("local .agentcompany config can override MCP from project config", async ()
       const opencodeDir = path.join(dir, ".agentcompany")
       await fs.mkdir(opencodeDir, { recursive: true })
       await Filesystem.write(
-        path.join(opencodeDir, "agentcompany.json"),
+        path.join(opencodeDir, "agent-company.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -2030,7 +2030,7 @@ test("wellknown URL with trailing slash is normalized", async () => {
 describe("resolvePluginSpec", () => {
   test("keeps package specs unchanged", async () => {
     await using tmp = await tmpdir()
-    const file = path.join(tmp.path, "agentcompany.json")
+    const file = path.join(tmp.path, "agent-company.json")
     expect(await ConfigPlugin.resolvePluginSpec("oh-my-opencode@2.4.3", file)).toBe("oh-my-opencode@2.4.3")
     expect(await ConfigPlugin.resolvePluginSpec("@scope/pkg", file)).toBe("@scope/pkg")
   })
@@ -2046,7 +2046,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "agentcompany.json")
+    const file = path.join(tmp.path, "agent-company.json")
     const hit = await ConfigPlugin.resolvePluginSpec(".\\plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin", "index.ts")).href)
   })
@@ -2058,7 +2058,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "agentcompany.json")
+    const file = path.join(tmp.path, "agent-company.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin.ts", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin.ts")).href)
   })
@@ -2077,7 +2077,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "agentcompany.json")
+    const file = path.join(tmp.path, "agent-company.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin")).href)
   })
@@ -2091,7 +2091,7 @@ describe("resolvePluginSpec", () => {
       },
     })
 
-    const file = path.join(tmp.path, "agentcompany.json")
+    const file = path.join(tmp.path, "agent-company.json")
     const hit = await ConfigPlugin.resolvePluginSpec("./plugin", file)
     expect(ConfigPlugin.pluginSpecifier(hit)).toBe(pathToFileURL(path.join(tmp.path, "plugin", "index.ts")).href)
   })
@@ -2152,7 +2152,7 @@ describe("deduplicatePluginOrigins", () => {
         await fs.mkdir(pluginDir, { recursive: true })
 
         await Filesystem.write(
-          path.join(dir, "agentcompany.json"),
+          path.join(dir, "agent-company.json"),
           JSON.stringify({
             $schema: "https://opencode.ai/config.json",
             plugin: ["my-plugin@1.0.0"],
@@ -2186,7 +2186,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         init: async (dir) => {
           // Create a project config that would normally be loaded
           await Filesystem.write(
-            path.join(dir, "agentcompany.json"),
+            path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "project/model",
@@ -2281,7 +2281,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         init: async (dir) => {
           // Create a config with relative instruction path
           await Filesystem.write(
-            path.join(dir, "agentcompany.json"),
+            path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               instructions: ["./CUSTOM.md"],
@@ -2327,7 +2327,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         init: async (dir) => {
           // Create config in the custom config dir
           await Filesystem.write(
-            path.join(dir, "agentcompany.json"),
+            path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "configdir/model",
@@ -2340,7 +2340,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         init: async (dir) => {
           // Create config in project (should be ignored)
           await Filesystem.write(
-            path.join(dir, "agentcompany.json"),
+            path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "project/model",

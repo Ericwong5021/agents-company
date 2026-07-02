@@ -95,14 +95,17 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
   const directories = yield* ConfigPaths.directories(ctx.directory)
   yield* Effect.promise(() => migrateTuiConfig({ directories, cwd: ctx.directory }))
 
-  const projectFiles = Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG ? [] : yield* ConfigPaths.files("tui", ctx.directory)
+  const globalFiles = ConfigPaths.fileInDirectory(Global.Path.config, "tui")
+  const projectFiles = Flag.AGENTCOMPANY_DISABLE_PROJECT_CONFIG
+    ? []
+    : (yield* ConfigPaths.files("tui", ctx.directory)).filter((file) => !globalFiles.includes(file))
 
   const acc: Acc = {
     result: {},
   }
 
   // 1. Global tui config (lowest precedence).
-  for (const file of ConfigPaths.fileInDirectory(Global.Path.config, "tui")) {
+  for (const file of globalFiles) {
     yield* Effect.promise(() => mergeFile(acc, file, ctx)).pipe(Effect.orDie)
   }
 
@@ -121,10 +124,10 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
   // 4. Local config directories (and AGENTCOMPANY_CONFIG_DIR) discovered while
   // walking up the tree. Also returned below so callers can install plugin
   // dependencies from each location.
-  const dirs = unique(directories).filter((dir) => ConfigPaths.isLocalConfigDir(dir) || dir === Flag.AGENTCOMPANY_CONFIG_DIR)
+  const dirs = unique(directories)
+  const projectDirs = dirs.filter((dir) => !ConfigPaths.isLocalConfigDir(dir))
 
-  for (const dir of dirs) {
-    if (!ConfigPaths.isLocalConfigDir(dir) && dir !== Flag.AGENTCOMPANY_CONFIG_DIR) continue
+  for (const dir of projectDirs) {
     for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
       yield* Effect.promise(() => mergeFile(acc, file, ctx)).pipe(Effect.orDie)
     }

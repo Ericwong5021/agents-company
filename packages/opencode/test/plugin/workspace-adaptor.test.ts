@@ -63,7 +63,7 @@ describe("plugin.workspace", () => {
         )
 
         await Bun.write(
-          path.join(dir, "agentcompany.json"),
+          path.join(dir, "agent-company.json"),
           JSON.stringify(
             {
               $schema: "https://opencode.ai/config.json",

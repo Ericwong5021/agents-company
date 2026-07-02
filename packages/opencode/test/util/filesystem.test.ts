@@ -154,20 +154,20 @@ describe("filesystem", () => {
       const nested = path.join(project, "nested")
       await fs.mkdir(nested, { recursive: true })
 
-      await fs.writeFile(path.join(tmp.path, "agentcompany.json"), "{}", "utf-8")
-      await fs.writeFile(path.join(tmp.path, "agentcompany.jsonc"), "{}", "utf-8")
-      await fs.writeFile(path.join(project, "agentcompany.json"), "{}", "utf-8")
-      await fs.writeFile(path.join(project, "agentcompany.jsonc"), "{}", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "agent-company.json"), "{}", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "agent-company.jsonc"), "{}", "utf-8")
+      await fs.writeFile(path.join(project, "agent-company.json"), "{}", "utf-8")
+      await fs.writeFile(path.join(project, "agent-company.jsonc"), "{}", "utf-8")
 
-      const result = await Filesystem.findUp(["agentcompany.json", "agentcompany.jsonc"], nested, tmp.path, {
+      const result = await Filesystem.findUp(["agent-company.json", "agent-company.jsonc"], nested, tmp.path, {
         rootFirst: true,
       })
 
       expect(result).toEqual([
-        path.join(tmp.path, "agentcompany.json"),
-        path.join(tmp.path, "agentcompany.jsonc"),
-        path.join(project, "agentcompany.json"),
-        path.join(project, "agentcompany.jsonc"),
+        path.join(tmp.path, "agent-company.json"),
+        path.join(tmp.path, "agent-company.jsonc"),
+        path.join(project, "agent-company.json"),
+        path.join(project, "agent-company.jsonc"),
       ])
     })
   })

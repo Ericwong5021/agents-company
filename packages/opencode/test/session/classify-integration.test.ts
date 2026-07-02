@@ -64,7 +64,7 @@ function runFork(fx: Effect.Effect<any, any, any>) {
 
 function writeConfig(dir: string, origin: string) {
   return Bun.write(
-    path.join(dir, "agentcompany.json"),
+    path.join(dir, "agent-company.json"),
     JSON.stringify({
       $schema: "https://opencode.ai/config.json",
       enabled_providers: ["alibaba"],

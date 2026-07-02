@@ -28,7 +28,7 @@ async function project(source: string) {
       const file = path.join(dir, "plugin.ts")
       await Bun.write(file, source)
       await Bun.write(
-        path.join(dir, "agentcompany.json"),
+        path.join(dir, "agent-company.json"),
         JSON.stringify(
           {
             $schema: "https://opencode.ai/config.json",
