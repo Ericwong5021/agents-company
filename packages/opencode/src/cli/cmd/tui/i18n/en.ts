@@ -35,10 +35,13 @@ export const dict: Record<string, string> = {
   "tui.home.agreement.suffix": "",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "Board Chat",
-  "tui.home.board_chat.placeholder": "Message all board members...",
-  "tui.home.board_chat.hint": "Enter to send · / for commands",
+  "tui.home.board_chat.title": "Ask the board",
+  "tui.home.board_chat.subtitle":
+    "Sends to every configured board member. If your team is not set up yet, starts with the assistant.",
+  "tui.home.board_chat.placeholder": "Describe the outcome you want...",
+  "tui.home.board_chat.hint": "Enter to send to the board · / for commands",
   "tui.home.board_chat.sending": "sending...",
+  "tui.home.board_chat.no_agents": "No board or assistant is available yet. Retry startup or connect a provider.",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "attach file",
@@ -59,8 +62,7 @@ export const dict: Record<string, string> = {
     "Run {highlight}/dark{/highlight} for dark mode or {highlight}/light{/highlight} for light mode",
   "tui.tips.doc": "Run {highlight}/doc{/highlight} to open the user documentation",
   "tui.tips.free_models": "Free models are available for a limited time — try them now!",
-  "tui.tips.background":
-    "Run {highlight}/background{/highlight} to set a custom image as your home background",
+  "tui.tips.background": "Run {highlight}/background{/highlight} to set a custom image as your home background",
   "tui.tips.undo": "Use {highlight}/undo{/highlight} to revert the last message and file changes",
   "tui.tips.redo": "Use {highlight}/redo{/highlight} to restore previously undone messages and file changes",
   "tui.tips.share": "Run {highlight}/share{/highlight} to create a public link to your conversation at agent-company",
@@ -95,18 +97,22 @@ export const dict: Record<string, string> = {
     "Press {highlight}Ctrl+G{/highlight} or {highlight}Home{/highlight} to jump to the beginning of the conversation",
   "tui.tips.jump_last":
     "Press {highlight}Ctrl+Alt+G{/highlight} or {highlight}End{/highlight} to jump to the most recent message",
-  "tui.tips.newline": "Press {highlight}Shift+Enter{/highlight} or {highlight}Ctrl+J{/highlight} to add newlines in your prompt",
+  "tui.tips.newline":
+    "Press {highlight}Shift+Enter{/highlight} or {highlight}Ctrl+J{/highlight} to add newlines in your prompt",
   "tui.tips.clear_input": "Press {highlight}Ctrl+C{/highlight} when typing to clear the input field",
   "tui.tips.escape": "Press {highlight}Escape{/highlight} to stop the AI mid-response",
   "tui.tips.plan_agent": "Switch to {highlight}Plan{/highlight} agent to get suggestions without making actual changes",
   "tui.tips.subagent": "Use {highlight}@agent-name{/highlight} in prompts to invoke specialized subagents",
-  "tui.tips.cycle_sessions": "Press {highlight}Ctrl+X Right/Left{/highlight} to cycle through parent and child sessions",
+  "tui.tips.cycle_sessions":
+    "Press {highlight}Ctrl+X Right/Left{/highlight} to cycle through parent and child sessions",
   "tui.tips.config_files":
     "Create {highlight}agentcompany.json{/highlight} for server settings and {highlight}tui.json{/highlight} for TUI settings",
-  "tui.tips.global_config": "Place TUI settings in {highlight}~/.config/agentcompany/tui.json{/highlight} for global config",
+  "tui.tips.global_config":
+    "Place TUI settings in {highlight}~/.config/agentcompany/tui.json{/highlight} for global config",
   "tui.tips.schema": "Add {highlight}$schema{/highlight} to your config for autocomplete in your editor",
   "tui.tips.default_model": "Configure {highlight}model{/highlight} in config to set your default model",
-  "tui.tips.keybinds": "Override any keybind in {highlight}tui.json{/highlight} via the {highlight}keybinds{/highlight} section",
+  "tui.tips.keybinds":
+    "Override any keybind in {highlight}tui.json{/highlight} via the {highlight}keybinds{/highlight} section",
   "tui.tips.disable_keybind": "Set any keybind to {highlight}none{/highlight} to disable it completely",
   "tui.tips.mcp_config": "Configure local or remote MCP servers in the {highlight}mcp{/highlight} config section",
   "tui.tips.mcp_oauth": "agent-company auto-handles OAuth for remote MCP servers requiring auth",
@@ -114,7 +120,8 @@ export const dict: Record<string, string> = {
     "Add {highlight}.md{/highlight} files to {highlight}.agentcompany/command/{/highlight} to define reusable custom prompts",
   "tui.tips.command_args":
     "Use {highlight}$ARGUMENTS{/highlight}, {highlight}$1{/highlight}, {highlight}$2{/highlight} in custom commands for dynamic input",
-  "tui.tips.command_backticks": "Use backticks in commands to inject shell output (e.g., {highlight}`git status`{/highlight})",
+  "tui.tips.command_backticks":
+    "Use backticks in commands to inject shell output (e.g., {highlight}`git status`{/highlight})",
   "tui.tips.custom_agent":
     "Add {highlight}.md{/highlight} files to {highlight}.agentcompany/agent/{/highlight} for specialized AI personas",
   "tui.tips.agent_perms":
@@ -123,7 +130,8 @@ export const dict: Record<string, string> = {
   "tui.tips.bash_deny": 'Set {highlight}"rm -rf *": "deny"{/highlight} to block destructive commands',
   "tui.tips.bash_ask": 'Configure {highlight}"git push": "ask"{/highlight} to require approval before pushing',
   "tui.tips.formatter": "agent-company auto-formats files using prettier, gofmt, ruff, and more",
-  "tui.tips.disable_formatter": 'Set {highlight}"formatter": false{/highlight} in config to disable all auto-formatting',
+  "tui.tips.disable_formatter":
+    'Set {highlight}"formatter": false{/highlight} in config to disable all auto-formatting',
   "tui.tips.custom_formatter": "Define custom formatter commands with file extensions in config",
   "tui.tips.lsp": "agent-company uses LSP servers for intelligent code analysis",
   "tui.tips.custom_tool":
@@ -146,8 +154,7 @@ export const dict: Record<string, string> = {
   "tui.tips.github_install": "Run {highlight}agents github install{/highlight} to set up the GitHub workflow",
   "tui.tips.github_oc": "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
   "tui.tips.theme_system": 'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
-  "tui.tips.brand_color_note":
-    "Brand colors automatically adjust the matching highlight, glow, and shadow tones",
+  "tui.tips.brand_color_note": "Brand colors automatically adjust the matching highlight, glow, and shadow tones",
   "tui.tips.theme_files": "Create JSON theme files in {highlight}.agentcompany/themes/{/highlight} directory",
   "tui.tips.theme_variants": "Themes support dark/light variants for both modes",
   "tui.tips.theme_ansi": "Reference ANSI colors 0-255 in custom themes",
@@ -199,12 +206,10 @@ export const dict: Record<string, string> = {
   // Built-in slash command descriptions
   "tui.slash.init.description": "guided AGENTS.md setup",
   "tui.slash.review.description": "review changes [commit|branch|pr], defaults to uncommitted",
-  "tui.slash.dream.description":
-    "manually consolidate project memory from memory files and raw trajectory",
+  "tui.slash.dream.description": "manually consolidate project memory from memory files and raw trajectory",
   "tui.slash.distill.description":
     "find repeated workflows in recent work and package them into skills, subagents, or commands",
-  "tui.slash.goal.description":
-    "set a stop-condition goal; runs until a judge says it's met. /goal clear to abort",
+  "tui.slash.goal.description": "set a stop-condition goal; runs until a judge says it's met. /goal clear to abort",
   "tui.slash.deep-research.description":
     "deep multi-source, fact-checked research report (runs the deep-research workflow)",
 
@@ -308,9 +313,11 @@ export const dict: Record<string, string> = {
   "tui.toast.update_available.confirm": "A new release v{{version}} is available. Would you like to update now?",
   "tui.toast.update_available.updating": "Updating to v{{version}}...",
   "tui.toast.update_available.failed": "Update failed",
-  "tui.toast.update_available.success": "Successfully updated to agent-company v{{version}}. Please restart the application.",
+  "tui.toast.update_available.success":
+    "Successfully updated to agent-company v{{version}}. Please restart the application.",
   "tui.toast.updated.title": "Auto-updated",
-  "tui.toast.updated.message": "Patch update applied: v{{version}}. Restart to use the new version. Disable via autoupdate: false in config.",
+  "tui.toast.updated.message":
+    "Patch update applied: v{{version}}. Restart to use the new version. Disable via autoupdate: false in config.",
   "tui.sidebar.instructions": "Instructions",
   "tui.sidebar.cwd": "Working Directory",
   "tui.toast.unknown_error": "An unknown error has occurred",
@@ -385,7 +392,7 @@ export const dict: Record<string, string> = {
   "tui.command.voice.send.title_off": "Voice send: OFF — click to turn on",
   "tui.voice.enabled": "Voice input on (Chinese/English) — click [Voice] to record",
   "tui.voice.disabled": "Voice input disabled",
-  "tui.voice.send.enabled": "Voice send enabled — after a pause, clearly say \"send it\" to submit",
+  "tui.voice.send.enabled": 'Voice send enabled — after a pause, clearly say "send it" to submit',
   "tui.voice.send.disabled": "Voice send disabled",
   "tui.voice.control.enabled": "Voice control enabled — using multimodal model for intelligent editing (slower)",
   "tui.voice.control.disabled": "Voice control disabled — using fast ASR transcription",
@@ -393,16 +400,18 @@ export const dict: Record<string, string> = {
   "tui.command.voice.control.title_on": "Voice control: ON (multimodal) — click to turn off",
   "tui.command.voice.control.title_off": "Voice control: OFF (fast ASR) — click to turn on",
   "tui.voice.error.no_auth": "Use /connect to sign in to MiMo, or configure voice.asr_model for another provider",
-  "tui.voice.error.no_auth_provider": "Voice provider \"{{provider}}\" is not authenticated, check its apiKey",
-  "tui.voice.error.provider_not_found": "Provider \"{{provider}}\" not available — /connect to authenticate, or declare models in config for custom endpoints",
-  "tui.voice.error.no_url": "Provider \"{{provider}}\" has no baseURL configured — set options.baseURL in the provider config",
+  "tui.voice.error.no_auth_provider": 'Voice provider "{{provider}}" is not authenticated, check its apiKey',
+  "tui.voice.error.provider_not_found":
+    'Provider "{{provider}}" not available — /connect to authenticate, or declare models in config for custom endpoints',
+  "tui.voice.error.no_url":
+    'Provider "{{provider}}" has no baseURL configured — set options.baseURL in the provider config',
   "tui.voice.error.no_device": "No microphone/audio device found — please check your system audio settings",
   "tui.voice.error.recorder_failed": "Recording failed",
   "tui.voice.error.no_recorder": "No recording tool found, please install sox",
   "tui.voice.error.too_short": "Recording too short",
   "tui.voice.error.network": "Transcription failed, please check your network",
   "tui.voice.error.empty_send": "Nothing to send",
-  "tui.voice.error.unknown_agent": "Agent \"{{name}}\" not found",
+  "tui.voice.error.unknown_agent": 'Agent "{{name}}" not found',
   "tui.command.prompt.stash.title": "Stash prompt",
   "tui.command.prompt.stash.pop.title": "Stash pop",
   "tui.command.prompt.stash.list.title": "Stash list",
@@ -427,7 +436,8 @@ export const dict: Record<string, string> = {
   "cli.providers.mimo_free.ready": "MiMo Auto (free) channel ready",
   "cli.providers.mimo_free.failed": "MiMo Auto (free) verification failed",
   "cli.providers.mimo_free.default_set": "Default model set to mimo/mimo-auto (1M context, free)",
-  "cli.providers.mimo_free.usage_hint": "No login required — just run agents. For paid/premium models, choose MiMo browser login instead.",
+  "cli.providers.mimo_free.usage_hint":
+    "No login required — just run agents. For paid/premium models, choose MiMo browser login instead.",
   "cli.providers.mimo_login.decrypt_retry": "Decryption failed, please retry ({remaining} attempts left)",
   "cli.providers.mimo_login.decrypt_exhausted": "Decryption failed, max retries reached",
   "tui.dialog.login.import_claude": "Import from Claude Code",
@@ -453,7 +463,8 @@ export const dict: Record<string, string> = {
   "tui.question.plan_enter.option.1.description": "Stay in current mode",
 
   // Question i18n — plan_exit
-  "tui.question.plan_exit.question": "Plan at {{plan}} is complete. Would you like to switch to the build agent and start implementing?",
+  "tui.question.plan_exit.question":
+    "Plan at {{plan}} is complete. Would you like to switch to the build agent and start implementing?",
   "tui.question.plan_exit.header": "Plan",
   "tui.question.plan_exit.option.0.label": "Yes",
   "tui.question.plan_exit.option.0.description": "Switch to build agent and start implementing the plan",
@@ -465,15 +476,19 @@ export const dict: Record<string, string> = {
 
   // Workspace trust
   "trust.title": "Accessing workspace:",
-  "trust.safety_check": "Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.",
+  "trust.safety_check":
+    "Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.",
   "trust.capabilities": "agent-company will be able to read, edit, and execute files here.",
-  "trust.plugin_warn": "If malicious plugins exist in this directory, they can execute arbitrary code, read, modify, or exfiltrate your files.",
+  "trust.plugin_warn":
+    "If malicious plugins exist in this directory, they can execute arbitrary code, read, modify, or exfiltrate your files.",
   "trust.option.yes": "Yes, I trust this folder",
   "trust.option.no": "No, exit",
   "trust.dangerous.title_home": "WARNING: You are about to open your HOME DIRECTORY.",
   "trust.dangerous.title_root": "WARNING: You are about to open the FILESYSTEM ROOT.",
-  "trust.dangerous.body_home": "The model will have access to ALL your personal files — SSH keys, credentials, browser profiles, and everything else under your home folder.",
-  "trust.dangerous.body_root": "The model will have access to the ENTIRE filesystem — system files, all user data, credentials, and everything on this machine.",
+  "trust.dangerous.body_home":
+    "The model will have access to ALL your personal files — SSH keys, credentials, browser profiles, and everything else under your home folder.",
+  "trust.dangerous.body_root":
+    "The model will have access to the ENTIRE filesystem — system files, all user data, credentials, and everything on this machine.",
   "trust.dangerous.advice_home": "Unless you have a very specific reason, DO NOT trust your entire home directory.",
   "trust.dangerous.advice_root": "Unless you have a very specific reason, DO NOT trust the filesystem root.",
   "trust.dangerous.option.yes": "I understand the risks, trust for this session",
@@ -481,11 +496,14 @@ export const dict: Record<string, string> = {
   // Shell: persistent left nav, top bar, right sidebar
   "tui.shell.nav.home": "Home",
   "tui.shell.nav.recent": "Recent",
+  "tui.shell.nav.manage": "Manage company",
   "tui.shell.nav.org-chart": "Organization",
   "tui.shell.nav.projects": "Projects",
   "tui.shell.nav.agents": "Agents",
   "tui.shell.nav.workstation": "Workstation",
   "tui.shell.nav.settings": "Settings",
+  "tui.shell.nav.expand": "Show nav",
+  "tui.shell.nav.collapse": "Hide nav",
   "tui.shell.back": "Back",
   "tui.shell.route.home": "Home",
   "tui.shell.route.session": "Session",
@@ -508,23 +526,40 @@ export const dict: Record<string, string> = {
   "tui.settings.group.danger": "Danger Zone",
   "tui.org.disband.title": "Disband company",
   "tui.org.disband.menu_description": "Delete all company data — irreversible",
-  "tui.org.disband.confirm": "This will permanently delete all agents, threads, sessions, tasks and workspace files. Login and app settings are kept. Continue?",
+  "tui.org.disband.confirm":
+    "This will permanently delete all agents, threads, sessions, tasks and workspace files. Login and app settings are kept. Continue?",
   "tui.org.disband.yes": "Yes, disband (y)",
   "tui.org.disband.no": "Cancel (esc)",
   "tui.org.disband.warning.title": "⚠ IRREVERSIBLE — READ CAREFULLY",
-  "tui.org.disband.warning.body": "All company data will be permanently deleted and CANNOT be recovered. Press y to confirm.",
+  "tui.org.disband.warning.body":
+    "All company data will be permanently deleted and CANNOT be recovered. Press y to confirm.",
   "tui.org.disband.warning.confirm": "Delete everything (y)",
   "tui.org.disband.running": "Disbanding…",
   "tui.org.disband.failed": "Failed to disband company",
   "tui.org.disband.done": "Company disbanded",
   "tui.shell.placeholder.projects": "Project management coming soon",
+  "tui.startup.loading_plugins": "Loading TUI plugins...",
+  "tui.startup.finishing": "Finishing startup...",
+  "tui.startup.elapsed": "{{seconds}}s elapsed",
+  "tui.startup.slow_hint": "Still preparing. Press Ctrl+C to exit if this looks stuck.",
 
   // Onboarding
   "onboarding.welcome.loading": "Loading...",
   "onboarding.welcome.initializing": "Initializing workspace...",
   "onboarding.welcome.ready": "Welcome to Agent Company",
-  "onboarding.welcome.start": "Start Building",
-  "onboarding.welcome.start_desc": "Full onboarding, just a few minutes",
+  "onboarding.welcome.blocked": "Setup needs attention",
+  "onboarding.welcome.status": "Step {{current}}/{{total}}: {{step}} · {{seconds}}s",
+  "onboarding.welcome.slow_hint":
+    "This is taking longer than usual. You can retry, or skip setup and try one task first.",
+  "onboarding.welcome.error_step": "Could not load {{step}}: {{error}}",
+  "onboarding.welcome.step.agents": "agent roster",
+  "onboarding.welcome.step.templates": "company templates",
+  "onboarding.welcome.retry": "Retry",
+  "onboarding.welcome.start": "Create your company",
+  "onboarding.welcome.start_desc": "Full guided setup, just a few minutes",
+  "onboarding.welcome.skip": "Try one task first",
+  "onboarding.welcome.skip_desc": "Use the current/default model now. Company setup can wait.",
+  "onboarding.welcome.loading_detail": "Loading {{step}}/{{total}} · attempt {{attempt}}",
   "onboarding.provider.title": "Connect to AI",
   "onboarding.provider.description": "Choose a provider and model to power your agents",
   "onboarding.provider.setting_up": "Setting up your model...",
@@ -556,7 +591,7 @@ export const dict: Record<string, string> = {
   "onboarding.founding_team.loading": "Loading team details...",
   "onboarding.founding_team.assembling": "Assembling your founding team...",
   "onboarding.founding_team.wait": "This may take a moment",
-  "onboarding.founding_team.searching": "Searching for \"{{role}}\"…",
+  "onboarding.founding_team.searching": 'Searching for "{{role}}"…',
   "onboarding.founding_team.matching": "Matching {{role}}…",
   "onboarding.founding_team.complete_speech": "Great news, {{name}}! Your founding team is assembled!",
   "onboarding.founding_team.error": "Failed to assemble the founding team. Please try again.",

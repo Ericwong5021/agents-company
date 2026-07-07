@@ -57,9 +57,11 @@ export function HomeBoardPrompt() {
     const res = await sdk.fetch(`${sdk.url}/company-agent`)
     if (!res.ok) throw new Error("无法获取智能体列表")
     const agentList = (await res.json()) as Array<{ id: string }>
-    const agentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
+    const boardAgentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
+    const agentIDs =
+      boardAgentIDs.length > 0 ? boardAgentIDs : agentList.some((a) => a.id === "assistant") ? ["assistant"] : []
 
-    if (agentIDs.length === 0) throw new Error("暂无团队成员，请先完成入职配置")
+    if (agentIDs.length === 0) throw new Error(t("tui.home.board_chat.no_agents"))
 
     const profile = kv.get("onboarding_profile") as Record<string, any> | undefined
     const companyName = (profile?.companyName as string) || (profile?.userName as string) || ""
@@ -91,9 +93,7 @@ export function HomeBoardPrompt() {
     if (autocompleteRef()?.visible) return
 
     // Client-side slash commands
-    const clientSlash = text.startsWith("/")
-      ? command.slashes().find((s) => s.display === text)
-      : undefined
+    const clientSlash = text.startsWith("/") ? command.slashes().find((s) => s.display === text) : undefined
     if (clientSlash) {
       setInputText("")
       if (textarea && !textarea.isDestroyed) textarea.clear()
@@ -149,11 +149,9 @@ export function HomeBoardPrompt() {
         void interrupt()
         return
       }
-      void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then(
-        (result) => {
-          if (result) void exit()
-        },
-      )
+      void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
+        if (result) void exit()
+      })
     }
   })
 
@@ -167,13 +165,16 @@ export function HomeBoardPrompt() {
   return (
     <box flexDirection="column" width="100%" gap={1}>
       {/* Board chat header */}
-      <box flexDirection="row" gap={1} alignItems="center">
-        <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-          👑 {t("tui.home.board_chat.title")}
-        </text>
-        <Show when={sending()}>
-          <Spinner color={theme.textMuted}>{t("tui.home.board_chat.sending")}</Spinner>
-        </Show>
+      <box flexDirection="column" gap={1}>
+        <box flexDirection="row" gap={1} alignItems="center">
+          <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+            {t("tui.home.board_chat.title")}
+          </text>
+          <Show when={sending()}>
+            <Spinner color={theme.textMuted}>{t("tui.home.board_chat.sending")}</Spinner>
+          </Show>
+        </box>
+        <text fg={theme.textMuted}>{t("tui.home.board_chat.subtitle")}</text>
       </box>
 
       {/* Input area (mirrors the group-session route's textarea + autocomplete) */}
@@ -218,9 +219,7 @@ export function HomeBoardPrompt() {
 
       {/* Hint text */}
       <box>
-        <text fg={theme.textMuted}>
-          {t("tui.home.board_chat.hint")}
-        </text>
+        <text fg={theme.textMuted}>{t("tui.home.board_chat.hint")}</text>
       </box>
     </box>
   )

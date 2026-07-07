@@ -21,28 +21,47 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
   const { theme } = useTheme()
   const t = useLanguage().t
   const dialog = useDialog()
+  const templates = OrgTemplateService.all()
+  const starters = templates.filter((tpl) => tpl.tier === "starter")
+  const advanced = templates.filter((tpl) => tpl.tier === "advanced")
+  const allTemplates = [...starters, ...advanced]
 
   useKeyboard((evt) => {
-    if (evt.name === "return" && selected()) confirm()
+    if (evt.name === "return" && selected()) {
+      confirm()
+      return
+    }
+    if (evt.name === "tab") {
+      moveSelection(evt.shift ? -1 : 1)
+      return
+    }
+    if (evt.name === "right" || evt.name === "down") {
+      moveSelection(1)
+      return
+    }
+    if (evt.name === "left" || evt.name === "up") moveSelection(-1)
   })
 
   onMount(() => {
     dialog.setSize("large")
+    if (starters.length > 0) setSelected(starters[0]!.id)
 
     if (process.env["ONBOARDING_DEV"] && starters.length > 0) {
-      setSelected(starters[0]!.id)
       setTimeout(() => props.onComplete(starters[0]!.id), 500)
     }
   })
   const [selected, setSelected] = createSignal<string | null>(null)
   const [hovered, setHovered] = createSignal<string | null>(null)
 
-  const templates = OrgTemplateService.all()
-  const starters = templates.filter((tpl) => tpl.tier === "starter")
-  const advanced = templates.filter((tpl) => tpl.tier === "advanced")
-
   function select(id: string) {
     setSelected(id === selected() ? null : id)
+  }
+
+  function moveSelection(offset: number) {
+    if (allTemplates.length === 0) return
+    const current = selected()
+    const index = current ? allTemplates.findIndex((tpl) => tpl.id === current) : -1
+    setSelected(allTemplates[(index + offset + allTemplates.length) % allTemplates.length]!.id)
   }
 
   function confirm() {
@@ -71,13 +90,7 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
         width={20}
         paddingLeft={1}
         paddingRight={1}
-        backgroundColor={
-          isSelected()
-            ? theme.primary
-            : isHovered()
-              ? theme.backgroundElement
-              : theme.backgroundPanel
-        }
+        backgroundColor={isSelected() ? theme.primary : isHovered() ? theme.backgroundElement : theme.backgroundPanel}
         border
         borderColor={isSelected() ? theme.primary : theme.border}
         onMouseOver={() => setHovered(tpl.id)}
@@ -85,9 +98,7 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
         onMouseUp={() => select(tpl.id)}
       >
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={isSelected() ? theme.background : theme.text}>
-            {tpl.icon} {tpl.name}
-          </text>
+          <text fg={isSelected() ? theme.background : theme.text}>{tpl.name}</text>
           <Show when={isSelected()}>
             <text fg={theme.background}>✓</text>
           </Show>
@@ -112,12 +123,8 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
           screen when a template is selected. */}
       <box flexDirection="row" gap={2}>
         <box flexDirection="row" flexWrap="wrap" gap={1} flexGrow={1}>
-          <For each={starters}>
-            {(tpl) => renderCard(tpl)}
-          </For>
-          <For each={advanced}>
-            {(tpl) => renderCard(tpl)}
-          </For>
+          <For each={starters}>{(tpl) => renderCard(tpl)}</For>
+          <For each={advanced}>{(tpl) => renderCard(tpl)}</For>
         </box>
 
         {/* Preview: show selected template's org structure */}
@@ -139,15 +146,15 @@ export function StepTemplateSelect(props: StepTemplateSelectProps) {
                 {(div) => (
                   <box flexDirection="column" paddingLeft={1}>
                     <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                      📁 {div.name}
+                      {div.name}
                     </text>
                     <For each={div.roles}>
                       {(role) => (
                         <box flexDirection="row" paddingLeft={2} gap={1}>
                           <text fg={theme.textMuted}>
-                            {role.level === "c-suite" ? "👑" : role.level === "lead" ? "⭐" : "·"}
+                            {role.level === "c-suite" ? "C" : role.level === "lead" ? "Lead" : "Role"}
                           </text>
-                          <text fg={theme.text}>{role.fallback.icon} {role.fallback.name}</text>
+                          <text fg={theme.text}>{role.fallback.name}</text>
                         </box>
                       )}
                     </For>

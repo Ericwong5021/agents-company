@@ -12,8 +12,8 @@ import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
 import { BUSINESS_SCOPE_PRESETS } from "./business-scope-cards"
 import { StarryBackground } from "@tui/component/starry-background"
-import { DialogProvider } from "@tui/component/dialog-provider"
 import { DialogModel } from "@tui/component/dialog-model"
+import { DialogMimoLogin } from "@tui/component/dialog-mimo-login"
 import { StepWelcome } from "./step-welcome"
 import { StepTemplateSelect } from "./step-template-select"
 import { StepProfile } from "./step-profile"
@@ -102,6 +102,17 @@ export function Onboarding() {
     route.navigate(groupSessionID ? { type: "group-session", groupSessionID } : { type: "home" })
   }
 
+  function skipToHome() {
+    setDone(true)
+    kv.set("onboarding_profile", {
+      quickStart: true,
+      completedAt: Date.now(),
+    })
+    kv.set("onboarding_done", true)
+    dialog.clear()
+    route.replace({ type: "home" })
+  }
+
   // Creates a group session with the founding team and seeds an opening message
   // in the founder's voice that hands the floor to the co-founders. Returns the
   // new group session ID, or null on any failure.
@@ -141,7 +152,7 @@ export function Onboarding() {
   function renderStep(s: Step) {
     if (s === "provider") {
       dialog.replace(
-        () => (hasConnectedModels() ? <DialogModel /> : <DialogProvider />),
+        () => (hasConnectedModels() ? <DialogModel /> : <DialogMimoLogin />),
         () => {
           const current = local.model.current()
           if (current?.providerID && current?.modelID) {
@@ -241,7 +252,7 @@ export function Onboarding() {
       <StarryBackground />
       <Show when={step() === "welcome"}>
         <box position="absolute" top={0} left={0} right={0} bottom={0}>
-          <StepWelcome onComplete={() => setStep("provider")} />
+          <StepWelcome onComplete={() => setStep("provider")} onSkip={skipToHome} />
         </box>
       </Show>
     </box>

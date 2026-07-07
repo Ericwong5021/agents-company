@@ -39,10 +39,12 @@ export const dict = {
   "tui.home.agreement.suffix": "",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "董事會群聊",
-  "tui.home.board_chat.placeholder": "向所有董事會成員發送訊息...",
-  "tui.home.board_chat.hint": "Enter 發送 · / 喚起命令",
+  "tui.home.board_chat.title": "詢問董事會",
+  "tui.home.board_chat.subtitle": "會發送給所有已配置的董事會成員。團隊尚未配置時，會先用基礎助手開始。",
+  "tui.home.board_chat.placeholder": "描述你想完成的結果...",
+  "tui.home.board_chat.hint": "Enter 發送給董事會 · / 喚起命令",
   "tui.home.board_chat.sending": "發送中...",
+  "tui.home.board_chat.no_agents": "還沒有可用的董事會成員或基礎助手。請重試啟動，或先連接一個服務商。",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "新增檔案",
@@ -55,11 +57,11 @@ export const dict = {
   "tui.tips.label": "提示",
   "tui.tips.plain_terminal": "建議使用 iTerm 或 VS Code 終端機",
   "tui.tips.attach_file": "輸入 {highlight}@{/highlight} 後接檔案名稱以模糊搜尋並附加檔案",
-  "tui.tips.shell_prefix": "以 {highlight}!{/highlight} 開頭可直接執行 shell 指令（例如 {highlight}!ls -la{/highlight}）",
+  "tui.tips.shell_prefix":
+    "以 {highlight}!{/highlight} 開頭可直接執行 shell 指令（例如 {highlight}!ls -la{/highlight}）",
   "tui.tips.tab_agent":
     "按 {highlight}Tab{/highlight} 或 {highlight}Shift+Tab{/highlight} 在 Build / Plan / Compose 智慧代理之間切換",
-  "tui.tips.theme_mode":
-    "執行 {highlight}/dark{/highlight} 切換深色模式，{highlight}/light{/highlight} 切換淺色模式",
+  "tui.tips.theme_mode": "執行 {highlight}/dark{/highlight} 切換深色模式，{highlight}/light{/highlight} 切換淺色模式",
   "tui.tips.doc": "執行 {highlight}/doc{/highlight} 開啟使用文件",
   "tui.tips.free_models": "限時提供免費模型中，立即體驗！",
   "tui.tips.background": "執行 {highlight}/background{/highlight} 設定自訂圖片作為主頁背景",
@@ -72,9 +74,11 @@ export const dict = {
   "tui.tips.init": "執行 {highlight}/init{/highlight} 根據你的程式碼庫自動產生專案規則",
   "tui.tips.models": "執行 {highlight}/models{/highlight} 或 {highlight}Ctrl+X M{/highlight} 切換模型",
   "tui.tips.brand_color": "使用 {highlight}/brand-color{/highlight} 或 {highlight}Ctrl+X C{/highlight} 切換品牌色系",
-  "tui.tips.theme": "使用 {highlight}/themes{/highlight} 或 {highlight}Ctrl+X T{/highlight} 在 {{count}} 個內建主題之間切換",
+  "tui.tips.theme":
+    "使用 {highlight}/themes{/highlight} 或 {highlight}Ctrl+X T{/highlight} 在 {{count}} 個內建主題之間切換",
   "tui.tips.new_session": "按 {highlight}Ctrl+X N{/highlight} 或 {highlight}/new{/highlight} 開啟全新工作階段",
-  "tui.tips.sessions": "使用 {highlight}/sessions{/highlight} 或 {highlight}Ctrl+X L{/highlight} 列出並繼續先前的工作階段",
+  "tui.tips.sessions":
+    "使用 {highlight}/sessions{/highlight} 或 {highlight}Ctrl+X L{/highlight} 列出並繼續先前的工作階段",
   "tui.tips.compact": "執行 {highlight}/compact{/highlight} 在接近上下文上限時壓縮長對話",
   "tui.tips.export": "按 {highlight}Ctrl+X X{/highlight} 或 {highlight}/export{/highlight} 把對話儲存為 Markdown",
   "tui.tips.copy_last": "按 {highlight}Ctrl+X Y{/highlight} 將助理最後一條訊息複製到剪貼簿",
@@ -157,11 +161,9 @@ export const dict = {
   "tui.tips.external_dir": "權限 {highlight}external_directory{/highlight} 保護專案外部的檔案",
   "tui.tips.debug_config": "執行 {highlight}agents debug config{/highlight} 排查設定問題",
   "tui.tips.print_logs": "使用 {highlight}--print-logs{/highlight} 旗標在 stderr 輸出詳細記錄",
-  "tui.tips.timeline":
-    "按 {highlight}Ctrl+X G{/highlight} 或 {highlight}/timeline{/highlight} 跳到指定訊息",
+  "tui.tips.timeline": "按 {highlight}Ctrl+X G{/highlight} 或 {highlight}/timeline{/highlight} 跳到指定訊息",
   "tui.tips.toggle_code": "按 {highlight}Ctrl+X H{/highlight} 切換訊息中程式碼區塊的顯示",
-  "tui.tips.status":
-    "按 {highlight}Ctrl+X S{/highlight} 或 {highlight}/status{/highlight} 檢視系統狀態",
+  "tui.tips.status": "按 {highlight}Ctrl+X S{/highlight} 或 {highlight}/status{/highlight} 檢視系統狀態",
   "tui.tips.scroll_accel":
     "在 {highlight}tui.json{/highlight} 中啟用 {highlight}scroll_acceleration{/highlight} 享受平滑捲動",
   "tui.tips.username_toggle": "透過指令面板（{highlight}Ctrl+P{/highlight}）切換對話中使用者名稱的顯示",
@@ -297,7 +299,8 @@ export const dict = {
   "tui.toast.update_available.failed": "更新失敗",
   "tui.toast.update_available.success": "已更新到 agent-company v{{version}}，請重新啟動應用程式。",
   "tui.toast.updated.title": "已自動更新",
-  "tui.toast.updated.message": "已自動套用修補更新：v{{version}}。重新啟動後生效。可在設定中設置 autoupdate: false 關閉自動更新。",
+  "tui.toast.updated.message":
+    "已自動套用修補更新：v{{version}}。重新啟動後生效。可在設定中設置 autoupdate: false 關閉自動更新。",
   "tui.sidebar.instructions": "指令檔案",
   "tui.sidebar.cwd": "工作目錄",
   "tui.toast.unknown_error": "發生未知錯誤",
@@ -381,7 +384,8 @@ export const dict = {
   "tui.command.voice.control.title_off": "語音控制：已關閉（快速 ASR） — 點擊開啟",
   "tui.voice.error.no_auth": "請先用 /connect 連接 MiMo 帳號，或配置 voice.asr_model 指定其他 provider",
   "tui.voice.error.no_auth_provider": "語音 provider「{{provider}}」未認證，請檢查其 apiKey 配置",
-  "tui.voice.error.provider_not_found": "provider「{{provider}}」不可用 — 請 /connect 連接，自定義端點需在配置中聲明 models",
+  "tui.voice.error.provider_not_found":
+    "provider「{{provider}}」不可用 — 請 /connect 連接，自定義端點需在配置中聲明 models",
   "tui.voice.error.no_url": "provider「{{provider}}」未配置 baseURL，請在 options.baseURL 中指定",
   "tui.voice.error.no_device": "未偵測到麥克風/音訊裝置 — 請檢查系統音訊設定",
   "tui.voice.error.recorder_failed": "錄音失敗",
@@ -421,7 +425,8 @@ export const dict = {
 
   // Workspace trust
   "trust.title": "存取工作區：",
-  "trust.safety_check": "安全確認：這是你自己建立或信任的專案嗎？（如你自己的程式碼、知名開源專案或團隊內部專案）。如果不是，請先檢查此目錄下的內容。",
+  "trust.safety_check":
+    "安全確認：這是你自己建立或信任的專案嗎？（如你自己的程式碼、知名開源專案或團隊內部專案）。如果不是，請先檢查此目錄下的內容。",
   "trust.capabilities": "agent-company 將能夠讀取、編輯和執行此目錄中的檔案。",
   "trust.plugin_warn": "如果此目錄中存在惡意外掛程式，它們可以執行任意程式碼、讀取、修改或竊取你的檔案。",
   "trust.option.yes": "是的，我信任此目錄",
@@ -443,10 +448,13 @@ export const dict = {
   "tui.dialog.login.flow.copied": "已複製",
   "tui.shell.nav.home": "首頁",
   "tui.shell.nav.recent": "近期",
+  "tui.shell.nav.manage": "管理公司",
   "tui.shell.nav.org-chart": "組織架構",
   "tui.shell.nav.projects": "專案管理",
   "tui.shell.nav.agents": "Agent 管理",
   "tui.shell.nav.settings": "設定",
+  "tui.shell.nav.expand": "展開導航",
+  "tui.shell.nav.collapse": "收起導航",
   "tui.shell.back": "返回",
   "tui.shell.route.home": "首頁",
   "tui.shell.route.session": "會話",
@@ -465,4 +473,25 @@ export const dict = {
   "tui.settings.group.tools": "工具",
   "tui.settings.group.system": "系統",
   "tui.shell.placeholder.projects": "專案管理即將上線",
+  "tui.startup.loading_plugins": "正在載入 TUI 外掛...",
+  "tui.startup.finishing": "正在完成啟動...",
+  "tui.startup.elapsed": "已等待 {{seconds}} 秒",
+  "tui.startup.slow_hint": "仍在準備中。如果看起來卡住了，可按 Ctrl+C 退出。",
+
+  // Onboarding
+  "onboarding.welcome.loading": "載入中...",
+  "onboarding.welcome.initializing": "正在初始化工作區...",
+  "onboarding.welcome.ready": "歡迎使用 Agent Company",
+  "onboarding.welcome.blocked": "配置載入需要處理",
+  "onboarding.welcome.status": "步驟 {{current}}/{{total}}：{{step}} · {{seconds}} 秒",
+  "onboarding.welcome.slow_hint": "這一步比預期更久。你可以重試，也可以先跳過配置試一次任務。",
+  "onboarding.welcome.error_step": "無法載入{{step}}：{{error}}",
+  "onboarding.welcome.step.agents": "智慧代理名單",
+  "onboarding.welcome.step.templates": "公司範本",
+  "onboarding.welcome.retry": "重試",
+  "onboarding.welcome.start": "建立你的公司",
+  "onboarding.welcome.start_desc": "完整引導流程，幾分鐘完成",
+  "onboarding.welcome.skip": "先試一次任務",
+  "onboarding.welcome.skip_desc": "先用目前或預設模型開始，公司配置可以稍後完成。",
+  "onboarding.welcome.loading_detail": "載入 {{step}}/{{total}} · 第 {{attempt}} 次",
 } satisfies Partial<Record<Keys, string>>

@@ -39,10 +39,12 @@ export const dict = {
   "tui.home.agreement.suffix": "",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "董事会群聊",
-  "tui.home.board_chat.placeholder": "向所有董事会成员发送消息...",
-  "tui.home.board_chat.hint": "Enter 发送 · / 唤起命令",
+  "tui.home.board_chat.title": "询问董事会",
+  "tui.home.board_chat.subtitle": "会发送给所有已配置的董事会成员。团队尚未配置时，会先用基础助手开始。",
+  "tui.home.board_chat.placeholder": "描述你想完成的结果...",
+  "tui.home.board_chat.hint": "Enter 发送给董事会 · / 唤起命令",
   "tui.home.board_chat.sending": "发送中...",
+  "tui.home.board_chat.no_agents": "还没有可用的董事会成员或基础助手。请重试启动，或先连接一个服务商。",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "添加文件",
@@ -55,7 +57,8 @@ export const dict = {
   "tui.tips.label": "提示",
   "tui.tips.plain_terminal": "推荐使用iTerm或vscode终端",
   "tui.tips.attach_file": "输入 {highlight}@{/highlight} 后接文件名以模糊搜索并附加文件",
-  "tui.tips.shell_prefix": "以 {highlight}!{/highlight} 开头可直接运行 shell 命令（例如 {highlight}!ls -la{/highlight}）",
+  "tui.tips.shell_prefix":
+    "以 {highlight}!{/highlight} 开头可直接运行 shell 命令（例如 {highlight}!ls -la{/highlight}）",
   "tui.tips.tab_agent":
     "按 {highlight}Tab{/highlight} 或 {highlight}Shift+Tab{/highlight} 在 Build / Plan / Compose 智能体之间切换",
   "tui.tips.theme_mode":
@@ -72,7 +75,8 @@ export const dict = {
   "tui.tips.init": "运行 {highlight}/init{/highlight} 基于你的代码库自动生成项目规则",
   "tui.tips.models": "运行 {highlight}/models{/highlight} 或 {highlight}Ctrl+X M{/highlight} 切换模型",
   "tui.tips.brand_color": "使用 {highlight}/brand-color{/highlight} 或 {highlight}Ctrl+X C{/highlight} 切换品牌色系",
-  "tui.tips.theme": "使用 {highlight}/themes{/highlight} 或 {highlight}Ctrl+X T{/highlight} 在 {{count}} 个内置主题间切换",
+  "tui.tips.theme":
+    "使用 {highlight}/themes{/highlight} 或 {highlight}Ctrl+X T{/highlight} 在 {{count}} 个内置主题间切换",
   "tui.tips.new_session": "按 {highlight}Ctrl+X N{/highlight} 或 {highlight}/new{/highlight} 开启全新会话",
   "tui.tips.sessions": "使用 {highlight}/sessions{/highlight} 或 {highlight}Ctrl+X L{/highlight} 列出并继续之前的会话",
   "tui.tips.compact": "运行 {highlight}/compact{/highlight} 在接近上下文上限时压缩长会话",
@@ -157,11 +161,9 @@ export const dict = {
   "tui.tips.external_dir": "权限 {highlight}external_directory{/highlight} 保护项目外部的文件",
   "tui.tips.debug_config": "运行 {highlight}agents debug config{/highlight} 排查配置问题",
   "tui.tips.print_logs": "使用 {highlight}--print-logs{/highlight} 标志在 stderr 输出详细日志",
-  "tui.tips.timeline":
-    "按 {highlight}Ctrl+X G{/highlight} 或 {highlight}/timeline{/highlight} 跳到指定消息",
+  "tui.tips.timeline": "按 {highlight}Ctrl+X G{/highlight} 或 {highlight}/timeline{/highlight} 跳到指定消息",
   "tui.tips.toggle_code": "按 {highlight}Ctrl+X H{/highlight} 切换消息中代码块的显示",
-  "tui.tips.status":
-    "按 {highlight}Ctrl+X S{/highlight} 或 {highlight}/status{/highlight} 查看系统状态",
+  "tui.tips.status": "按 {highlight}Ctrl+X S{/highlight} 或 {highlight}/status{/highlight} 查看系统状态",
   "tui.tips.scroll_accel":
     "在 {highlight}tui.json{/highlight} 中开启 {highlight}scroll_acceleration{/highlight} 享受平滑滚动",
   "tui.tips.username_toggle": "通过命令面板（{highlight}Ctrl+P{/highlight}）切换聊天中用户名的显示",
@@ -297,7 +299,8 @@ export const dict = {
   "tui.toast.update_available.failed": "更新失败",
   "tui.toast.update_available.success": "已更新到 agent-company v{{version}}，请重启应用。",
   "tui.toast.updated.title": "已自动更新",
-  "tui.toast.updated.message": "已自动应用补丁更新：v{{version}}。重启后生效。可在配置中设置 autoupdate: false 关闭自动更新。",
+  "tui.toast.updated.message":
+    "已自动应用补丁更新：v{{version}}。重启后生效。可在配置中设置 autoupdate: false 关闭自动更新。",
   "tui.sidebar.instructions": "指令文件",
   "tui.sidebar.cwd": "工作目录",
   "tui.toast.unknown_error": "发生未知错误",
@@ -381,7 +384,8 @@ export const dict = {
   "tui.command.voice.control.title_off": "语音控制：已关闭（快速 ASR） — 点击开启",
   "tui.voice.error.no_auth": "请先用 /connect 连接 MiMo 账号，或配置 voice.asr_model 指定其他 provider",
   "tui.voice.error.no_auth_provider": "语音 provider「{{provider}}」未认证，请检查其 apiKey 配置",
-  "tui.voice.error.provider_not_found": "provider「{{provider}}」不可用 — 请 /connect 连接，自定义端点需在配置中声明 models",
+  "tui.voice.error.provider_not_found":
+    "provider「{{provider}}」不可用 — 请 /connect 连接，自定义端点需在配置中声明 models",
   "tui.voice.error.no_url": "provider「{{provider}}」未配置 baseURL，请在 options.baseURL 中指定",
   "tui.voice.error.no_device": "未检测到麦克风/音频设备 — 请检查系统音频设置",
   "tui.voice.error.recorder_failed": "录音失败",
@@ -414,7 +418,8 @@ export const dict = {
   "cli.providers.mimo_free.ready": "MiMo Auto (free) 通道已就绪",
   "cli.providers.mimo_free.failed": "MiMo Auto (free) 自检失败",
   "cli.providers.mimo_free.default_set": "默认模型已切换为 mimo/mimo-auto（1M 上下文，免费）",
-  "cli.providers.mimo_free.usage_hint": "无需登录，直接 agents run 即可使用。如需付费/更高级模型，可重新选择 MiMo 浏览器登录。",
+  "cli.providers.mimo_free.usage_hint":
+    "无需登录，直接 agents run 即可使用。如需付费/更高级模型，可重新选择 MiMo 浏览器登录。",
   "cli.providers.mimo_login.decrypt_retry": "解密失败，请重试 (剩余 {remaining} 次)",
   "cli.providers.mimo_login.decrypt_exhausted": "解密失败，已达最大重试次数",
   "tui.dialog.login.import_claude": "从 Claude Code 导入",
@@ -452,7 +457,8 @@ export const dict = {
 
   // Workspace trust
   "trust.title": "访问工作区：",
-  "trust.safety_check": "安全确认：这是你自己创建或信任的项目吗？（如你自己的代码、知名开源项目或团队内部项目）。如果不是，请先检查此目录下的内容。",
+  "trust.safety_check":
+    "安全确认：这是你自己创建或信任的项目吗？（如你自己的代码、知名开源项目或团队内部项目）。如果不是，请先检查此目录下的内容。",
   "trust.capabilities": "agent-company 将能够读取、编辑和执行此目录中的文件。",
   "trust.plugin_warn": "如果此目录中存在恶意插件，它们可以执行任意代码、读取、修改或窃取你的文件。",
   "trust.option.yes": "是的，我信任此目录",
@@ -467,10 +473,13 @@ export const dict = {
   "trust.dangerous.option.no": "退出（推荐）",
   "tui.shell.nav.home": "首页",
   "tui.shell.nav.recent": "近期",
+  "tui.shell.nav.manage": "管理公司",
   "tui.shell.nav.org-chart": "组织架构",
   "tui.shell.nav.projects": "项目管理",
   "tui.shell.nav.agents": "Agent 管理",
   "tui.shell.nav.settings": "设置",
+  "tui.shell.nav.expand": "展开导航",
+  "tui.shell.nav.collapse": "收起导航",
   "tui.shell.back": "返回",
   "tui.shell.route.home": "首页",
   "tui.shell.route.session": "会话",
@@ -501,13 +510,27 @@ export const dict = {
   "tui.org.disband.failed": "解散公司失败",
   "tui.org.disband.done": "公司已解散",
   "tui.shell.placeholder.projects": "项目管理即将上线",
+  "tui.startup.loading_plugins": "正在加载 TUI 插件...",
+  "tui.startup.finishing": "正在完成启动...",
+  "tui.startup.elapsed": "已等待 {{seconds}} 秒",
+  "tui.startup.slow_hint": "仍在准备中。如果看起来卡住了，可按 Ctrl+C 退出。",
 
   // Onboarding
   "onboarding.welcome.loading": "加载中...",
   "onboarding.welcome.initializing": "正在初始化工作区...",
   "onboarding.welcome.ready": "欢迎使用 Agent Company",
-  "onboarding.welcome.start": "开始创建你的公司",
+  "onboarding.welcome.blocked": "配置加载需要处理",
+  "onboarding.welcome.status": "步骤 {{current}}/{{total}}：{{step}} · {{seconds}} 秒",
+  "onboarding.welcome.slow_hint": "这一步比预期更久。你可以重试，也可以先跳过配置试一次任务。",
+  "onboarding.welcome.error_step": "无法加载{{step}}：{{error}}",
+  "onboarding.welcome.step.agents": "智能体名单",
+  "onboarding.welcome.step.templates": "公司模板",
+  "onboarding.welcome.retry": "重试",
+  "onboarding.welcome.start": "创建你的公司",
   "onboarding.welcome.start_desc": "完整引导流程，几分钟搞定",
+  "onboarding.welcome.skip": "先试一次任务",
+  "onboarding.welcome.skip_desc": "先用当前或默认模型开始，公司配置可以稍后完成。",
+  "onboarding.welcome.loading_detail": "加载 {{step}}/{{total}} · 第 {{attempt}} 次",
   "onboarding.provider.title": "连接 AI",
   "onboarding.provider.description": "选择一个提供商和模型来驱动您的智能体",
   "onboarding.provider.setting_up": "正在设置模型...",

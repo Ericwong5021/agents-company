@@ -44,15 +44,12 @@ export function LeftNav(props: { overlay?: boolean; collapsed?: boolean; onToggl
   })
 
   const recentSessions = createMemo(() =>
-    (sync.data.session ?? [])
-      .toSorted((a, b) => b.time.updated - a.time.updated)
-      .slice(0, 8),
+    (sync.data.session ?? []).toSorted((a, b) => b.time.updated - a.time.updated).slice(0, 8),
   )
 
   const navToPlugin = (id: string) => route.navigate({ type: "plugin", id })
 
-  const isCurrentNav = (id: string) =>
-    route.data.type === "plugin" && route.data.id === id
+  const isCurrentNav = (id: string) => route.data.type === "plugin" && route.data.id === id
 
   const items = createMemo<NavItem[]>(() => {
     const out: NavItem[] = [
@@ -92,16 +89,15 @@ export function LeftNav(props: { overlay?: boolean; collapsed?: boolean; onToggl
     }
     out.push(
       {
+        kind: "header",
+        label: t("tui.shell.nav.manage"),
+        active: false,
+      },
+      {
         kind: "nav",
         label: t("tui.shell.nav.org-chart"),
         active: isCurrentNav("org-chart"),
         onSelect: () => navToPlugin("org-chart"),
-      },
-      {
-        kind: "nav",
-        label: t("tui.shell.nav.projects"),
-        active: isCurrentNav("project-management"),
-        onSelect: () => navToPlugin("project-management"),
       },
       {
         kind: "nav",
@@ -131,15 +127,16 @@ export function LeftNav(props: { overlay?: boolean; collapsed?: boolean; onToggl
   const collapsedPanel = (
     <box
       backgroundColor={theme.backgroundPanel}
-      width={2}
+      width={12}
       height="100%"
       alignItems="center"
       justifyContent="center"
       position={props.overlay ? "absolute" : "relative"}
     >
       <Show when={props.onToggle}>
-        <box onMouseUp={props.onToggle}>
+        <box onMouseUp={props.onToggle} flexDirection="row" gap={1}>
           <text fg={theme.textMuted}>▶</text>
+          <text fg={theme.textMuted}>{t("tui.shell.nav.expand")}</text>
         </box>
       </Show>
     </box>
@@ -159,7 +156,8 @@ export function LeftNav(props: { overlay?: boolean; collapsed?: boolean; onToggl
     >
       <box flexShrink={0} flexDirection="row" justifyContent="flex-end" height={1}>
         <Show when={props.onToggle}>
-          <box onMouseUp={props.onToggle}>
+          <box onMouseUp={props.onToggle} flexDirection="row" gap={1}>
+            <text fg={theme.textMuted}>{t("tui.shell.nav.collapse")}</text>
             <text fg={theme.textMuted}>◀</text>
           </box>
         </Show>
