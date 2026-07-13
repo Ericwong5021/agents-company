@@ -1,311 +1,129 @@
-# Contributing to OpenCode
+# Contributing to Agent Company
 
-We want to make it easy for you to contribute to OpenCode. Here are the most common type of changes that get merged:
+Thank you for helping build Agent Company. The project is currently converging on its local-first Pre-Public release, so contributions should strengthen that product path rather than reopen settled product direction.
 
-- Bug fixes
-- Additional LSPs / Formatters
-- Improvements to LLM performance
-- Support for new providers
-- Fixes for environment-specific quirks
-- Missing standard behavior
-- Documentation improvements
+## Start with the right source
 
-However, any UI or core product feature must go through a design review with the core team before implementation.
+Before changing product behavior, read:
 
-If you are unsure if a PR would be accepted, feel free to ask a maintainer or look for issues with any of the following labels:
+1. [Product Constitution](docs/product-design/PRODUCT-CONSTITUTION.md)
+2. [Product PRD](docs/Agent%20Company%20产品%20PRD.md)
+3. [Implementation Plan](docs/product-design/implementation-plan.md)
+4. [Repository instructions](AGENTS.md)
 
-- [`help wanted`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3Ahelp-wanted)
-- [`good first issue`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
-- [`bug`](https://github.com/anomalyco/opencode/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
-- [`perf`](https://github.com/anomalyco/opencode/issues?q=is%3Aopen%20is%3Aissue%20label%3A%22perf%22)
+The authority order for all documentation is in [docs/README.md](docs/README.md). If code and target design differ, describe and test the gap; do not quietly change the constitution to match current implementation.
 
-> [!NOTE]
-> PRs that ignore these guardrails will likely be closed.
+Core product or UI changes should begin with an issue or design discussion. Small fixes, tests, provider support, performance improvements, and documentation corrections can usually proceed directly when their scope is clear.
 
-Want to take on an issue? Leave a comment and a maintainer may assign it to you unless it is something we are already working on.
+## Development setup
 
-## Adding New Providers
-
-New providers shouldn't require many if ANY code changes, but if you want to add support for a new provider first make a PR to:
-https://github.com/anomalyco/models.dev
-
-## Developing OpenCode
-
-- Requirements: Bun 1.3+
-- Install dependencies and start the dev server from the repo root:
-
-  ```bash
-  bun install
-  bun dev
-  ```
-
-### Running against a different directory
-
-By default, `bun dev` runs OpenCode in the `packages/opencode` directory. To run it against a different directory or repository:
+Requirements: Bun 1.3.x and any platform dependencies needed by Electron and node-pty.
 
 ```bash
-bun dev <directory>
+git clone https://github.com/Ericwong5021/agents-company.git
+cd agents-company
+bun install
 ```
 
-To run OpenCode in the root of the opencode repo itself:
+Run the current CLI/TUI development entry:
 
 ```bash
-bun dev .
+bun run dev
 ```
 
-### Building a "localcode"
-
-To compile a standalone executable:
+Run the shared WebUI or Electron desktop shell:
 
 ```bash
-./packages/opencode/script/build.ts --single
+bun run dev:web
+bun run dev:desktop
 ```
 
-Then run it with:
+The standalone WebUI expects a local backend, normally on port 4096. The Electron app builds and hosts the backend from `packages/opencode` itself.
+
+## Repository map
+
+| Path | Responsibility |
+|---|---|
+| `packages/app` | Shared SolidJS + Vite WebUI for browser and Electron |
+| `packages/desktop` | Electron main/preload/renderer shell and packaging |
+| `packages/opencode` | Bun/Effect runtime, server, SQLite, Git, workflows, TUI, and Control Plane services |
+| `packages/ui` | Shared UI primitives |
+| `packages/sdk` | Generated and hand-written client SDKs |
+| `docs/product-design` | Canonical product design and implementation plan |
+| `docs/compose` | Historical implementation plans and reports |
+
+The TUI is a supported secondary client. New product information architecture should be designed in the shared WebUI and exposed through common Control Plane semantics, not implemented as a TUI-only product model.
+
+## Checks
+
+Do not run tests from the repository root; a guard intentionally rejects that. Run checks from the package you changed.
 
 ```bash
-./packages/opencode/dist/opencode-<platform>/bin/opencode
+cd packages/opencode
+bun typecheck
+bun test
 ```
-
-Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
-
-- Core pieces:
-  - `packages/opencode`: OpenCode core business logic & server.
-  - `packages/opencode/src/cli/cmd/tui/`: The TUI code, written in SolidJS with [opentui](https://github.com/sst/opentui)
-  - `packages/app`: The shared web UI components, written in SolidJS
-  - `packages/desktop`: The native desktop app, built with Tauri (wraps `packages/app`)
-  - `packages/plugin`: Source for `@agents-company/plugin`
-
-### Understanding bun dev vs opencode
-
-During development, `bun dev` is the local equivalent of the built `opencode` command. Both run the same CLI interface:
 
 ```bash
-# Development (from project root)
-bun dev --help           # Show all available commands
-bun dev serve            # Start headless API server
-bun dev web              # Start server + open web interface
-bun dev <directory>      # Start TUI in specific directory
-
-# Production
-opencode --help          # Show all available commands
-opencode serve           # Start headless API server
-opencode web             # Start server + open web interface
-opencode <directory>     # Start TUI in specific directory
+cd packages/app
+bun typecheck
+bun run test:unit
 ```
-
-### Running the API Server
-
-To start the OpenCode headless API server:
 
 ```bash
-bun dev serve
+cd packages/desktop
+bun typecheck
+bun run build
 ```
 
-This starts the headless server on port 4096 by default. You can specify a different port:
+Use focused tests during development and record the exact commands and results in the pull request. UI changes should include screenshots or a short recording for relevant states and platforms.
+
+To regenerate the JavaScript SDK after API changes:
 
 ```bash
-bun dev serve --port 8080
+./packages/sdk/js/script/build.ts
 ```
 
-### Running the Web App
+## Building local artifacts
 
-To test UI changes during development:
-
-1. **First, start the OpenCode server** (see [Running the API Server](#running-the-api-server) section above)
-2. **Then run the web app:**
+Build a single CLI/runtime artifact:
 
 ```bash
-bun run --cwd packages/app dev
+bun run packages/opencode/script/build.ts --single
 ```
 
-This starts a local dev server at http://localhost:5173 (or similar port shown in output). Most UI changes can be tested here, but the server must be running for full functionality.
-
-### Running the Desktop App
-
-The desktop app is a native Tauri application that wraps the web UI.
-
-To run the native desktop app:
+Build or package the Electron app from `packages/desktop`:
 
 ```bash
-bun run --cwd packages/desktop tauri dev
+bun run build
+bun run package
 ```
 
-This starts the web dev server on http://localhost:1420 and opens the native window.
+Use `package:win`, `package:mac`, or `package:linux` for a specific target.
 
-If you only want the web dev server (no native shell):
+## Pull requests
 
-```bash
-bun run --cwd packages/desktop dev
-```
+- Keep changes focused and preserve unrelated work in the repository.
+- Link an issue for user-visible features or behavior changes.
+- Explain the problem, why the change is correct, and how it was verified.
+- Separate current implementation facts from future target behavior.
+- Include migration and recovery behavior for schema, identity-file, and Worktree changes.
+- Include negative permission tests for private, Direct, approval, or external-action changes.
+- Do not claim a product workflow is complete merely because a backend module exists.
+- Use conventional commit prefixes such as `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
 
-To create a production `dist/` and build the native app bundle:
+Large AI-generated issue or PR descriptions without concrete understanding, evidence, and a focused change are not useful. Concise, authored explanations are preferred.
 
-```bash
-bun run --cwd packages/desktop tauri build
-```
+## Product guardrails
 
-This runs `bun run --cwd packages/desktop build` automatically via Tauri’s `beforeBuildCommand`.
+Without an explicit product decision, do not expand the active Pre-Public scope to:
 
-> [!NOTE]
-> Running the desktop app requires additional Tauri dependencies (Rust toolchain, platform-specific libraries). See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for setup instructions.
+- multi-user or cloud-hosted companies;
+- mobile clients;
+- one Project writing multiple repositories;
+- Kanban-first project management;
+- general-industry delivery claims;
+- pixel-office simulation;
+- weaker private-space, approval, audit, or Worktree boundaries.
 
-> [!NOTE]
-> If you make changes to the API or SDK (e.g. `packages/opencode/src/server/server.ts`), run `./script/generate.ts` to regenerate the SDK and related files.
-
-Please try to follow the [style guide](./AGENTS.md)
-
-### Setting up a Debugger
-
-Bun debugging is currently rough around the edges. We hope this guide helps you get set up and avoid some pain points.
-
-The most reliable way to debug OpenCode is to run it manually in a terminal via `bun run --inspect=<url> dev ...` and attach
-your debugger via that URL. Other methods can result in breakpoints being mapped incorrectly, at least in VSCode (YMMV).
-
-Caveats:
-
-- If you want to run the OpenCode TUI and have breakpoints triggered in the server code, you might need to run `bun dev spawn` instead of
-  the usual `bun dev`. This is because `bun dev` runs the server in a worker thread and breakpoints might not work there.
-- If `spawn` does not work for you, you can debug the server separately:
-  - Debug server: `bun run --inspect=ws://localhost:6499/ --cwd packages/opencode ./src/index.ts serve --port 4096`,
-    then attach TUI with `opencode attach http://localhost:4096`
-  - Debug TUI: `bun run --inspect=ws://localhost:6499/ --cwd packages/opencode --conditions=browser ./src/index.ts`
-
-Other tips and tricks:
-
-- You might want to use `--inspect-wait` or `--inspect-brk` instead of `--inspect`, depending on your workflow
-- Specifying `--inspect=ws://localhost:6499/` on every invocation can be tiresome, you may want to `export BUN_OPTIONS=--inspect=ws://localhost:6499/` instead
-
-#### VSCode Setup
-
-If you use VSCode, you can use our example configurations [.vscode/settings.example.json](.vscode/settings.example.json) and [.vscode/launch.example.json](.vscode/launch.example.json).
-
-Some debug methods that can be problematic:
-
-- Debug configurations with `"request": "launch"` can have breakpoints incorrectly mapped and thus unusable
-- The same problem arises when running OpenCode in the VSCode `JavaScript Debug Terminal`
-
-With that said, you may want to try these methods, as they might work for you.
-
-## Pull Request Expectations
-
-### Issue First Policy
-
-**All PRs must reference an existing issue.** Before opening a PR, open an issue describing the bug or feature. This helps maintainers triage and prevents duplicate work. PRs without a linked issue may be closed without review.
-
-- Use `Fixes #123` or `Closes #123` in your PR description to link the issue
-- For small fixes, a brief issue is fine - just enough context for maintainers to understand the problem
-
-### General Requirements
-
-- Keep pull requests small and focused
-- Explain the issue and why your change fixes it
-- Before adding new functionality, ensure it doesn't already exist elsewhere in the codebase
-
-### UI Changes
-
-If your PR includes UI changes, please include screenshots or videos showing the before and after. This helps maintainers review faster and gives you quicker feedback.
-
-### Logic Changes
-
-For non-UI changes (bug fixes, new features, refactors), explain **how you verified it works**:
-
-- What did you test?
-- How can a reviewer reproduce/confirm the fix?
-
-### No AI-Generated Walls of Text
-
-Long, AI-generated PR descriptions and issues are not acceptable and may be ignored. Respect the maintainers' time:
-
-- Write short, focused descriptions
-- Explain what changed and why in your own words
-- If you can't explain it briefly, your PR might be too large
-
-### PR Titles
-
-PR titles should follow conventional commit standards:
-
-- `feat:` new feature or functionality
-- `fix:` bug fix
-- `docs:` documentation or README changes
-- `chore:` maintenance tasks, dependency updates, etc.
-- `refactor:` code refactoring without changing behavior
-- `test:` adding or updating tests
-
-You can optionally include a scope to indicate which package is affected:
-
-- `feat(app):` feature in the app package
-- `fix(desktop):` bug fix in the desktop package
-- `chore(opencode):` maintenance in the opencode package
-
-Examples:
-
-- `docs: update contributing guidelines`
-- `fix: resolve crash on startup`
-- `feat: add dark mode support`
-- `feat(app): add dark mode support`
-- `fix(desktop): resolve crash on startup`
-- `chore: bump dependency versions`
-
-### Style Preferences
-
-These are not strictly enforced, they are just general guidelines:
-
-- **Functions:** Keep logic within a single function unless breaking it out adds clear reuse or composition benefits.
-- **Destructuring:** Do not do unnecessary destructuring of variables.
-- **Control flow:** Avoid `else` statements.
-- **Error handling:** Prefer `.catch(...)` instead of `try`/`catch` when possible.
-- **Types:** Reach for precise types and avoid `any`.
-- **Variables:** Stick to immutable patterns and avoid `let`.
-- **Naming:** Choose concise single-word identifiers when they remain descriptive.
-- **Runtime APIs:** Use Bun helpers such as `Bun.file()` when they fit the use case.
-
-## Feature Requests
-
-For net-new functionality, start with a design conversation. Open an issue describing the problem, your proposed approach (optional), and why it belongs in OpenCode. The core team will help decide whether it should move forward; please wait for that approval instead of opening a feature PR directly.
-
-## Trust & Vouch System
-
-This project uses [vouch](https://github.com/mitchellh/vouch) to manage contributor trust. The vouch list is maintained in [`.github/VOUCHED.td`](.github/VOUCHED.td).
-
-### How it works
-
-- **Vouched users** are explicitly trusted contributors.
-- **Denounced users** are explicitly blocked. Issues and pull requests from denounced users are automatically closed. If you have been denounced, you can request to be unvouched by reaching out to a maintainer on [Discord](https://opencode.ai/discord)
-- **Everyone else** can participate normally — you don't need to be vouched to open issues or PRs.
-
-### For maintainers
-
-Collaborators with write access can manage the vouch list by commenting on any issue:
-
-- `vouch` — vouch for the issue author
-- `vouch @username` — vouch for a specific user
-- `denounce` — denounce the issue author
-- `denounce @username` — denounce a specific user
-- `denounce @username <reason>` — denounce with a reason
-- `unvouch` / `unvouch @username` — remove someone from the list
-
-Changes are committed automatically to `.github/VOUCHED.td`.
-
-### Denouncement policy
-
-Denouncement is reserved for users who repeatedly submit low-quality AI-generated contributions, spam, or otherwise act in bad faith. It is not used for disagreements or honest mistakes.
-
-## Issue Requirements
-
-All issues **must** use one of our issue templates:
-
-- **Bug report** — for reporting bugs (requires a description)
-- **Feature request** — for suggesting enhancements (requires verification checkbox and description)
-- **Question** — for asking questions (requires the question)
-
-Blank issues are not allowed. When a new issue is opened, an automated check verifies that it follows a template and meets our contributing guidelines. If an issue doesn't meet the requirements, you'll receive a comment explaining what needs to be fixed and have **2 hours** to edit the issue. After that, it will be automatically closed.
-
-Issues may be flagged for:
-
-- Not using a template
-- Required fields left empty or filled with placeholder text
-- AI-generated walls of text
-- Missing meaningful content
-
-If you believe your issue was incorrectly flagged, let a maintainer know.
+Agent Company is rebuilt from AgentCompany foundations and does not preserve legacy filesystem, config, or API compatibility unless a migration bridge is explicitly requested and documented.

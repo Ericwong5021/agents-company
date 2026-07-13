@@ -1,15 +1,15 @@
 # Agent Company CLI
 
-Run an AI company from your terminal.
+Use Agent Company from your terminal.
 
-Agent Company is a terminal-first workspace for delegating software work to a structured group of AI agents. You describe the outcome, inspect the plan, approve important steps, and keep the work moving inside a terminal UI designed for real projects.
+Agent Company CLI is the terminal entry point for delegating software work to a structured group of AI agents. You describe the outcome, inspect the plan, approve important steps, and keep work moving inside a terminal UI designed for real projects.
 
 ```bash
 npm install -g @agents-company/cli
 agents
 ```
 
-Agent Company currently focuses on the TUI experience. Web and app interfaces are not part of the supported public surface for this npm package.
+This npm package exposes the CLI/TUI surface. The broader Agent Company product is moving toward a shared Web/Desktop workbench with the TUI retained as a secondary client; Web and desktop binaries are not distributed through this package.
 
 ## Quick Start
 
@@ -74,7 +74,7 @@ Inside the TUI, common patterns include:
 - Use `/models` to inspect and switch models.
 - Use `/help` to see available commands in the current TUI.
 
-The TUI is the core product surface. Commands and docs should be read with that assumption: Agent Company is not trying to preserve legacy AgentCompany or opencode compatibility unless a migration bridge is explicitly documented.
+The TUI is the core surface of this CLI package, not the primary information architecture of the broader product. Agent Company is not trying to preserve legacy AgentCompany or OpenCode compatibility unless a migration bridge is explicitly documented.
 
 ## Shell Commands
 

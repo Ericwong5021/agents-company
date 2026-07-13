@@ -1,8 +1,8 @@
-# AgentCompany Use Restrictions
+# Agent Company Use Restrictions
 
 ## Use Restrictions
 
-You are solely responsible for your use of AgentCompany and any outputs, actions, or consequences arising therefrom, and you agree not to use AgentCompany or any derivatives thereof:
+You are solely responsible for your use of Agent Company and any outputs, actions, or consequences arising therefrom, and you agree not to use Agent Company or any derivatives thereof:
 
 - For any unlawful, fraudulent, or malicious purpose, or in any manner that violates any applicable laws or regulations;
 
@@ -16,4 +16,4 @@ You are solely responsible for your use of AgentCompany and any outputs, actions
 
 - To access, collect, process, disclose, or disseminate personal data or other protected information without appropriate authorization or lawful basis; or to access, interact with, scrape, or automate any third-party platform or service in violation of any applicable laws, policies, or authorization requirements;
 
-- To use AgentCompany in a manner that autonomously executes high-risk actions without appropriate human oversight or authorization.
+- To use Agent Company in a manner that autonomously executes high-risk actions without appropriate human oversight or authorization.

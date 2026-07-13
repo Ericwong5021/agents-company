@@ -1,5 +1,7 @@
 # Hermes Runtime Implementation Summary
 
+> Historical implementation snapshot. It overlaps `IMPLEMENTATION_COMPLETE.md` and is retained only for provenance. Use [`README.md`](README.md), current code, and tests for the module's present behavior.
+
 ## Overview
 
 Successfully implemented Hermes runtime support for AgentCompany. The implementation follows all requirements specified in the task.

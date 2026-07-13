@@ -1,47 +1,74 @@
 # Security
 
-## IMPORTANT
+## Threat model
 
-We do not accept AI generated security reports. We receive a large number of
-these and we absolutely do not have the resources to review them all. If you
-submit one that will be an automatic ban from the project.
+Agent Company is a local AI development system with access to powerful tools, including shell commands, file operations, Git, network requests, model providers, and MCP servers. Treat an authorized Agent run with the same care as a local developer process acting with your operating-system account.
 
-## Threat Model
+### No operating-system sandbox guarantee
 
-### Overview
+The permission and approval systems help users understand and authorize actions; they are not an operating-system security sandbox. Unless a runtime explicitly documents stronger isolation, Agent code and tools run with the permissions of the Agent Company process.
 
-OpenCode is an AI-powered coding assistant that runs locally on your machine. It provides an agent system with access to powerful tools including shell execution, file operations, and web access.
+For untrusted repositories, tools, plugins, MCP servers, or prompts, use a disposable VM, container, or dedicated OS account and restrict credentials available to the process.
 
-### No Sandbox
+### Local server
 
-OpenCode does **not** sandbox the agent. The permission system exists as a UX feature to help users stay aware of what actions the agent is taking - it prompts for confirmation before executing commands, writing files, etc. However, it is not designed to provide security isolation.
+The Electron shell starts a loopback server with generated credentials. CLI/server modes can be configured separately.
 
-If you need true isolation, run OpenCode inside a Docker container or VM.
+- Keep the server bound to loopback unless remote access is an intentional, reviewed choice.
+- Set `AGENTCOMPANY_SERVER_PASSWORD` when running a separately reachable server.
+- Do not publish the local port or credentials through logs, screenshots, shell history, or URLs.
+- A reverse proxy, tunnel, or LAN bind expands the threat model and is the operator's responsibility.
 
-### Server Mode
+Unauthenticated loopback access can still be dangerous when other local processes or browser content are untrusted. The Pre-Public product target therefore requires authenticated clients and explicit browser pairing; consult release notes for what the current build enforces.
 
-Server mode is opt-in only. When enabled, set `OPENCODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
+### Private Agent data
 
-### Out of Scope
+The Product Constitution defines strict future boundaries for Agent private spaces and Direct messages. Until a release explicitly marks those boundaries as implemented and its negative tests pass, do not store secrets in experimental Agent identity features on the assumption that planned isolation is already a security control.
 
-| Category                        | Rationale                                                               |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| **Server access when opted-in** | If you enable server mode, API access is expected behavior              |
-| **Sandbox escapes**             | The permission system is not a sandbox (see above)                      |
-| **LLM provider data handling**  | Data sent to your configured LLM provider is governed by their policies |
-| **MCP server behavior**         | External MCP servers you configure are outside our trust boundary       |
-| **Malicious config files**      | Users control their own config; modifying it is not an attack vector    |
+Once shipped, any cross-Agent, manager, search, summary, log, backup, or API path that exposes another Agent's private content is a security issue.
 
----
+### External services
 
-# Reporting Security Issues
+Data sent to configured model providers, MCP servers, plugins, remote repositories, or other integrations is governed by those systems and their credentials. Agent Company cannot provide confidentiality beyond the boundary of a service the user explicitly enables.
 
-We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
+## In-scope examples
 
-To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/anomalyco/opencode/security/advisories/new) tab.
+- Authentication or authorization bypass in a supported server/client configuration;
+- Path traversal or arbitrary file access beyond an authorized workspace;
+- Cross-Agent private-space or Direct-message disclosure in a released feature;
+- Approval-policy bypass that performs an action outside the granted resource scope;
+- Credential leakage through logs, diagnostics, URLs, notifications, or exported data;
+- Worktree handling that modifies or destroys an unrelated repository/worktree;
+- A sandbox claim in a supported runtime that can be escaped.
 
-The team will send a response indicating the next steps in handling your report. After the initial reply to your report, the security team will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
+## Usually out of scope
 
-## Escalation
+| Category | Rationale |
+|---|---|
+| Actions the user explicitly authorized | Tool execution is expected behavior within the granted scope |
+| Lack of OS isolation in the default runtime | The default permission UI is not presented as an OS sandbox |
+| Provider retention or training policy | Governed by the configured provider |
+| Malicious behavior of an explicitly installed MCP server or plugin | External component outside the default trust boundary |
+| A user directly editing their own local config or data files | The local user already controls those files |
+| Behavior that exists only in target design documents | Planned features are not shipped security boundaries |
 
-If you do not receive an acknowledgement of your report within 6 business days, you may send an email to security@anoma.ly
+An issue may still be in scope when prompt injection or an external component crosses an Agent Company authorization boundary that the user did not grant.
+
+## Reporting a vulnerability
+
+Please use the repository's private GitHub Security Advisory flow:
+
+<https://github.com/Ericwong5021/agents-company/security/advisories/new>
+
+Include:
+
+- affected version and platform;
+- required configuration;
+- a minimal reproduction;
+- actual versus expected authorization boundary;
+- impact and whether data or credentials were exposed;
+- any suggested mitigation.
+
+Do not include real secrets, private Agent content, or third-party personal data.
+
+We do not accept reports that are generated wholesale by AI or submitted as unverified bulk scanner output. The reporter must personally validate the behavior, provide a minimal reproduction, and be able to explain the concrete authorization boundary and impact. Abusive bulk submissions may result in the reporter being blocked.

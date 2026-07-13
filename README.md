@@ -2,270 +2,175 @@
 
 # Agent Company
 
-**The AI Company Operating System**
+**A local-first operating system for your own AI software company.**
 
-*Give yourself a company of AI employees — not a chatbot, an organization.*
+You set the direction. The company turns it into an accountable, testable delivery—and brings back only the decisions that are truly yours.
 
-[![npm version](https://img.shields.io/npm/v/@agents-company/cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agents-company/cli)
-[![npm downloads](https://img.shields.io/npm/dm/@agents-company/cli?color=cb3837)](https://www.npmjs.com/package/@agents-company/cli)
-[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![runtime](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh)
-[![language](https://img.shields.io/badge/language-TypeScript-3178c6?logo=typescript&logoColor=fff)](https://www.typescriptlang.org)
-[![TUI](https://img.shields.io/badge/interface-TUI-00d111)](#quick-start)
-
-[Quick Start](#quick-start) · [English](README.md) · [中文](README.zh.md) · [Design Docs](docs/product-design/00-overview.md) · [PRD](docs/Agent%20Company%20产品%20PRD.md) · [Roadmap](#roadmap)
+[中文](README.zh.md) · [Product Constitution](docs/product-design/PRODUCT-CONSTITUTION.md) · [PRD](docs/Agent%20Company%20产品%20PRD.md) · [Docs Index](docs/README.md)
 
 </div>
 
----
+> [!IMPORTANT]
+> Agent Company is converging toward its **Pre-Public** release. The repository already contains substantial agent-runtime, governance, TUI, WebUI, and Electron foundations, but the complete IM-first desktop journey, tray lifecycle, strict private spaces, and persona-level Dreaming are target work—not yet a finished public product. The documents above define the target; the code and implementation plan record current gaps.
 
-## The Pitch
+## What Agent Company Is
 
-> **You set the direction. The company drives it forward. When it's your call, it comes back.**
+Agent Company lets one person run a persistent AI organization on their own computer.
 
-You're not "using a chatbot." You're **running a virtual company**.
+Instead of manually orchestrating a set of disposable agents, you speak with a small board. The board turns broad goals into an acceptably scoped Project Charter, forms a temporary project team, delegates work, reviews evidence, and escalates only material decisions.
 
-Agent Company is a multi-agent operating system where AI agents form a real organization — with a boardroom, departments, project squads, and execution teams. You tell the company what you want. It decomposes the goal, delegates down through the org chart, executes, reviews, and brings key decisions back to you.
+The product has three inseparable layers:
 
-```
-You ←→ 🏢 Boardroom (CEO / CTO / CFO / CMO)
-           ↓
-        📋 Departments — split goals, set acceptance criteria
-           ↓
-        👥 Project Squads — decompose into executable specs
-           ↓
-        ⚙️ Execution Layer — drive tools, produce artifacts
-```
+| Layer | Responsibility |
+|---|---|
+| Work | IM collaboration, software projects, code, tests, review, and delivery |
+| Governance | Organization, delegation, approval policy, gates, reputation, and audit |
+| Life | Persistent identity, private space, social relationships, reflection, and Dreaming |
 
-**No shortcuts, no skip-levels.** Every request flows through the full org chart, 4-5 layers deep. Only the tool layer produces artifacts (code, docs, data, designs). Everything else is planning, orchestration, and governance.
+## Product Direction
 
----
+The intended product formula is:
 
-## Why a "Company" and Not a "Framework"?
+> Multica-level visual finish + Bloome-style IM-first interaction + Agent Company autonomous governance and agent personhood.
 
-| | Multi-Agent Framework | Agent Company |
-|---|---|---|
-| Metaphor | "Prompt templates in a trenchcoat" | A virtual org with real hierarchy |
-| Collaboration | Agents talk to each other | Agents have **roles, reports, and accountability** |
-| Governance | None or manual | **Built-in approval gates, escalation, audit trails** |
-| Identity | Stateless prompts | **Persistent agent files**: soul, memory, skills, relationships |
-| User Experience | Write code to orchestrate | **Just tell the company what you want** |
+That means:
 
----
+- **IM-first, not Kanban-first.** Conversation is the primary surface; tasks and boards are derived views.
+- **High signal by default.** The main conversation shows conclusions, decisions, risks, approvals, and deliveries. Full collaboration expands in Threads; tool logs nest one level deeper.
+- **A minimal fixed board, then a dynamic organization.** A new company starts with a CEO, CTO, and Product Lead. Departments and project roles appear only when real work requires them.
+- **Autonomy with configurable approval.** Internal decomposition, delegation, implementation, tests, and agent review normally run automatically. Users choose autonomous, balanced, or strict approval levels.
+- **Local-first and always available.** Desktop and browser share one WebUI backed by a local Control Plane. The desktop target stays in the system tray/status bar and keeps authorized work running after the window closes.
+- **Software development first.** The first public release optimizes one project around one primary Git repository. Other domains come later.
 
-## Features
+## What Makes It Different
 
-<table>
-<tr>
-<td width="50%" valign="top">
+### The board must make goals executable
 
-### 🏛️ Boardroom Interface
+Passing a vague, untestable goal directly to an execution agent is a board failure. Before work begins, the board must produce a Project Charter with value, deliverables, acceptance criteria, scope, constraints, risks, milestones, a DRI, and unresolved user decisions.
 
-Your entry point is a meeting with the board — CEO, CTO, CFO, CMO. Discuss goals, set priorities, review progress. No prompt engineering required.
+### Temporary agents are candidates, not throwaways
 
-</td>
-<td width="50%" valign="top">
+Project agents return to a candidate pool. Selection reasons, quality, reputation, cost, speed, and specialties accumulate across projects. Repeated high-value work can justify promotion to a permanent position.
 
-### 🔄 Recursive Delegation
+### Permanent agents have lives as well as jobs
 
-Tasks decompose naturally through the org chart: Boardroom → Departments → Project Squads → Execution → Tool Layer. Each layer does exactly one thing well.
+A permanent agent has separate spaces:
 
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 🎯 Bidding Scheduler
-
-Agents bid to speak based on relevance, expertise, and turn rights. No central host, no agent dominates, no voice is lost. A decentralized alternative to LLM-moderated turn-taking.
-
-</td>
-<td width="50%" valign="top">
-
-### 🧠 Persistent Identity
-
-Each agent is more than a prompt — they're a bundle of persistent files: **soul** (who they are), **memory** (what they've learned), **skills** (what they can do), and **relationships** (who they work with).
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 📋 Task & Artifact Management
-
-Track work through the org. Artifacts flow upward through **gates** — approved or escalated. Every decision is traceable.
-
-</td>
-<td width="50%" valign="top">
-
-### 🔒 Governance by Design
-
-Approval checkpoints at every level. Trust scales with performance. The system records everything — because an untraceable system is an ungovernable one.
-
-</td>
-</tr>
-<tr>
-<td colspan="2" align="center">
-
-### 🖥️ Terminal-Native UI
-
-Beautiful TUI built with SolidJS + OpenTUI. Not a web app, not a desktop wrapper — a **native terminal experience** for developers who live in the command line.
-
-</td>
-</tr>
-</table>
-
----
-
-## Quick Start
-
-### Install
-
-```bash
-# Via npm
-npm install -g @agents-company/cli
-
-# Or via Bun (recommended)
-bun install -g @agents-company/cli
+```text
+agents/<id>/
+  private/       # SOUL, dreams, journal, interests, private memory
+  professional/  # ROLE, instructions, career, skills, work memory
+  public/        # PROFILE, contributions, shared skills
 ```
 
-### Run
+The agent can write its private space. The user can read it but cannot edit it. No other agent—including managers and board members—can read it. PROFILE is an agent-curated card with system-signed employment facts beside it.
 
-```bash
-agents
+Dreaming is distinct from task reflection: it is a private, low-frequency synthesis of real experiences that can produce a versioned SOUL change, but can never change the agent's formal role, permissions, company constitution, or project code.
+
+## Software Delivery Contract
+
+The first public release follows one strict delivery loop:
+
+```text
+Goal
+→ Project Charter
+→ Project room and dynamic team
+→ Worktree
+→ Implementation and tests
+→ Agent Review
+→ Policy-driven approval
+→ Merge
+→ Verify main branch
+→ Destroy Worktree
+→ Reflection and agent lifecycle updates
 ```
 
-That's it. The onboarding flow walks you through:
+Worktrees are configurable and on by default. When enabled, they cannot be destroyed before merge and main-branch verification. Conflicts return to review; failed and cancelled worktrees remain available for explicit disposition.
 
-1. **Set up your AI company** — name, industry, team size
-2. **Create your founding team** — CEO, CTO, CFO, CMO
-3. **Enter the boardroom** — start giving directions
+## Architecture
 
-### Development
+```text
+Electron / Browser / TUI
+          │ local API + event stream
+          ▼
+Local Control Plane
+  ├─ Agent / Thread / Workflow runtime
+  ├─ Governance / Approval / Audit
+  ├─ Context Resolver / Privacy boundaries
+  ├─ Project / Admission / Worktree delivery
+  ├─ SQLite
+  ├─ Versioned agent identity files
+  └─ Git repositories and worktrees
+```
+
+The current codebase evolves in place:
+
+| Package | Role |
+|---|---|
+| `packages/app` | Shared SolidJS + Vite WebUI |
+| `packages/desktop` | Electron desktop shell and local server host |
+| `packages/opencode` | Bun/Effect/Hono runtime, Control Plane services, SQLite, Git, workflows, and TUI |
+
+The renderer clients must not mutate SQLite or identity files directly. The Control Plane owns authenticated writes, recovery, and event ordering.
+
+## Existing Foundation
+
+The repository already includes reusable implementations for sessions, actors, group sessions, autonomous bidding, threads, company projects, delegation, admission, organization, reputation, trust levels, audit events, token governance, workflows, Control Plane workspaces, and Git worktrees.
+
+The active work is product integration and hardening: the shared IM workbench, desktop lifecycle, policy inheritance, strict worktree governance, candidate careers, three-space privacy, Direct messages, and persona-level Dreaming. See the [implementation plan](docs/product-design/implementation-plan.md) for the verified inventory and sequence.
+
+## Development
+
+Requirements: Bun 1.3.x and the platform dependencies needed by Electron/node-pty.
 
 ```bash
 git clone https://github.com/Ericwong5021/agents-company.git
 cd agents-company
 bun install
+```
+
+Run the current TUI/runtime development entry:
+
+```bash
 bun run dev
 ```
 
-> **Current focus is the TUI** in `packages/opencode/src/cli/cmd/tui/`. Web and App are not the current mainline.
-
----
-
-## Architecture
-
-```
-User ←→ Boardroom (CEO/CTO/CFO/CMO)     ← system entry = a meeting
-        ↓
-     Departments (business + infrastructure)
-        ↓
-     Project squads (Leader)
-        ↓
-     Execution layer
-        ↓
-     Tool layer                           ← the only layer that produces artifacts
-```
-
-**Key principles:**
-
-| Principle | What it means |
-|-----------|---------------|
-| **Recursive delegation** | Every non-leaf node decomposes → delegates → gates results |
-| **Identity ≠ Execution** | Agent files are "who"; Model is "how they run" |
-| **Information as files** | Policies, strategy, memory are all documents, governed by scope × clearance |
-| **Attention as cost** | Four modes (idle/reactive/divergent/focused) select model tier and context depth |
-| **Governance through records** | Every cross-agent action is an audit event |
-
-See the [Product Design Overview](docs/product-design/00-overview.md) for the full architecture.
-
----
-
-## Core Objects
-
-| Object | Description |
-|--------|-------------|
-| **Workspace** | The company space — organization, tasks, meetings, artifacts, rules, history |
-| **Agent** | A digital employee with persistent identity (soul/instruct/memory/skills/relationships/kanban) |
-| **Thread** | The unit of concurrency — focused, divergent, reactive, ambient |
-| **Group / Meeting** | A governable collaboration room, not just a group chat |
-| **Task** | A trackable, reviewable, accept-able unit of work |
-| **Artifact** | Produced by the tool layer, flowing upward through gates |
-| **Gate** | Review checkpoint — pass to escalate, fail to retry |
-| **Decision** | Traceable organizational decision with rationale (DRI decides, no voting) |
-| **Proposal** | Bottom-up suggestions from agents to the board |
-
----
-
-## Built-in Agents
-
-| Agent | Role | Description |
-|-------|------|-------------|
-| `build` | 🔨 Engineer | Executes tools based on configured permissions |
-| `plan` | 📐 Planner | Read-only planning mode — suggests, doesn't change |
-| `compose` | 🎼 Orchestrator | Manages workflows with built-in compose skills |
-| `explore` | 🔍 Researcher | Fast codebase exploration and analysis |
-| `general` | 🤖 Generalist | Multi-purpose agent for complex research tasks |
-
-Custom agents can be defined via config or `.agentcompany/agent/` files.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Runtime | [Bun](https://bun.sh) + TypeScript |
-| TUI | SolidJS + OpenTUI (terminal rendering) |
-| State | [Effect-TS](https://effect.website) (functional effect system) |
-| Storage | Drizzle ORM + SQLite |
-| Build | Turborepo (monorepo) |
-| Models | Any LLM provider (OpenAI, Anthropic, Google, local models...) |
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| **P0** — Execution Foundation | ✅ Done | Single-task chain, structured activity contracts, real delivery, approval, cancel |
-| **P1** — Execution Model + Multi-Agent | 🔨 In Progress | Agent=file-bundle, model=engine, concurrency=thread, presence registry |
-| **P2** — Org Context Foundation | 📋 Planned | Context resolver, scope × clearance, role-based visibility, delegate/message primitives |
-| **P3** — Interaction + Recursive Delegation | 📋 Planned | A2A alignment, recursive delegation, failure protocols, admission grading |
-| **P4** — Governance + Learning | 📋 Planned | Reputation, org changes, proposal loop, experience→skill crystallization |
-| **P5** — Experience & Spatial Loop | 📋 Planned | Differentiated rendering, living office, org tree + thread visualization |
-
----
-
-## Contributing
-
-We welcome contributions! Please read our [AGENTS.md](AGENTS.md) for coding conventions and style guidelines.
+Run the shared WebUI or Electron shell:
 
 ```bash
-# Run typechecks from package directories (not repo root)
+bun run dev:web
+bun run dev:desktop
+```
+
+Typecheck and test from package directories, never from the repository root:
+
+```bash
 cd packages/opencode
 bun typecheck
 bun test
 ```
 
----
+Repository conventions are in [AGENTS.md](AGENTS.md).
 
-## Community
+## Current Release Path
 
-- [GitHub Discussions](https://github.com/Ericwong5021/agents-company/discussions) — Ask questions, share ideas
-- [GitHub Issues](https://github.com/Ericwong5021/agents-company/issues) — Report bugs, request features
+1. Product and terminology baseline
+2. Local Control Plane and tray/status-bar lifecycle
+3. IM-first company, project rooms, and Threads
+4. Board Charter, approval policy, and software delivery closure
+5. Candidate careers, Agent Home, privacy, Direct, and Dreaming
+6. Windows/macOS Pre-Public hardening and first public release
 
----
+The first release intentionally excludes multi-user cloud hosting, mobile apps, multi-repository projects, general-industry delivery, Kanban-first project management, and pixel-office simulation.
+
+## Documentation
+
+- [Product Constitution](docs/product-design/PRODUCT-CONSTITUTION.md)—non-negotiable product principles and boundaries
+- [Product PRD](docs/Agent%20Company%20产品%20PRD.md)—public-release requirements and acceptance
+- [Product Design Overview](docs/product-design/00-overview.md)—system model and document map
+- [Implementation Plan](docs/product-design/implementation-plan.md)—current foundation, gaps, and delivery workstreams
+- [Documentation Index](docs/README.md)—authority order and historical-document status
 
 ## License
 
-Source code is licensed under the [MIT License](./LICENSE). Use of Agent Company is also subject to the [Use Restrictions](./USE_RESTRICTIONS.md).
-
----
-
-<div align="center">
-
-<sub>Built with the philosophy that AI should work <strong>like an organization</strong>, not like a chatbot.</sub>
-
-</div>
+The source code is licensed under the [Apache License 2.0](LICENSE). Use is also subject to the [Use Restrictions](USE_RESTRICTIONS.md).

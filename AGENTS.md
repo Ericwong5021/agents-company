@@ -1,16 +1,22 @@
 - 使用中文跟用户对话。
-- 回答前先问用户问题，一次只问一个。根据回答继续追问，直到有 95% 信心理解真实需求和目标后，再给出方案。
+- 只有在缺失信息会实质改变产品结果、权限边界或不可逆操作时才向用户提问；一次只问一个。其余情况基于已有上下文做合理假设并推进，不要重复确认已经收敛的产品决策。
 - Use AgentCompany Compose skills when available, otherwise use superpowers skill if installed.
 - To regenerate the JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
 - The default branch in this repo is `main`.
 - CI triggers on both `main` and `dev` branches.
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
-- Agent Company is a new product rebuilt from AgentCompany foundations, not a AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
+- Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
-## Core Focus (as of 2025-06-18)
+## Core Focus (as of 2026-07-13)
 
-Our core development focus is the **TUI** (terminal UI) implementation in `packages/opencode/src/cli/cmd/tui/`. We do not currently provide support for Web or App interfaces. All operations should default to checking the TUI implementation first.
+The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
+
+- The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
+- The local Control Plane and agent runtime live in `packages/opencode`.
+- The TUI in `packages/opencode/src/cli/cmd/tui/` remains a supported secondary entry point and should share service semantics with the Web/Desktop clients; it must not define the primary product information architecture.
+- The first public release focuses on single-user local software development. Do not expand the active scope to multi-user cloud hosting, general-industry delivery, multi-repository projects, Kanban-first project management, or a pixel office without an explicit product decision.
+- Product decisions and document precedence are indexed in `docs/README.md`. When code and target design differ, describe the gap rather than presenting planned behavior as implemented.
 
 ## Style Guide
 

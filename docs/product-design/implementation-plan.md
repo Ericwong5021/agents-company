@@ -1,393 +1,343 @@
-# Implementation Plan: Agent Company Product Phases
-
-> Based on: `docs/product-design/00-overview.md` through `08-product-phases.md`
-> Current state: P0 (Execution Foundation) completed
-> Target: R1 first-ship (P0-P5 complete, Local/Web open-source)
-
----
-
-## Current Codebase Inventory
-
-### Already Built (can be leveraged)
-
-| System | Location | Coverage |
-|--------|----------|----------|
-| Agent model (native + configurable) | `src/agent/`, `src/company-agent/` | CRUD, templates, permissions, modes |
-| Session model | `src/session/` | CRUD, parent/child, context inheritance |
-| Actor system | `src/actor/` | spawn/subagent, lifecycle, context modes, completion gate |
-| Group Session (multi-agent chat) | `src/group-session/` | Round-based fan-out, context injection |
-| Inbox (inter-actor messaging) | `src/inbox/` | send/drain, wake-on-delivery, 7-day GC |
-| Task system | `src/task/` | CRUD, status transitions, completion gate |
-| Workflow runtime | `src/workflow/` | QuickJS sandbox, concurrency, nested workflows |
-| Database (16+ tables) | `src/*/sql.ts` | Drizzle SQLite, full schema |
-| Config system | `src/config/` | Hierarchical JSONC, agent/model/permission |
-| Workspace / Control Plane | `src/control-plane/` | Adaptor pattern, worktree, SSE sync |
-| TUI | `src/cli/cmd/tui/` | 130+ files, SolidJS, shell/routes/dialogs/i18n |
-| Server API | `src/server/` | Hono, 20+ route groups |
-| Memory (FTS5) | `src/memory/` | File-based search, reconcile |
-| Team schema (skeleton) | `src/team/` | Types only, no service/persistence |
-
-### Not Yet Built
-
-- ContextResolver (scope x classification x clearance)
-- Attention modes (idle/reactive/divergent/focused)
-- Thread model (concurrent execution units per agent)
-- Organizational file tree (public/groups/agents three-layer)
-- Delegate/Reply/Propose primitives as named APIs
-- Recursive delegation with depth limits
-- Failure protocol (approach attempts + fix iterations + escalation)
-- Admission grading (task-rating-aware review standards)
-- Reputation/honor score system
-- Bottom-up proposal system
-- DRI decision rules
-- Trust dial
-- Token full-chain statistics
-- Non-coding work type adapters
-
----
-
-## Phase Plan
-
-### P1 — Execution Model + Multi-Agent
-
-**Goal**: Agent = persistent file bundle, Model = transient engine, Thread = concurrency unit. Multiple agents run concurrently with per-thread state tracking.
-
-**Depends on**: P0 (done)
-
-#### P1.1 — Agent File Bundle
-
-Transform `CompanyAgent` from DB-only to filesystem-backed persistent identity.
-
-| Task | Detail |
-|------|--------|
-| Agent filesystem layout | `workspace/agents/<agent-id>/` with `soul.md`, `instruct.md`, `memory/`, `skills/`, `relationships.md`, `kanban.md` |
-| soul.md schema | Name, role, responsibilities, org belonging, work style — stable identity |
-| instruct.md schema | Evolvable instructions: how to judge, communicate, when to escalate |
-| Memory directory | Private memories: work records, lessons, reflections (leverage existing FTS5 memory) |
-| Skills directory | Private skills: reusable capabilities crystallized from experience |
-| relationships.md | Colleague relationships: collaboration preferences, communication style, trust level |
-| kanban.md | Personal task view: current projects, todos, progress |
-| CompanyAgent ↔ file sync | On create: generate file bundle from template. On update: sync DB ↔ files. On read: prefer files for prompt injection |
-| Idle cost design | File-bundle agents cost near-zero tokens when idle (no active thread) |
-
-#### P1.2 — Thread Model
-
-Introduce the concept of concurrent execution threads per agent identity.
-
-| Task | Detail |
-|------|--------|
-| Thread schema (DB) | `thread` table: id, agent_id, kind (primary/reactive/ambient), status, started_at, budget |
-| Primary thread | Focused/divergent mode, exclusive isolated workspace, max 1 per agent |
-| Reactive thread | Response mode, independent scratch, short run, light budget, multiple per agent (rate-limited) |
-| Ambient thread | Idle mode, read-only exploration, very low frequency, scheduler rate-limited |
-| Per-agent activity registry | Current threads + what they're doing + status. Check before assigning work |
-| AgentStatus upgrade | From single enum → per-thread status + agent-level rollup |
-| File bundle write serialization | Concurrent threads communicate via persistent files at startup only; primary has exclusive workspace; reactive reads-only or writes to scratch; memory/kanban writes serialized |
-
-#### P1.3 — Concurrency & Workstation
-
-| Task | Detail |
-|------|--------|
-| Multi-agent CRUD in TUI | Create, start, stop, configure multiple agents from TUI |
-| Workstation status view | Show all agents, their threads, status, current task |
-| Agent spawn integration | `actor.spawn` gains thread-awareness (which thread kind, which agent identity) |
-| Session ↔ Thread binding | Session gains `thread_id` foreign key; thread owns one or more sessions |
-
-**Acceptance**: 3+ agents run concurrently. One agent can respond to a colleague (reactive thread) while focused on main task (primary thread).
-
----
-
-### P2 — Organizational Context Foundation
-
-**Goal**: Context injection upgraded to org information architecture × classification × access intersection. Agents see what they're authorized to see based on their position in the org tree.
-
-**Depends on**: P1
-
-**Key insight from design doc**: P2 MUST come before P3 — without directory/roles/clearance, agents cannot meaningfully collaborate.
-
-#### P2.1 — Three-Layer File Tree
-
-| Task | Detail |
-|------|--------|
-| Workspace directory structure | `workspace/public/` (org-level), `workspace/groups/<project-id>/` (team-level), `workspace/agents/<agent-id>/` (individual-level) |
-| Public directory | `org/profiles/`, `org/structure.md`, `policy/safety-redlines.md`, `policy/collaboration.md`, `facilities/skills.md`, `board/strategy.md`, `board/projects.md`, `minutes/` |
-| Groups directory | Dynamically created on team formation; contains project shared context, squad minutes, project resources |
-| Front-matter schema | Every document has `scope` (public/group/private), `classification` (public/internal/confidential/restricted), `owner`, `updatedBy` |
-| Bootstrap | On first run, scaffold the directory tree from templates. On agent creation, scaffold agent file bundle |
-
-#### P2.2 — Clearance & Access Control
-
-| Task | Detail |
-|------|--------|
-| Clearance derivation | Base clearance from position in org tree (department + rank). Relationship edges add/remove local access |
-| Org structure definition | Config-driven org tree: departments, roles, reporting lines. Stored in `workspace/public/org/structure.md` |
-| Access gate | `Agent can see doc <==> doc.scope covers Agent AND Agent.clearance >= doc.classification` |
-| Relationship edges | Private channels grant +1 level. External collaborators get -1 level. Delegation channels grant delegate access |
-| Audit on access | Every cross-agent document access fires an audit event |
-
-#### P2.3 — ContextResolver
-
-The single context gateway. All memory, skills, messages, and modes pass through it.
-
-| Task | Detail |
-|------|--------|
-| Resolution flow | (1) Scan three-layer doc tree → (2) Filter by scope × clearance (hard boundary) → (3) Soft focus by mode-profile → (4) Aggregate inbox + memory → (5) Truncate by relevance + token budget → (6) Expose authorized tools |
-| Token tiers | Standing summary (directory one-liner, safety red line, current project — injected every time) vs. on-demand pull (deep doc content via `read_doc`) |
-| Inject vs explore | `visible = access-filter(scope ∩ clearance ± relationships)` is hard boundary. `injected = visible ∩ mode-profile(attention)` is soft focus. Mode never expands access |
-| read_doc primitive | Agent calls `read_doc(path)` to pull authorized documents on demand. Fires audit event |
-| Directory summary in instruct | Agent's `instruct.md` auto-includes a directory summary of what's visible to them |
-
-#### P2.4 — Minimal Interaction Primitives
-
-| Task | Detail |
-|------|--------|
-| AgentMessage schema | ID, FromAgentID, ToAgentID, Kind (fyi/request/reply/proposal), Body, Classification, ThreadID, RootNeedID, IssueID, InReplyTo, Depth |
-| message_agent (FYI) | Inform, no task created. Creates message + fires event. Addressing by name/role |
-| delegate (Request) | Delegate task. Creates message + child task. Depth +1 per delegate. Addressing by name/role |
-| reply | Task completion flow-back. Auto-creates message to original requester. Fires event + marks unread |
-| Inbox integration | Leverage existing inbox system; extend with AgentMessage fields (RootNeedID, Depth, Kind) |
-| Unread injection | On agent startup, drain inbox + inject unread messages into context (reactive mode) |
-
-**Acceptance**: Different clearance yields different visibility. Instruct contains directory summary. Delegate resolves target by name. Inbox delivers FYI/reply across agents.
-
----
-
-### P3 — Interaction + Recursive Delegation
-
-**Goal**: Requirements flow through the organization via recursive decompose → delegate → admit/escalate. Full end-to-end from board roundtable to tool-layer delivery.
-
-**Depends on**: P2
-
-#### P3.1 — Organizational Layers
-
-| Task | Detail |
-|------|--------|
-| Layer definitions | Board roundtable → Department heads → Project team (Leader) → Execution layer → Tool layer |
-| Role assignment | Each agent gets a layer role via `soul.md` (org belonging + rank). Determines delegation authority and context scope |
-| Task rating | Company-level (board roundtable), Project-level (board member → department), Individual-level (department → project team). Entry point varies, pipeline is the same |
-| No-skip-level enforcement | Delegate depth increments per hop. Validate target is exactly one level down from sender |
-| MAX_DELEGATION_DEPTH | Default 5 (org tree depth). Over-limit rejected with error feedback |
-| Self-delegation guard | `to == from` rejected |
-
-#### P3.2 — Recursive Decompose-Delegate-Admit
-
-| Task | Detail |
-|------|--------|
-| Decompose | Non-leaf nodes decompose goals into sub-tasks. Uses divergent attention mode |
-| Recruit/Delegate | Leader recruits team members from available agents, delegates tasks. Uses `delegate` primitive |
-| Admission check | On child task completion, leader evaluates against acceptance criteria. Uses focused attention mode |
-| Escalation | Two approaches both fail → carry results + findings to superior. Superior can: accept with known limitations, relax standards, supply context, assign stronger personnel |
-| Bounded retries | Max 2 approach attempts per level (fundamentally different strategies). Fix iterations bounded by convergence budget |
-| Failure bubbling | Only when it bubbles to the board and still can't solve is it a failed project. Board only sees what bubbles up |
-| Full-chain report | Failed projects get complete flow log + all-level approaches for board retrospective |
-
-#### P3.3 — Admission Grading
-
-| Task | Detail |
-|------|--------|
-| Task-rating-aware standards | Company-level = strong model + cross-vendor + simulation. Project-level = medium. Individual-level = lightweight |
-| Actionable findings | Review must give "reject: these 3 items + how to verify", not just "no good" |
-| Shift-left self-check | Execution layer runs self-check before submission. Greatly reduces rejection rate |
-| Approval flow | Submits artifact → reviewer evaluates → approve (gate passed) or reject (with findings for fix iteration) |
-
-#### P3.4 — Work Type Abstraction
-
-| Task | Detail |
-|------|--------|
-| Universal contract | `spec + workflow → tool output → admission`. Isomorphic across all work types |
-| Coding adapter | Already exists (P0). Isolated workspace + PR + test/build/lint |
-| **Decision/Planning adapter (优先)** | Diverge + evaluate tools → plan/recommendation. Verification = multi-plan comparison. 验证董事会圆桌流程 |
-| Research adapter | Search/browse/crawl tools → report artifact. Verification = source tracing + cross-validation |
-| Writing adapter | Writing tools → manuscript artifact. Verification = rubric review + fact-check |
-| Design adapter | Design tools → design assets. Verification = rendering + visual review |
-| Analysis adapter | Data/spreadsheet tools → model/analysis. Verification = recalculation + assumption audit |
-
-**Acceptance**: One requirement runs end-to-end from roundtable through delegation to tool-layer delivery and admission. At least one non-coding work type can deliver + admit.
-
----
-
-### P4 — Governance + Learning
-
-**Goal**: Organization self-evaluates, self-evolves, proactively proposes. Reputation drives routing. Token consumption is visible.
-
-**Depends on**: P3
-
-#### P4.1 — Reputation System
-
-| Task | Detail |
-|------|--------|
-| Reputation schema | Per-agent score with history. Also rolls up to org level (departments/project teams) |
-| Automatic scoring | Admission pass/fail, fix iteration count, approaches used, red line violations, token efficiency vs estimate |
-| Superior rubric | Subjective scoring against fixed criteria (minority of cases) |
-| Difficulty weighting | Partial success on hard tasks shouldn't penalize more than easy tasks |
-| Reviewer accountability | Work that passes review but is later found bad penalizes the reviewer |
-| Decay/recency | Reflects recent performance, recoverable, not a life sentence |
-| Score in public profile | Written into `workspace/public/org/profiles/<agent-id>.md` for routing/recruitment visibility |
-| Reputation → routing | High score → important work, low score → minor work or increased supervision |
-
-#### P4.2 — Decision Rules & Org Changes
-
-| Task | Detail |
-|------|--------|
-| DRI system | Every decision domain has one Directly Responsible Individual. Decides after hearing input, no voting |
-| Advisory voting | Voting is advisory only. Higher reputation carries more weight |
-| Bounded debate | Limited rounds; at deadline the DRI decides |
-| Cross-level appeal | Can appeal one level up; top is final. Allows real pushback |
-| Minutes | Decisions + dissent recorded in `workspace/public/minutes/` |
-| Recruitment | Forming temporary group from existing agents. Leader proposes, superior approves |
-| Staffing | Detect skill gap → trigger "hiring" proposal → superior approval → onboard (instantiate file bundle) |
-| Layoff | Archive, not delete. Preserves work records, allows rehire |
-
-#### P4.3 — Bottom-Up Proposals
-
-| Task | Detail |
-|------|--------|
-| Propose primitive | Mirror of delegate. Creates message flowing upward. Superior adopts/shelves/rejects |
-| Gate 1 (experiment) | Self-service within authority in isolated workspace |
-| Gate 2 (production) | Superior approval for anything affecting production or product direction |
-| Trigger sources | Rhythm (weekly meetings), milestones (project phase transitions), environment scanning (idle agent exploration) |
-| Learning loop | Environment scan → proposal → authorized experiment → results → superior approval → crystallize into skill |
-| Experience → skill crystallization | Deep state run ends → reflection writes memory → repeated tasks → crystallize into skill → written to public facility |
-
-#### P4.4 — Token Governance & Observability
-
-| Task | Detail |
-|------|--------|
-| Full-chain token stats | Visible from roundtable through all levels to execution. Each level shows token consumption per project |
-| Emergency stop | Manual project block when token consumption is out of control |
-| Audit trail | Every cross-agent access, message, admission, escalation is an audit event threaded by RootNeedID |
-| Trust dial | New users start with more approval gates (low auto-admission threshold). As trust builds, autonomy increases |
-
-**Acceptance**: Subordinates can proactively propose and adopted proposals become tasks. Reputation affects agent selection. Projects can be blocked. Token full-chain visible.
-
----
-
-### P5 — Experience and Space Closure
-
-**Goal**: Organization, collaboration, reputation, and information flow rendered in the TUI. Users can watch agents collaborate, request approval, and deliver.
-
-**Depends on**: P0 activity contract + P3/P4 events
-**Special**: Backend-independent UI items can run parallel with P1-P4
-
-#### P5.1 — Office Layout & Presence
-
-| Task | Detail |
-|------|--------|
-| Office layout engine | Grid/space-based layout for agent workstations. Editable, persistent across restarts |
-| Agent presence rendering | Each agent shown at their workstation with status (idle/thinking/speaking/working/error) |
-| Layout editor | User can rearrange workstations, add decoration, define zones (departments) |
-| Map view | Zoomable view of the entire org with departments, teams, agents |
-
-#### P5.2 — Collaboration Visualization
-
-| Task | Detail |
-|------|--------|
-| Delegation tree view | Recursive layer tree showing delegation chain from board to leaf |
-| Thread connections | Visual lines showing active threads between agents |
-| Meeting visualization | Fan-in view of multi-agent meetings converging into one thread |
-| Real-time updates | Office view updates as agents work (via SSE/WebSocket events) |
-
-#### P5.3 — Board Roundtable UX
-
-| Task | Detail |
-|------|--------|
-| Roundtable entry | User enters as board chair. Sees C-suite agents around the table |
-| Speaking interaction | User speaks, agents respond. Board discussion flows naturally |
-| Task dispatch | User can dispatch tasks from roundtable. Watch delegation cascade through org |
-| Approval prompts | When agents need approval, prompt appears in roundtable. User approves/rejects |
-
-#### P5.4 — Onboarding & Fixtures
-
-| Task | Detail |
-|------|--------|
-| Onboarding flow | Welcome → provider setup → interview → founding team creation (enhanced from existing) |
-| Org template | Pre-built org structures (startup, enterprise, etc.) with agent templates |
-| Replay fixtures | Sample scenarios showing org collaboration end-to-end |
-| Demo mode | Pre-populated office with agents doing visible work |
-
-**Acceptance**: Dispatch task → watch characters collaborate/request approval → see delivery. Org structure and information flow readable in office view.
-
----
-
-## Implementation Order & Dependencies
-
-```
-P0 (DONE)
-  │
-  ├─ P1.1 Agent File Bundle
-  ├─ P1.2 Thread Model
-  └─ P1.3 Concurrency & Workstation
-       │
-       ├─ P2.1 Three-Layer File Tree
-       ├─ P2.2 Clearance & Access Control
-       ├─ P2.3 ContextResolver
-       └─ P2.4 Minimal Interaction Primitives
-            │
-            ├─ P3.1 Organizational Layers
-            ├─ P3.2 Recursive Decompose-Delegate-Admit
-            ├─ P3.3 Admission Grading
-            └─ P3.4 Work Type Abstraction (Decision/Planning 优先)
-                 │
-                 ├─ P4.1 Reputation System
-                 ├─ P4.2 Decision Rules & Org Changes
-                 ├─ P4.3 Bottom-Up Proposals
-                 └─ P4.4 Token Governance & Observability
-                      │
-                      └─ P5.1-P5.3 (Office Layout, Collaboration Viz, Roundtable UX)
-
-═══════════════════════════════════════════════════════
-P5.4 — 引导流程 + 组织模板（与 P1-P4 并行开发，后端无关）
-═══════════════════════════════════════════════════════
+# Implementation Plan：Pre-Public 收敛
+
+> 状态：当前
+> 代码盘点日期：2026-07-13
+> 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
+> 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
+
+## 1. 计划目的
+
+本计划不是从零设计 Agent Company，也不再沿用旧的 P0–P5/TUI/像素办公室路线。目标是在现有代码基础上，把已经存在但分散的 Agent、治理和交付能力收敛成一条可公开发布的本地产品旅程。
+
+必须始终区分：
+
+- **模块存在**：代码中有类型、服务、路由或测试；
+- **产品闭环**：用户可从共享 WebUI 使用，状态可恢复，权限和异常路径通过验收。
+
+只有后者可以在产品文案中标记为完成。
+
+## 2. 已验证的代码基础
+
+以下路径在当前仓库中存在，可优先复用；表格不代表已经达到 PRD 验收。
+
+| 能力 | 当前路径 | 可复用基础 | 主要产品缺口 |
+|---|---|---|---|
+| 共享 WebUI | `packages/app` | SolidJS、Vite、Session/Project UI、通知与桌面桥接 | 仍以 Coding Session 为中心，缺公司频道、主会话高信号与 Agent Home |
+| Electron 桌面 | `packages/desktop` | 启动内嵌本地 Server、随机密码、系统通知、共享 renderer | 仍有 OpenCode 命名；无托盘/状态栏、关闭窗口生命周期和完整恢复入口 |
+| Local Server | `packages/opencode/src/server` | Hono API、SSE、Basic Auth、嵌入 WebUI | 需要稳定 Control Plane 契约、浏览器配对、迁移与恢复语义 |
+| 项目执行 | `packages/opencode/src/company-project` | Project、Plan、Work Item、Artifact、Approval Gate、执行服务 | 需与 Charter、IM、审批策略和严格 Worktree 状态机整合 |
+| Agent 身份 | `packages/opencode/src/company-agent` | Agent CRUD、模板、文件包、SOUL/INSTRUCT/记忆等 | 当前文件包边界较平；缺 candidate/employee、ROLE/PROFILE 和三空间迁移 |
+| Thread | `packages/opencode/src/thread` | Primary/Reactive/Ambient、状态、速率限制、活动汇总 | 缺产品级 IM Thread 和私有 Dream Thread |
+| Actor / Session | `packages/opencode/src/actor`, `src/session` | 子 Agent、会话、恢复与运行循环 | 需绑定正式 Agent、项目权限、长期 Thread 和高信号事件 |
+| 群聊 | `packages/opencode/src/group-session` | 多 Agent Group Session 与 Bidding Scheduler | 需频道模型、Thread 展示、Direct 隔离和结论提升协议 |
+| 委派与消息 | `packages/opencode/src/delegation`, `src/agent-message` | message/delegate/reply/propose、分解、升级、决定 | 固定层级假设需改为适应性组织；需接入 Charter/项目 UI |
+| Admission | `packages/opencode/src/admission` | 任务等级、coding/non-coding submission、findings | 需软件验收映射、独立 Reviewer 与 Delivery Card |
+| 组织 | `packages/opencode/src/org`, `src/team` | 组织与团队基础类型/服务 | 需最小董事会、动态团队、候选池和职业生命周期 |
+| 声誉与信任 | `packages/opencode/src/reputation`, `src/trust-dial` | 声誉历史、信任等级评估 | 需批准预设/继承、UI、选人策略；不能影响私域权限 |
+| 审计与 Token | `packages/opencode/src/audit-event`, `src/token-governance` | 审计事件、Root Need/项目消耗报告 | 事件类型和私域元数据规则需扩充，接入 UI 与恢复 |
+| Context | `packages/opencode/src/workspace` | Context Resolver、scope/classification、relationship | 现有关系可提升 clearance 的逻辑不得作用于 private/Direct；需硬边界测试 |
+| Worktree | `packages/opencode/src/worktree`, `src/control-plane` | 创建、移除、重置、Workspace adaptor | 缺项目级审批→合并→主分支验证→销毁状态机和孤儿处置产品流 |
+| Workflow | `packages/opencode/src/workflow` | 沙箱、并发、持久化、嵌套、模型路由 | 保留为执行引擎，不把工作流编辑器变成主 UX |
+| TUI | `packages/opencode/src/cli/cmd/tui` | 成熟终端交互和大量运行能力 | 调整为次级入口，共用 Control Plane 契约，不再主导产品 IA |
+| 现有 Dream | `packages/opencode/src/session/auto-dream.ts`, `src/agent/prompt/dream.txt` | 项目记忆 consolidation | 产品语义上归入 Reflection/Distillation；人格 Dreaming 另建协议 |
+
+## 3. 目标架构
+
+```mermaid
+flowchart TB
+    subgraph Clients
+      Desktop["Electron + shared WebUI"]
+      Browser["Browser + shared WebUI"]
+      TUI["TUI secondary client"]
+    end
+    Desktop --> API
+    Browser --> API
+    TUI --> API
+    API["Versioned local API + SSE/WebSocket"] --> CP["Control Plane"]
+    CP --> Policy["Governance / Approval / Audit"]
+    CP --> Runtime["Agent / Thread / Workflow Runtime"]
+    CP --> Context["Context Resolver / Privacy Boundary"]
+    CP --> Delivery["Project / Admission / Worktree"]
+    CP --> DB["SQLite"]
+    CP --> Identity["Versioned Agent identity files"]
+    CP --> Git["Repositories / Worktrees"]
 ```
 
-## Cross-Cutting Concerns
+架构约束：
 
-### Leverage Existing Systems
+- 不重写为 Multica 的 Next.js/Go 或其他竞争产品技术栈；
+- renderer 不直接写 SQLite、身份文件或 Git 状态；
+- 所有客户端使用同一服务契约和事件语义；
+- Control Plane 是单一权威写入者；
+- 数据库状态必须能用 Git/文件事实校验和恢复；
+- 隐私边界在存储、API、搜索、日志和 Context Resolver 同时生效。
 
-| Existing System | Reuse For |
-|----------------|-----------|
-| `CompanyAgent` | Extend to full Agent file bundle (P1.1) |
-| `Actor.spawn` | Extend with thread-awareness (P1.2) |
-| `Inbox` | Extend with AgentMessage fields — RootNeedID, Depth, Kind (P2.4) |
-| `GroupSession` | Evolve into board roundtable + meeting primitive (P3.1, P5.3) |
-| `Task` | Add parent chain for delegation depth tracking (P3.2) |
-| `Memory (FTS5)` | Agent private memory + experience sedimentation (P1.1, P4.3) |
-| `Workflow` | Work type adapters wrap workflow execution (P3.4) |
-| `Config` | Org structure, clearance, role definitions (P2.2) |
-| `TUI` | Office layout, presence, roundtable UX (P5) |
+## 4. 实施工作流
 
-### New DB Tables Needed
+### W0 — 文档与领域语言收敛
 
-| Phase | Table | Purpose |
-|-------|-------|---------|
-| P1 | `thread` | Concurrent execution units per agent |
-| P1 | `agent_bundle` | Agent file bundle metadata (links DB agent to filesystem) |
-| P2 | `clearance` | Per-agent clearance level + relationship edges |
-| P2 | `agent_message` | Inter-agent messages (extends inbox concept) |
-| P3 | `admission` | Admission records with grading criteria and results |
-| P4 | `reputation_score` | Per-agent reputation with history |
-| P4 | `proposal` | Bottom-up proposals with adopt/shelve/reject outcome |
-| P4 | `audit_event` | Full audit trail threaded by RootNeedID |
+状态：本次文档清理已建立基线；后续随实现持续校验。
 
-> 注：组织架构（部门、角色、汇报关系）存储在 `agent-company.jsonc` 配置文件中，不需要独立 DB 表。
+工作：
 
-### Design Decisions (Confirmed)
+- 产品宪法作为最高层事实源；
+- PRD、00–08 设计和本计划统一到 IM-first、Web/Desktop-first；
+- 删除固定五层、所有规则皆软规则、像素办公室和通用领域首发等冲突；
+- 统一术语：Company、Channel、Thread、Charter、Project、Work Item、Gate、Candidate、Employee、Agent Home、Dreaming；
+- 在 API/schema 变更中保留术语映射，避免数据库名和 UI 概念漂移。
 
-1. **Org structure source of truth** → **仅配置文件**: 扩展 `agent-company.jsonc` 增加组织树配置（部门、角色、汇报关系），单一数据源
-2. **Thread ↔ Session relationship** → **Thread 1:N Session**: Thread 是长期存在的执行上下文（工位），Session 是其中的一次次对话（工作会话）。符合"身份 vs 执行"解耦的设计哲学
-3. **ContextResolver location** → **独立模块** `src/context-resolver/`: 横切关注点，被 `session/prompt.ts`、`group-session/`、`actor/spawn.ts` 等多处调用，职责清晰
-4. **Reputation storage** → **独立表** `reputation_score`: 支持历史追踪、复杂查询（分数趋势、排序），与 `company_agent` 解耦，未来可扩展到团队/部门评分
-5. **Non-coding work types** → **决策/规划优先**: 验证董事会圆桌流程，其次研究调查
-6. **P5 parallelism** → **引导流程 + 组织模板**: 增强引导流程、预置组织模板、演示模式，可在 P1-P4 期间并行开发
+验收：新成员从 `docs/README.md` 能确定唯一事实源，所有新 Issue/PR 使用相同领域语言。
 
----
+### W1 — Control Plane 与桌面生命周期
 
-## R1 First-Ship Acceptance Criteria (from design doc)
+目标：让本地公司可靠常驻。
 
-1. **Multi-Agent**: Create and run multiple agents concurrently, distinguishable in office
-2. **Workspace**: Each agent has independent workspace and instruct; task strategy configurable
-3. **Flow**: At least one cross-agent orchestration end-to-end
-4. **Organization**: Basic org structure and agent belonging configurable, reflected in office view
-5. **Space**: Office layout editable, persistent, survives restart
-6. **Experience**: Rendering and presence interaction cover dispatch, approval, delivery main path
-7. **Delivery**: PR or local diff review merge loop; tasks cancellable
+工作：
+
+1. 将 Electron 现有内嵌 Server 明确为 Local Control Plane 进程；
+2. 完成 Agent Company 命名、App ID、数据目录和协议迁移；
+3. 增加 Windows/Linux Tray 与 macOS Status Item；
+4. 区分关闭窗口、暂停公司和退出进程；
+5. 从托盘恢复/重建已关闭的 BrowserWindow；
+6. 提供真实任务、审批、阻塞和异常摘要；
+7. 设计浏览器配对/本地凭据，不在 URL 或日志暴露密码；
+8. 将恢复注册表覆盖 Project、Thread、Gate、Worktree 和后台运行；
+9. 启动时执行 schema migration、孤儿扫描和幂等恢复；
+10. 建立备份、导出、恢复和诊断包边界。
+
+验收：PRD 14.1 的关闭窗口、托盘重开和系统重启场景通过；退出进程前可明确处理仍在运行的任务。
+
+### W2 — IM-first 产品壳
+
+目标：共享 WebUI 成为公司的主要入口。
+
+工作：
+
+1. 建立 Company/Channel/Thread/Message 的产品 API；
+2. 支持公司、董事会、部门、项目和 Direct 频道；
+3. Project 创建时自动创建项目群；
+4. 定义 `signal_type` 与高信号提升规则；
+5. 主会话只渲染高信号事件，保留 Thread 引用；
+6. Thread 聚合消息、Work Items、工具、日志、Decision 和 Artifact；
+7. 大日志分页/流式加载，避免会话快照无限增长；
+8. 构建 Charter、Approval、Delivery 和 Agent 卡片；
+9. 看板、组织图、审计和 Usage 作为辅助视图；
+10. 将现有 Session/Project UI 逐步映射到新 IA，不平行维护第二套消息系统。
+
+验收：用户只看主会话能理解项目状态，展开 Thread 可追溯结论和验证证据。
+
+### W3 — 董事会、Charter 与批准策略
+
+目标：让自治从可验收目标开始，并只在重大事项打扰用户。
+
+工作：
+
+1. 新公司创建 CEO、CTO、Product Lead；
+2. 为 Charter 建 schema、版本、Definition of Ready 和变更 diff；
+3. 将原始 Goal、Charter、Project 和 Root Need 串联；
+4. 用确定性规则识别重大范围、验收、权限、仓库和风险变化；
+5. 建立自主/平衡/严格预设；
+6. 建立 Company → Project → One-off 的策略解析器；
+7. Agent 只能调用 `escalate` 提高门槛，不能更改下限；
+8. Approval 记录动作类别、资源范围、到期和撤销；
+9. 用户越级指令写成独立 Intervention 事件；
+10. 将 Trust Dial 从抽象等级接入具体策略，但不触碰 private/Direct 权限。
+
+验收：同一项目在三种预设下产生可预测、可测试的不同审批点；未就绪 Charter 无法进入开发。
+
+### W4 — 自治软件交付与 Worktree 治理
+
+目标：把现有 Project、Delegation、Admission 和 Worktree 串成真实交付。
+
+工作：
+
+1. 强制一个 Project 绑定一个主仓库；
+2. Worktree 项目默认值开启，可在创建项目时覆盖；
+3. 新增项目级 Worktree lifecycle 记录，不能只依赖目录是否存在；
+4. 将 Work Item 写入所有权绑定到 Worktree；
+5. 复用 Delegation 做适应性分解，移除“必须逐层委派”的固定层级门禁；
+6. 复用 Admission 生成与 Charter acceptance 一一映射的 findings；
+7. Reviewer 与执行者在需要独立审查的任务上分离；
+8. Approval 后若 diff 变化，自动使批准或 Review 失效；
+9. 合并成功后在主分支重新运行必要验证；
+10. 只有主分支验证通过才允许销毁；
+11. 冲突回到 Review，失败/取消进入 preserved 状态；
+12. 启动孤儿扫描同时检查数据库、`git worktree list`、分支和文件路径；
+13. Direct mode 使用单写者锁并在 UI 明示风险。
+
+验收：真实仓库完成创建→实现→测试→Review→批准→合并→主分支验证→销毁；每个状态均可从异常中恢复。
+
+### W5 — 候选池与动态组织
+
+目标：让临时 Agent 可复用，并通过真实工作形成正式岗位。
+
+工作：
+
+1. 将 Agent lifecycle 扩展为 candidate/assigned/employee/archived；
+2. 存储每次推荐、选择、拒绝和原因；
+3. 汇总任务难度、Admission、速度、成本、声誉和合作信息；
+4. 建立能力需求与候选推荐接口；
+5. Charter 通过后由项目 DRI 建最小团队；
+6. 项目结束自动回池，保留身份和记录；
+7. 晋升规则同时要求持续需求、频率和质量；
+8. 晋升和归档通过公司治理，不由 Dreaming 或单一分数触发；
+9. 正式员工建立 Agent Home，项目代码仍使用项目 Worktree。
+
+验收：同一候选 Agent 可跨两个项目复用；选择理由可追溯；满足条件时出现合理的晋升提案而非自动批量招聘。
+
+### W6 — Agent Home 与隐私迁移
+
+目标：把现有平面 Agent 文件包迁移为可证明隔离的三空间。
+
+工作：
+
+1. 定义版本化 identity manifest；
+2. 将 SOUL、个人记忆和私人关系迁移到 `private/`；
+3. 新建 `professional/ROLE.md`、INSTRUCT、career、skills、work-memory；
+4. 新建 `public/PROFILE.md` 和系统签名事实投影；
+5. 迁移时保留原文件、校验和、作者和来源；
+6. API 将 private read 和 write 分离：Agent 本人读写、用户只读；
+7. 管理者、董事会、其他 Agent 和服务账号默认硬拒绝；
+8. 私域从组织全文搜索、embedding、推荐、招聘、声誉和跨 Agent 摘要中排除；
+9. 日志、通知、错误和审计只保留必要元数据；
+10. 用户磁盘改动检测为 external authored 版本；
+11. 备份加密复制但不解析 private 正文；
+12. UI 移除编辑、转发和引用动作。
+
+验收：PRD 10.2 的全部攻击面测试通过，而不只是 API 单元测试。
+
+### W7 — Direct、Reflection、Ambient 与人格型 Dreaming
+
+目标：建立生命层，同时保持治理边界。
+
+工作：
+
+1. Direct 建立双人 membership 与用户只读旁观语义；
+2. 禁止管理者/董事会访问，用户查看不触发 read receipt 或 context；
+3. 检测工作承诺、决定和范围变化，提示生成项目摘要；
+4. Reflection 写入职业工作记忆，不写 SOUL；
+5. Ambient 调度低频、可中断、默认只读；
+6. 把现有 `/dream` 逐步重命名/归类为 memory distillation；
+7. 新建真正的 Agent-private Dream Thread；
+8. 定义 experience ledger 和身份意义阈值，而不只按天触发；
+9. Dream 只获取本人 private、获准职业摘要和真实经历引用；
+10. 生成 Dream Record、Identity Reflection 和 SOUL Patch；
+11. Patch 存 diff、理由、来源、版本和中断状态；
+12. Dream tool policy 禁止项目写入、网络副作用、消息、权限和 ROLE 修改；
+13. Dream 预算独立，不参与绩效评分。
+
+验收：用户只读看到一个有真实经历依据的 SOUL diff；另一个 Agent、管理者和董事会从所有入口都无法读取。
+
+### W8 — Pre-Public 硬化与发布
+
+目标：将纵向闭环交给外部用户长期使用。
+
+工作：
+
+1. Windows/macOS 安装、签名、更新和卸载；
+2. 数据迁移、备份恢复和降级失败保护；
+3. 资源、Token、磁盘与后台活动上限；
+4. 键盘、屏幕阅读、减少动效和错误状态；
+5. 纵向 E2E 场景与真实示例仓库；
+6. privacy/worktree/approval/recovery 测试纳入 CI；
+7. 诊断导出默认脱敏；
+8. 产品文案只陈述通过验收的能力；
+9. 外部 Pre-Public 反馈只接收影响核心路径的变更，其他进入公开版后路线。
+
+验收：PRD 第 14、15 节在干净 Windows/macOS 设备通过。
+
+## 5. 依赖与并行关系
+
+```mermaid
+flowchart LR
+    W0["W0 领域基线"] --> W1["W1 Control Plane"]
+    W0 --> W2["W2 IM 工作台"]
+    W0 --> W3["W3 治理策略"]
+    W1 --> W4["W4 软件交付"]
+    W2 --> W4
+    W3 --> W4
+    W3 --> W5["W5 候选与组织"]
+    W5 --> W6["W6 Agent Home"]
+    W6 --> W7["W7 生命层"]
+    W4 --> W8["W8 硬化"]
+    W7 --> W8
+```
+
+建议先形成一个窄纵向切片：一个董事会频道、一个项目群、一个仓库、两个 Agent、一个 Worktree 和一个审批。每增加一个子系统，都必须接回该切片，而不是先建孤立管理页面。
+
+## 6. 数据与迁移策略
+
+### 6.1 事务状态
+
+SQLite 保存 Company、Channel、Thread、Project、Charter、Work Item、Gate、Approval、Decision、Agent lifecycle、Worktree lifecycle 和 Audit Event。
+
+### 6.2 身份内容
+
+Agent Home 文件保存人类可读、版本化的身份内容。数据库只保存 manifest、版本、校验和、权限与索引元数据。
+
+### 6.3 Git 事实
+
+Worktree、分支、提交和合并状态必须定期与 Git 校验。数据库不可以单方面声称一个未合并分支已经交付。
+
+### 6.4 迁移原则
+
+- 使用向前可恢复的增量迁移；
+- 迁移 private 前先做只读备份和校验；
+- 不把旧平面文件直接重新解释为 Agent 自己选择的公开 PROFILE；
+- 旧 `/dream` 记录保留原类型，不追溯伪造成身份梦境；
+- 恢复失败时保留源数据并停止危险写入。
+
+## 7. 测试策略
+
+### 7.1 单元/属性测试
+
+- 策略继承与重大变化判定；
+- Charter Definition of Ready；
+- Worktree 状态机和非法转换；
+- Candidate 推荐与晋升门槛；
+- private/Direct 权限矩阵；
+- Dream tool policy 和 SOUL Patch 校验；
+- 高信号提升与来源引用。
+
+### 7.2 集成测试
+
+- API → SQLite/identity/Git 的事务一致性；
+- Electron sidecar 与浏览器连接；
+- Delegation → Admission → Approval → Merge；
+- Context Resolver 不跨身份泄漏；
+- 进程终止后的恢复和孤儿处置；
+- 外部磁盘修改检测。
+
+### 7.3 E2E
+
+- PRD 14.1 的完整纵向场景；
+- 自主/平衡/严格三种策略变体；
+- Worktree 开启/关闭两种模式；
+- Windows/macOS 关闭窗口、托盘、通知和重启；
+- private/Direct 的负向攻击路径。
+
+测试从对应 package 目录运行；遵守仓库规则，不在根目录执行测试。
+
+## 8. 每个工作流的完成定义
+
+一个工作流只有同时满足以下条件才可标记完成：
+
+- 用户可从共享 WebUI 完成主路径；
+- TUI 若暴露同一能力，使用相同服务语义；
+- 状态持久化且异常可恢复；
+- 权限与审计覆盖成功和失败路径；
+- 有自动化测试和手工/视觉验收证据；
+- README、PRD、设计与实际能力同步；
+- 没有依赖人工数据库编辑、遗留 Worktree 或演示数据。
+
+## 9. 当前下一步
+
+优先实现 W1 与 W2 的最窄切片：
+
+1. 清理桌面端 OpenCode 品牌和生命周期；
+2. 建立托盘/状态栏与关闭窗口继续运行；
+3. 定义 Company/Channel/Thread 的服务契约；
+4. 在共享 WebUI 中完成董事会频道、项目群和高信号 Thread 展开；
+5. 把现有 `company-project` 的一条软件交付路径接入该 UI。
+
+这条切片成立后，再把批准继承、严格 Worktree 和 Agent Home 依次接入，避免并行建设多个互不相连的产品壳。

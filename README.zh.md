@@ -2,270 +2,175 @@
 
 # Agent Company
 
-**AI 公司操作系统**
+**在本地经营你自己的 AI 软件公司。**
 
-*给自己开一家 AI 公司——不是聊天机器人，是真正的组织。*
+你定方向，公司把它变成有责任、有验收、有证据的交付；只有真正需要你决定的事情才会回来找你。
 
-[![npm version](https://img.shields.io/npm/v/@agents-company/cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agents-company/cli)
-[![npm downloads](https://img.shields.io/npm/dm/@agents-company/cli?color=cb3837)](https://www.npmjs.com/package/@agents-company/cli)
-[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![runtime](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh)
-[![language](https://img.shields.io/badge/language-TypeScript-3178c6?logo=typescript&logoColor=fff)](https://www.typescriptlang.org)
-[![TUI](https://img.shields.io/badge/interface-TUI-00d111)](#快速开始)
-
-[快速开始](#快速开始) · [English](README.md) · [中文](README.zh.md) · [设计文档](docs/product-design/00-overview.md) · [产品 PRD](docs/Agent%20Company%20产品%20PRD.md) · [路线图](#路线图)
+[English](README.md) · [产品宪法](docs/product-design/PRODUCT-CONSTITUTION.md) · [产品 PRD](docs/Agent%20Company%20产品%20PRD.md) · [文档导航](docs/README.md)
 
 </div>
 
----
+> [!IMPORTANT]
+> Agent Company 正在向 **Pre-Public** 版本收敛。仓库已经包含大量 Agent Runtime、治理、TUI、WebUI 和 Electron 基础，但完整的 IM-first 桌面旅程、托盘常驻、严格私人空间和人格型 Dreaming 仍是目标工作，并非已完成的公开产品。上方文档定义目标，代码与实施计划记录当前差距。
 
-## 核心理念
+## Agent Company 是什么
 
-> **你定方向，公司自己推。需要你的时候，它会来找你。**
+Agent Company 让一个用户在自己的电脑上经营一个持续存在的 AI 组织。
 
-你不是在"用聊天机器人"。你在**经营一家虚拟公司**。
+你不需要手工编排一组用后即抛的 Agent，而是与一个最小董事会对话。董事会把较大的目标细化为可验收的 Project Charter，组建临时项目团队，委派和审查工作，并只把重大决定升级给你。
 
-Agent Company 是一个多智能体操作系统：AI Agent 组成一个真实的组织——有董事会、部门、项目组和执行团队。你告诉公司你想要什么，它会拆解目标、沿组织架构逐层委派、执行、审查，然后把需要你拍板的决策带回来。
+产品包含三个缺一不可的层次：
 
-```
-你 ←→ 🏢 董事会（CEO / CTO / CFO / CMO）
-           ↓
-        📋 部门层 — 拆目标 + 定验收标准
-           ↓
-        👥 项目组 — 拆解为可执行规格
-           ↓
-        ⚙️ 执行层 — 驱动工具，产出制品
-```
+| 层次 | 职责 |
+|---|---|
+| 工作层 | IM 协作、软件项目、代码、测试、审查与交付 |
+| 治理层 | 组织、委派、批准策略、Gate、声誉与审计 |
+| 生命层 | 持久身份、私人空间、社交关系、Reflection 与 Dreaming |
 
-**严格不越级。** 每个需求都走完整个组织链路，4-5 层深度。只有工具层直接产出制品（代码/文档/数据/设计稿），其余都是规划、编排和治理。
+## 产品方向
 
----
+目标产品公式是：
 
-## 为什么是"公司"而不是"框架"？
+> Multica 级别的视觉完成度 + Bloome 式 IM-first 交互 + Agent Company 的自治治理与 Agent 人格。
 
-| | 多 Agent 框架 | Agent Company |
-|---|---|---|
-| 隐喻 | "套壳的 Prompt 模板" | 有真实层级的虚拟组织 |
-| 协作 | Agent 互相聊天 | Agent 有**角色、汇报关系和问责** |
-| 治理 | 无或手动 | **内置审批关卡、升级机制、审计链路** |
-| 身份 | 无状态 Prompt | **持久化 Agent 文件**：soul、memory、skills、relationships |
-| 用户体验 | 写代码来编排 | **告诉公司你想要什么就行** |
+具体意味着：
 
----
+- **IM-first，不是 Kanban-first。** 对话是主入口，任务和看板是派生视图。
+- **默认高信号。** 主会话只显示结论、决定、风险、审批与交付；完整协作在 Thread 展开；工具日志再嵌套一层。
+- **最小固定董事会 + 动态组织。** 新公司从 CEO、CTO、Product Lead 开始，部门和项目岗位只在真实工作需要时形成。
+- **自治但可配置审批。** 内部分解、委派、实现、测试和 Agent Review 默认自动运行；用户可选自主、平衡或严格等级。
+- **Local-first 且持续在线。** 桌面端和浏览器共用 WebUI，由本地 Control Plane 驱动；桌面目标是关闭窗口后仍在托盘/状态栏继续获授权任务。
+- **先把软件研发做好。** 首次公开版本围绕一个项目对应一个主 Git 仓库优化，其他领域后续升级。
 
-## 核心能力
+## 它为什么不同
 
-<table>
-<tr>
-<td width="50%" valign="top">
+### 董事会必须把目标变得可执行
 
-### 🏛️ 董事会界面
+把笼统、不可验收的目标直接丢给执行 Agent，是董事会失职。开发前，董事会必须形成包含价值、交付物、验收、范围、约束、风险、里程碑、DRI 和待决策项的 Project Charter。
 
-入口是一场与董事会的会议——CEO、CTO、CFO、CMO。讨论目标、设定优先级、审查进度。不需要 Prompt 工程。
+### 临时 Agent 是候选人，不是消耗品
 
-</td>
-<td width="50%" valign="top">
+项目 Agent 在结束后返回候选池。入选理由、质量、声誉、成本、速度和专长会跨项目积累。持续、高频且高质量的工作可以推动其晋升为正式岗位。
 
-### 🔄 递归委派
+### 正式 Agent 不只有工作
 
-任务沿组织架构自然分解：董事会 → 部门 → 项目组 → 执行层 → 工具层。每一层只做一件事。
+正式 Agent 拥有相互隔离的空间：
 
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 🎯 竞标调度器
-
-Agent 根据相关性、专业度和轮转权利竞标发言。无中央主持人，无人垄断，无人被淹没。去中心化的多 Agent 发言调度方案。
-
-</td>
-<td width="50%" valign="top">
-
-### 🧠 持久化身份
-
-每个 Agent 不只是 Prompt——而是一束持久化文件：**soul**（身份）、**memory**（记忆）、**skills**（技能）、**relationships**（关系）。
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 📋 任务与制品管理
-
-通过组织架构追踪工作。制品经由**关卡**向上流转——通过则升级，失败则重试。每个决策可追溯。
-
-</td>
-<td width="50%" valign="top">
-
-### 🔒 治理优先
-
-每个层级都有审批检查点。信任随表现增长。系统记录一切——因为不可追溯的系统不可治理。
-
-</td>
-</tr>
-<tr>
-<td colspan="2" align="center">
-
-### 🖥️ 终端原生 UI
-
-基于 SolidJS + OpenTUI 的精美 TUI。不是 Web 应用，不是桌面包装器——而是面向终端开发者的**原生终端体验**。
-
-</td>
-</tr>
-</table>
-
----
-
-## 快速开始
-
-### 安装
-
-```bash
-# npm
-npm install -g @agents-company/cli
-
-# Bun（推荐）
-bun install -g @agents-company/cli
+```text
+agents/<id>/
+  private/       # SOUL、梦境、日志、兴趣、私人记忆
+  professional/  # ROLE、指令、职业、技能、工作记忆
+  public/        # PROFILE、贡献、共享技能
 ```
 
-### 运行
+Agent 可以写自己的私人空间；用户可以阅读但不能修改；包括管理者和董事会在内的其他 Agent 都不能读取。PROFILE 是 Agent 自己选择展示的名片，旁边附有系统签名的职位和声誉等事实。
 
-```bash
-agents
+Dreaming 与任务 Reflection 不同：它是对真实经历的低频私人整合，可以产生版本化 SOUL 变化，但永远不能修改正式职位、权限、公司宪法或项目代码。
+
+## 软件交付契约
+
+首次公开版本遵循一条严格闭环：
+
+```text
+目标
+→ Project Charter
+→ 项目群与动态团队
+→ Worktree
+→ 实现与测试
+→ Agent Review
+→ 按策略审批
+→ 合并
+→ 验证主分支
+→ 销毁 Worktree
+→ Reflection 与 Agent 生命周期更新
 ```
 
-就这样。引导向导会带你完成：
+Worktree 可配置且默认开启。启用后，合并和主分支验证完成前不能销毁；冲突回到审查；失败和取消的 Worktree 保留，等待明确处置。
 
-1. **设置你的 AI 公司** — 名称、行业、团队规模
-2. **创建创始团队** — CEO、CTO、CFO、CMO
-3. **进入董事会** — 开始下达方向
+## 架构
 
-### 本地开发
+```text
+Electron / Browser / TUI
+          │ 本地 API + 事件流
+          ▼
+Local Control Plane
+  ├─ Agent / Thread / Workflow Runtime
+  ├─ Governance / Approval / Audit
+  ├─ Context Resolver / Privacy Boundaries
+  ├─ Project / Admission / Worktree Delivery
+  ├─ SQLite
+  ├─ 版本化 Agent 身份文件
+  └─ Git 仓库与 Worktree
+```
+
+现有代码在原地演进：
+
+| Package | 职责 |
+|---|---|
+| `packages/app` | SolidJS + Vite 共享 WebUI |
+| `packages/desktop` | Electron 桌面壳与本地 Server 宿主 |
+| `packages/opencode` | Bun/Effect/Hono Runtime、Control Plane 服务、SQLite、Git、Workflow 与 TUI |
+
+Renderer 客户端不能直接修改 SQLite 或身份文件；Control Plane 统一负责认证写入、恢复和事件顺序。
+
+## 已有基础
+
+仓库已经有可复用的 Session、Actor、Group Session、Autonomous-Bidding、Thread、Company Project、Delegation、Admission、Org、Reputation、Trust Dial、Audit Event、Token Governance、Workflow、Control Plane Workspace 和 Git Worktree 实现。
+
+当前重点是产品整合与硬化：共享 IM 工作台、桌面生命周期、批准继承、严格 Worktree 治理、候选职业路径、三空间隐私、Direct 和人格型 Dreaming。详见[实施计划](docs/product-design/implementation-plan.md)。
+
+## 本地开发
+
+需要 Bun 1.3.x，以及 Electron/node-pty 所需的平台依赖。
 
 ```bash
 git clone https://github.com/Ericwong5021/agents-company.git
 cd agents-company
 bun install
+```
+
+运行当前 TUI/Runtime 开发入口：
+
+```bash
 bun run dev
 ```
 
-> **当前核心开发重点是 TUI**，位于 `packages/opencode/src/cli/cmd/tui/`。Web 和 App 不是当前主线。
-
----
-
-## 架构
-
-```
-用户 ←→ 董事会（CEO/CTO/CFO/CMO）    ← 系统入口 = 一场会议
-        ↓
-     部门层（业务 + 基建）
-        ↓
-     项目组（Leader）
-        ↓
-     执行层
-        ↓
-     工具层                              ← 唯一直接产出制品的层
-```
-
-**核心理念：**
-
-| 理念 | 含义 |
-|------|------|
-| **递归委托** | 每个非叶节点：拆解 → 委派 → 准入校验 |
-| **身份 ≠ 执行** | Agent 文件是"谁"，Model 是"怎么跑" |
-| **信息即文件** | 规章、战略、记忆都是文档，由作用域 × 密级控制 |
-| **注意力即成本** | 四种模式（空闲/响应/发散/专注）选择模型档位 |
-| **治理靠记录** | 每次跨 Agent 操作都是审计事件 |
-
-详见 [产品设计总览](docs/product-design/00-overview.md)。
-
----
-
-## 核心对象
-
-| 对象 | 说明 |
-|------|------|
-| **Workspace** | 公司空间：组织、任务、会议、制品、规则、历史 |
-| **Agent** | 数字员工：soul/instruct/memory/skills/relationships/kanban |
-| **Thread** | 并发单元：专注/发散/响应/环境 |
-| **Group / Meeting** | 可治理的协作房间，不只是群聊 |
-| **Task** | 可追踪、可审查、可验收的工作单元 |
-| **Artifact** | 工具层产出的制品，经关卡向上流转 |
-| **Gate** | 验收关卡：通过则升级，失败则重试 |
-| **Decision** | 可追溯的组织决策（DRI 拍板，不投票） |
-| **Proposal** | Agent 自下而上的建议和提案 |
-
----
-
-## 内置 Agent
-
-| Agent | 角色 | 说明 |
-|-------|------|------|
-| `build` | 🔨 工程师 | 基于权限执行工具 |
-| `plan` | 📐 规划师 | 只读规划模式——建议但不修改 |
-| `compose` | 🎼 编排者 | 管理工作流和编排技能 |
-| `explore` | 🔍 研究员 | 快速代码库探索和分析 |
-| `general` | 🤖 通才 | 通用多用途 Agent |
-
-自定义 Agent 可通过配置文件或 `.agentcompany/agent/` 目录创建。
-
----
-
-## 技术栈
-
-| 层 | 技术 |
-|------|------|
-| 运行时 | [Bun](https://bun.sh) + TypeScript |
-| TUI | SolidJS + OpenTUI（终端渲染） |
-| 状态管理 | [Effect-TS](https://effect.website)（函数式 Effect 系统） |
-| 存储 | Drizzle ORM + SQLite |
-| 构建 | Turborepo（monorepo） |
-| 模型 | 任意 LLM 服务商（OpenAI、Anthropic、Google、本地模型...） |
-
----
-
-## 路线图
-
-| 阶段 | 状态 | 描述 |
-|------|------|------|
-| **P0** — 执行底座 | ✅ 完成 | 单任务链路、结构化活动契约、真交付、审批、取消 |
-| **P1** — 执行模型 + 多 Agent | 🔨 进行中 | Agent=文件束、模型=动力、并发=线程、Presence 登记表 |
-| **P2** — 组织上下文底座 | 📋 计划中 | 上下文解析器、作用域 × 密级、角色可见性、delegate/message 原语 |
-| **P3** — 交互 + 递归委派 | 📋 计划中 | A2A 对齐、递归委派、失败协议、准入分级 |
-| **P4** — 治理 + 学习 | 📋 计划中 | 声誉、组织变更、提案闭环、经验→技能结晶 |
-| **P5** — 体验与空间闭环 | 📋 计划中 | 差异化演出、活态办公室、组织树 + 线程可视化 |
-
----
-
-## 参与贡献
-
-欢迎贡献！请先阅读 [AGENTS.md](AGENTS.md) 了解编码规范。
+运行共享 WebUI 或 Electron：
 
 ```bash
-# 在 package 目录下运行（不要在仓库根目录）
+bun run dev:web
+bun run dev:desktop
+```
+
+类型检查和测试必须从具体 package 目录运行，不能在仓库根目录运行测试：
+
+```bash
 cd packages/opencode
 bun typecheck
 bun test
 ```
 
----
+仓库规范见 [AGENTS.md](AGENTS.md)。
 
-## 社区
+## 当前发布路径
 
-- [GitHub Discussions](https://github.com/Ericwong5021/agents-company/discussions) — 提问、交流
-- [GitHub Issues](https://github.com/Ericwong5021/agents-company/issues) — 报 Bug、提需求
+1. 产品与术语基线
+2. 本地 Control Plane 与托盘/状态栏生命周期
+3. IM-first 公司、项目群与 Thread
+4. 董事会 Charter、批准策略与软件交付闭环
+5. 候选职业、Agent Home、隐私、Direct 与 Dreaming
+6. Windows/macOS Pre-Public 硬化和首次公开版本
 
----
+首次公开版本明确不包含云端多租户、移动端、单项目多仓库、通用行业交付、Kanban-first 重型项目管理和像素办公室模拟。
+
+## 文档
+
+- [产品宪法](docs/product-design/PRODUCT-CONSTITUTION.md)：不可被普通需求覆盖的原则与边界
+- [产品 PRD](docs/Agent%20Company%20产品%20PRD.md)：公开版本需求与验收
+- [产品设计总览](docs/product-design/00-overview.md)：系统模型和文档地图
+- [实施计划](docs/product-design/implementation-plan.md)：当前基础、差距和工作流
+- [文档导航](docs/README.md)：权威顺序与历史文档状态
 
 ## 许可证
 
-源代码基于 [MIT 许可证](./LICENSE) 开源。使用 Agent Company 还需遵守[使用限制](./USE_RESTRICTIONS.md)。
-
----
-
-<div align="center">
-
-<sub>理念：AI 应该像<strong>组织</strong>一样运作，而不是像聊天机器人。</sub>
-
-</div>
+源代码使用 [Apache License 2.0](LICENSE)。使用行为同时受 [Use Restrictions](USE_RESTRICTIONS.md) 约束。

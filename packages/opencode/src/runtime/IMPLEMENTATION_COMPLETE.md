@@ -1,5 +1,7 @@
 # ✅ Hermes Runtime Implementation Complete
 
+> Historical implementation snapshot. It records the state of the original delivery task and is not a current product roadmap or proof of end-to-end completion. Use [`README.md`](README.md), current code, and tests for the module's present behavior.
+
 ## Summary
 
 Successfully implemented Hermes runtime support for AgentCompany as specified in the requirements.

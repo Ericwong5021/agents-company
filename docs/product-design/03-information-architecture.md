@@ -1,151 +1,164 @@
-# 03. 信息架构
+# 信息架构、上下文与隐私边界
 
-> **模块**：信息架构
-> **核心问题**：谁能看到什么、怎么控制
-> **来源**：运转模型宪法 §3/§4/§5
+> 状态：当前
+> 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 
----
+## 1. 目标
 
-## 1. 两个正交维度
+信息架构必须同时做到：
 
-```
-可见性判定:  Agent 能看到 doc  ⟺  doc.scope 覆盖 Agent  ∧  Agent.clearance ≥ doc.classification
-```
+1. Agent 获得完成工作所需的最小上下文；
+2. 用户可以追溯公司的正式运行；
+3. 私人空间和 Direct 形成真实、不可越级的空间边界；
+4. 上下文压缩不改变权限；
+5. 磁盘文件、数据库和 UI 对同一事实有清晰权威源。
 
-信息的可见性由**作用域**和**密级**两个正交维度共同决定。
+## 2. 四类信息
 
----
+| 类别 | 例子 | 默认可见性 |
+|---|---|---|
+| Company Public | 公司文化、组织结构、公开 PROFILE、通用政策 | 全公司 + 用户 |
+| Work Scoped | 项目群、Charter、任务、制品、部门资料 | 项目/部门成员 + 用户 |
+| Agent Professional | ROLE、INSTRUCT、职业记录、工作记忆、私有技能 | Agent 本人、授权治理角色、用户 |
+| Agent Private | SOUL、梦境、私人日志、兴趣、私人关系与个人记忆 | Agent 本人读写；用户只读 |
 
-## 2. 作用域（Scope）三层
+Direct 是独立的双人会话作用域，不归入管理者可见的 Work Scoped 信息。
 
-| 层 | 内容 | 说明 |
-|----|------|------|
-| **Public（组织级）** | 同事名册、组织结构、公司规章、协作规范、安全红线、公共设施（skill/MCP/tool 目录）、战略看板、项目清单与进度、公司纪要 | 全组织可见 |
-| **Group（项目/团队级）** | 项目共享上下文、squad 内纪要、项目资源仓库；委派 thread 天然是临时 group scope | 招募时动态创建 |
-| **Private（个人级）** | soul、instruct、memory、专有 skill/MCP/tool、relationship、个人 kanban、手头项目清单 | 仅本人可见 |
+## 3. 推荐目录
 
----
-
-## 3. 密级（Classification）四级
-
-正交叠加于作用域之上：
-
-| 密级 | 说明 |
-|------|------|
-| **public** | 公开信息 |
-| **internal** | 内部信息 |
-| **confidential** | 机密信息 |
-| **restricted** | 受限信息 |
-
----
-
-## 4. 授权模型
-
-### 4.1 基础 Clearance 从组织树推导
-
-- Agent 在组织树的位置（部门 + 职级）决定基础 clearance
-- 组织架构与权限边界是同一棵树的两个读法
-
-### 4.2 Relationship 边做局部增删权
-
-- 某私交通道多看一档
-- 某外部协作者降一档
-- 某通道允许 delegate
-
-### 4.3 访问公式
-
-```
-Agent 能看到 doc  ⟺  doc.scope 覆盖 Agent  ∧  Agent.clearance ≥ doc.classification
-```
-
----
-
-## 5. 文件系统即真相
-
-### 5.1 三层目录结构
-
-```
+```text
 workspace/
-  public/           ← 组织级
+  company/
+    constitution/
+    policies/
     org/
-      profiles/     ← 同事名册
-      structure.md  ← 组织结构
-    policy/
-      safety-redlines.md   ← 安全红线
-      collaboration.md     ← 协作规范
-    facilities/
-      skills.md     ← 公共技能目录
-    board/
-      strategy.md   ← 战略看板
-      projects.md   ← 项目清单
-    minutes/        ← 公司纪要
-  groups/           ← 项目/团队级
-    <project-id>/   ← 招募时动态创建
-  agents/           ← 个人级
-    <agent-id>/
-      soul.md
-      instruct.md
-      memory/
+    culture/
+    minutes/
+  projects/<project-id>/
+    CHARTER.md
+    decisions/
+    artifacts/
+    shared-memory/
+    worktrees/<worktree-id>/
+  departments/<department-id>/
+  channels/<channel-id>/
+  agents/<agent-id>/
+    private/
+      SOUL.md
+      dreams/
+      journal/
+      interests/
+      relationships/
+      personal-memory/
+    professional/
+      ROLE.md
+      INSTRUCT.md
+      career/
       skills/
-      relationships.md
-      kanban.md
+      work-memory/
+    public/
+      PROFILE.md
+      contributions.md
+      shared-skills/
 ```
 
-### 5.2 Front-Matter 规范
+实际物理布局可以迁移，但 private/professional/public 的逻辑边界不能合并为一个模糊的 Agent 文件包。
 
-每个文档带 front-matter，定义其作用域和密级：
+## 4. 权限模型
 
-- **scope**：public / group:<groupId> / agent:<agentId>
-- **classification**：public / internal / confidential / restricted
-- **owner**：所有者
-- **updatedBy**：最后更新者
+每个文档至少携带：
 
----
-
-## 6. 上下文解析器（ContextResolver）
-
-### 6.1 定位
-
-系统唯一的上下文收口。memory、skill、消息、模式全部经过它。
-
-### 6.2 解析流程
-
-```
-ResolveContext(agent, task, mode) →
-  1. 扫 public / group / private 三层文档树
-  2. 过滤：scope ∩ (组织推导 clearance ± relationship 边)        ← 硬边界
-  3. 软聚焦：visible ∩ mode-profile(注意力模式)                  ← 软聚焦
-  4. 聚合：未读 inbox + 相关 memory
-  5. 截断：相关性排序 + token 预算 → 常驻摘要
-  6. 暴露工具（授权内）：read_doc / delegate / message_agent / propose
-  → 拼成本次 run 的 instruct
+```yaml
+scope: company | department:<id> | project:<id> | direct:<id> | agent:<id>
+classification: public | internal | confidential | restricted
+owner: <principal-id>
+authorship: agent | system | external
+updated_at: <timestamp>
 ```
 
-### 6.3 Token 两档
+普通工作信息的可见性由以下交集决定：
 
-| 档位 | 内容 | 注入方式 |
-|------|------|----------|
-| **常驻摘要** | 名册一句话、安全红线、当前项目一行 | 每次注入 |
-| **按需拉取** | 深度文档内容 | Agent 主动 read_doc |
-
-### 6.4 访问控制 vs 注意力：两个正交过滤
-
-```
-visible  = access-filter(scope ∩ clearance ± relationship)   ← 硬边界
-injected = visible ∩ mode-profile(当前注意力模式)             ← 软聚焦
+```text
+visible = scope membership ∩ classification clearance ∩ explicit policy
 ```
 
-- 模式永不扩权——只在 visible 内重排前景/静音噪音
-- 无状态 runtime 下「隔离噪音」无需删除上下文，只要这次不注入即可
+关系可以影响推荐和协作偏好，但不能提升 private 或 Direct 的权限。委派可以临时授予项目资料访问权，也不能打开身份私域。
 
----
+## 5. 私人空间硬边界
 
-## 7. 多租户前瞻
+| 主体 | 读取 | 写入 | 搜索/索引 |
+|---|---:|---:|---:|
+| Agent 本人 | 允许 | 允许 | 仅本人私有索引 |
+| 用户 | 允许 | 禁止 | 可按 Agent 浏览，不进入组织搜索 |
+| 其他 Agent | 禁止 | 禁止 | 禁止 |
+| 管理者/董事会 Agent | 禁止 | 禁止 | 禁止 |
+| 推荐、招聘、声誉服务 | 禁止 | 禁止 | 禁止 |
 
-- scope 抽象对（workspace → group → agent）天然适配多租户
-- 未来把 workspace 换成 tenant 边界几乎零改动
-- 第一版定语义，后续不重写
+实现要求：
 
----
+- 路径过滤、API 授权和 Context Resolver 三处都必须拒绝越权；
+- 任何 Agent 越权读取尝试都记录元数据审计事件；
+- 审计、日志、通知和错误信息不得包含私人内容；
+- 备份可以加密复制原文，但恢复外不得解析内容；
+- UI 不提供编辑、转发、引用、复制到群聊等快捷动作；
+- 用户磁盘修改标为 `authorship: external`，不得覆盖 Agent 自己的版本历史。
 
-*来源：运转模型宪法 §3/§4/§5*
+## 6. Direct 边界
+
+Direct 只允许两个参与 Agent 和只读用户查看。
+
+- 用户查看不产生已读、回复或上下文注入；
+- 管理者不能因汇报关系访问；
+- 全文不进入公司搜索、组织记忆或声誉评分；
+- 正式工作决定由参与者生成高信号摘要，经确认后写回项目群；
+- 摘要只陈述工作事实，不复制未经同意的私人表达。
+
+## 7. Context Resolver
+
+Context Resolver 是所有 Agent 上下文的唯一入口：
+
+```mermaid
+flowchart LR
+    I["Agent + Thread + Project + Intent"] --> A["硬权限过滤"]
+    A --> S["作用域与新鲜度选择"]
+    S --> M["按注意力模式排序"]
+    M --> B["Token 预算截断"]
+    B --> C["注入上下文与授权工具"]
+```
+
+处理顺序不可颠倒：先做硬权限过滤，再做相关性排序和预算截断。注意力模式只能缩小上下文，不能扩大访问范围。
+
+同一个 Agent 运行时可以按需注入其 SOUL 和私人记忆；其他 Agent 的运行上下文中不得出现这些文件的内容、摘要、embedding 或搜索命中。
+
+## 8. 主会话与记录
+
+正式协作记录分三层：
+
+1. 主会话的高信号事件；
+2. Thread 内的完整消息与决定形成过程；
+3. Tool run、日志、diff 和原始证据。
+
+每一层都保留到下一层的引用。系统生成主会话摘要时必须保留结论来源、决定 DRI、风险和未决项，不能只生成不可追溯的自然语言摘要。
+
+## 9. 权威数据源
+
+| 数据 | 权威源 |
+|---|---|
+| 事务状态、任务、Gate、事件索引 | SQLite |
+| Agent 人格与可读身份内容 | 版本化文件系统 |
+| 代码与软件制品 | Git 仓库 / Worktree |
+| UI 派生视图、缓存、搜索索引 | 可重建缓存 |
+
+客户端不能直接修改 SQLite 或身份文件；写入必须经 Control Plane 的授权 API。用户在文件系统做的外部修改只作为可检测输入，不绕过身份协议。
+
+## 10. 隐私验收
+
+首次公开版本至少包含自动化测试：
+
+- A Agent 无法通过路径、API、搜索、摘要或错误信息获取 B Agent private 内容；
+- 董事会和管理者同样被拒绝；
+- 用户可读取但所有产品写入接口返回拒绝；
+- 用户查看不会把内容带入后续 Agent 上下文；
+- 备份恢复后权限与版本历史不丢失；
+- 外部磁盘修改可识别且不会伪装成 Agent 作者；
+- Direct 不能被第三个 Agent 或组织搜索读取。

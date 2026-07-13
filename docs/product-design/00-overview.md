@@ -1,149 +1,146 @@
-# AgentCompany 产品设计总览
+# Agent Company 产品设计总览
 
-> **版本**：v1.0 · 2026-06-25
-> **性质**：产品设计主文档，定义 AgentCompany 的核心理念、组织架构全景和产品演进路径。
-> **子文档**：组织架构 · 执行模型 · 信息架构 · 注意力模式 · 交互原语 · 治理机制 · 工作类型 · 产品阶段
+> 状态：当前
+> 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
+> 目标版本：Pre-Public → 首次公开版本
 
----
+## 1. 产品定义
 
-## 1. 一句话定义
+Agent Company 是一个 **local-first、IM-first 的 AI 公司操作系统**。一个用户在自己的电脑上提出方向，由一个最小董事会把方向变成可验收项目，再由动态形成的 Agent 团队完成软件交付。
 
-整个系统是一棵**递归的「拆解—委派—准入/升级」树**：用户与董事会圆桌讨论，需求逐层向下拆解委派，**只有叶子节点（工具层）直接产出制品**（代码/文档/数据/设计稿），非叶节点做的是决策→规划→规格→编排的逐层转化，结果逐层向上准入（成功）或升级（失败）。
+产品不是：
 
-每个 Agent 是**一束持久文件（身份）**，模型是**把文件跑起来的动力（执行）**；一个上下文解析器决定每个 Agent 每次执行时「处在什么组织、是谁、能看到什么、能找谁、能用什么、用哪档模型」。
+- 多 Agent SDK 的可视化外壳；
+- 以看板为主的项目管理工具；
+- 需要用户逐步编排的工作流编辑器；
+- 用像素办公室模拟忙碌的 Agent 玩具。
 
----
+## 2. 产品公式
 
-## 2. 核心理念
+> **Multica 级视觉完成度 + Bloome 式 IM-first 交互 + Agent Company 的自治治理与 Agent 人格**
 
-### 2.1 递归委托
+三个参照分别回答不同问题：
 
-组织是一个固定层级的递归委托树。每个非叶节点做同一件事：拆解目标、招募/委派、准入校验、失败升级。叶子才执行。
+| 维度 | 目标 |
+|---|---|
+| 视觉 | 克制的色调、精确的间距、状态和动效细节，形成长期工作台质感 |
+| 交互 | 人与 Agent 在会话中共同工作，结构化协作藏在自然对话之后 |
+| 核心差异 | 组织能够自治；Agent 有职业历史、私人空间、社交关系和人格成长 |
 
-### 2.2 身份与执行解耦
+## 3. 三层产品模型
 
-Agent = 持久化文件束（谁），Model = 瞬时执行引擎（在做什么）。一份身份可被多次同时点燃。并发计量单位是 Thread，不是 Agent。
-
-### 2.3 信息即文件
-
-组织的全部信息——规章、战略、项目、记忆、关系——都是文件系统中的文档。访问由作用域 × 密级 × 清除级别三维控制。
-
-### 2.4 注意力即成本
-
-四种注意力模式（空闲/响应/发散/专注）同时决定注入什么上下文和用哪档模型。空闲用廉价模型，专注用强模型。
-
-### 2.5 治理靠记录
-
-涌现式系统不追求复现，靠记录治理。每次跨 Agent 的访问、消息、准入、升级都是审计事件，轨迹即这次的「源代码」。
-
-### 2.6 自底向上提案
-
-纯 demand-pull 会让董事会累、团队空转。补一条 initiative-push：想法自底向上冒，董事会从「生成任务」转为「筛选提案」。
-
----
-
-## 3. 组织架构全景
-
-```
-用户 ←→ 董事会圆桌（CEO/CTO/CFO/CMO）   ← 系统入口 = 一场会议
-        │ 高认知 + 业务前沿 → 定方向、定优先级
-        ↓
-     部门层
-       ├── 业务部门（CTO/CMO/CFO 各自的部门）← 拆目标 + 定验收标准 + 组团队
-       └── 基建部门（Infrastructure）← 跨部门协作案例库 + 可复用工作流 + 共享 Agent
-        ↓
-     项目组（Leader）         ← 拆解为可执行规格 + 招募成员 + 管准入
-        ↓
-     执行层                   ← 按协作流程编排交付：匹配预定义工作流 + 细化规格 + 驱动工具
-        ↓
-     工具层                   ← 唯一直接产出制品的层
-       编码 / 检索 / 写作 / 设计 / 分析 …
+```mermaid
+flowchart TB
+    U["用户：创办者与最终治理者"]
+    W["工作层：IM、项目、代码、测试、交付"]
+    G["治理层：董事会、委派、审批、Gate、审计、声誉"]
+    L["生命层：身份、私人空间、社交、Reflection、Dreaming"]
+    U --> W
+    U --> G
+    W <--> G
+    G <--> L
+    L --> W
 ```
 
-**关键规则**：
-- 严格不可越级：每层必须经过，不设跳步
-- 统一递归角色
-- 任务评级（决定入口，不决定链路）
-- 委派深度 ≈ 4-5 层
+三层缺一不可：
 
-详见 [01-organization-structure.md](./01-organization-structure.md)
+- 没有工作层，产品只是世界观；
+- 没有治理层，产品只是多 Agent 聊天；
+- 没有生命层，产品仍然只是可替换的工具集合。
 
----
+## 4. 核心体验
 
-## 4. 设计模块索引
+### 4.1 主要入口
 
-| # | 模块 | 核心问题 | 文档 |
-|---|------|----------|------|
-| 1 | 组织架构 | 谁在哪、干什么、怎么管 | [01-organization-structure.md](./01-organization-structure.md) |
-| 2 | 执行模型 | Agent 怎么跑、并发怎么管 | [02-execution-model.md](./02-execution-model.md) |
-| 3 | 信息架构 | 谁能看到什么、怎么控制 | [03-information-architecture.md](./03-information-architecture.md) |
-| 4 | 注意力模式 | Agent 在想什么、用什么档位 | [04-attention-modes.md](./04-attention-modes.md) |
-| 5 | 交互原语 | Agent 之间怎么沟通协作 | [05-interaction-primitives.md](./05-interaction-primitives.md) |
-| 6 | 治理机制 | 怎么评价、怎么决策、怎么进化 | [06-governance.md](./06-governance.md) |
-| 7 | 工作类型 | 不同类型的工作怎么做 | [07-work-types.md](./07-work-types.md) |
-| 8 | 产品阶段 | 先做什么、后做什么 | [08-product-phases.md](./08-product-phases.md) |
+- **桌面工作台**：默认使用方式，承载常驻公司体验；
+- **浏览器工作台**：连接同一个本地 Control Plane，使用同一套 WebUI；
+- **TUI**：次级入口，用于快速操作、诊断和终端用户偏好。
 
-### 模块依赖与阅读顺序
+### 4.2 信息层级
 
-```
-01 组织架构  ←── 基础，所有模块的前置
-  ↓
-02 执行模型  ←── 依赖 01（Agent 角色定义）
-  ↓
-03 信息架构  ←── 依赖 01（组织树推导 clearance）+ 02（Agent 文件束）
-  ↓
-04 注意力模式 ←── 依赖 02（线程模型）+ 03（ContextResolver）
-  ↓
-05 交互原语  ←── 依赖 02（线程模型）
-06 治理机制  ←── 依赖 04（声誉分）
-07 工作类型  ←── 依赖 02（执行模型）
-  ↓
-08 产品阶段  ←── 依赖以上所有模块
+主会话只呈现结论、决定、风险、状态和交付物。完整协作通过 Thread 展开，工具调用和长日志在 Thread 内继续折叠。
+
+```text
+主会话（高信号）
+  └─ Thread（完整协作）
+       └─ Tool run / log / diff（执行细节）
 ```
 
-**建议阅读顺序**：01 → 02 → 03 → 04 → 05/06/07（可并行）→ 08
+### 4.3 频道模型
 
----
+公司大群、董事会和部门群提供长期组织上下文；每个项目单独建立项目群；两个 Agent 可以在严格隔离的 Direct 中交流。正式工作决定最终必须回到项目群或正式记录。
 
-## 5. 核心概念表
+## 5. 组织运行方式
 
-| 概念 | 定义 |
-|------|------|
-| **Agent** | 一束持久文件（soul/instruct/memory/skills/relationships/kanban），代表一个组织成员的身份 |
-| **Model** | 大语言模型，把 Agent 文件束跑起来的执行引擎 |
-| **Thread** | 并发执行单元，分为主线（专注/发散）、响应线（处理碎片）、环境线（空闲探索） |
-| **Soul** | Agent 的稳定身份文件：名字、角色、职责、组织归属、工作风格，不随执行变化 |
-| **Instruct** | Agent 的可演化指令文件：该角色如何做判断、如何沟通、何时升级，随经验迭代 |
-| **Skill** | 经验结晶后的可复用能力，可从私有技能喂回公共设施 |
-| **Artifact** | 工具层直接产出的制品（代码/文档/数据/设计稿），经 Gate 向上流转 |
-| **Gate（验收）** | 每层向上流转的关卡，通过则升级成功，打回则重试或向上升级 |
-| **唤醒/调度器** | 指挥层机制，决定每个 Agent 在什么节奏（事件/定时/里程碑/环境）被点燃、进哪条线程 |
-| **Workspace** | 组织的文件系统根目录，包含 public/groups/agents 三层目录结构 |
-| **ContextResolver** | 上下文解析器，决定每个 Agent 每次执行时能看到什么、能用什么 |
-| **注意力模式** | Agent 的认知状态：空闲/响应/发散/专注，由广度×深度决定 |
-| **作用域** | 信息的可见范围：Public（组织级）/ Group（项目级）/ Private（个人级） |
-| **密级** | 信息的敏感程度：public / internal / confidential / restricted |
-| **Clearance** | Agent 的访问许可级别，从组织树位置推导 |
-| **Trust Dial（信任旋钮）** | 控制组织自治程度的机制，信任越高审批门越少，自治度越高 |
-| **Delegate** | 向下委派任务的交互原语 |
-| **Proposal** | 自底向上提案的交互原语，delegate 的镜像 |
-| **DRI** | 直接责任人，每个决策域的唯一拍板人 |
-| **声誉分** | 持久化信号，驱动路由/选人/晋升，非激励手段 |
+新公司以 CEO、CTO、Product Lead 组成最小固定董事会。董事会读取用户目标和代码仓库，产出 Project Charter，并按需要动态建立部门、项目组和临时岗位。
 
----
+```mermaid
+flowchart LR
+    Goal["用户目标"] --> Board["最小董事会"]
+    Board --> Charter["可验收 Project Charter"]
+    Charter --> Team["动态项目团队"]
+    Team --> Work["实现 / 测试 / Agent Review"]
+    Work --> Gate["按策略审批"]
+    Gate --> Merge["合并 / 主分支验证 / 清理"]
+```
 
-## 6. 设计原则
+组织路径是适应性的。简单任务不需要制造五层汇报链；大目标也不能跳过 Charter 直接压给执行层。
 
-| 原则 | 说明 |
-|------|------|
-| 框架一次定稿 | 数据模型、工作流接口、spec 格式按可扩展设计，第一版就定语义 |
-| 演出挂真数据 | 界面展示必须基于真实执行状态，禁止假数据 |
-| 工作流驱动 | 执行层必须使用预定义工作流（Claude Code、Codex 等），不允许自行摸索。工作流缺失时上报"工作条件缺失"，由管理层负责寻找或创建工作流 |
-| 服务端是权威 | 前端不虚构执行状态 |
-| 组织完整性 | 用户不越级，组织自治不损 |
-| 软红线靠规章 | 红线全部为软红线，靠规章共识 + 声誉自治，不靠强制阻断 |
-| 便宜可逆放开 | 管理层可做低风险探索（项目组最多试 2 种方案），昂贵不可逆的落地需设闸 |
+## 6. 核心对象
 
----
+| 对象 | 责任 |
+|---|---|
+| Company | 公司规则、默认审批策略、组织与长期文化 |
+| Agent | 持续身份；与一次模型调用解耦 |
+| Candidate | 可复用的临时 Agent，项目结束后回到候选池 |
+| Employee | 正式岗位 Agent，拥有持久职业记忆与 Agent Home |
+| Channel | 公司群、董事会、部门、项目或 Direct 的协作边界 |
+| Thread | 一项议题的完整协作过程，也是主要展开单元 |
+| Project Charter | 董事会把目标变成可验收项目的契约 |
+| Project | 在一个主仓库上完成一组可验收交付 |
+| Work Item | 有负责人、依赖、状态和验收的执行单元 |
+| Artifact | 代码、测试结果、文档、决策或其他可审查产物 |
+| Gate | 由规则或用户批准决定能否进入下一阶段的关卡 |
+| Decision | 有 DRI、理由、异议和影响范围的正式决定 |
+| Audit Event | 不可静默改写的治理元数据 |
 
-*来源：[agent-company-operating-model.md](../agent-company-operating-model.md) · [product-phase-plan.md](../product-phase-plan.md)*
+## 7. 本地技术形态
+
+```mermaid
+flowchart TB
+    E["Electron"] --> API["Local API + Event Stream"]
+    B["Browser"] --> API
+    T["TUI"] --> API
+    API --> CP["Control Plane：唯一权威写入者"]
+    CP --> R["Runtime / Workflow / Policy / Context"]
+    CP --> DB["SQLite"]
+    CP --> FS["Agent identity files"]
+    CP --> Git["Git repositories / Worktrees"]
+```
+
+Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不直接写数据库；Control Plane 负责认证、单写者语义、任务恢复和孤儿 Worktree 恢复。
+
+现有技术基础继续复用：
+
+- `packages/app`：SolidJS + Vite 的共享 WebUI；
+- `packages/desktop`：Electron 桌面壳；
+- `packages/opencode`：Bun、Effect、Hono、SQLite、工作流与 Agent Runtime。
+
+## 8. 设计文档分工
+
+| 文档 | 回答的问题 |
+|---|---|
+| [组织结构](01-organization-structure.md) | 谁负责、如何组队、如何成为正式员工 |
+| [执行模型](02-execution-model.md) | 一个目标怎样变成可验证交付 |
+| [信息架构](03-information-architecture.md) | 谁能看到什么，如何进入上下文 |
+| [注意力与成长](04-attention-modes.md) | Agent 何时工作、响应、反思、社交和做梦 |
+| [交互原语](05-interaction-primitives.md) | 用户与 Agent 如何在 IM 中协作 |
+| [治理](06-governance.md) | 哪些动作自动、哪些需要批准、如何审计 |
+| [工作类型](07-work-types.md) | 软件研发主线如何交付，未来如何扩展 |
+| [产品阶段](08-product-phases.md) | Pre-Public 如何收敛为首次公开版本 |
+
+## 9. 当前实现与目标的区别
+
+仓库中已有大量可复用模块，包括 Session、Actor、Group Session、Thread、Delegation、Admission、Reputation、Trust Dial、Audit、Token Governance、Workflow、Control Plane 和 Worktree。
+
+模块存在不等于产品闭环已经完成。当前阶段的关键工作是把这些能力收敛进共享 WebUI、本地常驻进程、严格隐私边界和一条可验收的软件交付旅程。具体以[实施计划](implementation-plan.md)为准。

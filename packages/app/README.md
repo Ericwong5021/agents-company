@@ -1,50 +1,28 @@
-## Usage
+# @agents-company/app
 
-Dependencies for these templates are managed with [pnpm](https://pnpm.io) using `pnpm up -Lri`.
+The shared SolidJS + Vite WebUI used by both the browser development surface and `packages/desktop`.
 
-This is the reason you see a `pnpm-lock.yaml`. That said, any package manager will work. This file can safely be removed once you clone a template.
+## Commands
 
-```bash
-$ npm install # or pnpm install or yarn install
-```
-
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
-
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm run dev` or `npm start`
-
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.<br>
-
-### `npm run build`
-
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-## E2E Testing
-
-Playwright starts the Vite dev server automatically via `webServer`, and UI tests expect an opencode backend at `localhost:4096` by default.
+Run from this package directory:
 
 ```bash
-bunx playwright install chromium
+bun dev
+bun typecheck
+bun run test:unit
 bun run test:e2e:local
-bun run test:e2e:local -- --grep "settings"
+bun run build
 ```
 
-Environment options:
+The standalone development server defaults to `http://localhost:3000` and expects a local Agent Company backend at `http://localhost:4096` unless overridden with:
 
-- `PLAYWRIGHT_SERVER_HOST` / `PLAYWRIGHT_SERVER_PORT` (backend address, default: `localhost:4096`)
-- `PLAYWRIGHT_PORT` (Vite dev server port, default: `3000`)
-- `PLAYWRIGHT_BASE_URL` (override base URL, default: `http://localhost:<PLAYWRIGHT_PORT>`)
+- `PLAYWRIGHT_SERVER_HOST`
+- `PLAYWRIGHT_SERVER_PORT`
+- `PLAYWRIGHT_PORT`
+- `PLAYWRIGHT_BASE_URL`
 
-## Deployment
+## Product role
 
-You can deploy the `dist` folder to any static host provider (netlify, surge, now, etc.)
+This package is the primary product UI. Electron embeds it rather than maintaining a separate desktop frontend. TUI features should share Control Plane semantics with this app, but the TUI does not define this package's information architecture.
+
+Current product direction and target behavior are defined in [`docs/product-design/PRODUCT-CONSTITUTION.md`](../../docs/product-design/PRODUCT-CONSTITUTION.md) and the [implementation plan](../../docs/product-design/implementation-plan.md).
