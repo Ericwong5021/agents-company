@@ -1,27 +1,42 @@
 import { describe, expect, test } from "bun:test"
-import { companyAgents, companyChannels, deliveryEvidence, threadEvents } from "./company-model"
+import { createDisconnectedCompanyWorkspaceDataSource } from "./company-data-source"
+import { createFixtureCompanyWorkspaceDataSource } from "./company-fixture"
 
-describe("company workspace view model", () => {
-  test("keeps the pre-public project as a high-signal channel", () => {
-    const project = companyChannels.find((channel) => channel.id === "pre-public-webui")
+describe("company workspace data source", () => {
+  test("keeps production honest when runtime data is not connected", () => {
+    const source = createDisconnectedCompanyWorkspaceDataSource()
+    const snapshot = source.getSnapshot()
 
-    expect(project).toMatchObject({
+    expect(snapshot.status).toBe("disconnected")
+    expect(JSON.stringify(snapshot)).not.toMatch(/142\/142|评审通过|后端接口、权限与审计日志已实现|已通过/)
+    expect(source.approveDelivery === undefined).toBe(true)
+    expect(source.sendMessage === undefined).toBe(true)
+  })
+
+  test("exposes the visual fixture only through the development adapter", () => {
+    const source = createFixtureCompanyWorkspaceDataSource()
+    const snapshot = source.getSnapshot()
+
+    expect(snapshot.status).toBe("ready")
+    if (snapshot.status !== "ready") return
+    expect(snapshot.channels.find((channel) => channel.id === "pre-public-webui")).toMatchObject({
       section: "项目",
       name: "Pre-Public WebUI",
-      preview: "准备合并到 main",
     })
   })
 
-  test("only references known agents from direct channels and thread events", () => {
-    const referenced = [
-      ...companyChannels.flatMap((channel) => (channel.agent ? [channel.agent] : [])),
-      ...threadEvents.map((event) => event.agent),
-    ]
+  test("publishes fixture action results through the same subscription boundary", async () => {
+    const source = createFixtureCompanyWorkspaceDataSource()
+    const updates: string[] = []
+    const unsubscribe = source.subscribe((snapshot) => {
+      if (snapshot.status !== "ready") return
+      updates.push(`${snapshot.delivery.status}:${snapshot.userMessages.length}`)
+    })
 
-    expect(referenced.every((agent) => agent in companyAgents)).toBe(true)
-  })
+    await source.sendMessage?.({ channelID: "pre-public-webui", body: "继续推进 M0" })
+    await source.approveDelivery?.({ deliveryID: "pre-public-webui-delivery" })
+    unsubscribe()
 
-  test("ships complete delivery evidence for the approval surface", () => {
-    expect(deliveryEvidence.map((item) => item.label)).toEqual(["功能验收", "兼容性检查", "可访问性", "性能基准"])
+    expect(updates).toEqual(["pending:1", "approved:1"])
   })
 })
