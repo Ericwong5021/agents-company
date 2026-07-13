@@ -1,6 +1,6 @@
 let nav: ((href: string) => void) | undefined
 
-export const setNavigate = (fn: (href: string) => void) => {
+export const setNavigate = (fn?: (href: string) => void) => {
   nav = fn
 }
 

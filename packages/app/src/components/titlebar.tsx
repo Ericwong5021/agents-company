@@ -32,7 +32,13 @@ type TauriApi = {
   }
 }
 
-const tauriApi = () => (window as unknown as { __TAURI__?: TauriApi }).__TAURI__
+declare global {
+  interface Window {
+    __TAURI__?: TauriApi
+  }
+}
+
+const tauriApi = () => window.__TAURI__
 const currentDesktopWindow = () => tauriApi()?.window?.getCurrentWindow?.()
 const currentThemeWindow = () => tauriApi()?.webviewWindow?.getCurrentWebviewWindow?.()
 
@@ -50,6 +56,7 @@ export function Titlebar() {
   const mac = createMemo(() => platform.platform === "desktop" && platform.os === "macos")
   const windows = createMemo(() => platform.platform === "desktop" && platform.os === "windows")
   const web = createMemo(() => platform.platform === "web")
+  const coding = createMemo(() => !!params.dir)
   const zoom = () => platform.webviewZoom?.() ?? 1
   const minHeight = () => (mac() ? `${40 / zoom()}px` : undefined)
 
@@ -113,10 +120,7 @@ export function Titlebar() {
     },
   ])
 
-  const getWin = () => {
-    if (platform.platform !== "desktop") return
-    return currentDesktopWindow()
-  }
+  const getWin = () => (platform.platform === "desktop" ? currentDesktopWindow() : undefined)
 
   createEffect(() => {
     if (platform.platform !== "desktop") return
@@ -165,6 +169,7 @@ export function Titlebar() {
 
   return (
     <header
+      data-component="app-titlebar"
       class="h-10 shrink-0 bg-background-base relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center"
       style={{ "min-height": minHeight() }}
       data-tauri-drag-region
@@ -179,46 +184,50 @@ export function Titlebar() {
       >
         <Show when={mac()}>
           <div class="h-full shrink-0" style={{ width: `${72 / zoom()}px` }} />
-          <div class="xl:hidden w-10 shrink-0 flex items-center justify-center">
-            <IconButton
-              icon="menu"
-              variant="ghost"
-              class="titlebar-icon rounded-md"
-              onClick={layout.mobileSidebar.toggle}
-              aria-label={language.t("sidebar.menu.toggle")}
-              aria-expanded={layout.mobileSidebar.opened()}
-            />
-          </div>
+          <Show when={coding()}>
+            <div class="xl:hidden w-10 shrink-0 flex items-center justify-center">
+              <IconButton
+                icon="menu"
+                variant="ghost"
+                class="titlebar-icon rounded-md"
+                onClick={() => layout.mobileSidebar.toggle()}
+                aria-label={language.t("sidebar.menu.toggle")}
+                aria-expanded={layout.mobileSidebar.opened()}
+              />
+            </div>
+          </Show>
         </Show>
-        <Show when={!mac()}>
+        <Show when={!mac() && coding()}>
           <div class="xl:hidden w-[48px] shrink-0 flex items-center justify-center">
             <IconButton
               icon="menu"
               variant="ghost"
               class="titlebar-icon rounded-md"
-              onClick={layout.mobileSidebar.toggle}
+              onClick={() => layout.mobileSidebar.toggle()}
               aria-label={language.t("sidebar.menu.toggle")}
               aria-expanded={layout.mobileSidebar.opened()}
             />
           </div>
         </Show>
         <div class="flex items-center gap-1 shrink-0">
-          <TooltipKeybind
-            class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
-            placement="bottom"
-            title={language.t("command.sidebar.toggle")}
-            keybind={command.keybind("sidebar.toggle")}
-          >
-            <Button
-              variant="ghost"
-              class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
-              onClick={layout.sidebar.toggle}
-              aria-label={language.t("command.sidebar.toggle")}
-              aria-expanded={layout.sidebar.opened()}
+          <Show when={coding()}>
+            <TooltipKeybind
+              class={web() ? "hidden xl:flex shrink-0 ml-14" : "hidden xl:flex shrink-0 ml-2"}
+              placement="bottom"
+              title={language.t("command.sidebar.toggle")}
+              keybind={command.keybind("sidebar.toggle")}
             >
-              <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
-            </Button>
-          </TooltipKeybind>
+              <Button
+                variant="ghost"
+                class="group/sidebar-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                onClick={() => layout.sidebar.toggle()}
+                aria-label={language.t("command.sidebar.toggle")}
+                aria-expanded={layout.sidebar.opened()}
+              >
+                <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+              </Button>
+            </TooltipKeybind>
+          </Show>
           <div class="hidden xl:flex items-center shrink-0">
             <Show when={params.dir}>
               <div
