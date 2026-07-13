@@ -39,10 +39,10 @@ export const dict = {
   "tui.home.agreement.suffix": "",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "Чат правления",
-  "tui.home.board_chat.placeholder": "Отправить сообщение всем членам правления...",
-  "tui.home.board_chat.hint": "Enter для отправки · / для команд",
-  "tui.home.board_chat.sending": "отправка...",
+  "tui.home.board_chat.title": "Запустить проект компании",
+  "tui.home.board_chat.placeholder": "Опишите желаемый результат...",
+  "tui.home.board_chat.hint": "Enter для запуска · / для команд",
+  "tui.home.board_chat.sending": "запуск...",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "прикрепить файл",

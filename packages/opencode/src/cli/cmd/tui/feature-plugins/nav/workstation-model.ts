@@ -27,6 +27,11 @@ export interface CompanyAgentInfo {
 
 export interface WorkstationStatusProject {
   id: string
+  company_project_id?: string
+  title?: string
+  status?: string
+  output_dir?: string
+  active_run_id?: string
   blocked: boolean
   blocked_reason?: string
   blocked_by_agent_id?: string
@@ -50,6 +55,9 @@ export interface WorkstationStatusAgent {
 
 export interface ApprovalPrompt {
   id: string
+  source?: "message" | "project_gate"
+  project_id?: string
+  gate_kind?: "project_approval" | "development_approval"
   from_agent_id: string
   to_agent_id: string
   root_need_id?: string

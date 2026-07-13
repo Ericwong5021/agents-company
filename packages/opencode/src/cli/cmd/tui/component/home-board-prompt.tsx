@@ -4,7 +4,6 @@ import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
 import { useRoute } from "../context/route"
-import { useKV } from "../context/kv"
 import { useToast } from "../ui/toast"
 import { useLanguage } from "../context/language"
 import { useKeybind } from "../context/keybind"
@@ -14,19 +13,17 @@ import { useExit } from "../context/exit"
 import { DialogConfirm } from "../ui/dialog-confirm"
 import { useDialog } from "../ui/dialog"
 import { Spinner } from "../component/spinner"
-
-const BOARD_DEPT_NAME = "董事会圆桌"
+import { useLocal } from "../context/local"
 
 /**
- * Home-page prompt that sends messages directly to the board group chat
- * (a group session with all company agents) instead of creating a new
- * one-on-one session.
+ * Home-page goal intake. A submitted goal starts the persistent company
+ * project workflow; group chat remains available as a discussion surface but
+ * is no longer the execution engine.
  */
 export function HomeBoardPrompt() {
   const sdk = useSDK()
   const route = useRoute()
   const navigate = route.navigate
-  const kv = useKV()
   const toast = useToast()
   const { theme } = useTheme()
   const t = useLanguage().t
@@ -34,6 +31,7 @@ export function HomeBoardPrompt() {
   const keybind = useKeybind()
   const exit = useExit()
   const dialog = useDialog()
+  const local = useLocal()
 
   let textarea: any
   let promptAnchor: any
@@ -44,44 +42,6 @@ export function HomeBoardPrompt() {
 
   const fileStyleId = createMemo(() => useTheme().syntax().getStyleId("extmark.file")!)
   const agentStyleId = createMemo(() => useTheme().syntax().getStyleId("extmark.agent")!)
-
-  // ── Ensure the board group session exists (create once, reuse forever) ──────
-  async function ensureBoardGroupSessionID(): Promise<string> {
-    const existing = kv.get("board_group_session_id")
-    if (existing && typeof existing === "string") {
-      // Verify it still exists on the server (might have been deleted)
-      const check = await sdk.fetch(`${sdk.url}/group-session/${existing}`)
-      if (check.ok) return existing
-    }
-
-    const res = await sdk.fetch(`${sdk.url}/company-agent`)
-    if (!res.ok) throw new Error("无法获取智能体列表")
-    const agentList = (await res.json()) as Array<{ id: string }>
-    const boardAgentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
-    const agentIDs =
-      boardAgentIDs.length > 0 ? boardAgentIDs : agentList.some((a) => a.id === "assistant") ? ["assistant"] : []
-
-    if (agentIDs.length === 0) throw new Error(t("tui.home.board_chat.no_agents"))
-
-    const profile = kv.get("onboarding_profile") as Record<string, any> | undefined
-    const companyName = (profile?.companyName as string) || (profile?.userName as string) || ""
-
-    const createRes = await sdk.fetch(`${sdk.url}/group-session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: `${BOARD_DEPT_NAME} · ${companyName}`,
-        agentIDs,
-      }),
-    })
-    if (!createRes.ok) {
-      const body = await createRes.text().catch(() => "")
-      throw new Error(`创建董事会群聊失败 (${createRes.status}): ${body}`)
-    }
-    const info = (await createRes.json()) as { id: string }
-    kv.set("board_group_session_id", info.id)
-    return info.id
-  }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function send() {
@@ -103,28 +63,26 @@ export function HomeBoardPrompt() {
 
     setSending(true)
     try {
-      const groupSessionID = await ensureBoardGroupSessionID()
-
-      const chatRes = await sdk.fetch(`${sdk.url}/group-session/${groupSessionID}/chat`, {
+      const selected = local.model.current()
+      const startRes = await sdk.fetch(`${sdk.url}/company-project`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          goal: text,
+          provider_id: selected?.providerID,
+          model_id: selected?.modelID,
+        }),
       })
-
-      if (chatRes.status === 409) {
-        // Group is busy — navigate there anyway so the user sees the live state
-        navigate({ type: "group-session", groupSessionID })
-        return
-      }
-      if (!chatRes.ok) {
-        toast.show({ variant: "error", message: "发送消息失败，请重试" })
+      if (!startRes.ok) {
+        const body = await startRes.text().catch(() => "")
+        toast.show({ variant: "error", message: body || "启动项目失败，请重试" })
         return
       }
 
-      // Clear the input and navigate to the board group session
       setInputText("")
       if (textarea && !textarea.isDestroyed) textarea.clear()
-      navigate({ type: "group-session", groupSessionID })
+      toast.show({ variant: "info", message: "项目已启动，团队正在调研；立项时会请求你批准" })
+      navigate({ type: "plugin", id: "workstation" })
     } catch (err) {
       toast.show({
         variant: "error",
@@ -135,20 +93,10 @@ export function HomeBoardPrompt() {
     }
   }
 
-  // ── Interrupt (not used from home, but keep for Ctrl+C handling) ────────────
-  async function interrupt() {
-    const gsid = kv.get("board_group_session_id")
-    if (!gsid || typeof gsid !== "string") return
-    await sdk.fetch(`${sdk.url}/group-session/${gsid}/interrupt`, { method: "POST" })
-  }
-
-  // Ctrl+C: first press interrupts busy agents, second press shows exit dialog
+  // Ignore exit while the project-start request is in flight.
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
-      if (sending()) {
-        void interrupt()
-        return
-      }
+      if (sending()) return
       void DialogConfirm.show(dialog, t("tui.dialog.exit.title"), t("tui.dialog.exit.message")).then((result) => {
         if (result) void exit()
       })
@@ -164,7 +112,7 @@ export function HomeBoardPrompt() {
 
   return (
     <box flexDirection="column" width="100%" gap={1}>
-      {/* Board chat header */}
+      {/* Company project intake */}
       <box flexDirection="column" gap={1}>
         <box flexDirection="row" gap={1} alignItems="center">
           <text fg={theme.accent} attributes={TextAttributes.BOLD}>
@@ -177,7 +125,7 @@ export function HomeBoardPrompt() {
         <text fg={theme.textMuted}>{t("tui.home.board_chat.subtitle")}</text>
       </box>
 
-      {/* Input area (mirrors the group-session route's textarea + autocomplete) */}
+      {/* Goal input */}
       <Autocomplete
         value={inputText()}
         setPrompt={() => {}}

@@ -34,13 +34,13 @@ export const dict: Record<string, string> = {
   "tui.home.agreement.privacy": "Privacy Policy",
   "tui.home.agreement.suffix": "",
 
-  // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "Ask the board",
+  // Company project intake
+  "tui.home.board_chat.title": "Start a company project",
   "tui.home.board_chat.subtitle":
-    "Sends to every configured board member. If your team is not set up yet, starts with the assistant.",
+    "The team researches and plans autonomously, then asks for approval before product initiation and development.",
   "tui.home.board_chat.placeholder": "Describe the outcome you want...",
-  "tui.home.board_chat.hint": "Enter to send to the board · / for commands",
-  "tui.home.board_chat.sending": "sending...",
+  "tui.home.board_chat.hint": "Enter to start the project · / for commands",
+  "tui.home.board_chat.sending": "starting...",
   "tui.home.board_chat.no_agents": "No board or assistant is available yet. Retry startup or connect a provider.",
 
   // Prompt bottom hints (trigger characters)

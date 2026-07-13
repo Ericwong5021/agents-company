@@ -39,10 +39,10 @@ export const dict = {
   "tui.home.agreement.suffix": "に同意したものとみなされます",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "役員会チャット",
-  "tui.home.board_chat.placeholder": "全ての役員にメッセージを送信...",
-  "tui.home.board_chat.hint": "Enter で送信 · / でコマンド",
-  "tui.home.board_chat.sending": "送信中...",
+  "tui.home.board_chat.title": "会社プロジェクトを開始",
+  "tui.home.board_chat.placeholder": "達成したい成果を説明してください...",
+  "tui.home.board_chat.hint": "Enter で開始 · / でコマンド",
+  "tui.home.board_chat.sending": "開始中...",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "ファイル添付",

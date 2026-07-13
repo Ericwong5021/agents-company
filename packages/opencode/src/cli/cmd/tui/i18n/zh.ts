@@ -38,12 +38,12 @@ export const dict = {
   "tui.home.agreement.privacy": "隐私政策",
   "tui.home.agreement.suffix": "",
 
-  // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "询问董事会",
-  "tui.home.board_chat.subtitle": "会发送给所有已配置的董事会成员。团队尚未配置时，会先用基础助手开始。",
+  // 公司项目入口
+  "tui.home.board_chat.title": "启动公司项目",
+  "tui.home.board_chat.subtitle": "团队会自主调研和规划，并在产品立项与开始开发前请求你批准。",
   "tui.home.board_chat.placeholder": "描述你想完成的结果...",
-  "tui.home.board_chat.hint": "Enter 发送给董事会 · / 唤起命令",
-  "tui.home.board_chat.sending": "发送中...",
+  "tui.home.board_chat.hint": "Enter 启动项目 · / 唤起命令",
+  "tui.home.board_chat.sending": "启动中...",
   "tui.home.board_chat.no_agents": "还没有可用的董事会成员或基础助手。请重试启动，或先连接一个服务商。",
 
   // Prompt bottom hints (trigger characters)

@@ -6,6 +6,7 @@ import { CompanyAgent } from "@/company-agent/company-agent"
 import { Project } from "@/project"
 import { Instance } from "@/project/instance"
 import { AgentMessage } from "@/agent-message/agent-message"
+import { CompanyProject } from "@/company-project"
 import { AuditEvent } from "@/audit-event/audit-event"
 import z from "zod"
 import { Effect } from "effect"
@@ -38,6 +39,9 @@ const AgentStatusSchema = z.object({
 
 const ApprovalSchema = z.object({
   id: z.string(),
+  source: z.enum(["message", "project_gate"]),
+  project_id: z.string().optional(),
+  gate_kind: z.enum(["project_approval", "development_approval"]).optional(),
   from_agent_id: z.string(),
   to_agent_id: z.string(),
   root_need_id: z.string().optional(),
@@ -61,19 +65,21 @@ interface CollaborationNode {
   children: CollaborationNode[]
 }
 
-const CollaborationNodeSchema: z.ZodType<CollaborationNode> = z.lazy(() =>
-  z.object({
-    id: z.string(),
-    kind: z.enum(["fyi", "request", "reply", "proposal"]),
-    from_agent_id: z.string(),
-    to_agent_id: z.string(),
-    task_summary: z.string().optional(),
-    outcome: z.string().optional(),
-    depth: z.number(),
-    time_created: z.number(),
-    children: z.array(CollaborationNodeSchema),
-  }),
-).meta({ ref: "WorkstationCollaborationNode" })
+const CollaborationNodeSchema: z.ZodType<CollaborationNode> = z
+  .lazy(() =>
+    z.object({
+      id: z.string(),
+      kind: z.enum(["fyi", "request", "reply", "proposal"]),
+      from_agent_id: z.string(),
+      to_agent_id: z.string(),
+      task_summary: z.string().optional(),
+      outcome: z.string().optional(),
+      depth: z.number(),
+      time_created: z.number(),
+      children: z.array(CollaborationNodeSchema),
+    }),
+  )
+  .meta({ ref: "WorkstationCollaborationNode" })
 
 const CollaborationTreeSchema = z.object({
   root_need_id: z.string(),
@@ -85,6 +91,11 @@ const CollaborationTreeSchema = z.object({
 const WorkstationStatusSchema = z.object({
   project: z.object({
     id: z.string(),
+    company_project_id: z.string().optional(),
+    title: z.string().optional(),
+    status: z.string().optional(),
+    output_dir: z.string().optional(),
+    active_run_id: z.string().optional(),
     blocked: z.boolean(),
     blocked_reason: z.string().optional(),
     blocked_by_agent_id: z.string().optional(),
@@ -141,7 +152,8 @@ function buildCollaborationTree(rootNeedID: string, messages: AgentMessage.Info[
       time_created: message.time.created,
       children: [],
     }
-    const parent = (message.inReplyTo ? nodes.get(message.inReplyTo) : undefined) ?? lastRequestAtDepth.get(message.depth - 1)
+    const parent =
+      (message.inReplyTo ? nodes.get(message.inReplyTo) : undefined) ?? lastRequestAtDepth.get(message.depth - 1)
     if (parent) parent.children.push(node)
     else roots.push(node)
     nodes.set(message.id, node)
@@ -182,11 +194,21 @@ export const WorkstationRoutes = lazy(() =>
           const threadSvc = yield* Thread.Service
           const projectSvc = yield* Project.Service
           const messageSvc = yield* AgentMessage.Service
+          const companyProjectSvc = yield* CompanyProject.Service
 
           const agentList = yield* agentSvc.list()
           const allThreads = yield* threadSvc.listActive()
           const project = (yield* projectSvc.get(Instance.project.id)) ?? Instance.project
           const approvals = yield* messageSvc.listPendingApprovals({ limit: 20 })
+          const companyProjects = yield* companyProjectSvc.list()
+          const projectGates = yield* companyProjectSvc.listGates(undefined, "pending")
+          const projectWorkItems = yield* Effect.all(
+            companyProjects.map((item) => companyProjectSvc.listWorkItems(item.id)),
+          )
+          const latestCompanyProject = companyProjects[0]
+          const latestBlockedWorkItem = projectWorkItems[0]?.find(
+            (item) => item.status === "blocked" || item.status === "failed",
+          )
           const collaborationTrees = yield* Effect.all(
             [...new Set(approvals.flatMap((approval) => (approval.rootNeedID ? [approval.rootNeedID] : [])))].map(
               (rootNeedID) =>
@@ -225,18 +247,22 @@ export const WorkstationRoutes = lazy(() =>
           const totalAgents = agents.length
           const activeAgents = agents.filter((a) => a.status !== "idle").length
           const totalThreads = agents.reduce((sum, a) => sum + a.threads.length, 0)
-          const openTasks = agents.reduce(
-            (sum, a) => sum + a.threads.filter((t) => t.kind === "primary" && t.status === "active").length,
-            0,
-          )
+          const openTasks = projectWorkItems
+            .flat()
+            .filter((item) => !["completed", "cancelled"].includes(item.status)).length
 
           return {
             project: {
               id: project.id,
-              blocked: project.block !== undefined,
-              blocked_reason: project.block?.reason,
-              blocked_by_agent_id: project.block?.byAgentID,
-              time_blocked: project.block?.time,
+              company_project_id: latestCompanyProject?.id,
+              title: latestCompanyProject?.title,
+              status: latestCompanyProject?.status,
+              output_dir: latestCompanyProject?.output_dir,
+              active_run_id: latestCompanyProject?.active_run_id,
+              blocked: project.block !== undefined || latestCompanyProject?.status === "blocked",
+              blocked_reason: project.block?.reason ?? latestBlockedWorkItem?.error,
+              blocked_by_agent_id: project.block?.byAgentID ?? latestBlockedWorkItem?.owner_agent_id,
+              time_blocked: project.block?.time ?? latestBlockedWorkItem?.updated_at,
             },
             agents,
             summary: {
@@ -244,20 +270,35 @@ export const WorkstationRoutes = lazy(() =>
               active_agents: activeAgents,
               total_threads: totalThreads,
               open_tasks: openTasks,
-              pending_approvals: approvals.length,
+              pending_approvals: approvals.length + projectGates.length,
             },
-            approvals: approvals.map((approval) => ({
-              id: approval.id,
-              from_agent_id: approval.fromAgentID,
-              to_agent_id: approval.toAgentID,
-              root_need_id: approval.rootNeedID,
-              thread_id: approval.threadID,
-              in_reply_to: approval.inReplyTo,
-              task_summary: approval.taskSummary,
-              body: approval.body,
-              depth: approval.depth,
-              time_created: approval.time.created,
-            })),
+            approvals: [
+              ...projectGates.map((gate) => ({
+                id: gate.id,
+                source: "project_gate" as const,
+                project_id: gate.project_id,
+                gate_kind: gate.kind,
+                from_agent_id: gate.requested_by_agent_id ?? "project-lead",
+                to_agent_id: "user",
+                task_summary: gate.title,
+                body: gate.summary,
+                depth: 0,
+                time_created: gate.requested_at,
+              })),
+              ...approvals.map((approval) => ({
+                id: approval.id,
+                source: "message" as const,
+                from_agent_id: approval.fromAgentID,
+                to_agent_id: approval.toAgentID,
+                root_need_id: approval.rootNeedID,
+                thread_id: approval.threadID,
+                in_reply_to: approval.inReplyTo,
+                task_summary: approval.taskSummary,
+                body: approval.body,
+                depth: approval.depth,
+                time_created: approval.time.created,
+              })),
+            ],
             collaboration_trees: collaborationTrees,
           }
         }),

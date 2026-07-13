@@ -1,5 +1,5 @@
 import type { TuiPlugin, TuiPluginModule } from "@agents-company/plugin/tui"
-import { createMemo, createResource, createSignal, createEffect, For, Show } from "solid-js"
+import { createMemo, createResource, createSignal, createEffect, For, Show, onCleanup } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useLanguage } from "../../context/language"
 import { useSDK } from "../../context/sdk"
@@ -14,6 +14,7 @@ import {
   flattenCollaborationNodes,
   formatTokens,
   type AgentStatus,
+  type ApprovalPrompt,
   type CompanyAgentInfo,
   type ProjectTokenStats,
   type ThreadInfo,
@@ -92,6 +93,8 @@ function WorkstationView() {
   event.on("thread.created", bump)
   event.on("thread.updated", bump)
   event.on("thread.completed", bump)
+  const projectRefresh = setInterval(bump, 2000)
+  onCleanup(() => clearInterval(projectRefresh))
 
   // -------------------------------------------------------------------------
   // Actions
@@ -116,9 +119,7 @@ function WorkstationView() {
   }
 
   const handleStop = async (agentID: string) => {
-    const threads = (allThreads() ?? []).filter(
-      (t) => t.agentID === agentID && t.status === "active",
-    )
+    const threads = (allThreads() ?? []).filter((t) => t.agentID === agentID && t.status === "active")
     if (threads.length === 0) return
 
     const results = await Promise.all(
@@ -143,11 +144,15 @@ function WorkstationView() {
     route.navigate({ type: "plugin", id: "agent-management", data: { agentID } })
   }
 
-  const handleApproval = async (messageID: string, decision: "approve" | "reject") => {
-    const res = await sdk.fetch(`${sdk.url}/workstation/approval/${encodeURIComponent(messageID)}/resolve`, {
+  const handleApproval = async (approval: ApprovalPrompt, decision: "approve" | "reject") => {
+    const path =
+      approval.source === "project_gate" && approval.project_id
+        ? `/company-project/${encodeURIComponent(approval.project_id)}/gates/${encodeURIComponent(approval.id)}/resolve`
+        : `/workstation/approval/${encodeURIComponent(approval.id)}/resolve`
+    const res = await sdk.fetch(`${sdk.url}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, actorAgentID: "user" }),
+      body: JSON.stringify(approval.source === "project_gate" ? { decision } : { decision, actorAgentID: "user" }),
     })
     if (!res.ok) {
       toast.show({ variant: "error", message: t("tui.workstation.approval.failed") })
@@ -241,12 +246,7 @@ function WorkstationView() {
                 }
                 const cfg = statusConfig[a.status]
                 return (
-                  <box
-                    flexShrink={0}
-                    paddingTop={0}
-                    paddingBottom={0}
-                    onMouseUp={() => handleConfigure(a.id)}
-                  >
+                  <box flexShrink={0} paddingTop={0} paddingBottom={0} onMouseUp={() => handleConfigure(a.id)}>
                     <text>
                       <text fg={theme[cfg.colorKey]}>{cfg.icon}</text>
                       <text fg={theme.text}>
@@ -312,7 +312,8 @@ function WorkstationView() {
             borderColor={theme.border}
           >
             <text fg={theme.text}>
-              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents}
+              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/
+              {summary().totalAgents}
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
@@ -349,14 +350,38 @@ function WorkstationView() {
               {t("tui.workstation.presence.idle")}: <text fg={theme.success}>{office().presence.idle}</text>
             </text>
             <text fg={theme.text}>
-              {t("tui.workstation.summary.tokens")}: <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
+              {t("tui.workstation.summary.tokens")}:{" "}
+              <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
             </text>
             <Show when={summary().observedTokens > 0}>
               <text fg={theme.text}>
-                {t("tui.workstation.summary.observed")}: <text fg={theme.accent}>{formatTokens(summary().observedTokens)}</text>
+                {t("tui.workstation.summary.observed")}:{" "}
+                <text fg={theme.accent}>{formatTokens(summary().observedTokens)}</text>
               </text>
             </Show>
           </box>
+
+          <Show when={office().project?.company_project_id}>
+            <box
+              flexShrink={0}
+              flexDirection="column"
+              paddingLeft={1}
+              paddingRight={1}
+              border={["left"]}
+              borderColor={theme.accent}
+            >
+              <text fg={theme.text}>
+                <b>{office().project?.title}</b> ·{" "}
+                <text fg={office().project?.blocked ? theme.error : theme.accent}>{office().project?.status}</text>
+              </text>
+              <Show when={office().project?.active_run_id}>
+                <text fg={theme.textMuted}>workflow: {office().project?.active_run_id}</text>
+              </Show>
+              <Show when={office().project?.output_dir}>
+                <text fg={theme.textMuted}>{office().project?.output_dir}</text>
+              </Show>
+            </box>
+          </Show>
 
           <Show when={office().approvals.length > 0}>
             <box flexShrink={0} flexDirection="column" gap={0}>
@@ -379,12 +404,14 @@ function WorkstationView() {
                         <text fg={theme.textMuted}> · {approval.task_summary}</text>
                       </Show>
                     </text>
-                    <text fg={theme.textMuted}>{approval.body.split("\n")[0]}</text>
+                    <text fg={theme.textMuted}>
+                      {approval.source === "project_gate" ? approval.body : approval.body.split("\n")[0]}
+                    </text>
                     <box flexDirection="row" gap={2}>
-                      <box onMouseUp={() => handleApproval(approval.id, "approve")}>
+                      <box onMouseUp={() => handleApproval(approval, "approve")}>
                         <text fg={theme.success}>{t("tui.workstation.approval.approve")}</text>
                       </box>
-                      <box onMouseUp={() => handleApproval(approval.id, "reject")}>
+                      <box onMouseUp={() => handleApproval(approval, "reject")}>
                         <text fg={theme.error}>{t("tui.workstation.approval.reject")}</text>
                       </box>
                     </box>
@@ -401,7 +428,13 @@ function WorkstationView() {
               </text>
               <For each={office().collaborationTrees}>
                 {(tree) => (
-                  <box flexShrink={0} flexDirection="column" paddingLeft={1} border={["left"]} borderColor={theme.border}>
+                  <box
+                    flexShrink={0}
+                    flexDirection="column"
+                    paddingLeft={1}
+                    border={["left"]}
+                    borderColor={theme.border}
+                  >
                     <text fg={theme.textMuted}>
                       {tree.root_need_id} · {tree.total_messages} {t("tui.workstation.collaboration.messages")}
                     </text>
@@ -429,12 +462,7 @@ function WorkstationView() {
           <box flexShrink={0} flexDirection="column" gap={1}>
             <For each={workstationAgents()}>
               {(agent) => (
-                <AgentCard
-                  agent={agent}
-                  onStart={handleStart}
-                  onStop={handleStop}
-                  onConfigure={handleConfigure}
-                />
+                <AgentCard agent={agent} onStart={handleStart} onStop={handleStop} onConfigure={handleConfigure} />
               )}
             </For>
 
@@ -445,13 +473,12 @@ function WorkstationView() {
 
           {/* Bottom separator and summary */}
           <box flexShrink={0} paddingTop={1}>
-            <text fg={theme.textMuted}>
-              {"─".repeat(50)}
-            </text>
+            <text fg={theme.textMuted}>{"─".repeat(50)}</text>
           </box>
           <box flexShrink={0} flexDirection="row" gap={2}>
             <text fg={theme.text}>
-              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/{summary().totalAgents}
+              {t("tui.workstation.summary.active")}: <text fg={theme.accent}>{summary().activeAgents}</text>/
+              {summary().totalAgents}
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
@@ -467,7 +494,8 @@ function WorkstationView() {
             </text>
             <text fg={theme.textMuted}>{"│"}</text>
             <text fg={theme.text}>
-              {t("tui.workstation.summary.tokens")}: <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
+              {t("tui.workstation.summary.tokens")}:{" "}
+              <text fg={theme.accent}>{formatTokens(summary().trackedTokens)}</text>
             </text>
           </box>
         </box>

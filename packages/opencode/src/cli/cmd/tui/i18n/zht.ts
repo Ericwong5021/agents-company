@@ -39,11 +39,11 @@ export const dict = {
   "tui.home.agreement.suffix": "",
 
   // Board chat (home prompt → group chat)
-  "tui.home.board_chat.title": "詢問董事會",
-  "tui.home.board_chat.subtitle": "會發送給所有已配置的董事會成員。團隊尚未配置時，會先用基礎助手開始。",
+  "tui.home.board_chat.title": "啟動公司專案",
+  "tui.home.board_chat.subtitle": "團隊會自主調研和規劃，並在產品立項與開始開發前請求你批准。",
   "tui.home.board_chat.placeholder": "描述你想完成的結果...",
-  "tui.home.board_chat.hint": "Enter 發送給董事會 · / 喚起命令",
-  "tui.home.board_chat.sending": "發送中...",
+  "tui.home.board_chat.hint": "Enter 啟動專案 · / 喚起命令",
+  "tui.home.board_chat.sending": "啟動中...",
   "tui.home.board_chat.no_agents": "還沒有可用的董事會成員或基礎助手。請重試啟動，或先連接一個服務商。",
 
   // Prompt bottom hints (trigger characters)
