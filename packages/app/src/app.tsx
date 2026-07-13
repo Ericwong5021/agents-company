@@ -63,6 +63,14 @@ const SessionRoute = () => (
 
 const SessionIndexRoute = () => <Navigate href="session" />
 
+function DirectoryRoute(props: ParentProps) {
+  return (
+    <Layout>
+      <DirectoryLayout>{props.children}</DirectoryLayout>
+    </Layout>
+  )
+}
+
 function UiI18nBridge(props: ParentProps) {
   const language = useLanguage()
   return <I18nProvider value={{ locale: language.intl, t: language.t }}>{props.children}</I18nProvider>
@@ -94,9 +102,7 @@ function AppShellProviders(props: ParentProps) {
           <NotificationProvider>
             <ModelsProvider>
               <CommandProvider>
-                <HighlightsProvider>
-                  <Layout>{props.children}</Layout>
-                </HighlightsProvider>
+                <HighlightsProvider>{props.children}</HighlightsProvider>
               </CommandProvider>
             </ModelsProvider>
           </NotificationProvider>
@@ -299,7 +305,7 @@ export function AppInterface(props: {
                   root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
                 >
                   <Route path="/" component={HomeRoute} />
-                  <Route path="/:dir" component={DirectoryLayout}>
+                  <Route path="/:dir" component={DirectoryRoute}>
                     <Route path="/" component={SessionIndexRoute} />
                     <Route path="/session/:id?" component={SessionRoute} />
                   </Route>
