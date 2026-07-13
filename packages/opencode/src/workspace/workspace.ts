@@ -134,6 +134,7 @@ export async function initWorkspace(dataPath: string): Promise<void> {
     ws("public", "minutes"),
     ws("groups"),
     ws("agents"),
+    ws("projects"),
   ]
   await Promise.all(dirs.map((d) => fs.mkdir(d, { recursive: true })))
 

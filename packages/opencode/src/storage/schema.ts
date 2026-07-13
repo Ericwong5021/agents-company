@@ -2,13 +2,18 @@ export { AccountTable, AccountStateTable, ControlAccountTable } from "../account
 export { ProjectTable } from "../project/project.sql"
 export { CompanyAgentTable } from "../company-agent/company-agent.sql"
 export { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"
-export {
-  GroupSessionTable,
-  GroupSessionMemberTable,
-  GroupMessageTable,
-} from "../group-session/group-session.sql"
+export { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "../group-session/group-session.sql"
 export { SessionShareTable } from "../share/share.sql"
 export { WorkspaceTable } from "../control-plane/workspace.sql"
 export { WorkflowRunTable } from "../workflow/workflow.sql"
 export { HistoryFtsTable } from "../history/fts.sql"
 export { AgentMessageTable } from "../agent-message/agent-message.sql"
+export {
+  CompanyProjectTable,
+  CompanyPlanTable,
+  CompanyWorkItemTable,
+  CompanyWorkItemDependencyTable,
+  CompanyArtifactTable,
+  CompanyApprovalGateTable,
+  CompanyProjectEventTable,
+} from "../company-project/company-project.sql"

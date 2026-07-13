@@ -61,6 +61,7 @@ import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { GroupSession } from "@/group-session"
+import { CompanyProject, CompanyProjectExecution } from "@/company-project"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
 import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
@@ -130,6 +131,8 @@ export const AppLayer = Layer.suspend(() =>
     History.defaultLayer,
     CompanyAgent.defaultLayer,
     GroupSession.defaultLayer,
+    CompanyProject.defaultLayer,
+    CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     AuditEvent.defaultLayer,

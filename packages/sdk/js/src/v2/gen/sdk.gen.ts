@@ -39,6 +39,10 @@ import type {
   CompanyAgentTemplatesSearchResponses,
   CompanyAgentUpdateErrors,
   CompanyAgentUpdateResponses,
+  CompanyProjectGetResponses,
+  CompanyProjectListResponses,
+  CompanyProjectResolveGateResponses,
+  CompanyProjectStartResponses,
   Config as Config3,
   ConfigGetResponses,
   ConfigProvidersResponses,
@@ -1728,6 +1732,154 @@ export class CompanyAgent extends HeyApiClient {
   private _templates?: Templates
   get templates(): Templates {
     return (this._templates ??= new Templates({ client: this.client }))
+  }
+}
+
+export class CompanyProject extends HeyApiClient {
+  /**
+   * List company projects
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectListResponses, unknown, ThrowOnError>({
+      url: "/company-project",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Start an autonomous company project
+   *
+   * Creates a persistent project and starts research. Execution stops at the product approval gate.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      goal?: string
+      title?: string
+      session_id?: string
+      provider_id?: string
+      model_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "goal" },
+            { in: "body", key: "title" },
+            { in: "body", key: "session_id" },
+            { in: "body", key: "provider_id" },
+            { in: "body", key: "model_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyProjectStartResponses, unknown, ThrowOnError>({
+      url: "/company-project",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get company project execution state
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectGetResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resolve a company project human gate
+   *
+   * Approval starts the next stage; rejection stops the project.
+   */
+  public resolveGate<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      gateID: string
+      directory?: string
+      workspace?: string
+      decision?: "approve" | "reject"
+      note?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "gateID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "decision" },
+            { in: "body", key: "note" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyProjectResolveGateResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/gates/{gateID}/resolve",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -3927,6 +4079,7 @@ export class Session2 extends HeyApiClient {
       modelRef?: string
       agent?: string
       agentID?: string
+      companyAgentID?: string
       task_id?: string
       source?: "user" | "spawn" | "hook"
       provenance?: Provenance
@@ -3954,6 +4107,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "modelRef" },
             { in: "body", key: "agent" },
             { in: "body", key: "agentID" },
+            { in: "body", key: "companyAgentID" },
             { in: "body", key: "task_id" },
             { in: "body", key: "source" },
             { in: "body", key: "provenance" },
@@ -4069,6 +4223,7 @@ export class Session2 extends HeyApiClient {
       modelRef?: string
       agent?: string
       agentID?: string
+      companyAgentID?: string
       task_id?: string
       source?: "user" | "spawn" | "hook"
       provenance?: Provenance
@@ -4096,6 +4251,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "modelRef" },
             { in: "body", key: "agent" },
             { in: "body", key: "agentID" },
+            { in: "body", key: "companyAgentID" },
             { in: "body", key: "task_id" },
             { in: "body", key: "source" },
             { in: "body", key: "provenance" },
@@ -6400,6 +6556,11 @@ export class OpencodeClient extends HeyApiClient {
   private _companyAgent?: CompanyAgent
   get companyAgent(): CompanyAgent {
     return (this._companyAgent ??= new CompanyAgent({ client: this.client }))
+  }
+
+  private _companyProject?: CompanyProject
+  get companyProject(): CompanyProject {
+    return (this._companyProject ??= new CompanyProject({ client: this.client }))
   }
 
   private _groupSession?: GroupSession

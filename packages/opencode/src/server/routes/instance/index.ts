@@ -20,6 +20,7 @@ import { Flag } from "@/flag/flag"
 import { ExperimentalHttpApiServer } from "./httpapi/server"
 import { ProjectRoutes } from "./project"
 import { CompanyAgentRoutes } from "./company-agent"
+import { CompanyProjectRoutes } from "./company-project"
 import { GroupSessionRoutes } from "./group-session"
 import { ThreadRoutes } from "./thread"
 import { WorkstationRoutes } from "./workstation"
@@ -60,6 +61,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
   return app
     .route("/project", ProjectRoutes())
     .route("/company-agent", CompanyAgentRoutes())
+    .route("/company-project", CompanyProjectRoutes())
     .route("/group-session", GroupSessionRoutes())
     .route("/thread", ThreadRoutes())
     .route("/", AgentLifecycleRoutes())

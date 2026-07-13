@@ -16,6 +16,11 @@ const prefixes = {
   workflow: "wf",
   thread: "thr",
   reputation: "rep",
+  companyProject: "cprj",
+  companyPlan: "cpln",
+  companyWorkItem: "cwi",
+  artifact: "art",
+  gate: "gate",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {
