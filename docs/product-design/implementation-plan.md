@@ -1,343 +1,453 @@
-# Implementation Plan：Pre-Public 收敛
+# Implementation Plan：Pre-Public 纵向交付
 
 > 状态：当前
 > 代码盘点日期：2026-07-13
+> 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
 
-## 1. 计划目的
+## 1. 本轮重排结论
 
-本计划不是从零设计 Agent Company，也不再沿用旧的 P0–P5/TUI/像素办公室路线。目标是在现有代码基础上，把已经存在但分散的 Agent、治理和交付能力收敛成一条可公开发布的本地产品旅程。
+Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉方向；当前不再需要继续制作静态页面方案。下一阶段必须从“模块和界面分别存在”切换为“每个里程碑都交付一段真实、可恢复、可验证的用户旅程”。
 
-必须始终区分：
+本计划用 M0–M6 纵向里程碑替代原来按 W1–W8 子系统铺开的实施顺序，但不改变宪法和 PRD 的首次公开版本范围。
 
-- **模块存在**：代码中有类型、服务、路由或测试；
-- **产品闭环**：用户可从共享 WebUI 使用，状态可恢复，权限和异常路径通过验收。
+核心决定：
 
-只有后者可以在产品文案中标记为完成。
+- 保留当前 Company Workspace 的视觉语言，不重做信息架构和视觉方向；
+- 先修复共享 App Shell，再接入真实业务，避免把演示状态扩散成第二套产品；
+- 先建立 Company/Channel/Thread/Message 的权威契约，再让 WebUI、Desktop 和 TUI 消费；
+- 先完成一个真实仓库的严格交付闭环，再扩展候选池、Agent Home 和生命层；
+- 隐私硬边界必须早于 Direct 和 Dreaming；
+- 每个里程碑都必须独立可合并、可回滚、可从 UI 验收，不能以“后端模块已存在”代替产品完成。
 
-## 2. 已验证的代码基础
+## 2. 当前事实基线
 
-以下路径在当前仓库中存在，可优先复用；表格不代表已经达到 PRD 验收。
+| 区域 | 当前事实 | 当前结论 |
+|---|---|---|
+| 产品文档 | 宪法、PRD、00–08 专题设计和本计划已有单向优先级 | S0 产品收敛基本完成 |
+| Company Workspace | 视觉、响应式和局部交互已通过 Design QA | 只是隔离 fixture View Model，不是业务完成 |
+| 共享 App Shell | 根路由绕过旧 `Layout`，Titlebar、通知定位、Deep Link 等跨切面能力没有完整覆盖；Tailwind source 路径也存在构建产物缺失风险 | 必须先完成 M0 |
+| Local Server / Runtime | Hono、SSE、Basic Auth、SQLite、Session、Workflow、Agent Runtime 可复用 | 是引擎基础，不是产品 Control Plane 闭环 |
+| Company Project | 已有 Project、Plan、Work Item、Artifact 和两个人工 Gate | 当前仍是固定游戏 MVP 流程，创建新空仓库，不处理导入仓库、严格 Worktree、合并或主分支验证 |
+| SDK | `companyProject.list/get` 等返回类型仍为 `unknown` | 不能直接作为新 WebUI 的长期契约 |
+| Desktop | 可启动内嵌 Server、生成随机密码、更新和通知 | 仍使用 OpenCode 品牌/协议/数据目录；无托盘/状态栏、窗口重建和公司恢复入口 |
+| Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
+| Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
+| E2E / 发布 | App 有 Playwright 配置，Desktop 有打包脚本 | E2E 仍是 `fixme` 骨架，尚无 Windows/macOS 纵向发布证据 |
 
-| 能力 | 当前路径 | 可复用基础 | 主要产品缺口 |
-|---|---|---|---|
-| 共享 WebUI | `packages/app` | SolidJS、Vite、Session/Project UI、通知与桌面桥接 | 仍以 Coding Session 为中心，缺公司频道、主会话高信号与 Agent Home |
-| Electron 桌面 | `packages/desktop` | 启动内嵌本地 Server、随机密码、系统通知、共享 renderer | 仍有 OpenCode 命名；无托盘/状态栏、关闭窗口生命周期和完整恢复入口 |
-| Local Server | `packages/opencode/src/server` | Hono API、SSE、Basic Auth、嵌入 WebUI | 需要稳定 Control Plane 契约、浏览器配对、迁移与恢复语义 |
-| 项目执行 | `packages/opencode/src/company-project` | Project、Plan、Work Item、Artifact、Approval Gate、执行服务 | 需与 Charter、IM、审批策略和严格 Worktree 状态机整合 |
-| Agent 身份 | `packages/opencode/src/company-agent` | Agent CRUD、模板、文件包、SOUL/INSTRUCT/记忆等 | 当前文件包边界较平；缺 candidate/employee、ROLE/PROFILE 和三空间迁移 |
-| Thread | `packages/opencode/src/thread` | Primary/Reactive/Ambient、状态、速率限制、活动汇总 | 缺产品级 IM Thread 和私有 Dream Thread |
-| Actor / Session | `packages/opencode/src/actor`, `src/session` | 子 Agent、会话、恢复与运行循环 | 需绑定正式 Agent、项目权限、长期 Thread 和高信号事件 |
-| 群聊 | `packages/opencode/src/group-session` | 多 Agent Group Session 与 Bidding Scheduler | 需频道模型、Thread 展示、Direct 隔离和结论提升协议 |
-| 委派与消息 | `packages/opencode/src/delegation`, `src/agent-message` | message/delegate/reply/propose、分解、升级、决定 | 固定层级假设需改为适应性组织；需接入 Charter/项目 UI |
-| Admission | `packages/opencode/src/admission` | 任务等级、coding/non-coding submission、findings | 需软件验收映射、独立 Reviewer 与 Delivery Card |
-| 组织 | `packages/opencode/src/org`, `src/team` | 组织与团队基础类型/服务 | 需最小董事会、动态团队、候选池和职业生命周期 |
-| 声誉与信任 | `packages/opencode/src/reputation`, `src/trust-dial` | 声誉历史、信任等级评估 | 需批准预设/继承、UI、选人策略；不能影响私域权限 |
-| 审计与 Token | `packages/opencode/src/audit-event`, `src/token-governance` | 审计事件、Root Need/项目消耗报告 | 事件类型和私域元数据规则需扩充，接入 UI 与恢复 |
-| Context | `packages/opencode/src/workspace` | Context Resolver、scope/classification、relationship | 现有关系可提升 clearance 的逻辑不得作用于 private/Direct；需硬边界测试 |
-| Worktree | `packages/opencode/src/worktree`, `src/control-plane` | 创建、移除、重置、Workspace adaptor | 缺项目级审批→合并→主分支验证→销毁状态机和孤儿处置产品流 |
-| Workflow | `packages/opencode/src/workflow` | 沙箱、并发、持久化、嵌套、模型路由 | 保留为执行引擎，不把工作流编辑器变成主 UX |
-| TUI | `packages/opencode/src/cli/cmd/tui` | 成熟终端交互和大量运行能力 | 调整为次级入口，共用 Control Plane 契约，不再主导产品 IA |
-| 现有 Dream | `packages/opencode/src/session/auto-dream.ts`, `src/agent/prompt/dream.txt` | 项目记忆 consolidation | 产品语义上归入 Reflection/Distillation；人格 Dreaming 另建协议 |
+因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
-## 3. 目标架构
+```text
+S0 产品事实基线：基本完成
+视觉验证：完成
+真实 Company/IM 用户旅程：尚未完成
+自治软件交付闭环：只有可复用原型
+Agent 生命层与 Pre-Public 发布：尚未进入验收
+```
 
-```mermaid
-flowchart TB
-    subgraph Clients
-      Desktop["Electron + shared WebUI"]
-      Browser["Browser + shared WebUI"]
-      TUI["TUI secondary client"]
-    end
-    Desktop --> API
-    Browser --> API
-    TUI --> API
-    API["Versioned local API + SSE/WebSocket"] --> CP["Control Plane"]
-    CP --> Policy["Governance / Approval / Audit"]
-    CP --> Runtime["Agent / Thread / Workflow Runtime"]
-    CP --> Context["Context Resolver / Privacy Boundary"]
-    CP --> Delivery["Project / Admission / Worktree"]
-    CP --> DB["SQLite"]
-    CP --> Identity["Versioned Agent identity files"]
-    CP --> Git["Repositories / Worktrees"]
+## 3. 目标架构与边界
+
+```text
+Electron / Browser / TUI
+          │
+          ▼
+Generated SDK + authenticated local API + SSE invalidation
+          │
+          ▼
+Local Control Plane（唯一权威写入者）
+  ├─ Company / Conversation application services
+  ├─ Governance / Approval / Audit
+  ├─ Agent / Session / Workflow runtime
+  ├─ Delivery / Admission / Worktree lifecycle
+  └─ Context Resolver / Privacy boundary
+          │
+          ├──────────────┬────────────────────┐
+          ▼              ▼                    ▼
+       SQLite      versioned identity files   Git / Worktrees
 ```
 
 架构约束：
 
-- 不重写为 Multica 的 Next.js/Go 或其他竞争产品技术栈；
-- renderer 不直接写 SQLite、身份文件或 Git 状态；
-- 所有客户端使用同一服务契约和事件语义；
-- Control Plane 是单一权威写入者；
-- 数据库状态必须能用 Git/文件事实校验和恢复；
-- 隐私边界在存储、API、搜索、日志和 Context Resolver 同时生效。
+- WebUI、Electron renderer 和 TUI 不直接写 SQLite、身份文件或 Git；
+- SQLite 是事务状态权威源，身份文件是人格内容权威源，Git 是代码与合并事实权威源；
+- SSE 只负责实时失效通知和增量体验，断线后必须从权威快照重建，不能把内存事件总线当作正式记录；
+- 当前 `thread` 表表示 Agent 执行线程，不能直接冒充产品 IM Thread；产品层使用 `ConversationThread`，并通过 `runtime_thread_id` / `session_id` 关联执行过程；
+- 当前 `MessageV2` 保留为模型会话和工具原始记录；正式频道消息使用 `ChannelMessage`，通过来源引用连接原始消息、AgentMessage、Decision、Artifact 和 Gate；
+- `GroupSession`、Bidding 和 Workflow 是运行实现，不直接定义用户可见的频道模型；
+- 当前 `/company-project` 原型可以拆解复用，但不承担新产品兼容责任；新契约稳定后删除或转为内部适配层；
+- Worktree 的通用 `remove --force` 只能由通过生命周期校验的 disposition service 调用。
 
-## 4. 实施工作流
+## 4. 交付方法
 
-### W0 — 文档与领域语言收敛
+每个里程碑遵守相同顺序：
 
-状态：本次文档清理已建立基线；后续随实现持续校验。
+1. 先写失败的领域、权限、恢复或 Git 事实测试；
+2. 建立 SQLite schema、Effect service 和完整 Zod response schema；
+3. 生成 JavaScript SDK，禁止新增产品接口返回 `unknown`；
+4. 接入共享 WebUI，并通过同一服务语义供 Desktop、Browser 和 TUI 使用；
+5. 增加真实后端 E2E，不使用 fixture 证明业务完成；
+6. 更新实现状态和产品文案，只陈述已经通过退出标准的能力。
 
-工作：
+每个里程碑合并时必须满足：
 
-- 产品宪法作为最高层事实源；
-- PRD、00–08 设计和本计划统一到 IM-first、Web/Desktop-first；
-- 删除固定五层、所有规则皆软规则、像素办公室和通用领域首发等冲突；
-- 统一术语：Company、Channel、Thread、Charter、Project、Work Item、Gate、Candidate、Employee、Agent Home、Dreaming；
-- 在 API/schema 变更中保留术语映射，避免数据库名和 UI 概念漂移。
+- 主路径可以从共享 WebUI 完成；
+- 刷新、SSE 断线和进程重启后状态仍可重建；
+- 权限、拒绝、取消和失败路径有自动化测试；
+- 没有人工修改数据库、补写 Git 状态或清理 Worktree；
+- 不破坏现有 Coding Session 次级入口；
+- 从对应 package 目录运行测试和 `bun typecheck`，不从仓库根目录运行测试。
 
-验收：新成员从 `docs/README.md` 能确定唯一事实源，所有新 Issue/PR 使用相同领域语言。
+## 5. 纵向里程碑
 
-### W1 — Control Plane 与桌面生命周期
+### M0 — 保护现有能力并建立真实接线边界
 
-目标：让本地公司可靠常驻。
+目标：让视觉壳成为可安全接业务的共享 App Shell，不继续积累演示债务。
 
-工作：
+状态：已完成（2026-07-13）。
 
-1. 将 Electron 现有内嵌 Server 明确为 Local Control Plane 进程；
-2. 完成 Agent Company 命名、App ID、数据目录和协议迁移；
-3. 增加 Windows/Linux Tray 与 macOS Status Item；
-4. 区分关闭窗口、暂停公司和退出进程；
-5. 从托盘恢复/重建已关闭的 BrowserWindow；
-6. 提供真实任务、审批、阻塞和异常摘要；
-7. 设计浏览器配对/本地凭据，不在 URL 或日志暴露密码；
-8. 将恢复注册表覆盖 Project、Thread、Gate、Worktree 和后台运行；
-9. 启动时执行 schema migration、孤儿扫描和幂等恢复；
-10. 建立备份、导出、恢复和诊断包边界。
+预计：2–3 个工程日。
 
-验收：PRD 14.1 的关闭窗口、托盘重开和系统重启场景通过；退出进程前可明确处理仍在运行的任务。
+主要工作：
 
-### W2 — IM-first 产品壳
+1. 修正 `packages/ui/src/styles/tailwind/index.css` 的 source 路径，并增加构建产物 utility smoke test；
+2. 从 `packages/app/src/pages/layout.tsx` 提取根路由也需要的 App Chrome 能力，覆盖 Titlebar、Toast、通知跳转、Deep Link、更新和桌面窗口拖拽；
+3. 保留 Company Workspace 的布局和样式，把 `company-model.ts` fixture 放到显式开发适配器后面；生产入口不得显示“已测试、已审计、已批准、正在验证”等虚假业务事实；
+4. 建立 Company Workspace 的 data-source/store 边界，使后续 SDK 数据替换 fixture 时不重写页面；
+5. 将 `packages/app/e2e/todo.spec.ts` 替换为可运行的 App Shell 冒烟测试。
 
-目标：共享 WebUI 成为公司的主要入口。
+退出标准：
 
-工作：
+- Company Workspace 和旧 Coding Session 都经过同一 App Chrome；
+- App 类型检查、单元测试和生产构建通过；
+- 构建 CSS 确认包含共享页面依赖的核心 utility；
+- 生产模式不存在 fixture 业务陈述；
+- Playwright 能打开根路由、切换频道壳、打开/关闭 Thread，并验证桌面标题栏区域。
 
-1. 建立 Company/Channel/Thread/Message 的产品 API；
-2. 支持公司、董事会、部门、项目和 Direct 频道；
-3. Project 创建时自动创建项目群；
-4. 定义 `signal_type` 与高信号提升规则；
-5. 主会话只渲染高信号事件，保留 Thread 引用；
-6. Thread 聚合消息、Work Items、工具、日志、Decision 和 Artifact；
-7. 大日志分页/流式加载，避免会话快照无限增长；
-8. 构建 Charter、Approval、Delivery 和 Agent 卡片；
-9. 看板、组织图、审计和 Usage 作为辅助视图；
-10. 将现有 Session/Project UI 逐步映射到新 IA，不平行维护第二套消息系统。
+### M1 — Company Bootstrap 与本地产品契约
 
-验收：用户只看主会话能理解项目状态，展开 Thread 可追溯结论和验证证据。
+目标：在干净数据目录中创建一家公司、最小董事会和一个真实仓库绑定。
 
-### W3 — 董事会、Charter 与批准策略
+预计：1–2 周。
 
-目标：让自治从可验收目标开始，并只在重大事项打扰用户。
+主要工作：
 
-工作：
+1. 新建 `Company`、`RepositoryBinding`、`ApprovalPolicy` 和最小 `AgentLifecycle` schema；
+2. 实现首次引导：模型提供方、公司数据目录、CEO/CTO/Product Lead、Git 仓库、平衡预设；
+3. 复用现有 Provider 和 Project 探测能力，但 Company 只保存一个项目一个主仓库的产品绑定；
+4. 新建带完整 Zod response 的 `/company` 产品路由，修复 SDK `unknown`，并运行 `./packages/sdk/js/script/build.ts`；
+5. 将 Desktop 品牌、App ID、协议和新数据目录切换为 Agent Company；本产品不为旧 AgentCompany/OpenCode 数据布局提供隐式兼容桥；
+6. 明确桌面短期凭据与浏览器显式配对凭据，默认仅绑定 loopback；
+7. 所有创建步骤幂等，失败时可继续首次引导而不生成第二家公司或重复董事会。
 
-1. 新公司创建 CEO、CTO、Product Lead；
-2. 为 Charter 建 schema、版本、Definition of Ready 和变更 diff；
-3. 将原始 Goal、Charter、Project 和 Root Need 串联；
-4. 用确定性规则识别重大范围、验收、权限、仓库和风险变化；
-5. 建立自主/平衡/严格预设；
-6. 建立 Company → Project → One-off 的策略解析器；
-7. Agent 只能调用 `escalate` 提高门槛，不能更改下限；
-8. Approval 记录动作类别、资源范围、到期和撤销；
-9. 用户越级指令写成独立 Intervention 事件；
-10. 将 Trust Dial 从抽象等级接入具体策略，但不触碰 private/Direct 权限。
+退出标准：
 
-验收：同一项目在三种预设下产生可预测、可测试的不同审批点；未就绪 Charter 无法进入开发。
+- 干净环境完成 PRD 6.1 的七个步骤；
+- 刷新和重启后仍打开同一家公司、董事会和仓库；
+- 浏览器未提供凭据时无法读取公司数据；
+- SDK 中本里程碑产品接口没有 `unknown` response；
+- 首次引导失败不会留下不可恢复的半初始化状态。
 
-### W4 — 自治软件交付与 Worktree 治理
+### M2 — 真实 IM、董事会与高信号 Thread
 
-目标：把现有 Project、Delegation、Admission 和 Worktree 串成真实交付。
+目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-工作：
+预计：约 2 周。
 
-1. 强制一个 Project 绑定一个主仓库；
-2. Worktree 项目默认值开启，可在创建项目时覆盖；
-3. 新增项目级 Worktree lifecycle 记录，不能只依赖目录是否存在；
-4. 将 Work Item 写入所有权绑定到 Worktree；
-5. 复用 Delegation 做适应性分解，移除“必须逐层委派”的固定层级门禁；
-6. 复用 Admission 生成与 Charter acceptance 一一映射的 findings；
-7. Reviewer 与执行者在需要独立审查的任务上分离；
-8. Approval 后若 diff 变化，自动使批准或 Review 失效；
-9. 合并成功后在主分支重新运行必要验证；
-10. 只有主分支验证通过才允许销毁；
-11. 冲突回到 Review，失败/取消进入 preserved 状态；
-12. 启动孤儿扫描同时检查数据库、`git worktree list`、分支和文件路径；
-13. Direct mode 使用单写者锁并在 UI 明示风险。
+主要工作：
 
-验收：真实仓库完成创建→实现→测试→Review→批准→合并→主分支验证→销毁；每个状态均可从异常中恢复。
+1. 建立 `Channel`、`ChannelMember`、`ConversationThread`、`ChannelMessage` 和 `SignalProjection`；
+2. 支持公司、董事会、部门、项目和 Direct 五类频道的 schema，但本里程碑先开放公司、董事会和项目三类主路径；
+3. 建立频道列表、分页消息、Thread 详情、发送消息和来源引用 API；
+4. 用现有 global event stream 做失效通知，断线后按快照/游标重取；正式消息先持久化再广播；
+5. 将 Session、AgentMessage、GroupSession 和 Tool run 投影到一个产品会话模型，不建设第二套平行聊天运行时；
+6. 用户在董事会发送目标时创建 Root Need 和真实 Thread；项目创建时自动创建项目群；
+7. 实现 conclusion、decision、plan、status、risk、approval、delivery、intervention 的高信号协议；
+8. 把当前频道栏、主会话、Thread Panel 和 Composer 接到生成 SDK，并删除生产 fixture 适配器。
 
-### W5 — 候选池与动态组织
+退出标准：
 
-目标：让临时 Agent 可复用，并通过真实工作形成正式岗位。
+- 用户发送消息、刷新、重启后消息和来源 Thread 完整；
+- 主会话只出现高信号消息，工具输出留在 Thread 并按需加载；
+- 项目群由项目事实自动创建，不由 UI 写死；
+- 任一高信号消息可定位到来源 Thread、作者/DRI、项目和时间；
+- App Playwright 使用真实本地 Server 完成董事会消息到 Thread 的主路径。
 
-工作：
+### M3 — Charter、治理与真实软件交付闭环
 
-1. 将 Agent lifecycle 扩展为 candidate/assigned/employee/archived；
-2. 存储每次推荐、选择、拒绝和原因；
-3. 汇总任务难度、Admission、速度、成本、声誉和合作信息；
-4. 建立能力需求与候选推荐接口；
-5. Charter 通过后由项目 DRI 建最小团队；
-6. 项目结束自动回池，保留身份和记录；
-7. 晋升规则同时要求持续需求、频率和质量；
-8. 晋升和归档通过公司治理，不由 Dreaming 或单一分数触发；
-9. 正式员工建立 Agent Home，项目代码仍使用项目 Worktree。
+目标：让一个导入的真实仓库完成目标到主分支交付，而不是在空目录生成演示 MVP。
 
-验收：同一候选 Agent 可跨两个项目复用；选择理由可追溯；满足条件时出现合理的晋升提案而非自动批量招聘。
+预计：3–4 周。
 
-### W6 — Agent Home 与隐私迁移
+主要工作：
 
-目标：把现有平面 Agent 文件包迁移为可证明隔离的三空间。
+1. 将 `Goal → Charter → Project → Work Item` 建成正式领域模型，并实现 Charter Definition of Ready；
+2. 建立自主/平衡/严格三种策略及 Company → Project → One-off 继承；
+3. 复用 Delegation、Admission、Decision、Escalation 和 Audit，但移除固定游戏团队与固定层级假设；
+4. 一个 Project 强制绑定 M1 导入的一个主 Git 仓库；跨仓库目标必须拆项目；
+5. 新建持久化 `WorktreeRun` 状态机：created → executing → testing → agent_review → waiting_approval → merging → verifying_main → destroyable → destroyed；
+6. Work Item 绑定写入所有权、Worktree、基础提交和负责人；
+7. 至少一个执行 Agent 和一个独立 Reviewer 对照 Charter 产生 diff、测试和 findings；
+8. 审批后 diff 改变、合并冲突或验证失败时自动使批准失效并回到 Review；
+9. 合并后在主分支重新执行必要验证，只有通过后才能销毁 Worktree；
+10. 失败、取消和异常保留现场；启动时用 SQLite、`git worktree list`、分支和目录交叉校验；
+11. Delivery Card 只显示真实提交、验证、Review、风险、合并和清理证据。
 
-工作：
+退出标准：
 
-1. 定义版本化 identity manifest；
-2. 将 SOUL、个人记忆和私人关系迁移到 `private/`；
-3. 新建 `professional/ROLE.md`、INSTRUCT、career、skills、work-memory；
-4. 新建 `public/PROFILE.md` 和系统签名事实投影；
-5. 迁移时保留原文件、校验和、作者和来源；
-6. API 将 private read 和 write 分离：Agent 本人读写、用户只读；
-7. 管理者、董事会、其他 Agent 和服务账号默认硬拒绝；
-8. 私域从组织全文搜索、embedding、推荐、招聘、声誉和跨 Agent 摘要中排除；
-9. 日志、通知、错误和审计只保留必要元数据；
-10. 用户磁盘改动检测为 external authored 版本；
-11. 备份加密复制但不解析 private 正文；
-12. UI 移除编辑、转发和引用动作。
+- PRD 14.1 第 4–11 步在一个带测试的真实仓库通过；
+- 平衡模式只在最终合并等重大节点打扰用户；
+- 批准、拒绝、冲突、主分支验证失败和进程中断均有恢复测试；
+- 未合并或未验证状态无法调用销毁；
+- 当前固定游戏 MVP execution 不再是产品默认路径；
+- 全程不需要用户手工编排 Agent、修改数据库或补 Git 状态。
 
-验收：PRD 10.2 的全部攻击面测试通过，而不只是 API 单元测试。
+### M4 — Desktop 常驻、通知与恢复
 
-### W7 — Direct、Reflection、Ambient 与人格型 Dreaming
+目标：窗口不是公司进程，关闭窗口和系统重启都不破坏已授权工作。
 
-目标：建立生命层，同时保持治理边界。
+预计：2–3 周；M1 完成后可与 M2/M3 并行，但 Dogfood Alpha 前必须完成。
 
-工作：
+主要工作：
 
-1. Direct 建立双人 membership 与用户只读旁观语义；
-2. 禁止管理者/董事会访问，用户查看不触发 read receipt 或 context；
-3. 检测工作承诺、决定和范围变化，提示生成项目摘要；
-4. Reflection 写入职业工作记忆，不写 SOUL；
-5. Ambient 调度低频、可中断、默认只读；
-6. 把现有 `/dream` 逐步重命名/归类为 memory distillation；
-7. 新建真正的 Agent-private Dream Thread；
-8. 定义 experience ledger 和身份意义阈值，而不只按天触发；
-9. Dream 只获取本人 private、获准职业摘要和真实经历引用；
-10. 生成 Dream Record、Identity Reflection 和 SOUL Patch；
-11. Patch 存 diff、理由、来源、版本和中断状态；
-12. Dream tool policy 禁止项目写入、网络副作用、消息、权限和 ROLE 修改；
-13. Dream 预算独立，不参与绩效评分。
+1. 增加 Windows/Linux Tray 与 macOS Status Item；
+2. 区分关闭窗口、暂停公司、停止新动作和退出进程；
+3. BrowserWindow 销毁后可从托盘、协议或通知重新创建；
+4. 状态栏只展示真实 idle/working/waiting/reviewing/blocked/error 状态；
+5. 审批、阻塞、完成和异常通知定位到对应高信号消息与 Thread；
+6. 建立 Project、ConversationThread、Workflow、Gate 和 Worktree 的恢复注册表；
+7. 启动时执行 schema migration、运行恢复和孤儿 Worktree 扫描；
+8. 建立备份、导出、恢复和脱敏诊断包的最小可用路径。
 
-验收：用户只读看到一个有真实经历依据的 SOUL diff；另一个 Agent、管理者和董事会从所有入口都无法读取。
+退出标准：
 
-### W8 — Pre-Public 硬化与发布
+- 长任务运行时关闭窗口，任务继续且托盘可重开；
+- 应用或系统异常终止后能恢复或进入明确待处置状态；
+- 通知不泄漏 private/Direct 正文；
+- 备份恢复后公司、项目、审批和 Git 关联一致；
+- PRD 6.5 与 14.1 第 8、12 步通过。
 
-目标：将纵向闭环交给外部用户长期使用。
+### M5 — 组织、Agent Home、私域与生命层
 
-工作：
+目标：在不破坏治理和隐私的前提下完成 Agent 的职业连续性、社交和人格成长。
 
-1. Windows/macOS 安装、签名、更新和卸载；
-2. 数据迁移、备份恢复和降级失败保护；
-3. 资源、Token、磁盘与后台活动上限；
-4. 键盘、屏幕阅读、减少动效和错误状态；
-5. 纵向 E2E 场景与真实示例仓库；
-6. privacy/worktree/approval/recovery 测试纳入 CI；
-7. 诊断导出默认脱敏；
-8. 产品文案只陈述通过验收的能力；
-9. 外部 Pre-Public 反馈只接收影响核心路径的变更，其他进入公开版后路线。
+预计：4–5 周，分三个可独立合并的 Gate。
 
-验收：PRD 第 14、15 节在干净 Windows/macOS 设备通过。
+#### M5A — 生命周期与私域底座
 
-## 5. 依赖与并行关系
+- 实现 candidate/assigned/employee/archived；
+- 记录候选、入选、拒绝、质量、成本、速度、声誉和合作事实；
+- 建立 versioned identity manifest；
+- 迁移为 private/professional/public 三空间，分离 SOUL、ROLE、PROFILE；
+- 用户只读、本人读写、所有其他 Agent/管理者/服务硬拒绝；
+- private 从搜索、embedding、招聘、推荐、声誉、摘要、日志和通知排除；
+- 外部磁盘修改标记为 external authored version。
 
-```mermaid
-flowchart LR
-    W0["W0 领域基线"] --> W1["W1 Control Plane"]
-    W0 --> W2["W2 IM 工作台"]
-    W0 --> W3["W3 治理策略"]
-    W1 --> W4["W4 软件交付"]
-    W2 --> W4
-    W3 --> W4
-    W3 --> W5["W5 候选与组织"]
-    W5 --> W6["W6 Agent Home"]
-    W6 --> W7["W7 生命层"]
-    W4 --> W8["W8 硬化"]
-    W7 --> W8
+M5A 退出：PRD 11.2 的 API、路径、索引、摘要、日志、通知、错误、备份、导出、UI 和上下文注入攻击面全部通过。
+
+#### M5B — 候选复用、Direct、Reflection 与 Ambient
+
+- Charter 按能力选择最小团队，项目结束返回候选池；
+- 频率、质量和持续需求共同触发晋升提案；
+- Direct 只允许两个 Agent 和只读用户，正式工作事实摘要回项目群；
+- Reflection 写职业工作记忆和 INSTRUCT 建议，不直接修改 SOUL；
+- Ambient 低频、可中断、默认无项目写权限。
+
+M5B 退出：同一候选跨两个项目复用且选择理由可追溯；第三个 Agent、管理者和董事会无法读取 Direct。
+
+#### M5C — 人格型 Dreaming
+
+- 将现有 `/dream` 明确归类为 Reflection/Distillation；
+- 新建 Agent-private Dream Thread、经历 ledger、意义阈值和独立预算；
+- Dream 只读取本人 private、获准职业摘要和真实经历引用；
+- SOUL Patch 保存 diff、理由、来源、版本和中断状态；
+- Dream 工具策略禁止项目写入、外部副作用、消息、权限、ROLE 和宪法修改。
+
+M5C 退出：PRD 14.1 第 13–15 步通过；用户只读看到有真实经历依据的 SOUL diff，其他主体从所有入口都无法读取。
+
+### M6 — Pre-Public 硬化与首次公开版本
+
+目标：把完整纵向路径交给外部用户长期使用。
+
+预计：2–3 周，不含外部签名证书或发布账号等待时间。
+
+主要工作：
+
+1. Windows/macOS 安装、签名、更新、卸载和升级失败保护；
+2. 数据迁移、备份恢复、磁盘不足和数据库损坏演练；
+3. Token、CPU、内存、磁盘和后台活动上限；
+4. 键盘、屏幕阅读、减少动效、空状态、错误和离线体验；
+5. 将 privacy/worktree/approval/recovery 纵向测试纳入 `main` 和 `dev` CI；
+6. 建立真实示例仓库和可重复的 PRD 14.1 验收；
+7. 诊断导出默认脱敏，产品文案只描述已验收能力；
+8. 在干净 Windows/macOS 设备完成安装、升级、恢复和卸载演练。
+
+退出标准：
+
+- PRD 第 14、15 节全部通过；
+- 高严重度数据丢失、仓库破坏、越权和认证问题为零；
+- 外部测试用户无需团队后台补状态即可完成纵向旅程；
+- README、产品宪法、PRD、设计和实现事实一致；
+- 首次公开版本只做发布收敛，不再临时新增大功能。
+
+## 6. 依赖、并行工作流与发布检查点
+
+```text
+M0 App Shell 修复
+  └─ M1 Company Bootstrap / Product Contract
+       ├─ M2 Real IM / Board
+       │    └─ M3 Governed Delivery
+       │         └─ M5 Identity / Life
+       └─ M4 Desktop Continuity ─────────┐
+                                         ├─ M6 Pre-Public / RC
+                 M3 Governed Delivery ───┤
+                 M5 Identity / Life ─────┘
 ```
 
-建议先形成一个窄纵向切片：一个董事会频道、一个项目群、一个仓库、两个 Agent、一个 Worktree 和一个审批。每增加一个子系统，都必须接回该切片，而不是先建孤立管理页面。
+三条长期并行流：
 
-## 6. 数据与迁移策略
+| 工作流 | 责任 | 首要约束 |
+|---|---|---|
+| Control Plane / Domain | schema、服务、策略、恢复、Git 事实 | 先写权威状态和非法转换测试 |
+| WebUI / Desktop | 共享 UI、App Chrome、托盘、通知、无障碍 | 只消费生成 SDK，不复制领域规则 |
+| Verification / Release | 真实仓库 E2E、故障注入、打包、文档事实 | 从 M0 起持续进入 CI，不在 M6 临时补测试 |
 
-### 6.1 事务状态
+发布检查点：
 
-SQLite 保存 Company、Channel、Thread、Project、Charter、Work Item、Gate、Approval、Decision、Agent lifecycle、Worktree lifecycle 和 Audit Event。
+| 检查点 | 前置 | 可对外表述 |
+|---|---|---|
+| Internal Alpha | M0 + M1 + M2 | 可创建本地公司并进行真实董事会会话 |
+| Dogfood Alpha | M3 + M4 | 可把一个真实软件目标可靠交付到主分支 |
+| Pre-Public Beta | M5 | 完成 Agent 职业连续性、私域与人格成长 |
+| Release Candidate | M6 | 安装、恢复、隐私和纵向验收达到发布门槛 |
 
-### 6.2 身份内容
+工期假设：一条主实现流加一条可并行的 Desktop/Verification 流，且模型供应商、代码签名和发布账号不阻塞。按此假设，M0 到 Release Candidate 约 11–14 个日历周；单线串行约 16–20 周。里程碑退出标准优先于日期，不以压缩 Gate 换取表面进度。
 
-Agent Home 文件保存人类可读、版本化的身份内容。数据库只保存 manifest、版本、校验和、权限与索引元数据。
+## 7. 产品数据与 API 决策
 
-### 6.3 Git 事实
+### 7.1 新增或收敛的权威对象
 
-Worktree、分支、提交和合并状态必须定期与 Git 校验。数据库不可以单方面声称一个未合并分支已经交付。
+| 对象 | 权威位置 | 关键关联 |
+|---|---|---|
+| Company | SQLite | policy、data_version、board |
+| RepositoryBinding | SQLite + Git 校验 | Company / Project → one repository |
+| Channel | SQLite | kind、members、scope、retention |
+| ConversationThread | SQLite | channel、project、root_need、runtime thread/session |
+| ChannelMessage | SQLite | signal_type、source_thread、reply_to、visibility |
+| Charter | SQLite + version | Project、acceptance、DRI、open decisions |
+| ApprovalPolicy / Approval | SQLite | company→project→one-off、resource、expiry |
+| WorktreeRun | SQLite + Git 校验 | project、work item、branch、base/merge commit、disposition |
+| AgentLifecycle | SQLite | candidate/assigned/employee/archived |
+| IdentityManifest | SQLite metadata + versioned files | checksum、space、authorship、version |
 
-### 6.4 迁移原则
+### 7.2 API 分组
 
-- 使用向前可恢复的增量迁移；
-- 迁移 private 前先做只读备份和校验；
-- 不把旧平面文件直接重新解释为 Agent 自己选择的公开 PROFILE；
-- 旧 `/dream` 记录保留原类型，不追溯伪造成身份梦境；
-- 恢复失败时保留源数据并停止危险写入。
+首个稳定产品契约按以下能力分组，所有 response 都必须使用可生成的 Zod schema：
 
-## 7. 测试策略
+- `/company`：bootstrap、current company、policy、repositories；
+- `/company/channels`：频道列表、成员和创建；
+- `/company/channels/:channelID/messages`：分页消息和发送；
+- `/company/threads/:threadID`：Thread、来源、工具/制品分页；
+- `/company/projects`：Goal、Charter、Project、Work Item、Delivery；
+- `/company/projects/:projectID/approvals/:approvalID/resolve`：受作用域约束的批准；
+- `/company/agents`：lifecycle、公开事实和 Agent Home 只读投影；
+- `/global/event`：实时失效通知；断线恢复仍以对应 snapshot API 为准。
 
-### 7.1 单元/属性测试
+当前 `/company-project`、`/workstation`、`/thread` 和 `/group-session` 保留为迁移期间的内部来源。M3 退出前，产品 UI 不再直接依赖这些旧聚合结构。
 
-- 策略继承与重大变化判定；
-- Charter Definition of Ready；
-- Worktree 状态机和非法转换；
-- Candidate 推荐与晋升门槛；
-- private/Direct 权限矩阵；
-- Dream tool policy 和 SOUL Patch 校验；
-- 高信号提升与来源引用。
+### 7.3 PRD 覆盖自审
 
-### 7.2 集成测试
+| PRD 需求族 | 负责里程碑 | 覆盖说明 |
+|---|---|---|
+| LCP-01–03、LCP-09 | M1 | 认证本地 API、单写者、共享契约、浏览器凭据 |
+| LCP-04–08 | M4，M6 硬化 | 关窗继续、托盘/状态栏、通知、重启恢复、备份导出 |
+| IM-01 | M2 + M5 | M2 完成公司/董事会/项目；M5 在私域硬边界后开放部门和 Direct |
+| IM-02–09 | M2 | 项目群、高信号、Thread、来源、工具折叠、@/动作、辅助视图 |
+| GOV-01 | M1 | 最小固定董事会 |
+| GOV-02–11 | M3 | Charter、DRI、策略继承、重大变化、Intervention、Gate、Audit |
+| ORG-01 | M3 | 真实交付的最小动态团队 |
+| ORG-02–07 | M5A–M5B | 候选复用、正式岗位、模型解耦、归档与重新聘用 |
+| DEV-01–10 | M3 | 单仓库、严格 Worktree、Review、合并、主分支验证、恢复和清理 |
+| LIFE-01–10 | M5A | 三空间、SOUL/ROLE/PROFILE、只读用户、索引/日志/上下文硬隔离 |
+| GROW-01–06 | M5B | Direct、正式事实回写、Reflection、Ambient |
+| GROW-07–11 | M5C | 人格型 Dreaming、SOUL Patch、工具策略和旧 dream 语义拆分 |
+| 非功能与发布门槛 | M0 起持续，M6 收口 | 可靠性、性能、无障碍、数据主权、设备打包和文档事实 |
+| PRD 14.1 纵向场景 | M1–M6 累积 | 每个里程碑认领明确步骤，M6 在干净设备完整重放 |
 
-- API → SQLite/identity/Git 的事务一致性；
-- Electron sidecar 与浏览器连接；
-- Delegation → Admission → Approval → Merge；
-- Context Resolver 不跨身份泄漏；
-- 进程终止后的恢复和孤儿处置；
-- 外部磁盘修改检测。
+覆盖自审结论：PRD 当前范围没有未分配需求；Direct 和 Dreaming 被有意放在私域硬边界之后，不代表从首次公开版本删除。
 
-### 7.3 E2E
+## 8. 测试与发布 Gate
 
-- PRD 14.1 的完整纵向场景；
-- 自主/平衡/严格三种策略变体；
-- Worktree 开启/关闭两种模式；
-- Windows/macOS 关闭窗口、托盘、通知和重启；
-- private/Direct 的负向攻击路径。
+### 8.1 单元与属性测试
 
-测试从对应 package 目录运行；遵守仓库规则，不在根目录执行测试。
+- Charter Definition of Ready 和重大变化判定；
+- 批准策略继承、收紧和授权到期；
+- 高信号投影、来源引用和消息可见性；
+- Worktree 状态机所有合法/非法转换；
+- Candidate 选择与晋升门槛；
+- private/Direct 完整权限矩阵；
+- Dream tool policy、经历引用和 SOUL Patch 校验。
 
-## 8. 每个工作流的完成定义
+### 8.2 集成测试
 
-一个工作流只有同时满足以下条件才可标记完成：
+- API → SQLite / identity / Git 的事务一致性；
+- SDK schema 不产生产品 `unknown`；
+- ChannelMessage → SSE → WebUI snapshot 重建；
+- Delegation → Admission → Approval → Merge → Main Verification；
+- 进程终止后的 workflow、Gate 和 Worktree 恢复；
+- Context Resolver、搜索、日志、通知和备份不跨身份泄漏；
+- 外部磁盘修改检测和迁移失败保护。
 
-- 用户可从共享 WebUI 完成主路径；
-- TUI 若暴露同一能力，使用相同服务语义；
-- 状态持久化且异常可恢复；
-- 权限与审计覆盖成功和失败路径；
-- 有自动化测试和手工/视觉验收证据；
-- README、PRD、设计与实际能力同步；
-- 没有依赖人工数据库编辑、遗留 Worktree 或演示数据。
+### 8.3 E2E 与设备验收
 
-## 9. 当前下一步
+- App Playwright 使用真实本地 Server，不用 fixture 证明业务；
+- 临时真实 Git 仓库覆盖成功、冲突、验证失败、取消和恢复；
+- Electron 覆盖关窗继续、托盘重开、通知定位和系统重启；
+- 自主/平衡/严格以及 Worktree 开/关两种模式；
+- Windows/macOS 干净设备执行 PRD 14.1；
+- private/Direct 从 API、路径、搜索、摘要、日志、通知、错误、备份、导出、UI 和 Context 注入做负向攻击。
 
-优先实现 W1 与 W2 的最窄切片：
+## 9. 迁移、回滚与故障策略
 
-1. 清理桌面端 OpenCode 品牌和生命周期；
-2. 建立托盘/状态栏与关闭窗口继续运行；
-3. 定义 Company/Channel/Thread 的服务契约；
-4. 在共享 WebUI 中完成董事会频道、项目群和高信号 Thread 展开；
-5. 把现有 `company-project` 的一条软件交付路径接入该 UI。
+- 新表和字段在 M0–M5 优先采用可前向恢复的增量迁移；删除旧表只在 M6 备份/恢复演练通过后发生；
+- 每次涉及身份内容或数据版本的迁移先创建只读备份、校验和和 migration journal；
+- 迁移失败时停止危险写入，保留原数据并进入恢复界面；
+- Agent Company 使用自己的 App ID、协议和数据目录，不静默迁移旧 OpenCode/AgentCompany 数据；需要兼容桥时另做显式产品决定；
+- 未完成里程碑能力用 server capability 隐藏，不在生产 UI 回退到 fixture；
+- 项目失败、取消或进程异常默认保留 Worktree 和分支，只有显式 disposition 或验证通过后才能清理；
+- 每个里程碑单独合并，回滚代码时不得回滚已成功写入的新用户数据；通过兼容读路径或向前修复恢复。
 
-这条切片成立后，再把批准继承、严格 Worktree 和 Agent Home 依次接入，避免并行建设多个互不相连的产品壳。
+## 10. 明确范围与拒绝的路线
+
+本计划包含首次公开版本要求的单用户、本地、单项目单仓库、软件研发、Desktop/Browser/TUI、Agent Home 和生命层。
+
+本计划不包含：
+
+- 多用户、多租户或云端公司托管；
+- 手机和平板；
+- 通用行业交付和 Agent 模板市场；
+- 单项目多仓库写入；
+- Kanban-first 重型项目管理；
+- 像素办公室和虚假活动展示；
+- 旧 AgentCompany 文件系统、配置或 API 兼容层。
+
+本轮明确拒绝以下实现顺序：
+
+- 直接把 Company Workspace 接到当前 `/company-project`：其 schema、仓库和交付语义不满足 PRD；
+- 继续先做更多静态管理页面：会扩大演示壳而不缩短纵向交付路径；
+- 先实现 Dreaming 再补私域：会把硬权限问题带入最敏感的数据；
+- 让 Desktop 托盘展示 fixture 状态：状态栏只能报告 Control Plane 的真实事件；
+- 为产品方向重写 SolidJS/Electron/Bun/Effect 技术栈：现有基础足够支撑目标；
+- 为旧 API 保留长期双轨消息或项目模型：新产品不承担默认兼容义务。
+
+## 11. 关键假设与当前下一步
+
+最脆弱的技术假设是：现有 Session、AgentMessage、Workflow、Delegation、Admission 和 Worktree 能作为运行引擎被新产品应用层适配，而不需要整体重写。
+
+验证方式：
+
+- M2 必须证明一条真实 ChannelMessage 可以追溯到现有 Session/AgentMessage；
+- M3 必须证明现有 Workflow/Admission 能在导入仓库和严格 Worktree 状态机下完成一次交付；
+- 如果任一验证失败，只重写对应产品 application service / adaptor，不重写共享 WebUI 或整个 Agent Runtime。
+
+M0 已完成并通过退出标准。当前下一步是为 M1 生成文件级、测试先行的 Compose 实施计划；未获得 M1 计划确认前，不开始业务代码改动。
