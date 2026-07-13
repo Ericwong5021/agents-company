@@ -13,6 +13,8 @@ export interface InstanceContext {
   directory: string
   worktree: string
   project: Project.Info
+  /** Optional source for configuration while tools remain jailed to directory/worktree. */
+  configDirectory?: string
 }
 
 const context = LocalContext.create<InstanceContext>("instance")
@@ -23,11 +25,13 @@ const FORBIDDEN_ROOTS = new Set([
   "/etc", "/proc", "/sys", "/dev", "/boot", "/root", "/var",
   "/private/etc", "/private/var",
 ])
+const SAFE_SYSTEM_TEMP_ROOTS = ["/var/folders", "/private/var/folders"]
 
 function assertSafeDirectory(directory: string): void {
   if (directory === pathParse(directory).root) {
     throw new Error("Access denied: filesystem root is not a valid project directory")
   }
+  if (SAFE_SYSTEM_TEMP_ROOTS.some((root) => directory === root || AppFileSystem.contains(root, directory))) return
   for (const forbidden of FORBIDDEN_ROOTS) {
     if (directory === forbidden || AppFileSystem.contains(forbidden, directory)) {
       throw new Error("Access denied: target is a protected system directory")

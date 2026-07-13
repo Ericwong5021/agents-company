@@ -59,6 +59,9 @@ import { parameters as workflowParameters } from "../../src/tool/workflow"
 import { Tool } from "../../src/tool"
 import { MessageV2 } from "../../src/session/message-v2"
 import { Flag } from "../../src/flag/flag"
+import { CompanyAgent } from "../../src/company-agent"
+import { AgentMessage } from "../../src/agent-message/agent-message"
+import { Thread } from "../../src/thread/thread"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -128,6 +131,9 @@ function makeLayer() {
     Env.defaultLayer,
     AgentSvc.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
+    AgentMessage.defaultLayer,
+    Thread.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,

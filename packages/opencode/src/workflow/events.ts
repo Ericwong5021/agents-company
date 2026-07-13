@@ -42,6 +42,7 @@ export const WorkflowAgentFailed = BusEvent.define(
     actorID: z.string().optional(),
     /** AgentOpts.agentType (defaulted to "general" by the spawn code). */
     agentType: z.string(),
+    companyAgentID: z.string().optional(),
     /** AgentOpts.label, observability tag (e.g. "port:bun_sys/fd.rs"). */
     label: z.string().optional(),
     /** Phase title at failure time, either AgentOpts.phase or run.currentPhase. */

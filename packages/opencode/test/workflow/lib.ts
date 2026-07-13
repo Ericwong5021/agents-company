@@ -49,6 +49,9 @@ import { TestLLMServer } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
 import { Worktree } from "../../src/worktree"
 import { WorkflowRuntime } from "../../src/workflow/runtime"
+import { CompanyAgent } from "../../src/company-agent"
+import { AgentMessage } from "../../src/agent-message/agent-message"
+import { Thread } from "../../src/thread/thread"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -114,6 +117,9 @@ export function makeLayer() {
     Env.defaultLayer,
     AgentSvc.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
+    AgentMessage.defaultLayer,
+    Thread.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,

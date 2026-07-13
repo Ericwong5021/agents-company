@@ -15,7 +15,10 @@ const Parameters = z.object({
     .optional()
     .describe("Optional division to narrow the search, e.g. 'engineering', 'marketing', 'design'."),
   name: z.string().optional().describe("Optional display name override for the new hire."),
-  department: z.string().optional().describe("Optional department to place the new hire in (defaults to the template's division)."),
+  department: z
+    .string()
+    .optional()
+    .describe("Optional department to place the new hire in (defaults to the template's division)."),
   reason: z.string().min(1).describe("Why this hire is needed now — shown to the founder for confirmation."),
 })
 
@@ -26,7 +29,11 @@ type Metadata = {
 
 // Turn a template into a stable, unique, lowercase-dashed agent id.
 function slugify(division: string, slug: string) {
-  return `${division}-${slug}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+  return `${division}-${slug}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
 }
 
 export const RecruitTool = Tool.define<typeof Parameters, Metadata, CompanyAgent.Service | Session.Service>(
@@ -49,12 +56,16 @@ export const RecruitTool = Tool.define<typeof Parameters, Metadata, CompanyAgent
 
           // Who is doing the hiring — the new member reports to them.
           const session = yield* sessionSvc.get(SessionID.make(ctx.sessionID))
-          const recruiterID = session.companyAgentID ?? ("onboarding-assistant" as CompanyAgentID)
+          const recruiterID = ctx.companyAgentID ?? session.companyAgentID ?? ("onboarding-assistant" as CompanyAgentID)
 
           // Ensure a unique id (the same template can be hired more than once).
           const baseID = slugify(match.division, match.slug)
           let id = baseID
-          for (let n = 2; (yield* companyAgentSvc.get(id as CompanyAgentID).pipe(Effect.catch(() => Effect.succeed(undefined)))); n++) {
+          for (
+            let n = 2;
+            yield* companyAgentSvc.get(id as CompanyAgentID).pipe(Effect.catch(() => Effect.succeed(undefined)));
+            n++
+          ) {
             id = `${baseID}-${n}`
           }
 

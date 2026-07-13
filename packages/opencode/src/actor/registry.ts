@@ -5,7 +5,7 @@ import type { SessionID, MessageID } from "@/session/schema"
 import { ActorRegistryTable } from "./actor.sql"
 import type { Actor, ActorStatus, ActorOutcome, ContextMode, Lifecycle, SpawnMode, ToolWhitelist } from "./schema"
 import * as Events from "./events"
-import { Log } from "@/util"
+import { Lock, Log } from "@/util"
 import { SYSTEM_SPAWNED_AGENT_TYPES } from "@/agent/config"
 import type { ThreadID } from "@/thread/schema"
 
@@ -85,6 +85,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
+    const actorIDNext = new Map<string, number>()
 
     // --- CRUD methods ---
 
@@ -305,24 +306,26 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
       sessionID: SessionID,
       agentType: string,
     ) {
-      const existing = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .select({ actor_id: ActorRegistryTable.actor_id })
-            .from(ActorRegistryTable)
-            .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.agent, agentType)))
-            .all(),
-        ),
-      )
-      const prefix = `${agentType}-`
-      let max = 0
-      for (const row of existing) {
-        if (row.actor_id.startsWith(prefix)) {
-          const n = parseInt(row.actor_id.slice(prefix.length), 10)
-          if (Number.isFinite(n) && n > max) max = n
-        }
-      }
-      return `${agentType}-${max + 1}`
+      return yield* Effect.promise(async () => {
+        using _ = await Lock.write(`actor-id:${sessionID}:${agentType}`)
+        const key = `${sessionID}:${agentType}`
+        const prefix = `${agentType}-`
+        const next =
+          actorIDNext.get(key) ??
+          Database.use((db) =>
+            db
+              .select({ actor_id: ActorRegistryTable.actor_id })
+              .from(ActorRegistryTable)
+              .where(and(eq(ActorRegistryTable.session_id, sessionID), eq(ActorRegistryTable.agent, agentType)))
+              .all(),
+          ).reduce((max, row) => {
+            if (!row.actor_id.startsWith(prefix)) return max
+            const value = Number.parseInt(row.actor_id.slice(prefix.length), 10)
+            return Number.isFinite(value) ? Math.max(max, value) : max
+          }, 0) + 1
+        actorIDNext.set(key, next + 1)
+        return `${agentType}-${next}`
+      })
     })
 
     // --- Orphan Recovery ---

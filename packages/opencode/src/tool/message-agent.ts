@@ -75,7 +75,7 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
           if (op.action === "fyi") {
             const result = yield* messageAgent(
               {
-                fromId: ctx.agent,
+                fromId: ctx.companyAgentID ?? ctx.agent,
                 toId: op.to,
                 body: op.body,
                 threadID: op.thread_id,
@@ -94,7 +94,7 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
           if (op.action === "delegate") {
             const result = yield* delegate(
               {
-                fromId: ctx.agent,
+                fromId: ctx.companyAgentID ?? ctx.agent,
                 toId: op.to,
                 body: op.body,
                 taskSummary: op.task_summary,
@@ -114,11 +114,12 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
                   spawn: {
                     sessionID: ctx.sessionID as any,
                     agentType: result.toAgentID,
+                    companyAgentID: result.toAgentID,
                     task: op.body,
                     context: "none",
                     tools: "INHERIT",
                     background: true,
-                    parentActorID: ctx.agent,
+                    parentActorID: ctx.actorID ?? "main",
                     delegationMessageID: result.messageID,
                     depth: result.depth,
                   },
@@ -148,7 +149,7 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
           if (op.action === "propose") {
             const result = yield* propose(
               {
-                fromId: ctx.agent,
+                fromId: ctx.companyAgentID ?? ctx.agent,
                 body: op.body,
                 rationale: op.rationale,
                 threadID: op.thread_id,
@@ -168,7 +169,7 @@ export const MessageAgentTool = Tool.define<typeof parameters, Metadata, AgentMe
           if (op.action === "reply") {
             const result = yield* reply(
               {
-                fromId: ctx.agent,
+                fromId: ctx.companyAgentID ?? ctx.agent,
                 originalMessageId: op.original_message_id,
                 body: op.body,
                 outcome: op.outcome,

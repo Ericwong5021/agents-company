@@ -134,7 +134,7 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
         const started = yield* runtime.start({
           script,
           sessionID: ctx.sessionID as SessionID,
-          parentActorID: ctx.agent ?? "main",
+          parentActorID: ctx.actorID ?? "main",
           args: input.args,
           workspace: input.workspace,
           maxConcurrentAgents: cfg.workflow?.maxConcurrentAgents,
@@ -205,25 +205,20 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
           const truncated = result.length > 4000 ? result.slice(0, 4000) + " …(truncated)" : result
           return {
             title: `workflow ${label} completed`,
-            output:
-              (lines.length ? lines.join("\n") + "\n\n" : "") +
-              `Result: ${truncated}\nrun_id: ${runID}`,
+            output: (lines.length ? lines.join("\n") + "\n\n" : "") + `Result: ${truncated}\nrun_id: ${runID}`,
             metadata: { runID, status: "completed", transcript: finalTranscript } satisfies Metadata,
           }
         }
         if (outcome.status === "failed") {
           return {
             title: `workflow ${label} failed`,
-            output:
-              (lines.length ? lines.join("\n") + "\n\n" : "") +
-              `Error: ${outcome.error}\nrun_id: ${runID}`,
+            output: (lines.length ? lines.join("\n") + "\n\n" : "") + `Error: ${outcome.error}\nrun_id: ${runID}`,
             metadata: { runID, status: "failed", transcript: finalTranscript } satisfies Metadata,
           }
         }
         return {
           title: `workflow ${label} cancelled`,
-          output:
-            (lines.length ? lines.join("\n") + "\n\n" : "") + `Cancelled.\nrun_id: ${runID}`,
+          output: (lines.length ? lines.join("\n") + "\n\n" : "") + `Cancelled.\nrun_id: ${runID}`,
           metadata: { runID, status: "cancelled", transcript: finalTranscript } satisfies Metadata,
         }
       }

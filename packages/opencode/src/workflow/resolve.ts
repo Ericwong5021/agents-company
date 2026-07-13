@@ -18,7 +18,17 @@ const SAFE_NAME = /^[A-Za-z0-9._-]+$/
 
 export async function resolveWorkflowScript(name: string, start: string, stop: string): Promise<string | null> {
   if (!SAFE_NAME.test(name)) throw new Error(`invalid workflow name: ${JSON.stringify(name)}`)
-  const candidate = path.join(Global.Path.config, "workflows", `${name}.js`)
-  if (await Filesystem.exists(candidate)) return Filesystem.readText(candidate)
+  const findProjectWorkflow = async (current: string): Promise<string | null> => {
+    const candidate = path.join(current, ".agentcompany", "workflows", `${name}.js`)
+    if (await Filesystem.exists(candidate)) return Filesystem.readText(candidate)
+    if (current === stop) return null
+    const parent = path.dirname(current)
+    if (parent === current || !Filesystem.contains(stop, parent)) return null
+    return findProjectWorkflow(parent)
+  }
+  const project = await findProjectWorkflow(start)
+  if (project) return project
+  const shared = path.join(Global.Path.config, "workflows", `${name}.js`)
+  if (await Filesystem.exists(shared)) return Filesystem.readText(shared)
   return null
 }

@@ -259,7 +259,7 @@ const live: Layer.Layer<
             .get(),
         ),
       )
-      const companyAgentId = sessionRow?.company_agent_id
+      const companyAgentId = input.user.companyAgentID ?? sessionRow?.company_agent_id
       if (companyAgentId && companyAgentId !== "assistant") {
         const companyAgent = yield* companyAgentSvc.get(companyAgentId as CompanyAgentID)
         if (companyAgent) {

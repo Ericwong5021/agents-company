@@ -672,6 +672,7 @@ export const layer = Layer.effect(
     const loadInstanceState = Effect.fn("Config.loadInstanceState")(
       function* (ctx: InstanceContext) {
         const auth = yield* authSvc.all().pipe(Effect.orDie)
+        const configDirectory = ctx.configDirectory ?? ctx.directory
 
         let result: Info = {}
         const consoleManagedProviders = new Set<string>()
@@ -800,7 +801,7 @@ export const layer = Layer.effect(
             ? ConfigPaths.fileInDirectory(Flag.AGENTCOMPANY_CONFIG_DIR, "agent-company")
             : []),
         ])
-        for (const file of yield* ConfigPaths.files("agent-company", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
+        for (const file of yield* ConfigPaths.files("agent-company", configDirectory, ctx.worktree).pipe(Effect.orDie)) {
           yield* merge(file, yield* loadFile(file), globalConfigFiles.has(file) ? "global" : "local")
         }
 
@@ -808,7 +809,7 @@ export const layer = Layer.effect(
         result.mode = result.mode || {}
         result.plugin = result.plugin || []
 
-        const directories = yield* ConfigPaths.directories(ctx.directory, ctx.worktree)
+        const directories = yield* ConfigPaths.directories(configDirectory, ctx.worktree)
 
         if (Flag.AGENTCOMPANY_CONFIG_DIR) {
           log.debug("loading config from AGENTCOMPANY_CONFIG_DIR", { path: Flag.AGENTCOMPANY_CONFIG_DIR })
@@ -817,7 +818,7 @@ export const layer = Layer.effect(
         const deps: Fiber.Fiber<void, never>[] = []
 
         // Load Claude Code commands first so Agent Company commands override on name collision.
-        for (const dir of yield* ConfigPaths.claudeCommandDirectories(ctx.directory, ctx.worktree)) {
+        for (const dir of yield* ConfigPaths.claudeCommandDirectories(configDirectory, ctx.worktree)) {
           result.command = mergeDeep(result.command ?? {}, yield* Effect.promise(() => ConfigCommand.load(dir)))
         }
 
@@ -872,7 +873,7 @@ export const layer = Layer.effect(
         if (process.env.AGENTCOMPANY_CONFIG_CONTENT) {
           const source = "AGENTCOMPANY_CONFIG_CONTENT"
           const next = yield* loadConfig(process.env.AGENTCOMPANY_CONFIG_CONTENT, {
-            dir: ctx.directory,
+            dir: configDirectory,
             source,
           })
           yield* merge(source, next, "local")
@@ -939,7 +940,7 @@ export const layer = Layer.effect(
 
         if (!Flag.AGENTCOMPANY_DISABLE_CLAUDE_CODE_MCP) {
           yield* mergeClaudeMcp(path.join(Global.Path.home, ".claude.json"))
-          yield* mergeClaudeMcp(path.join(ctx.directory, ".claude.json"))
+          yield* mergeClaudeMcp(path.join(configDirectory, ".claude.json"))
         }
 
         for (const [name, mode] of Object.entries(result.mode ?? {})) {

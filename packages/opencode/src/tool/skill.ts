@@ -27,12 +27,12 @@ export const SkillTool = Tool.define(
       execute: (params: z.infer<typeof Parameters>, ctx: Tool.Context) =>
         Effect.gen(function* () {
           // Resolve the caller's company agent so private per-agent skills resolve.
-          const companyAgentID = yield* sessionSvc
-            .get(SessionID.make(ctx.sessionID))
-            .pipe(
+          const companyAgentID =
+            ctx.companyAgentID ??
+            (yield* sessionSvc.get(SessionID.make(ctx.sessionID)).pipe(
               Effect.map((s) => s.companyAgentID),
               Effect.catch(() => Effect.succeed(undefined)),
-            )
+            ))
           const info = yield* skill.get(params.name, companyAgentID)
           if (!info) {
             const all = yield* skill.all()

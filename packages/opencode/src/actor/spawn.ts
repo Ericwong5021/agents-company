@@ -22,6 +22,7 @@ import { parseReturnHeader, type ReturnStatus } from "./return-header"
 import { Thread } from "@/thread/thread"
 import type { ThreadID } from "@/thread/schema"
 import { Log } from "@/util"
+import type { CompanyAgentID } from "@/company-agent/schema"
 
 const log = Log.create({ service: "actor.spawn" })
 
@@ -128,6 +129,8 @@ export interface SpawnInput {
    */
   parentSessionID?: SessionID
   agentType: string
+  /** Stable company identity used for persona, organization tools, and thread ownership. */
+  companyAgentID?: CompanyAgentID
   task: string
   description?: string
   context: ContextMode
@@ -243,6 +246,7 @@ export const layer = Layer.effect(
       sessionID: SessionID
       actorID: string
       agentType: string
+      companyAgentID?: CompanyAgentID
       task: string
       task_id?: string
       model?: { providerID: ProviderID; modelID: ModelID }
@@ -254,6 +258,7 @@ export const layer = Layer.effect(
         sessionID: input.sessionID,
         agent: input.agentType,
         agentID: input.actorID,
+        companyAgentID: input.companyAgentID,
         source: input.source,
         provenance: input.provenance,
         model: input.model,
@@ -282,6 +287,7 @@ export const layer = Layer.effect(
       parentActorID?: string
       actorID: string
       agentType: string
+      companyAgentID?: CompanyAgentID
       task: string
       description?: string
       background: boolean
@@ -636,14 +642,15 @@ export const layer = Layer.effect(
       })
 
     const spawnPeer = Effect.fn("Actor.spawnPeer")(function* (input: SpawnInput) {
+      const threadAgentID = input.companyAgentID ?? input.agentType
       // Check thread constraints before spawning (P1.3)
-      const canSpawn = yield* threadService.canAccept(input.agentType, "reactive")
+      const canSpawn = yield* threadService.canAccept(threadAgentID, "reactive")
       if (!canSpawn) {
         yield* Effect.fail(new Error(`Agent ${input.agentType} cannot accept reactive thread work`))
       }
       // Create or attach to a thread for the peer agent
       const peerThread = yield* threadService.create({
-        agentID: input.agentType,
+        agentID: threadAgentID,
         kind: "reactive",
         description: `${input.agentType}: ${input.task.slice(0, 40)}`,
       })
@@ -652,6 +659,7 @@ export const layer = Layer.effect(
         contextFrom: input.context === "full" ? input.sessionID : undefined,
         title: `${input.agentType}: ${input.task.slice(0, 40)}`,
         threadID: peerThread.id,
+        companyAgentID: input.companyAgentID,
       })
       yield* actorReg.register({
         sessionID: child.id,
@@ -667,6 +675,7 @@ export const layer = Layer.effect(
         lifecycle: input.lifecycle ?? "persistent",
         tools: input.tools,
       })
+      if (input.onActorID) yield* Effect.sync(() => input.onActorID!(child.id)).pipe(Effect.ignore)
       if (input.forkContext) {
         forkContexts.set(child.id, input.forkContext) // peer's actorID === child.id
       }
@@ -676,6 +685,7 @@ export const layer = Layer.effect(
         parentActorID: input.parentActorID,
         actorID: child.id,
         agentType: input.agentType,
+        companyAgentID: input.companyAgentID,
         task: input.task,
         description: input.description,
         background: input.background,
@@ -691,16 +701,17 @@ export const layer = Layer.effect(
 
     const spawnSubagent = Effect.fn("Actor.spawnSubagent")(function* (input: SpawnInput) {
       const actorID = yield* actorReg.allocateActorID(input.sessionID, input.agentType)
+      const threadAgentID = input.companyAgentID ?? actorID
 
       // Check thread constraints before spawning (P1.3)
-      const canSpawn = yield* threadService.canAccept(input.agentType, "primary")
+      const canSpawn = yield* threadService.canAccept(threadAgentID, "primary")
       if (!canSpawn) {
         yield* Effect.fail(new Error(`Agent ${input.agentType} cannot accept primary thread work`))
       }
 
       // Create a primary thread for the subagent (P1.3)
       const thread = yield* threadService.create({
-        agentID: input.agentType,
+        agentID: threadAgentID,
         kind: "primary",
         description: `${input.agentType}: ${input.task.slice(0, 40)}`,
       })
@@ -746,6 +757,7 @@ export const layer = Layer.effect(
         parentActorID: input.parentActorID,
         actorID,
         agentType: input.agentType,
+        companyAgentID: input.companyAgentID,
         task: taskWithFormat,
         description: input.description,
         background: input.background,

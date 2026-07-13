@@ -99,6 +99,7 @@ import { ActorRegistry } from "@/actor/registry"
 import { Metrics } from "@/metrics"
 import { resolveInvocationStyle, type ToolStyleConfig } from "../tool/invocation-style"
 import { shouldAutoDream, shouldAutoDistill, DREAM_TASK, DISTILL_TASK, AUTO_DREAM_TITLE, AUTO_DISTILL_TITLE } from "./auto-dream"
+import { CompanyAgentID } from "@/company-agent/schema"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -624,6 +625,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       messages: MessageV2.WithParts[]
       agentID?: string
       task_id?: string
+      companyAgentID?: CompanyAgentID
     }) {
       using _ = log.time("resolveTools")
       const tools: Record<string, AITool> = {}
@@ -656,6 +658,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         callID: options.toolCallId,
         extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, promptOps },
         agent: input.agent.name,
+        companyAgentID: input.companyAgentID,
         actorID: input.agentID,
         taskId: input.task_id,
         messages: input.messages,
@@ -1109,6 +1112,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         sessionID,
         role: "user",
         agentID: lastUser.agentID,
+        companyAgentID: lastUser.companyAgentID,
         time: { created: Date.now() },
         agent: lastUser.agent,
         model: lastUser.model,
@@ -1376,6 +1380,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         role: "user",
         sessionID: input.sessionID,
         agentID: input.agentID,
+        companyAgentID: input.companyAgentID,
         time: { created: Date.now() },
         tools: input.tools,
         agent: ag.name,
@@ -2019,6 +2024,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID,
             agentID: lastUser.agentID,
+            companyAgentID: lastUser.companyAgentID,
             agent: lastUser.agent,
             model: lastUser.model,
             tools: lastUser.tools,
@@ -2122,6 +2128,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID,
             agentID: lastUser.agentID,
+            companyAgentID: lastUser.companyAgentID,
             agent: lastUser.agent,
             model: lastUser.model,
             tools: lastUser.tools,
@@ -2807,6 +2814,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               messages: msgs,
               agentID: lastUser.agentID,
               task_id,
+              companyAgentID: lastUser.companyAgentID,
             })
 
             if (lastUser.format?.type === "json_schema") {
@@ -3054,7 +3062,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             }
 
             const [skills, env, instructions] = yield* Effect.all([
-              sys.skills(agent, session.companyAgentID),
+              sys.skills(agent, lastUser.companyAgentID ?? session.companyAgentID),
               Effect.sync(() => sys.environment(model, session.time.created)),
               instruction.system().pipe(Effect.orDie),
             ])
@@ -3370,6 +3378,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   role: "user" as const,
                   sessionID,
                   agentID: lastUser.agentID,
+                  companyAgentID: lastUser.companyAgentID,
                   agent: lastUser.agent,
                   model: lastUser.model,
                   tools: lastUser.tools,
@@ -3682,6 +3691,7 @@ export const PromptInput = z.object({
     ),
   agent: z.string().optional(),
   agentID: z.string().optional(),
+  companyAgentID: CompanyAgentID.zod.optional(),
   task_id: z.string().optional()
     .describe("If the spawning caller bound this prompt to a specific user-task (T4 etc), pass its TID. Propagates to Tool.Context.taskId so memory-path-guard allows writes to tasks/<task_id>/*.md."),
   source: z.enum(["user", "spawn", "hook"]).optional(),

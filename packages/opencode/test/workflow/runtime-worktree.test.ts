@@ -28,6 +28,41 @@ const fileExists = (p: string) =>
     .catch(() => false)
 
 describe("WorkflowRuntime worktree isolation", () => {
+  it.live("an explicit workflow workspace also binds shared-agent tools to that directory", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ dir, llm }) {
+        const runtime = yield* WorkflowRuntime.Service
+        const session = yield* Session.Service
+        const parent = yield* session.create({
+          title: "wf project workspace",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        })
+        const project = `${dir}-generated-project`
+        yield* Effect.promise(() => fsp.mkdir(project, { recursive: true }))
+        yield* Effect.addFinalizer(() => Effect.promise(() => fsp.rm(project, { recursive: true, force: true })))
+        yield* llm.tool("write", { filePath: "game.ts", content: "export const playable = true\n" })
+        yield* llm.text("done")
+        const script = [
+          `export const meta = { name: "project-workspace", description: "d" }`,
+          `return await agent("build the game")`,
+        ].join("\n")
+        const { runID } = yield* runtime.start({
+          script,
+          sessionID: parent.id,
+          parentActorID: "main",
+          model: ref,
+          workspace: project,
+        })
+        const outcome = yield* runtime.wait({ runID })
+        expect(outcome.status).toBe("completed")
+        expect(yield* Effect.promise(() => fileExists(path.join(project, "game.ts")))).toBe(true)
+        expect(yield* Effect.promise(() => fileExists(path.join(dir, "game.ts")))).toBe(false)
+      }),
+      { git: true, config: providerCfg },
+    ),
+    30000,
+  )
+
   it.live("an isolated agent's relative file write lands in its worktree, not the parent tree", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ dir, llm }) {

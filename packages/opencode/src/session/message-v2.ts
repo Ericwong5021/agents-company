@@ -17,6 +17,7 @@ import type { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { Effect } from "effect"
 import { EffectLogger } from "@/effect"
+import { CompanyAgentID } from "@/company-agent/schema"
 
 /** Error shape thrown by Bun's fetch() when gzip/br decompression fails mid-stream */
 interface FetchDecompressionError extends Error {
@@ -384,6 +385,7 @@ export type Provenance = z.infer<typeof Provenance>
 
 export const User = Base.extend({
   role: z.literal("user"),
+  companyAgentID: CompanyAgentID.zod.optional(),
   time: z.object({
     created: z.number(),
   }),

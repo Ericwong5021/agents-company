@@ -6,6 +6,7 @@ import type { SessionID, MessageID } from "../session/schema"
 import * as Truncate from "./truncate"
 import { RecoverableError } from "./recoverable"
 import { Agent } from "@/agent/agent"
+import type { CompanyAgentID } from "@/company-agent/schema"
 
 export interface Metadata {
   [key: string]: any
@@ -18,6 +19,7 @@ export type Context<M extends Metadata = Metadata> = {
   sessionID: SessionID
   messageID: MessageID
   agent: string
+  companyAgentID?: CompanyAgentID
   actorID?: string
   taskId?: string
   abort: AbortSignal

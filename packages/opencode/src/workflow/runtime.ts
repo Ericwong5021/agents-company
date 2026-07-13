@@ -8,6 +8,7 @@ import { EffectBridge } from "@/effect"
 import { Bus } from "@/bus"
 import { Inbox } from "@/inbox"
 import { Worktree } from "@/worktree"
+import type { CompanyAgentID } from "@/company-agent/schema"
 import { Provider } from "@/provider"
 import { InstanceRef } from "@/effect/instance-ref"
 import { Instance } from "@/project/instance"
@@ -18,7 +19,14 @@ import { parseMeta } from "./meta"
 import { evalScript, type HostFn } from "./sandbox"
 import { makeFileHooks, resolveInWorkspace } from "./workspace"
 import { isInlineScript, resolveWorkflowScript } from "./resolve"
-import { WorkflowAgentFailed, WorkflowChildFailed, WorkflowFinished, WorkflowLog, WorkflowPhase, WorkflowStarted } from "./events"
+import {
+  WorkflowAgentFailed,
+  WorkflowChildFailed,
+  WorkflowFinished,
+  WorkflowLog,
+  WorkflowPhase,
+  WorkflowStarted,
+} from "./events"
 import { WorkflowPersistence, journalKeyBase } from "./persistence"
 import type { RunSummary } from "./persistence"
 import { Log, Lock } from "@/util"
@@ -132,6 +140,7 @@ interface StartInput {
 /** Options the guest may pass to `agent(prompt, opts?)`. */
 interface AgentOpts {
   agentType?: string
+  companyAgentID?: CompanyAgentID
   tools?: readonly string[]
   /** A model reference resolved host-side via Provider.resolveModelRef: either a
    *  "provider/model" literal or a configured tier/group name (e.g. "lite").
@@ -155,7 +164,10 @@ export interface Interface {
   readonly transcript: (input: { runID: string }) => Effect.Effect<readonly WorkflowTranscriptEntry[]>
   readonly cancel: (input: { runID: string }) => Effect.Effect<void>
   readonly list: (input?: { sessionID?: SessionID }) => Effect.Effect<RunSummary[]>
-  readonly resume: (input: { runID: string; agentTimeoutMs?: number }) => Effect.Effect<{ runID: string; resumed: boolean }>
+  readonly resume: (input: {
+    runID: string
+    agentTimeoutMs?: number
+  }) => Effect.Effect<{ runID: string; resumed: boolean }>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/WorkflowRuntime") {}
@@ -338,11 +350,10 @@ export const layer = Layer.effect(
             { concurrency: "unbounded", discard: true },
           )
         }
-        yield* Effect.forEach(
-          [...entry.worktrees],
-          (directory) => worktree.remove({ directory }).pipe(Effect.ignore),
-          { concurrency: "unbounded", discard: true },
-        )
+        yield* Effect.forEach([...entry.worktrees], (directory) => worktree.remove({ directory }).pipe(Effect.ignore), {
+          concurrency: "unbounded",
+          discard: true,
+        })
         entry.worktrees.clear()
         // Recurse into child workflow RUNS (populated by workflow()). Cancelling the
         // orchestrator tears down the whole tree — a child still "running" here is
@@ -450,6 +461,24 @@ export const layer = Layer.effect(
       // Instance/Workspace context — the quickjs Promise boundary in agent()
       // would otherwise lose it.
       const bridge = yield* EffectBridge.make()
+      // A workflow may target an explicit project workspace which is different
+      // from the Instance that launched it. Bind shared agents to that Instance
+      // as well as file hooks; otherwise their read/write/bash tools silently
+      // operate in AgentCompany's own repository while the workflow guest sees
+      // the requested workspace. Isolated agents still get their own worktree
+      // bridge below.
+      const coordinatorContext = input.workspace ? Instance.current : undefined
+      const sharedContext = input.workspace
+        ? yield* Effect.promise(() =>
+            Instance.provide({
+              directory: workspaceRoot,
+              fn: () => ({ ...Instance.current, configDirectory: coordinatorContext!.directory }),
+            }),
+          )
+        : undefined
+      const sharedBridge = sharedContext
+        ? yield* EffectBridge.make().pipe(Effect.provideService(InstanceRef, sharedContext))
+        : bridge
 
       // Resolve the process-wide ceiling NOW (under the live Instance context) so
       // its semaphore object exists before any spawn site closes over it. Sized
@@ -539,6 +568,14 @@ export const layer = Layer.effect(
         reason: FailReason,
         info: { actorID?: string; errorMessage?: string } = {},
       ) => {
+        log.warn("workflow agent failed", {
+          runID,
+          agentType: o.agentType ?? "general",
+          companyAgentID: o.companyAgentID,
+          label: o.label,
+          reason,
+          ...info,
+        })
         try {
           Effect.runFork(
             bus
@@ -547,6 +584,7 @@ export const layer = Layer.effect(
                 runID,
                 actorID: info.actorID,
                 agentType: o.agentType ?? "general",
+                companyAgentID: o.companyAgentID,
                 label: o.label,
                 phase: o.phase ?? entry.currentPhase,
                 reason,
@@ -598,13 +636,17 @@ export const layer = Layer.effect(
         let reason: FailReason = "actor-error"
         let actorID: string | undefined
         let errorMessage: string | undefined
-        const value = await bridge
+        const value = await sharedBridge
           .promise(
             Effect.gen(function* () {
               const spawned = yield* actor.spawn({
-                mode: "subagent",
+                // A target workspace is a distinct project boundary. Give its
+                // worker a peer session created inside that Instance instead of
+                // reusing the parent repository's session slice.
+                mode: input.workspace ? "peer" : "subagent",
                 sessionID: input.sessionID,
                 agentType: o.agentType ?? "general",
+                companyAgentID: o.companyAgentID,
                 description: spawnDescription(o),
                 task: prompt,
                 context: "none",
@@ -728,6 +770,7 @@ export const layer = Layer.effect(
                     mode: "subagent",
                     sessionID: input.sessionID,
                     agentType: o.agentType ?? "general",
+                    companyAgentID: o.companyAgentID,
                     description: spawnDescription(o),
                     task: prompt,
                     context: "none",
@@ -855,7 +898,9 @@ export const layer = Layer.effect(
                 // computed above (the key hashes the raw `o.model` ref, NOT the
                 // resolved struct, so resume keys stay stable across config changes).
                 // Never-throws: an unknown group falls back to input.model.
-                const resolvedModel = await bridge.promise(resolveAgentModel(o.model, input.model, entry.warnedModelRefs))
+                const resolvedModel = await bridge.promise(
+                  resolveAgentModel(o.model, input.model, entry.warnedModelRefs),
+                )
                 return spawnShared(actor, promptStr, o, resolvedModel)
               }),
             )
@@ -896,14 +941,18 @@ export const layer = Layer.effect(
         entry.currentPhase = String(title)
         entry.transcript.push({ kind: "phase", text: String(title) })
         Effect.runFork(WorkflowPersistence.recordPhase({ runID, phase: String(title) }).pipe(Effect.ignore))
-        Effect.runFork(WorkflowPersistence.appendJournal(runID, { t: "phase", title: String(title), pass }).pipe(Effect.ignore))
+        Effect.runFork(
+          WorkflowPersistence.appendJournal(runID, { t: "phase", title: String(title), pass }).pipe(Effect.ignore),
+        )
         Effect.runFork(bus.publish(WorkflowPhase, { sessionID: input.sessionID, runID, title: String(title) }))
         return undefined
       }
 
       const logHook: HostFn = (message: unknown) => {
         entry.transcript.push({ kind: "log", text: String(message) })
-        Effect.runFork(WorkflowPersistence.appendJournal(runID, { t: "log", msg: String(message), pass }).pipe(Effect.ignore))
+        Effect.runFork(
+          WorkflowPersistence.appendJournal(runID, { t: "log", msg: String(message), pass }).pipe(Effect.ignore),
+        )
         Effect.runFork(bus.publish(WorkflowLog, { sessionID: input.sessionID, runID, message: String(message) }))
         return undefined
       }
@@ -937,14 +986,20 @@ export const layer = Layer.effect(
           scheduleFlush(entry)
           return Promise.resolve(journal.results.get("wf:" + key))
         }
-        const childRunID = "wf_" + createHash("sha256").update(runID + key).digest("hex")
+        const childRunID =
+          "wf_" +
+          createHash("sha256")
+            .update(runID + key)
+            .digest("hex")
         return bridge.promise(
           Effect.gen(function* () {
             const childScript = isInlineScript(spec)
               ? spec
               : yield* Effect.promise(() => resolveWorkflowScript(spec, workspaceRoot, Instance.worktree))
             if (childScript === null)
-              return yield* Effect.die(new Error(`${WORKFLOW_STRUCTURAL_ERROR}: unknown workflow: ${JSON.stringify(spec)}`))
+              return yield* Effect.die(
+                new Error(`${WORKFLOW_STRUCTURAL_ERROR}: unknown workflow: ${JSON.stringify(spec)}`),
+              )
             // Nesting guards (T12) — LAUNCH path only (a journal HIT early-returned
             // above without deriving childName/childRunID, and a cached child already
             // completed in a prior pass, so re-validating would be wrong). The child's
@@ -960,7 +1015,9 @@ export const layer = Layer.effect(
             // cycle and is bounded only by maxDepth.
             const childName = isInlineScript(spec) ? "inline:" + base.slice(0, 12) : spec
             if (depth + 1 > maxDepth) {
-              return yield* Effect.die(new Error(`${WORKFLOW_STRUCTURAL_ERROR}: workflow nesting exceeds maxDepth (${maxDepth})`))
+              return yield* Effect.die(
+                new Error(`${WORKFLOW_STRUCTURAL_ERROR}: workflow nesting exceeds maxDepth (${maxDepth})`),
+              )
             }
             if (lineage.includes(childName)) {
               return yield* Effect.die(
@@ -1068,7 +1125,12 @@ export const layer = Layer.effect(
         // is the motivating use case.
         const seed = createHash("sha1").update(runID).digest().readUInt32BE(0)
         const result = yield* Effect.tryPromise({
-          try: () => evalScript(body, hooks, { deadlineMs: input.scriptDeadlineMs ?? SCRIPT_DEADLINE_MS, args: input.args, seed }),
+          try: () =>
+            evalScript(body, hooks, {
+              deadlineMs: input.scriptDeadlineMs ?? SCRIPT_DEADLINE_MS,
+              args: input.args,
+              seed,
+            }),
           catch: (e) => (e instanceof Error ? e : new Error(String(e))),
         }).pipe(Effect.result)
 
@@ -1092,7 +1154,8 @@ export const layer = Layer.effect(
                 senderSessionID: input.sessionID,
                 senderActorID: "workflow",
                 type: "actor_notification",
-                content: `Workflow completed. run_id: ${runID}\n` + JSON.stringify(result.success ?? null).slice(0, 4000),
+                content:
+                  `Workflow completed. run_id: ${runID}\n` + JSON.stringify(result.success ?? null).slice(0, 4000),
               })
               .pipe(Effect.ignore)
           return
