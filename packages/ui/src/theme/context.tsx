@@ -9,13 +9,13 @@ import type { DesktopTheme } from "./types"
 export type ColorScheme = "light" | "dark" | "system"
 
 const STORAGE_KEYS = {
-  THEME_ID: "opencode-theme-id",
-  COLOR_SCHEME: "opencode-color-scheme",
-  THEME_CSS_LIGHT: "opencode-theme-css-light",
-  THEME_CSS_DARK: "opencode-theme-css-dark",
+  THEME_ID: "agent-company.theme-id",
+  COLOR_SCHEME: "agent-company.color-scheme",
+  THEME_CSS_LIGHT: "agent-company.theme-css-light",
+  THEME_CSS_DARK: "agent-company.theme-css-dark",
 } as const
 
-const THEME_STYLE_ID = "oc-theme"
+const THEME_STYLE_ID = "agent-company-theme"
 let files: Record<string, () => Promise<{ default: DesktopTheme }>> | undefined
 let ids: string[] | undefined
 let known: Set<string> | undefined
@@ -29,7 +29,10 @@ function getFiles() {
 function themeIDs() {
   if (ids) return ids
   ids = Object.keys(getFiles())
-    .map((path) => path.slice("./themes/".length, -".json".length))
+    .map((path) => {
+      const id = path.slice("./themes/".length, -".json".length)
+      return id === "graphite" ? "opencode" : id
+    })
     .sort()
   return ids
 }
@@ -41,7 +44,7 @@ function knownThemes() {
 }
 
 const names: Record<string, string> = {
-  "oc-2": "OC-2",
+  "oc-2": "Agent Company",
   amoled: "AMOLED",
   aura: "Aura",
   ayu: "Ayu",
@@ -66,7 +69,7 @@ const names: Record<string, string> = {
   nord: "Nord",
   "one-dark": "One Dark",
   onedarkpro: "One Dark Pro",
-  opencode: "OpenCode",
+  opencode: "Graphite",
   orng: "Orng",
   "osaka-jade": "Osaka Jade",
   palenight: "Palenight",
@@ -143,7 +146,7 @@ function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "da
   ${css}
 }`
 
-  document.getElementById("oc-theme-preload")?.remove()
+  document.getElementById("agent-company-theme-preload")?.remove()
   ensureThemeStyleElement().textContent = fullCss
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
@@ -186,7 +189,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (hit) return Promise.resolve(hit)
       const pending = loads.get(next)
       if (pending) return pending
-      const file = getFiles()[`./themes/${next}.json`]
+      const file = getFiles()[next === "opencode" ? "./themes/graphite.json" : `./themes/${next}.json`]
       if (!file) return Promise.resolve(undefined)
       const task = file()
         .then((mod) => {
