@@ -7,12 +7,14 @@ import { ChannelMessageTable, BOARD_CHANNEL_ID } from "../../src/conversation/co
 import { ChannelMessageID } from "../../src/conversation/schema"
 import { AppRuntime } from "../../src/effect/app-runtime"
 import { GroupSession } from "../../src/group-session"
+import { GroupMessageTable, GroupSessionMemberTable } from "../../src/group-session/group-session.sql"
 import { Global } from "../../src/global"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionStatus } from "../../src/session/status"
-import type { MessageID, SessionID } from "../../src/session/schema"
+import { SessionID } from "../../src/session/schema"
+import type { MessageID } from "../../src/session/schema"
 import { SessionTable } from "../../src/session/session.sql"
 import { eq } from "../../src/storage"
 import * as Database from "../../src/storage/db"
@@ -96,9 +98,9 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
         lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
       })),
     )
+    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
 
     try {
-      await using repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
       await bootstrap(repository.path)
 
       const memoryPath = path.join(Global.Path.data, "agents", "board-ceo", "m2-work-scope-canary.md")
@@ -173,13 +175,15 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
           sessionID: agentMessage!.sessionID as SessionID,
           messageID: agentMessage!.runtimeMessageID as MessageID,
         })
-        expect(source.info.id).toBe(agentMessage!.runtimeMessageID)
+        expect(source.info.id).toBe(agentMessage!.runtimeMessageID!)
         expect(source.parts.length).toBeGreaterThan(0)
         expect(
           group.members.map(
             (member) =>
-              Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, member.sessionID)).get())
-                ?.company_agent_id,
+              Database.use((db) => {
+                const sessionID = SessionID.zod.safeParse(member.sessionID).data
+                return sessionID ? db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get()?.company_agent_id : undefined
+              })?.toString(),
           ),
         ).toEqual(["assistant", "assistant", "assistant"])
         expect(JSON.stringify(server.captures)).not.toContain(canary)
@@ -187,7 +191,90 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
         await rm(memoryPath, { force: true })
       }
     } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
       await server.stop()
+      await repository[Symbol.asyncDispose]()
+    }
+  })
+
+  test.serial("resumes a persisted round after the first agent without replaying the user or first speaker", async () => {
+    const server = startScriptedLLMServer(
+      Array.from({ length: 16 }, () => ({
+        lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
+      })),
+    )
+    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+
+    try {
+      await bootstrap(repository.path)
+      const group = await groupSession(repository.path, (service) =>
+        service.create({ title: "M2 resume bridge", agentIDs: boardAgents, contextPolicy: "work_scoped" }),
+      )
+      const firstMember = Database.use((db) =>
+        db
+          .select()
+          .from(GroupSessionMemberTable)
+          .where(eq(GroupSessionMemberTable.group_session_id, group.id))
+          .orderBy(GroupSessionMemberTable.position)
+          .get(),
+      )
+      if (!firstMember) throw new Error("Board group has no members")
+
+      const time = Date.now()
+      Database.use((db) =>
+        db
+          .insert(GroupMessageTable)
+          .values([
+            {
+              id: Identifier.ascending("message"),
+              group_session_id: group.id,
+              round_num: 0,
+              role: "user",
+              content: "Resume after the first persisted board response.",
+              time_created: time,
+              time_updated: time,
+            },
+            {
+              id: Identifier.ascending("message"),
+              group_session_id: group.id,
+              round_num: 0,
+              role: "agent",
+              company_agent_id: firstMember.company_agent_id,
+              session_id: firstMember.session_id,
+              content: "The first board member identified a concrete risk.",
+              status_summary: "done",
+              time_created: time + 1,
+              time_updated: time + 1,
+            },
+          ])
+          .run(),
+      )
+
+      await groupSession(repository.path, (service) => service.resume({ groupSessionID: group.id, roundNum: 0 }))
+      await waitFor(async () =>
+        groupSession(repository.path, (service) =>
+          Effect.gen(function* () {
+            const messages = yield* service.messages(group.id)
+            return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.role === "agent").length === 2
+          }),
+        ),
+      )
+
+      const messages = await groupSession(repository.path, (service) => service.messages(group.id))
+      const userMessages = messages.filter((message) => message.role === "user")
+      const agentMessages = messages.filter((message) => message.role === "agent")
+      expect(userMessages).toHaveLength(1)
+      expect(agentMessages).toHaveLength(2)
+      expect(agentMessages[0]?.companyAgentID).toBe(firstMember.company_agent_id)
+      expect(agentMessages[1]?.companyAgentID).not.toBe(firstMember.company_agent_id)
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
+      await server.stop()
+      await repository[Symbol.asyncDispose]()
     }
   })
 
@@ -222,9 +309,9 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
         })
       },
     })
+    const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
     try {
-      await using repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
       await bootstrap(repository.path)
       const group = await groupSession(repository.path, (service) =>
         service.create({ title: "M2 interrupt bridge", agentIDs: boardAgents, contextPolicy: "work_scoped" }),
@@ -247,7 +334,11 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
       expect(statuses).toEqual([{ type: "idle" }, { type: "idle" }, { type: "idle" }])
       await Instance.disposeAll()
     } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
       server.stop(true)
+      await repository[Symbol.asyncDispose]()
     }
   })
 })

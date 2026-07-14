@@ -50,7 +50,7 @@ export const provide =
           Instance.provide({
             directory: binding.rootPath,
             fn: () => Effect.runPromiseWith(services)(self.pipe(Effect.provideService(InstanceRef, Instance.current))),
-          }),
+          }).then((value) => value),
         ),
       )
     })

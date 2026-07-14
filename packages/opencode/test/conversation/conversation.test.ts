@@ -164,6 +164,94 @@ describe.serial("M2 conversation read model", () => {
     expect(second.nextCursor).toBeUndefined()
   })
 
+  test.serial("keeps user input and sourced high signals in the main channel while excluding ordinary agent output", async () => {
+    insertMessage("cmsg_user-need", 10)
+    const threadID = ConversationThreadID.parse("cth_signal-source")
+    Database.use((db) => {
+      db.insert(ConversationThreadTable)
+        .values({
+          id: threadID,
+          company_id: companyID,
+          channel_id: COMPANY_CHANNEL_ID,
+          title: "Sourced high signal",
+          status: "active",
+          time_created: 1,
+          time_updated: 1,
+        })
+        .run()
+      db
+        .insert(ChannelMessageTable)
+        .values([
+          {
+            id: ChannelMessageID.parse("cmsg_agent-ordinary"),
+            channel_id: COMPANY_CHANNEL_ID,
+            author_kind: "agent",
+            author_id: "board-cto",
+            body: "I am still investigating.",
+            visibility: "channel",
+            mentions: [],
+            time_created: 20,
+            time_updated: 20,
+          },
+          {
+            id: ChannelMessageID.parse("cmsg_agent-unsourced-signal"),
+            channel_id: COMPANY_CHANNEL_ID,
+            source_thread_id: threadID,
+            author_kind: "agent",
+            author_id: "board-product-lead",
+            body: "This direct database signal has no evidence.",
+            signal_type: "risk",
+            visibility: "company",
+            mentions: [],
+            time_created: 25,
+            time_updated: 25,
+          },
+          {
+            id: ChannelMessageID.parse("cmsg_agent-signal"),
+            channel_id: COMPANY_CHANNEL_ID,
+            source_thread_id: threadID,
+            author_kind: "agent",
+            author_id: "board-product-lead",
+            body: "The team identified a release risk.",
+            signal_type: "risk",
+            visibility: "company",
+            mentions: [],
+            time_created: 30,
+            time_updated: 30,
+          },
+        ])
+        .run(),
+      db.insert(SignalProjectionTable)
+        .values({
+          id: SignalProjectionID.parse("spr_agent-signal"),
+          channel_message_id: ChannelMessageID.parse("cmsg_agent-signal"),
+          conversation_thread_id: threadID,
+          conversation_run_id: null,
+          projector_version: 1,
+          source_watermark: "group_message:msg_source",
+          time_created: 30,
+          time_updated: 30,
+        })
+        .run()
+      db.insert(SignalProjectionSourceTable)
+        .values({
+          signal_projection_id: SignalProjectionID.parse("spr_agent-signal"),
+          ordinal: 0,
+          source_kind: "group_message",
+          source_id: "msg_source",
+          time_created: 30,
+          time_updated: 30,
+        })
+        .run()
+    })
+
+    expect(
+      (await run((conversation) => conversation.pageMessages({ companyID, channelID: COMPANY_CHANNEL_ID, principal: user }))).items.map(
+        (message) => message.id,
+      ),
+    ).toEqual([ChannelMessageID.parse("cmsg_agent-signal"), ChannelMessageID.parse("cmsg_user-need")])
+  })
+
   test.serial("scopes thread entries and source evidence through the visible channel", async () => {
     const threadID = ConversationThreadID.parse("cth_board-need")
     Database.use((db) => {

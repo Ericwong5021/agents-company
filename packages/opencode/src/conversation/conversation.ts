@@ -3,7 +3,7 @@ import z from "zod"
 import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
-import { and, desc, eq, isNull, lt, or } from "@/storage"
+import { and, desc, eq, exists, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
 import {
   ChannelMemberTable,
@@ -382,14 +382,27 @@ function readChannelMessages(input: {
   before?: ChannelMessageCursor
   limit: number
 }) {
-  return Database.use((db) =>
-    db
+  return Database.use((db) => {
+    const mainFeedMessage = or(
+      eq(ChannelMessageTable.author_kind, "user"),
+      and(
+        isNotNull(ChannelMessageTable.signal_type),
+        exists(
+          db
+            .select({ id: SignalProjectionTable.id })
+            .from(SignalProjectionTable)
+            .where(eq(SignalProjectionTable.channel_message_id, ChannelMessageTable.id)),
+        ),
+      ),
+    )
+    return db
       .select()
       .from(ChannelMessageTable)
       .where(
         input.before
           ? and(
               eq(ChannelMessageTable.channel_id, input.channelID),
+              mainFeedMessage,
               or(
                 lt(ChannelMessageTable.time_created, input.before.time_created),
                 and(
@@ -398,12 +411,15 @@ function readChannelMessages(input: {
                 ),
               ),
             )
-          : eq(ChannelMessageTable.channel_id, input.channelID),
+          : and(
+              eq(ChannelMessageTable.channel_id, input.channelID),
+              mainFeedMessage,
+            ),
       )
       .orderBy(desc(ChannelMessageTable.time_created), desc(ChannelMessageTable.id))
       .limit(input.limit + 1)
-      .all(),
-  )
+      .all()
+  })
 }
 
 function readThreadMessages(input: {

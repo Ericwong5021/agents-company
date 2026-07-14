@@ -76,11 +76,12 @@ import { memoMap } from "./memo-map"
 // Wrapped in Layer.suspend so the cross-module `.defaultLayer` reads defer to
 // first use instead of running at module load — same TDZ fix as Actor.defaultLayer.
 export const AppLayer = Layer.suspend(() => {
+  const bus = Bus.defaultLayer
   const groupSession = GroupSession.defaultLayer
   return Layer.mergeAll(
     Npm.defaultLayer,
     AppFileSystem.defaultLayer,
-    Bus.defaultLayer,
+    bus,
     Auth.defaultLayer,
     Account.defaultLayer,
     Config.defaultLayer,
@@ -137,7 +138,7 @@ export const AppLayer = Layer.suspend(() => {
     Company.defaultLayer,
     LocalAuth.defaultLayer,
     groupSession,
-    ConversationRuntime.layer.pipe(Layer.provide(groupSession)),
+    ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus))),
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,
