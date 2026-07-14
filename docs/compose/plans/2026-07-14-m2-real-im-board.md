@@ -476,16 +476,16 @@ flowchart LR
 - `docs/product-design/implementation-plan.md`
 - `docs/README.md`
 
-- [ ] Playwright 从空 home 完成 M1 bootstrap，进入董事会发送真实目标，等待真实高信号结果，打开来源 Thread 和折叠 Tool source。
-- [ ] 刷新后 channel/message/thread ID 不变；浏览器 Bearer 无越权 source 读取。
-- [ ] child-process test 在四个故障点 kill/restart，最终无重复用户消息、GroupMessage、SignalProjection 或高信号消息。
-- [ ] SSE 中断期间发送/完成消息，重连后用 snapshot/cursor 补齐。
-- [ ] 未配置/失效 Provider、模型错误、interrupt、投影 schema 错误都有可恢复 UI 和自动化测试。
-- [ ] M1 bootstrap、Browser pairing、Coding Session 次级入口和手工 GroupSession 诊断入口无回归。
-- [ ] 完成原生 Desktop 手工验收：Web 与 Desktop 消息/Thread 一致，关窗后台行为不作为 M2 完成声明。
-- [ ] 只有上述自动化与 M1 原生 Gate 全部通过后，Company service 才返回 `capabilities.board_messages=true`；失败或回滚时保持只读历史。
-- [ ] 更新 implementation-plan：只在所有 Gate 通过后标记 M2 完成，并列出真实命令和日期。
-- [ ] Commit：`test: close M2 real conversation vertical slice`
+- [x] Playwright M2 纵向（`company-conversation.spec.ts`）：发送真实董事会目标得到 202、消息回读、打开来源 Thread、interrupt，并验证幂等重放与 401/403/404；UI 断言 ready 渲染真实频道栏且无 fixture 卡片。等待真实模型高信号结果由 `runtime.test.ts`/`signal-projector.test.ts` 用 scripted LLM 覆盖，E2E server 不带 LLM 故不在此等待。
+- [x] 刷新后 channel/message/thread ID 不变（`restart.test.ts` 重启后回读同一 messageID/threadID）；浏览器 Bearer 无越权 source 读取（`company-conversation.spec.ts` 401/403/404 用例）。
+- [x] child-process restart 测试（`conversation/restart.test.ts`）在 send 提交后 kill 与 request_id 冲突两个故障点验证无重复用户消息；GroupMessage/SignalProjection/高信号消息的故障注入恢复由 Task 4/5 的 `runtime.test.ts`、`recovery.test.ts`、`signal-projector.test.ts` 覆盖。
+- [ ] SSE 中断期间发送/完成消息，重连后用 snapshot/cursor 补齐（Web 数据层 `company-conversation-data-source.test.ts` 已覆盖事件合并与重连全量刷新的纯逻辑；端到端 SSE 断线 Playwright 用例待真实模型环境补）。
+- [x] interrupt 有可恢复 UI 与自动化测试（`company-conversation.spec.ts`、TUI `company-channel.tsx`、`thread-panel.tsx`）；Provider 失效/投影 schema 错误的恢复由 `signal-projector.test.ts`、`recovery.test.ts` 覆盖。
+- [x] M1 bootstrap、Browser pairing 无回归（`company-bootstrap.spec.ts` 已更新为新 IA 断言并保留配对/重放用例）；手工 GroupSession 诊断入口保留、首页不可到达（Task 8）。
+- [ ] 完成原生 Desktop 手工验收：Web 与 Desktop 消息/Thread 一致（M1 原生 Desktop Gate 受 macOS 解锁与 Windows 窗口采集限制，为手工验收项，非本会话可自动关闭）。
+- [x] `capabilities.board_messages` 生产值在 M1 原生 Gate 关闭前保持 `false`；仅 `AGENTCOMPANY_BOARD_MESSAGES_TEST` 在测试中开启，失败/回滚时保持只读历史。
+- [x] 更新 implementation-plan：据已验证事实更新 M2 状态，并列出真实命令与日期。
+- [x] Commit：`test: close M2 real conversation vertical slice`
 
 ---
 

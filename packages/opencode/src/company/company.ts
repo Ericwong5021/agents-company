@@ -10,6 +10,7 @@ import { Project } from "@/project"
 import { ProjectID } from "@/project/schema"
 import { Provider } from "@/provider"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { Flag } from "@/flag/flag"
 import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
@@ -83,7 +84,7 @@ function needsBootstrap(): CompanyState {
         responsibilities: [...member.responsibilities],
       })),
     },
-    capabilities: { board_messages: false },
+    capabilities: { board_messages: Flag.AGENTCOMPANY_BOARD_MESSAGES_TEST },
   })
 }
 
@@ -160,7 +161,7 @@ function current(db: TxOrDb): CompanyState {
       kind: "bootstrap_complete",
       action: "open_board",
     },
-    capabilities: { board_messages: false },
+    capabilities: { board_messages: Flag.AGENTCOMPANY_BOARD_MESSAGES_TEST },
   })
   if (!parsed.success) return corrupt()
   return parsed.data

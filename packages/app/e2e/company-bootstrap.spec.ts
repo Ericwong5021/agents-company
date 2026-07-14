@@ -53,13 +53,18 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
   await page.getByRole("button", { name: "创建 Company", exact: true }).click()
 
   await expect(page.getByRole("heading", { name: "Agent Company" })).toBeVisible()
-  await expect(page.getByText("CEO", { exact: true })).toBeVisible()
-  await expect(page.getByText("CTO", { exact: true })).toBeVisible()
-  await expect(page.getByText("Product Lead", { exact: true })).toBeVisible()
+  // M2: ready state renders the live workspace (channel sidebar + read-only
+  // feed). Board messaging stays disabled until the release gate closes, so the
+  // composer is replaced by a capability notice — no fabricated send entry.
+  await expect(page.locator(".company-channels")).toBeVisible()
+  await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
+  await expect(page.locator(".company-composer")).toHaveCount(0)
+  await expect(page.locator(".company-approval, .company-delivery")).toHaveCount(0)
+
+  // M1 company facts and browser pairing remain reachable via the Context Panel.
+  await page.getByRole("button", { name: "公司配置" }).click()
   await expect(page.getByText("Balanced", { exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Company 初始化完成" })).toBeVisible()
-  await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
-  await expect(page.locator(".company-composer, .company-thread, .company-approval, .company-delivery")).toHaveCount(0)
 
   const reused = await request.post(serverUrl + "/local-auth/exchange", {
     data: { code: pair.code, label: "Reused code" },
@@ -67,5 +72,8 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
   expect(reused.status()).toBe(400)
 
   await page.reload()
-  await expect(page.getByRole("heading", { name: "Agent Company" })).toBeVisible()
+  // After reload the workspace rebuilds from the persisted snapshot; channels
+  // and the capability notice reappear without re-bootstrap.
+  await expect(page.locator(".company-channels")).toBeVisible()
+  await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
 })

@@ -164,7 +164,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-状态：实施中。Conversation schema、频道/Thread 读取模型、董事会幂等 intake、GroupSession 精确来源以及高信号投影与进程恢复已完成并通过目标回归；认证 HTTP contract、生成 SDK、Web/TUI 接线、真实 Workspace 与纵向 Gate 仍待完成。`capabilities.board_messages` 在 Task 10 Gate 前继续保持关闭。
+状态：Task 1–9 已完成并提交推送。Conversation schema/迁移、频道与 Thread 读取模型、董事会幂等 intake、GroupSession 精确来源、高信号投影与进程恢复、认证 HTTP contract 与生成 SDK、Web 会话数据层、TUI 统一入口与真实 Company Workspace UI 均已落地并通过目标测试；生产 fixture 已删除。Task 10 已完成进程重启恢复测试（`conversation/restart.test.ts`，真实 child-process kill/restart 验证持久化与幂等）、M2 Playwright 纵向（`company-conversation.spec.ts`，验证发送 202、消息回读、Thread/source、interrupt、幂等重放与 401/403/404）与 M1 bootstrap E2E 回归修正；`capabilities.board_messages` 仍由 `AGENTCOMPANY_BOARD_MESSAGES_TEST` 仅在测试中开启，生产值在 M1 原生 Desktop 手工 Gate 关闭前保持 `false`。详细任务勾选见 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
 
 预计：约 3 周（双工作流 12–15 个工程日；单线顺序实施约 4 周）。详细代码审计与任务拆解见 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
 

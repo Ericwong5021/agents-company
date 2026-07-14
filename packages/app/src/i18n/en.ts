@@ -1092,4 +1092,5 @@ export const dict = {
   "company.composer.mention.ceo": "@CEO",
   "company.composer.mention.cto": "@CTO",
   "company.composer.mention.product_lead": "@Product Lead",
+  "company.workspace.board_messages_disabled": "Board messaging is read-only: live conversation is enabled once the release gate passes.",
 }

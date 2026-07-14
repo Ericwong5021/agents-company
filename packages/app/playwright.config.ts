@@ -64,6 +64,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], locale: "zh-CN" },
     },
     {
+      name: "company-conversation",
+      testMatch: "company-conversation.spec.ts",
+      retries: 0,
+      use: { ...devices["Desktop Chrome"], locale: "zh-CN" },
+    },
+    {
       name: "app-shell",
       testMatch: "app-shell.spec.ts",
       use: { ...devices["Desktop Chrome"], locale: "zh-CN" },

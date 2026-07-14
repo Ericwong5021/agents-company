@@ -1050,4 +1050,5 @@ export const dict = {
   "company.composer.mention.ceo": "@CEO",
   "company.composer.mention.cto": "@CTO",
   "company.composer.mention.product_lead": "@Product Lead",
+  "company.workspace.board_messages_disabled": "董事会消息为只读：真实会话能力将在发布 Gate 通过后启用。",
 } satisfies Partial<Record<Keys, string>>

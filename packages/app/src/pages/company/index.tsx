@@ -12,6 +12,7 @@ import { MessageFeed } from "./message-feed"
 import { ThreadPanel } from "./thread-panel"
 import { CompanyComposer } from "./company-composer"
 import { useServer } from "@/context/server"
+import { useLanguage } from "@/context/language"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
 
@@ -50,6 +51,7 @@ function channelTitle(conv: ConversationSnapshot, fallback: string): string {
  * management stay reachable without dominating the IM surface.
  */
 function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspaceSnapshot>; dataSource: CompanyWorkspaceDataSource }) {
+  const language = useLanguage()
   const conversation = createMemo(() => props.snapshot().conversation)
   const store = createMemo<ConversationStore | undefined>(() => props.dataSource.conversation)
   const [contextOpen, setContextOpen] = createSignal(false)
@@ -60,6 +62,11 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
   const hasOpenThread = createMemo(() => conversation().thread !== null)
   const hasMoreMessages = createMemo(() => conversation().messagesBefore !== null)
   const hasMoreEntries = createMemo(() => conversation().threadEntriesBefore !== null)
+  // board_messages stays false until the Task 10 release gate closes. While
+  // false, the workspace renders the real channel/message read model but hides
+  // the send entry — per the M2 release policy, this is not a fixture fallback.
+  const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
+  const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
 
   const selectChannel = (channelID: string) => {
     setMobileChannelsOpen(false)
@@ -118,14 +125,23 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
           onLoadMore={() => void store()?.pageMessages()}
           onOpenThread={openThread}
         />
-        <CompanyComposer
-          sending={() => conversation().sending}
-          error={() => conversation().error}
-          hasOpenThread={hasOpenThread}
-          onSend={(body) => void store()?.sendMessage(body)}
-          onInterrupt={() => void interrupt()}
-          onRetry={() => void store()?.refresh()}
-        />
+        <Show
+          when={boardMessagesEnabled()}
+          fallback={
+            <div class="company-composer-disabled" data-capability="board-messages-disabled" role="status">
+              {companyDisabledText()}
+            </div>
+          }
+        >
+          <CompanyComposer
+            sending={() => conversation().sending}
+            error={() => conversation().error}
+            hasOpenThread={hasOpenThread}
+            onSend={(body) => void store()?.sendMessage(body)}
+            onInterrupt={() => void interrupt()}
+            onRetry={() => void store()?.refresh()}
+          />
+        </Show>
       </main>
 
       <Show when={hasOpenThread()}>

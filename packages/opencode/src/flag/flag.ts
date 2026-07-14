@@ -183,4 +183,11 @@ export const Flag = {
   get AGENTCOMPANY_CLIENT() {
     return process.env["AGENTCOMPANY_CLIENT"] ?? "cli"
   },
+  // Test-only override: forces capabilities.board_messages to true so the M2
+  // Playwright vertical can exercise the live send pipeline before the release
+  // gate closes. Production never sets this; the gate flips the hardcoded
+  // default in company.ts once all Task 10 checks pass.
+  get AGENTCOMPANY_BOARD_MESSAGES_TEST() {
+    return truthy("AGENTCOMPANY_BOARD_MESSAGES_TEST")
+  },
 }
