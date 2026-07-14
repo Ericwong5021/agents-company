@@ -1,10 +1,13 @@
 import type { CompanyNeedsBootstrapState, CompanyProviderList, ProviderAuthMethod } from "@agents-company/sdk/v2/client"
+import { useDialog } from "@agents-company/ui/context/dialog"
 import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js"
+import { DialogCustomProvider } from "@/components/dialog-custom-provider"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { normalizeServerUrl } from "@/context/server"
 import type { CompanyWorkspaceDataSource } from "./company-data-source"
 import type { CompanyWorkspaceAccess } from "./company-model"
+import { companyProviderOptions } from "./company-provider-options"
 import {
   bootstrapDraftStorageKey,
   canSubmit,
@@ -53,9 +56,12 @@ export function CompanyBootstrap(props: {
   onComplete?: () => void
 }) {
   const language = useLanguage()
+  const dialog = useDialog()
   const platform = usePlatform()
   const key = bootstrapDraftStorageKey(normalizeServerUrl(props.serverUrl) ?? props.serverUrl)
-  const [draft, setDraft] = createSignal(readDraft(key) ?? createDraft(newRequestID(), props.snapshot.defaults.company_name))
+  const [draft, setDraft] = createSignal(
+    readDraft(key) ?? createDraft(newRequestID(), props.snapshot.defaults.company_name),
+  )
   const [providers, setProviders] = createSignal<CompanyProviderList>()
   const [methods, setMethods] = createSignal<Record<string, ProviderAuthMethod[]>>({})
   const [step, setStep] = createSignal(0)
@@ -65,7 +71,10 @@ export function CompanyBootstrap(props: {
   const [pending, setPending] = createSignal(false)
   const [error, setError] = createSignal<string>()
 
-  const selectedProvider = createMemo(() => providers()?.providers.find((item) => item.provider_id === draft().provider_id))
+  const selectedProvider = createMemo(() =>
+    providers()?.providers.find((item) => item.provider_id === draft().provider_id),
+  )
+  const visibleProviders = createMemo(() => companyProviderOptions(providers()?.providers ?? [], draft().provider_id))
   const selectedMethods = createMemo(() => methods()[draft().provider_id ?? ""] ?? [])
   const currentStep = () => steps[step()]
 
@@ -95,6 +104,34 @@ export function CompanyBootstrap(props: {
     update({ type: "provider.selected", provider_id: providerID, model_id: model.model_id })
   }
 
+  const addCustomProvider = () => {
+    dialog.show(() => (
+      <DialogCustomProvider
+        back="close"
+        onFetchModels={(input) =>
+          props.dataSource.listCustomProviderModels({
+            customProviderModelsInput: {
+              format: input.format,
+              base_url: input.baseURL,
+              ...(input.apiKey ? { api_key: input.apiKey } : {}),
+              headers: input.headers,
+            },
+          })
+        }
+        onSaved={async (result) => {
+          if (result.key) {
+            await props.dataSource.setProvider({
+              providerID: result.providerID,
+              auth: { type: "api", key: result.key },
+            })
+          }
+          await loadProviders()
+          chooseProvider(result.providerID)
+        }}
+      />
+    ))
+  }
+
   const connectApi = async () => {
     const provider = selectedProvider()
     if (!provider || !apiKey().trim() || pending()) return
@@ -120,7 +157,10 @@ export function CompanyBootstrap(props: {
     setPending(true)
     setError()
     try {
-      const authorization = await props.dataSource.authorizeProvider({ providerID: provider.provider_id, method: index })
+      const authorization = await props.dataSource.authorizeProvider({
+        providerID: provider.provider_id,
+        method: index,
+      })
       if (!authorization) throw new Error("Missing OAuth authorization")
       setOauthMethod(index)
       platform.openLink(authorization.url)
@@ -208,7 +248,8 @@ export function CompanyBootstrap(props: {
   }
 
   const canContinue = () => {
-    if (currentStep() === "provider") return !!draft().provider_id && !!draft().model_id
+    if (currentStep() === "provider")
+      return !!draft().provider_id && !!draft().model_id && !!selectedProvider()?.connected
     if (currentStep() === "company") return !!draft().company_name.trim()
     if (currentStep() === "repository") return !!draft().repository
     return true
@@ -222,14 +263,20 @@ export function CompanyBootstrap(props: {
           <h1>{language.t("company.bootstrap.title")}</h1>
           <p>{language.t("company.bootstrap.subtitle")}</p>
         </div>
-        <span class="company-bootstrap-progress">{language.t("company.bootstrap.progress", { current: step() + 1, total: steps.length })}</span>
+        <span class="company-bootstrap-progress">
+          {language.t("company.bootstrap.progress", { current: step() + 1, total: steps.length })}
+        </span>
       </header>
 
       <form class="company-bootstrap-form" onSubmit={submit}>
         <nav class="company-bootstrap-steps" aria-label={language.t("company.bootstrap.steps.label")}>
           <For each={steps}>
             {(item, index) => (
-              <button type="button" classList={{ active: step() === index(), complete: step() > index() }} onClick={() => setStep(index())}>
+              <button
+                type="button"
+                classList={{ active: step() === index(), complete: step() > index() }}
+                onClick={() => setStep(index())}
+              >
                 <span>{index() + 1}</span>
                 {language.t(`company.bootstrap.step.${item}`)}
               </button>
@@ -242,9 +289,14 @@ export function CompanyBootstrap(props: {
             <div class="company-bootstrap-field-grid">
               <label>
                 <span>{language.t("company.bootstrap.provider.label")}</span>
-                <select value={draft().provider_id ?? ""} onChange={(event) => chooseProvider(event.currentTarget.value)}>
+                <select
+                  value={draft().provider_id ?? ""}
+                  onChange={(event) => chooseProvider(event.currentTarget.value)}
+                >
                   <option value="">{language.t("company.bootstrap.provider.placeholder")}</option>
-                  <For each={providers()?.providers ?? []}>{(provider) => <option value={provider.provider_id}>{provider.name}</option>}</For>
+                  <For each={visibleProviders()}>
+                    {(provider) => <option value={provider.provider_id}>{provider.name}</option>}
+                  </For>
                 </select>
               </label>
               <label>
@@ -255,31 +307,35 @@ export function CompanyBootstrap(props: {
                   onChange={(event) => {
                     const provider = selectedProvider()
                     if (!provider) return
-                    update({ type: "provider.selected", provider_id: provider.provider_id, model_id: event.currentTarget.value })
+                    update({
+                      type: "provider.selected",
+                      provider_id: provider.provider_id,
+                      model_id: event.currentTarget.value,
+                    })
                   }}
                 >
                   <option value="">{language.t("company.bootstrap.model.placeholder")}</option>
-                  <For each={selectedProvider()?.models ?? []}>{(model) => <option value={model.model_id}>{model.name}</option>}</For>
+                  <For each={selectedProvider()?.models ?? []}>
+                    {(model) => <option value={model.model_id}>{model.name}</option>}
+                  </For>
                 </select>
               </label>
             </div>
             <Show when={selectedProvider() && !selectedProvider()!.connected}>
               <div class="company-bootstrap-connection">
                 <strong>{language.t("company.bootstrap.provider.connect")}</strong>
-                <Show when={selectedMethods().some((method) => method.type === "api")}>
-                  <div class="company-bootstrap-inline-form">
-                    <input
-                      type="password"
-                      autocomplete="off"
-                      value={apiKey()}
-                      placeholder={language.t("company.bootstrap.provider.apiKey")}
-                      onInput={(event) => setApiKey(event.currentTarget.value)}
-                    />
-                    <button type="button" onClick={() => void connectApi()} disabled={pending() || !apiKey().trim()}>
-                      {language.t("company.bootstrap.provider.connectAction")}
-                    </button>
-                  </div>
-                </Show>
+                <div class="company-bootstrap-inline-form">
+                  <input
+                    type="password"
+                    autocomplete="off"
+                    value={apiKey()}
+                    placeholder={language.t("company.bootstrap.provider.apiKey")}
+                    onInput={(event) => setApiKey(event.currentTarget.value)}
+                  />
+                  <button type="button" onClick={() => void connectApi()} disabled={pending() || !apiKey().trim()}>
+                    {language.t("company.bootstrap.provider.connectAction")}
+                  </button>
+                </div>
                 <For each={selectedMethods()}>
                   {(method, index) => (
                     <Show when={method.type === "oauth"}>
@@ -296,19 +352,36 @@ export function CompanyBootstrap(props: {
                       placeholder={language.t("company.bootstrap.provider.oauthCode")}
                       onInput={(event) => setOauthCode(event.currentTarget.value)}
                     />
-                    <button type="button" onClick={() => void completeOAuth()} disabled={pending() || !oauthCode().trim()}>
+                    <button
+                      type="button"
+                      onClick={() => void completeOAuth()}
+                      disabled={pending() || !oauthCode().trim()}
+                    >
                       {language.t("company.bootstrap.provider.confirmOAuth")}
                     </button>
                   </div>
                 </Show>
               </div>
             </Show>
+            <div class="company-bootstrap-custom-provider">
+              <div>
+                <strong>{language.t("company.bootstrap.provider.custom.title")}</strong>
+                <span>{language.t("company.bootstrap.provider.custom.description")}</span>
+              </div>
+              <button type="button" onClick={addCustomProvider}>
+                {language.t("company.bootstrap.provider.custom.action")}
+              </button>
+            </div>
           </Show>
 
           <Show when={currentStep() === "company"}>
             <label class="company-bootstrap-field">
               <span>{language.t("company.bootstrap.company.name")}</span>
-              <input value={draft().company_name} maxlength={80} onInput={(event) => update({ type: "company.named", company_name: event.currentTarget.value })} />
+              <input
+                value={draft().company_name}
+                maxlength={80}
+                onInput={(event) => update({ type: "company.named", company_name: event.currentTarget.value })}
+              />
             </label>
             <div class="company-bootstrap-readonly">
               <span>{language.t("company.bootstrap.company.dataDirectory")}</span>
@@ -336,9 +409,15 @@ export function CompanyBootstrap(props: {
                   onInput={(event) => update({ type: "repository.path", repository_path: event.currentTarget.value })}
                 />
                 <Show when={platform.platform === "desktop" && platform.openDirectoryPickerDialog}>
-                  <button type="button" onClick={() => void chooseDirectory()}>{language.t("company.bootstrap.repository.pick")}</button>
+                  <button type="button" onClick={() => void chooseDirectory()}>
+                    {language.t("company.bootstrap.repository.pick")}
+                  </button>
                 </Show>
-                <button type="button" onClick={() => void inspect()} disabled={pending() || !draft().repository_path?.trim()}>
+                <button
+                  type="button"
+                  onClick={() => void inspect()}
+                  disabled={pending() || !draft().repository_path?.trim()}
+                >
                   {language.t("company.bootstrap.repository.inspect")}
                 </button>
               </div>
@@ -349,7 +428,11 @@ export function CompanyBootstrap(props: {
                   <strong>{repository().root_path}</strong>
                   <span>{repository().default_branch}</span>
                   <span>{repository().bootstrap_head_commit ?? "HEAD"}</span>
-                  <span>{repository().dirty ? language.t("company.bootstrap.repository.dirty") : language.t("company.bootstrap.repository.clean")}</span>
+                  <span>
+                    {repository().dirty
+                      ? language.t("company.bootstrap.repository.dirty")
+                      : language.t("company.bootstrap.repository.clean")}
+                  </span>
                 </div>
               )}
             </Show>
@@ -377,23 +460,45 @@ export function CompanyBootstrap(props: {
 
           <Show when={currentStep() === "review"}>
             <dl class="company-bootstrap-review">
-              <div><dt>{language.t("company.bootstrap.review.company")}</dt><dd>{draft().company_name}</dd></div>
-              <div><dt>{language.t("company.bootstrap.review.provider")}</dt><dd>{draft().provider_id} / {draft().model_id}</dd></div>
-              <div><dt>{language.t("company.bootstrap.review.repository")}</dt><dd>{draft().repository_path}</dd></div>
-              <div><dt>{language.t("company.bootstrap.review.policy")}</dt><dd>{draft().approval_preset}</dd></div>
+              <div>
+                <dt>{language.t("company.bootstrap.review.company")}</dt>
+                <dd>{draft().company_name}</dd>
+              </div>
+              <div>
+                <dt>{language.t("company.bootstrap.review.provider")}</dt>
+                <dd>
+                  {draft().provider_id} / {draft().model_id}
+                </dd>
+              </div>
+              <div>
+                <dt>{language.t("company.bootstrap.review.repository")}</dt>
+                <dd>{draft().repository_path}</dd>
+              </div>
+              <div>
+                <dt>{language.t("company.bootstrap.review.policy")}</dt>
+                <dd>{draft().approval_preset}</dd>
+              </div>
             </dl>
           </Show>
         </section>
 
         <Show when={error()}>{(message) => <p class="company-bootstrap-error">{message()}</p>}</Show>
         <footer class="company-bootstrap-actions">
-          <button type="button" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step() === 0 || pending()}>
+          <button
+            type="button"
+            onClick={() => setStep((current) => Math.max(0, current - 1))}
+            disabled={step() === 0 || pending()}
+          >
             {language.t("company.bootstrap.back")}
           </button>
           <Show
             when={currentStep() === "review"}
             fallback={
-              <button type="button" onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))} disabled={!canContinue() || pending()}>
+              <button
+                type="button"
+                onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))}
+                disabled={!canContinue() || pending()}
+              >
                 {language.t("company.bootstrap.next")}
               </button>
             }

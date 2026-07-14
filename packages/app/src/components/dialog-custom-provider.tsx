@@ -11,11 +11,25 @@ import { createStore, produce } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import { type FormState, headerRow, modelRow, validateCustomProvider } from "./dialog-custom-provider-form"
+import {
+  type CustomProviderFormat,
+  type FormState,
+  headerRow,
+  modelRow,
+  validateCustomProvider,
+} from "./dialog-custom-provider-form"
 import { DialogSelectProvider } from "./dialog-select-provider"
 
 type Props = {
   back?: "providers" | "close"
+  initialFormat?: CustomProviderFormat
+  onSaved?: (result: NonNullable<ReturnType<typeof validateCustomProvider>["result"]>) => void | Promise<void>
+  onFetchModels?: (input: {
+    format: CustomProviderFormat
+    baseURL: string
+    apiKey?: string
+    headers: Record<string, string>
+  }) => Promise<{ model_id: string; name: string }[] | undefined>
 }
 
 export function DialogCustomProvider(props: Props) {
@@ -25,6 +39,7 @@ export function DialogCustomProvider(props: Props) {
   const language = useLanguage()
 
   const [form, setForm] = createStore<FormState>({
+    format: props.initialFormat ?? "openai",
     providerID: "",
     name: "",
     baseURL: "",
@@ -115,6 +130,47 @@ export function DialogCustomProvider(props: Props) {
     return output.result
   }
 
+  const fetchModelsMutation = useMutation(() => ({
+    mutationFn: async () => {
+      const baseURL = form.baseURL.trim()
+      if (!/^https?:\/\//.test(baseURL)) throw new Error(language.t("provider.custom.error.baseURL.format"))
+      const headers = Object.fromEntries(
+        form.headers
+          .map((header) => ({ key: header.key.trim(), value: header.value.trim() }))
+          .filter((header) => !!header.key && !!header.value)
+          .map((header) => [header.key, header.value]),
+      )
+      const input = { format: form.format, baseURL, apiKey: form.apiKey.trim() || undefined, headers }
+      if (props.onFetchModels) return props.onFetchModels(input)
+      const response = await globalSDK.client.company.providerModels({
+        customProviderModelsInput: {
+          format: input.format,
+          base_url: input.baseURL,
+          ...(input.apiKey ? { api_key: input.apiKey } : {}),
+          headers: input.headers,
+        },
+      })
+      if (response.data === undefined) throw new Error(language.t("common.requestFailed"))
+      return response.data
+    },
+    onSuccess: (models) => {
+      if (!models?.length) {
+        showToast({ title: language.t("provider.custom.models.empty") })
+        return
+      }
+      setForm(
+        "models",
+        models.map((model) => ({ ...modelRow(), id: model.model_id, name: model.name })),
+      )
+    },
+    onError: (error) => {
+      showToast({
+        title: language.t("provider.custom.models.fetchFailed"),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    },
+  }))
+
   const saveMutation = useMutation(() => ({
     mutationFn: async (result: NonNullable<ReturnType<typeof validate>>) => {
       const disabledProviders = globalSync.data.config.disabled_providers ?? []
@@ -136,7 +192,8 @@ export function DialogCustomProvider(props: Props) {
       })
       return result
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      await props.onSaved?.(result)
       dialog.close()
       showToast({
         variant: "success",
@@ -183,6 +240,17 @@ export function DialogCustomProvider(props: Props) {
           <p class="text-14-regular text-text-base">{language.t("provider.custom.description.prefix")}</p>
 
           <div class="flex flex-col gap-4">
+            <label class="flex flex-col gap-2 text-12-medium text-text-weak">
+              {language.t("provider.custom.field.format.label")}
+              <select
+                class="h-10 px-3 rounded-md border border-border-base bg-background-base text-14-regular text-text-base"
+                value={form.format}
+                onChange={(event) => setForm("format", event.currentTarget.value as CustomProviderFormat)}
+              >
+                <option value="openai">{language.t("provider.custom.field.format.openai")}</option>
+                <option value="anthropic">{language.t("provider.custom.field.format.anthropic")}</option>
+              </select>
+            </label>
             <TextField
               autofocus
               label={language.t("provider.custom.field.providerID.label")}
@@ -219,7 +287,20 @@ export function DialogCustomProvider(props: Props) {
           </div>
 
           <div class="flex flex-col gap-3">
-            <label class="text-12-medium text-text-weak">{language.t("provider.custom.models.label")}</label>
+            <div class="flex items-center justify-between gap-3">
+              <label class="text-12-medium text-text-weak">{language.t("provider.custom.models.label")}</label>
+              <Button
+                type="button"
+                size="small"
+                variant="secondary"
+                onClick={() => fetchModelsMutation.mutate()}
+                disabled={fetchModelsMutation.isPending}
+              >
+                {fetchModelsMutation.isPending
+                  ? language.t("provider.custom.models.fetching")
+                  : language.t("provider.custom.models.fetch")}
+              </Button>
+            </div>
             <For each={form.models}>
               {(m, i) => (
                 <div class="flex gap-2 items-start" data-row={m.row}>

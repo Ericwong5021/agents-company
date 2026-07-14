@@ -80,6 +80,27 @@ export const ProviderConnection = z
   .meta({ ref: "ProviderConnection" })
 export type ProviderConnection = z.infer<typeof ProviderConnection>
 
+export const CustomProviderModelsInput = z
+  .object({
+    format: z.enum(["openai", "anthropic"]),
+    base_url: z.string().url(),
+    api_key: z.string().optional(),
+    headers: z.record(z.string(), z.string()).default({}),
+  })
+  .strict()
+  .meta({ ref: "CustomProviderModelsInput" })
+export type CustomProviderModelsInput = z.infer<typeof CustomProviderModelsInput>
+
+export const CustomProviderModels = z
+  .array(z.object({ model_id: ModelID.zod, name: z.string() }).strict())
+  .meta({ ref: "CustomProviderModels" })
+export type CustomProviderModels = z.infer<typeof CustomProviderModels>
+
+export const CustomProviderModelsFailed = NamedError.create(
+  "CustomProviderModelsFailed",
+  z.object({ message: z.string() }).strict(),
+)
+
 export const RepositoryCandidate = z
   .object({
     project_id: z.string(),

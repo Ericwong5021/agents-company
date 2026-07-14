@@ -1300,7 +1300,10 @@
   color: var(--text-base);
   background: var(--surface-base);
   cursor: pointer;
-  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .company-state-panel button,
@@ -1383,6 +1386,8 @@
 
 .company-bootstrap-steps {
   display: flex;
+  width: 190px;
+  align-self: start;
   flex-direction: column;
   gap: 4px;
 }
@@ -1407,6 +1412,7 @@
 
 .company-bootstrap-steps button > span {
   display: grid;
+  flex: 0 0 22px;
   place-items: center;
   width: 22px;
   height: 22px;
@@ -1434,6 +1440,7 @@
 }
 
 .company-bootstrap-panel {
+  min-width: 0;
   min-height: 360px;
   padding: clamp(20px, 4vw, 36px);
 }
@@ -1484,6 +1491,7 @@
 }
 
 .company-bootstrap-connection,
+.company-bootstrap-custom-provider,
 .company-bootstrap-readonly,
 .company-bootstrap-repository-result,
 .company-bootstrap-review,
@@ -1493,6 +1501,34 @@
   flex-direction: column;
   gap: 10px;
   margin-top: 24px;
+}
+
+.company-bootstrap-custom-provider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-base);
+}
+
+.company-bootstrap-custom-provider > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.company-bootstrap-custom-provider span {
+  color: var(--text-weak);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.company-bootstrap-custom-provider button {
+  flex: none;
+  min-height: 38px;
+  padding: 0 11px;
 }
 
 .company-bootstrap-readonly,
@@ -1737,27 +1773,8 @@
     flex-direction: column;
   }
 
-  .company-bootstrap-form {
-    grid-template-columns: 1fr;
-    margin-top: 28px;
-  }
-
-  .company-bootstrap-steps {
-    flex-direction: row;
-    overflow-x: auto;
-  }
-
-  .company-bootstrap-steps button {
-    width: auto;
-    flex: none;
-  }
-
-  .company-bootstrap-steps button > span {
-    display: none;
-  }
-
   .company-bootstrap-actions {
-    grid-column: auto;
+    grid-column: 2;
   }
 
   .company-bootstrap-field-grid,
@@ -1771,6 +1788,7 @@
   }
 
   .company-bootstrap-inline-form,
+  .company-bootstrap-custom-provider,
   .company-ready-credential-list > div {
     align-items: stretch;
     grid-template-columns: 1fr;

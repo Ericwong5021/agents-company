@@ -31,7 +31,7 @@ import {
 
 const COMPANY_ID = CompanyID.parse("cmp_local")
 const REPOSITORY_BINDING_ID = "rbd_primary"
-const unsupportedProviders = new Set(["opencode", "opencode-go"])
+const unsupportedProviders = new Set(["opencode"])
 
 export const BOARD = [
   { id: "board-ceo", role: "ceo", name: "CEO", reports_to: null, responsibilities: ["公司目标与最终取舍"] },

@@ -162,6 +162,9 @@ export const dict = {
   "provider.custom.description.link": "provider config docs",
   "provider.custom.description.suffix": ".",
   "provider.custom.field.providerID.label": "Provider ID",
+  "provider.custom.field.format.label": "API compatibility",
+  "provider.custom.field.format.openai": "OpenAI-compatible",
+  "provider.custom.field.format.anthropic": "Anthropic-compatible",
   "provider.custom.field.providerID.placeholder": "myprovider",
   "provider.custom.field.providerID.description": "Lowercase letters, numbers, hyphens, or underscores",
   "provider.custom.field.name.label": "Display name",
@@ -178,6 +181,10 @@ export const dict = {
   "provider.custom.models.name.placeholder": "Display Name",
   "provider.custom.models.remove": "Remove model",
   "provider.custom.models.add": "Add model",
+  "provider.custom.models.fetch": "Fetch model list",
+  "provider.custom.models.fetching": "Fetching…",
+  "provider.custom.models.empty": "This provider returned no available models",
+  "provider.custom.models.fetchFailed": "Unable to fetch model list",
   "provider.custom.headers.label": "Headers (optional)",
   "provider.custom.headers.key.label": "Header",
   "provider.custom.headers.key.placeholder": "Header-Name",
@@ -731,7 +738,8 @@ export const dict = {
   "settings.general.row.appearance.title": "Appearance",
   "settings.general.row.appearance.description": "Customise how Agent Company looks on your device",
   "settings.general.row.colorScheme.title": "Color scheme",
-  "settings.general.row.colorScheme.description": "Choose whether Agent Company follows the system, light, or dark theme",
+  "settings.general.row.colorScheme.description":
+    "Choose whether Agent Company follows the system, light, or dark theme",
   "settings.general.row.theme.title": "Theme",
   "settings.general.row.theme.description": "Customise how Agent Company is themed.",
   "settings.general.row.font.title": "Code Font",
@@ -959,7 +967,8 @@ export const dict = {
   "company.pairing.invalid": "The pairing code is invalid or has expired.",
 
   "company.bootstrap.title": "Set up your local company",
-  "company.bootstrap.subtitle": "Choose the provider, repository, and initial operating policy for this single-user local workspace.",
+  "company.bootstrap.subtitle":
+    "Choose the provider, repository, and initial operating policy for this single-user local workspace.",
   "company.bootstrap.progress": "Step {{current}} of {{total}}",
   "company.bootstrap.steps.label": "Company setup steps",
   "company.bootstrap.step.provider": "Provider",
@@ -974,6 +983,10 @@ export const dict = {
   "company.bootstrap.provider.connectAction": "Connect",
   "company.bootstrap.provider.oauthCode": "Authorization code",
   "company.bootstrap.provider.confirmOAuth": "Confirm authorization",
+  "company.bootstrap.provider.custom.title": "Custom provider",
+  "company.bootstrap.provider.custom.description":
+    "Use an OpenAI- or Anthropic-compatible endpoint with your own API key.",
+  "company.bootstrap.provider.custom.action": "Add custom provider",
   "company.bootstrap.model.label": "Model",
   "company.bootstrap.model.placeholder": "Choose a model",
   "company.bootstrap.company.name": "Company name",
@@ -988,7 +1001,8 @@ export const dict = {
   "company.bootstrap.policy.autonomous.title": "Autonomous",
   "company.bootstrap.policy.autonomous.body": "Allow routine work to proceed with minimal intervention.",
   "company.bootstrap.policy.balanced.title": "Balanced",
-  "company.bootstrap.policy.balanced.body": "Require review for consequential changes while keeping routine work moving.",
+  "company.bootstrap.policy.balanced.body":
+    "Require review for consequential changes while keeping routine work moving.",
   "company.bootstrap.policy.strict.title": "Strict",
   "company.bootstrap.policy.strict.body": "Require explicit review before work can advance.",
   "company.bootstrap.review.company": "Company",
@@ -1001,8 +1015,10 @@ export const dict = {
   "company.bootstrap.create": "Create company",
   "company.bootstrap.error.load": "Unable to load providers. Check the local Control Plane and try again.",
   "company.bootstrap.error.provider": "Unable to connect this provider. Your draft is still available.",
-  "company.bootstrap.error.repository": "Unable to inspect this repository. Confirm it is a Git repository and try again.",
-  "company.bootstrap.error.initialized": "A company is already initialized here. Review the existing local company before making changes.",
+  "company.bootstrap.error.repository":
+    "Unable to inspect this repository. Confirm it is a Git repository and try again.",
+  "company.bootstrap.error.initialized":
+    "A company is already initialized here. Review the existing local company before making changes.",
   "company.bootstrap.error.submit": "Unable to create the company. Your draft has been kept for retry.",
 
   "company.ready.subtitle": "Your local Control Plane is configured for this repository.",
@@ -1022,12 +1038,14 @@ export const dict = {
   "company.ready.start.m2": "Available in M2",
   "company.ready.start.action": "Open board",
   "company.ready.capability.title": "Board messages are not enabled yet",
-  "company.ready.capability.body": "This M1 release establishes the local company contract. Messaging is planned for M2.",
+  "company.ready.capability.body":
+    "This M1 release establishes the local company contract. Messaging is planned for M2.",
   "company.ready.credentials.eyebrow": "Local access",
   "company.ready.credentials.title": "Browser credentials",
   "company.ready.credentials.pending": "Preparing…",
   "company.ready.credentials.pair": "Connect browser",
-  "company.ready.credentials.paired": "This browser is paired. Browser credential management requires a trusted local session.",
+  "company.ready.credentials.paired":
+    "This browser is paired. Browser credential management requires a trusted local session.",
   "company.ready.credentials.revoked": "Revoked",
   "company.ready.credentials.revoke": "Revoke",
   "company.ready.credentials.empty": "No paired browsers yet.",

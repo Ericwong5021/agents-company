@@ -23,8 +23,12 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
 
   await page.goto("/?pair=" + encodeURIComponent(pair.code))
   await page.getByLabel("浏览器名称").fill("Playwright Chromium")
+  const providers = page.waitForResponse((response) => new URL(response.url()).pathname === "/company/providers")
+  const providerAuth = page.waitForResponse((response) => new URL(response.url()).pathname === "/company/providers/auth")
   await page.getByRole("button", { name: "安全连接" }).click()
   await expect(page.getByRole("heading", { name: "初始化本地 Company" })).toBeVisible()
+  expect((await providers).status()).toBe(200)
+  expect((await providerAuth).status()).toBe(200)
 
   await page.getByLabel("模型提供商").selectOption("openai")
   await page.getByPlaceholder("API 密钥").fill("test-openai-key")

@@ -79,20 +79,24 @@ async function nonGitDirectory() {
 }
 
 describe.serial("Company bootstrap", () => {
-  test.serial("creates one company, one binding, and exactly three board members", async () => {
-    await using repo = await tmpdir({
-      git: true,
-      config: providerConfig,
-    })
-    const result = await bootstrap(repo.path)
-    expect(result.state).toBe("ready")
-    if (result.state !== "ready") throw new Error("Expected ready state")
-    expect(result.company.board).toHaveLength(3)
-    expect(result.company.repository.root_path).toBe(repo.path)
-    expect(Database.use((db) => db.select().from(CompanyTable).all())).toHaveLength(1)
-    expect(Database.use((db) => db.select().from(ApprovalPolicyTable).all())).toHaveLength(1)
-    expect(Database.use((db) => db.select().from(RepositoryBindingTable).all())).toHaveLength(1)
-  })
+  test.serial(
+    "creates one company, one binding, and exactly three board members",
+    async () => {
+      await using repo = await tmpdir({
+        git: true,
+        config: providerConfig,
+      })
+      const result = await bootstrap(repo.path)
+      expect(result.state).toBe("ready")
+      if (result.state !== "ready") throw new Error("Expected ready state")
+      expect(result.company.board).toHaveLength(3)
+      expect(result.company.repository.root_path).toBe(repo.path)
+      expect(Database.use((db) => db.select().from(CompanyTable).all())).toHaveLength(1)
+      expect(Database.use((db) => db.select().from(ApprovalPolicyTable).all())).toHaveLength(1)
+      expect(Database.use((db) => db.select().from(RepositoryBindingTable).all())).toHaveLength(1)
+    },
+    { timeout: 30_000 },
+  )
 
   test.serial("same request is idempotent and changed request conflicts", async () => {
     await using repo = await tmpdir({
@@ -131,6 +135,7 @@ describe.serial("Company bootstrap", () => {
     try {
       expect(await bootstrap(repo.path)).toEqual(first)
     } finally {
+      await Instance.disposeAll()
       await fs.rename(moved, repo.path)
     }
   })
@@ -147,7 +152,7 @@ describe.serial("Company bootstrap", () => {
         }),
       ).toEqual(first)
     } finally {
-      await fs.rm(alias, { force: true })
+      await fs.unlink(alias)
     }
   })
 

@@ -10,6 +10,9 @@ export type CompanyWorkspaceDataSource = {
   refresh(): Promise<void>
   listProviders(): Promise<Awaited<ReturnType<CompanyClient["company"]["providers"]>>["data"]>
   listProviderAuth(): Promise<Awaited<ReturnType<CompanyClient["company"]["providerAuth"]>>["data"]>
+  listCustomProviderModels(
+    input: Parameters<CompanyClient["company"]["providerModels"]>[0],
+  ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerModels"]>>["data"]>
   setProvider(
     input: Parameters<CompanyClient["company"]["providerSet"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerSet"]>>["data"]>
@@ -88,6 +91,7 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
     refresh: async () => undefined,
     listProviders: async () => undefined,
     listProviderAuth: async () => undefined,
+    listCustomProviderModels: async () => undefined,
     setProvider: async () => undefined,
     authorizeProvider: async () => undefined,
     completeProviderOAuth: async () => undefined,
@@ -128,6 +132,7 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     refresh,
     listProviders: () => request(client.company.providers()),
     listProviderAuth: () => request(client.company.providerAuth()),
+    listCustomProviderModels: (input) => request(client.company.providerModels(input)),
     setProvider: (input) => request(client.company.providerSet(input)),
     authorizeProvider: (input) => request(client.company.providerOauthAuthorize(input)),
     completeProviderOAuth: (input) => request(client.company.providerOauthCallback(input)),

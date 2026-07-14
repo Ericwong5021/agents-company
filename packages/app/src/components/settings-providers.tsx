@@ -76,7 +76,7 @@ export const SettingsProviders: Component = () => {
   const isConfigCustom = (providerID: string) => {
     const provider = globalSync.data.config.provider?.[providerID]
     if (!provider) return false
-    if (provider.npm !== "@ai-sdk/openai-compatible") return false
+    if (!["@ai-sdk/openai-compatible", "@ai-sdk/anthropic"].includes(provider.npm ?? "")) return false
     if (!provider.models || Object.keys(provider.models).length === 0) return false
     return true
   }

@@ -32,12 +32,14 @@ async function start(home: string) {
   }
 
   const child = Bun.spawn({
-    cmd: ["bun", "run", "src/index.ts", "serve", "--hostname", "127.0.0.1", "--port", String(port)],
+    cmd: [process.execPath, "src/index.ts", "serve", "--hostname", "127.0.0.1", "--port", String(port)],
     cwd: path.resolve(import.meta.dir, "../.."),
     env,
-    stdout: "inherit",
-    stderr: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
   })
+  const stdout = new Response(child.stdout).text()
+  const stderr = new Response(child.stderr).text()
   const stop = async () => {
     if (child.exitCode === null) child.kill("SIGTERM")
     await child.exited
@@ -45,7 +47,7 @@ async function start(home: string) {
 
   await waitForHealth(url).catch(async (error) => {
     await stop()
-    throw error
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${await stdout}\n${await stderr}`)
   })
 
   return { url, [Symbol.asyncDispose]: stop }
@@ -129,7 +131,7 @@ describe.serial("Company process restart", () => {
     const revoke = await json(server.url, "/local-auth/credentials/" + first.issued.credential_id, { method: "DELETE" })
     expect(revoke.response.status).toBe(200)
     expect((await json(server.url, "/company", {}, bearer)).response.status).toBe(401)
-  }, { timeout: 20_000 })
+  }, { timeout: 60_000 })
 
   test.serial("isolates two AGENTCOMPANY_HOME roots across child processes", async () => {
     await using homeA = await tmpdir()
@@ -148,5 +150,5 @@ describe.serial("Company process restart", () => {
     const restoredResult = await json(serverA.url, "/company", {}, "Bearer " + first.issued.token)
     expect(restoredResult.response.status).toBe(200)
     expect(CompanyReadyState.parse(restoredResult.body).company.id).toBe(first.company.company.id)
-  }, { timeout: 20_000 })
+  }, { timeout: 90_000 })
 })

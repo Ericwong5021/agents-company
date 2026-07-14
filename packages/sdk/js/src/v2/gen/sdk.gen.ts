@@ -50,6 +50,8 @@ import type {
   CompanyProjectStartResponses,
   CompanyProviderAuthErrors,
   CompanyProviderAuthResponses,
+  CompanyProviderModelsErrors,
+  CompanyProviderModelsResponses,
   CompanyProviderOauthAuthorizeErrors,
   CompanyProviderOauthAuthorizeResponses,
   CompanyProviderOauthCallbackErrors,
@@ -67,6 +69,7 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  CustomProviderModelsInput,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiInstructionsLoaded,
@@ -637,6 +640,32 @@ export class Company extends HeyApiClient {
     return (options?.client ?? this.client).get<CompanyProviderAuthResponses, CompanyProviderAuthErrors, ThrowOnError>({
       url: "/company/providers/auth",
       ...options,
+    })
+  }
+
+  /**
+   * Fetch models from a custom provider endpoint
+   */
+  public providerModels<ThrowOnError extends boolean = false>(
+    parameters?: {
+      customProviderModelsInput?: CustomProviderModelsInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "customProviderModelsInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyProviderModelsResponses,
+      CompanyProviderModelsErrors,
+      ThrowOnError
+    >({
+      url: "/company/providers/models",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -2255,6 +2284,7 @@ export class GroupSession extends HeyApiClient {
       workspace?: string
       title?: string
       agentIDs?: Array<string>
+      contextPolicy?: "work_scoped"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2267,6 +2297,7 @@ export class GroupSession extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "title" },
             { in: "body", key: "agentIDs" },
+            { in: "body", key: "contextPolicy" },
           ],
         },
       ],

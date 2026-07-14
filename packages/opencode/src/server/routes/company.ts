@@ -8,6 +8,9 @@ import {
   BootstrapInput,
   CompanyAlreadyInitialized,
   CompanyCorruptState,
+  CustomProviderModels,
+  CustomProviderModelsFailed,
+  CustomProviderModelsInput,
   CompanyModelNotAvailable,
   CompanyProviderList,
   CompanyProviderNotConnected,
@@ -31,7 +34,7 @@ import {
   UnknownErrorResponse,
 } from "../error"
 
-const unsupportedProviders = new Set(["opencode", "opencode-go"])
+const unsupportedProviders = new Set(["opencode"])
 const RepositoryInspectInput = z
   .object({ repository_path: z.string().min(1) })
   .strict()
@@ -44,6 +47,36 @@ function isUnsupported(providerID: string) {
 function ensureSupported(providerID: ProviderID) {
   if (!isUnsupported(providerID)) return
   throw new CompanyProviderUnsupported({ provider_id: providerID })
+}
+
+async function customProviderModels(input: CustomProviderModelsInput) {
+  const base = new URL(input.base_url)
+  const url = new URL("models", base.pathname.endsWith("/") ? base : new URL(`${base.pathname}/`, base))
+  const headers = new Headers(input.headers)
+  if (input.api_key && !headers.has("authorization")) headers.set("authorization", `Bearer ${input.api_key}`)
+  if (input.format === "anthropic" && !headers.has("anthropic-version")) headers.set("anthropic-version", "2023-06-01")
+
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) }).catch(() => undefined)
+  if (!response) throw new CustomProviderModelsFailed({ message: "无法连接到提供商端点" })
+  if (!response.ok) throw new CustomProviderModelsFailed({ message: `提供商返回 HTTP ${response.status}` })
+
+  const body = await response.json().catch(() => undefined)
+  const result = z
+    .object({
+      data: z.array(
+        z
+          .object({ id: z.string().min(1), name: z.string().optional(), display_name: z.string().optional() })
+          .passthrough(),
+      ),
+    })
+    .passthrough()
+    .safeParse(body)
+  if (!result.success) throw new CustomProviderModelsFailed({ message: "提供商返回的模型列表格式无效" })
+  return CustomProviderModels.parse(
+    result.data.data
+      .map((model) => ({ model_id: model.id, name: model.display_name ?? model.name ?? model.id }))
+      .toSorted((left, right) => left.name.localeCompare(right.name)),
+  )
 }
 
 function defaults(providers: Record<string, Provider.Info>) {
@@ -128,9 +161,13 @@ async function providerMethods() {
   return AppRuntime.runPromise(
     CompanySetupInstance.provide(
       ProviderAuth.Service.use((service) =>
-        service.methods().pipe(
-          Effect.map((methods) => Object.fromEntries(Object.entries(methods).filter(([providerID]) => !isUnsupported(providerID)))),
-        ),
+        service
+          .methods()
+          .pipe(
+            Effect.map((methods) =>
+              Object.fromEntries(Object.entries(methods).filter(([providerID]) => !isUnsupported(providerID))),
+            ),
+          ),
       ),
     ),
   )
@@ -143,9 +180,12 @@ const badRequest = namedErrorResponse("Invalid company bootstrap request", [
   CompanyProviderNotConnected.Schema,
   CompanyModelNotAvailable.Schema,
   ProviderAuth.ValidationFailed.Schema,
+  CustomProviderModelsFailed.Schema,
 ] as const)
 
-const conflict = namedErrorResponse("Company bootstrap already initialized", [CompanyAlreadyInitialized.Schema] as const)
+const conflict = namedErrorResponse("Company bootstrap already initialized", [
+  CompanyAlreadyInitialized.Schema,
+] as const)
 const internalError = namedErrorResponse("Unable to complete company operation", [
   CompanyCorruptState.Schema,
   UnknownErrorResponse,
@@ -200,6 +240,23 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       async (c) => c.json(await providerMethods()),
+    )
+    .post(
+      "/providers/models",
+      describeRoute({
+        operationId: "company.providerModels",
+        summary: "Fetch models from a custom provider endpoint",
+        responses: {
+          200: {
+            description: "Discovered custom provider models",
+            content: { "application/json": { schema: resolver(CustomProviderModels) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+        },
+      }),
+      validator("json", CustomProviderModelsInput, productValidationHook),
+      async (c) => c.json(await customProviderModels(c.req.valid("json"))),
     )
     .put(
       "/providers/:providerID/credentials",
@@ -277,10 +334,14 @@ export const CompanyRoutes = lazy(() =>
               const provider = yield* ProviderAuth.Service
               const method = (yield* provider.methods())[providerID]?.[input.method]
               if (!method || method.type !== "oauth")
-                return yield* Effect.fail(new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }))
+                return yield* Effect.fail(
+                  new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }),
+                )
               const authorization = yield* provider.authorize({ providerID, ...input })
               if (!authorization)
-                return yield* Effect.fail(new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }))
+                return yield* Effect.fail(
+                  new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }),
+                )
               return authorization
             }),
           ),
@@ -315,7 +376,9 @@ export const CompanyRoutes = lazy(() =>
               const provider = yield* ProviderAuth.Service
               const method = (yield* provider.methods())[providerID]?.[input.method]
               if (!method || method.type !== "oauth")
-                return yield* Effect.fail(new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }))
+                return yield* Effect.fail(
+                  new ProviderAuth.ValidationFailed({ field: "method", message: "OAuth method is not available" }),
+                )
               yield* provider.callback({ providerID, ...input })
             }),
           ),
@@ -364,6 +427,7 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       validator("json", BootstrapInput, productValidationHook),
-      async (c) => c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.bootstrap(c.req.valid("json"))))),
+      async (c) =>
+        c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.bootstrap(c.req.valid("json"))))),
     ),
 )

@@ -61,7 +61,50 @@ describe.serial("/company", () => {
     const providers = CompanyProviderList.parse(await response.json())
     expect(JSON.stringify(providers)).not.toContain("super-secret-provider-key")
     expect(providers.providers.some((provider) => provider.provider_id === "openai" && provider.connected)).toBe(true)
-    expect(providers.providers.some((provider) => ["opencode", "opencode-go"].includes(provider.provider_id))).toBe(false)
+    expect(providers.providers.some((provider) => provider.provider_id === "opencode")).toBe(false)
+    expect(providers.providers.some((provider) => provider.provider_id === "opencode-go")).toBe(true)
+  })
+
+  test.serial("discovers models from OpenAI- and Anthropic-compatible custom endpoints", async () => {
+    const requests: Record<string, string>[] = []
+    const endpoint = Bun.serve({
+      port: 0,
+      fetch(request) {
+        requests.push(Object.fromEntries(request.headers))
+        return Response.json({
+          data: [
+            { id: "zeta", name: "Zeta" },
+            { id: "claude-custom", display_name: "Claude Custom" },
+          ],
+        })
+      },
+    })
+    try {
+      const app = Server.Default().app
+      const response = await app.request("/company/providers/models", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          format: "anthropic",
+          base_url: endpoint.url,
+          api_key: "custom-provider-secret",
+          headers: { "x-client": "company-test" },
+        }),
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual([
+        { model_id: "claude-custom", name: "Claude Custom" },
+        { model_id: "zeta", name: "Zeta" },
+      ])
+      expect(requests).toHaveLength(1)
+      expect(requests[0]).toMatchObject({
+        authorization: "Bearer custom-provider-secret",
+        "anthropic-version": "2023-06-01",
+        "x-client": "company-test",
+      })
+    } finally {
+      endpoint.stop(true)
+    }
   })
 
   test.serial("declares non-empty schemas for every M1 company operation", async () => {
@@ -70,6 +113,7 @@ describe.serial("/company", () => {
       { method: "get", path: "/company", statuses: ["200", "500"] },
       { method: "get", path: "/company/providers", statuses: ["200", "500"] },
       { method: "get", path: "/company/providers/auth", statuses: ["200", "500"] },
+      { method: "post", path: "/company/providers/models", statuses: ["200", "400"] },
       { method: "put", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
       { method: "delete", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
       { method: "post", path: "/company/providers/{providerID}/oauth/authorize", statuses: ["200", "400", "500"] },
@@ -83,7 +127,8 @@ describe.serial("/company", () => {
       item.statuses.map((status) => {
         const response = operation?.responses?.[status]
         expect(response).toBeDefined()
-        if (!response || !("content" in response)) throw new Error(`Missing JSON response schema for ${item.method} ${item.path}`)
+        if (!response || !("content" in response))
+          throw new Error(`Missing JSON response schema for ${item.method} ${item.path}`)
         expect(response.content?.["application/json"]?.schema).toBeDefined()
       })
     }

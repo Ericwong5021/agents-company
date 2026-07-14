@@ -180,6 +180,7 @@ export function createFixtureCompanyWorkspaceDataSource(): CompanyWorkspaceDataS
     refresh: async () => undefined,
     listProviders: async () => undefined,
     listProviderAuth: async () => undefined,
+    listCustomProviderModels: async () => undefined,
     setProvider: async () => undefined,
     authorizeProvider: async () => undefined,
     completeProviderOAuth: async () => undefined,

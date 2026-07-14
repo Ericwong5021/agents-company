@@ -1,5 +1,8 @@
 const PROVIDER_ID = /^[a-z0-9][a-z0-9-_]*$/
 const OPENAI_COMPATIBLE = "@ai-sdk/openai-compatible"
+const ANTHROPIC_COMPATIBLE = "@ai-sdk/anthropic"
+
+export type CustomProviderFormat = "openai" | "anthropic"
 
 type Translator = (key: string, vars?: Record<string, string | number | boolean>) => string
 
@@ -28,6 +31,7 @@ export type HeaderRow = {
 }
 
 export type FormState = {
+  format: CustomProviderFormat
   providerID: string
   name: string
   baseURL: string
@@ -137,7 +141,7 @@ export function validateCustomProvider(input: ValidateArgs) {
       name,
       key,
       config: {
-        npm: OPENAI_COMPATIBLE,
+        npm: input.form.format === "anthropic" ? ANTHROPIC_COMPATIBLE : OPENAI_COMPATIBLE,
         name,
         ...(env ? { env: [env] } : {}),
         options: {
