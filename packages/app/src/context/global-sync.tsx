@@ -57,7 +57,7 @@ function createGlobalSync() {
   const sessionMeta = new Map<string, { limit: number }>()
 
   const [projectCache, setProjectCache, projectInit] = persisted(
-    Persist.global("globalSync.project", ["globalSync.project.v1"]),
+    Persist.global("globalSync.project"),
     createStore({ value: [] as Project[] }),
   )
 

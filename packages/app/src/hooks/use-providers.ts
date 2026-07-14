@@ -2,17 +2,10 @@ import { useGlobalSync } from "@/context/global-sync"
 import { decode64 } from "@/utils/base64"
 import { useParams } from "@solidjs/router"
 import { createMemo } from "solid-js"
+import { isAgentCompanyProvider, popularProviders } from "./provider-filter"
 
-export const popularProviders = [
-  "opencode",
-  "opencode-go",
-  "anthropic",
-  "github-copilot",
-  "openai",
-  "google",
-  "openrouter",
-  "vercel",
-]
+export { isAgentCompanyProvider, popularProviders } from "./provider-filter"
+
 const popularProviderSet = new Set(popularProviders)
 
 export function useProviders() {
@@ -26,19 +19,18 @@ export function useProviders() {
     }
     return globalSync.data.provider
   }
+  const all = () => providers().all.filter((provider) => isAgentCompanyProvider(provider.id))
   return {
-    all: () => providers().all,
+    all,
     default: () => providers().default,
-    popular: () => providers().all.filter((p) => popularProviderSet.has(p.id)),
+    popular: () => all().filter((provider) => popularProviderSet.has(provider.id)),
     connected: () => {
       const connected = new Set(providers().connected)
-      return providers().all.filter((p) => connected.has(p.id))
+      return all().filter((provider) => connected.has(provider.id))
     },
     paid: () => {
       const connected = new Set(providers().connected)
-      return providers().all.filter(
-        (p) => connected.has(p.id) && (p.id !== "opencode" || Object.values(p.models).some((m) => m.cost?.input)),
-      )
+      return all().filter((provider) => connected.has(provider.id))
     },
   }
 }

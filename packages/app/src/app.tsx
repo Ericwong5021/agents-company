@@ -13,14 +13,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
 import { Effect } from "effect"
 import {
   type Component,
-  createMemo,
   createResource,
   createSignal,
   ErrorBoundary,
-  For,
   type JSX,
   lazy,
-  onCleanup,
   type ParentProps,
   Show,
   Suspense,
@@ -28,6 +25,8 @@ import {
 import { Dynamic } from "solid-js/web"
 import { CommandProvider } from "@/context/command"
 import { AppChrome } from "@/components/app-chrome"
+import { ConnectionAuthGate } from "@/components/connection-auth-gate"
+import { ConnectionError } from "@/components/connection-error"
 import { CommentsProvider } from "@/context/comments"
 import { FileProvider } from "@/context/file"
 import { GlobalSDKProvider } from "@/context/global-sdk"
@@ -39,7 +38,7 @@ import { ModelsProvider } from "@/context/models"
 import { NotificationProvider } from "@/context/notification"
 import { PermissionProvider } from "@/context/permission"
 import { PromptProvider } from "@/context/prompt"
-import { ServerConnection, ServerProvider, serverName, useServer } from "@/context/server"
+import { ServerConnection, ServerProvider, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
 import { TerminalProvider } from "@/context/terminal"
 import DirectoryLayout from "@/pages/directory-layout"
@@ -78,13 +77,10 @@ function UiI18nBridge(props: ParentProps) {
 
 declare global {
   interface Window {
-    __OPENCODE__?: {
+    __AGENTCOMPANY__?: {
       updaterEnabled?: boolean
       deepLinks?: string[]
       wsl?: boolean
-    }
-    api?: {
-      setTitlebar?: (theme: { mode: "light" | "dark" }) => Promise<void>
     }
   }
 }
@@ -143,7 +139,7 @@ export function AppBaseProviders(props: ParentProps<{ locale?: Locale }>) {
       <Font />
       <ThemeProvider
         onThemeApplied={(_, mode) => {
-          void window.api?.setTitlebar?.({ mode })
+          void (window as Window & { api?: { setTitlebar?: (theme: { mode: "light" | "dark" }) => Promise<void> } }).api?.setTitlebar?.({ mode })
         }}
       >
         <LanguageProvider locale={props.locale}>
@@ -228,53 +224,6 @@ function ConnectionGate(props: ParentProps<{ disableHealthCheck?: boolean }>) {
   )
 }
 
-function ConnectionError(props: { onRetry?: () => void; onServerSelected?: (key: ServerConnection.Key) => void }) {
-  const language = useLanguage()
-  const server = useServer()
-  const others = () => server.list.filter((s) => ServerConnection.key(s) !== server.key)
-  const name = createMemo(() => server.name || server.key)
-  const serverToken = "\u0000server\u0000"
-  const unreachable = createMemo(() => language.t("app.server.unreachable", { server: serverToken }).split(serverToken))
-
-  const timer = setInterval(() => props.onRetry?.(), 1000)
-  onCleanup(() => clearInterval(timer))
-
-  return (
-    <div class="h-dvh w-screen flex flex-col items-center justify-center bg-background-base gap-6 p-6">
-      <div class="flex flex-col items-center max-w-md text-center">
-        <Splash class="w-12 h-15 mb-4" />
-        <p class="text-14-regular text-text-base">
-          {unreachable()[0]}
-          <span class="text-text-strong font-medium">{name()}</span>
-          {unreachable()[1]}
-        </p>
-        <p class="mt-1 text-12-regular text-text-weak">{language.t("app.server.retrying")}</p>
-      </div>
-      <Show when={others().length > 0}>
-        <div class="flex flex-col gap-2 w-full max-w-sm">
-          <span class="text-12-regular text-text-base text-center">{language.t("app.server.otherServers")}</span>
-          <div class="flex flex-col gap-1 bg-surface-base rounded-lg p-2">
-            <For each={others()}>
-              {(conn) => {
-                const key = ServerConnection.key(conn)
-                return (
-                  <button
-                    type="button"
-                    class="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-surface-raised-base-hover transition-colors text-left"
-                    onClick={() => props.onServerSelected?.(key)}
-                  >
-                    <span class="text-14-regular text-text-strong truncate">{serverName(conn)}</span>
-                  </button>
-                )
-              }}
-            </For>
-          </div>
-        </div>
-      </Show>
-    </div>
-  )
-}
-
 function ServerKey(props: ParentProps) {
   const server = useServer()
   return (
@@ -298,24 +247,26 @@ export function AppInterface(props: {
       servers={props.servers}
     >
       <ConnectionGate disableHealthCheck={props.disableHealthCheck}>
-        <ServerKey>
-          <QueryProvider>
-            <GlobalSDKProvider>
-              <GlobalSyncProvider>
-                <Dynamic
-                  component={props.router ?? Router}
-                  root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
-                >
-                  <Route path="/" component={HomeRoute} />
-                  <Route path="/:dir" component={DirectoryRoute}>
-                    <Route path="/" component={SessionIndexRoute} />
-                    <Route path="/session/:id?" component={SessionRoute} />
-                  </Route>
-                </Dynamic>
-              </GlobalSyncProvider>
-            </GlobalSDKProvider>
-          </QueryProvider>
-        </ServerKey>
+        <ConnectionAuthGate>
+          <ServerKey>
+            <QueryProvider>
+              <GlobalSDKProvider>
+                <GlobalSyncProvider>
+                  <Dynamic
+                    component={props.router ?? Router}
+                    root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
+                  >
+                    <Route path="/" component={HomeRoute} />
+                    <Route path="/:dir" component={DirectoryRoute}>
+                      <Route path="/" component={SessionIndexRoute} />
+                      <Route path="/session/:id?" component={SessionRoute} />
+                    </Route>
+                  </Dynamic>
+                </GlobalSyncProvider>
+              </GlobalSDKProvider>
+            </QueryProvider>
+          </ServerKey>
+        </ConnectionAuthGate>
       </ConnectionGate>
     </ServerProvider>
   )

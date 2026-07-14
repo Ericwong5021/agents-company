@@ -323,7 +323,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
 
   const [history, setHistory] = persisted(
-    Persist.global("prompt-history", ["prompt-history.v1"]),
+    Persist.global("prompt-history"),
     createStore<{
       entries: PromptHistoryStoredEntry[]
     }>({
@@ -331,7 +331,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     }),
   )
   const [shellHistory, setShellHistory] = persisted(
-    Persist.global("prompt-history-shell", ["prompt-history-shell.v1"]),
+    Persist.global("prompt-history-shell"),
     createStore<{
       entries: PromptHistoryStoredEntry[]
     }>({

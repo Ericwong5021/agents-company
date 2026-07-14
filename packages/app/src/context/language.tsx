@@ -30,7 +30,7 @@ type Dictionary = i18n.Flatten<RawDictionary>
 type Source = { dict: Record<string, string> }
 
 function cookie(locale: Locale) {
-  return `oc_locale=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`
+  return `agent_company_locale=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`
 }
 
 const LOCALES: readonly Locale[] = [
@@ -177,7 +177,7 @@ export function normalizeLocale(value: string): Locale {
 function readStoredLocale() {
   if (typeof localStorage !== "object") return
   try {
-    const raw = localStorage.getItem("opencode.global.dat:language")
+    const raw = localStorage.getItem("agent-company.global.dat:language")
     if (!raw) return
     const next = JSON.parse(raw) as { locale?: string }
     if (typeof next?.locale !== "string") return
@@ -195,7 +195,7 @@ export const { use: useLanguage, provider: LanguageProvider } = createSimpleCont
   init: (props: { locale?: Locale }) => {
     const initial = props.locale ?? readStoredLocale() ?? detectLocale()
     const [store, setStore, _, ready] = persisted(
-      Persist.global("language", ["language.v1"]),
+      Persist.global("language"),
       createStore({
         locale: initial,
       }),

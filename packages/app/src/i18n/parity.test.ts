@@ -18,14 +18,31 @@ import { dict as zht } from "./zht"
 import { dict as tr } from "./tr"
 
 const locales = [ar, br, bs, da, de, es, fr, ja, ko, no, pl, ru, th, tr, zh, zht]
-const keys = ["command.session.previous.unseen", "command.session.next.unseen"] as const
+const unseenKeys = ["command.session.previous.unseen", "command.session.next.unseen"] as const
+const pairingKeys = [
+  "company.pairing.title",
+  "company.pairing.description",
+  "company.pairing.code.label",
+  "company.pairing.label.label",
+  "company.pairing.submit",
+  "company.pairing.pending",
+  "company.pairing.invalid",
+] as const
 
 describe("i18n parity", () => {
   test("non-English locales translate targeted unseen session keys", () => {
     for (const locale of locales) {
-      for (const key of keys) {
+      for (const key of unseenKeys) {
         expect(locale[key]).toBeDefined()
         expect(locale[key]).not.toBe(en[key])
+      }
+    }
+  })
+
+  test("all app locales provide browser pairing copy", () => {
+    for (const locale of [en, ...locales]) {
+      for (const key of pairingKeys) {
+        expect(locale[key]).toBeDefined()
       }
     }
   })

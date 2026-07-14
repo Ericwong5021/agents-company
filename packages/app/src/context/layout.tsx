@@ -226,7 +226,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       }
     }
 
-    const target = Persist.global("layout", ["layout.v6"])
+    const target = Persist.global("layout")
     const [store, setStore, _, ready] = persisted(
       { ...target, migrate },
       createStore({
@@ -271,11 +271,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
       used: new Map<string, number>(),
     }
 
-    const SESSION_STATE_KEYS = [
-      { key: "prompt", legacy: "prompt", version: "v2" },
-      { key: "terminal", legacy: "terminal", version: "v1" },
-      { key: "file-view", legacy: "file", version: "v1" },
-    ] as const
+    const SESSION_STATE_KEYS = ["prompt", "terminal", "file-view"] as const
 
     const dropSessionState = (keys: string[]) => {
       for (const key of keys) {
@@ -285,11 +281,8 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         if (!dir) continue
 
         for (const entry of SESSION_STATE_KEYS) {
-          const target = session ? Persist.session(dir, session, entry.key) : Persist.workspace(dir, entry.key)
+          const target = session ? Persist.session(dir, session, entry) : Persist.workspace(dir, entry)
           void removePersisted(target, platform)
-
-          const legacyKey = `${dir}/${entry.legacy}${session ? "/" + session : ""}.${entry.version}`
-          void removePersisted({ key: legacyKey }, platform)
         }
       }
     }

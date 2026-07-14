@@ -3,6 +3,7 @@ import { type Accessor, batch, createEffect, createMemo, onCleanup } from "solid
 import { createStore } from "solid-js/store"
 import { Persist, persisted } from "@/utils/persist"
 import { useCheckServerHealth } from "@/utils/server-health"
+import { readLocalAuthToken } from "@/utils/local-auth-storage"
 
 type StoredProject = { worktree: string; expanded: boolean }
 type StoredServer = string | ServerConnection.HttpBase | ServerConnection.Http
@@ -40,6 +41,7 @@ export namespace ServerConnection {
     url: string
     username?: string
     password?: string
+    token?: string
   }
 
   // Regular web connections
@@ -102,7 +104,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
     const checkServerHealth = useCheckServerHealth()
 
     const [store, setStore, _, ready] = persisted(
-      Persist.global("server", ["server.v3"]),
+      Persist.global("server"),
       createStore({
         list: [] as StoredServer[],
         projects: {} as Record<string, StoredProject[]>,
@@ -128,7 +130,10 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       const deduped = new Map(
         servers.map((value) => {
           const conn: ServerConnection.Any = "type" in value ? value : { type: "http", http: value }
-          return [ServerConnection.key(conn), conn]
+          if (conn.type !== "http" || conn.http.token) return [ServerConnection.key(conn), conn]
+          const token = readLocalAuthToken(conn.http.url)
+          if (!token) return [ServerConnection.key(conn), conn]
+          return [ServerConnection.key(conn), { ...conn, http: { ...conn.http, token } }]
         }),
       )
 
@@ -198,6 +203,20 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       })
     }
 
+    function clearToken(url_: string) {
+      const normalized = normalizeServerUrl(url_)
+      if (!normalized) return
+      const index = store.list.findIndex((value) => url(value) === normalized)
+      if (index === -1) return
+      const value = store.list[index]
+      if (!value || typeof value === "string") return
+      if ("type" in value) {
+        setStore("list", index, { ...value, http: { ...value.http, token: undefined } })
+        return
+      }
+      setStore("list", index, { ...value, token: undefined })
+    }
+
     const isReady = createMemo(() => ready() && !!state.active)
 
     const check = (conn: ServerConnection.Any) => checkServerHealth(conn.http).then((x) => x.healthy)
@@ -243,6 +262,7 @@ export const { use: useServer, provider: ServerProvider } = createSimpleContext(
       setActive,
       add,
       remove,
+      clearToken,
       projects: {
         list: projectsList,
         open(directory: string) {

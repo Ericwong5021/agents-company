@@ -34,10 +34,8 @@ function equalSelectedLines(a: SelectedLineRange | null | undefined, b: Selected
 }
 
 function createViewSession(dir: string, id: string | undefined) {
-  const legacyViewKey = `${dir}/file${id ? "/" + id : ""}.v1`
-
   const [view, setView, _, ready] = persisted(
-    Persist.scoped(dir, id, "file-view", [legacyViewKey]),
+    Persist.scoped(dir, id, "file-view"),
     createStore<{
       file: Record<string, FileViewState>
     }>({

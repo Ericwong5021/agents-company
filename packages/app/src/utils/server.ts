@@ -1,24 +1,25 @@
 import { createOpencodeClient } from "@agents-company/sdk/v2/client"
 import type { ServerConnection } from "@/context/server"
 
+export function authorizationHeaders(server: ServerConnection.HttpBase) {
+  if (server.token) return { Authorization: `Bearer ${server.token}` }
+  if (!server.password) return {}
+  return {
+    Authorization: `Basic ${btoa(`${server.username ?? "agentcompany"}:${server.password}`)}`,
+  }
+}
+
 export function createSdkForServer({
   server,
   ...config
 }: Omit<NonNullable<Parameters<typeof createOpencodeClient>[0]>, "baseUrl"> & {
   server: ServerConnection.HttpBase
 }) {
-  const auth = (() => {
-    if (!server.password) return
-    return {
-      Authorization: `Basic ${btoa(`${server.username ?? "opencode"}:${server.password}`)}`,
-    }
-  })()
-
   return createOpencodeClient({
     ...config,
     headers: {
       ...(config.headers instanceof Headers ? Object.fromEntries(config.headers.entries()) : config.headers),
-      ...auth,
+      ...authorizationHeaders(server),
     },
     baseUrl: server.url,
   })

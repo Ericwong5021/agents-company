@@ -1147,25 +1147,6 @@
   margin: 0;
 }
 
-.company-data-source-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 120px;
-  color: var(--company-text-faint);
-  font-size: 12px;
-}
-
-.company-workspace[data-state="disconnected"] .company-channel-placeholder p {
-  max-width: 440px;
-}
-
-.company-workspace[data-state="disconnected"] button,
-.company-workspace[data-state="disconnected"] input {
-  cursor: default;
-}
-
 @media (max-width: 1180px) {
   .company-workspace {
     grid-template-columns: 64px 250px minmax(500px, 1fr);
@@ -1274,5 +1255,525 @@
   .company-workspace *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.company-state-panel,
+.company-bootstrap,
+.company-ready {
+  min-height: 100%;
+  padding: clamp(24px, 5vw, 72px);
+  color: var(--text-base);
+  background: var(--background-base);
+}
+
+.company-state-panel {
+  display: flex;
+  max-width: 720px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  margin: auto;
+}
+
+.company-state-panel h1,
+.company-bootstrap h1,
+.company-ready h1,
+.company-ready h2,
+.company-ready h3 {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.company-state-panel p,
+.company-bootstrap p,
+.company-ready p {
+  margin: 0;
+  color: var(--text-weak);
+}
+
+.company-state-panel button,
+.company-bootstrap button,
+.company-ready button {
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  color: var(--text-base);
+  background: var(--surface-base);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.company-state-panel button,
+.company-bootstrap-actions button,
+.company-ready-credentials > .company-ready-section-heading > button,
+.company-ready-start button {
+  min-height: 36px;
+  padding: 0 13px;
+}
+
+.company-state-panel button:not(:disabled):active,
+.company-bootstrap button:not(:disabled):active,
+.company-ready button:not(:disabled):active {
+  transform: scale(0.95);
+}
+
+.company-state-panel button:disabled,
+.company-bootstrap button:disabled,
+.company-ready button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.company-bootstrap,
+.company-ready {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.company-bootstrap-header,
+.company-ready-header,
+.company-ready-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.company-bootstrap-eyebrow,
+.company-ready-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-weak);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.company-bootstrap-header h1,
+.company-ready-header h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -0.04em;
+}
+
+.company-bootstrap-header p,
+.company-ready-header p {
+  max-width: 620px;
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.company-bootstrap-progress,
+.company-ready-status {
+  flex: none;
+  padding: 6px 9px;
+  border: 1px solid var(--border-base);
+  border-radius: 999px;
+  color: var(--text-weak);
+  font-size: 12px;
+}
+
+.company-bootstrap-form {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 42px;
+}
+
+.company-bootstrap-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.company-bootstrap-steps button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border-color: transparent;
+  text-align: left;
+  background: transparent;
+}
+
+.company-bootstrap-steps button:hover,
+.company-bootstrap-steps button.active {
+  border-color: var(--border-base);
+  background: var(--surface-base);
+}
+
+.company-bootstrap-steps button > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--text-weak);
+  background: var(--surface-raised-base);
+  font-size: 11px;
+}
+
+.company-bootstrap-steps button.active > span,
+.company-bootstrap-steps button.complete > span {
+  color: var(--background-base);
+  background: var(--text-strong);
+}
+
+.company-bootstrap-panel,
+.company-ready-facts,
+.company-ready-board,
+.company-ready-start,
+.company-ready-capability,
+.company-ready-credentials {
+  border: 1px solid var(--border-base);
+  border-radius: 12px;
+  background: var(--surface-base);
+}
+
+.company-bootstrap-panel {
+  min-height: 360px;
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.company-bootstrap-field-grid,
+.company-ready-facts,
+.company-ready-board-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.company-bootstrap-field,
+.company-bootstrap-field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-weak);
+  font-size: 13px;
+}
+
+.company-bootstrap input,
+.company-bootstrap select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  color: var(--text-base);
+  background: var(--background-base);
+}
+
+.company-bootstrap-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.company-bootstrap-inline-form input {
+  min-width: 0;
+}
+
+.company-bootstrap-inline-form button,
+.company-bootstrap-connection > button {
+  flex: none;
+  min-height: 38px;
+  padding: 0 11px;
+}
+
+.company-bootstrap-connection,
+.company-bootstrap-readonly,
+.company-bootstrap-repository-result,
+.company-bootstrap-review,
+.company-ready-pairing,
+.company-ready-credential-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.company-bootstrap-readonly,
+.company-bootstrap-repository-result,
+.company-ready-pairing {
+  padding: 14px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  background: var(--surface-raised-base);
+}
+
+.company-bootstrap-readonly span,
+.company-bootstrap-repository-result span,
+.company-ready-facts span,
+.company-ready-member span,
+.company-ready-credential-list small {
+  color: var(--text-weak);
+  font-size: 12px;
+}
+
+.company-bootstrap-board-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.company-bootstrap-board-preview > div,
+.company-ready-member {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+}
+
+.company-bootstrap-board-preview span {
+  color: var(--text-weak);
+  font-size: 12px;
+}
+
+.company-bootstrap-policies {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.company-bootstrap-policies legend {
+  margin-bottom: 12px;
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.company-bootstrap-policies label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.company-bootstrap-policies label.selected {
+  border-color: var(--text-strong);
+}
+
+.company-bootstrap-policies strong {
+  color: var(--text-strong);
+}
+
+.company-bootstrap-policies span {
+  grid-column: 2;
+  margin-top: 4px;
+  color: var(--text-weak);
+  font-size: 13px;
+}
+
+.company-bootstrap-review {
+  margin: 0;
+}
+
+.company-bootstrap-review > div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-base);
+}
+
+.company-bootstrap-review dt {
+  color: var(--text-weak);
+}
+
+.company-bootstrap-review dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.company-bootstrap-error,
+.company-ready-error {
+  color: var(--text-danger-base) !important;
+}
+
+.company-bootstrap-actions {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-bootstrap-actions > button:last-child,
+.company-bootstrap-actions > button[type="submit"],
+.company-ready-credentials > .company-ready-section-heading > button {
+  color: var(--background-base);
+  border-color: var(--text-strong);
+  background: var(--text-strong);
+}
+
+.company-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.company-ready-facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 16px;
+}
+
+.company-ready-facts article {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.company-ready-facts strong,
+.company-ready-facts small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-ready-facts small {
+  color: var(--text-weak);
+}
+
+.company-ready-board,
+.company-ready-credentials,
+.company-ready-start,
+.company-ready-capability {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.company-ready-board h2,
+.company-ready-start h2,
+.company-ready-credentials h2 {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.company-ready-board-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.company-ready-member h3 {
+  font-size: 16px;
+}
+
+.company-ready-member p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.company-ready-start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.company-ready-start p {
+  max-width: 580px;
+  margin-top: 8px;
+}
+
+.company-ready-capability {
+  border-style: dashed;
+}
+
+.company-ready-capability p {
+  margin-top: 5px;
+}
+
+.company-ready-pairing {
+  overflow-wrap: anywhere;
+}
+
+.company-ready-pairing a {
+  color: var(--text-strong);
+  text-decoration: underline;
+}
+
+.company-ready-credential-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-base);
+}
+
+.company-ready-credential-list button {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.company-ready-paired {
+  margin-top: 18px !important;
+}
+
+@media (max-width: 760px) {
+  .company-bootstrap,
+  .company-ready,
+  .company-state-panel {
+    padding: 24px 18px;
+  }
+
+  .company-bootstrap-header,
+  .company-ready-header,
+  .company-ready-section-heading,
+  .company-ready-start {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .company-bootstrap-form {
+    grid-template-columns: 1fr;
+    margin-top: 28px;
+  }
+
+  .company-bootstrap-steps {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .company-bootstrap-steps button {
+    width: auto;
+    flex: none;
+  }
+
+  .company-bootstrap-steps button > span {
+    display: none;
+  }
+
+  .company-bootstrap-actions {
+    grid-column: auto;
+  }
+
+  .company-bootstrap-field-grid,
+  .company-ready-facts,
+  .company-ready-board-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-bootstrap-board-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .company-bootstrap-inline-form,
+  .company-ready-credential-list > div {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }

@@ -63,13 +63,6 @@ beforeAll(async () => {
     useParams: () => params,
   }))
 
-  mock.module("@agents-company/sdk/v2/client", () => ({
-    createOpencodeClient: (input: { directory: string }) => {
-      createdClients.push(input.directory)
-      return clientFor(input.directory)
-    },
-  }))
-
   mock.module("@agents-company/ui/toast", () => ({
     showToast: () => 0,
   }))

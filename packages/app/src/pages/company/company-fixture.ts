@@ -3,7 +3,7 @@ import type {
   CompanyChannel,
   CompanyDelivery,
   CompanyMessage,
-  CompanyReadySnapshot,
+  CompanyDemoSnapshot,
   CompanyThreadEvent,
   CompanyWorkspaceSnapshot,
 } from "./company-model"
@@ -145,8 +145,8 @@ const delivery: CompanyDelivery = {
   sourceLabel: "来自 Thread · 交付验收",
 }
 
-const snapshot = (status: CompanyDelivery["status"], userMessages: string[]): CompanyReadySnapshot => ({
-  status: "ready",
+const snapshot = (status: CompanyDelivery["status"], userMessages: string[]): CompanyDemoSnapshot => ({
+  status: "demo",
   company: { name: "Agent Company", versionLabel: "本地优先 · v1.0.0" },
   currentUserAgentID: "product-lead",
   agents,
@@ -177,13 +177,24 @@ export function createFixtureCompanyWorkspaceDataSource(): CompanyWorkspaceDataS
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    refresh: async () => undefined,
+    listProviders: async () => undefined,
+    listProviderAuth: async () => undefined,
+    setProvider: async () => undefined,
+    authorizeProvider: async () => undefined,
+    completeProviderOAuth: async () => undefined,
+    inspectRepository: async () => undefined,
+    bootstrap: async () => undefined,
+    createPairing: async () => undefined,
+    listCredentials: async () => undefined,
+    revokeCredential: async () => undefined,
     async sendMessage(input) {
-      if (state.snapshot.status !== "ready") return
+      if (state.snapshot.status !== "demo") return
       if (input.channelID !== state.snapshot.featuredChannelID) return
       publish({ ...state.snapshot, userMessages: [...state.snapshot.userMessages, input.body] })
     },
     async approveDelivery(input) {
-      if (state.snapshot.status !== "ready") return
+      if (state.snapshot.status !== "demo") return
       if (input.deliveryID !== state.snapshot.delivery.id) return
       publish({ ...state.snapshot, delivery: { ...state.snapshot.delivery, status: "approved" } })
     },

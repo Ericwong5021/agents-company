@@ -3,7 +3,9 @@ import { Icon, type IconProps } from "@agents-company/ui/icon"
 import { Mark } from "@agents-company/ui/logo"
 import {
   For,
+  Match,
   Show,
+  Switch,
   createContext,
   createMemo,
   createSignal,
@@ -14,14 +16,18 @@ import {
   type JSX,
 } from "solid-js"
 import { createCompanyWorkspaceDataSource, type CompanyWorkspaceDataSource } from "./company-data-source"
-import type { CompanyDisconnectedSnapshot, CompanyReadySnapshot } from "./company-model"
+import { useGlobalSDK } from "@/context/global-sdk"
+import type { CompanyDemoSnapshot, CompanyWorkspaceSnapshot } from "./company-model"
+import { CompanyBootstrap, type CompanyBootstrapSnapshot } from "./company-bootstrap"
+import { CompanyReady, type CompanyReadySnapshot } from "./company-ready"
+import { useServer } from "@/context/server"
 import "./workspace.css"
 
 type WorkspaceIcon = IconProps["name"]
 
 const sections = ["公司", "项目", "Direct"] as const
 
-const CompanyDataContext = createContext<Accessor<CompanyReadySnapshot>>()
+const CompanyDataContext = createContext<Accessor<CompanyDemoSnapshot>>()
 
 function useCompanyData() {
   const data = useContext(CompanyDataContext)
@@ -490,97 +496,106 @@ function ThreadPanel(props: { onClose: () => void }) {
   )
 }
 
-function DisconnectedWorkspace(props: { snapshot: CompanyDisconnectedSnapshot }) {
+function CompanyLiveWorkspace(props: {
+  snapshot: Exclude<CompanyWorkspaceSnapshot, CompanyDemoSnapshot>
+  dataSource: CompanyWorkspaceDataSource
+  serverUrl: string
+  onRefresh: () => void
+}) {
+  const needsBootstrap = () => {
+    const snapshot = props.snapshot
+    return snapshot.status === "needs_bootstrap" ? (snapshot satisfies CompanyBootstrapSnapshot) : undefined
+  }
+  const ready = () => {
+    const snapshot = props.snapshot
+    return snapshot.status === "ready" ? (snapshot satisfies CompanyReadySnapshot) : undefined
+  }
+  const failed = () => {
+    const snapshot = props.snapshot
+    return snapshot.status === "error" ? snapshot : undefined
+  }
+  const disconnected = () => {
+    const snapshot = props.snapshot
+    return snapshot.status === "disconnected" ? snapshot : undefined
+  }
+
   return (
-    <div class="company-workspace" data-thread-open="false" data-state="disconnected">
-      <aside class="company-rail" aria-label="公司导航">
-        <div class="company-mark" aria-label={props.snapshot.company.name}>
-          <Mark class="company-mark-icon" />
-        </div>
-        <nav class="company-rail-nav">
-          <RailButton icon="bubble-5" label="消息" active />
-          <RailButton icon="eye" label="关注" />
-          <RailButton icon="providers" label="成员" />
-          <RailButton icon="folder" label="文件" />
-          <RailButton icon="settings-gear" label="设置" />
-        </nav>
-        <div class="company-rail-bottom">
-          <RailButton icon="help" label="帮助" />
-        </div>
-      </aside>
-      <aside class="company-channels" aria-label="频道">
-        <div class="company-channels-header">
-          <strong>{props.snapshot.company.name}</strong>
-        </div>
-        <label class="company-search">
-          <Icon name="magnifying-glass" size="small" />
-          <input placeholder="搜索" aria-label="搜索频道" disabled />
-        </label>
-        <div class="company-channel-scroll">
-          <div class="company-data-source-empty">
-            <Icon name="models" />
-            <span>等待本地数据源</span>
-          </div>
-        </div>
-        <div class="company-switcher" aria-label="当前公司">
-          <span class="company-switcher-mark">AC</span>
-          <span>
-            <strong>{props.snapshot.company.name}</strong>
-            <small>{props.snapshot.company.versionLabel}</small>
-          </span>
-        </div>
-      </aside>
-      <main class="company-conversation">
-        <header class="company-conversation-header">
-          <div class="company-title-copy">
-            <div class="company-title-row">
-              <h1>公司工作区</h1>
-            </div>
-            <span>本地优先的开发协作入口</span>
-          </div>
-        </header>
-        <div class="company-feed">
-          <div class="company-channel-placeholder">
-            <Icon name="models" size="large" />
-            <h2>{props.snapshot.title}</h2>
-            <p>{props.snapshot.description}</p>
-          </div>
-        </div>
-      </main>
-    </div>
+    <Switch fallback={<main class="company-state-panel" data-company-state="loading">正在读取本地 Company…</main>}>
+      <Match when={needsBootstrap()}>
+        {(snapshot) => (
+          <CompanyBootstrap
+            snapshot={snapshot()}
+            dataSource={props.dataSource}
+            serverUrl={props.serverUrl}
+            onComplete={props.onRefresh}
+          />
+        )}
+      </Match>
+      <Match when={ready()}>{(snapshot) => <CompanyReady snapshot={snapshot()} dataSource={props.dataSource} />}</Match>
+      <Match when={failed()}>
+        {(snapshot) => (
+          <main class="company-state-panel" data-company-state="error">
+            <h1>{snapshot().title}</h1>
+            <p>{snapshot().description}</p>
+            <Show when={snapshot().retryable}>
+              <button type="button" onClick={props.onRefresh}>重试</button>
+            </Show>
+          </main>
+        )}
+      </Match>
+      <Match when={disconnected()}>
+        {(snapshot) => (
+          <main class="company-state-panel" data-company-state="disconnected">
+            <h1>{snapshot().title}</h1>
+            <p>{snapshot().description}</p>
+          </main>
+        )}
+      </Match>
+    </Switch>
   )
 }
 
 export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceDataSource }) {
-  const source = props.dataSource ?? createCompanyWorkspaceDataSource()
+  const globalSDK = useGlobalSDK()
+  const server = useServer()
+  const source = props.dataSource ?? createCompanyWorkspaceDataSource(globalSDK.client)
   const initial = source.getSnapshot()
   const [snapshot, setSnapshot] = createSignal(initial)
-  const [activeChannel, setActiveChannel] = createSignal(initial.status === "ready" ? initial.featuredChannelID : "")
+  const [activeChannel, setActiveChannel] = createSignal(initial.status === "demo" ? initial.featuredChannelID : "")
   const [search, setSearch] = createSignal("")
   const [threadOpen, setThreadOpen] = createSignal(true)
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
-  const ready = createMemo(() => {
+  const demo = createMemo(() => {
     const value = snapshot()
-    return value.status === "ready" ? value : undefined
+    return value.status === "demo" ? value : undefined
   })
-  const disconnected = createMemo(() => {
+  const state = createMemo<Exclude<CompanyWorkspaceSnapshot, CompanyDemoSnapshot>>(() => {
     const value = snapshot()
-    return value.status === "disconnected" ? value : undefined
+    if (value.status === "demo") return { status: "loading" }
+    return value
   })
 
   onMount(() => {
     const unsubscribe = source.subscribe(setSnapshot)
     onCleanup(unsubscribe)
+    void source.refresh()
   })
 
   return (
     <Show
-      when={ready()}
-      fallback={<Show when={disconnected()}>{(data) => <DisconnectedWorkspace snapshot={data()} />}</Show>}
+      when={demo()}
+      fallback={
+        <CompanyLiveWorkspace
+          snapshot={state()}
+          dataSource={source}
+          serverUrl={server.current?.http.url ?? ""}
+          onRefresh={() => void source.refresh()}
+        />
+      }
     >
       {(data) => (
         <CompanyDataContext.Provider value={data}>
-          <div class="company-workspace" data-thread-open={threadOpen() ? "true" : "false"} data-state="ready">
+          <div class="company-workspace" data-thread-open={threadOpen() ? "true" : "false"} data-state="demo">
             <CompanyRail onMessages={() => setMobileChannelsOpen((current) => !current)} />
             <Show when={mobileChannelsOpen()}>
               <button

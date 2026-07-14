@@ -86,11 +86,6 @@ export function getWorkspaceTerminalCacheKey(dir: string) {
   return `${dir}:${WORKSPACE_KEY}`
 }
 
-export function getLegacyTerminalStorageKeys(dir: string, legacySessionID?: string) {
-  if (!legacySessionID) return [`${dir}/terminal.v1`]
-  return [`${dir}/terminal/${legacySessionID}.v1`, `${dir}/terminal.v1`]
-}
-
 type TerminalSession = ReturnType<typeof createWorkspaceTerminalSession>
 
 type TerminalCacheEntry = {
@@ -110,7 +105,7 @@ const trimTerminal = (pty: LocalPTY) => {
   }
 }
 
-export function clearWorkspaceTerminals(dir: string, sessionIDs?: string[], platform?: Platform) {
+export function clearWorkspaceTerminals(dir: string, platform?: Platform) {
   const key = getWorkspaceTerminalCacheKey(dir)
   for (const cache of caches) {
     const entry = cache.get(key)
@@ -118,24 +113,12 @@ export function clearWorkspaceTerminals(dir: string, sessionIDs?: string[], plat
   }
 
   void removePersisted(Persist.workspace(dir, "terminal"), platform)
-
-  const legacy = new Set(getLegacyTerminalStorageKeys(dir))
-  for (const id of sessionIDs ?? []) {
-    for (const key of getLegacyTerminalStorageKeys(dir, id)) {
-      legacy.add(key)
-    }
-  }
-  for (const key of legacy) {
-    void removePersisted({ key }, platform)
-  }
 }
 
-function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string, legacySessionID?: string) {
-  const legacy = getLegacyTerminalStorageKeys(dir, legacySessionID)
-
+function createWorkspaceTerminalSession(sdk: ReturnType<typeof useSDK>, dir: string) {
   const [store, setStore, _, ready] = persisted(
     {
-      ...Persist.workspace(dir, "terminal", legacy),
+      ...Persist.workspace(dir, "terminal"),
       migrate: migrateTerminalState,
     },
     createStore<{
@@ -382,7 +365,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
     }
 
-    const loadWorkspace = (dir: string, legacySessionID?: string) => {
+    const loadWorkspace = (dir: string) => {
       // Terminals are workspace-scoped so tabs persist while switching sessions in the same directory.
       const key = getWorkspaceTerminalCacheKey(dir)
       const existing = cache.get(key)
@@ -393,7 +376,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       }
 
       const entry = createRoot((dispose) => ({
-        value: createWorkspaceTerminalSession(sdk, dir, legacySessionID),
+        value: createWorkspaceTerminalSession(sdk, dir),
         dispose,
       }))
 
@@ -402,7 +385,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
       return entry.value
     }
 
-    const workspace = createMemo(() => loadWorkspace(params.dir!, params.id))
+    const workspace = createMemo(() => loadWorkspace(params.dir!))
 
     createEffect(
       on(
@@ -411,7 +394,7 @@ export const { use: useTerminal, provider: TerminalProvider } = createSimpleCont
           if (!prev?.dir) return
           if (next.dir === prev.dir && next.id === prev.id) return
           if (next.dir === prev.dir && next.id) return
-          loadWorkspace(prev.dir, prev.id).trimAll()
+          loadWorkspace(prev.dir).trimAll()
         },
         { defer: true },
       ),

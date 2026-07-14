@@ -1,3 +1,5 @@
+import type { CompanyNeedsBootstrapState, CompanyReadyState } from "@agents-company/sdk/v2/client"
+
 export type CompanyAgent = {
   id: string
   name: string
@@ -48,8 +50,8 @@ export type CompanyDelivery = {
   sourceLabel: string
 }
 
-export type CompanyReadySnapshot = {
-  status: "ready"
+export type CompanyDemoSnapshot = {
+  status: "demo"
   company: { name: string; versionLabel: string }
   currentUserAgentID: string
   agents: Record<string, CompanyAgent>
@@ -73,4 +75,15 @@ export type CompanyDisconnectedSnapshot = {
   description: string
 }
 
-export type CompanyWorkspaceSnapshot = CompanyReadySnapshot | CompanyDisconnectedSnapshot
+export type CompanyWorkspaceAccess = {
+  kind: "trusted" | "basic" | "bearer"
+  can_manage_credentials: boolean
+}
+
+export type CompanyWorkspaceSnapshot =
+  | { status: "loading" }
+  | ({ status: "needs_bootstrap"; access: CompanyWorkspaceAccess } & CompanyNeedsBootstrapState)
+  | ({ status: "ready"; access: CompanyWorkspaceAccess } & CompanyReadyState)
+  | { status: "error"; title: string; description: string; retryable: boolean }
+  | CompanyDisconnectedSnapshot
+  | CompanyDemoSnapshot
