@@ -2,7 +2,7 @@ import z from "zod"
 import { Context, Effect, Layer, Ref, Stream } from "effect"
 import { Database, eq, and, desc } from "../storage"
 import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "./group-session.sql"
-import { GroupSessionID } from "./schema"
+import { GroupContextPolicy, GroupSessionID } from "./schema"
 import type { SessionID } from "../session/schema"
 import type { ProjectID } from "../project/schema"
 import type { CompanyAgentID } from "../company-agent/schema"
@@ -40,6 +40,7 @@ export const Info = z.object({
   id: GroupSessionID.zod,
   projectID: z.string(),
   title: z.string(),
+  contextPolicy: GroupContextPolicy.optional(),
   members: MemberInfo.array(),
   time: z.object({
     created: z.number(),
@@ -58,6 +59,8 @@ export const GroupMessage = z.object({
   sessionID: z.string().optional(),
   content: z.string(),
   statusSummary: z.string().optional(),
+  externalMessageID: z.string().optional(),
+  runtimeMessageID: z.string().optional(),
   time: z.object({ created: z.number(), updated: z.number() }),
 })
 export type GroupMessage = z.infer<typeof GroupMessage>
@@ -69,6 +72,7 @@ export type GroupMessage = z.infer<typeof GroupMessage>
 export const CreateInput = z.object({
   title: z.string().min(1),
   agentIDs: z.array(z.string()).min(1).max(10),
+  contextPolicy: GroupContextPolicy.optional(),
 })
 export type CreateInput = z.infer<typeof CreateInput>
 
@@ -224,6 +228,7 @@ function loadGroupInfo(groupID: GroupSessionID): Info | undefined {
     id: row.id,
     projectID: row.project_id,
     title: row.title,
+    contextPolicy: row.context_policy ?? undefined,
     members,
     time: {
       created: row.time_created,
@@ -382,6 +387,7 @@ export const layer: Layer.Layer<
                 id: groupID,
                 project_id: project.id as ProjectID,
                 title: input.title,
+                context_policy: input.contextPolicy ?? null,
                 time_created: now,
                 time_updated: now,
               })
@@ -446,6 +452,7 @@ export const layer: Layer.Layer<
             id: row.id,
             projectID: row.project_id,
             title: row.title,
+            contextPolicy: row.context_policy ?? undefined,
             members,
             time: {
               created: row.time_created,
@@ -867,6 +874,8 @@ export const layer: Layer.Layer<
             sessionID: row.session_id ?? undefined,
             content: row.content,
             statusSummary: row.status_summary ?? undefined,
+            externalMessageID: row.external_message_id ?? undefined,
+            runtimeMessageID: row.runtime_message_id ?? undefined,
             time: { created: row.time_created, updated: row.time_updated },
           }),
         )

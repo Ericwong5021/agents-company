@@ -13,3 +13,6 @@ export const GroupSessionID = Schema.String.annotate({ [ZodOverride]: Identifier
 )
 
 export type GroupSessionID = Schema.Schema.Type<typeof GroupSessionID>
+
+export const GroupContextPolicy = z.enum(["work_scoped"])
+export type GroupContextPolicy = z.infer<typeof GroupContextPolicy>

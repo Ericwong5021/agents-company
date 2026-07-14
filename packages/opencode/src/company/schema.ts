@@ -112,7 +112,7 @@ export const CompanyNeedsBootstrapState = z
         board: z.array(BoardMember).length(3),
       })
       .strict(),
-    capabilities: z.object({ board_messages: z.literal(false) }).strict(),
+    capabilities: z.object({ board_messages: z.boolean() }).strict(),
   })
   .strict()
   .meta({ ref: "CompanyNeedsBootstrapState" })
@@ -141,7 +141,7 @@ export const CompanyReadyState = z
       })
       .strict(),
     start_suggestion: StartSuggestion,
-    capabilities: z.object({ board_messages: z.literal(false) }).strict(),
+    capabilities: z.object({ board_messages: z.boolean() }).strict(),
   })
   .strict()
   .meta({ ref: "CompanyReadyState" })

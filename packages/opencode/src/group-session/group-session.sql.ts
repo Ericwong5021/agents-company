@@ -1,10 +1,12 @@
-import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
-import { SessionTable } from "../session/session.sql"
+import { ChannelMessageTable } from "../conversation/conversation.sql"
+import { MessageTable, SessionTable } from "../session/session.sql"
 import { CompanyAgentTable } from "../company-agent/company-agent.sql"
 import { Timestamps } from "../storage/schema.sql"
-import type { GroupSessionID } from "./schema"
-import type { SessionID } from "../session/schema"
+import type { ChannelMessageID } from "../conversation/schema"
+import type { GroupContextPolicy, GroupSessionID } from "./schema"
+import type { MessageID, SessionID } from "../session/schema"
 import type { ProjectID } from "../project/schema"
 import type { CompanyAgentID } from "../company-agent/schema"
 
@@ -17,6 +19,7 @@ export const GroupSessionTable = sqliteTable(
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
     title: text().notNull(),
+    context_policy: text().$type<GroupContextPolicy>(),
     ...Timestamps,
     time_archived: integer(),
   },
@@ -70,9 +73,17 @@ export const GroupMessageTable = sqliteTable(
     content: text().notNull(),
     // e.g. "done", "thinking", "tool_calling", "error", "cancelled"
     status_summary: text(),
+    external_message_id: text()
+      .$type<ChannelMessageID>()
+      .references(() => ChannelMessageTable.id, { onDelete: "set null" }),
+    runtime_message_id: text()
+      .$type<MessageID>()
+      .references(() => MessageTable.id, { onDelete: "set null" }),
     ...Timestamps,
   },
   (table) => [
     index("group_message_group_round_idx").on(table.group_session_id, table.round_num),
+    uniqueIndex("group_message_group_external_message_idx").on(table.group_session_id, table.external_message_id),
+    uniqueIndex("group_message_runtime_message_idx").on(table.runtime_message_id),
   ],
 )

@@ -22,6 +22,12 @@ const prefixes = {
   artifact: "art",
   gate: "gate",
   localCredential: "lcr",
+  channel: "chn",
+  rootNeed: "need",
+  conversationThread: "cth",
+  channelMessage: "cmsg",
+  conversationRun: "crun",
+  signalProjection: "spr",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {

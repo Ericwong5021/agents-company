@@ -10,6 +10,7 @@ import { Project } from "@/project"
 import { ProjectID } from "@/project/schema"
 import { Provider } from "@/provider"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
 import {
@@ -318,6 +319,11 @@ export const layer = Layer.effect(
                 time_updated: now,
               })
               .run()
+            ensureCompanyChannels({
+              companyID: COMPANY_ID,
+              boardAgentIDs: BOARD.map((member) => member.id),
+              now,
+            })
             tx.insert(CompanyAgentTable)
               .values(
                 BOARD.map((member) => ({
