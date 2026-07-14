@@ -50,6 +50,7 @@ import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { GroupSession } from "@tui/routes/group-session"
+import { CompanyChannel } from "@tui/routes/company-channel"
 import { decideCompanyEntry } from "@tui/routes/company-entry"
 import { CompanyConnectionError, CompanySetupRequired } from "@tui/routes/company-setup-required"
 import { PromptHistoryProvider } from "./component/prompt/history"
@@ -411,6 +412,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
     if (route.data.type === "group-session") {
       renderer.setTerminalTitle(`agent-company | group-session`)
+    }
+    if (route.data.type === "company-channel") {
+      renderer.setTerminalTitle(`agent-company | ${route.data.channelID}`)
     }
   })
 
@@ -1245,6 +1249,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
                 </Match>
                 <Match when={route.data.type === "group-session"}>
                   <GroupSession />
+                </Match>
+                <Match when={route.data.type === "company-channel"}>
+                  <CompanyChannel />
                 </Match>
               </Switch>
             </Show>

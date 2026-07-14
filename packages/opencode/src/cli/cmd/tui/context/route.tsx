@@ -21,13 +21,19 @@ export type GroupSessionRoute = {
   groupSessionID: string
 }
 
+export type CompanyChannelRoute = {
+  type: "company-channel"
+  channelID: string
+  companyID: string
+}
+
 export type PluginRoute = {
   type: "plugin"
   id: string
   data?: Record<string, unknown>
 }
 
-export type Route = HomeRoute | SessionRoute | GroupSessionRoute | PluginRoute
+export type Route = HomeRoute | SessionRoute | GroupSessionRoute | PluginRoute | CompanyChannelRoute
 
 export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",

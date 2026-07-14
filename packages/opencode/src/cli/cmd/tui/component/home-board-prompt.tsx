@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
+import { createMemo, createResource, createSignal, onMount, Show } from "solid-js"
 import { TextAttributes } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
@@ -13,12 +13,11 @@ import { useExit } from "../context/exit"
 import { DialogConfirm } from "../ui/dialog-confirm"
 import { useDialog } from "../ui/dialog"
 import { Spinner } from "../component/spinner"
-import { useLocal } from "../context/local"
 
 /**
- * Home-page goal intake. A submitted goal starts the persistent company
- * project workflow; group chat remains available as a discussion surface but
- * is no longer the execution engine.
+ * Home-page goal intake. Submitting a goal sends it to the board channel,
+ * which creates a Root Need and starts the board discussion via the Control
+ * Plane. The user navigates to the company-channel route afterward.
  */
 export function HomeBoardPrompt() {
   const sdk = useSDK()
@@ -31,7 +30,6 @@ export function HomeBoardPrompt() {
   const keybind = useKeybind()
   const exit = useExit()
   const dialog = useDialog()
-  const local = useLocal()
 
   let textarea: any
   let promptAnchor: any
@@ -42,6 +40,24 @@ export function HomeBoardPrompt() {
 
   const fileStyleId = createMemo(() => useTheme().syntax().getStyleId("extmark.file")!)
   const agentStyleId = createMemo(() => useTheme().syntax().getStyleId("extmark.agent")!)
+
+  // Resolve company ID and board channel
+  const [companyInfo] = createResource(async () => {
+    const current = await sdk.client.company.current()
+    if (current.error) throw current.error
+    if (current.data?.state !== "ready") return undefined
+    return { companyID: current.data.company.id, company: current.data }
+  })
+
+  const [boardChannel] = createResource(
+    () => companyInfo(),
+    async (info) => {
+      if (!info) return undefined
+      const channels = await sdk.client.company.channels({ company_id: info.companyID })
+      if (channels.error) throw channels.error
+      return (channels.data ?? []).find((ch) => ch.kind === "board")
+    },
+  )
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function send() {
@@ -61,39 +77,41 @@ export function HomeBoardPrompt() {
       return
     }
 
+    const board = boardChannel()
+    const info = companyInfo()
+    if (!board || !info) {
+      toast.show({ variant: "error", message: t("tui.home.board_chat.no_agents") })
+      return
+    }
+
     setSending(true)
     try {
-      const selected = local.model.current()
-      const startRes = await sdk.fetch(`${sdk.url}/company-project`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          goal: text,
-          provider_id: selected?.providerID,
-          model_id: selected?.modelID,
-        }),
+      const result = await sdk.client.company.channelSend({
+        channelID: board.id,
+        company_id: info.companyID,
+        channelSendInput: {
+          request_id: crypto.randomUUID(),
+          body: text,
+        },
       })
-      if (!startRes.ok) {
-        const body = await startRes.text().catch(() => "")
-        toast.show({ variant: "error", message: body || "启动项目失败，请重试" })
-        return
-      }
+      if (result.error) throw result.error
 
       setInputText("")
       if (textarea && !textarea.isDestroyed) textarea.clear()
-      toast.show({ variant: "info", message: "项目已启动，团队正在调研；立项时会请求你批准" })
-      navigate({ type: "plugin", id: "workstation" })
+      toast.show({ variant: "info", message: t("tui.home.board_chat.sent") })
+      // Navigate to the board channel
+      navigate({ type: "company-channel", channelID: board.id, companyID: info.companyID })
     } catch (err) {
       toast.show({
         variant: "error",
-        message: err instanceof Error ? err.message : "操作失败",
+        message: err instanceof Error ? err.message : t("tui.home.board_chat.send_failed"),
       })
     } finally {
       setSending(false)
     }
   }
 
-  // Ignore exit while the project-start request is in flight.
+  // Ignore exit while the request is in flight.
   useKeyboard((evt) => {
     if (keybind.match("app_exit", evt)) {
       if (sending()) return
@@ -112,7 +130,7 @@ export function HomeBoardPrompt() {
 
   return (
     <box flexDirection="column" width="100%" gap={1}>
-      {/* Company project intake */}
+      {/* Company board intake */}
       <box flexDirection="column" gap={1}>
         <box flexDirection="row" gap={1} alignItems="center">
           <text fg={theme.accent} attributes={TextAttributes.BOLD}>

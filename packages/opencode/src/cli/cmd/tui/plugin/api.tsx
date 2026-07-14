@@ -103,6 +103,15 @@ function routeCurrent(route: ReturnType<typeof useRoute>): TuiPluginApi["route"]
       },
     }
   }
+  if (route.data.type === "company-channel") {
+    return {
+      name: "company-channel",
+      params: {
+        channelID: route.data.channelID,
+        companyID: route.data.companyID,
+      },
+    }
+  }
 
   return {
     name: route.data.id,

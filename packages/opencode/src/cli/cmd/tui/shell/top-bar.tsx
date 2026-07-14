@@ -33,6 +33,8 @@ function routeLabel(r: Route, t: (key: string) => string, sync: ReturnType<typeo
     }
     case "group-session":
       return `${t("tui.shell.route.group-session")} · ${r.groupSessionID.slice(0, 8)}`
+    case "company-channel":
+      return `${t("tui.shell.route.company-channel")} · ${r.channelID.slice(0, 8)}`
     case "plugin": {
       const labelKey = NAV_ROUTE_LABEL[r.id]
       if (labelKey) return t(labelKey)
@@ -48,8 +50,8 @@ function parentOf(r: Route, sync: ReturnType<typeof useSync>): Route | undefined
     const parentID: string | undefined = sync.session.get(r.sessionID)?.parentID
     return parentID ? { type: "session", sessionID: parentID } : undefined
   }
-  // group-session and plugin both parent to home
-  if (r.type === "group-session" || r.type === "plugin") return { type: "home" }
+  // group-session, company-channel and plugin all parent to home
+  if (r.type === "group-session" || r.type === "plugin" || r.type === "company-channel") return { type: "home" }
   return undefined
 }
 

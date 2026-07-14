@@ -88,48 +88,43 @@ export function Home() {
     ))
   })
 
-  // ── Handle --prompt CLI arg: auto-send to board group session ───────────────
+  // ── Handle --prompt CLI arg: auto-send to board channel ─────────────────────
   createEffect(() => {
     if (!sync.ready || !local.model.ready) return
-    if (!args.prompt) return
+    const promptText = args.prompt
+    if (!promptText) return
     const sent = kv.get("_home_prompt_auto_sent")
     if (sent) return
     kv.set("_home_prompt_auto_sent", true)
-    setTimeout(async () => {
+    void (async () => {
       try {
-        const existing = kv.get("board_group_session_id")
-        let gsid: string | undefined =
-          typeof existing === "string" ? existing : undefined
-        if (gsid) {
-          const check = await sdk.fetch(`${sdk.url}/group-session/${gsid}`)
-          if (!check.ok) gsid = undefined
+        const current = await sdk.client.company.current()
+        if (current.error || current.data?.state !== "ready") {
+          toast.show({ variant: "error", message: t("tui.home.prompt.auto.company_not_ready") })
+          return
         }
-        if (!gsid) {
-          const res = await sdk.fetch(`${sdk.url}/company-agent`)
-          const agentList = (await res.json()) as Array<{ id: string }>
-          const agentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
-          const current = await sdk.client.company.current()
-          const company = current.data
-          const companyName = company?.state === "ready" ? company.company.name : ""
-          const createRes = await sdk.fetch(`${sdk.url}/group-session`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: `董事会圆桌 · ${companyName}`, agentIDs }),
-          })
-          const info = (await createRes.json()) as { id: string }
-          gsid = info.id
-          kv.set("board_group_session_id", gsid)
+        const companyID = current.data.company.id
+        const channels = await sdk.client.company.channels({ company_id: companyID })
+        if (channels.error) throw channels.error
+        const board = (channels.data ?? []).find((ch) => ch.kind === "board")
+        if (!board) {
+          toast.show({ variant: "error", message: t("tui.home.prompt.auto.no_board") })
+          return
         }
-        await sdk.fetch(`${sdk.url}/group-session/${gsid}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: args.prompt }),
+        const result = await sdk.client.company.channelSend({
+          channelID: board.id,
+          company_id: companyID,
+          channelSendInput: {
+            request_id: crypto.randomUUID(),
+            body: promptText,
+          },
         })
-        fullRoute.navigate({ type: "group-session", groupSessionID: gsid })
+        if (result.error) throw result.error
+        fullRoute.navigate({ type: "company-channel", channelID: board.id, companyID })
       } catch {
-        toast.show({ variant: "error", message: "Failed to auto-send prompt" })
+        toast.show({ variant: "error", message: t("tui.home.prompt.auto.failed") })
       }
-    }, 100)
+    })()
   })
 
   return (
