@@ -7,7 +7,6 @@ import { Rpc } from "@/util"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config"
 import { GlobalBus } from "@/bus/global"
-import { Flag } from "@/flag/flag"
 import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
@@ -47,14 +46,9 @@ let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
-    const headers = { ...input.headers }
-    const auth = getAuthorizationHeader()
-    if (auth && !headers["authorization"] && !headers["Authorization"]) {
-      headers["Authorization"] = auth
-    }
     const request = new Request(input.url, {
       method: input.method,
-      headers,
+      headers: input.headers,
       body: input.body,
     })
     const response = await Server.Default().app.fetch(request)
@@ -69,10 +63,14 @@ export const rpc = {
     const result = writeHeapSnapshot("server.heapsnapshot")
     return result
   },
-  async server(input: { port: number; hostname: string; mdns?: boolean; cors?: string[] }) {
+  async server(input: { port: number; hostname: string; mdns?: boolean; mdnsDomain?: string; cors?: string[]; noAuth?: boolean }) {
     if (server) await server.stop(true)
     server = await Server.listen(input)
-    return { url: server.url.toString() }
+    return {
+      url: server.url.toString(),
+      username: server.credentials?.username,
+      password: server.credentials?.password,
+    }
   },
   async checkUpgrade(input: { directory: string }) {
     await Instance.provide({
@@ -95,10 +93,3 @@ export const rpc = {
 }
 
 Rpc.listen(rpc)
-
-function getAuthorizationHeader(): string | undefined {
-  const password = Flag.AGENTCOMPANY_SERVER_PASSWORD
-  if (!password) return undefined
-  const username = Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany"
-  return `Basic ${btoa(`${username}:${password}`)}`
-}

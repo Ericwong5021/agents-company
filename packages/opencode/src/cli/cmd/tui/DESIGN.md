@@ -129,7 +129,7 @@ fg={isSelected() ? theme.background : theme.textMuted}  // 次要文字
 
 - 推入内容：`dialog.replace(() => <X/>, onClose?)`；清空：`dialog.clear()`。
 - 内层内容自身**不要**再画遮罩/居中/外框，只排版内容，并沿用 `paddingTop={1}`（外层已提供）+ 左右 `padding 2` 的惯例。
-- 引导流程统一用 `<OnboardingFrame>`（`routes/onboarding/frame.tsx`）：标题行（标题 + 步骤圆点）、可选副标题、助手气泡、body、可选 footer。
+- 公司尚未初始化或当前目录不匹配绑定仓库时，使用 `routes/company-setup-required.tsx` 的全屏只读提示。它只说明 Desktop 或浏览器中的下一步与绑定路径，不能在 TUI 内创建或修改公司状态。
 
 ### 4.2 卡片 (`<Card>`)
 
@@ -220,5 +220,5 @@ fg={isSelected() ? theme.background : theme.textMuted}  // 次要文字
 - 主题与 token：`context/theme.tsx`、`context/theme/agentcompany.json`
 - 对话框体系与尺寸：`ui/dialog.tsx`
 - 卡片组件：`component/card.tsx`
-- 引导外框 / 气泡 / 步骤点：`routes/onboarding/frame.tsx`
-- 卡片网格 + 并排预览 + 主按钮：`routes/onboarding/step-template-select.tsx`、`step-founding-team.tsx`
+- 公司入口提示：`routes/company-setup-required.tsx`
+- 导航列表与状态布局：`shell/left-nav.tsx`

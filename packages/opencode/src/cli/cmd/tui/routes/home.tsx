@@ -108,8 +108,9 @@ export function Home() {
           const res = await sdk.fetch(`${sdk.url}/company-agent`)
           const agentList = (await res.json()) as Array<{ id: string }>
           const agentIDs = agentList.filter((a) => a.id !== "assistant").map((a) => a.id)
-          const profile = kv.get("onboarding_profile") as Record<string, any> | undefined
-          const companyName = (profile?.companyName as string) || (profile?.userName as string) || ""
+          const current = await sdk.client.company.current()
+          const company = current.data
+          const companyName = company?.state === "ready" ? company.company.name : ""
           const createRes = await sdk.fetch(`${sdk.url}/group-session`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

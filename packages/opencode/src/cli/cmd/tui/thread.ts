@@ -17,6 +17,7 @@ import { writeHeapSnapshot } from "v8"
 import { TuiConfig } from "./config/tui"
 import { AGENTCOMPANY_PROCESS_ROLE, AGENTCOMPANY_RUN_ID, ensureRunID, sanitizedProcessEnv } from "@/util/mimo-process"
 import { checkTrust, markTrusted } from "@/project/workspace-trust"
+import { authorization } from "@/server/server"
 import { t } from "@/cli/i18n"
 
 declare global {
@@ -273,16 +274,22 @@ export const TuiThreadCommand = cmd({
         network.port !== 0 ||
         network.hostname !== "127.0.0.1"
 
-      const transport = external
+      const listener = external ? await client.call("server", network) : undefined
+      const transport = listener
         ? {
-            url: (await client.call("server", network)).url,
+            url: listener.url,
             fetch: undefined,
             events: undefined,
+            headers:
+              listener.username && listener.password
+                ? { Authorization: authorization({ username: listener.username, password: listener.password }) }
+                : undefined,
           }
         : {
             url: "http://opencode.internal",
             fetch: createWorkerFetch(client),
             events: createEventSource(client),
+            headers: undefined,
           }
 
       setTimeout(() => {
@@ -300,6 +307,7 @@ export const TuiThreadCommand = cmd({
           config,
           directory: cwd,
           fetch: transport.fetch,
+          headers: transport.headers,
           events: transport.events,
           args: {
             continue: args.continue,

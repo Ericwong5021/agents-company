@@ -7,7 +7,6 @@ import { useLanguage } from "../../context/language"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { useSDK } from "../../context/sdk"
-import { useKV } from "../../context/kv"
 
 const id = "internal:org-disband"
 
@@ -17,7 +16,6 @@ function DisbandDialog() {
   const dialog = useDialog()
   const toast = useToast()
   const sdk = useSDK()
-  const kv = useKV()
 
   // Two steps: initial yes/no, then the red irreversible warning.
   const [stage, setStage] = createSignal<"confirm" | "warning">("confirm")
@@ -33,7 +31,6 @@ function DisbandDialog() {
       return
     }
     toast.show({ variant: "success", message: t("tui.org.disband.done") })
-    kv.set("onboarding_done", false)
   }
 
   useKeyboard((evt) => {

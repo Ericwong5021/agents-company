@@ -6,7 +6,6 @@ import { useSDK } from "../../context/sdk"
 import { useRoute } from "../../context/route"
 import { useRightSidebar } from "../../context/right-sidebar"
 import { useToast } from "@tui/ui/toast"
-import { useKV } from "../../context/kv"
 import { TextAttributes } from "@opentui/core"
 
 // ---------------------------------------------------------------------------
@@ -47,7 +46,6 @@ function OrgChartView() {
   const route = useRoute()
   const rightSidebar = useRightSidebar()
   const toast = useToast()
-  const kv = useKV()
 
   // Load all company agents from the server.
   const [agents] = createResource(async () => {
@@ -55,17 +53,20 @@ function OrgChartView() {
     if (!res.ok) return [] as CompanyAgentInfo[]
     return (await res.json()) as CompanyAgentInfo[]
   })
-
-  // Read onboarding profile from KV to get the human user's name.
-  const profile = createMemo(() => kv.get("onboarding_profile") as Record<string, any> | undefined)
+  const [company] = createResource(async () => {
+    const result = await sdk.client.company.current()
+    const data = result.data
+    if (data?.state !== "ready") return
+    return data.company
+  })
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const ASSISTANT_ID = "onboarding-assistant"
+  const ASSISTANT_ID = "assistant"
   const assistant = createMemo(() => agents()?.find((a) => a.id === ASSISTANT_ID) ?? null)
   const teamMembers = createMemo(() => agents()?.filter((a) => a.id !== ASSISTANT_ID) ?? [])
-  const userName = createMemo(() => (profile()?.userName as string) || "创始人")
-  const companyName = createMemo(() => (profile()?.companyName as string) || "")
-  const assistantName = createMemo(() => assistant()?.name || (profile()?.assistantName as string) || "")
+  const userName = () => "创始人"
+  const companyName = createMemo(() => company()?.name ?? "")
+  const assistantName = createMemo(() => assistant()?.name ?? "")
 
   // Show sidebar panel for the board department.
   const [showBoardMenu, setShowBoardMenu] = createSignal(false)
@@ -213,7 +214,7 @@ function OrgChartView() {
             fallback={
               <box flexDirection="column" alignItems="center" paddingTop={4} gap={1}>
                 <text fg={theme.textMuted}>暂无组织数据</text>
-                <text fg={theme.textMuted}>请先在 onboarding 中创建一个公司</text>
+                <text fg={theme.textMuted}>{t("company.setup.required.body")}</text>
               </box>
             }
           >

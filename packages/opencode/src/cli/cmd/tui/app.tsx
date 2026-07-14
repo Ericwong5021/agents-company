@@ -8,6 +8,7 @@ import {
   Match,
   createEffect,
   createMemo,
+  createResource,
   ErrorBoundary,
   createSignal,
   onMount,
@@ -49,7 +50,8 @@ import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { GroupSession } from "@tui/routes/group-session"
-import { Onboarding } from "@tui/routes/onboarding"
+import { decideCompanyEntry } from "@tui/routes/company-entry"
+import { CompanyConnectionError, CompanySetupRequired } from "@tui/routes/company-setup-required"
 import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
@@ -74,6 +76,7 @@ import { TuiConfig } from "@/cli/cmd/tui/config/tui"
 import { createTuiApi, TuiPluginRuntime, type RouteMap } from "./plugin"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { isPlainTerminal } from "./util/terminal"
+import fs from "node:fs/promises"
 
 import type { EventSource } from "./context/sdk"
 import { DialogVariant } from "./component/dialog-variant"
@@ -251,6 +254,34 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const promptRef = usePromptRef()
   const lang = useLanguage()
   const t = lang.t
+  const [companyEntry, { refetch: refetchCompanyEntry }] = createResource(async () => {
+    const current = await sdk.client.company.current()
+    if (current.error) throw current.error
+    const data = current.data
+    if (!data) throw new Error("The Control Plane returned an empty company state")
+
+    const cwd = await fs.realpath(sdk.directory ?? process.cwd())
+    if (data.state === "needs_bootstrap") {
+      return decideCompanyEntry({ state: "needs_bootstrap", data_directory: data.data_directory }, cwd)
+    }
+
+    const repositoryPath = await fs.realpath(data.company.repository.root_path).catch(() => undefined)
+    if (!repositoryPath) {
+      return { type: "repository_mismatch" as const, repository_path: data.company.repository.root_path }
+    }
+
+    return decideCompanyEntry({ state: "ready", repository_path: repositoryPath }, cwd)
+  })
+  const setupRequired = createMemo(() => {
+    const entry = companyEntry()
+    if (entry?.type !== "setup_required") return
+    return entry
+  })
+  const repositoryMismatch = createMemo(() => {
+    const entry = companyEntry()
+    if (entry?.type !== "repository_mismatch") return
+    return entry
+  })
   const routes: RouteMap = new Map()
   const [routeRev, setRouteRev] = createSignal(0)
   const routeView = (name: string) => {
@@ -1189,29 +1220,40 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       <Show when={Flag.AGENTCOMPANY_SHOW_TTFD}>
         <TimeToFirstDraw />
       </Show>
-      <Show
-        when={kv.get("onboarding_done", false)}
-        fallback={<Onboarding />}
-      >
-        <Shell>
-          <Show when={ready()}>
-            <Switch>
-              <Match when={route.data.type === "home"}>
-                <Home />
-              </Match>
-              <Match when={route.data.type === "session"}>
-                <Session />
-              </Match>
-              <Match when={route.data.type === "group-session"}>
-                <GroupSession />
-              </Match>
-            </Switch>
-          </Show>
-          {plugin()}
-        </Shell>
-      </Show>
-      <TuiPluginRuntime.Slot name="app" />
-      <StartupLoading ready={ready} />
+      <Switch>
+        <Match when={companyEntry.loading}>
+          <StartupLoading ready={() => false} />
+        </Match>
+        <Match when={companyEntry.error}>
+          {(error) => <CompanyConnectionError error={errorMessage(error())} onRetry={() => void refetchCompanyEntry()} />}
+        </Match>
+        <Match when={setupRequired()}>
+          {(entry) => <CompanySetupRequired entry={entry()} />}
+        </Match>
+        <Match when={repositoryMismatch()}>
+          {(entry) => <CompanySetupRequired entry={entry()} />}
+        </Match>
+        <Match when={companyEntry()?.type === "ready"}>
+          <Shell>
+            <Show when={ready()}>
+              <Switch>
+                <Match when={route.data.type === "home"}>
+                  <Home />
+                </Match>
+                <Match when={route.data.type === "session"}>
+                  <Session />
+                </Match>
+                <Match when={route.data.type === "group-session"}>
+                  <GroupSession />
+                </Match>
+              </Switch>
+            </Show>
+            {plugin()}
+          </Shell>
+          <TuiPluginRuntime.Slot name="app" />
+          <StartupLoading ready={ready} />
+        </Match>
+      </Switch>
     </box>
   )
 }
