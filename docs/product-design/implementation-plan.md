@@ -1,6 +1,6 @@
 # Implementation Plan：Pre-Public 纵向交付
 
-> 状态：M1 代码与自动化验证已完成；原生 Desktop 手工验收待 macOS 解锁后完成，M1 尚未标记为完成
+> 状态：M1 代码与 Windows 自动化验证已完成；原生 Desktop 已通过 Windows 启动冒烟，交互清单仍待可可靠采集窗口的环境完成，M1 尚未标记为完成
 > 代码盘点基线：2026-07-13；M1 实施验证更新：2026-07-14
 > 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
@@ -34,14 +34,14 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | Desktop | M1 已切换 Agent Company 品牌、App ID、协议、数据目录 preflight 与内嵌 Server | M4 的托盘、关窗后台运行、通知恢复仍未实现；原生首启手工验收待完成 |
 | Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
 | Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
-| E2E / 发布 | M1 有真实 Playwright bootstrap、跨进程 restart/isolation、Desktop 静态契约与打包构建证据 | 原生 macOS 手工验收待关闭；Windows/macOS 干净设备打包矩阵仍在 M6 |
+| E2E / 发布 | M1 有真实 Playwright bootstrap、跨进程 restart/isolation、Desktop 静态契约、Windows 生产构建与 NSIS 安装包证据 | 原生 Desktop 交互验收待关闭；Windows/macOS 干净设备安装与升级矩阵仍在 M6 |
 
 因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
 ```text
 S0 产品事实基线：基本完成
 视觉验证：完成
-M1 Company Bootstrap：代码与自动化验证完成，等待原生 Desktop 手工验收
+M1 Company Bootstrap：代码与 Windows 自动化验证完成，原生 Windows 启动冒烟通过，等待 Desktop 交互验收
 真实 IM 用户旅程：M2 尚未完成
 自治软件交付闭环：只有可复用原型
 Agent 生命层与 Pre-Public 发布：尚未进入验收
@@ -129,7 +129,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：在干净数据目录中创建一家公司、最小董事会和一个真实仓库绑定。
 
-状态：代码、自动化 Gate、浏览器与 TUI 手工验收已于 2026-07-14 完成；原生 Desktop 手工验收因执行环境的 macOS 锁屏尚未完成，故本里程碑仍处于验收中。
+状态：代码、自动化 Gate、浏览器与 TUI 验收已于 2026-07-14 完成；Windows 原生 Desktop 已完成隔离数据目录启动冒烟，但窗口采集接口返回 `0x80004002`，无法可靠继续点击验收，故本里程碑仍处于验收中。
 
 实施验证：2026-07-14。M1 实际覆盖范围与文件级计划以 [2026-07-13 M1 Company Bootstrap 实施计划](../compose/plans/2026-07-13-m1-company-bootstrap.md) 为准。
 
@@ -154,17 +154,19 @@ Local Control Plane（唯一权威写入者）
 #### 2026-07-14 验证证据
 
 - 根目录 `bun script/generate-agent-company-brand.ts --check` 与 `./packages/sdk/js/script/build.ts` 通过；后者重复生成后输出哈希一致。
-- `packages/opencode` 的 migration check、M1 Company/Local Auth/server/build-node 测试、`bun typecheck` 均通过；真实 child-process restart/isolation 测试覆盖 Company 与浏览器 Bearer 的持久化和 revoke。
+- `packages/opencode` 的 migration check、M1 Company/Local Auth/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；真实 child-process restart/isolation 测试覆盖 Company 与浏览器 Bearer 的持久化和 revoke。
 - `packages/sdk/js` 的类型检查和 Company contract 测试通过；`packages/app` 的单元测试、类型检查、生产构建与真实 Playwright bootstrap E2E 通过；`packages/ui` 类型检查通过。
-- `packages/desktop` 的 Company home、品牌、shell env、renderer HTML 测试、类型检查和打包构建通过；生产身份静态扫描未发现 OpenCode 用户可见残留。
+- `packages/desktop` 的 Company home、品牌、shell env、renderer HTML 测试、类型检查和 Electron 生产构建均在 Windows 通过；生产身份静态扫描未发现 OpenCode 用户可见残留。`electron-builder` 已使用本机 Electron 分发目录和可访问的构建依赖镜像生成 `win-unpacked`、NSIS 安装包与 blockmap；本地构建未配置发布证书，签名仍由 CI 发布流程负责。
 - 浏览器手工完成配对、五步初始化、刷新持久化和控制台无错误核验；TUI 手工覆盖未初始化、错误仓库目录和正确仓库目录三种入口。
-- 原生 Desktop 已在隔离 userData 中启动，但 macOS 锁屏阻止目录选择、取消、重启、配对和 revoke 的点击验收。解除锁屏后须完成该清单，才可将 M1 标记为完成。
+- 原生 Desktop 已在隔离 Windows `APPDATA` 中启动并显示 `Agent Company` 窗口；测试机的窗口截图/可访问性采集返回 `0x80004002（不支持此接口）`，因此没有盲点目录选择、取消、重启、配对和 revoke。须在可可靠观测窗口的 Windows 或 macOS 会话完成该清单，才可将 M1 标记为完成。
 
 ### M2 — 真实 IM、董事会与高信号 Thread
 
 目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-预计：约 2 周。
+状态：实施中。Conversation schema、频道/Thread 读取模型、董事会幂等 intake、GroupSession 精确来源以及高信号投影与进程恢复已完成并通过目标回归；认证 HTTP contract、生成 SDK、Web/TUI 接线、真实 Workspace 与纵向 Gate 仍待完成。`capabilities.board_messages` 在 Task 10 Gate 前继续保持关闭。
+
+预计：约 3 周（双工作流 12–15 个工程日；单线顺序实施约 4 周）。详细代码审计与任务拆解见 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
 
 主要工作：
 
@@ -462,4 +464,4 @@ M0 App Shell 修复
 - M3 必须证明现有 Workflow/Admission 能在导入仓库和严格 Worktree 状态机下完成一次交付；
 - 如果任一验证失败，只重写对应产品 application service / adaptor，不重写共享 WebUI 或整个 Agent Runtime。
 
-M0 已完成并通过退出标准。M1 已完成代码与自动化 Gate，但原生 Desktop 手工验收尚未关闭；当前下一步是在解锁的 macOS 会话中完成该验收，再将 M1 标记为完成。M2 的真实董事会消息、Thread 与输入能力尚未开始验收。
+M0 已完成并通过退出标准。M1 已完成代码、Windows 自动化 Gate 与 NSIS 安装包构建，原生 Windows 启动冒烟也已通过，但 Desktop 交互验收尚未关闭；当前下一步是在可可靠观测窗口的原生会话完成交互清单，再将 M1 标记为完成。M2 的真实董事会消息、Thread 与输入能力尚未开始验收。

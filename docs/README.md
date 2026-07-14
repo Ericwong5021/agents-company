@@ -34,6 +34,7 @@
 
 - [Autonomous-Bidding PRD](product-design/bidding-prd.md) 与[技术文档](product-design/bidding-technical-document.md)描述群聊内部的发言调度组件。它是 Thread/群聊的实现机制之一，不定义整个产品的信息架构。
 - [M1 Company Bootstrap 实施计划](compose/plans/2026-07-13-m1-company-bootstrap.md)记录 M1 的文件级实现、验证与恢复要求；当前验收状态以[实施计划](product-design/implementation-plan.md)为准。
+- [M2 真实 IM、董事会与高信号 Thread 实施计划](compose/plans/2026-07-14-m2-real-im-board.md)记录 M2 的领域契约、Runtime 适配、恢复策略、共享 WebUI/TUI 接线和纵向 Gate；完成状态仍以[实施计划](product-design/implementation-plan.md)与对应报告为准。
 - `compose/reports/` 保存已经交付的修复报告，可用于追溯代码决策。
 - `compose/plans/` 保存历史实施计划；最终状态以对应 report 与当前代码为准。
 
