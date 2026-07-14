@@ -1,8 +1,8 @@
 # M2 真实 IM、董事会与高信号 Thread 实施计划
 
-> 状态：实施中；Task 1–5 已完成并提交，Task 6–10 待实施
+> 状态：实施中；Task 1–6 已完成并提交，Task 7–10 待实施
 > 制定日期：2026-07-14
-> 进度更新：2026-07-14（`f87c442`、`3983625`、`b91b674`、`644d2b4`、`43d283e`）
+> 进度更新：2026-07-14（`f87c442`、`3983625`、`b91b674`、`644d2b4`、`43d283e`、`cb2ec75`）
 > 上位事实源：[产品宪法](../../product-design/PRODUCT-CONSTITUTION.md) → [产品 PRD](../../Agent%20Company%20产品%20PRD.md) → [实施计划](../../product-design/implementation-plan.md)
 > 实施方式：按 Task 1 → 10 推进；每个 Task 先写失败测试，再实现、验证并独立提交
 
@@ -371,13 +371,13 @@ flowchart LR
 - `packages/opencode/src/server/routes/company.ts`
 - `packages/sdk/js/src/v2/gen/**`（只由生成命令修改）
 
-- [ ] 写 raw HTTP 失败测试，覆盖七个 operation、Basic/Bearer、无凭据 401、作用域 403/404、409 和完整错误 body。
-- [ ] route 只做验证与 service 调用；不在 handler 内拼领域规则。
-- [ ] POST send 返回 202；所有写入已持久化后才返回。
-- [ ] OpenAPI 覆盖测试保证 success/error schema 完整，Event union 包含三类 invalidation。
-- [ ] 从仓库根运行唯一生成命令：`./packages/sdk/js/script/build.ts`。
-- [ ] 从 `packages/sdk/js` 运行 contract assertions 与 `bun typecheck`，确认 M2 operation response/error 没有 `unknown`。
-- [ ] Commit：`feat(sdk): publish typed M2 conversation contract`
+- [x] 写 raw HTTP 失败测试，覆盖七个 operation、Basic/Bearer、无凭据 401、作用域 403/404、409 和完整错误 body。
+- [x] route 只做验证与 service 调用；不在 handler 内拼领域规则。
+- [x] POST send 返回 202；所有写入已持久化后才返回。
+- [x] OpenAPI 覆盖测试保证 success/error schema 完整，Event union 包含三类 invalidation。
+- [x] 从仓库根运行唯一生成命令：`./packages/sdk/js/script/build.ts`。
+- [x] 从 `packages/sdk/js` 运行 contract assertions 与 `bun typecheck`，确认 M2 operation response/error 没有 `unknown`。
+- [x] Commit：`feat(sdk): publish typed M2 conversation contract`
 
 ## Task 7：建立 Web 会话数据层与 SSE 补偿（2 天）
 
