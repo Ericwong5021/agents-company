@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 import type { Configuration } from "electron-builder"
+import { PRODUCT_BRAND } from "./src/shared/brand"
 
 const execFileAsync = promisify(execFile)
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
@@ -21,13 +22,13 @@ async function signWindows(configuration: { path: string }) {
 }
 
 const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.AGENTCOMPANY_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
 })()
 
 const getBase = (): Configuration => ({
-  artifactName: "opencode-desktop-${os}-${arch}.${ext}",
+  artifactName: "agent-company-desktop-${os}-${arch}.${ext}",
   directories: {
     output: "dist",
     buildResources: "resources",
@@ -54,8 +55,8 @@ const getBase = (): Configuration => ({
     sign: true,
   },
   protocols: {
-    name: "OpenCode",
-    schemes: ["opencode"],
+    name: PRODUCT_BRAND.names.prod,
+    schemes: [PRODUCT_BRAND.deep_link_protocol],
   },
   win: {
     icon: `resources/icons/icon.ico`,
@@ -84,29 +85,27 @@ function getConfig() {
     case "dev": {
       return {
         ...base,
-        appId: "ai.opencode.desktop.dev",
-        productName: "OpenCode Dev",
-        rpm: { packageName: "opencode-dev" },
+        appId: PRODUCT_BRAND.app_ids.dev,
+        productName: PRODUCT_BRAND.names.dev,
+        rpm: { packageName: "agent-company-dev" },
       }
     }
     case "beta": {
       return {
         ...base,
-        appId: "ai.opencode.desktop.beta",
-        productName: "OpenCode Beta",
-        protocols: { name: "OpenCode Beta", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode-beta", channel: "latest" },
-        rpm: { packageName: "opencode-beta" },
+        appId: PRODUCT_BRAND.app_ids.beta,
+        productName: PRODUCT_BRAND.names.beta,
+        protocols: { name: PRODUCT_BRAND.names.beta, schemes: [PRODUCT_BRAND.deep_link_protocol] },
+        rpm: { packageName: "agent-company-beta" },
       }
     }
     case "prod": {
       return {
         ...base,
-        appId: "ai.opencode.desktop",
-        productName: "OpenCode",
-        protocols: { name: "OpenCode", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode", channel: "latest" },
-        rpm: { packageName: "opencode" },
+        appId: PRODUCT_BRAND.app_ids.prod,
+        productName: PRODUCT_BRAND.names.prod,
+        protocols: { name: PRODUCT_BRAND.names.prod, schemes: [PRODUCT_BRAND.deep_link_protocol] },
+        rpm: { packageName: "agent-company" },
       }
     }
   }

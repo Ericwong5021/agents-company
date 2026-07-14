@@ -3,10 +3,11 @@ import { app, BrowserWindow, net, nativeImage, nativeTheme, protocol } from "ele
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { TitlebarTheme } from "../preload/types"
+import { PRODUCT_BRAND } from "../shared/brand"
 
 const root = dirname(fileURLToPath(import.meta.url))
 const rendererRoot = join(root, "../renderer")
-const rendererProtocol = "oc"
+const rendererProtocol = PRODUCT_BRAND.renderer_scheme
 const rendererHost = "renderer"
 
 protocol.registerSchemesAsPrivileged([
@@ -76,7 +77,7 @@ export function createMainWindow() {
     width: state.width,
     height: state.height,
     show: false,
-    title: "OpenCode",
+    title: PRODUCT_BRAND.names.prod,
     icon: iconPath(),
     backgroundColor,
     ...(process.platform === "darwin"
@@ -120,37 +121,6 @@ export function createMainWindow() {
   win.once("ready-to-show", () => {
     win.show()
   })
-
-  return win
-}
-
-export function createLoadingWindow() {
-  const mode = tone()
-  const win = new BrowserWindow({
-    width: 640,
-    height: 480,
-    resizable: false,
-    center: true,
-    show: true,
-    icon: iconPath(),
-    backgroundColor,
-    ...(process.platform === "darwin" ? { titleBarStyle: "hidden" as const } : {}),
-    ...(process.platform === "win32"
-      ? {
-          frame: false,
-          titleBarStyle: "hidden" as const,
-          titleBarOverlay: overlay({ mode }),
-        }
-      : {}),
-    webPreferences: {
-      preload: join(root, "../preload/index.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  })
-
-  loadWindow(win, "loading.html")
 
   return win
 }

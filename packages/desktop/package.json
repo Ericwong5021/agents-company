@@ -4,10 +4,10 @@
   "version": "0.1.2",
   "type": "module",
   "license": "Apache-2.0",
-  "homepage": "https://opencode.ai",
+  "homepage": "https://github.com/Ericwong5021/agents-company",
   "author": {
-    "name": "OpenCode",
-    "email": "hello@opencode.ai"
+    "name": "Agent Company",
+    "email": "maintainers@agentcompany.ai"
   },
   "scripts": {
     "typecheck": "tsgo -b",

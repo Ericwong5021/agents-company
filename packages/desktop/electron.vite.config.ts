@@ -1,21 +1,22 @@
 import { defineConfig } from "electron-vite"
 import appPlugin from "@agents-company/app/vite"
 import * as fs from "node:fs/promises"
+import path from "node:path"
 
 const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.AGENTCOMPANY_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
 })()
 
-const OPENCODE_SERVER_DIST = "../opencode/dist/node"
+const CONTROL_PLANE_DIST = "../opencode/dist/node"
 
 const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
 
 export default defineConfig({
   main: {
     define: {
-      "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.AGENTCOMPANY_CHANNEL": JSON.stringify(channel),
     },
     build: {
       rollupOptions: {
@@ -25,25 +26,26 @@ export default defineConfig({
     },
     plugins: [
       {
-        name: "opencode:node-pty-narrower",
+        name: "agent-company:node-pty-narrower",
         enforce: "pre",
         resolveId(s) {
           if (s === "@lydell/node-pty") return nodePtyPkg
         },
       },
       {
-        name: "opencode:virtual-server-module",
+        name: "agent-company:virtual-server-module",
         enforce: "pre",
         resolveId(id) {
-          if (id === "virtual:opencode-server") return this.resolve(`${OPENCODE_SERVER_DIST}/node.js`)
+          if (id === "virtual:opencode-server") return { id: "./chunks/node.js", external: true }
         },
       },
       {
-        name: "opencode:copy-server-assets",
+        name: "agent-company:copy-control-plane-assets",
         async writeBundle() {
-          for (const l of await fs.readdir(OPENCODE_SERVER_DIST)) {
-            if (!l.endsWith(".wasm")) continue
-            await fs.writeFile(`./out/main/chunks/${l}`, await fs.readFile(`${OPENCODE_SERVER_DIST}/${l}`))
+          await fs.mkdir("./out/main/chunks", { recursive: true })
+          for (const l of await fs.readdir(CONTROL_PLANE_DIST)) {
+            if (l.endsWith(".map")) continue
+            await fs.copyFile(path.join(CONTROL_PLANE_DIST, l), path.join("./out/main/chunks", l))
           }
         },
       },
@@ -65,7 +67,7 @@ export default defineConfig({
     publicDir: "../../../app/public",
     root: "src/renderer",
     define: {
-      "import.meta.env.VITE_OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.VITE_AGENTCOMPANY_CHANNEL": JSON.stringify(channel),
     },
     build: {
       rollupOptions: {

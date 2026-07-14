@@ -1,6 +1,7 @@
 import { Menu, shell } from "electron"
 
 import { UPDATER_ENABLED } from "./constants"
+import { PRODUCT_BRAND } from "../shared/brand"
 import { createMainWindow } from "./windows"
 
 type Deps = {
@@ -15,7 +16,7 @@ export function createMenu(deps: Deps) {
 
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: "OpenCode",
+      label: PRODUCT_BRAND.names.prod,
       submenu: [
         { role: "about" },
         {
@@ -115,18 +116,15 @@ export function createMenu(deps: Deps) {
     {
       label: "Help",
       submenu: [
-        { label: "OpenCode Documentation", click: () => shell.openExternal("https://opencode.ai/docs") },
-        { label: "Support Forum", click: () => shell.openExternal("https://discord.com/invite/opencode") },
-        { type: "separator" },
+        { label: "Agent Company Documentation", click: () => shell.openExternal("https://github.com/Ericwong5021/agents-company") },
         { type: "separator" },
         {
           label: "Share Feedback",
-          click: () =>
-            shell.openExternal("https://github.com/anomalyco/opencode/issues/new?template=feature_request.yml"),
+          click: () => shell.openExternal("https://github.com/Ericwong5021/agents-company/issues/new?template=feature_request.yml"),
         },
         {
           label: "Report a Bug",
-          click: () => shell.openExternal("https://github.com/anomalyco/opencode/issues/new?template=bug_report.yml"),
+          click: () => shell.openExternal("https://github.com/Ericwong5021/agents-company/issues/new?template=bug_report.yml"),
         },
       ],
     },
