@@ -14,6 +14,9 @@ export async function createOpencode(options?: ServerOptions) {
 
   const client = createOpencodeClient({
     baseUrl: server.url,
+    headers: {
+      Authorization: "Basic " + Buffer.from(server.username + ":" + server.password).toString("base64"),
+    },
   })
 
   return {

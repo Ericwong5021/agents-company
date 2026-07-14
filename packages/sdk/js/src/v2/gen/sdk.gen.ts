@@ -23,6 +23,7 @@ import type {
   BashInteractiveListResponses,
   BashInteractiveReplyErrors,
   BashInteractiveReplyResponses,
+  BootstrapInput,
   CommandListResponses,
   CompanyAgentCreateErrors,
   CompanyAgentCreateResponses,
@@ -39,10 +40,28 @@ import type {
   CompanyAgentTemplatesSearchResponses,
   CompanyAgentUpdateErrors,
   CompanyAgentUpdateResponses,
+  CompanyBootstrapErrors,
+  CompanyBootstrapResponses,
+  CompanyCurrentErrors,
+  CompanyCurrentResponses,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
   CompanyProjectResolveGateResponses,
   CompanyProjectStartResponses,
+  CompanyProviderAuthErrors,
+  CompanyProviderAuthResponses,
+  CompanyProviderOauthAuthorizeErrors,
+  CompanyProviderOauthAuthorizeResponses,
+  CompanyProviderOauthCallbackErrors,
+  CompanyProviderOauthCallbackResponses,
+  CompanyProviderRemoveErrors,
+  CompanyProviderRemoveResponses,
+  CompanyProvidersErrors,
+  CompanyProviderSetErrors,
+  CompanyProviderSetResponses,
+  CompanyProvidersResponses,
+  CompanyRepositoryInspectErrors,
+  CompanyRepositoryInspectResponses,
   Config as Config3,
   ConfigGetResponses,
   ConfigProvidersResponses,
@@ -102,6 +121,18 @@ import type {
   GroupSessionMessagesResponses,
   GroupSessionStatusResponses,
   InstanceDisposeResponses,
+  LocalAuthCredentialsErrors,
+  LocalAuthCredentialsResponses,
+  LocalAuthExchangeErrors,
+  LocalAuthExchangeResponses,
+  LocalAuthPairErrors,
+  LocalAuthPairResponses,
+  LocalAuthRevokeErrors,
+  LocalAuthRevokeResponses,
+  LocalAuthSessionErrors,
+  LocalAuthSessionResponses,
+  LocalExchangeInput,
+  LocalPairingInput,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -175,6 +206,7 @@ import type {
   QuestionReplyResponses,
   QuestionSetNeverAskErrors,
   QuestionSetNeverAskResponses,
+  RepositoryInspectInput,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionActorsErrors,
@@ -490,6 +522,304 @@ export class Global extends HeyApiClient {
   private _import?: Import
   get import(): Import {
     return (this._import ??= new Import({ client: this.client }))
+  }
+}
+
+export class LocalAuth extends HeyApiClient {
+  /**
+   * Exchange a one-time browser pairing code for a bearer credential
+   */
+  public exchange<ThrowOnError extends boolean = false>(
+    parameters?: {
+      localExchangeInput?: LocalExchangeInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "localExchangeInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<LocalAuthExchangeResponses, LocalAuthExchangeErrors, ThrowOnError>({
+      url: "/local-auth/exchange",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get the current local authentication session
+   */
+  public session<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<LocalAuthSessionResponses, LocalAuthSessionErrors, ThrowOnError>({
+      url: "/local-auth/session",
+      ...options,
+    })
+  }
+
+  /**
+   * Create a short-lived browser pairing code
+   */
+  public pair<ThrowOnError extends boolean = false>(
+    parameters?: {
+      localPairingInput?: LocalPairingInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "localPairingInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<LocalAuthPairResponses, LocalAuthPairErrors, ThrowOnError>({
+      url: "/local-auth/pairings",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List browser credentials
+   */
+  public credentials<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      LocalAuthCredentialsResponses,
+      LocalAuthCredentialsErrors,
+      ThrowOnError
+    >({ url: "/local-auth/credentials", ...options })
+  }
+
+  /**
+   * Revoke a browser credential
+   */
+  public revoke<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "id" }] }])
+    return (options?.client ?? this.client).delete<LocalAuthRevokeResponses, LocalAuthRevokeErrors, ThrowOnError>({
+      url: "/local-auth/credentials/{id}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Company extends HeyApiClient {
+  /**
+   * Get the local company bootstrap state
+   */
+  public current<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<CompanyCurrentResponses, CompanyCurrentErrors, ThrowOnError>({
+      url: "/company",
+      ...options,
+    })
+  }
+
+  /**
+   * List providers available for company bootstrap
+   */
+  public providers<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<CompanyProvidersResponses, CompanyProvidersErrors, ThrowOnError>({
+      url: "/company/providers",
+      ...options,
+    })
+  }
+
+  /**
+   * List provider authentication methods
+   */
+  public providerAuth<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<CompanyProviderAuthResponses, CompanyProviderAuthErrors, ThrowOnError>({
+      url: "/company/providers/auth",
+      ...options,
+    })
+  }
+
+  /**
+   * Remove a provider credential
+   */
+  public providerRemove<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "providerID" }] }])
+    return (options?.client ?? this.client).delete<
+      CompanyProviderRemoveResponses,
+      CompanyProviderRemoveErrors,
+      ThrowOnError
+    >({
+      url: "/company/providers/{providerID}/credentials",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Store a provider credential
+   */
+  public providerSet<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      auth?: Auth3
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { key: "auth", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<CompanyProviderSetResponses, CompanyProviderSetErrors, ThrowOnError>({
+      url: "/company/providers/{providerID}/credentials",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Begin provider OAuth authorization
+   */
+  public providerOauthAuthorize<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      method?: number
+      inputs?: {
+        [key: string]: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "body", key: "method" },
+            { in: "body", key: "inputs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyProviderOauthAuthorizeResponses,
+      CompanyProviderOauthAuthorizeErrors,
+      ThrowOnError
+    >({
+      url: "/company/providers/{providerID}/oauth/authorize",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Complete provider OAuth authorization
+   */
+  public providerOauthCallback<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      method?: number
+      code?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "body", key: "method" },
+            { in: "body", key: "code" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyProviderOauthCallbackResponses,
+      CompanyProviderOauthCallbackErrors,
+      ThrowOnError
+    >({
+      url: "/company/providers/{providerID}/oauth/callback",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Inspect a repository for company bootstrap
+   */
+  public repositoryInspect<ThrowOnError extends boolean = false>(
+    parameters?: {
+      repositoryInspectInput?: RepositoryInspectInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "repositoryInspectInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyRepositoryInspectResponses,
+      CompanyRepositoryInspectErrors,
+      ThrowOnError
+    >({
+      url: "/company/repository/inspect",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Atomically create the local company
+   */
+  public bootstrap<ThrowOnError extends boolean = false>(
+    parameters?: {
+      bootstrapInput?: BootstrapInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "bootstrapInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<CompanyBootstrapResponses, CompanyBootstrapErrors, ThrowOnError>({
+      url: "/company/bootstrap",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -6531,6 +6861,16 @@ export class OpencodeClient extends HeyApiClient {
   private _global?: Global
   get global(): Global {
     return (this._global ??= new Global({ client: this.client }))
+  }
+
+  private _localAuth?: LocalAuth
+  get localAuth(): LocalAuth {
+    return (this._localAuth ??= new LocalAuth({ client: this.client }))
+  }
+
+  private _company?: Company
+  get company(): Company {
+    return (this._company ??= new Company({ client: this.client }))
   }
 
   private _auth?: Auth

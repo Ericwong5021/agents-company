@@ -75,8 +75,7 @@ await createClient({
   ],
 })
 
-await $`bun prettier --write src/gen`
 await $`bun prettier --write src/v2`
 await $`rm -rf dist`
-await $`bun tsc`
+await $`bun typecheck`
 await $`rm openapi.json`

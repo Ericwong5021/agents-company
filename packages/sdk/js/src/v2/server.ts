@@ -1,4 +1,5 @@
 import launch from "cross-spawn"
+import { randomBytes } from "node:crypto"
 import { type Config } from "./gen/types.gen.js"
 import { stop, bindAbort } from "../process.js"
 
@@ -31,11 +32,15 @@ export async function createOpencodeServer(options?: ServerOptions) {
 
   const args = [`serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
+  const username = "agentcompany"
+  const password = randomBytes(32).toString("base64url")
 
   const proc = launch(`opencode`, args, {
     env: {
       ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      AGENTCOMPANY_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      AGENTCOMPANY_SERVER_USERNAME: username,
+      AGENTCOMPANY_SERVER_PASSWORD: password,
     },
   })
   let clear = () => {}
@@ -53,7 +58,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
       output += chunk.toString()
       const lines = output.split("\n")
       for (const line of lines) {
-        if (line.startsWith("opencode server listening")) {
+        if (/^(agentcompany|opencode) server listening/.test(line)) {
           const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
           if (!match) {
             clear()
@@ -92,6 +97,8 @@ export async function createOpencodeServer(options?: ServerOptions) {
 
   return {
     url,
+    username,
+    password,
     close() {
       clear()
       stop(proc)
@@ -119,7 +126,7 @@ export function createOpencodeTui(options?: TuiOptions) {
     stdio: "inherit",
     env: {
       ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
+      AGENTCOMPANY_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
     },
   })
 

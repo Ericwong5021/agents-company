@@ -4,6 +4,269 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type IssuedCredential = {
+  credential_id: string
+  label: string
+  token: string
+  created_at: number
+}
+
+export type ProductValidationError = {
+  name: "ProductValidationError"
+  data: {
+    issues: Array<{
+      path: Array<string>
+      message: string
+    }>
+  }
+}
+
+export type LocalPairingInvalidOrExpired = {
+  name: "LocalPairingInvalidOrExpired"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type UnknownError = {
+  name: "UnknownError"
+  data: {
+    message: string
+  }
+}
+
+export type LocalExchangeInput = {
+  code: string
+  label: string
+}
+
+export type BoardMember = {
+  id: string
+  role: "ceo" | "cto" | "product_lead"
+  name: string
+  lifecycle: "employee"
+  responsibilities: Array<string>
+}
+
+export type CompanyNeedsBootstrapState = {
+  state: "needs_bootstrap"
+  data_directory: string
+  defaults: {
+    company_name: "Agent Company"
+    approval_preset: "balanced"
+    board: [BoardMember, BoardMember, BoardMember]
+  }
+  capabilities: {
+    board_messages: false
+  }
+}
+
+export type CompanyId = string
+
+export type ApprovalPreset = "autonomous" | "balanced" | "strict"
+
+export type RepositoryCandidate = {
+  project_id: string
+  root_path: string
+  default_branch: string
+  bootstrap_head_commit: string | null
+  dirty: boolean
+}
+
+export type StartSuggestion = {
+  kind: "bootstrap_complete"
+  action: "open_board"
+}
+
+export type CompanyReadyState = {
+  state: "ready"
+  data_directory: string
+  company: {
+    id: CompanyId
+    name: string
+    data_version: 1
+    provider: {
+      provider_id: string
+      model_id: string
+    }
+    approval_policy: {
+      preset: ApprovalPreset
+    }
+    repository: RepositoryCandidate
+    board: [BoardMember, BoardMember, BoardMember]
+    created_at: number
+    updated_at: number
+  }
+  start_suggestion: StartSuggestion
+  capabilities: {
+    board_messages: false
+  }
+}
+
+export type CompanyState = CompanyNeedsBootstrapState | CompanyReadyState
+
+export type LocalAuthUnauthorized = {
+  name: "LocalAuthUnauthorized"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type CompanyCorruptState = {
+  name: "CompanyCorruptState"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type CompanyModelOption = {
+  model_id: string
+  name: string
+  status: "alpha" | "beta" | "deprecated" | "active"
+  context_window: number
+}
+
+export type CompanyProviderOption = {
+  provider_id: string
+  name: string
+  connected: boolean
+  models: Array<CompanyModelOption>
+}
+
+export type CompanyProviderList = {
+  providers: Array<CompanyProviderOption>
+  defaults: {
+    [key: string]: string
+  }
+}
+
+export type ProviderAuthMethod = {
+  type: "oauth" | "api"
+  label: string
+  prompts?: Array<
+    | {
+        type: "text"
+        key: string
+        message: string
+        placeholder?: string
+        when?: {
+          key: string
+          op: "eq" | "neq"
+          value: string
+        }
+      }
+    | {
+        type: "select"
+        key: string
+        message: string
+        options: Array<{
+          label: string
+          value: string
+          hint?: string
+        }>
+        when?: {
+          key: string
+          op: "eq" | "neq"
+          value: string
+        }
+      }
+  >
+}
+
+export type ProviderConnection = {
+  provider_id: string
+  connected: true
+  models: Array<string>
+}
+
+export type CompanyRepositoryNotGit = {
+  name: "CompanyRepositoryNotGit"
+  data: {
+    path: string
+  }
+}
+
+export type CompanyProviderUnsupported = {
+  name: "CompanyProviderUnsupported"
+  data: {
+    provider_id: string
+  }
+}
+
+export type CompanyProviderNotConnected = {
+  name: "CompanyProviderNotConnected"
+  data: {
+    provider_id: string
+  }
+}
+
+export type CompanyModelNotAvailable = {
+  name: "CompanyModelNotAvailable"
+  data: {
+    provider_id: string
+    model_id: string
+  }
+}
+
+export type ProviderAuthValidationFailed = {
+  name: "ProviderAuthValidationFailed"
+  data: {
+    field: string
+    message: string
+  }
+}
+
+export type OAuth = {
+  type: "oauth"
+  refresh: string
+  access: string
+  expires: number
+  accountId?: string
+  enterpriseUrl?: string
+}
+
+export type ApiAuth = {
+  type: "api"
+  key: string
+  metadata?: {
+    [key: string]: string
+  }
+}
+
+export type WellKnownAuth = {
+  type: "wellknown"
+  key: string
+  token: string
+}
+
+export type Auth = OAuth | ApiAuth | WellKnownAuth
+
+export type ProviderAuthAuthorization = {
+  url: string
+  method: "auto" | "code"
+  instructions: string
+}
+
+export type RepositoryInspectInput = {
+  repository_path: string
+}
+
+export type CompanyAlreadyInitialized = {
+  name: "CompanyAlreadyInitialized"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type BootstrapInput = {
+  request_id: string
+  company_name: string
+  provider_id: string
+  model_id: string
+  repository_path: string
+  approval_preset?: ApprovalPreset
+}
+
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -453,13 +716,6 @@ export type ProviderAuthError = {
   name: "ProviderAuthError"
   data: {
     providerID: string
-    message: string
-  }
-}
-
-export type UnknownError = {
-  name: "UnknownError"
-  data: {
     message: string
   }
 }
@@ -2714,30 +2970,37 @@ export type BadRequestError = {
   success: false
 }
 
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-  enterpriseUrl?: string
+export type LocalAuthSession = {
+  authenticated: true
+  kind: "trusted" | "basic" | "bearer"
+  credential_id?: string
 }
 
-export type ApiAuth = {
-  type: "api"
-  key: string
-  metadata?: {
-    [key: string]: string
+export type LocalPairing = {
+  code: string
+  label: string
+  expires_at: number
+  pairing_url: string
+}
+
+export type LocalAuthForbidden = {
+  name: "LocalAuthForbidden"
+  data: {
+    [key: string]: never
   }
 }
 
-export type WellKnownAuth = {
-  type: "wellknown"
-  key: string
-  token: string
+export type LocalPairingInput = {
+  label: string
 }
 
-export type Auth = OAuth | ApiAuth | WellKnownAuth
+export type LocalCredential = {
+  id: string
+  label: string
+  created_at: number
+  last_used_at: number | null
+  revoked_at: number | null
+}
 
 export type Workspace = {
   id: string
@@ -3044,45 +3307,6 @@ export type SubtaskPartInput = {
   command?: string
 }
 
-export type ProviderAuthMethod = {
-  type: "oauth" | "api"
-  label: string
-  prompts?: Array<
-    | {
-        type: "text"
-        key: string
-        message: string
-        placeholder?: string
-        when?: {
-          key: string
-          op: "eq" | "neq"
-          value: string
-        }
-      }
-    | {
-        type: "select"
-        key: string
-        message: string
-        options: Array<{
-          label: string
-          value: string
-          hint?: string
-        }>
-        when?: {
-          key: string
-          op: "eq" | "neq"
-          value: string
-        }
-      }
-  >
-}
-
-export type ProviderAuthAuthorization = {
-  url: string
-  method: "auto" | "code"
-  instructions: string
-}
-
 export type Symbol = {
   name: string
   kind: number
@@ -3351,6 +3575,395 @@ export type GlobalHealthResponses = {
 
 export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
 
+export type LocalAuthExchangeData = {
+  body?: LocalExchangeInput
+  path?: never
+  query?: never
+  url: "/local-auth/exchange"
+}
+
+export type LocalAuthExchangeErrors = {
+  /**
+   * Invalid pairing request
+   */
+  400: ProductValidationError | LocalPairingInvalidOrExpired
+  /**
+   * Unable to complete local authentication operation
+   */
+  500: UnknownError
+}
+
+export type LocalAuthExchangeError = LocalAuthExchangeErrors[keyof LocalAuthExchangeErrors]
+
+export type LocalAuthExchangeResponses = {
+  /**
+   * Issued credential
+   */
+  200: IssuedCredential
+}
+
+export type LocalAuthExchangeResponse = LocalAuthExchangeResponses[keyof LocalAuthExchangeResponses]
+
+export type CompanyCurrentData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/company"
+}
+
+export type CompanyCurrentErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyCurrentError = CompanyCurrentErrors[keyof CompanyCurrentErrors]
+
+export type CompanyCurrentResponses = {
+  /**
+   * Current company state
+   */
+  200: CompanyState
+}
+
+export type CompanyCurrentResponse = CompanyCurrentResponses[keyof CompanyCurrentResponses]
+
+export type CompanyProvidersData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/company/providers"
+}
+
+export type CompanyProvidersErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProvidersError = CompanyProvidersErrors[keyof CompanyProvidersErrors]
+
+export type CompanyProvidersResponses = {
+  /**
+   * Provider choices
+   */
+  200: CompanyProviderList
+}
+
+export type CompanyProvidersResponse = CompanyProvidersResponses[keyof CompanyProvidersResponses]
+
+export type CompanyProviderAuthData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/company/providers/auth"
+}
+
+export type CompanyProviderAuthErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProviderAuthError = CompanyProviderAuthErrors[keyof CompanyProviderAuthErrors]
+
+export type CompanyProviderAuthResponses = {
+  /**
+   * Provider authentication methods
+   */
+  200: {
+    [key: string]: Array<ProviderAuthMethod>
+  }
+}
+
+export type CompanyProviderAuthResponse = CompanyProviderAuthResponses[keyof CompanyProviderAuthResponses]
+
+export type CompanyProviderRemoveData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/company/providers/{providerID}/credentials"
+}
+
+export type CompanyProviderRemoveErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProviderRemoveError = CompanyProviderRemoveErrors[keyof CompanyProviderRemoveErrors]
+
+export type CompanyProviderRemoveResponses = {
+  /**
+   * Credential removed
+   */
+  200: boolean
+}
+
+export type CompanyProviderRemoveResponse = CompanyProviderRemoveResponses[keyof CompanyProviderRemoveResponses]
+
+export type CompanyProviderSetData = {
+  body?: Auth
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/company/providers/{providerID}/credentials"
+}
+
+export type CompanyProviderSetErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProviderSetError = CompanyProviderSetErrors[keyof CompanyProviderSetErrors]
+
+export type CompanyProviderSetResponses = {
+  /**
+   * Connected provider
+   */
+  200: ProviderConnection
+}
+
+export type CompanyProviderSetResponse = CompanyProviderSetResponses[keyof CompanyProviderSetResponses]
+
+export type CompanyProviderOauthAuthorizeData = {
+  body?: {
+    /**
+     * Auth method index
+     */
+    method: number
+    /**
+     * Prompt inputs
+     */
+    inputs?: {
+      [key: string]: string
+    }
+  }
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/company/providers/{providerID}/oauth/authorize"
+}
+
+export type CompanyProviderOauthAuthorizeErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProviderOauthAuthorizeError =
+  CompanyProviderOauthAuthorizeErrors[keyof CompanyProviderOauthAuthorizeErrors]
+
+export type CompanyProviderOauthAuthorizeResponses = {
+  /**
+   * OAuth authorization
+   */
+  200: ProviderAuthAuthorization
+}
+
+export type CompanyProviderOauthAuthorizeResponse =
+  CompanyProviderOauthAuthorizeResponses[keyof CompanyProviderOauthAuthorizeResponses]
+
+export type CompanyProviderOauthCallbackData = {
+  body?: {
+    /**
+     * Auth method index
+     */
+    method: number
+    /**
+     * OAuth authorization code
+     */
+    code?: string
+  }
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/company/providers/{providerID}/oauth/callback"
+}
+
+export type CompanyProviderOauthCallbackErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyProviderOauthCallbackError =
+  CompanyProviderOauthCallbackErrors[keyof CompanyProviderOauthCallbackErrors]
+
+export type CompanyProviderOauthCallbackResponses = {
+  /**
+   * OAuth callback completed
+   */
+  200: boolean
+}
+
+export type CompanyProviderOauthCallbackResponse =
+  CompanyProviderOauthCallbackResponses[keyof CompanyProviderOauthCallbackResponses]
+
+export type CompanyRepositoryInspectData = {
+  body?: RepositoryInspectInput
+  path?: never
+  query?: never
+  url: "/company/repository/inspect"
+}
+
+export type CompanyRepositoryInspectErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyRepositoryInspectError = CompanyRepositoryInspectErrors[keyof CompanyRepositoryInspectErrors]
+
+export type CompanyRepositoryInspectResponses = {
+  /**
+   * Repository candidate
+   */
+  200: RepositoryCandidate
+}
+
+export type CompanyRepositoryInspectResponse =
+  CompanyRepositoryInspectResponses[keyof CompanyRepositoryInspectResponses]
+
+export type CompanyBootstrapData = {
+  body?: BootstrapInput
+  path?: never
+  query?: never
+  url: "/company/bootstrap"
+}
+
+export type CompanyBootstrapErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Company bootstrap already initialized
+   */
+  409: CompanyAlreadyInitialized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyBootstrapError = CompanyBootstrapErrors[keyof CompanyBootstrapErrors]
+
+export type CompanyBootstrapResponses = {
+  /**
+   * Initialized company
+   */
+  200: CompanyReadyState
+}
+
+export type CompanyBootstrapResponse = CompanyBootstrapResponses[keyof CompanyBootstrapResponses]
+
 export type GlobalEventData = {
   body?: never
   path?: never
@@ -3516,6 +4129,144 @@ export type GlobalImportRunResponses = {
 }
 
 export type GlobalImportRunResponse = GlobalImportRunResponses[keyof GlobalImportRunResponses]
+
+export type LocalAuthSessionData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/local-auth/session"
+}
+
+export type LocalAuthSessionErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete local authentication operation
+   */
+  500: UnknownError
+}
+
+export type LocalAuthSessionError = LocalAuthSessionErrors[keyof LocalAuthSessionErrors]
+
+export type LocalAuthSessionResponses = {
+  /**
+   * Authenticated session
+   */
+  200: LocalAuthSession
+}
+
+export type LocalAuthSessionResponse = LocalAuthSessionResponses[keyof LocalAuthSessionResponses]
+
+export type LocalAuthPairData = {
+  body?: LocalPairingInput
+  path?: never
+  query?: never
+  url: "/local-auth/pairings"
+}
+
+export type LocalAuthPairErrors = {
+  /**
+   * Invalid credential request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Basic authentication required
+   */
+  403: LocalAuthForbidden
+  /**
+   * Unable to complete local authentication operation
+   */
+  500: UnknownError
+}
+
+export type LocalAuthPairError = LocalAuthPairErrors[keyof LocalAuthPairErrors]
+
+export type LocalAuthPairResponses = {
+  /**
+   * Pairing code and URL
+   */
+  200: LocalPairing
+}
+
+export type LocalAuthPairResponse = LocalAuthPairResponses[keyof LocalAuthPairResponses]
+
+export type LocalAuthCredentialsData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/local-auth/credentials"
+}
+
+export type LocalAuthCredentialsErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Basic authentication required
+   */
+  403: LocalAuthForbidden
+  /**
+   * Unable to complete local authentication operation
+   */
+  500: UnknownError
+}
+
+export type LocalAuthCredentialsError = LocalAuthCredentialsErrors[keyof LocalAuthCredentialsErrors]
+
+export type LocalAuthCredentialsResponses = {
+  /**
+   * Credential audit records
+   */
+  200: Array<LocalCredential>
+}
+
+export type LocalAuthCredentialsResponse = LocalAuthCredentialsResponses[keyof LocalAuthCredentialsResponses]
+
+export type LocalAuthRevokeData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: never
+  url: "/local-auth/credentials/{id}"
+}
+
+export type LocalAuthRevokeErrors = {
+  /**
+   * Invalid credential request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Basic authentication required
+   */
+  403: LocalAuthForbidden
+  /**
+   * Unable to complete local authentication operation
+   */
+  500: UnknownError
+}
+
+export type LocalAuthRevokeError = LocalAuthRevokeErrors[keyof LocalAuthRevokeErrors]
+
+export type LocalAuthRevokeResponses = {
+  /**
+   * Credential revoked
+   */
+  200: boolean
+}
+
+export type LocalAuthRevokeResponse = LocalAuthRevokeResponses[keyof LocalAuthRevokeResponses]
 
 export type AuthRemoveData = {
   body?: never
