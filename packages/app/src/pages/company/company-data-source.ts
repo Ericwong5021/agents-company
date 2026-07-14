@@ -1,6 +1,7 @@
-import { type CompanyState, createOpencodeClient, type LocalAuthSession } from "@agents-company/sdk/v2/client"
-import type { CompanyWorkspaceAccess, CompanyWorkspaceSnapshot } from "./company-model"
+import { type CompanyState, createOpencodeClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
+import type { CompanyWorkspaceAccess, CompanyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
 import { createFixtureCompanyWorkspaceDataSource } from "./company-fixture"
+import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 
 export type CompanyClient = Pick<ReturnType<typeof createOpencodeClient>, "company" | "localAuth">
 
@@ -37,6 +38,10 @@ export type CompanyWorkspaceDataSource = {
   ): Promise<Awaited<ReturnType<CompanyClient["localAuth"]["revoke"]>>["data"]>
   sendMessage?(input: { channelID: string; body: string }): Promise<void>
   approveDelivery?(input: { deliveryID: string }): Promise<void>
+  /** M2 conversation store, available when company is ready */
+  conversation?: ConversationStore
+  /** Forward an SSE event to the data source for M2 invalidation handling */
+  handleEvent?(event: Event): void
 }
 
 type SdkResult<T, E = unknown> = { data?: T; error?: E; response: Response }
@@ -54,9 +59,35 @@ function access(session: LocalAuthSession): CompanyWorkspaceAccess {
   }
 }
 
-function toSnapshot(state: CompanyState, session: LocalAuthSession): CompanyWorkspaceSnapshot {
-  if (state.state === "needs_bootstrap") return { status: "needs_bootstrap", access: access(session), ...state }
-  return { status: "ready", access: access(session), ...state }
+/** Build a ready snapshot that includes the conversation state, if available. */
+function toReadySnapshot(
+  state: CompanyState & { state: "ready" },
+  session: LocalAuthSession,
+  conversation?: ConversationSnapshot,
+): CompanyWorkspaceSnapshot {
+  if (state.state !== "ready") throw new Error("Expected ready state")
+  const base = { status: "ready" as const, access: access(session), ...state }
+  if (conversation) {
+    return { ...base, conversation }
+  }
+  // Default empty conversation state when store is not yet initialized
+  return {
+    ...base,
+    conversation: {
+      channels: [],
+      activeChannelID: null,
+      messages: [],
+      messagesBefore: null,
+      pendingMessages: [],
+      thread: null,
+      threadEntries: [],
+      threadEntriesBefore: null,
+      loadingChannels: true,
+      loadingMessages: false,
+      sending: false,
+      error: null,
+    } satisfies ConversationSnapshot,
+  }
 }
 
 function errorSnapshot(error: unknown): CompanyWorkspaceSnapshot {
@@ -100,6 +131,7 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
     createPairing: async () => undefined,
     listCredentials: async () => undefined,
     revokeCredential: async () => undefined,
+    handleEvent: () => undefined,
   }
 }
 
@@ -111,14 +143,56 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     listeners.forEach((listener) => listener(next))
   }
 
+  // ── Conversation store management ─────────────────────────────────────────
+  let conversationStore: ConversationStore | undefined
+  let unsubConversation: (() => void) | undefined
+
+  function ensureConversationStore(companyID: string) {
+    if (conversationStore) return conversationStore
+    conversationStore = createConversationStore({ client: client as Pick<CompanyClient, "company">, companyID })
+    // Subscribe to conversation store changes to update the ready snapshot
+    unsubConversation = conversationStore.subscribe((cs) => {
+      const currentSnapshot = current
+      if (currentSnapshot.status === "ready") {
+        publish({ ...currentSnapshot, conversation: cs })
+      }
+    })
+    return conversationStore
+  }
+
+  function disposeConversationStore() {
+    if (unsubConversation) {
+      unsubConversation()
+      unsubConversation = undefined
+    }
+    conversationStore = undefined
+  }
+
   const refresh = async () => {
     publish({ status: "loading" })
     try {
       const [company, session] = await Promise.all([client.company.current(), client.localAuth.session()])
-      publish(toSnapshot(unwrap(company), unwrap(session)))
+      const companyState = unwrap(company) as CompanyState
+      const sessionState = unwrap(session)
+
+      if (companyState.state === "ready") {
+        // Initialize or refresh conversation store
+        const cs = ensureConversationStore(companyState.company.id)
+        await cs.refresh()
+        publish(toReadySnapshot(companyState, sessionState, cs.getState()))
+      } else {
+        disposeConversationStore()
+        publish(toSnapshot(companyState, sessionState))
+      }
     } catch (error) {
+      disposeConversationStore()
       publish(errorSnapshot(error))
     }
+  }
+
+  function toSnapshot(state: CompanyState, session: LocalAuthSession): CompanyWorkspaceSnapshot {
+    if (state.state === "needs_bootstrap") return { status: "needs_bootstrap", access: access(session), ...state }
+    return toReadySnapshot(state as CompanyState & { state: "ready" }, session)
   }
 
   const request = async <T, E>(operation: Promise<SdkResult<T, E>>) => unwrap(await operation)
@@ -145,6 +219,16 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     createPairing: (input) => request(client.localAuth.pair(input)),
     listCredentials: () => request(client.localAuth.credentials()),
     revokeCredential: (input) => request(client.localAuth.revoke(input)),
+    get conversation() { return conversationStore },
+    handleEvent(event: Event) {
+      if (
+        event.type === "company.channel.invalidated" ||
+        event.type === "company.thread.invalidated" ||
+        event.type === "company.conversation_run.updated"
+      ) {
+        conversationStore?.handleEvent(event)
+      }
+    },
   }
 }
 

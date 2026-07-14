@@ -21,6 +21,7 @@ import type { CompanyDemoSnapshot, CompanyWorkspaceSnapshot } from "./company-mo
 import { CompanyBootstrap, type CompanyBootstrapSnapshot } from "./company-bootstrap"
 import { CompanyReady, type CompanyReadySnapshot } from "./company-ready"
 import { useServer } from "@/context/server"
+import type { Event } from "@agents-company/sdk/v2/client"
 import "./workspace.css"
 
 type WorkspaceIcon = IconProps["name"]
@@ -579,6 +580,20 @@ export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceD
     const unsubscribe = source.subscribe(setSnapshot)
     onCleanup(unsubscribe)
     void source.refresh()
+
+    // Forward M2 conversation invalidation events to the data source
+    const unsubEvent = source.handleEvent
+      ? globalSDK.event.on("global", (event: Event) => {
+          if (
+            event.type === "company.channel.invalidated" ||
+            event.type === "company.thread.invalidated" ||
+            event.type === "company.conversation_run.updated"
+          ) {
+            source.handleEvent?.(event)
+          }
+        })
+      : undefined
+    if (unsubEvent) onCleanup(unsubEvent)
   })
 
   return (

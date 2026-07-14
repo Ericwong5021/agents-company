@@ -189,6 +189,7 @@ export function createFixtureCompanyWorkspaceDataSource(): CompanyWorkspaceDataS
     createPairing: async () => undefined,
     listCredentials: async () => undefined,
     revokeCredential: async () => undefined,
+    handleEvent: () => undefined,
     async sendMessage(input) {
       if (state.snapshot.status !== "demo") return
       if (input.channelID !== state.snapshot.featuredChannelID) return
