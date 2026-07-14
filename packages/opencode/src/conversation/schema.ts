@@ -1,5 +1,6 @@
+import { NamedError } from "@agents-company/shared/util/error"
 import z from "zod"
-import { BoardRole } from "@/company/schema"
+import { BoardRole, CompanyID } from "@/company/schema"
 
 export const ChannelID = z.string().startsWith("chn_").brand<"ChannelID">().meta({ ref: "ChannelID" })
 export type ChannelID = z.infer<typeof ChannelID>
@@ -128,3 +129,39 @@ export const SignalProjectionSource = z
   .strict()
   .meta({ ref: "SignalProjectionSource" })
 export type SignalProjectionSource = z.infer<typeof SignalProjectionSource>
+
+export const MessageInvalidInput = NamedError.create("ConversationMessageInvalidInput", z.object({}).strict())
+export const ChannelNotVisible = NamedError.create(
+  "ConversationChannelNotVisible",
+  z.object({ company_id: CompanyID, channel_id: ChannelID }).strict(),
+)
+export const ChannelNotWritable = NamedError.create(
+  "ConversationChannelNotWritable",
+  z.object({ channel_id: ChannelID }).strict(),
+)
+export const ThreadNotVisible = NamedError.create(
+  "ConversationThreadNotVisible",
+  z.object({ company_id: CompanyID, thread_id: ConversationThreadID }).strict(),
+)
+export const ThreadNotWritable = NamedError.create(
+  "ConversationThreadNotWritable",
+  z.object({ thread_id: ConversationThreadID }).strict(),
+)
+export const ReplyNotVisible = NamedError.create(
+  "ConversationReplyNotVisible",
+  z.object({ channel_id: ChannelID, message_id: ChannelMessageID }).strict(),
+)
+export const MentionNotVisible = NamedError.create(
+  "ConversationMentionNotVisible",
+  z.object({ channel_id: ChannelID }).strict(),
+)
+export const RequestConflict = NamedError.create(
+  "ConversationRequestConflict",
+  z.object({ channel_id: ChannelID, request_id: z.string().uuid() }).strict(),
+)
+export const SourceNotFound = NamedError.create(
+  "ConversationSourceNotFound",
+  z.object({ thread_id: ConversationThreadID, source_id: z.string().min(1) }).strict(),
+)
+export const CompanyNotFound = NamedError.create("ConversationCompanyNotFound", z.object({ company_id: CompanyID }).strict())
+export const InvalidCursor = NamedError.create("ConversationInvalidCursor", z.object({}).strict())

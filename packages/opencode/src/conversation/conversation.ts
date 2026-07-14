@@ -1,4 +1,3 @@
-import { NamedError } from "@agents-company/shared/util/error"
 import { Context, Effect, Layer } from "effect"
 import z from "zod"
 import { CompanyTable } from "@/company/company.sql"
@@ -21,17 +20,25 @@ import {
   ChannelKind,
   ChannelMessageCursor,
   ChannelMessageID,
+  ChannelNotVisible,
+  CompanyNotFound,
   ConversationMention,
   ConversationPrincipal,
   ConversationThreadID,
   ConversationThreadStatus,
+  InvalidCursor,
   MessageAuthor,
   MessageVisibility,
   RootNeedID,
   SignalProjectionID,
   SignalProjectionSourceKind,
   SignalType,
+  SourceNotFound,
+  ThreadNotVisible,
 } from "./schema"
+import * as Intake from "./intake"
+
+export { MessageAccepted, SendMessageInput } from "./intake"
 
 const PageLimit = z.number().int().min(1).max(100)
 
@@ -201,21 +208,6 @@ export const EnsureProjectChannelInput = z
   })
   .strict()
 export type EnsureProjectChannelInput = z.infer<typeof EnsureProjectChannelInput>
-
-export const ChannelNotVisible = NamedError.create(
-  "ConversationChannelNotVisible",
-  z.object({ company_id: CompanyID, channel_id: ChannelID }).strict(),
-)
-export const ThreadNotVisible = NamedError.create(
-  "ConversationThreadNotVisible",
-  z.object({ company_id: CompanyID, thread_id: ConversationThreadID }).strict(),
-)
-export const SourceNotFound = NamedError.create(
-  "ConversationSourceNotFound",
-  z.object({ thread_id: ConversationThreadID, source_id: z.string().min(1) }).strict(),
-)
-export const CompanyNotFound = NamedError.create("ConversationCompanyNotFound", z.object({ company_id: CompanyID }).strict())
-export const InvalidCursor = NamedError.create("ConversationInvalidCursor", z.object({}).strict())
 
 type ChannelAccess = Pick<PageMessagesInput, "companyID" | "channelID" | "principal">
 type ThreadAccess = Pick<GetThreadInput, "companyID" | "threadID" | "principal">
@@ -458,6 +450,7 @@ export interface Interface {
   readonly getThread: (input: GetThreadInput) => Effect.Effect<ConversationThreadDetail, InstanceType<typeof ThreadNotVisible>>
   readonly pageEntries: (input: PageEntriesInput) => Effect.Effect<ThreadEntryPage, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof InvalidCursor>>
   readonly getSource: (input: GetSourceInput) => Effect.Effect<ThreadSource, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof SourceNotFound>>
+  readonly sendMessage: (input: Intake.SendMessageInput) => Effect.Effect<Intake.MessageAccepted, Intake.SendMessageError>
   readonly ensureCompanyChannels: (input: EnsureCompanyChannelsInput) => Effect.Effect<void>
   readonly ensureProjectChannel: (input: EnsureProjectChannelInput) => Effect.Effect<ChannelSummary, InstanceType<typeof CompanyNotFound>>
 }
@@ -654,12 +647,15 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return channelFromRow(channel)
     })
 
+    const sendMessage = Intake.sendMessage
+
     return Service.of({
       listChannels,
       pageMessages,
       getThread,
       pageEntries,
       getSource,
+      sendMessage,
       ensureCompanyChannels,
       ensureProjectChannel,
     })
