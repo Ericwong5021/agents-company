@@ -31,7 +31,7 @@ const options = {
   },
   "no-auth": {
     type: "boolean" as const,
-    describe: "allow starting without authentication on non-loopback addresses (DANGEROUS)",
+    describe: "disable all authentication (DANGEROUS)",
     default: false,
   },
 }

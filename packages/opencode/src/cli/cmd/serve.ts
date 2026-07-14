@@ -1,7 +1,6 @@
 import { Server } from "../../server/server"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
-import { Flag } from "../../flag/flag"
 
 export const ServeCommand = cmd({
   command: "serve",
@@ -9,20 +8,23 @@ export const ServeCommand = cmd({
   describe: "starts a headless agentcompany server",
   handler: async (args) => {
     const opts = await resolveNetworkOptions(args)
-    const isLoopback = opts.hostname === "127.0.0.1" || opts.hostname === "localhost" || opts.hostname === "::1"
-
-    if (!isLoopback && !Flag.AGENTCOMPANY_SERVER_PASSWORD && !opts.noAuth) {
-      console.error("ERROR: Binding to non-loopback address without AGENTCOMPANY_SERVER_PASSWORD is not allowed.")
-      console.error("Set AGENTCOMPANY_SERVER_PASSWORD or pass --no-auth to override (DANGEROUS).")
-      process.exit(1)
-    }
-
-    if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) {
-      console.log("Warning: AGENTCOMPANY_SERVER_PASSWORD is not set; server is unsecured.")
-    }
-
     const server = await Server.listen(opts)
     console.log(`agentcompany server listening on http://${server.hostname}:${server.port}`)
+    if (opts.noAuth) {
+      console.warn("Warning: authentication is disabled; this server is unauthenticated.")
+    } else if (server.credentials) {
+      const response = await fetch(new URL("/local-auth/pairings", server.url), {
+        method: "POST",
+        headers: {
+          authorization: Server.authorization(server.credentials),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ label: "Browser" }),
+      })
+      if (!response.ok) throw new Error("Unable to create browser pairing")
+      const pairing = (await response.json()) as { pairing_url: string }
+      console.log(pairing.pairing_url)
+    }
 
     await new Promise(() => {})
     await server.stop()

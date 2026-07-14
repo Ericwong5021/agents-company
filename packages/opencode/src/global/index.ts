@@ -1,7 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
 import os from "os"
-import { Filesystem } from "../util"
 import { Flock } from "@agents-company/shared/util/flock"
 import { resolveAgentCompanyHome } from "@agents-company/shared/global"
 import { initWorkspace } from "../workspace/workspace"
@@ -36,7 +35,7 @@ await Promise.all([
 
 const CACHE_VERSION = "21"
 
-const version = await Filesystem.readText(path.join(Path.cache, "version")).catch(() => "0")
+const version = await fs.readFile(path.join(Path.cache, "version"), "utf8").catch(() => "0")
 
 if (version !== CACHE_VERSION) {
   try {
@@ -50,7 +49,7 @@ if (version !== CACHE_VERSION) {
       ),
     )
   } catch {}
-  await Filesystem.write(path.join(Path.cache, "version"), CACHE_VERSION)
+  await fs.writeFile(path.join(Path.cache, "version"), CACHE_VERSION)
 }
 
 export * as Global from "."

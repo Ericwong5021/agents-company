@@ -169,7 +169,7 @@ export async function refresh(force = false) {
   })
 }
 
-if (!Flag.AGENTCOMPANY_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
+if (typeof Bun !== "undefined" && !Flag.AGENTCOMPANY_DISABLE_MODELS_FETCH && !process.argv.includes("--get-yargs-completions")) {
   void refresh()
   setInterval(
     async () => {

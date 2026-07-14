@@ -1,18 +1,22 @@
 import { generateSpecs } from "hono-openapi"
 import { Hono } from "hono"
+import { randomBytes } from "node:crypto"
 import { adapter } from "#hono"
 import { lazy } from "@/util/lazy"
 import { Log } from "@/util"
 import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "@/control-plane/schema"
 import { MDNS } from "./mdns"
-import { AuthMiddleware, CompressionMiddleware, CorsMiddleware, ErrorMiddleware, LoggerMiddleware } from "./middleware"
+import { AuthMiddleware, CompressionMiddleware, CorsMiddleware, errorMiddleware, LoggerMiddleware, type ServerEnv } from "./middleware"
+import { type AuthMode, type BasicCredentials } from "./auth"
 import { FenceMiddleware } from "./fence"
 import { initProjectors } from "./projectors"
 import { InstanceRoutes } from "./routes/instance"
 import { ControlPlaneRoutes } from "./routes/control"
 import { UIRoutes } from "./routes/ui"
-import { GlobalRoutes } from "./routes/global"
+import { GlobalHealthRoutes, GlobalRoutes } from "./routes/global"
+import { CompanyRoutes } from "./routes/company"
+import { LocalAuthPublicRoutes, LocalAuthRoutes } from "./routes/local-auth"
 import { WorkspaceRouterMiddleware } from "./workspace"
 import { InstanceMiddleware } from "./routes/instance/middleware"
 import { WorkspaceRoutes } from "./routes/control/workspace"
@@ -28,34 +32,54 @@ export type Listener = {
   hostname: string
   port: number
   url: URL
+  credentials?: BasicCredentials
   stop: (close?: boolean) => Promise<void>
 }
 
-export const Default = lazy(() => create({}))
+export type CreateOptions = {
+  cors?: string[]
+  auth?: AuthMode
+}
 
-function create(opts: { cors?: string[] }) {
-  const app = new Hono()
-    .onError(ErrorMiddleware)
+export type ListenOptions = {
+  port: number
+  hostname: string
+  mdns?: boolean
+  mdnsDomain?: string
+  cors?: string[]
+  noAuth?: boolean
+  auth?: AuthMode | BasicCredentials
+}
+
+export { authorization } from "./auth"
+export type { AuthMode, BasicCredentials } from "./auth"
+
+export const Default = lazy(() => create({ auth: { mode: "trusted" } }))
+
+export function create(opts: CreateOptions = {}) {
+  const auth = opts.auth ?? { mode: "trusted" }
+  const app = new Hono<ServerEnv>()
+    .onError(errorMiddleware(auth))
     .use(CorsMiddleware(opts))
     .use(LoggerMiddleware)
-    .use(AuthMiddleware)
     .use(CompressionMiddleware)
-    .route("/global", GlobalRoutes())
+    .route("/global", GlobalHealthRoutes())
+    .route("/local-auth", LocalAuthPublicRoutes())
 
-  const runtime = adapter.create(app)
+  const runtime = adapter.create(app as never)
+  const protectedApp = new Hono<ServerEnv>()
+    .use(AuthMiddleware(auth))
+    .route("/company", CompanyRoutes())
+    .route("/global", GlobalRoutes())
+    .route("/local-auth", LocalAuthRoutes())
 
   if (Flag.AGENTCOMPANY_WORKSPACE_ID) {
-    return {
-      app: app
-        .use(InstanceMiddleware(Flag.AGENTCOMPANY_WORKSPACE_ID ? WorkspaceID.make(Flag.AGENTCOMPANY_WORKSPACE_ID) : undefined))
-        .use(FenceMiddleware)
-        .route("/", InstanceRoutes(runtime.upgradeWebSocket)),
-      runtime,
-    }
-  }
-
-  return {
-    app: app
+    protectedApp
+      .use(InstanceMiddleware(Flag.AGENTCOMPANY_WORKSPACE_ID ? WorkspaceID.make(Flag.AGENTCOMPANY_WORKSPACE_ID) : undefined))
+      .use(FenceMiddleware)
+      .route("/", InstanceRoutes(runtime.upgradeWebSocket))
+  } else {
+    protectedApp
       .route("/", ControlPlaneRoutes())
       .route(
         "/",
@@ -65,9 +89,9 @@ function create(opts: { cors?: string[] }) {
           .use(WorkspaceRouterMiddleware(runtime.upgradeWebSocket))
           .route("/", InstanceRoutes(runtime.upgradeWebSocket)),
       )
-      .route("/", UIRoutes()),
-    runtime,
   }
+
+  return { app: app.route("/", UIRoutes()).route("/", protectedApp), runtime }
 }
 
 export async function openapi() {
@@ -75,13 +99,13 @@ export async function openapi() {
   // hono-openapi can see describeRoute metadata (`.route()` wraps
   // handlers when the sub-app has a custom errorHandler, which
   // strips the metadata symbol).
-  const { app } = create({})
+  const { app } = create({ auth: { mode: "trusted" } })
   const result = await generateSpecs(app, {
     documentation: {
       info: {
-        title: "opencode",
+        title: "Agent Company Local API",
         version: "1.0.0",
-        description: "opencode api",
+        description: "Authenticated local Control Plane API for Agent Company",
       },
       openapi: "3.1.1",
     },
@@ -91,15 +115,25 @@ export async function openapi() {
 
 export let url: URL
 
-export async function listen(opts: {
-  port: number
-  hostname: string
-  mdns?: boolean
-  mdnsDomain?: string
-  cors?: string[]
-}): Promise<Listener> {
-  const built = create(opts)
-  const server = await built.runtime.listen(opts)
+function listenAuth(opts: ListenOptions): AuthMode {
+  if (opts.noAuth) return { mode: "trusted" }
+  if (opts.auth) {
+    if ("mode" in opts.auth) return opts.auth
+    return { mode: "network", basic: opts.auth }
+  }
+  return {
+    mode: "network",
+    basic: {
+      username: Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany",
+      password: Flag.AGENTCOMPANY_SERVER_PASSWORD ?? randomBytes(32).toString("base64url"),
+    },
+  }
+}
+
+export async function listen(opts: ListenOptions): Promise<Listener> {
+  const auth = listenAuth(opts)
+  const built = create({ cors: opts.cors, auth })
+  const server = await built.runtime.listen({ port: opts.port, hostname: opts.hostname })
 
   const next = new URL("http://localhost")
   next.hostname = opts.hostname
@@ -123,6 +157,7 @@ export async function listen(opts: {
     hostname: opts.hostname,
     port: server.port,
     url: next,
+    ...(auth.mode === "network" ? { credentials: auth.basic } : {}),
     stop(close?: boolean) {
       closing ??= (async () => {
         if (mdns) MDNS.unpublish()

@@ -99,16 +99,19 @@ function normalizeFrontMatter(existing: FrontMatter, defaults: FrontMatter): Fro
 }
 
 async function writeOrRepairMarkdown(filePath: string, defaults: FrontMatter, body: string): Promise<void> {
-  const file = Bun.file(filePath)
-  if (!(await file.exists())) {
-    await Bun.write(filePath, stringifyFrontMatter(defaults, body))
+  const exists = await fs.stat(filePath).then(
+    () => true,
+    () => false,
+  )
+  if (!exists) {
+    await fs.writeFile(filePath, stringifyFrontMatter(defaults, body))
     return
   }
 
-  const parsed = parseFrontMatter(await file.text())
+  const parsed = parseFrontMatter(await fs.readFile(filePath, "utf8"))
   const next = normalizeFrontMatter(parsed.frontMatter, defaults)
   if (JSON.stringify(next) === JSON.stringify(parsed.frontMatter)) return
-  await Bun.write(filePath, stringifyFrontMatter(next, parsed.body))
+  await fs.writeFile(filePath, stringifyFrontMatter(next, parsed.body))
 }
 
 // ---------------------------------------------------------------------------

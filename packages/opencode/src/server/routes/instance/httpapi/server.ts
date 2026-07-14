@@ -19,7 +19,6 @@ import { memoMap } from "@/effect/memo-map"
 const Query = Schema.Struct({
   directory: Schema.optional(Schema.String),
   workspace: Schema.optional(Schema.String),
-  auth_token: Schema.optional(Schema.String),
 })
 
 const Headers = Schema.Struct({
@@ -47,24 +46,6 @@ class Authorization extends HttpApiMiddleware.Service<Authorization>()("@opencod
     basic: HttpApiSecurity.basic,
   },
 }) {}
-
-const normalize = HttpRouter.middleware()(
-  Effect.gen(function* () {
-    return (effect) =>
-      Effect.gen(function* () {
-        const query = yield* HttpServerRequest.schemaSearchParams(Query)
-        if (!query.auth_token) return yield* effect
-        const req = yield* HttpServerRequest.HttpServerRequest
-        const next = req.modify({
-          headers: {
-            ...req.headers,
-            authorization: `Basic ${query.auth_token}`,
-          },
-        })
-        return yield* effect.pipe(Effect.provideService(HttpServerRequest.HttpServerRequest, next))
-      })
-  }),
-).layer
 
 const auth = Layer.succeed(
   Authorization,
@@ -138,7 +119,6 @@ export const routes = Layer.mergeAll(
   HttpApiBuilder.layer(ProviderSecured).pipe(Layer.provide(providerHandlers)),
 ).pipe(
   Layer.provide(auth),
-  Layer.provide(normalize),
   Layer.provide(instance),
   Layer.provide(HttpServer.layerServices),
   Layer.provideMerge(Observability.layer),

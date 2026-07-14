@@ -6,5 +6,7 @@ app.log
 src/provider/models-snapshot.js
 src/provider/models-snapshot.d.ts
 script/build-*.ts
+!script/build-node.ts
+!script/build-support.ts
 temporary-*.md
 .agents-company-test-fixtures-*

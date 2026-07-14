@@ -3,18 +3,28 @@ import { NamedError } from "@agents-company/shared/util/error"
 import { NotFoundError } from "../storage"
 import { Session } from "../session"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import type { ErrorHandler, MiddlewareHandler } from "hono"
+import type { Context, ErrorHandler, MiddlewareHandler } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { Log } from "../util"
-import { Flag } from "@/flag/flag"
-import { basicAuth } from "hono/basic-auth"
 import { cors } from "hono/cors"
 import { compress } from "hono/compress"
 import { isPtyConnectPath, PTY_CONNECT_TICKET_QUERY } from "./pty-ticket"
+import { createHash, timingSafeEqual } from "node:crypto"
+import { AppRuntime } from "@/effect/app-runtime"
+import { LocalAuth } from "@/local-auth"
+import { LocalAuthUnauthorized, type LocalAuthSession } from "@/local-auth/schema"
+import type { AuthMode } from "./auth"
 
 const log = Log.create({ service: "server" })
 
-export const ErrorMiddleware: ErrorHandler = (err, c) => {
+export type ServerEnv = {
+  Variables: {
+    localAuth: LocalAuthSession
+  }
+}
+
+export function errorMiddleware(auth: AuthMode): ErrorHandler {
+  return (err, c) => {
   log.error("failed", {
     error: err,
   })
@@ -23,6 +33,19 @@ export const ErrorMiddleware: ErrorHandler = (err, c) => {
     if (err instanceof NotFoundError) status = 404
     else if (err instanceof Provider.ModelNotFoundError) status = 400
     else if (err.name === "ProviderAuthValidationFailed") status = 400
+    else if (err.name === "CompanyAlreadyInitialized") status = 409
+    else if (err.name === "LocalAuthUnauthorized") status = 401
+    else if (err.name === "LocalAuthForbidden") status = 403
+    else if (err.name === "LocalPairingInvalidOrExpired") status = 400
+    else if (
+      [
+        "CompanyRepositoryNotGit",
+        "CompanyProviderUnsupported",
+        "CompanyProviderNotConnected",
+        "CompanyModelNotAvailable",
+      ].includes(err.name)
+    )
+      status = 400
     else if (err.name.startsWith("Worktree")) status = 400
     else status = 500
     return c.json(err.toObject(), { status })
@@ -31,26 +54,66 @@ export const ErrorMiddleware: ErrorHandler = (err, c) => {
     return c.json(new NamedError.Unknown({ message: err.message }).toObject(), { status: 409 })
   }
   if (err instanceof HTTPException) return err.getResponse()
-  const message = err instanceof Error && err.stack ? err.stack : err.toString()
+  const message = auth.mode === "network" ? "Internal server error" : err instanceof Error && err.stack ? err.stack : err.toString()
   return c.json(new NamedError.Unknown({ message }).toObject(), {
     status: 500,
   })
+  }
 }
 
-export const AuthMiddleware: MiddlewareHandler = (c, next) => {
+export const ErrorMiddleware = errorMiddleware({ mode: "trusted" })
+
+function credentialsMatch(expected: string, provided: string) {
+  return timingSafeEqual(
+    createHash("sha256").update(expected).digest(),
+    createHash("sha256").update(provided).digest(),
+  )
+}
+
+function unauthorized(c: Context<ServerEnv>) {
+  c.header("WWW-Authenticate", 'Basic realm="agentcompany", Bearer')
+  return c.json(new LocalAuthUnauthorized({}).toObject(), 401)
+}
+
+function authenticated(c: Context<ServerEnv>, session: LocalAuthSession) {
+  c.set("localAuth", session)
+}
+
+export function AuthMiddleware(auth: AuthMode): MiddlewareHandler<ServerEnv> {
+  return async (c, next) => {
   if (c.req.method === "OPTIONS") return next()
-  const password = Flag.AGENTCOMPANY_SERVER_PASSWORD
-  if (!password) return next()
+
+  if (auth.mode === "trusted") {
+    authenticated(c, { authenticated: true, kind: "trusted" })
+    return next()
+  }
 
   // PTY websocket connect with a ticket skips basic auth; the handler validates the ticket.
   const path = new URL(c.req.url).pathname
-  if (isPtyConnectPath(path) && c.req.query(PTY_CONNECT_TICKET_QUERY)) return next()
+  if (isPtyConnectPath(path) && c.req.query(PTY_CONNECT_TICKET_QUERY)) {
+    authenticated(c, { authenticated: true, kind: "trusted" })
+    return next()
+  }
 
-  const username = Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany"
+  const value = c.req.header("authorization")
+  if (!value) return unauthorized(c)
+  const separator = value.indexOf(" ")
+  const scheme = separator === -1 ? value : value.slice(0, separator)
+  const token = separator === -1 ? "" : value.slice(separator + 1).trim()
 
-  if (c.req.query("auth_token")) c.req.raw.headers.set("authorization", `Basic ${c.req.query("auth_token")}`)
+  if (scheme.toLowerCase() === "basic") {
+    const supplied = Buffer.from(token, "base64").toString("utf8")
+    if (!credentialsMatch(auth.basic.username + ":" + auth.basic.password, supplied)) return unauthorized(c)
+    authenticated(c, { authenticated: true, kind: "basic" })
+    return next()
+  }
 
-  return basicAuth({ username, password })(c, next)
+  if (scheme.toLowerCase() !== "bearer") return unauthorized(c)
+  const session = await AppRuntime.runPromise(LocalAuth.Service.use((service) => service.verify(token)))
+  if (!session) return unauthorized(c)
+  authenticated(c, session)
+  return next()
+  }
 }
 
 export const LoggerMiddleware: MiddlewareHandler = async (c, next) => {
@@ -75,12 +138,7 @@ export function CorsMiddleware(opts?: { cors?: string[] }): MiddlewareHandler {
     origin(input) {
       if (!input) return
 
-      if (input.startsWith("http://localhost:")) return input
-      if (input.startsWith("http://127.0.0.1:")) return input
-      if (input === "tauri://localhost" || input === "http://tauri.localhost" || input === "https://tauri.localhost")
-        return input
-
-      if (/^https:\/\/([a-z0-9-]+\.)*opencode\.ai$/.test(input)) return input
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(input)) return input
       if (opts?.cors?.includes(input)) return input
     },
   })

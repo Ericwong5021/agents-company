@@ -60,6 +60,8 @@ import { WorkflowRuntime } from "@/workflow/runtime"
 import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
+import { Company } from "@/company"
+import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
 import { CompanyProject, CompanyProjectExecution } from "@/company-project"
 import { Thread } from "@/thread/thread"
@@ -130,6 +132,8 @@ export const AppLayer = Layer.suspend(() =>
     Memory.defaultLayer,
     History.defaultLayer,
     CompanyAgent.defaultLayer,
+    Company.defaultLayer,
+    LocalAuth.defaultLayer,
     GroupSession.defaultLayer,
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,

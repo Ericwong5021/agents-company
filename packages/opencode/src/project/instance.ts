@@ -43,9 +43,15 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
-function boot(input: { directory: string; init?: () => Promise<any>; worktree?: string; project?: Project.Info }) {
+function boot(input: {
+  directory: string
+  init?: () => Promise<any>
+  worktree?: string
+  project?: Project.Info
+  configDirectory?: string
+}) {
   return iife(async () => {
-    const ctx =
+    const loaded =
       input.project && input.worktree
         ? {
             directory: input.directory,
@@ -59,6 +65,7 @@ function boot(input: { directory: string; init?: () => Promise<any>; worktree?: 
               worktree: sandbox,
               project,
             }))
+    const ctx = input.configDirectory ? { ...loaded, configDirectory: input.configDirectory } : loaded
     await context.provide(ctx, async () => {
       await input.init?.()
     })
@@ -76,7 +83,7 @@ function track(directory: string, next: Promise<InstanceContext>) {
 }
 
 export const Instance = {
-  async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
+  async provide<R>(input: { directory: string; init?: () => Promise<any>; configDirectory?: string; fn: () => R }): Promise<R> {
     const directory = AppFileSystem.resolve(input.directory)
     assertSafeDirectory(directory)
     let existing = cache.get(directory)
@@ -87,6 +94,7 @@ export const Instance = {
         boot({
           directory,
           init: input.init,
+          configDirectory: input.configDirectory,
         }),
       )
     }
@@ -138,7 +146,13 @@ export const Instance = {
   restore<R>(ctx: InstanceContext, fn: () => R): R {
     return context.provide(ctx, fn)
   },
-  async reload(input: { directory: string; init?: () => Promise<any>; project?: Project.Info; worktree?: string }) {
+  async reload(input: {
+    directory: string
+    init?: () => Promise<any>
+    project?: Project.Info
+    worktree?: string
+    configDirectory?: string
+  }) {
     const directory = AppFileSystem.resolve(input.directory)
     Log.Default.info("reloading instance", { directory })
     await disposeInstance(directory)

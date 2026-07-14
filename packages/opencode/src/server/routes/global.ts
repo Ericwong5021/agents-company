@@ -81,29 +81,30 @@ async function streamEvents(c: Context, subscribe: (q: AsyncQueue<string | null>
   })
 }
 
-export const GlobalRoutes = lazy(() =>
-  new Hono()
-    .get(
-      "/health",
-      describeRoute({
-        summary: "Get health",
-        description: "Get health information about the OpenCode server.",
-        operationId: "global.health",
-        responses: {
-          200: {
-            description: "Health information",
-            content: {
-              "application/json": {
-                schema: resolver(z.object({ healthy: z.literal(true), version: z.string() })),
-              },
+export const GlobalHealthRoutes = lazy(() =>
+  new Hono().get(
+    "/health",
+    describeRoute({
+      summary: "Get health",
+      description: "Get health information about the OpenCode server.",
+      operationId: "global.health",
+      responses: {
+        200: {
+          description: "Health information",
+          content: {
+            "application/json": {
+              schema: resolver(z.object({ healthy: z.literal(true), version: z.string() })),
             },
           },
         },
-      }),
-      async (c) => {
-        return c.json({ healthy: true, version: InstallationVersion })
       },
-    )
+    }),
+    async (c) => c.json({ healthy: true, version: InstallationVersion }),
+  ),
+)
+
+export const GlobalRoutes = lazy(() =>
+  new Hono()
     .get(
       "/event",
       describeRoute({

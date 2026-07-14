@@ -1,0 +1,91 @@
+import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { CompanyProviderList } from "../../src/company/schema"
+import { Server } from "../../src/server/server"
+import { resetDatabase } from "../fixture/db"
+
+afterEach(async () => {
+  await Server.Default().app.request("/company/providers/openai/credentials", { method: "DELETE" })
+  await resetDatabase()
+})
+
+async function nonGitDirectory() {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "agentcompany-company-route-"))
+  return {
+    path: await fs.realpath(directory),
+    [Symbol.asyncDispose]: () => fs.rm(directory, { recursive: true, force: true }),
+  }
+}
+
+describe.serial("/company", () => {
+  test.serial("returns typed needs_bootstrap state", async () => {
+    const response = await Server.Default().app.request("/company")
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      state: "needs_bootstrap",
+      defaults: {
+        company_name: "Agent Company",
+        approval_preset: "balanced",
+      },
+      capabilities: { board_messages: false },
+    })
+  })
+
+  test.serial("rejects non-git repository inspection with a product error", async () => {
+    await using directory = await nonGitDirectory()
+    const response = await Server.Default().app.request("/company/repository/inspect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repository_path: directory.path }),
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ name: "CompanyRepositoryNotGit" })
+  })
+
+  test.serial("returns a strict provider projection without secrets or upstream Zen", async () => {
+    const app = Server.Default().app
+    const before = CompanyProviderList.parse(await (await app.request("/company/providers")).json())
+    expect(before.providers.some((provider) => provider.provider_id === "openai" && !provider.connected)).toBe(true)
+    expect(
+      (
+        await app.request("/company/providers/openai/credentials", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "api", key: "super-secret-provider-key" }),
+        })
+      ).status,
+    ).toBe(200)
+    const response = await app.request("/company/providers")
+    const providers = CompanyProviderList.parse(await response.json())
+    expect(JSON.stringify(providers)).not.toContain("super-secret-provider-key")
+    expect(providers.providers.some((provider) => provider.provider_id === "openai" && provider.connected)).toBe(true)
+    expect(providers.providers.some((provider) => ["opencode", "opencode-go"].includes(provider.provider_id))).toBe(false)
+  })
+
+  test.serial("declares non-empty schemas for every M1 company operation", async () => {
+    const spec = await Server.openapi()
+    const operations = [
+      { method: "get", path: "/company", statuses: ["200", "500"] },
+      { method: "get", path: "/company/providers", statuses: ["200", "500"] },
+      { method: "get", path: "/company/providers/auth", statuses: ["200", "500"] },
+      { method: "put", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
+      { method: "delete", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
+      { method: "post", path: "/company/providers/{providerID}/oauth/authorize", statuses: ["200", "400", "500"] },
+      { method: "post", path: "/company/providers/{providerID}/oauth/callback", statuses: ["200", "400", "500"] },
+      { method: "post", path: "/company/repository/inspect", statuses: ["200", "400", "500"] },
+      { method: "post", path: "/company/bootstrap", statuses: ["200", "400", "409", "500"] },
+    ] as const
+    for (const item of operations) {
+      const operation = spec.paths?.[item.path]?.[item.method]
+      expect(operation).toBeDefined()
+      item.statuses.map((status) => {
+        const response = operation?.responses?.[status]
+        expect(response).toBeDefined()
+        if (!response || !("content" in response)) throw new Error(`Missing JSON response schema for ${item.method} ${item.path}`)
+        expect(response.content?.["application/json"]?.schema).toBeDefined()
+      })
+    }
+  })
+})

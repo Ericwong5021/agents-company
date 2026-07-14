@@ -1,6 +1,8 @@
 export { AccountTable, AccountStateTable, ControlAccountTable } from "../account/account.sql"
 export { ProjectTable } from "../project/project.sql"
 export { CompanyAgentTable } from "../company-agent/company-agent.sql"
+export { CompanyTable, ApprovalPolicyTable, RepositoryBindingTable } from "../company/company.sql"
+export { LocalClientCredentialTable } from "../local-auth/local-auth.sql"
 export { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"
 export { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "../group-session/group-session.sql"
 export { SessionShareTable } from "../share/share.sql"

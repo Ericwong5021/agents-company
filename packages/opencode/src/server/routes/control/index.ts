@@ -88,9 +88,9 @@ export function ControlPlaneRoutes(): Hono {
       openAPIRouteHandler(app, {
         documentation: {
           info: {
-            title: "opencode",
-            version: "0.0.3",
-            description: "opencode api",
+            title: "Agent Company Local API",
+            version: "1.0.0",
+            description: "Authenticated local Control Plane API for Agent Company",
           },
           openapi: "3.1.1",
         },

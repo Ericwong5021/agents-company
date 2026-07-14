@@ -21,6 +21,7 @@ const prefixes = {
   companyWorkItem: "cwi",
   artifact: "art",
   gate: "gate",
+  localCredential: "lcr",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {
