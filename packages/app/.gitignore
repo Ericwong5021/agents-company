@@ -1,3 +1,4 @@
 src/assets/theme.css
+.artifacts/m1-e2e/
 e2e/test-results
 e2e/playwright-report

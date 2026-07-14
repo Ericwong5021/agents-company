@@ -1,6 +1,6 @@
 # Agent Company 文档导航
 
-> 最近清理：2026-07-13
+> 最近清理：2026-07-14
 
 本文档目录采用“一个主题、一个事实源”的原则。阅读或修改前先确认文档层级，避免把历史计划当成当前产品定义。
 
@@ -33,6 +33,7 @@
 ## 组件与历史文档
 
 - [Autonomous-Bidding PRD](product-design/bidding-prd.md) 与[技术文档](product-design/bidding-technical-document.md)描述群聊内部的发言调度组件。它是 Thread/群聊的实现机制之一，不定义整个产品的信息架构。
+- [M1 Company Bootstrap 实施计划](compose/plans/2026-07-13-m1-company-bootstrap.md)记录 M1 的文件级实现、验证与恢复要求；当前验收状态以[实施计划](product-design/implementation-plan.md)为准。
 - `compose/reports/` 保存已经交付的修复报告，可用于追溯代码决策。
 - `compose/plans/` 保存历史实施计划；最终状态以对应 report 与当前代码为准。
 
@@ -41,5 +42,6 @@
 - 宪法只写长期原则和硬边界；具体页面与字段写入 PRD 或专题设计。
 - PRD 只定义用户可感知需求与验收，不复制实现步骤。
 - 实施计划必须区分“代码模块存在”和“产品闭环已通过验收”。
+- M1 的 Company 数据目录由启动 Control Plane 的 host 在动态导入前固定；浏览器只能配对并读取该 host 已选目录，不能在线搬迁它。
 - 历史报告不随产品方向重写，但不得被 README 或当前设计当成路线图引用。
 - 新增文档前先检查能否补充现有事实源；不再创建平行版本的总览或路线图。
