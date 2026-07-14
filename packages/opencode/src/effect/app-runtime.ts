@@ -63,6 +63,7 @@ import { CompanyAgent } from "@/company-agent"
 import { Company } from "@/company"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
+import { ConversationRuntime } from "@/conversation/runtime"
 import { CompanyProject, CompanyProjectExecution } from "@/company-project"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
@@ -74,8 +75,9 @@ import { memoMap } from "./memo-map"
 
 // Wrapped in Layer.suspend so the cross-module `.defaultLayer` reads defer to
 // first use instead of running at module load — same TDZ fix as Actor.defaultLayer.
-export const AppLayer = Layer.suspend(() =>
-  Layer.mergeAll(
+export const AppLayer = Layer.suspend(() => {
+  const groupSession = GroupSession.defaultLayer
+  return Layer.mergeAll(
     Npm.defaultLayer,
     AppFileSystem.defaultLayer,
     Bus.defaultLayer,
@@ -134,7 +136,8 @@ export const AppLayer = Layer.suspend(() =>
     CompanyAgent.defaultLayer,
     Company.defaultLayer,
     LocalAuth.defaultLayer,
-    GroupSession.defaultLayer,
+    groupSession,
+    ConversationRuntime.layer.pipe(Layer.provide(groupSession)),
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,
@@ -144,8 +147,8 @@ export const AppLayer = Layer.suspend(() =>
     ReputationLayer,
     TokenGovernance.defaultLayer,
     TrustDial.defaultLayer,
-  ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer)),
-)
+  ).pipe(Layer.provideMerge(Observability.layer), Layer.provideMerge(BashInteractive.defaultLayer))
+})
 
 const rt = ManagedRuntime.make(AppLayer as Layer.Layer<any, never, never>, { memoMap })
 type Runtime = Pick<typeof rt, "runSync" | "runPromise" | "runPromiseExit" | "runFork" | "runCallback" | "dispose">

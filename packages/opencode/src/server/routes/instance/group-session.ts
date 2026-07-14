@@ -159,12 +159,10 @@ export const GroupSessionRoutes = lazy(() =>
         operationId: "groupSession.chat",
         responses: {
           200: {
-            description: "Message accepted — roundNum of the newly created round",
+            description: "Message accepted — stable group message and round identifiers",
             content: {
               "application/json": {
-                schema: resolver(
-                  z.object({ roundNum: z.number() }).meta({ ref: "GroupSessionChatResult" }),
-                ),
+                schema: resolver(GroupSession.ChatResult),
               },
             },
           },
@@ -179,10 +177,7 @@ export const GroupSessionRoutes = lazy(() =>
         try {
           return await jsonRequest("GroupSessionRoutes.chat", c, function* () {
             const svc = yield* GroupSession.Service
-            yield* svc.chat({ groupSessionID: id, text })
-            const msgs = yield* svc.messages(id)
-            const lastUserMsg = [...msgs].reverse().find((m) => m.role === "user")
-            return { roundNum: lastUserMsg?.roundNum ?? 0 }
+            return yield* svc.chat({ groupSessionID: id, text })
           })
         } catch (err) {
           if (err instanceof GroupSession.BusyError) {

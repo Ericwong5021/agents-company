@@ -3,14 +3,16 @@ import { Context, Effect, Layer, Ref, Stream } from "effect"
 import { Database, eq, and, desc } from "../storage"
 import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "./group-session.sql"
 import { GroupContextPolicy, GroupSessionID } from "./schema"
+import { ChannelMessageID } from "@/conversation/schema"
+import { MessageID } from "../session/schema"
 import type { SessionID } from "../session/schema"
 import type { ProjectID } from "../project/schema"
 import type { CompanyAgentID } from "../company-agent/schema"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import type { MessageV2 } from "@/session/message-v2"
 import { SessionStatus } from "@/session/status"
 import { SessionRunState } from "@/session/run-state"
-import { InstanceState } from "@/effect"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Bus } from "@/bus"
@@ -18,12 +20,13 @@ import { BusEvent } from "@/bus/bus-event"
 import { BiddingScheduler } from "./scheduler/BiddingScheduler"
 import { probeOne } from "./scheduler/probe"
 import type { ProbeInput } from "./scheduler/probe"
-import type { Bid, ScoredBid } from "./scheduler/bidding.types"
-import { CompanyAgent } from "@/company-agent"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Memory } from "@/memory"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider"
 import { LLM } from "@/session/llm"
+
+const MEMBER_CONCURRENCY = 3
 
 // ---------------------------------------------------------------------------
 // Info types
@@ -59,8 +62,8 @@ export const GroupMessage = z.object({
   sessionID: z.string().optional(),
   content: z.string(),
   statusSummary: z.string().optional(),
-  externalMessageID: z.string().optional(),
-  runtimeMessageID: z.string().optional(),
+  externalMessageID: ChannelMessageID.optional(),
+  runtimeMessageID: MessageID.zod.optional(),
   time: z.object({ created: z.number(), updated: z.number() }),
 })
 export type GroupMessage = z.infer<typeof GroupMessage>
@@ -79,8 +82,15 @@ export type CreateInput = z.infer<typeof CreateInput>
 export const ChatInput = z.object({
   groupSessionID: GroupSessionID.zod,
   text: z.string().min(1),
+  externalMessageID: ChannelMessageID.optional(),
 })
 export type ChatInput = z.infer<typeof ChatInput>
+
+export const ChatResult = z.object({
+  roundNum: z.number(),
+  userGroupMessageID: z.string(),
+})
+export type ChatResult = z.infer<typeof ChatResult>
 
 // ---------------------------------------------------------------------------
 // Events
@@ -95,6 +105,7 @@ export const Event = {
     z.object({
       groupSessionID: GroupSessionID.zod,
       roundNum: z.number(),
+      userGroupMessageID: z.string(),
       memberSessionIDs: z.array(z.string()),
     }),
   ),
@@ -190,7 +201,7 @@ export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: GroupSessionID) => Effect.Effect<Info>
   readonly list: () => Effect.Effect<Info[]>
-  readonly chat: (input: ChatInput) => Effect.Effect<void>
+  readonly chat: (input: ChatInput) => Effect.Effect<ChatResult>
   readonly interrupt: (id: GroupSessionID) => Effect.Effect<void>
   readonly isBusy: (id: GroupSessionID) => Effect.Effect<boolean>
   readonly messages: (id: GroupSessionID) => Effect.Effect<GroupMessage[]>
@@ -307,6 +318,8 @@ function insertGroupMessage(input: {
   sessionID?: SessionID
   content: string
   statusSummary?: string
+  externalMessageID?: z.infer<typeof ChannelMessageID>
+  runtimeMessageID?: MessageID
 }) {
   const now = Date.now()
   const id = Identifier.ascending("message")
@@ -322,18 +335,65 @@ function insertGroupMessage(input: {
         session_id: input.sessionID ?? null,
         content: input.content,
         status_summary: input.statusSummary ?? null,
+        external_message_id: input.externalMessageID ?? null,
+        runtime_message_id: input.runtimeMessageID ?? null,
         time_created: now,
         time_updated: now,
       })
       .run(),
   )
+  return id
 }
 
-function extractMessageText(msg: { parts: ReadonlyArray<{ type: string; text?: string }> }): string {
+function extractMessageText(msg: MessageV2.WithParts): string {
   return msg.parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text" && !!p.text)
     .map((p) => p.text)
     .join("") || "(no output)"
+}
+
+function findExternalMessage(input: { groupSessionID: GroupSessionID; externalMessageID: z.infer<typeof ChannelMessageID> }) {
+  return Database.use((db) =>
+    db
+      .select({ id: GroupMessageTable.id, round_num: GroupMessageTable.round_num })
+      .from(GroupMessageTable)
+      .where(
+        and(
+          eq(GroupMessageTable.group_session_id, input.groupSessionID),
+          eq(GroupMessageTable.external_message_id, input.externalMessageID),
+        ),
+      )
+      .get(),
+  )
+}
+
+type PublicCompanyAgent = {
+  name: string
+  description: string
+  role: string
+  responsibilities: string[]
+}
+
+function loadPublicCompanyAgent(id: CompanyAgentID): PublicCompanyAgent | undefined {
+  const row = Database.use((db) =>
+    db
+      .select({
+        name: CompanyAgentTable.name,
+        description: CompanyAgentTable.description,
+        role: CompanyAgentTable.role_key,
+        responsibilities: CompanyAgentTable.responsibilities,
+      })
+      .from(CompanyAgentTable)
+      .where(eq(CompanyAgentTable.id, id))
+      .get(),
+  )
+  if (!row) return
+  return {
+    name: row.name,
+    description: row.description ?? "",
+    role: row.role ?? id,
+    responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : [],
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -348,7 +408,6 @@ export const layer: Layer.Layer<
   | SessionStatus.Service
   | SessionRunState.Service
   | Bus.Service
-  | CompanyAgent.Service
   | Memory.Service
   | Agent.Service
   | Provider.Service
@@ -362,17 +421,16 @@ export const layer: Layer.Layer<
       const statusSvc = yield* SessionStatus.Service
       const runState = yield* SessionRunState.Service
       const bus = yield* Bus.Service
-      const companyAgentSvc = yield* CompanyAgent.Service
       const memorySvc = yield* Memory.Service
       const agentSvc = yield* Agent.Service
       const provider = yield* Provider.Service
       const llmSvc = yield* LLM.Service
       const activeSchedulers = yield* Ref.make(new Set<string>())
+      const interruptedSchedulers = yield* Ref.make(new Set<string>())
 
       // --- create ---
 
       const create = Effect.fn("GroupSession.create")(function* (input: CreateInput) {
-        const directory = yield* InstanceState.directory
         const project = Instance.project
 
         const now = Date.now()
@@ -399,7 +457,10 @@ export const layer: Layer.Layer<
         for (const [i, agentID] of input.agentIDs.entries()) {
           const session = yield* sessionSvc.create({
             title: `${input.title} — ${agentID}`,
-            companyAgentID: agentID as CompanyAgentID,
+            ...(input.contextPolicy === "work_scoped"
+              ? { permission: [{ permission: "skill", pattern: "*", action: "deny" }] }
+              : {}),
+            ...(input.contextPolicy === "work_scoped" ? {} : { companyAgentID: agentID as CompanyAgentID }),
           })
 
           yield* Effect.sync(() =>
@@ -472,20 +533,16 @@ export const layer: Layer.Layer<
         const statuses = yield* Effect.forEach(
           info.members,
           (m) => statusSvc.get(m.sessionID as SessionID),
-          { concurrency: "unbounded" },
+          { concurrency: MEMBER_CONCURRENCY },
         )
         return statuses.some((s) => s.type === "busy")
       })
 
       // --- probe helpers ---
 
-      const loadCompanyAgent = Effect.fn("GroupSession.loadCompanyAgent")(function* (agentID: CompanyAgentID) {
-        return yield* companyAgentSvc.get(agentID)
-      })
-
-      const searchPrivateMemory = Effect.fn("GroupSession.searchPrivateMemory")(function* (agentID: string) {
+      const searchPrivateMemory = Effect.fn("GroupSession.searchPrivateMemory")(function* (agentID: string, query: string) {
         const results = yield* memorySvc.search({
-          query: "",
+          query,
           scope: "agents",
           scope_id: agentID,
         }).pipe(Effect.orElseSucceed(() => []))
@@ -494,7 +551,7 @@ export const layer: Layer.Layer<
 
       /**
        * Build the prompt text for a specific speaker.
-       * Injects: group context (shared history) + current trigger message + private memories + turn directive.
+       * Work-scoped sessions may use only shared conversation and public role facts.
        */
       const buildSpeakerPrompt = Effect.fn("GroupSession.buildSpeakerPrompt")(function* (params: {
         groupID: GroupSessionID
@@ -502,11 +559,14 @@ export const layer: Layer.Layer<
         speakerName: string
         speakerRole: string
         speakerDescription: string
+        speakerResponsibilities: string[]
+        contextPolicy?: GroupContextPolicy
         currentMessage: string
         roundNum: number
       }) {
         const groupContext = yield* Effect.sync(() => buildGroupContext(params.groupID, params.roundNum))
-        const privateMemories = yield* searchPrivateMemory(params.speakerID)
+        const privateMemories =
+          params.contextPolicy === "work_scoped" ? "" : yield* searchPrivateMemory(params.speakerID, params.currentMessage)
 
         const parts: string[] = []
         if (groupContext) parts.push(groupContext)
@@ -519,6 +579,7 @@ export const layer: Layer.Layer<
           `Name: ${params.speakerName}\n` +
           `Role: ${params.speakerRole}\n` +
           `Description: ${params.speakerDescription}\n` +
+          `Responsibilities: ${params.speakerResponsibilities.join("; ")}\n` +
           `</persona>\n\n` +
           `[INSTRUCTION]\n` +
           `You are ${params.speakerName} (${params.speakerRole}) in a group discussion.\n` +
@@ -533,6 +594,16 @@ export const layer: Layer.Layer<
       // --- chat ---
 
       const chat = Effect.fn("GroupSession.chat")(function* (input: ChatInput) {
+        const replay = input.externalMessageID
+          ? yield* Effect.sync(() =>
+              findExternalMessage({
+                groupSessionID: input.groupSessionID,
+                externalMessageID: input.externalMessageID,
+              }),
+            )
+          : undefined
+        if (replay) return { roundNum: replay.round_num, userGroupMessageID: replay.id }
+
         const busy = yield* isBusy(input.groupSessionID)
         if (busy) return yield* Effect.die(new BusyError(input.groupSessionID))
 
@@ -540,12 +611,13 @@ export const layer: Layer.Layer<
         const roundNum = yield* Effect.sync(() => currentRoundNum(input.groupSessionID))
 
         // Save the user message to the group message store
-        yield* Effect.sync(() =>
+        const userGroupMessageID = yield* Effect.sync(() =>
           insertGroupMessage({
             groupSessionID: input.groupSessionID,
             roundNum,
             role: "user",
             content: input.text,
+            externalMessageID: input.externalMessageID,
           }),
         )
 
@@ -554,6 +626,7 @@ export const layer: Layer.Layer<
         yield* bus.publish(Event.ChatSent, {
           groupSessionID: input.groupSessionID,
           roundNum,
+          userGroupMessageID,
           memberSessionIDs,
         })
 
@@ -563,6 +636,11 @@ export const layer: Layer.Layer<
         })
 
         // Mark this group as having an active scheduler
+        yield* Ref.update(interruptedSchedulers, (s) => {
+          const next = new Set(s)
+          next.delete(input.groupSessionID)
+          return next
+        })
         yield* Ref.update(activeSchedulers, (s) => new Set(s).add(input.groupSessionID))
 
         // Fork-detach the bidding loop so chat() returns immediately.
@@ -575,6 +653,11 @@ export const layer: Layer.Layer<
           Effect.ensuring(
             Effect.gen(function* () {
               yield* Ref.update(activeSchedulers, (s) => {
+                const next = new Set(s)
+                next.delete(input.groupSessionID)
+                return next
+              })
+              yield* Ref.update(interruptedSchedulers, (s) => {
                 const next = new Set(s)
                 next.delete(input.groupSessionID)
                 return next
@@ -593,6 +676,7 @@ export const layer: Layer.Layer<
           ),
           Effect.forkDetach,
         )
+        return { roundNum, userGroupMessageID }
       })
 
       /**
@@ -612,12 +696,16 @@ export const layer: Layer.Layer<
         const memberIds = params.info.members.map((m) => m.companyAgentID)
         const scheduler = new BiddingScheduler(params.groupSessionID, memberIds)
 
-        // Load all company agents for persona info
-        const agentInfos: Record<string, CompanyAgent.Info> = {}
+        // Work-scoped sessions deliberately use only public company fields.
+        const agentInfos: Record<string, PublicCompanyAgent> = {}
         for (const m of params.info.members) {
-          const ag = yield* loadCompanyAgent(m.companyAgentID as CompanyAgentID)
+          const ag = yield* Effect.sync(() => loadPublicCompanyAgent(m.companyAgentID as CompanyAgentID))
           if (ag) agentInfos[m.companyAgentID] = ag
         }
+
+        const isInterrupted = Effect.fn("GroupSession.isInterrupted")(function* () {
+          return (yield* Ref.get(interruptedSchedulers)).has(params.groupSessionID)
+        })
 
         // Resolve probe dependencies (from closure)
         const probeAgent = yield* agentSvc.get("probe").pipe(Effect.orElseSucceed(() => undefined))
@@ -655,8 +743,10 @@ export const layer: Layer.Layer<
               const bid = yield* probeOne(probeCtx, probeInput)
               return { agentId: member.companyAgentID, bid }
             }),
-          { concurrency: "unbounded" },
+          { concurrency: MEMBER_CONCURRENCY },
         )
+
+        if (yield* isInterrupted()) return
 
         let selection = scheduler.decide(bids)
 
@@ -683,6 +773,7 @@ export const layer: Layer.Layer<
 
         // Re-bid loop
         while (true) {
+          if (yield* isInterrupted()) return
           if (selection.type === "yielded") {
             yield* bus.publish(Event.TurnYielded, {
               groupSessionID: params.groupSessionID,
@@ -734,8 +825,10 @@ export const layer: Layer.Layer<
               groupID: params.groupSessionID,
               speakerID: speakerId as CompanyAgentID,
               speakerName,
-              speakerRole: agentInfo?.name ?? speakerId,
+              speakerRole: agentInfo?.role ?? speakerId,
               speakerDescription: agentInfo?.description ?? "",
+              speakerResponsibilities: agentInfo?.responsibilities ?? [],
+              contextPolicy: params.info.contextPolicy,
               currentMessage: lastMessage,
               roundNum: params.roundNum,
             })
@@ -747,8 +840,18 @@ export const layer: Layer.Layer<
               parts: [{ type: "text", text: speakerPrompt }],
             }).pipe(
               Effect.matchEffect({
-                onSuccess: (msg) => Effect.succeed(extractMessageText(msg as any)),
-                onFailure: () => Effect.succeed(""),
+                onSuccess: (msg) =>
+                  Effect.succeed({
+                    content: extractMessageText(msg),
+                    runtimeMessageID: msg.info.id,
+                    statusSummary:
+                      msg.info.role === "assistant" && (msg.info.finish === "cancelled" || msg.info.error)
+                        ? msg.info.finish === "cancelled"
+                          ? ("interrupted" as const)
+                          : ("error" as const)
+                        : ("done" as const),
+                  }),
+                onFailure: () => Effect.succeed({ content: "", statusSummary: "error" as const }),
               }),
             )
 
@@ -759,8 +862,9 @@ export const layer: Layer.Layer<
                 role: "agent",
                 companyAgentID: speakerId as CompanyAgentID,
                 sessionID: member.sessionID as SessionID,
-                content: result || "",
-                statusSummary: result ? "done" : "error",
+                content: result.content,
+                statusSummary: result.statusSummary,
+                runtimeMessageID: result.runtimeMessageID,
               }),
             )
 
@@ -769,13 +873,14 @@ export const layer: Layer.Layer<
               roundNum: params.roundNum,
               sessionID: member.sessionID,
               companyAgentID: speakerId,
-              statusSummary: result ? "done" : "error",
+              statusSummary: result.statusSummary,
             })
 
+            if (yield* isInterrupted()) return
             scheduler.afterSpeak(speakerId)
             speakersThisTurn.add(speakerId)
 
-            lastMessage = result || ""
+            lastMessage = result.content
 
             yield* bus.publish(Event.BiddingStarted, {
               groupSessionID: params.groupSessionID,
@@ -802,8 +907,9 @@ export const layer: Layer.Layer<
                   const bid = yield* probeOne(probeCtx, probeInput)
                   return { agentId: member.companyAgentID, bid }
                 }),
-              { concurrency: "unbounded" },
+              { concurrency: MEMBER_CONCURRENCY },
             )
+            if (yield* isInterrupted()) return
             selection = scheduler.decide(bids)
 
             // Emit BiddingCompleted for the re-bid round
@@ -839,16 +945,12 @@ export const layer: Layer.Layer<
 
       const interrupt = Effect.fn("GroupSession.interrupt")(function* (id: GroupSessionID) {
         const info = yield* get(id)
+        yield* Ref.update(interruptedSchedulers, (s) => new Set(s).add(id))
         yield* Effect.forEach(
           info.members,
           (m) => runState.cancel(m.sessionID as SessionID).pipe(Effect.ignore),
-          { concurrency: "unbounded", discard: true },
+          { concurrency: MEMBER_CONCURRENCY, discard: true },
         )
-        yield* Ref.update(activeSchedulers, (s) => {
-          const next = new Set(s)
-          next.delete(id)
-          return next
-        })
       })
 
       // --- messages ---
@@ -885,11 +987,12 @@ export const layer: Layer.Layer<
 
       const remove = Effect.fn("GroupSession.remove")(function* (id: GroupSessionID) {
         const info = yield* get(id)
+        yield* interrupt(id)
         // Remove each member session (cascades messages/parts)
         yield* Effect.forEach(
           info.members,
           (m) => sessionSvc.remove(m.sessionID as SessionID).pipe(Effect.ignore),
-          { concurrency: "unbounded", discard: true },
+          { concurrency: MEMBER_CONCURRENCY, discard: true },
         )
         yield* Effect.sync(() =>
           Database.use((db) =>
@@ -910,7 +1013,6 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(SessionStatus.defaultLayer),
     Layer.provide(SessionRunState.defaultLayer),
     Layer.provide(Bus.layer),
-    Layer.provide(CompanyAgent.defaultLayer),
     Layer.provide(Memory.defaultLayer),
     Layer.provide(Agent.defaultLayer),
     Layer.provide(Provider.defaultLayer),
