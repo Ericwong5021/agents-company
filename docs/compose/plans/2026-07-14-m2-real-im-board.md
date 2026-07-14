@@ -415,13 +415,13 @@ flowchart LR
 - `packages/opencode/src/cli/cmd/tui/i18n/en.ts`
 - `packages/opencode/src/cli/cmd/tui/i18n/zh.ts`
 
-- [ ] 首页先读取真实 board channel，再通过生成 SDK 发送 request_id/body。
-- [ ] `--prompt` 使用同一方法；删除 `board_group_session_id` KV 与自动创建 GroupSession 逻辑。
-- [ ] 删除 HomeBoardPrompt 对 `/company-project` 的默认提交；不能再绕过董事会与 Root Need。
-- [ ] 最小 CompanyChannel 路由支持主消息分页、打开 Thread 摘要和 interrupt；不复制 Web IA。
-- [ ] 手工 GroupSession 创建仍可从诊断入口使用，但首页不可到达。
-- [ ] 从 `packages/opencode` 运行 TUI 目标测试与 `bun typecheck`。
-- [ ] Commit：`feat(tui): route board intake through company channels`
+- [x] 首页先读取真实 board channel，再通过生成 SDK 发送 request_id/body。
+- [x] `--prompt` 使用同一方法；删除 `board_group_session_id` KV 与自动创建 GroupSession 逻辑。
+- [x] 删除 HomeBoardPrompt 对 `/company-project` 的默认提交；不能再绕过董事会与 Root Need。
+- [x] 最小 CompanyChannel 路由支持主消息分页、打开 Thread 摘要和 interrupt；不复制 Web IA。
+- [x] 手工 GroupSession 创建仍可从诊断入口使用，但首页不可到达。
+- [x] 从 `packages/opencode` 运行 TUI 目标测试与 `bun typecheck`。
+- [x] Commit：`feat(tui): route board intake through company channels`
 
 ## Task 9：接入真实 Company Workspace 并删除生产 fixture（3 天）
 
