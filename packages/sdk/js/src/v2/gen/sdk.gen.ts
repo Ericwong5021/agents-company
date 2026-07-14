@@ -24,6 +24,8 @@ import type {
   BashInteractiveReplyErrors,
   BashInteractiveReplyResponses,
   BootstrapInput,
+  ChannelId,
+  ChannelSendInput,
   CommandListResponses,
   CompanyAgentCreateErrors,
   CompanyAgentCreateResponses,
@@ -42,8 +44,15 @@ import type {
   CompanyAgentUpdateResponses,
   CompanyBootstrapErrors,
   CompanyBootstrapResponses,
+  CompanyChannelMessagesErrors,
+  CompanyChannelMessagesResponses,
+  CompanyChannelSendErrors,
+  CompanyChannelSendResponses,
+  CompanyChannelsErrors,
+  CompanyChannelsResponses,
   CompanyCurrentErrors,
   CompanyCurrentResponses,
+  CompanyId,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
   CompanyProjectResolveGateResponses,
@@ -64,11 +73,20 @@ import type {
   CompanyProvidersResponses,
   CompanyRepositoryInspectErrors,
   CompanyRepositoryInspectResponses,
+  CompanyThreadActionErrors,
+  CompanyThreadActionResponses,
+  CompanyThreadEntriesErrors,
+  CompanyThreadEntriesResponses,
+  CompanyThreadErrors,
+  CompanyThreadResponses,
+  CompanyThreadSourceErrors,
+  CompanyThreadSourceResponses,
   Config as Config3,
   ConfigGetResponses,
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  ConversationThreadId,
   CustomProviderModelsInput,
   EventSubscribeResponses,
   EventTuiCommandExecute,
@@ -276,6 +294,7 @@ import type {
   SyncReplayResponses,
   SyncStartResponses,
   TextPartInput,
+  ThreadActionInput,
   ThreadAgentActivityResponses,
   ThreadAgentStatusResponses,
   ThreadCompleteErrors,
@@ -849,6 +868,225 @@ export class Company extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  /**
+   * List company channels visible to the local user
+   */
+  public channels<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<CompanyChannelsResponses, CompanyChannelsErrors, ThrowOnError>({
+      url: "/company/channels",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Page main-feed channel messages for the local user
+   */
+  public channelMessages<ThrowOnError extends boolean = false>(
+    parameters: {
+      channelID: ChannelId
+      company_id: CompanyId
+      before?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "channelID" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "before" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyChannelMessagesResponses,
+      CompanyChannelMessagesErrors,
+      ThrowOnError
+    >({
+      url: "/company/channels/{channelID}/messages",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Send a board message and queue the board run
+   */
+  public channelSend<ThrowOnError extends boolean = false>(
+    parameters: {
+      channelID: ChannelId
+      company_id: CompanyId
+      channelSendInput?: ChannelSendInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "channelID" },
+            { in: "query", key: "company_id" },
+            { key: "channelSendInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyChannelSendResponses, CompanyChannelSendErrors, ThrowOnError>({
+      url: "/company/channels/{channelID}/messages",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get a conversation thread detail
+   */
+  public thread<ThrowOnError extends boolean = false>(
+    parameters: {
+      threadID: ConversationThreadId
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "threadID" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyThreadResponses, CompanyThreadErrors, ThrowOnError>({
+      url: "/company/threads/{threadID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Page thread entries for the local user
+   */
+  public threadEntries<ThrowOnError extends boolean = false>(
+    parameters: {
+      threadID: ConversationThreadId
+      company_id: CompanyId
+      before?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "threadID" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "before" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyThreadEntriesResponses,
+      CompanyThreadEntriesErrors,
+      ThrowOnError
+    >({
+      url: "/company/threads/{threadID}/entries",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resolve a precise thread source reference
+   */
+  public threadSource<ThrowOnError extends boolean = false>(
+    parameters: {
+      threadID: ConversationThreadId
+      sourceID: string
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "threadID" },
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyThreadSourceResponses, CompanyThreadSourceErrors, ThrowOnError>({
+      url: "/company/threads/{threadID}/sources/{sourceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Apply a structured thread action (M2: interrupt only)
+   */
+  public threadAction<ThrowOnError extends boolean = false>(
+    parameters: {
+      threadID: ConversationThreadId
+      company_id: CompanyId
+      threadActionInput?: ThreadActionInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "threadID" },
+            { in: "query", key: "company_id" },
+            { key: "threadActionInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyThreadActionResponses, CompanyThreadActionErrors, ThrowOnError>(
+      {
+        url: "/company/threads/{threadID}/actions",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
   }
 }
 

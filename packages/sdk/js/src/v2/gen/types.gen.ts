@@ -288,6 +288,171 @@ export type BootstrapInput = {
   approval_preset?: ApprovalPreset
 }
 
+export type ChannelId = string
+
+export type ChannelKind = "company" | "board" | "department" | "project" | "direct"
+
+export type ConversationMessageInvalidInput = {
+  name: "ConversationMessageInvalidInput"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type ConversationInvalidCursor = {
+  name: "ConversationInvalidCursor"
+  data: {
+    [key: string]: never
+  }
+}
+
+export type ChannelMessageId = string
+
+export type RootNeedId = string
+
+export type ConversationThreadId = string
+
+export type MessageAuthor =
+  | {
+      kind: "user"
+      id: string
+    }
+  | {
+      kind: "agent"
+      id: string
+    }
+  | {
+      kind: "system"
+      id: string
+    }
+
+export type SignalType =
+  | "conclusion"
+  | "decision"
+  | "plan"
+  | "status"
+  | "risk"
+  | "approval"
+  | "delivery"
+  | "intervention"
+
+export type ConversationPrincipal =
+  | {
+      kind: "user"
+      id: string
+    }
+  | {
+      kind: "agent"
+      id: string
+    }
+
+export type MessageVisibility = "channel" | "company"
+
+export type ConversationMention =
+  | {
+      kind: "agent"
+      agent_id: string
+    }
+  | {
+      kind: "role"
+      role: "ceo" | "cto" | "product_lead"
+    }
+
+export type ConversationChannelNotVisible = {
+  name: "ConversationChannelNotVisible"
+  data: {
+    company_id: CompanyId
+    channel_id: ChannelId
+  }
+}
+
+export type ConversationChannelNotWritable = {
+  name: "ConversationChannelNotWritable"
+  data: {
+    channel_id: ChannelId
+  }
+}
+
+export type ConversationThreadNotWritable = {
+  name: "ConversationThreadNotWritable"
+  data: {
+    thread_id: ConversationThreadId
+  }
+}
+
+export type ConversationReplyNotVisible = {
+  name: "ConversationReplyNotVisible"
+  data: {
+    channel_id: ChannelId
+    message_id: ChannelMessageId
+  }
+}
+
+export type ConversationMentionNotVisible = {
+  name: "ConversationMentionNotVisible"
+  data: {
+    channel_id: ChannelId
+  }
+}
+
+export type ConversationRunId = string
+
+export type ConversationCompanyNotFound = {
+  name: "ConversationCompanyNotFound"
+  data: {
+    company_id: CompanyId
+  }
+}
+
+export type ConversationSourceNotFound = {
+  name: "ConversationSourceNotFound"
+  data: {
+    thread_id: ConversationThreadId
+    source_id: string
+  }
+}
+
+export type ConversationThreadNotVisible = {
+  name: "ConversationThreadNotVisible"
+  data: {
+    company_id: CompanyId
+    thread_id: ConversationThreadId
+  }
+}
+
+export type ConversationRequestConflict = {
+  name: "ConversationRequestConflict"
+  data: {
+    channel_id: ChannelId
+    request_id: string
+  }
+}
+
+export type ChannelSendInput = {
+  request_id: string
+  body: string
+  reply_to?: string
+  referenced_thread_id?: ConversationThreadId
+  mentions?: Array<ConversationMention>
+}
+
+export type ConversationThreadStatus = "active" | "completed" | "interrupted"
+
+export type SignalProjectionId = string
+
+export type SignalProjectionSourceKind =
+  | "group_message"
+  | "message"
+  | "part"
+  | "agent_message"
+  | "decision"
+  | "artifact"
+  | "gate"
+
+export type ThreadActionInput = {
+  kind: "interrupt"
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -344,16 +509,12 @@ export type EventGlobalDisposed = {
   }
 }
 
-export type ChannelId = string
-
 export type EventCompanyChannelInvalidated = {
   type: "company.channel.invalidated"
   properties: {
     channel_id: ChannelId
   }
 }
-
-export type ConversationThreadId = string
 
 export type EventCompanyThreadInvalidated = {
   type: "company.thread.invalidated"
@@ -3093,8 +3254,6 @@ export type AgentTemplate = {
   system_prompt: string
 }
 
-export type ChannelMessageId = string
-
 export type GroupSessionStatus = {
   busy: boolean
 }
@@ -4061,6 +4220,441 @@ export type CompanyBootstrapResponses = {
 }
 
 export type CompanyBootstrapResponse = CompanyBootstrapResponses[keyof CompanyBootstrapResponses]
+
+export type CompanyChannelsData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/channels"
+}
+
+export type CompanyChannelsErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelsError = CompanyChannelsErrors[keyof CompanyChannelsErrors]
+
+export type CompanyChannelsResponses = {
+  /**
+   * Visible channels
+   */
+  200: Array<{
+    id: ChannelId
+    kind: ChannelKind
+    scopeID?: string
+    title: string
+    retentionDays: number
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }>
+}
+
+export type CompanyChannelsResponse = CompanyChannelsResponses[keyof CompanyChannelsResponses]
+
+export type CompanyChannelMessagesData = {
+  body?: never
+  path: {
+    channelID: ChannelId
+  }
+  query: {
+    company_id: CompanyId
+    before?: string
+    limit?: number
+  }
+  url: "/company/channels/{channelID}/messages"
+}
+
+export type CompanyChannelMessagesErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelMessagesError = CompanyChannelMessagesErrors[keyof CompanyChannelMessagesErrors]
+
+export type CompanyChannelMessagesResponses = {
+  /**
+   * A page of channel messages
+   */
+  200: {
+    items: Array<{
+      id: ChannelMessageId
+      channelID: ChannelId
+      rootNeedID?: RootNeedId
+      sourceThreadID?: ConversationThreadId
+      replyToID?: ChannelMessageId
+      requestID?: string
+      author: MessageAuthor
+      body: string
+      signalType?: SignalType
+      dri?: ConversationPrincipal
+      visibility: MessageVisibility
+      mentions: Array<ConversationMention>
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    nextCursor?: string
+  }
+}
+
+export type CompanyChannelMessagesResponse = CompanyChannelMessagesResponses[keyof CompanyChannelMessagesResponses]
+
+export type CompanyChannelSendData = {
+  body?: ChannelSendInput
+  path: {
+    channelID: ChannelId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/channels/{channelID}/messages"
+}
+
+export type CompanyChannelSendErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Conversation resource not found
+   */
+  404: ConversationCompanyNotFound | ConversationSourceNotFound | ConversationThreadNotVisible
+  /**
+   * Conversation request conflict
+   */
+  409: ConversationRequestConflict
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelSendError = CompanyChannelSendErrors[keyof CompanyChannelSendErrors]
+
+export type CompanyChannelSendResponses = {
+  /**
+   * Message accepted and persisted; the board run is queued
+   */
+  202: {
+    messageID: ChannelMessageId
+    rootNeedID?: RootNeedId
+    threadID?: ConversationThreadId
+    runID?: ConversationRunId
+    replayed: boolean
+  }
+}
+
+export type CompanyChannelSendResponse = CompanyChannelSendResponses[keyof CompanyChannelSendResponses]
+
+export type CompanyThreadData = {
+  body?: never
+  path: {
+    threadID: ConversationThreadId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/threads/{threadID}"
+}
+
+export type CompanyThreadErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyThreadError = CompanyThreadErrors[keyof CompanyThreadErrors]
+
+export type CompanyThreadResponses = {
+  /**
+   * Thread detail
+   */
+  200: {
+    id: ConversationThreadId
+    channelID: ChannelId
+    rootNeedID?: RootNeedId
+    projectScopeID?: string
+    title: string
+    status: ConversationThreadStatus
+    members: Array<{
+      principal: ConversationPrincipal
+      time: {
+        joined: number
+        left?: number
+      }
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type CompanyThreadResponse = CompanyThreadResponses[keyof CompanyThreadResponses]
+
+export type CompanyThreadEntriesData = {
+  body?: never
+  path: {
+    threadID: ConversationThreadId
+  }
+  query: {
+    company_id: CompanyId
+    before?: string
+    limit?: number
+  }
+  url: "/company/threads/{threadID}/entries"
+}
+
+export type CompanyThreadEntriesErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyThreadEntriesError = CompanyThreadEntriesErrors[keyof CompanyThreadEntriesErrors]
+
+export type CompanyThreadEntriesResponses = {
+  /**
+   * A page of thread entries
+   */
+  200: {
+    items: Array<{
+      type: "message"
+      message: {
+        id: ChannelMessageId
+        channelID: ChannelId
+        rootNeedID?: RootNeedId
+        sourceThreadID?: ConversationThreadId
+        replyToID?: ChannelMessageId
+        requestID?: string
+        author: MessageAuthor
+        body: string
+        signalType?: SignalType
+        dri?: ConversationPrincipal
+        visibility: MessageVisibility
+        mentions: Array<ConversationMention>
+        time: {
+          created: number
+          updated: number
+        }
+      }
+    }>
+    nextCursor?: string
+  }
+}
+
+export type CompanyThreadEntriesResponse = CompanyThreadEntriesResponses[keyof CompanyThreadEntriesResponses]
+
+export type CompanyThreadSourceData = {
+  body?: never
+  path: {
+    threadID: ConversationThreadId
+    sourceID: string
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/threads/{threadID}/sources/{sourceID}"
+}
+
+export type CompanyThreadSourceErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Conversation resource not found
+   */
+  404: ConversationCompanyNotFound | ConversationSourceNotFound | ConversationThreadNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyThreadSourceError = CompanyThreadSourceErrors[keyof CompanyThreadSourceErrors]
+
+export type CompanyThreadSourceResponses = {
+  /**
+   * Thread source detail
+   */
+  200: {
+    projectionID: SignalProjectionId
+    ordinal: number
+    kind: SignalProjectionSourceKind
+    sourceID: string
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type CompanyThreadSourceResponse = CompanyThreadSourceResponses[keyof CompanyThreadSourceResponses]
+
+export type CompanyThreadActionData = {
+  body?: ThreadActionInput
+  path: {
+    threadID: ConversationThreadId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/threads/{threadID}/actions"
+}
+
+export type CompanyThreadActionErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400: ProductValidationError | ConversationMessageInvalidInput | ConversationInvalidCursor
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyThreadActionError = CompanyThreadActionErrors[keyof CompanyThreadActionErrors]
+
+export type CompanyThreadActionResponses = {
+  /**
+   * Updated thread detail
+   */
+  200: {
+    id: ConversationThreadId
+    channelID: ChannelId
+    rootNeedID?: RootNeedId
+    projectScopeID?: string
+    title: string
+    status: ConversationThreadStatus
+    members: Array<{
+      principal: ConversationPrincipal
+      time: {
+        joined: number
+        left?: number
+      }
+    }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
+  }
+}
+
+export type CompanyThreadActionResponse = CompanyThreadActionResponses[keyof CompanyThreadActionResponses]
 
 export type GlobalEventData = {
   body?: never

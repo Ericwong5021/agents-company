@@ -10,11 +10,13 @@ import { GroupSessionID } from "@/group-session/schema"
 import { GroupMessageTable } from "@/group-session/group-session.sql"
 import { Instance } from "@/project/instance"
 import { Event as ServerEvent } from "@/server/event"
-import { Database, and, eq } from "@/storage"
+import { Database, and, eq, or } from "@/storage"
 import * as ConversationRecovery from "./recovery"
 import * as SignalProjector from "./signal-projector"
 import { ChannelMessageTable, ChannelTable, ConversationRunTable, ConversationThreadTable } from "./conversation.sql"
-import { ConversationPrincipal, ConversationRunID } from "./schema"
+import { ConversationPrincipal, ConversationRunID, ConversationThreadID, ThreadNotVisible } from "./schema"
+import { Conversation } from "./conversation"
+import { CompanyID } from "@/company/schema"
 
 const BOARD_ROLES = ["ceo", "cto", "product_lead"] as const
 
@@ -247,6 +249,24 @@ function markFailed(runID: ConversationRunID, error: unknown) {
   })
 }
 
+function markInterrupted(runID: ConversationRunID) {
+  Database.use((db) => {
+    const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
+    if (!run || run.state === "completed" || run.state === "interrupted") return
+    const now = Date.now()
+    db
+      .update(ConversationRunTable)
+      .set({
+        state: "interrupted",
+        retryable: false,
+        time_finished: now,
+        time_updated: now,
+      })
+      .where(eq(ConversationRunTable.id, runID))
+      .run()
+  })
+}
+
 function sourceWatermark(groupSessionID: GroupSessionID, roundNum: number, sourceIDs: string[]) {
   return `${groupSessionID}:${roundNum}:${sourceIDs.join("|")}`
 }
@@ -265,15 +285,21 @@ function synthesisPrompt(input: { title: string; messages: GroupSession.GroupMes
 export interface Interface {
   readonly start: (runID: ConversationRunID) => Effect.Effect<Started, Error>
   readonly recover: () => Effect.Effect<ConversationRunID[]>
+  readonly interruptThread: (input: {
+    companyID: CompanyID
+    threadID: ConversationThreadID
+    principal: ConversationPrincipal
+  }) => Effect.Effect<Conversation.ConversationThreadDetail, InstanceType<typeof ThreadNotVisible>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ConversationRuntime") {}
 
-export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Service> = Layer.effect(
+export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Service | Conversation.Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
     const groupSessions = yield* GroupSession.Service
     const bus = yield* Bus.Service
+    const conversation = yield* Conversation.Service
 
     const publishRunState = Effect.fn("ConversationRuntime.publishRunState")(function* (input: {
       threadID: RuntimeInput["thread"]["id"]
@@ -446,6 +472,46 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       )
     })
 
+    const interruptThread = Effect.fn("ConversationRuntime.interruptThread")(function* (input: {
+      companyID: CompanyID
+      threadID: ConversationThreadID
+      principal: ConversationPrincipal
+    }) {
+      const activeRuns = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({
+              id: ConversationRunTable.id,
+              runtime_id: ConversationRunTable.runtime_id,
+              state: ConversationRunTable.state,
+            })
+            .from(ConversationRunTable)
+            .where(
+              and(
+                eq(ConversationRunTable.conversation_thread_id, input.threadID),
+                or(
+                  eq(ConversationRunTable.state, "queued"),
+                  eq(ConversationRunTable.state, "running"),
+                  eq(ConversationRunTable.state, "projecting"),
+                ),
+              ),
+            )
+            .all(),
+        ),
+      )
+      for (const run of activeRuns) {
+        const groupSessionID = run.runtime_id ? GroupSessionID.zod.safeParse(run.runtime_id).data : undefined
+        if (groupSessionID) {
+          yield* groupSessions.interrupt(groupSessionID).pipe(Effect.ignore)
+        }
+        yield* Effect.sync(() => markInterrupted(run.id))
+      }
+      for (const run of activeRuns) {
+        yield* publishRunState({ threadID: input.threadID, state: "interrupted" }).pipe(Effect.forkDetach)
+      }
+      return yield* conversation.getThread({ companyID: input.companyID, threadID: input.threadID, principal: input.principal })
+    })
+
     const recover = Effect.fn("ConversationRuntime.recover")(function* () {
       const runIDs = yield* ConversationRecovery.recover()
       yield* Effect.forEach(runIDs, (runID) => start(runID).pipe(Effect.catch(() => Effect.void)), {
@@ -455,7 +521,7 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       return runIDs
     })
 
-    return Service.of({ start, recover })
+    return Service.of({ start, recover, interruptThread })
   }),
 )
 

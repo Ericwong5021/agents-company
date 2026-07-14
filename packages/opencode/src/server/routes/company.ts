@@ -33,6 +33,7 @@ import {
   productValidationHook,
   UnknownErrorResponse,
 } from "../error"
+import { CompanyChannelRoutes, CompanyThreadRoutes } from "./company-conversation"
 
 const unsupportedProviders = new Set(["opencode"])
 const RepositoryInspectInput = z
@@ -429,5 +430,7 @@ export const CompanyRoutes = lazy(() =>
       validator("json", BootstrapInput, productValidationHook),
       async (c) =>
         c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.bootstrap(c.req.valid("json"))))),
-    ),
+    )
+    .route("/channels", CompanyChannelRoutes())
+    .route("/threads", CompanyThreadRoutes()),
 )

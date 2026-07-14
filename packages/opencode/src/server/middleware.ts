@@ -47,6 +47,20 @@ export function errorMiddleware(auth: AuthMode): ErrorHandler {
     )
       status = 400
     else if (err.name.startsWith("Worktree")) status = 400
+    else if (err.name === "ConversationMessageInvalidInput" || err.name === "ConversationInvalidCursor") status = 400
+    else if (
+      [
+        "ConversationChannelNotVisible",
+        "ConversationThreadNotVisible",
+        "ConversationChannelNotWritable",
+        "ConversationThreadNotWritable",
+        "ConversationReplyNotVisible",
+        "ConversationMentionNotVisible",
+      ].includes(err.name)
+    )
+      status = 403
+    else if (err.name === "ConversationCompanyNotFound" || err.name === "ConversationSourceNotFound") status = 404
+    else if (err.name === "ConversationRequestConflict") status = 409
     else status = 500
     return c.json(err.toObject(), { status })
   }

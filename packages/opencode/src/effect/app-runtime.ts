@@ -63,6 +63,7 @@ import { CompanyAgent } from "@/company-agent"
 import { Company } from "@/company"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
+import { Conversation } from "@/conversation"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { CompanyProject, CompanyProjectExecution } from "@/company-project"
 import { Thread } from "@/thread/thread"
@@ -78,6 +79,7 @@ import { memoMap } from "./memo-map"
 export const AppLayer = Layer.suspend(() => {
   const bus = Bus.defaultLayer
   const groupSession = GroupSession.defaultLayer
+  const conversation = Conversation.defaultLayer
   return Layer.mergeAll(
     Npm.defaultLayer,
     AppFileSystem.defaultLayer,
@@ -138,7 +140,8 @@ export const AppLayer = Layer.suspend(() => {
     Company.defaultLayer,
     LocalAuth.defaultLayer,
     groupSession,
-    ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus))),
+    conversation,
+    ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus, conversation))),
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,
