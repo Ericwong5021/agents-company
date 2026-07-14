@@ -1,6 +1,5 @@
 import { type CompanyState, createOpencodeClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
 import type { CompanyWorkspaceAccess, CompanyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
-import { createFixtureCompanyWorkspaceDataSource } from "./company-fixture"
 import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 
 export type CompanyClient = Pick<ReturnType<typeof createOpencodeClient>, "company" | "localAuth">
@@ -36,8 +35,6 @@ export type CompanyWorkspaceDataSource = {
   revokeCredential(
     input: Parameters<CompanyClient["localAuth"]["revoke"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["localAuth"]["revoke"]>>["data"]>
-  sendMessage?(input: { channelID: string; body: string }): Promise<void>
-  approveDelivery?(input: { deliveryID: string }): Promise<void>
   /** M2 conversation store, available when company is ready */
   conversation?: ConversationStore
   /** Forward an SSE event to the data source for M2 invalidation handling */
@@ -233,6 +230,5 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
 }
 
 export function createCompanyWorkspaceDataSource(client: CompanyClient): CompanyWorkspaceDataSource {
-  if (import.meta.env.VITE_AGENTCOMPANY_COMPANY_FIXTURE === "true") return createFixtureCompanyWorkspaceDataSource()
   return createSdkCompanyWorkspaceDataSource(client)
 }

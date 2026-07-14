@@ -45,7 +45,6 @@ export default defineConfig({
       reuseExistingServer: reuse,
       timeout: 120_000,
       env: {
-        VITE_AGENTCOMPANY_COMPANY_FIXTURE: "false",
         VITE_AGENTCOMPANY_SERVER_HOST: serverHost,
         VITE_AGENTCOMPANY_SERVER_PORT: serverPort,
       },

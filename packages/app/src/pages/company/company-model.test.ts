@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createDisconnectedCompanyWorkspaceDataSource } from "./company-data-source"
-import { createFixtureCompanyWorkspaceDataSource } from "./company-fixture"
+import type { CompanyReadyWorkspaceSnapshot } from "./company-model"
 
 describe("company workspace data source", () => {
   test("keeps production honest when runtime data is not connected", () => {
@@ -8,34 +8,69 @@ describe("company workspace data source", () => {
     const snapshot = source.getSnapshot()
 
     expect(snapshot.status).toBe("disconnected")
-    expect(JSON.stringify(snapshot)).not.toMatch(/142\/142|评审通过|后端接口、权限与审计日志已实现|已通过/)
+    // No fixture/demo content leaks into the disconnected snapshot
+    expect(JSON.stringify(snapshot)).not.toMatch(/142\/142|评审通过|已通过|pre-public-webui/)
     expect(source.refresh).toBeDefined()
   })
 
-  test("exposes the visual fixture only through the development adapter", () => {
-    const source = createFixtureCompanyWorkspaceDataSource()
-    const snapshot = source.getSnapshot()
-
-    expect(snapshot.status).toBe("demo")
-    if (snapshot.status !== "demo") return
-    expect(snapshot.channels.find((channel) => channel.id === "pre-public-webui")).toMatchObject({
-      section: "项目",
-      name: "Pre-Public WebUI",
-    })
+  test("disconnected source has no conversation store or send/approve actions", () => {
+    const source = createDisconnectedCompanyWorkspaceDataSource()
+    // The fixture-only sendMessage/approveDelivery methods are gone; sending
+    // happens through the conversation store, which is absent when disconnected.
+    expect((source as Record<string, unknown>)["sendMessage"]).toBeUndefined()
+    expect((source as Record<string, unknown>)["approveDelivery"]).toBeUndefined()
+    expect(source.conversation).toBeUndefined()
   })
+})
 
-  test("publishes fixture action results through the same subscription boundary", async () => {
-    const source = createFixtureCompanyWorkspaceDataSource()
-    const updates: string[] = []
-    const unsubscribe = source.subscribe((snapshot) => {
-      if (snapshot.status !== "demo") return
-      updates.push(`${snapshot.delivery.status}:${snapshot.userMessages.length}`)
-    })
+describe("CompanyReadySnapshot shape", () => {
+  test("ready snapshot carries the M2 conversation state", () => {
+    const snapshot = {
+      status: "ready",
+      access: { kind: "basic", can_manage_credentials: true },
+      state: "ready",
+      data_directory: "/company/data",
+      company: {
+        id: "cmp_local",
+        name: "Agent Company",
+        data_version: 1,
+        provider: { provider_id: "openai", model_id: "gpt-5" },
+        approval_policy: { preset: "balanced" },
+        repository: {
+          project_id: "project-1",
+          root_path: "/repo",
+          default_branch: "main",
+          bootstrap_head_commit: "abc123",
+          dirty: false,
+        },
+        board: [
+          { id: "board-ceo", role: "ceo", name: "CEO", lifecycle: "employee", responsibilities: ["Direction"] },
+          { id: "board-cto", role: "cto", name: "CTO", lifecycle: "employee", responsibilities: ["Quality"] },
+          { id: "board-product-lead", role: "product_lead", name: "Product Lead", lifecycle: "employee", responsibilities: ["Value"] },
+        ],
+        created_at: 1,
+        updated_at: 1,
+      },
+      start_suggestion: { kind: "bootstrap_complete", action: "open_board" },
+      capabilities: { board_messages: false },
+      conversation: {
+        channels: [],
+        activeChannelID: null,
+        messages: [],
+        messagesBefore: null,
+        pendingMessages: [],
+        thread: null,
+        threadEntries: [],
+        threadEntriesBefore: null,
+        loadingChannels: true,
+        loadingMessages: false,
+        sending: false,
+        error: null,
+      },
+    } satisfies CompanyReadyWorkspaceSnapshot
 
-    await source.sendMessage?.({ channelID: "pre-public-webui", body: "继续推进 M0" })
-    await source.approveDelivery?.({ deliveryID: "pre-public-webui-delivery" })
-    unsubscribe()
-
-    expect(updates).toEqual(["pending:1", "approved:1"])
+    expect(snapshot.status).toBe("ready")
+    expect(snapshot.conversation.channels).toEqual([])
+    expect(snapshot.capabilities.board_messages).toBe(false)
   })
 })
