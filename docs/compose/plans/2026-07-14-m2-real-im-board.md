@@ -448,15 +448,15 @@ flowchart LR
 - `packages/app/src/pages/company/company-fixture.ts`
 - `VITE_AGENTCOMPANY_COMPANY_FIXTURE` 运行时分支
 
-- [ ] 组件测试先覆盖真实 empty/loading/error/pending/failed/completed、键盘导航和 reduced motion。
-- [ ] ready 默认渲染频道栏、主会话、Composer 和可折叠 Context Panel；公司事实与浏览器配对管理仍可访问。
-- [ ] 频道、成员、badge、消息和 Thread 都来自 SDK；无项目时不渲染 fixture 项目。
-- [ ] Agent 普通消息只在 Thread；高信号消息显示 source affordance、author/DRI、project 和时间。
-- [ ] 工具详情默认折叠并在点击后请求 source API；长输出不进入初始 DOM。
-- [ ] 只显示真实 conclusion/status/risk/intervention；移除 fixture Approval/Delivery 卡和“已批准”切换。
-- [ ] 发送、@角色、引用 Thread、interrupt、失败重试均有可访问状态，状态不只靠颜色。
-- [ ] 从 `packages/app` 运行 unit、typecheck、build；从 `packages/ui` 运行 typecheck。
-- [ ] Commit：`feat(app): ship live company messaging workspace`
+- [x] 组件测试先覆盖真实 empty/loading/error/pending/failed/completed、键盘导航和 reduced motion。
+- [x] ready 默认渲染频道栏、主会话、Composer 和可折叠 Context Panel；公司事实与浏览器配对管理仍可访问。
+- [x] 频道、成员、badge、消息和 Thread 都来自 SDK；无项目时不渲染 fixture 项目。
+- [x] Agent 普通消息只在 Thread；高信号消息显示 source affordance、author/DRI、project 和时间。
+- [x] 工具详情默认折叠并在点击后请求 source API；长输出不进入初始 DOM。
+- [x] 只显示真实 conclusion/status/risk/intervention；移除 fixture Approval/Delivery 卡和“已批准”切换。
+- [x] 发送、@角色、引用 Thread、interrupt、失败重试均有可访问状态，状态不只靠颜色。
+- [x] 从 `packages/app` 运行 unit、typecheck、build；从 `packages/ui` 运行 typecheck。
+- [x] Commit：`feat(app): ship live company messaging workspace`
 
 ## Task 10：真实纵向 E2E、重启 Gate 与文档收口（2.5 天）
 
