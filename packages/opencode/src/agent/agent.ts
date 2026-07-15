@@ -56,6 +56,8 @@ export const Info = z
   })
 export type Info = z.infer<typeof Info>
 
+export const BOARD_DISCUSSION_AGENT_ID = "board-discussion"
+
 export interface Interface {
   readonly get: (agent: string) => Effect.Effect<Info>
   readonly list: () => Effect.Effect<Info[]>
@@ -226,6 +228,23 @@ export const layer = Layer.effect(
             options: {},
             mode: "subagent",
             native: true,
+          },
+          [BOARD_DISCUSSION_AGENT_ID]: {
+            name: BOARD_DISCUSSION_AGENT_ID,
+            description: "Internal Board discussion agent with no tool or private-memory access.",
+            options: {},
+            permission: Permission.merge(
+              defaults,
+              user,
+              Permission.fromConfig({
+                "*": "deny",
+                StructuredOutput: "allow",
+              }),
+            ),
+            mode: "subagent",
+            native: true,
+            hidden: true,
+            toolAllowlist: [],
           },
           title: {
             name: "title",

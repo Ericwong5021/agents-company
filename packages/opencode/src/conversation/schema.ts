@@ -131,6 +131,10 @@ export const SignalProjectionSource = z
 export type SignalProjectionSource = z.infer<typeof SignalProjectionSource>
 
 export const MessageInvalidInput = NamedError.create("ConversationMessageInvalidInput", z.object({}).strict())
+export const BoardMessagesDisabled = NamedError.create(
+  "ConversationBoardMessagesDisabled",
+  z.object({ company_id: CompanyID }).strict(),
+)
 export const ChannelNotVisible = NamedError.create(
   "ConversationChannelNotVisible",
   z.object({ company_id: CompanyID, channel_id: ChannelID }).strict(),

@@ -69,6 +69,10 @@ function sameValues(left: readonly string[], right: readonly string[]) {
   return left.length === right.length && left.every((item, index) => item === right[index])
 }
 
+export function boardMessagesEnabled() {
+  return !Flag.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
+}
+
 function needsBootstrap(): CompanyState {
   return CompanyNeedsBootstrapState.parse({
     state: "needs_bootstrap",
@@ -84,7 +88,7 @@ function needsBootstrap(): CompanyState {
         responsibilities: [...member.responsibilities],
       })),
     },
-    capabilities: { board_messages: Flag.AGENTCOMPANY_BOARD_MESSAGES_TEST },
+    capabilities: { board_messages: boardMessagesEnabled() },
   })
 }
 
@@ -161,7 +165,7 @@ function current(db: TxOrDb): CompanyState {
       kind: "bootstrap_complete",
       action: "open_board",
     },
-    capabilities: { board_messages: Flag.AGENTCOMPANY_BOARD_MESSAGES_TEST },
+    capabilities: { board_messages: boardMessagesEnabled() },
   })
   if (!parsed.success) return corrupt()
   return parsed.data

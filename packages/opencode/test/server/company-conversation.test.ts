@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { authorization, Server } from "../../src/server/server"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
+import { CompanyAgentID } from "../../src/company-agent/schema"
 import { CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
@@ -8,16 +9,33 @@ import {
   BOARD_CHANNEL_ID,
   COMPANY_CHANNEL_ID,
   ChannelMessageTable,
+  ConversationRunTable,
+  ConversationThreadTable,
   LOCAL_USER_ID,
+  RootNeedTable,
+  SignalProjectionSourceTable,
+  SignalProjectionTable,
   ensureCompanyChannels,
 } from "../../src/conversation/conversation.sql"
-import { ChannelID } from "../../src/conversation/schema"
+import {
+  ChannelID,
+  ChannelMessageID,
+  ConversationRunID,
+  ConversationThreadID,
+  SignalProjectionID,
+} from "../../src/conversation/schema"
+import { GroupMessageTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
+import { GroupSessionID } from "../../src/group-session/schema"
+import { Identifier } from "../../src/id/id"
+import { ProjectTable } from "../../src/project/project.sql"
+import type { ProjectID } from "../../src/project/schema"
 import * as Database from "../../src/storage/db"
 import { eq } from "../../src/storage"
 import { resetDatabase } from "../fixture/db"
 
 const companyID = CompanyID.parse("cmp_local")
 const credentials = { username: "agentcompany", password: "secret" }
+const boardMessagesOverride = process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
 
 let requestCounter = 0
 function requestID() {
@@ -58,6 +76,85 @@ function seed() {
   ensureCompanyChannels({ companyID, boardAgentIDs: ["board-ceo", "board-cto", "board-product-lead"], now: 1 })
 }
 
+function seedProjectedBoardSignal(input: { threadID: ConversationThreadID; runID: ConversationRunID }) {
+  const projectID = "m2-conversation-project" as ProjectID
+  const groupSessionID = GroupSessionID.ascending()
+  const groupMessageID = Identifier.ascending("message")
+  const channelMessageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
+  const projectionID = SignalProjectionID.parse(Identifier.ascending("signalProjection"))
+  const now = Date.now()
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({ id: projectID, worktree: "/tmp/m2-conversation", sandboxes: [], time_created: now, time_updated: now })
+      .run()
+    db.insert(GroupSessionTable)
+      .values({
+        id: groupSessionID,
+        project_id: projectID,
+        title: "M2 Board thread",
+        context_policy: "work_scoped",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(GroupMessageTable)
+      .values({
+        id: groupMessageID,
+        group_session_id: groupSessionID,
+        round_num: 0,
+        role: "agent",
+        company_agent_id: CompanyAgentID.zod.parse("board-cto"),
+        content: "The CTO identified a release race in the runtime transition.",
+        status_summary: "done",
+        time_created: now + 1,
+        time_updated: now + 1,
+      })
+      .run()
+    db.update(ConversationRunTable)
+      .set({ runtime_id: groupSessionID, runtime_round_num: 0, time_updated: now + 1 })
+      .where(eq(ConversationRunTable.id, input.runID))
+      .run()
+    db.insert(ChannelMessageTable)
+      .values({
+        id: channelMessageID,
+        channel_id: BOARD_CHANNEL_ID,
+        source_thread_id: input.threadID,
+        author_kind: "agent",
+        author_id: "board-product-lead",
+        body: "The Board identified a release race that must be closed.",
+        signal_type: "risk",
+        visibility: "company",
+        mentions: [],
+        time_created: now + 2,
+        time_updated: now + 2,
+      })
+      .run()
+    db.insert(SignalProjectionTable)
+      .values({
+        id: projectionID,
+        channel_message_id: channelMessageID,
+        conversation_thread_id: input.threadID,
+        conversation_run_id: input.runID,
+        projector_version: 1,
+        source_watermark: `${groupSessionID}:0:${groupMessageID}`,
+        time_created: now + 2,
+        time_updated: now + 2,
+      })
+      .run()
+    db.insert(SignalProjectionSourceTable)
+      .values({
+        signal_projection_id: projectionID,
+        ordinal: 0,
+        source_kind: "group_message",
+        source_id: groupMessageID,
+        time_created: now + 2,
+        time_updated: now + 2,
+      })
+      .run()
+  })
+  return { groupMessageID, channelMessageID }
+}
+
 function send(channelID: string, body: string, requestIDValue = requestID(), headers: Record<string, string> = {}) {
   return Server.Default().app.request(
     `/company/channels/${channelID}/messages?company_id=${companyID}`,
@@ -70,12 +167,15 @@ function send(channelID: string, body: string, requestIDValue = requestID(), hea
 }
 
 beforeEach(async () => {
+  delete process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
   requestCounter = 0
   await resetDatabase()
   seed()
 })
 
 afterEach(async () => {
+  if (boardMessagesOverride === undefined) delete process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
+  else process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES = boardMessagesOverride
   await Server.Default().app.request("/company/providers/openai/credentials", { method: "DELETE" })
   await resetDatabase()
 })
@@ -109,6 +209,17 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     expect(await response.json()).toMatchObject({ name: "ConversationChannelNotVisible" })
   })
 
+  test.serial("enforces the board_messages capability before creating any conversation rows", async () => {
+    process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES = "true"
+
+    const response = await send(BOARD_CHANNEL_ID, "This must remain read-only.", requestID())
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ name: "ConversationBoardMessagesDisabled" })
+    expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(0)
+    expect(Database.use((db) => db.select().from(ConversationThreadTable).all())).toHaveLength(0)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
+  })
+
   test.serial("accepts a board message and returns 202 with persisted ids", async () => {
     const response = await send(BOARD_CHANNEL_ID, "Ship the scoped board intake.", requestID())
     expect(response.status).toBe(202)
@@ -125,6 +236,25 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     )
     expect(persisted).toBeDefined()
     expect(persisted?.body).toBe("Ship the scoped board intake.")
+  })
+
+  test.serial("dispatches a newly persisted run without waiting for process restart", async () => {
+    const response = await send(BOARD_CHANNEL_ID, "Dispatch immediately.", requestID())
+    expect(response.status).toBe(202)
+    const { runID } = await response.json()
+
+    const deadline = Date.now() + 2_000
+    while (
+      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
+        ?.state === "queued" &&
+      Date.now() < deadline
+    ) {
+      await Bun.sleep(20)
+    }
+    expect(
+      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
+        ?.state,
+    ).not.toBe("queued")
   })
 
   test.serial("replays an identical request idempotently and 409s on a different body", async () => {
@@ -189,21 +319,67 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     expect(badCursor.status).toBe(400)
   })
 
-  test.serial("returns thread detail, entries, and a 404 for an unknown source", async () => {
+  test.serial("returns run state, runtime entries, hydrated evidence, and a 404 for an unknown source", async () => {
     const accepted = await send(BOARD_CHANNEL_ID, "Discuss the M2 scope.", requestID())
-    const { threadID } = await accepted.json()
+    const { threadID, runID } = await accepted.json()
+    Database.use((db) =>
+      db.update(ConversationRunTable)
+        .set({
+          state: "failed",
+          attempt: 2,
+          retryable: true,
+          safe_error_summary: "The Board runtime needs a retry.",
+          time_finished: Date.now(),
+          time_updated: Date.now(),
+        })
+        .where(eq(ConversationRunTable.id, runID))
+        .run(),
+    )
+    const projected = seedProjectedBoardSignal({ threadID, runID })
 
     const detail = await Server.Default().app.request(`/company/threads/${threadID}?company_id=${companyID}`)
     expect(detail.status).toBe(200)
     const thread = await detail.json()
     expect(thread.id).toBe(threadID)
     expect(thread.status).toBe("active")
+    expect(thread.run).toMatchObject({
+      id: runID,
+      state: "failed",
+      attempt: 2,
+      retryable: true,
+      safeErrorSummary: "The Board runtime needs a retry.",
+    })
     expect(thread.members.some((member: { principal: { id: string } }) => member.principal.id === LOCAL_USER_ID)).toBe(true)
 
     const entries = await Server.Default().app.request(`/company/threads/${threadID}/entries?company_id=${companyID}`)
     expect(entries.status).toBe(200)
     const entryPage = await entries.json()
-    expect(Array.isArray(entryPage.items)).toBe(true)
+    expect(entryPage.items).toContainEqual(
+      expect.objectContaining({
+        type: "agent_message",
+        message: expect.objectContaining({
+          id: projected.groupMessageID,
+          agentID: "board-cto",
+          body: "The CTO identified a release race in the runtime transition.",
+          status: "done",
+        }),
+      }),
+    )
+
+    const source = await Server.Default().app.request(
+      `/company/threads/${threadID}/sources/${projected.groupMessageID}?company_id=${companyID}`,
+    )
+    expect(source.status).toBe(200)
+    expect(await source.json()).toMatchObject({
+      kind: "group_message",
+      sourceID: projected.groupMessageID,
+      detail: {
+        type: "group_message",
+        agentID: "board-cto",
+        body: "The CTO identified a release race in the runtime transition.",
+        status: "done",
+      },
+    })
 
     const missingSource = await Server.Default().app.request(
       `/company/threads/${threadID}/sources/msg_does-not-exist?company_id=${companyID}`,
@@ -220,7 +396,14 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
 
   test.serial("applies an interrupt action and returns updated thread detail", async () => {
     const accepted = await send(BOARD_CHANNEL_ID, "A goal to interrupt.", requestID())
-    const { threadID } = await accepted.json()
+    const { runID, threadID } = await accepted.json()
+    Database.use((db) =>
+      db
+        .update(ConversationRunTable)
+        .set({ state: "queued", runtime_id: null, runtime_round_num: null })
+        .where(eq(ConversationRunTable.id, runID))
+        .run(),
+    )
 
     const response = await Server.Default().app.request(`/company/threads/${threadID}/actions?company_id=${companyID}`, {
       method: "POST",
@@ -230,6 +413,62 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     expect(response.status).toBe(200)
     const thread = await response.json()
     expect(thread.id).toBe(threadID)
+    expect(thread.status).toBe("interrupted")
+    expect(
+      Database.use((db) => db.select().from(ConversationThreadTable).where(eq(ConversationThreadTable.id, threadID)).get())
+        ?.status,
+    ).toBe("interrupted")
+    expect(
+      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
+        ?.state,
+    ).toBe("interrupted")
+  })
+
+  test.serial("includes company-visible Board signals in the company feed", async () => {
+    const accepted = await send(BOARD_CHANNEL_ID, "Publish a company-visible Board risk.", requestID())
+    const { threadID, runID } = await accepted.json()
+    const projected = seedProjectedBoardSignal({ threadID, runID })
+
+    const response = await Server.Default().app.request(
+      `/company/channels/${COMPANY_CHANNEL_ID}/messages?company_id=${companyID}`,
+    )
+    expect(response.status).toBe(200)
+    expect((await response.json()).items).toContainEqual(
+      expect.objectContaining({
+        id: projected.channelMessageID,
+        channelID: BOARD_CHANNEL_ID,
+        visibility: "company",
+        signalType: "risk",
+      }),
+    )
+  })
+
+  test.serial("rejects an invisible interrupt before mutating its thread or run", async () => {
+    const accepted = await send(BOARD_CHANNEL_ID, "A protected goal.", requestID())
+    const { runID, threadID } = await accepted.json()
+    Database.use((db) =>
+      db
+        .update(ConversationRunTable)
+        .set({ state: "queued", runtime_id: null, runtime_round_num: null })
+        .where(eq(ConversationRunTable.id, runID))
+        .run(),
+    )
+
+    const response = await Server.Default().app.request(`/company/threads/${threadID}/actions?company_id=cmp_other`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "interrupt" }),
+    })
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ name: "ConversationThreadNotVisible" })
+    expect(
+      Database.use((db) => db.select().from(ConversationThreadTable).where(eq(ConversationThreadTable.id, threadID)).get())
+        ?.status,
+    ).toBe("active")
+    expect(
+      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
+        ?.state,
+    ).toBe("queued")
   })
 
   test.serial("rejects a non-interrupt action as a 400 product error", async () => {

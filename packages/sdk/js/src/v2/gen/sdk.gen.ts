@@ -2520,6 +2520,7 @@ export class GroupSession extends HeyApiClient {
     parameters?: {
       directory?: string
       workspace?: string
+      id?: string
       title?: string
       agentIDs?: Array<string>
       contextPolicy?: "work_scoped"
@@ -2533,6 +2534,7 @@ export class GroupSession extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "body", key: "id" },
             { in: "body", key: "title" },
             { in: "body", key: "agentIDs" },
             { in: "body", key: "contextPolicy" },

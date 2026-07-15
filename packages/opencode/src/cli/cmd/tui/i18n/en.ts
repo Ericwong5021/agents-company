@@ -44,6 +44,7 @@ export const dict: Record<string, string> = {
   "tui.home.board_chat.sent": "Goal sent to board",
   "tui.home.board_chat.no_agents": "No board or assistant is available yet. Retry startup or connect a provider.",
   "tui.home.board_chat.send_failed": "Send failed, please retry",
+  "tui.home.board_chat.disabled": "Board messaging is disabled for this build.",
   "tui.home.prompt.auto.no_board": "No board channel found",
   "tui.home.prompt.auto.company_not_ready": "Company is not ready",
   "tui.home.prompt.auto.failed": "Failed to auto-send the goal to the board",
@@ -60,6 +61,12 @@ export const dict: Record<string, string> = {
   "tui.company.channel.interrupted": "Thread interrupted",
   "tui.company.channel.send_failed": "Send failed",
   "tui.company.channel.you": "You",
+  "tui.company.channel.disabled": "Board messaging is disabled for this build.",
+  "tui.company.channel.run": "Run",
+  "tui.company.channel.attempt": "attempt",
+  "tui.company.channel.source": "Source",
+  "tui.company.channel.source_loading": "Loading source...",
+  "tui.company.channel.source_load_failed": "Failed to load source",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "attach file",

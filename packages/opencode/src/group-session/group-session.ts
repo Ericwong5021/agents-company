@@ -22,7 +22,7 @@ import { probeOne } from "./scheduler/probe"
 import type { ProbeInput } from "./scheduler/probe"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Memory } from "@/memory"
-import { Agent } from "@/agent/agent"
+import { Agent, BOARD_DISCUSSION_AGENT_ID } from "@/agent/agent"
 import { Provider } from "@/provider"
 import { LLM } from "@/session/llm"
 
@@ -73,6 +73,7 @@ export type GroupMessage = z.infer<typeof GroupMessage>
 // ---------------------------------------------------------------------------
 
 export const CreateInput = z.object({
+  id: GroupSessionID.zod.optional(),
   title: z.string().min(1),
   agentIDs: z.array(z.string()).min(1).max(10),
   contextPolicy: GroupContextPolicy.optional(),
@@ -443,31 +444,42 @@ export const layer: Layer.Layer<
         const project = Instance.project
 
         const now = Date.now()
-        const groupID = GroupSessionID.ascending()
+        const groupID = input.id ?? GroupSessionID.ascending()
+        const existing = yield* Effect.sync(() => loadGroupInfo(groupID))
+        if (existing && existing.projectID !== project.id) {
+          return yield* Effect.die(new Error(`GroupSession ${groupID} belongs to another project`))
+        }
 
-        // Create the group row
-        yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .insert(GroupSessionTable)
-              .values({
-                id: groupID,
-                project_id: project.id as ProjectID,
-                title: input.title,
-                context_policy: input.contextPolicy ?? null,
-                time_created: now,
-                time_updated: now,
-              })
-              .run(),
-          ),
-        )
+        if (!existing) {
+          yield* Effect.sync(() =>
+            Database.use((db) =>
+              db
+                .insert(GroupSessionTable)
+                .values({
+                  id: groupID,
+                  project_id: project.id as ProjectID,
+                  title: input.title,
+                  context_policy: input.contextPolicy ?? null,
+                  time_created: now,
+                  time_updated: now,
+                })
+                .run(),
+            ),
+          )
+        }
 
-        // Create one member session per agentID, register membership
+        const existingAgentIDs = new Set(loadMembers(groupID).map((member) => member.companyAgentID))
         for (const [i, agentID] of input.agentIDs.entries()) {
+          if (existingAgentIDs.has(agentID)) continue
           const session = yield* sessionSvc.create({
             title: `${input.title} — ${agentID}`,
             ...(input.contextPolicy === "work_scoped"
-              ? { permission: [{ permission: "skill", pattern: "*", action: "deny" }] }
+              ? {
+                  permission: [
+                    { permission: "*", pattern: "*", action: "deny" },
+                    { permission: "StructuredOutput", pattern: "*", action: "allow" },
+                  ],
+                }
               : {}),
             ...(input.contextPolicy === "work_scoped" ? {} : { companyAgentID: agentID as CompanyAgentID }),
           })
@@ -490,7 +502,7 @@ export const layer: Layer.Layer<
         }
 
         const info = yield* Effect.sync(() => loadGroupInfo(groupID)!)
-        yield* bus.publish(Event.Created, info)
+        yield* bus.publish(existing ? Event.Updated : Event.Created, info)
         return info
       })
 
@@ -664,9 +676,10 @@ export const layer: Layer.Layer<
           (item) => item.companyAgentID === input.companyAgentID,
         )
         if (!member) return yield* Effect.fail(new Error(`Group session member ${input.companyAgentID} was not found`))
+        const group = yield* get(input.groupSessionID)
         return yield* promptSvc.prompt({
           sessionID: member.sessionID as SessionID,
-          agentID: "main",
+          agentID: group.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
           source: "spawn",
           format: input.format,
           parts: [{ type: "text", text: input.text }],
@@ -839,7 +852,7 @@ export const layer: Layer.Layer<
 
             const result = yield* promptSvc.prompt({
               sessionID: member.sessionID as SessionID,
-              agentID: "main",
+              agentID: params.info.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
               source: "user",
               parts: [{ type: "text", text: speakerPrompt }],
             }).pipe(
@@ -1013,7 +1026,14 @@ export const layer: Layer.Layer<
         yield* Ref.update(interruptedSchedulers, (s) => new Set(s).add(id))
         yield* Effect.forEach(
           info.members,
-          (m) => runState.cancel(m.sessionID as SessionID).pipe(Effect.ignore),
+          (m) =>
+            Effect.all(
+              [
+                runState.cancel(m.sessionID as SessionID).pipe(Effect.ignore),
+                runState.cancelActor(m.sessionID as SessionID, BOARD_DISCUSSION_AGENT_ID).pipe(Effect.ignore),
+              ],
+              { discard: true },
+            ),
           { concurrency: MEMBER_CONCURRENCY, discard: true },
         )
       })

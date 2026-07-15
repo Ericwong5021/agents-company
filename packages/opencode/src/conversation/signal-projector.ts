@@ -39,6 +39,7 @@ export const SignalProjectionRejected = NamedError.create(
         "approval_requires_fact",
         "delivery_requires_fact",
         "run_not_found",
+        "run_not_projecting",
         "source_not_found",
       ]),
     })
@@ -161,6 +162,15 @@ function write(input: ParsedProjectInput): Projected | RejectionReason {
           ),
         )
         .get()
+      if (existing && run.state === "completed") {
+        return {
+          projectionID: existing.id,
+          channelMessageID: existing.channel_message_id,
+          sourceWatermark,
+          replayed: true,
+        }
+      }
+      if (run.state !== "projecting" || thread.status !== "active") return "run_not_projecting"
       if (existing) {
         const now = Date.now()
         db.update(ConversationRunTable)
@@ -172,7 +182,7 @@ function write(input: ParsedProjectInput): Projected | RejectionReason {
             time_finished: now,
             time_updated: now,
           })
-          .where(eq(ConversationRunTable.id, input.runID))
+          .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
           .run()
         return {
           projectionID: existing.id,
@@ -240,7 +250,7 @@ function write(input: ParsedProjectInput): Projected | RejectionReason {
           time_finished: now,
           time_updated: now,
         })
-        .where(eq(ConversationRunTable.id, input.runID))
+        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
         .run()
       return {
         projectionID,

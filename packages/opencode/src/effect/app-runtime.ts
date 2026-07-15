@@ -64,6 +64,7 @@ import { Company } from "@/company"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
+import { ConversationCommand } from "@/conversation/command"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { CompanyProject, CompanyProjectExecution } from "@/company-project"
 import { Thread } from "@/thread/thread"
@@ -80,6 +81,7 @@ export const AppLayer = Layer.suspend(() => {
   const bus = Bus.defaultLayer
   const groupSession = GroupSession.defaultLayer
   const conversation = Conversation.defaultLayer
+  const conversationRuntime = ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus, conversation)))
   return Layer.mergeAll(
     Npm.defaultLayer,
     AppFileSystem.defaultLayer,
@@ -141,7 +143,10 @@ export const AppLayer = Layer.suspend(() => {
     LocalAuth.defaultLayer,
     groupSession,
     conversation,
-    ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus, conversation))),
+    conversationRuntime,
+    ConversationCommand.layer.pipe(
+      Layer.provide(Layer.mergeAll(conversation, conversationRuntime, bus)),
+    ),
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,

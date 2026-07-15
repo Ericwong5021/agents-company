@@ -40,9 +40,6 @@ type M2Errors =
   | CompanyThreadSourceError
   | CompanyThreadActionError
 
-export type M2ConversationContractAssertions = [
-  ExpectFalse<IsUnsafe<M2Responses>>,
-  ExpectFalse<IsUnsafe<M2Errors>>,
-]
+export type M2ConversationContractAssertions = [ExpectFalse<IsUnsafe<M2Responses>>, ExpectFalse<IsUnsafe<M2Errors>>]
 
 test("M2 generated conversation response and error types are concrete", () => {})

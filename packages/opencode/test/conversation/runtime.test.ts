@@ -15,6 +15,7 @@ import { BOARD_CHANNEL_ID } from "../../src/conversation/conversation.sql"
 import { AppRuntime } from "../../src/effect/app-runtime"
 import { GroupSession } from "../../src/group-session"
 import { GroupMessageTable, GroupSessionMemberTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
+import { GroupSessionID } from "../../src/group-session/schema"
 import { Instance } from "../../src/project/instance"
 import { MessageV2 } from "../../src/session/message-v2"
 import type { MessageID, SessionID } from "../../src/session/schema"
@@ -195,6 +196,92 @@ describe.serial("M2 conversation runtime", () => {
     }
   })
 
+  test.serial("serializes concurrent starts of the same persisted runtime binding", async () => {
+    const server = startScriptedLLMServer(
+      Array.from({ length: 32 }, () => ({
+        lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
+      })),
+    )
+    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+
+    try {
+      await bootstrap(repository.path)
+      const accepted = await Effect.runPromise(
+        Conversation.Service.use((conversation) =>
+          conversation.sendMessage({
+            companyID,
+            channelID: BOARD_CHANNEL_ID,
+            principal: { kind: "user", id: "usr_local" },
+            requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d8",
+            body: "Start this persisted board runtime exactly once.",
+          }),
+        ).pipe(Effect.provide(Conversation.layer)),
+      )
+      const reservedGroupSessionID = GroupSessionID.ascending()
+      await groupSession(repository.path, (service) =>
+        service.create({
+          id: reservedGroupSessionID,
+          title: "Concurrent M2 board start",
+          agentIDs: ["board-ceo", "board-cto", "board-product-lead"],
+          contextPolicy: "work_scoped",
+        }),
+      )
+      Database.use((db) =>
+        db
+          .update(ConversationRunTable)
+          .set({
+            state: "running",
+            runtime_id: reservedGroupSessionID,
+            runtime_round_num: null,
+            time_started: Date.now(),
+            time_updated: Date.now(),
+          })
+          .where(eq(ConversationRunTable.id, accepted.runID!))
+          .run(),
+      )
+
+      const started = await Instance.provide({
+        directory: repository.path,
+        fn: () =>
+          AppRuntime.runPromise(
+            ConversationRuntime.Service.use((runtime) =>
+              Effect.all([runtime.start(accepted.runID!), runtime.start(accepted.runID!)], {
+                concurrency: "unbounded",
+              }),
+            ),
+          ),
+      })
+      expect(started[1]).toEqual(started[0])
+      expect(
+        Database.use((db) =>
+          db
+            .select()
+            .from(GroupMessageTable)
+            .where(eq(GroupMessageTable.group_session_id, reservedGroupSessionID))
+            .all()
+            .filter((message) => message.external_message_id === accepted.messageID),
+        ),
+      ).toHaveLength(1)
+      expect(
+        Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, accepted.runID!)).get()),
+      ).toMatchObject({ state: "running", runtime_id: reservedGroupSessionID, runtime_round_num: started[0].roundNum })
+      await waitFor(
+        () =>
+          Database.use((db) => {
+            const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, accepted.runID!)).get()
+            return run?.state === "completed" || run?.state === "failed"
+          }),
+        1_000,
+      )
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
+      await server.stop()
+      await repository[Symbol.asyncDispose]()
+    }
+  })
+
   test.serial("synthesizes one grounded Product Lead high signal after the board round completes", async () => {
     const requests: Array<{ tools?: Array<{ function?: { name?: string } }> }> = []
     const server = Bun.serve({
@@ -331,6 +418,57 @@ describe.serial("M2 conversation runtime", () => {
           db.select().from(SignalProjectionTable).where(eq(SignalProjectionTable.conversation_run_id, accepted.runID!)).all(),
         ),
       ).toHaveLength(1)
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
+      await server.stop()
+      await repository[Symbol.asyncDispose]()
+    }
+  })
+
+  test.serial("recreates a persisted runtime binding when the process exited before GroupSession creation", async () => {
+    const server = startScriptedLLMServer(
+      Array.from({ length: 32 }, () => ({
+        lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
+      })),
+    )
+    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+
+    try {
+      await bootstrap(repository.path)
+      const accepted = await Effect.runPromise(
+        Conversation.Service.use((conversation) =>
+          conversation.sendMessage({
+            companyID,
+            channelID: BOARD_CHANNEL_ID,
+            principal: { kind: "user", id: "usr_local" },
+            requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d7",
+            body: "Recover the board binding created before the runtime group.",
+          }),
+        ).pipe(Effect.provide(Conversation.layer)),
+      )
+      const reservedGroupSessionID = GroupSessionID.ascending()
+      Database.use((db) =>
+        db.update(ConversationRunTable)
+          .set({
+            state: "running",
+            runtime_id: reservedGroupSessionID,
+            runtime_round_num: null,
+            time_started: Date.now(),
+            time_updated: Date.now(),
+          })
+          .where(eq(ConversationRunTable.id, accepted.runID!))
+          .run(),
+      )
+
+      expect(await recover(repository.path)).toEqual([accepted.runID!])
+      expect(
+        Database.use((db) => db.select().from(GroupSessionTable).where(eq(GroupSessionTable.id, reservedGroupSessionID)).get()),
+      ).toMatchObject({ id: reservedGroupSessionID, context_policy: "work_scoped" })
+      expect(
+        Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, accepted.runID!)).get()),
+      ).toMatchObject({ runtime_id: reservedGroupSessionID })
     } finally {
       await Instance.disposeAll()
       await resetDatabase()

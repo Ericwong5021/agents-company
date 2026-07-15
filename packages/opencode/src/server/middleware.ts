@@ -52,6 +52,7 @@ export function errorMiddleware(auth: AuthMode): ErrorHandler {
       [
         "ConversationChannelNotVisible",
         "ConversationThreadNotVisible",
+        "ConversationBoardMessagesDisabled",
         "ConversationChannelNotWritable",
         "ConversationThreadNotWritable",
         "ConversationReplyNotVisible",

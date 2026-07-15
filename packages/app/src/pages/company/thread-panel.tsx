@@ -4,6 +4,7 @@ import { useLanguage } from "@/context/language"
 import type {
   ConversationThreadDetail,
   ConversationThreadEntryItem,
+  ConversationThreadSource,
 } from "./company-model"
 
 /**
@@ -16,8 +17,14 @@ import type {
  */
 
 function entryAuthorName(entry: ConversationThreadEntryItem): string {
+  if (entry.type === "agent_message") return entry.message.agentID
   const author = entry.message.author
   return author.kind === "user" ? "local-user" : author.id
+}
+
+function sourceBody(source: ConversationThreadSource) {
+  if (source.detail.type === "unavailable") return source.detail.reason
+  return source.detail.body
 }
 
 export function ThreadPanel(props: {
@@ -26,9 +33,12 @@ export function ThreadPanel(props: {
   loading: Accessor<boolean>
   hasMore: Accessor<boolean>
   interrupting: Accessor<boolean>
+  threadSources: Accessor<Record<string, ConversationThreadSource>>
+  loadingSourceIDs: Accessor<string[]>
   onClose: () => void
   onInterrupt: () => void
   onLoadMore: () => void
+  onLoadSource: (sourceID: string) => void
 }) {
   const language = useLanguage()
   const thread = props.thread
@@ -44,6 +54,16 @@ export function ThreadPanel(props: {
                 <span class="company-thread-status" data-status={th().status}>
                   {language.t(`company.thread.status.${th().status}`)}
                 </span>
+                <Show when={th().run}>
+                  {(run) => (
+                    <div class="company-thread-run" data-run-state={run().state}>
+                      <span>{language.t(`company.thread.run.${run().state}`)}</span>
+                      <Show when={run().safeErrorSummary}>
+                        {(summary) => <p role="alert">{summary()}</p>}
+                      </Show>
+                    </div>
+                  )}
+                </Show>
               </div>
               <button
                 type="button"
@@ -87,10 +107,36 @@ export function ThreadPanel(props: {
                         <time>{new Date(entry.message.time.created).toLocaleString(language.locale())}</time>
                       </header>
                       <p>{entry.message.body}</p>
-                      <Show when={entry.message.signalType}>
-                        <span class="company-message-signal" data-signal={entry.message.signalType}>
-                          {language.t(`company.signal.${entry.message.signalType}`)}
-                        </span>
+                      <Show when={entry.type === "agent_message" ? entry.message.status : undefined}>
+                        {(status) => <span class="company-thread-agent-status">{status()}</span>}
+                      </Show>
+                      <Show when={entry.type === "message" ? entry : undefined}>
+                        {(messageEntry) => (
+                          <>
+                            <Show when={messageEntry().message.signalType}>
+                              <span class="company-message-signal" data-signal={messageEntry().message.signalType}>
+                                {language.t(`company.signal.${messageEntry().message.signalType}`)}
+                              </span>
+                            </Show>
+                            <For each={messageEntry().sources ?? []}>
+                              {(source) => (
+                                <div class="company-thread-source">
+                                  <button
+                                    type="button"
+                                    aria-expanded={props.threadSources()[source.sourceID] ? "true" : "false"}
+                                    aria-busy={props.loadingSourceIDs().includes(source.sourceID) ? "true" : "false"}
+                                    onClick={() => props.onLoadSource(source.sourceID)}
+                                  >
+                                    {language.t("company.thread.source.open")} · {source.kind}
+                                  </button>
+                                  <Show when={props.threadSources()[source.sourceID]}>
+                                    {(loaded) => <p class="company-thread-source-detail">{sourceBody(loaded())}</p>}
+                                  </Show>
+                                </div>
+                              )}
+                            </For>
+                          </>
+                        )}
                       </Show>
                     </div>
                   </article>

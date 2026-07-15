@@ -34,4 +34,11 @@ describe("ThreadPanel", () => {
     expect(component).toContain("onLoadMore")
     expect(component).toContain("company.thread.loadMore")
   })
+
+  test("renders agent runtime entries, run failures, and evidence only through the source loader", () => {
+    expect(component).toContain('entry.type === "agent_message"')
+    expect(component).toContain("safeErrorSummary")
+    expect(component).toContain("onLoadSource")
+    expect(component).toContain("threadSources")
+  })
 })

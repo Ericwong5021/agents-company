@@ -47,6 +47,7 @@ export const dict = {
   "tui.home.board_chat.sent": "目标已发送至董事会",
   "tui.home.board_chat.no_agents": "还没有可用的董事会成员或基础助手。请重试启动，或先连接一个服务商。",
   "tui.home.board_chat.send_failed": "发送失败，请重试",
+  "tui.home.board_chat.disabled": "当前构建未开启董事会消息能力。",
   "tui.home.prompt.auto.no_board": "未找到董事会频道",
   "tui.home.prompt.auto.company_not_ready": "公司尚未就绪",
   "tui.home.prompt.auto.failed": "自动发送目标至董事会失败",
@@ -63,6 +64,12 @@ export const dict = {
   "tui.company.channel.interrupted": "Thread 已中断",
   "tui.company.channel.send_failed": "发送失败",
   "tui.company.channel.you": "你",
+  "tui.company.channel.disabled": "当前构建未开启董事会消息能力。",
+  "tui.company.channel.run": "运行",
+  "tui.company.channel.attempt": "尝试",
+  "tui.company.channel.source": "来源",
+  "tui.company.channel.source_loading": "正在加载来源…",
+  "tui.company.channel.source_load_failed": "加载来源失败",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "添加文件",

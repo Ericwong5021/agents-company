@@ -7,9 +7,9 @@ import { expect, test } from "@playwright/test"
  * bootstrapped a ready company, so this spec pairs a fresh browser credential
  * and exercises the real Board Channel contract end-to-end through the Control
  * Plane API: send a board goal (202 + persisted), read it back from the message
- * page, open the source thread, and interrupt it. The send API does not gate on
- * the board_messages capability (that flag only controls the UI send entry), so
- * the contract is verifiable before the release gate closes.
+ * page, open the source thread, and interrupt it. The Control Plane uses the
+ * production-default enabled board_messages capability, so both the server
+ * authority check and the real composer are covered by this release gate.
  *
  * The UI side asserts that the ready workspace renders the real channel sidebar
  * and message feed from the SDK snapshot, with no fixture approval/delivery
@@ -20,26 +20,31 @@ import { expect, test } from "@playwright/test"
 const serverUrl = "http://127.0.0.1:4096"
 const basic = "Basic " + Buffer.from("agentcompany:m1-e2e-secret").toString("base64")
 
-async function pairBearer(request: import("@playwright/test").APIRequestContext): Promise<{ bearer: string; pair: { code: string } }> {
+async function createPair(request: import("@playwright/test").APIRequestContext, label: string) {
   const pairing = await request.post(serverUrl + "/local-auth/pairings", {
     headers: { authorization: basic },
-    data: { label: "Playwright M2 conversation" },
+    data: { label },
   })
   expect(pairing.ok()).toBe(true)
-  const pair = (await pairing.json()) as { code: string }
+  return (await pairing.json()) as { code: string }
+}
+
+async function pairBearer(request: import("@playwright/test").APIRequestContext): Promise<string> {
+  const pair = await createPair(request, "Playwright M2 API")
   const exchange = await request.post(serverUrl + "/local-auth/exchange", {
-    data: { code: pair.code, label: "Playwright M2 conversation" },
+    data: { code: pair.code, label: "Playwright M2 API" },
   })
   expect(exchange.ok()).toBe(true)
   const issued = (await exchange.json()) as { token: string }
-  return { bearer: "Bearer " + issued.token, pair }
+  return "Bearer " + issued.token
 }
 
 async function companyID(request: import("@playwright/test").APIRequestContext, bearer: string): Promise<string> {
   const res = await request.get(serverUrl + "/company", { headers: { authorization: bearer } })
   expect(res.ok()).toBe(true)
-  const body = (await res.json()) as { state: string; company?: { id: string } }
+  const body = (await res.json()) as { state: string; company?: { id: string }; capabilities?: { board_messages: boolean } }
   expect(body.state).toBe("ready")
+  expect(body.capabilities?.board_messages).toBe(true)
   return body.company!.id
 }
 
@@ -54,7 +59,7 @@ async function boardChannel(request: import("@playwright/test").APIRequestContex
 
 test.describe("M2 company conversation vertical", () => {
   test("sends a board goal and reads it back through the real contract", async ({ request }) => {
-    const { bearer } = await pairBearer(request)
+    const bearer = await pairBearer(request)
     const cid = await companyID(request, bearer)
     const channelID = await boardChannel(request, bearer, cid)
 
@@ -103,7 +108,7 @@ test.describe("M2 company conversation vertical", () => {
   })
 
   test("replays the same request id idempotently without duplicating", async ({ request }) => {
-    const { bearer } = await pairBearer(request)
+    const bearer = await pairBearer(request)
     const cid = await companyID(request, bearer)
     const channelID = await boardChannel(request, bearer, cid)
 
@@ -138,7 +143,7 @@ test.describe("M2 company conversation vertical", () => {
     const noAuth = await request.get(`${serverUrl}/company/channels?company_id=${cid}`)
     expect(noAuth.status()).toBe(401)
 
-    const { bearer } = await pairBearer(request)
+    const bearer = await pairBearer(request)
     // An unknown channel is not found, not leaked
     const missing = await request.get(`${serverUrl}/company/channels/chn_unknown/messages?company_id=${cid}`, {
       headers: { authorization: bearer },
@@ -147,21 +152,32 @@ test.describe("M2 company conversation vertical", () => {
   })
 
   test("ready workspace renders the real channel sidebar and no fixture cards", async ({ page, request }) => {
-    const { bearer, pair } = await pairBearer(request)
-    // The paired browser session is established via the pair code in the URL.
+    // A pairing code is single-use, so the browser receives a fresh code that
+    // has not already been exchanged by the API helper.
+    const pair = await createPair(request, "Playwright M2 browser")
     await page.goto("/?pair=" + encodeURIComponent(pair.code))
-    await page.getByLabel("浏览器名称").fill("Playwright M2 conversation")
+    await page.getByLabel("浏览器名称").fill("Playwright M2 browser")
     await page.getByRole("button", { name: "安全连接" }).click()
 
     // Ready state: real channel sidebar from the SDK, no fixture approval/delivery.
     await expect(page.locator(".company-channels")).toBeVisible()
     await expect(page.locator(".company-approval, .company-delivery")).toHaveCount(0)
-    // board_messages is false in the E2E server (no test override), so the
-    // composer is replaced by the capability notice, never a fake send entry.
-    await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
-    await expect(page.locator(".company-composer")).toHaveCount(0)
-    // The bearer token is stored for the session; sanity-check it does not grant
-    // cross-scope source reads (covered by the API test above).
-    expect(bearer).toMatch(/^Bearer /)
+    await expect(page.locator(".company-composer")).toBeVisible()
+    await expect(page.locator('[data-capability="board-messages-disabled"]')).toHaveCount(0)
+
+    const body = "Playwright UI sends a real M2 board goal"
+    await page.getByLabel("发送消息").fill(body)
+    await page.getByRole("button", { name: "发送", exact: true }).click()
+    const message = page.locator(".company-message", { hasText: body })
+    await expect(message).toBeVisible()
+    await message.getByRole("button", { name: "查看来源 Thread" }).click()
+    await expect(page.getByRole("complementary", { name: "Thread" })).toBeVisible()
+
+    // A document reload has no in-memory event history. The persisted message
+    // and its source Thread must be rebuilt from the snapshot APIs.
+    await page.reload()
+    await expect(message).toBeVisible()
+    await message.getByRole("button", { name: "查看来源 Thread" }).click()
+    await expect(page.getByRole("complementary", { name: "Thread" })).toBeVisible()
   })
 })

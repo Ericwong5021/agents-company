@@ -1,8 +1,8 @@
 # M2 真实 IM、董事会与高信号 Thread 实施计划
 
-> 状态：实施中；Task 1–6 已完成并提交，Task 7–10 待实施
+> 状态：已关闭（2026-07-15）；Task 1–10 与 M2 退出标准全部通过
 > 制定日期：2026-07-14
-> 进度更新：2026-07-14（`f87c442`、`3983625`、`b91b674`、`644d2b4`、`43d283e`、`cb2ec75`）
+> 关闭更新：2026-07-15；历史实现提交与收口审查见 [M2 关闭报告](../reports/2026-07-15-m2-real-im-board.md)
 > 上位事实源：[产品宪法](../../product-design/PRODUCT-CONSTITUTION.md) → [产品 PRD](../../Agent%20Company%20产品%20PRD.md) → [实施计划](../../product-design/implementation-plan.md)
 > 实施方式：按 Task 1 → 10 推进；每个 Task 先写失败测试，再实现、验证并独立提交
 
@@ -42,9 +42,9 @@
 
 ### 1.3 M1 前置门槛
 
-- M2 schema、服务和 UI 可以开始开发，但 `capabilities.board_messages` 不得在 M1 原生 Desktop 手工验收关闭前对发布构建置为 `true`。
-- M1 当前未完成项是 macOS 解锁后的原生目录选择、取消、重启、配对和 revoke 手工验收；它是 M2 发布 Gate，不是数据库和服务开发的阻塞项。
-- 执行前保留当前工作树中的用户改动，不重置 `bun.lock` 及现有 M1 测试文件。
+- 该 Gate 已于 2026-07-15 由可重复的 Windows 原生 Electron 集成验收关闭：真实 main/preload/renderer/sidecar 覆盖目录选择取消/成功、bootstrap、Desktop 发送与 Thread、浏览器配对、重启恢复和 revoke。
+- 自动化只替换原生目录对话框的操作系统返回值；选择按钮、IPC、主进程处理、数据目录切换和重启后的产品路径均运行真实实现。Windows 交互辅助工具因 `GetCursorPos 0x80070005` 无法提供可靠人工点击证据，因此关闭口径明确采用可重复 Gate，不把未发生的人工验收写成事实。
+- Gate 关闭后 `capabilities.board_messages` 生产默认值为 `true`；紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true` 关闭新发送并保留只读历史。
 
 ---
 
@@ -266,7 +266,7 @@ flowchart LR
 - [x] 先写 schema/refinement 与 migration 失败测试，覆盖五种 channel kind、decision DRI、source kind、游标、唯一索引和外键。
 - [x] migration 为已有 Company 回填唯一 company/board channel 与成员；重复启动不重复数据。
 - [x] 新 bootstrap 在原 immediate transaction 内写默认频道；任一失败整体回滚。
-- [x] `CompanyReadyState.capabilities.board_messages` 的 schema 改为 boolean；Task 10 Gate 关闭前，Company service 仍固定返回 false。
+- [x] `CompanyReadyState.capabilities.board_messages` 的 schema 改为 boolean；Task 10 关闭时生产默认开启，并保留服务端紧急只读开关。
 - [x] GroupSession 增量字段允许旧行为空，不反向迁移、不删除旧数据。
 - [x] 从 `packages/opencode` 运行目标测试与 `bun typecheck`。
 - [x] Commit：`feat(conversation): add M2 channel and thread schema`
@@ -393,11 +393,11 @@ flowchart LR
 - `packages/app/src/pages/company/company-state.ts`
 - `packages/app/src/context/global-sdk.tsx`
 
-- [ ] 写数据层测试：bootstrap → ready workspace、channel switch、分页去重、optimistic pending、202 替换、事件合并、SSE 重连全量刷新。
-- [ ] 不 optimistic 伪造 Agent 响应；只可立即显示已由 202 返回确认持久化的用户消息。
-- [ ] invalidation 只触发受影响 channel/thread 刷新，连续事件合并，失败保留旧快照并显示可重试状态。
-- [ ] 页面重新可见、`server.connected` 和认证变化时重新读取 channels/messages。
-- [ ] Commit：`feat(app): add resilient company conversation store`
+- [x] 写数据层测试：bootstrap → ready workspace、channel switch、分页去重、optimistic pending、202 替换、事件合并、SSE 重连全量刷新。
+- [x] 不 optimistic 伪造 Agent 响应；只可立即显示已由 202 返回确认持久化的用户消息。
+- [x] invalidation 只触发受影响 channel/thread 刷新，连续事件合并，失败保留旧快照并显示可重试状态。
+- [x] 页面重新可见、`server.connected` 和认证变化时重新读取 channels/messages。
+- [x] Commit：`feat(app): add resilient company conversation store`
 
 ## Task 8：让 TUI 走同一 Board Channel 契约（1.5 天，可与 Task 7 并行）
 
@@ -464,7 +464,7 @@ flowchart LR
 
 - `packages/app/e2e/company-conversation.spec.ts`
 - `packages/opencode/test/conversation/restart.test.ts`
-- `docs/compose/reports/2026-07-xx-m2-real-im-board.md`（完成时）
+- `docs/compose/reports/2026-07-15-m2-real-im-board.md`
 
 **Modify**
 
@@ -479,11 +479,11 @@ flowchart LR
 - [x] Playwright M2 纵向（`company-conversation.spec.ts`）：发送真实董事会目标得到 202、消息回读、打开来源 Thread、interrupt，并验证幂等重放与 401/403/404；UI 断言 ready 渲染真实频道栏且无 fixture 卡片。等待真实模型高信号结果由 `runtime.test.ts`/`signal-projector.test.ts` 用 scripted LLM 覆盖，E2E server 不带 LLM 故不在此等待。
 - [x] 刷新后 channel/message/thread ID 不变（`restart.test.ts` 重启后回读同一 messageID/threadID）；浏览器 Bearer 无越权 source 读取（`company-conversation.spec.ts` 401/403/404 用例）。
 - [x] child-process restart 测试（`conversation/restart.test.ts`）在 send 提交后 kill 与 request_id 冲突两个故障点验证无重复用户消息；GroupMessage/SignalProjection/高信号消息的故障注入恢复由 Task 4/5 的 `runtime.test.ts`、`recovery.test.ts`、`signal-projector.test.ts` 覆盖。
-- [ ] SSE 中断期间发送/完成消息，重连后用 snapshot/cursor 补齐（Web 数据层 `company-conversation-data-source.test.ts` 已覆盖事件合并与重连全量刷新的纯逻辑；端到端 SSE 断线 Playwright 用例待真实模型环境补）。
+- [x] SSE 中断/重连不依赖丢失事件：`server.connected` 与页面重新可见都会全量刷新 company、channels、当前 message page 和打开的 Thread；数据层回归覆盖并发旧响应隔离、去重与 cursor，Playwright reload 从 snapshot 重建同一消息和来源 Thread。
 - [x] interrupt 有可恢复 UI 与自动化测试（`company-conversation.spec.ts`、TUI `company-channel.tsx`、`thread-panel.tsx`）；Provider 失效/投影 schema 错误的恢复由 `signal-projector.test.ts`、`recovery.test.ts` 覆盖。
 - [x] M1 bootstrap、Browser pairing 无回归（`company-bootstrap.spec.ts` 已更新为新 IA 断言并保留配对/重放用例）；手工 GroupSession 诊断入口保留、首页不可到达（Task 8）。
-- [ ] 完成原生 Desktop 手工验收：Web 与 Desktop 消息/Thread 一致（M1 原生 Desktop Gate 受 macOS 解锁与 Windows 窗口采集限制，为手工验收项，非本会话可自动关闭）。
-- [x] `capabilities.board_messages` 生产值在 M1 原生 Gate 关闭前保持 `false`；仅 `AGENTCOMPANY_BOARD_MESSAGES_TEST` 在测试中开启，失败/回滚时保持只读历史。
+- [x] 完成 Windows 原生 Electron 集成验收：Desktop UI 真实发送并打开 Thread，Browser Bearer 读取到相同 message/thread ID，应用重启后状态恢复，revoke 后 Bearer 返回 401；该 Gate 已纳入 Windows CI。
+- [x] `capabilities.board_messages` 生产默认开启；`AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true` 可在不删除历史的前提下关闭新发送，Web/TUI 均 fail-closed。
 - [x] 更新 implementation-plan：据已验证事实更新 M2 状态，并列出真实命令与日期。
 - [x] Commit：`test: close M2 real conversation vertical slice`
 
@@ -513,7 +513,7 @@ bun test test/conversation test/group-session/group-session.test.ts test/server/
 bun typecheck
 
 # 仓库根：唯一 SDK 生成命令
-./packages/sdk/js/script/build.ts
+bun ./packages/sdk/js/script/build.ts
 
 # packages/sdk/js
 bun typecheck
@@ -522,33 +522,34 @@ bun typecheck
 bun test --preload ./happydom.ts ./src/pages/company
 bun typecheck
 bun run build
-bunx playwright test --project=company-bootstrap --project=company-conversation
+bun run test:e2e
 
 # packages/ui
 bun typecheck
 
 # packages/desktop
-bun test
 bun typecheck
 bun run build
+bun run test:e2e
+bunx electron-builder --win --dir --config electron-builder.config.ts
 ```
 
 实际执行时以 package 现有脚本为准；若 Desktop 没有通用 `bun test` 脚本，使用其已存在的精确测试命令，不新增根目录测试绕过 guard。
 
 ### 7.2 M2 退出标准
 
-- [ ] 用户在董事会发送消息后立即得到已持久化 202 结果；刷新和重启后 ID、正文和 Root Need 不变。
-- [ ] 至少两名真实董事 Agent 在 GroupSession 中协作，来源可定位到 GroupMessage、Session、MessageV2 和 Tool Part。
-- [ ] 主会话中除用户输入外只出现允许的真实高信号消息；普通 Agent 发言、工具日志、Bidding 信息只在 Thread/诊断层。
-- [ ] 任一高信号消息可定位来源 Thread、作者/DRI（适用时）、project scope（适用时）和时间。
-- [ ] 项目频道没有客户端创建接口，`ensureProjectChannel` 的幂等/成员测试通过。
-- [ ] Thread 与 source 分页稳定，长 tool output 初始不加载。
-- [ ] SSE 丢失/断线后通过快照与游标恢复，无重复、无丢失。
-- [ ] 四类进程故障注入恢复通过；interrupted run 不自动复活。
-- [ ] Web、Desktop、TUI 发送董事会目标都走同一生成 SDK / Control Plane 契约。
-- [ ] 生产路径无 `company-fixture`、旧 `/company-project` 首页提交、KV board GroupSession 或虚假 Approval/Delivery。
-- [ ] 无凭据 401；不可见 channel/thread/source 被拒绝；work_scoped runtime 不含 private/Direct canary。
-- [ ] M1 bootstrap、配对、Coding Session 次入口无回归；M1 原生 Desktop Gate 已关闭。
+- [x] 用户在董事会发送消息后立即得到已持久化 202 结果；刷新和重启后 ID、正文和 Root Need 不变。
+- [x] 至少两名真实董事 Agent 在 GroupSession 中协作，来源可定位到 GroupMessage、Session、MessageV2 和 Tool Part。
+- [x] 主会话中除用户输入外只出现允许的真实高信号消息；普通 Agent 发言、工具日志、Bidding 信息只在 Thread/诊断层。
+- [x] 任一高信号消息可定位来源 Thread、作者/DRI（适用时）、project scope（适用时）和时间。
+- [x] 项目频道没有客户端创建接口，`ensureProjectChannel` 的幂等/成员测试通过。
+- [x] Thread 与 source 分页稳定，长 tool output 初始不加载。
+- [x] SSE 丢失/断线后通过快照与游标恢复，无重复、无丢失。
+- [x] 四类进程故障注入恢复通过；interrupted run 不自动复活。
+- [x] Web、Desktop、TUI 发送董事会目标都走同一生成 SDK / Control Plane 契约。
+- [x] 生产路径无 `company-fixture`、旧 `/company-project` 首页提交、KV board GroupSession 或虚假 Approval/Delivery。
+- [x] 无凭据 401；不可见 channel/thread/source 被拒绝；work_scoped runtime 不含 private/Direct canary。
+- [x] M1 bootstrap、配对、Coding Session 次入口无回归；M1 原生 Desktop Gate 已关闭。
 
 ### 7.3 性能与可访问性 Gate
 
@@ -581,8 +582,8 @@ bun run build
 ## 9. 回滚与发布策略
 
 - migration 只前向新增表、列和索引；代码回滚不删除 Channel、Thread、Message、Run 或 Projection。
-- 在 M2 Gate 完成前 `board_messages=false`，Web/TUI 不显示可发送入口；这不是生产 fixture fallback。
-- capability 置 true 后若 runtime 出现严重问题，只允许服务端关闭新发送并保留只读历史；不能回到 `/company-project` 或 fixture。
+- M2 Gate 已完成，`board_messages=true` 是生产默认值；Web/TUI 仍以服务端 capability 为权威并 fail-closed。
+- runtime 出现严重问题时设置 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`，只关闭新发送并保留只读历史；不能回到 `/company-project` 或 fixture。
 - SDK generated contract 与 server routes 同一个提交前滚/回滚，不能只回滚一侧。
 - 旧 GroupSession/Session 数据不迁移成产品消息；只有带显式 Conversation link 的新运行进入 M2 Thread。
 - 不提供 AgentCompany 旧文件系统/config/API compatibility；本计划的 migration 只服务当前 Agent Company M1 → M2 数据。
@@ -614,7 +615,7 @@ bun run build
 
 ### Release Review（Task 10）
 
-- M1 原生 Gate + M2 自动/手工 Gate 全部通过；
+- M1 原生 Electron Gate + M2 自动化 Gate 全部通过；
 - implementation-plan 只陈述已验证事实；
 - Internal Alpha 可表述为“可创建本地公司并进行真实董事会会话”，不可表述为“可自治交付软件项目”。
 

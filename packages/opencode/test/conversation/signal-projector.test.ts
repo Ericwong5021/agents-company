@@ -263,4 +263,29 @@ describe.serial("M2 signal projector", () => {
       retryable: false,
     })
   })
+
+  test.serial("never overwrites an interrupted run or thread with a completed projection", async () => {
+    Database.use((db) => {
+      db.update(ConversationRunTable)
+        .set({ state: "interrupted", time_finished: 2, time_updated: 2 })
+        .where(eq(ConversationRunTable.id, runID))
+        .run()
+      db.update(ConversationThreadTable)
+        .set({ status: "interrupted", time_updated: 2 })
+        .where(eq(ConversationThreadTable.id, threadID))
+        .run()
+    })
+
+    await expect(project()).rejects.toMatchObject({
+      name: "ConversationSignalProjectionRejected",
+      data: { reason: "run_not_projecting" },
+    })
+    expect(Database.use((db) => db.select().from(SignalProjectionTable).all())).toHaveLength(0)
+    expect(
+      Database.use((db) => db.select().from(ChannelMessageTable).where(eq(ChannelMessageTable.signal_type, "risk")).all()),
+    ).toHaveLength(0)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())).toMatchObject({
+      state: "interrupted",
+    })
+  })
 })

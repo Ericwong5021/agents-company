@@ -2,7 +2,9 @@ import { describe, expect, test, beforeEach } from "bun:test"
 import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 import type {
   EventCompanyChannelInvalidated,
+  EventCompanyConversationRunUpdated,
   EventCompanyThreadInvalidated,
+  EventServerConnected,
 } from "@agents-company/sdk/v2/client"
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -83,8 +85,25 @@ const THREAD_ENTRIES_PAGE_1 = [
       mentions: [],
       time: { created: 200, updated: 200 },
     },
+    sources: [{ ordinal: 0, kind: "group_message", sourceID: "msg_source_1" }],
   },
 ]
+
+const THREAD_SOURCE = {
+  projectionID: "spr_1",
+  ordinal: 0,
+  kind: "group_message",
+  sourceID: "msg_source_1",
+  detail: {
+    type: "group_message",
+    roundNum: 0,
+    role: "agent",
+    agentID: "cto",
+    body: "Exact Board evidence loaded on demand.",
+    status: "done",
+  },
+  time: { created: 200, updated: 200 },
+} as const
 
 // ── Mock client factory ─────────────────────────────────────────────────────
 
@@ -104,6 +123,7 @@ function createMockClient(): { company: Record<string, (...args: any[]) => any> 
       }),
       thread: async (...args: any[]) => mockResult(THREAD_DETAIL),
       threadEntries: async (...args: any[]) => mockResult({ items: THREAD_ENTRIES_PAGE_1, nextCursor: undefined }),
+      threadSource: async (...args: any[]) => mockResult(THREAD_SOURCE),
       threadAction: async (...args: any[]) => mockResult(THREAD_ACTION_RESPONSE),
     } as any,
   }
@@ -139,6 +159,13 @@ describe("ConversationStore", () => {
     const state = store.getState()
     expect(state.loadingChannels).toBe(false)
     expect(state.channels).toHaveLength(3)
+  })
+
+  test("first refresh selects the board and loads its persisted messages", async () => {
+    await store.refresh()
+
+    expect(store.getState().activeChannelID).toBe("chn_board")
+    expect(store.getState().messages.map((message) => message.id)).toEqual(["cmsg_1", "cmsg_2"])
   })
 
   test("handles network error gracefully on refresh", async () => {
@@ -226,6 +253,39 @@ describe("ConversationStore", () => {
     expect(result.replayed).toBe(false)
   })
 
+  test("sendMessage exposes only the 202-confirmed user message and reconciles it by persisted id", async () => {
+    await store.setActiveChannel("chn_board")
+
+    const accepted = await store.sendMessage("Hello board")
+    expect(store.getState().pendingMessages).toEqual([
+      expect.objectContaining({
+        body: "Hello board",
+        channelID: "chn_board",
+        confirmed: true,
+        messageID: accepted.messageID,
+        threadID: accepted.threadID,
+        runID: accepted.runID,
+      }),
+    ])
+
+    client.company.channelMessages = async () =>
+      mockResult({
+        items: [
+          {
+            ...MSG_PAGE_1[0],
+            id: accepted.messageID,
+            body: "Hello board",
+          },
+          ...MSG_PAGE_1,
+        ],
+        nextCursor: undefined,
+      })
+    await store.refresh()
+
+    expect(store.getState().messages.some((message) => message.id === accepted.messageID)).toBe(true)
+    expect(store.getState().pendingMessages).toEqual([])
+  })
+
   test("sendMessage throws error without active channel", async () => {
     await expect(store.sendMessage("Hello")).rejects.toThrow("No active channel")
   })
@@ -240,6 +300,40 @@ describe("ConversationStore", () => {
     expect(state.thread!.id).toBe("cth_1")
     expect(state.thread!.status).toBe("active")
     expect(state.threadEntries).toHaveLength(1)
+  })
+
+  test("loads precise evidence only after an explicit source request", async () => {
+    let sourceCalls = 0
+    client.company.threadSource = async () => {
+      sourceCalls += 1
+      return mockResult(THREAD_SOURCE)
+    }
+    await store.openThread("cth_1")
+
+    expect(sourceCalls).toBe(0)
+    await store.loadThreadSource("msg_source_1")
+    expect(sourceCalls).toBe(1)
+    expect(store.getState().threadSources.msg_source_1).toEqual(THREAD_SOURCE)
+  })
+
+  test("a late source response cannot clear the loading state of a newly opened thread", async () => {
+    const resolvers: Array<(value: ReturnType<typeof mockResult>) => void> = []
+    client.company.thread = async ({ threadID }: { threadID: string }) => mockResult({ ...THREAD_DETAIL, id: threadID })
+    client.company.threadSource = () => new Promise((resolve) => resolvers.push(resolve))
+    await store.openThread("cth_1")
+    const first = store.loadThreadSource("shared-source")
+
+    await store.openThread("cth_2")
+    const second = store.loadThreadSource("shared-source")
+    expect(store.getState().loadingThreadSourceIDs).toEqual(["shared-source"])
+
+    resolvers[0](mockResult({ ...THREAD_SOURCE, sourceID: "shared-source" }))
+    await first
+    expect(store.getState().loadingThreadSourceIDs).toEqual(["shared-source"])
+
+    resolvers[1](mockResult({ ...THREAD_SOURCE, sourceID: "shared-source" }))
+    await second
+    expect(store.getState().loadingThreadSourceIDs).toEqual([])
   })
 
   test("interruptThread sends interrupt action", async () => {
@@ -316,6 +410,48 @@ describe("ConversationStore", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 400))
     expect(threadCalled).toBe(true)
+  })
+
+  test("handleEvent company.conversation_run.updated refreshes the matching open thread", async () => {
+    await store.openThread("cth_1")
+
+    let threadCalled = false
+    client.company.thread = async () => {
+      threadCalled = true
+      return mockResult(THREAD_DETAIL)
+    }
+    const event: EventCompanyConversationRunUpdated = {
+      type: "company.conversation_run.updated",
+      properties: { thread_id: "cth_1", state: "failed" },
+    }
+    store.handleEvent(event)
+
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(threadCalled).toBe(true)
+  })
+
+  test("handleEvent server.connected performs a full channels/messages/thread refresh", async () => {
+    await store.setActiveChannel("chn_board")
+    await store.openThread("cth_1")
+
+    const calls: string[] = []
+    client.company.channels = async () => {
+      calls.push("channels")
+      return mockResult(CHANNEL_RESPONSE)
+    }
+    client.company.channelMessages = async () => {
+      calls.push("messages")
+      return mockResult({ items: MSG_PAGE_1, nextCursor: undefined })
+    }
+    client.company.thread = async () => {
+      calls.push("thread")
+      return mockResult(THREAD_DETAIL)
+    }
+    const event: EventServerConnected = { type: "server.connected", properties: {} }
+    store.handleEvent(event)
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(calls).toEqual(expect.arrayContaining(["channels", "messages", "thread"]))
   })
 
   test("handleEvent skips refresh for non-matching thread", async () => {
@@ -400,5 +536,23 @@ describe("ConversationStore refresh isolation", () => {
 
     // messagesBefore should be "100" (oldest = MSG_PAGE_1[1].time.created = 100)
     expect(store.getState().messagesBefore).toBe("100")
+  })
+
+  test("a late channel response cannot replace the currently active channel snapshot", async () => {
+    const client: any = createMockClient()
+    const store = createConversationStore({ client, companyID: "cmp_local" })
+    const resolvers = new Map<string, (value: ReturnType<typeof mockResult>) => void>()
+    client.company.channelMessages = ({ channelID }: { channelID: string }) =>
+      new Promise((resolve) => resolvers.set(channelID, resolve))
+
+    const slow = store.setActiveChannel("chn_company")
+    const fast = store.setActiveChannel("chn_board")
+    resolvers.get("chn_board")?.(mockResult({ items: MSG_PAGE_1, nextCursor: undefined }))
+    await fast
+    resolvers.get("chn_company")?.(mockResult({ items: MSG_PAGE_2, nextCursor: undefined }))
+    await slow
+
+    expect(store.getState().activeChannelID).toBe("chn_board")
+    expect(store.getState().messages.map((message) => message.id)).toEqual(["cmsg_1", "cmsg_2"])
   })
 })

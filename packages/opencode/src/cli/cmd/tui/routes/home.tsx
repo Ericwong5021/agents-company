@@ -21,6 +21,7 @@ import { isPlainTerminal } from "../util/terminal"
 import { NavRow } from "../component/nav-row"
 import { HomeBoardPrompt } from "../component/home-board-prompt"
 import { Toast, useToast } from "../ui/toast"
+import { boardMessagesEnabled } from "./company-channel-model"
 
 export function Home() {
   const sync = useSync()
@@ -101,6 +102,10 @@ export function Home() {
         const current = await sdk.client.company.current()
         if (current.error || current.data?.state !== "ready") {
           toast.show({ variant: "error", message: t("tui.home.prompt.auto.company_not_ready") })
+          return
+        }
+        if (!boardMessagesEnabled(current.data.capabilities)) {
+          toast.show({ variant: "error", message: t("tui.home.board_chat.disabled") })
           return
         }
         const companyID = current.data.company.id

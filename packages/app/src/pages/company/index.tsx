@@ -1,8 +1,12 @@
 import type { Accessor } from "solid-js"
 import { Mark } from "@agents-company/ui/logo"
-import { Icon, type IconProps } from "@agents-company/ui/icon"
+import { Icon } from "@agents-company/ui/icon"
 import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
-import { createCompanyWorkspaceDataSource, type CompanyWorkspaceDataSource } from "./company-data-source"
+import {
+  createCompanyWorkspaceDataSource,
+  installCompanyRefreshTriggers,
+  type CompanyWorkspaceDataSource,
+} from "./company-data-source"
 import { useGlobalSDK } from "@/context/global-sdk"
 import type { CompanyWorkspaceSnapshot, CompanyReadyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
 import { CompanyBootstrap, type CompanyBootstrapSnapshot } from "./company-bootstrap"
@@ -15,8 +19,6 @@ import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
-
-type WorkspaceIcon = IconProps["name"]
 
 function CompanyRail(props: { onToggleContext: () => void; onToggleChannels: () => void }) {
   return (
@@ -53,7 +55,7 @@ function channelTitle(conv: ConversationSnapshot, fallback: string): string {
 function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspaceSnapshot>; dataSource: CompanyWorkspaceDataSource }) {
   const language = useLanguage()
   const conversation = createMemo(() => props.snapshot().conversation)
-  const store = createMemo<ConversationStore | undefined>(() => props.dataSource.conversation)
+  const store = (): ConversationStore | undefined => props.dataSource.conversation
   const [contextOpen, setContextOpen] = createSignal(false)
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
   const [interrupting, setInterrupting] = createSignal(false)
@@ -62,9 +64,9 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
   const hasOpenThread = createMemo(() => conversation().thread !== null)
   const hasMoreMessages = createMemo(() => conversation().messagesBefore !== null)
   const hasMoreEntries = createMemo(() => conversation().threadEntriesBefore !== null)
-  // board_messages stays false until the Task 10 release gate closes. While
-  // false, the workspace renders the real channel/message read model but hides
-  // the send entry — per the M2 release policy, this is not a fixture fallback.
+  // The server remains authoritative for the release capability. An emergency
+  // rollback keeps the persisted read model visible while hiding every send
+  // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
 
@@ -151,9 +153,12 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
           loading={() => conversation().loadingMessages}
           hasMore={hasMoreEntries}
           interrupting={interrupting}
+          threadSources={() => conversation().threadSources}
+          loadingSourceIDs={() => conversation().loadingThreadSourceIDs}
           onClose={() => void store()?.openThread("")}
           onInterrupt={() => void interrupt()}
           onLoadMore={() => void store()?.pageThreadEntries()}
+          onLoadSource={(sourceID) => void store()?.loadThreadSource(sourceID)}
         />
       </Show>
 
@@ -249,6 +254,7 @@ export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceD
   onMount(() => {
     const unsubscribe = source.subscribe(setSnapshot)
     onCleanup(unsubscribe)
+    onCleanup(installCompanyRefreshTriggers(source, document))
     void source.refresh()
 
     if (source.handleEvent) {

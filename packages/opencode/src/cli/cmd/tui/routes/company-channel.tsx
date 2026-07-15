@@ -18,10 +18,15 @@ import { DialogConfirm } from "../ui/dialog-confirm"
 import { useLanguage } from "../context/language"
 import {
   authorLabel,
+  boardMessagesEnabled,
   interruptAction,
-  type ChannelMessage,
+  threadEntryAuthor,
+  threadEntryBody,
+  threadEntrySources,
+  threadSourceBody,
   type ThreadDetail,
   type ThreadEntry,
+  type ThreadSource,
 } from "./company-channel-model"
 
 /**
@@ -48,6 +53,16 @@ export function CompanyChannel() {
   const [sending, setSending] = createSignal(false)
   const [thread, setThread] = createSignal<ThreadDetail | null>(null)
   const [threadEntries, setThreadEntries] = createSignal<ThreadEntry[]>([])
+  const [threadSources, setThreadSources] = createSignal<Record<string, ThreadSource>>({})
+  const [loadingSourceIDs, setLoadingSourceIDs] = createSignal<string[]>([])
+
+  const [companyCapabilities] = createResource(async () => {
+    const result = await sdk.client.company.current()
+    if (result.error) throw result.error
+    if (result.data?.state !== "ready") return undefined
+    if (result.data.company.id !== route.companyID) return undefined
+    return result.data.capabilities
+  })
 
   // Fetch channel info
   const [channelInfo] = createResource(
@@ -69,11 +84,15 @@ export function CompanyChannel() {
         limit: 50,
       })
       if (result.error) throw result.error
-      return (result.data?.items ?? []) as ChannelMessage[]
+      return result.data?.items ?? []
     },
   )
 
   async function send() {
+    if (!boardMessagesEnabled(companyCapabilities())) {
+      toast.show({ variant: "error", message: t("tui.company.channel.disabled") })
+      return
+    }
     const raw = textarea && !textarea.isDestroyed ? textarea.plainText : inputText()
     const text = raw.trim()
     if (!text || sending()) return
@@ -108,10 +127,32 @@ export function CompanyChannel() {
       ])
       if (tResult.error) throw tResult.error
       if (eResult.error) throw eResult.error
-      setThread(tResult.data as ThreadDetail)
-      setThreadEntries((eResult.data?.items ?? []) as ThreadEntry[])
+      if (!tResult.data) throw new Error("The Control Plane returned an empty thread")
+      setThread(tResult.data)
+      setThreadEntries(eResult.data?.items ?? [])
+      setThreadSources({})
     } catch {
       toast.show({ variant: "error", message: t("tui.company.channel.thread_load_failed") })
+    }
+  }
+
+  async function loadThreadSource(sourceID: string) {
+    const current = thread()
+    if (!current || threadSources()[sourceID] || loadingSourceIDs().includes(sourceID)) return
+    setLoadingSourceIDs((ids) => [...ids, sourceID])
+    try {
+      const result = await sdk.client.company.threadSource({
+        threadID: current.id,
+        sourceID,
+        company_id: route.companyID,
+      })
+      if (result.error) throw result.error
+      if (!result.data) throw new Error("The Control Plane returned an empty source")
+      setThreadSources((sources) => ({ ...sources, [sourceID]: result.data }))
+    } catch {
+      toast.show({ variant: "error", message: t("tui.company.channel.source_load_failed") })
+    } finally {
+      setLoadingSourceIDs((ids) => ids.filter((id) => id !== sourceID))
     }
   }
 
@@ -203,18 +244,48 @@ export function CompanyChannel() {
               <box flexDirection="row" gap={1}>
                 <text fg={theme.accent} attributes={TextAttributes.BOLD}>{th().title}</text>
                 <text fg={theme.textMuted}>({th().status})</text>
-                <button onClick={() => void interruptThread()}>
-                  <text fg={theme.warning}>{t("tui.company.channel.interrupt")}</text>
-                </button>
+                <Show when={th().status === "active"}>
+                  <button onClick={() => void interruptThread()}>
+                    <text fg={theme.warning}>{t("tui.company.channel.interrupt")}</text>
+                  </button>
+                </Show>
                 <button onClick={() => setThread(null)}>
                   <text fg={theme.textMuted}>{t("tui.company.channel.close")}</text>
                 </button>
               </box>
+              <Show when={th().run}>
+                {(run) => (
+                  <box flexDirection="column" gap={0} paddingLeft={1}>
+                    <text fg={theme.textMuted}>
+                      {t("tui.company.channel.run")}: {run().state} · {t("tui.company.channel.attempt")} {run().attempt}
+                    </text>
+                    <Show when={run().safeErrorSummary}>
+                      {(error) => <text fg={theme.error}>{error()}</text>}
+                    </Show>
+                  </box>
+                )}
+              </Show>
               <For each={threadEntries()}>
                 {(entry) => (
                   <box flexDirection="column" gap={0} paddingLeft={1}>
-                    <text fg={theme.textMuted}>{entry.message.author.id}</text>
-                    <text>{entry.message.body}</text>
+                    <text fg={theme.textMuted}>{threadEntryAuthor(entry, t("tui.company.channel.you"))}</text>
+                    <text>{threadEntryBody(entry)}</text>
+                    <For each={threadEntrySources(entry)}>
+                      {(source) => (
+                        <box flexDirection="column" gap={0} paddingLeft={1}>
+                          <button onClick={() => void loadThreadSource(source.sourceID)}>
+                            <text fg={theme.info}>
+                              {loadingSourceIDs().includes(source.sourceID)
+                                ? t("tui.company.channel.source_loading")
+                                : `${t("tui.company.channel.source")} ${source.ordinal}`}
+                            </text>
+                          </button>
+                          <Show when={threadSources()[source.sourceID]}>
+                            {(detail) => <text fg={theme.textMuted}>{threadSourceBody(detail())}</text>}
+                          </Show>
+                        </box>
+                      )}
+                    </For>
                   </box>
                 )}
               </For>
@@ -223,26 +294,31 @@ export function CompanyChannel() {
         </Show>
 
         {/* Input area */}
-        <box flexShrink={0} flexDirection="column" gap={1}>
-          <textarea
-            ref={(v: any) => { textarea = v }}
-            height={3}
-            keyBindings={sending() ? [] : [{ name: "return", action: "submit" }]}
-            onContentChange={() => {
-              const value = textarea && !textarea.isDestroyed ? textarea.plainText : ""
-              setInputText(value)
-            }}
-            onSubmit={() => void send()}
-            placeholder={t("tui.company.channel.placeholder")}
-            placeholderColor={theme.textMuted}
-            textColor={sending() ? theme.textMuted : theme.text}
-            focusedTextColor={sending() ? theme.textMuted : theme.text}
-            cursorColor={theme.text}
-          />
-          <Show when={sending()}>
-            <Spinner color={theme.textMuted}>{t("tui.company.channel.sending")}</Spinner>
-          </Show>
-        </box>
+        <Show
+          when={boardMessagesEnabled(companyCapabilities())}
+          fallback={<text fg={theme.textMuted}>{t("tui.company.channel.disabled")}</text>}
+        >
+          <box flexShrink={0} flexDirection="column" gap={1}>
+            <textarea
+              ref={(v: any) => { textarea = v }}
+              height={3}
+              keyBindings={sending() ? [] : [{ name: "return", action: "submit" }]}
+              onContentChange={() => {
+                const value = textarea && !textarea.isDestroyed ? textarea.plainText : ""
+                setInputText(value)
+              }}
+              onSubmit={() => void send()}
+              placeholder={t("tui.company.channel.placeholder")}
+              placeholderColor={theme.textMuted}
+              textColor={sending() ? theme.textMuted : theme.text}
+              focusedTextColor={sending() ? theme.textMuted : theme.text}
+              cursorColor={theme.text}
+            />
+            <Show when={sending()}>
+              <Spinner color={theme.textMuted}>{t("tui.company.channel.sending")}</Spinner>
+            </Show>
+          </box>
+        </Show>
       </box>
     </box>
   )

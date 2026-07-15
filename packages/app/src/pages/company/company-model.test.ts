@@ -62,6 +62,8 @@ describe("CompanyReadySnapshot shape", () => {
         thread: null,
         threadEntries: [],
         threadEntriesBefore: null,
+        threadSources: {},
+        loadingThreadSourceIDs: [],
         loadingChannels: true,
         loadingMessages: false,
         sending: false,

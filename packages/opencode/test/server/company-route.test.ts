@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -6,7 +6,15 @@ import { CompanyProviderList } from "../../src/company/schema"
 import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
 
+const boardMessagesOverride = process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
+
+beforeEach(() => {
+  delete process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
+})
+
 afterEach(async () => {
+  if (boardMessagesOverride === undefined) delete process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
+  else process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES = boardMessagesOverride
   await Server.Default().app.request("/company/providers/openai/credentials", { method: "DELETE" })
   await resetDatabase()
 })
@@ -29,8 +37,15 @@ describe.serial("/company", () => {
         company_name: "Agent Company",
         approval_preset: "balanced",
       },
-      capabilities: { board_messages: false },
+      capabilities: { board_messages: true },
     })
+  })
+
+  test.serial("exposes the emergency read-only capability switch", async () => {
+    process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES = "true"
+    const response = await Server.Default().app.request("/company")
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ capabilities: { board_messages: false } })
   })
 
   test.serial("rejects non-git repository inspection with a product error", async () => {

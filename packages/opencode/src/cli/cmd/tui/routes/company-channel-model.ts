@@ -1,4 +1,8 @@
 import type {
+  CompanyChannelMessagesResponse,
+  CompanyThreadEntriesResponse,
+  CompanyThreadResponse,
+  CompanyThreadSourceResponse,
   MessageAuthor,
   SignalType,
 } from "@agents-company/sdk/v2"
@@ -8,34 +12,14 @@ import type {
  * stays a thin SDK caller; dedup/merge/ordering and thread-summary logic lives
  * here so it is unit-testable without rendering OpenTUI.
  *
- * Shapes mirror the generated SDK responses (CompanyChannelMessagesResponses /
- * CompanyThreadEntriesResponses / CompanyThreadResponses) but are narrowed to
- * the fields the TUI actually renders.
+ * The aliases below come from the generated SDK. Keeping the route on the
+ * contract types prevents a new entry variant from silently becoming an unsafe
+ * cast in the TUI.
  */
-
-export interface ChannelMessage {
-  id: string
-  channelID: string
-  body: string
-  sourceThreadID?: string
-  replyToID?: string
-  author: MessageAuthor
-  signalType?: SignalType
-  time: { created: number; updated: number }
-}
-
-export interface ThreadDetail {
-  id: string
-  title: string
-  status: string
-  members: Array<{ principal: { kind: string; id: string } }>
-  time: { created: number; updated: number }
-}
-
-export interface ThreadEntry {
-  type: "message"
-  message: ChannelMessage
-}
+export type ChannelMessage = CompanyChannelMessagesResponse["items"][number]
+export type ThreadDetail = CompanyThreadResponse
+export type ThreadEntry = CompanyThreadEntriesResponse["items"][number]
+export type ThreadSource = CompanyThreadSourceResponse
 
 export interface ThreadActionInput {
   kind: "interrupt"
@@ -65,6 +49,11 @@ export function authorLabel(author: MessageAuthor, youLabel: string): string {
   return author.id
 }
 
+/** All board send surfaces fail closed when the capability is absent. */
+export function boardMessagesEnabled(capabilities: { board_messages: boolean } | undefined): boolean {
+  return capabilities?.board_messages === true
+}
+
 /**
  * Only high-signal messages carry a signal type the main feed should badge. The
  * TUI renders the bracketed type for these; ordinary agent replies (no signal
@@ -72,6 +61,25 @@ export function authorLabel(author: MessageAuthor, youLabel: string): string {
  */
 export function signalBadge(signalType: SignalType | undefined): string | undefined {
   return signalType
+}
+
+export function threadEntryAuthor(entry: ThreadEntry, youLabel: string): string {
+  if (entry.type === "agent_message") return entry.message.agentID
+  return authorLabel(entry.message.author, youLabel)
+}
+
+export function threadEntryBody(entry: ThreadEntry): string {
+  return entry.message.body
+}
+
+export function threadEntrySources(entry: ThreadEntry) {
+  if (entry.type === "agent_message") return []
+  return entry.sources ?? []
+}
+
+export function threadSourceBody(source: ThreadSource): string {
+  if (source.detail.type === "unavailable") return source.detail.reason
+  return source.detail.body
 }
 
 /**

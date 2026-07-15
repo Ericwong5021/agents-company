@@ -24,6 +24,8 @@ import {
   SignalProjectionID,
 } from "../../src/conversation/schema"
 import { Conversation } from "../../src/conversation"
+import { GroupMessageTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
+import { GroupSessionID } from "../../src/group-session/schema"
 import { ProjectTable } from "../../src/project/project.sql"
 import type { ProjectID } from "../../src/project/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
@@ -164,6 +166,48 @@ describe.serial("M2 conversation read model", () => {
     expect(second.nextCursor).toBeUndefined()
   })
 
+  test.serial("keeps the first page cursor-bounded with 10,000 persisted messages", async () => {
+    const rows = Array.from({ length: 10_000 }, (_, index) => {
+      const ordinal = (index + 1).toString().padStart(10, "0")
+      return {
+        id: ChannelMessageID.parse(`cmsg_${ordinal}`),
+        channel_id: COMPANY_CHANNEL_ID,
+        author_kind: "user" as const,
+        author_id: LOCAL_USER_ID,
+        body: `Message ${ordinal}`,
+        visibility: "channel" as const,
+        mentions: [],
+        time_created: index + 10,
+        time_updated: index + 10,
+      }
+    })
+    Database.transaction((tx) => {
+      Array.from({ length: 40 }, (_, batch) =>
+        tx
+          .insert(ChannelMessageTable)
+          .values(rows.slice(batch * 250, (batch + 1) * 250))
+          .run(),
+      )
+    })
+
+    const started = performance.now()
+    const first = await run((conversation) =>
+      conversation.pageMessages({
+        companyID,
+        channelID: COMPANY_CHANNEL_ID,
+        principal: user,
+        limit: 50,
+      }),
+    )
+    const elapsed = performance.now() - started
+
+    expect(first.items).toHaveLength(50)
+    expect(first.items[0]?.id).toBe(ChannelMessageID.parse("cmsg_0000010000"))
+    expect(first.items.at(-1)?.id).toBe(ChannelMessageID.parse("cmsg_0000009951"))
+    expect(first.nextCursor).toBeString()
+    console.info(`M2 10k message first page: ${elapsed.toFixed(1)}ms`)
+  })
+
   test.serial("keeps user input and sourced high signals in the main channel while excluding ordinary agent output", async () => {
     insertMessage("cmsg_user-need", 10)
     const threadID = ConversationThreadID.parse("cth_signal-source")
@@ -254,6 +298,8 @@ describe.serial("M2 conversation read model", () => {
 
   test.serial("scopes thread entries and source evidence through the visible channel", async () => {
     const threadID = ConversationThreadID.parse("cth_board-need")
+    const groupSessionID = GroupSessionID.ascending("ses_board-need")
+    const projectID = "source-evidence-project" as ProjectID
     Database.use((db) => {
       db.insert(ConversationThreadTable)
         .values({
@@ -279,12 +325,44 @@ describe.serial("M2 conversation read model", () => {
     })
     insertMessage("cmsg_thread", 10, threadID)
     Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: "/tmp/source-evidence",
+          sandboxes: [],
+          time_created: 10,
+          time_updated: 10,
+        })
+        .run()
+      db.insert(GroupSessionTable)
+        .values({
+          id: groupSessionID,
+          project_id: projectID,
+          title: "Board need runtime",
+          context_policy: "work_scoped",
+          time_created: 10,
+          time_updated: 10,
+        })
+        .run()
+      db.insert(GroupMessageTable)
+        .values({
+          id: "msg_group-evidence",
+          group_session_id: groupSessionID,
+          round_num: 1,
+          role: "agent",
+          content: "Grounded board evidence",
+          status_summary: "done",
+          time_created: 11,
+          time_updated: 11,
+        })
+        .run()
       db.insert(ConversationRunTable)
         .values({
           id: ConversationRunID.parse("crun_board-need"),
           conversation_thread_id: threadID,
           channel_message_id: ChannelMessageID.parse("cmsg_thread"),
           state: "completed",
+          runtime_id: groupSessionID,
           attempt: 1,
           retryable: false,
           time_created: 11,
@@ -325,7 +403,11 @@ describe.serial("M2 conversation read model", () => {
         }),
       ),
     ).rejects.toMatchObject({ name: "ConversationThreadNotVisible" })
-    expect((await run((conversation) => conversation.pageEntries({ companyID, threadID, principal: user }))).items).toHaveLength(1)
+    expect(
+      (await run((conversation) => conversation.pageEntries({ companyID, threadID, principal: user }))).items.map(
+        (entry) => entry.type,
+      ),
+    ).toEqual(["agent_message", "message"])
     expect(
       await run((conversation) =>
         conversation.getSource({

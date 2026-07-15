@@ -17,6 +17,7 @@
   --company-warning: #df8a17;
   --company-warning-soft: #fff7ea;
 
+  position: relative;
   display: grid;
   grid-template-columns: 80px 264px minmax(520px, 1fr) 300px;
   width: 100%;
@@ -30,6 +31,41 @@
   font-size: 14px;
   line-height: 1.45;
   user-select: none;
+}
+
+.company-context-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 80;
+  display: flex;
+  width: min(440px, calc(100% - 80px));
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--company-border);
+  background: var(--company-surface);
+  box-shadow: -18px 0 48px rgb(24 28 40 / 14%);
+}
+
+.company-context-header {
+  display: flex;
+  min-height: 64px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--company-border);
+}
+
+.company-context-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.company-context-body .company-ready {
+  min-height: 0;
+  padding: 24px;
 }
 
 .company-workspace[data-thread-open="false"] {
@@ -1010,6 +1046,20 @@
   font-weight: 650;
 }
 
+.company-thread-run {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  color: var(--company-text-muted);
+  font-size: 10px;
+}
+
+.company-thread-run p {
+  margin: 0;
+  color: #9b3f3f;
+  line-height: 1.35;
+}
+
 .company-thread-scroll {
   min-height: 0;
   padding: 8px 12px 22px;
@@ -1024,9 +1074,7 @@
 }
 
 .company-thread-event {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 9px;
+  display: block;
   padding: 12px 4px;
   border-bottom: 1px solid var(--company-border);
 }
@@ -1055,6 +1103,36 @@
   color: #4c4e55;
   font-size: 11px;
   line-height: 1.55;
+}
+
+.company-thread-agent-status {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--company-text-faint);
+  font-size: 9.5px;
+}
+
+.company-thread-source {
+  margin-top: 8px;
+}
+
+.company-thread-source button {
+  padding: 4px 7px;
+  border: 1px solid var(--company-border);
+  border-radius: 6px;
+  color: var(--company-text-muted);
+  font-size: 10px;
+}
+
+.company-thread-source button:hover {
+  border-color: var(--company-border-strong);
+  background: var(--company-surface-subtle);
+}
+
+.company-thread-source-detail {
+  padding: 7px;
+  border-left: 2px solid var(--company-border-strong);
+  white-space: pre-wrap;
 }
 
 .company-tool-row {

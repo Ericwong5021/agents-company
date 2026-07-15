@@ -60,3 +60,74 @@ jobs:
           name: unit-junit-report
           path: packages/*/.artifacts/unit/junit.xml
           if-no-files-found: warn
+
+  m2-e2e:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@agentscompany.dev"
+          git config --global user.name "agents-company-ci"
+
+      - name: Install Chromium
+        working-directory: packages/app
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run M2 browser gate
+        working-directory: packages/app
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT: .artifacts/e2e/junit.xml
+        run: |
+          mkdir -p .artifacts/e2e
+          bun run test:e2e
+
+      - name: Upload M2 browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2-browser-gate
+          path: |
+            packages/app/.artifacts/e2e/junit.xml
+            packages/app/e2e/playwright-report
+            packages/app/e2e/test-results
+          if-no-files-found: warn
+
+  m2-desktop:
+    needs: m2-e2e
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@agentscompany.dev"
+          git config --global user.name "agents-company-ci"
+
+      - name: Run M2 native Desktop gate
+        working-directory: packages/desktop
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT: .artifacts/m2-desktop/junit.xml
+        run: bun run test:e2e
+
+      - name: Upload M2 Desktop artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2-desktop-gate
+          path: |
+            packages/desktop/.artifacts/m2-desktop/junit.xml
+            packages/desktop/.artifacts/m2-desktop/test-results
+          if-no-files-found: warn

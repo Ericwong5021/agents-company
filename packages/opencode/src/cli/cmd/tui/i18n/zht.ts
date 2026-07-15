@@ -45,6 +45,13 @@ export const dict = {
   "tui.home.board_chat.hint": "Enter 啟動專案 · / 喚起命令",
   "tui.home.board_chat.sending": "啟動中...",
   "tui.home.board_chat.no_agents": "還沒有可用的董事會成員或基礎助手。請重試啟動，或先連接一個服務商。",
+  "tui.home.board_chat.disabled": "目前建置未開啟董事會訊息能力。",
+  "tui.company.channel.disabled": "目前建置未開啟董事會訊息能力。",
+  "tui.company.channel.run": "執行",
+  "tui.company.channel.attempt": "嘗試",
+  "tui.company.channel.source": "來源",
+  "tui.company.channel.source_loading": "正在載入來源…",
+  "tui.company.channel.source_load_failed": "載入來源失敗",
 
   // Prompt bottom hints (trigger characters)
   "tui.prompt.hint.attach_file": "新增檔案",

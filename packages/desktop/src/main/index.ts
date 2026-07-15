@@ -33,7 +33,10 @@ process.env.AGENTCOMPANY_DISABLE_EMBEDDED_WEB_UI = "true"
 const appId = app.isPackaged ? PRODUCT_BRAND.app_ids[CHANNEL] : PRODUCT_BRAND.app_ids.dev
 app.setName(app.isPackaged ? PRODUCT_BRAND.names[CHANNEL] : PRODUCT_BRAND.names.dev)
 app.setAppUserModelId(appId)
-app.setPath("userData", join(app.getPath("appData"), appId))
+if (process.env.AGENTCOMPANY_USER_DATA && !isAbsolute(process.env.AGENTCOMPANY_USER_DATA)) {
+  throw new Error("AGENTCOMPANY_USER_DATA must be an absolute path")
+}
+app.setPath("userData", process.env.AGENTCOMPANY_USER_DATA ?? join(app.getPath("appData"), appId))
 
 const { autoUpdater } = pkg
 const initEmitter = new EventEmitter()

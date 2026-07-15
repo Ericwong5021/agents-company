@@ -1,4 +1,4 @@
-import { createMemo, createResource, createSignal, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, Show } from "solid-js"
 import { TextAttributes } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
@@ -13,6 +13,7 @@ import { useExit } from "../context/exit"
 import { DialogConfirm } from "../ui/dialog-confirm"
 import { useDialog } from "../ui/dialog"
 import { Spinner } from "../component/spinner"
+import { boardMessagesEnabled } from "../routes/company-channel-model"
 
 /**
  * Home-page goal intake. Submitting a goal sends it to the board channel,
@@ -58,9 +59,14 @@ export function HomeBoardPrompt() {
       return (channels.data ?? []).find((ch) => ch.kind === "board")
     },
   )
+  const canSend = () => boardMessagesEnabled(companyInfo()?.company.capabilities)
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function send() {
+    if (!canSend()) {
+      toast.show({ variant: "error", message: t("tui.home.board_chat.disabled") })
+      return
+    }
     const raw = textarea && !textarea.isDestroyed ? textarea.plainText : inputText()
     const text = raw.trim()
     if (!text || sending()) return
@@ -121,8 +127,10 @@ export function HomeBoardPrompt() {
     }
   })
 
-  // Focus the textarea on mount
-  onMount(() => {
+  // The company state resolves asynchronously, so focus after the capability is
+  // known instead of assuming the input exists at mount time.
+  createEffect(() => {
+    if (!canSend()) return
     setTimeout(() => {
       if (textarea && !textarea.isDestroyed) textarea.focus()
     }, 1)
@@ -144,48 +152,50 @@ export function HomeBoardPrompt() {
       </box>
 
       {/* Goal input */}
-      <Autocomplete
-        value={inputText()}
-        setPrompt={() => {}}
-        setExtmark={() => {}}
-        anchor={() => promptAnchor}
-        input={() => textarea}
-        ref={(r) => setAutocompleteRef(() => r)}
-        fileStyleId={fileStyleId()}
-        agentStyleId={agentStyleId()}
-        promptPartTypeId={() => promptPartTypeId}
-        slashCommandsOnly
-      />
-      <box ref={(r: any) => (promptAnchor = r)}>
-        <textarea
-          ref={(v: any) => {
-            textarea = v
-            if (promptPartTypeId === 0) {
-              promptPartTypeId = v.extmarks.registerType("prompt-part")
-            }
-          }}
-          height={3}
-          keyBindings={sending() ? [] : [{ name: "return", action: "submit" }]}
-          onContentChange={() => {
-            const value = textarea && !textarea.isDestroyed ? textarea.plainText : ""
-            setInputText(value)
-            autocompleteRef()?.onInput(value)
-          }}
-          onKeyDown={(e: any) => {
-            autocompleteRef()?.onKeyDown(e)
-          }}
-          onSubmit={() => void send()}
-          placeholder={t("tui.home.board_chat.placeholder")}
-          placeholderColor={theme.textMuted}
-          textColor={sending() ? theme.textMuted : theme.text}
-          focusedTextColor={sending() ? theme.textMuted : theme.text}
-          cursorColor={theme.text}
+      <Show when={canSend()} fallback={<text fg={theme.textMuted}>{t("tui.home.board_chat.disabled")}</text>}>
+        <Autocomplete
+          value={inputText()}
+          setPrompt={() => {}}
+          setExtmark={() => {}}
+          anchor={() => promptAnchor}
+          input={() => textarea}
+          ref={(r) => setAutocompleteRef(() => r)}
+          fileStyleId={fileStyleId()}
+          agentStyleId={agentStyleId()}
+          promptPartTypeId={() => promptPartTypeId}
+          slashCommandsOnly
         />
-      </box>
+        <box ref={(r: any) => (promptAnchor = r)}>
+          <textarea
+            ref={(v: any) => {
+              textarea = v
+              if (promptPartTypeId === 0) {
+                promptPartTypeId = v.extmarks.registerType("prompt-part")
+              }
+            }}
+            height={3}
+            keyBindings={sending() ? [] : [{ name: "return", action: "submit" }]}
+            onContentChange={() => {
+              const value = textarea && !textarea.isDestroyed ? textarea.plainText : ""
+              setInputText(value)
+              autocompleteRef()?.onInput(value)
+            }}
+            onKeyDown={(e: any) => {
+              autocompleteRef()?.onKeyDown(e)
+            }}
+            onSubmit={() => void send()}
+            placeholder={t("tui.home.board_chat.placeholder")}
+            placeholderColor={theme.textMuted}
+            textColor={sending() ? theme.textMuted : theme.text}
+            focusedTextColor={sending() ? theme.textMuted : theme.text}
+            cursorColor={theme.text}
+          />
+        </box>
+      </Show>
 
       {/* Hint text */}
       <box>
-        <text fg={theme.textMuted}>{t("tui.home.board_chat.hint")}</text>
+        <text fg={theme.textMuted}>{canSend() ? t("tui.home.board_chat.hint") : ""}</text>
       </box>
     </box>
   )

@@ -14,7 +14,13 @@ import { Database, and, eq, or } from "@/storage"
 import * as ConversationRecovery from "./recovery"
 import * as SignalProjector from "./signal-projector"
 import { ChannelMessageTable, ChannelTable, ConversationRunTable, ConversationThreadTable } from "./conversation.sql"
-import { ConversationPrincipal, ConversationRunID, ConversationThreadID, ThreadNotVisible } from "./schema"
+import {
+  ConversationPrincipal,
+  ConversationRunID,
+  ConversationThreadID,
+  ThreadNotVisible,
+  ThreadNotWritable,
+} from "./schema"
 import { Conversation } from "./conversation"
 import { CompanyID } from "@/company/schema"
 
@@ -151,29 +157,35 @@ function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
 }
 
 function markRunning(runID: ConversationRunID) {
-  Database.use((db) => {
-    const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
-    if (!run || run.state === "completed" || run.state === "interrupted") return
-    const now = Date.now()
-    db
-      .update(ConversationRunTable)
-      .set({
-        state: "running",
-        attempt: run.state === "queued" ? run.attempt + 1 : run.attempt,
-        safe_error_summary: null,
-        retryable: false,
-        time_started: run.time_started ?? now,
-        time_finished: null,
-        time_updated: now,
-      })
-      .where(eq(ConversationRunTable.id, runID))
-      .run()
-  })
+  return Database.transaction(
+    (db) => {
+      const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
+      if (!run || (run.state !== "queued" && run.state !== "running")) return false
+      const now = Date.now()
+      return (
+        db
+          .update(ConversationRunTable)
+          .set({
+            state: "running",
+            attempt: run.state === "queued" ? run.attempt + 1 : run.attempt,
+            safe_error_summary: null,
+            retryable: false,
+            time_started: run.time_started ?? now,
+            time_finished: null,
+            time_updated: now,
+          })
+          .where(and(eq(ConversationRunTable.id, runID), eq(ConversationRunTable.state, run.state)))
+          .returning({ id: ConversationRunTable.id })
+          .all().length > 0
+      )
+    },
+    { behavior: "immediate" },
+  )
 }
 
 function bindRuntime(input: { runID: ConversationRunID; groupSessionID: GroupSessionID; roundNum?: number }) {
   const now = Date.now()
-  Database.use((db) =>
+  return Database.use((db) =>
     db
       .update(ConversationRunTable)
       .set(
@@ -181,17 +193,17 @@ function bindRuntime(input: { runID: ConversationRunID; groupSessionID: GroupSes
           ? { runtime_id: input.groupSessionID, time_updated: now }
           : { runtime_id: input.groupSessionID, runtime_round_num: input.roundNum, time_updated: now },
       )
-      .where(eq(ConversationRunTable.id, input.runID))
-      .run(),
+      .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
+      .returning({ id: ConversationRunTable.id })
+      .all().length > 0,
   )
 }
 
 function markProjecting(input: { runID: ConversationRunID; sourceWatermark: string }) {
-  return Database.use((db) => {
-    const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, input.runID)).get()
-    if (!run || run.state === "completed" || run.state === "interrupted") return false
-    const now = Date.now()
-    db
+  const now = Date.now()
+  return Database.use(
+    (db) =>
+      db
       .update(ConversationRunTable)
       .set({
         state: "projecting",
@@ -199,15 +211,15 @@ function markProjecting(input: { runID: ConversationRunID; sourceWatermark: stri
         retryable: false,
         time_updated: now,
       })
-      .where(eq(ConversationRunTable.id, input.runID))
-      .run()
-    return true
-  })
+        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
+        .returning({ id: ConversationRunTable.id })
+        .all().length > 0,
+  )
 }
 
 function markCompletedWithoutSignal(input: { runID: ConversationRunID; sourceWatermark: string }) {
   const now = Date.now()
-  Database.use((db) =>
+  return Database.use((db) =>
     db
       .update(ConversationRunTable)
       .set({
@@ -218,8 +230,9 @@ function markCompletedWithoutSignal(input: { runID: ConversationRunID; sourceWat
         time_finished: now,
         time_updated: now,
       })
-      .where(eq(ConversationRunTable.id, input.runID))
-      .run(),
+      .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
+      .returning({ id: ConversationRunTable.id })
+      .all().length > 0,
   )
 }
 
@@ -231,11 +244,10 @@ function safeErrorSummary(error: unknown) {
 }
 
 function markFailed(runID: ConversationRunID, error: unknown) {
-  Database.use((db) => {
-    const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
-    if (!run || run.state === "completed" || run.state === "interrupted") return
-    const now = Date.now()
-    db
+  const now = Date.now()
+  return Database.use(
+    (db) =>
+      db
       .update(ConversationRunTable)
       .set({
         state: "failed",
@@ -244,27 +256,80 @@ function markFailed(runID: ConversationRunID, error: unknown) {
         time_finished: now,
         time_updated: now,
       })
-      .where(eq(ConversationRunTable.id, runID))
-      .run()
-  })
+        .where(
+          and(
+            eq(ConversationRunTable.id, runID),
+            or(
+              eq(ConversationRunTable.state, "queued"),
+              eq(ConversationRunTable.state, "running"),
+              eq(ConversationRunTable.state, "projecting"),
+            ),
+          ),
+        )
+        .returning({ id: ConversationRunTable.id })
+        .all().length > 0,
+  )
 }
 
-function markInterrupted(runID: ConversationRunID) {
-  Database.use((db) => {
-    const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
-    if (!run || run.state === "completed" || run.state === "interrupted") return
-    const now = Date.now()
-    db
-      .update(ConversationRunTable)
-      .set({
-        state: "interrupted",
-        retryable: false,
-        time_finished: now,
-        time_updated: now,
-      })
-      .where(eq(ConversationRunTable.id, runID))
-      .run()
-  })
+function interruptState(input: { companyID: CompanyID; threadID: ConversationThreadID }) {
+  return Database.transaction(
+    (db) => {
+      const thread = db
+        .select({ id: ConversationThreadTable.id })
+        .from(ConversationThreadTable)
+        .where(
+          and(
+            eq(ConversationThreadTable.company_id, input.companyID),
+            eq(ConversationThreadTable.id, input.threadID),
+            eq(ConversationThreadTable.status, "active"),
+          ),
+        )
+        .get()
+      if (!thread) return
+      const runs = db
+        .select({ id: ConversationRunTable.id, runtime_id: ConversationRunTable.runtime_id })
+        .from(ConversationRunTable)
+        .where(
+          and(
+            eq(ConversationRunTable.conversation_thread_id, thread.id),
+            or(
+              eq(ConversationRunTable.state, "queued"),
+              eq(ConversationRunTable.state, "running"),
+              eq(ConversationRunTable.state, "projecting"),
+            ),
+          ),
+        )
+        .all()
+      const now = Date.now()
+      db
+        .update(ConversationRunTable)
+        .set({
+          state: "interrupted",
+          safe_error_summary: null,
+          retryable: false,
+          time_finished: now,
+          time_updated: now,
+        })
+        .where(
+          and(
+            eq(ConversationRunTable.conversation_thread_id, thread.id),
+            or(
+              eq(ConversationRunTable.state, "queued"),
+              eq(ConversationRunTable.state, "running"),
+              eq(ConversationRunTable.state, "projecting"),
+            ),
+          ),
+        )
+        .run()
+      db
+        .update(ConversationThreadTable)
+        .set({ status: "interrupted", time_updated: now })
+        .where(eq(ConversationThreadTable.id, thread.id))
+        .run()
+      return runs
+    },
+    { behavior: "immediate" },
+  )
 }
 
 function sourceWatermark(groupSessionID: GroupSessionID, roundNum: number, sourceIDs: string[]) {
@@ -289,7 +354,10 @@ export interface Interface {
     companyID: CompanyID
     threadID: ConversationThreadID
     principal: ConversationPrincipal
-  }) => Effect.Effect<Conversation.ConversationThreadDetail, InstanceType<typeof ThreadNotVisible>>
+  }) => Effect.Effect<
+    Conversation.ConversationThreadDetail,
+    InstanceType<typeof ThreadNotVisible> | InstanceType<typeof ThreadNotWritable>
+  >
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ConversationRuntime") {}
@@ -318,8 +386,16 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       const current = yield* Effect.sync(() => loadRun(input.runID))
       if (!current || current.run.state === "completed" || current.run.state === "interrupted") return
       const messages = yield* groupSessions.messages(input.groupSessionID)
-      const sourceMessages = messages.filter((message) => message.roundNum === input.roundNum)
-      if (sourceMessages.length === 0) {
+      const sourceMessages = messages.filter(
+        (message) => message.roundNum === input.roundNum && (message.role === "user" || message.statusSummary === "done"),
+      )
+      const successfulAgentIDs = new Set(
+        sourceMessages
+          .filter((message) => message.role === "agent" && message.content.trim())
+          .map((message) => message.companyAgentID)
+          .filter((agentID): agentID is string => Boolean(agentID)),
+      )
+      if (successfulAgentIDs.size < Math.min(2, input.boardAgentIDs.length)) {
         return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "missing_source" }))
       }
       const watermark = sourceWatermark(
@@ -342,8 +418,9 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       const synthesis = SignalSynthesis.safeParse(response.info.structured)
       if (!synthesis.success) return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "invalid_draft" }))
       if (!synthesis.data.publish) {
-        yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))
-        yield* publishRunState({ threadID: input.thread.id, state: "completed" }).pipe(Effect.forkDetach)
+        if (yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))) {
+          yield* publishRunState({ threadID: input.thread.id, state: "completed" }).pipe(Effect.forkDetach)
+        }
         return
       }
 
@@ -408,7 +485,15 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
         }
       }
 
-      yield* Effect.sync(() => markRunning(runID))
+      if (!(yield* Effect.sync(() => markRunning(runID)))) {
+        const current = yield* Effect.sync(() => loadRun(runID))
+        return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }))
+      }
+      const groupSessionID = input.groupSessionID ?? GroupSessionID.ascending()
+      if (!(yield* Effect.sync(() => bindRuntime({ runID, groupSessionID })))) {
+        const current = yield* Effect.sync(() => loadRun(runID))
+        return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }))
+      }
       const started = yield* RepositoryInstance.provide(input.thread.company_id)(
         Effect.gen(function* () {
           if (Instance.project.id !== input.projectID) {
@@ -420,22 +505,18 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
               }),
             )
           }
-          const group = input.groupSessionID
-            ? yield* groupSessions.get(input.groupSessionID)
-            : yield* groupSessions.create({
-                title: input.thread.title,
-                agentIDs: input.boardAgentIDs,
-                contextPolicy: "work_scoped",
-              })
-          yield* Effect.sync(() => bindRuntime({ runID, groupSessionID: group.id }))
+          const group = yield* groupSessions.create({
+            id: groupSessionID,
+            title: input.thread.title,
+            agentIDs: input.boardAgentIDs,
+            contextPolicy: "work_scoped",
+          })
           const accepted = yield* groupSessions.chat({
             groupSessionID: group.id,
             text: input.message.body,
             externalMessageID: input.message.id,
           })
-          if (input.run.runtime_id && input.run.runtime_round_num !== null && input.groupSessionID === group.id) {
-            yield* groupSessions.resume({ groupSessionID: group.id, roundNum: accepted.roundNum })
-          }
+          yield* groupSessions.resume({ groupSessionID: group.id, roundNum: accepted.roundNum })
           return {
             runID,
             groupSessionID: group.id,
@@ -451,8 +532,9 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
         monitor({ ...input, ...parsed }).pipe(
           Effect.catchCause((cause) =>
             Effect.gen(function* () {
-              yield* Effect.sync(() => markFailed(runID, Cause.squash(cause)))
-              yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+              if (yield* Effect.sync(() => markFailed(runID, Cause.squash(cause)))) {
+                yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+              }
             }),
           ),
         ),
@@ -465,8 +547,9 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
         Effect.tapError((error) =>
           Effect.gen(function* () {
             const input = yield* Effect.sync(() => loadRun(runID))
-            yield* Effect.sync(() => markFailed(runID, error))
-            if (input) yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+            if (yield* Effect.sync(() => markFailed(runID, error))) {
+              if (input) yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+            }
           }),
         ),
       )
@@ -477,38 +560,27 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       threadID: ConversationThreadID
       principal: ConversationPrincipal
     }) {
-      const activeRuns = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .select({
-              id: ConversationRunTable.id,
-              runtime_id: ConversationRunTable.runtime_id,
-              state: ConversationRunTable.state,
-            })
-            .from(ConversationRunTable)
-            .where(
-              and(
-                eq(ConversationRunTable.conversation_thread_id, input.threadID),
-                or(
-                  eq(ConversationRunTable.state, "queued"),
-                  eq(ConversationRunTable.state, "running"),
-                  eq(ConversationRunTable.state, "projecting"),
-                ),
-              ),
-            )
-            .all(),
-        ),
-      )
-      for (const run of activeRuns) {
-        const groupSessionID = run.runtime_id ? GroupSessionID.zod.safeParse(run.runtime_id).data : undefined
-        if (groupSessionID) {
-          yield* groupSessions.interrupt(groupSessionID).pipe(Effect.ignore)
-        }
-        yield* Effect.sync(() => markInterrupted(run.id))
+      const visible = yield* conversation.getThread(input)
+      if (visible.status !== "active") {
+        return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
       }
-      for (const run of activeRuns) {
-        yield* publishRunState({ threadID: input.threadID, state: "interrupted" }).pipe(Effect.forkDetach)
+      const activeRuns = yield* Effect.sync(() => interruptState(input))
+      if (!activeRuns) return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
+      const groupSessionIDs = activeRuns
+        .map((run) => (run.runtime_id ? GroupSessionID.zod.safeParse(run.runtime_id).data : undefined))
+        .filter((id): id is GroupSessionID => Boolean(id))
+      if (groupSessionIDs.length > 0) {
+        yield* RepositoryInstance.provide(input.companyID)(
+          Effect.forEach(groupSessionIDs, (id) => groupSessions.interrupt(id).pipe(Effect.ignore), { discard: true }),
+        ).pipe(Effect.ignore)
       }
+      yield* Effect.all(
+        [
+          bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
+          publishRunState({ threadID: input.threadID, state: "interrupted" }),
+        ],
+        { discard: true },
+      ).pipe(Effect.forkDetach)
       return yield* conversation.getThread({ companyID: input.companyID, threadID: input.threadID, principal: input.principal })
     })
 

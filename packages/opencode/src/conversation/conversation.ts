@@ -3,12 +3,17 @@ import z from "zod"
 import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
-import { and, desc, eq, exists, isNotNull, isNull, lt, or } from "@/storage"
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
+import { GroupMessageTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
+import { GroupSessionID } from "@/group-session/schema"
+import { MessageTable, PartTable } from "@/session/session.sql"
+import { MessageID, PartID } from "@/session/schema"
 import {
   ChannelMemberTable,
   ChannelMessageTable,
   ChannelTable,
+  ConversationRunTable,
   ConversationThreadMemberTable,
   ConversationThreadTable,
   SignalProjectionSourceTable,
@@ -26,6 +31,7 @@ import {
   ConversationPrincipal,
   ConversationThreadID,
   ConversationThreadStatus,
+  ConversationRunState,
   InvalidCursor,
   MessageAuthor,
   MessageVisibility,
@@ -88,6 +94,23 @@ export const ConversationThreadMember = z
   .strict()
 export type ConversationThreadMember = z.infer<typeof ConversationThreadMember>
 
+export const ConversationRunSnapshot = z
+  .object({
+    id: z.string(),
+    state: ConversationRunState,
+    attempt: z.number().int().nonnegative(),
+    retryable: z.boolean(),
+    safeErrorSummary: z.string().optional(),
+    time: z.object({
+      created: z.number().int(),
+      updated: z.number().int(),
+      started: z.number().int().optional(),
+      finished: z.number().int().optional(),
+    }),
+  })
+  .strict()
+export type ConversationRunSnapshot = z.infer<typeof ConversationRunSnapshot>
+
 export const ConversationThreadDetail = z
   .object({
     id: ConversationThreadID,
@@ -96,6 +119,7 @@ export const ConversationThreadDetail = z
     projectScopeID: z.string().optional(),
     title: z.string(),
     status: ConversationThreadStatus,
+    run: ConversationRunSnapshot.optional(),
     members: z.array(ConversationThreadMember),
     time: z.object({
       created: z.number().int(),
@@ -106,13 +130,81 @@ export const ConversationThreadDetail = z
   .strict()
 export type ConversationThreadDetail = z.infer<typeof ConversationThreadDetail>
 
-export const ThreadEntry = z
+export const ThreadSourceReference = z
   .object({
-    type: z.literal("message"),
-    message: ChannelMessage,
+    ordinal: z.number().int().nonnegative(),
+    kind: SignalProjectionSourceKind,
+    sourceID: z.string().min(1),
   })
   .strict()
+
+export const ThreadAgentMessage = z
+  .object({
+    id: z.string().min(1),
+    roundNum: z.number().int().nonnegative(),
+    agentID: z.string().min(1),
+    sessionID: z.string().optional(),
+    runtimeMessageID: z.string().optional(),
+    body: z.string(),
+    status: z.string().optional(),
+    time: z.object({ created: z.number().int(), updated: z.number().int() }),
+  })
+  .strict()
+
+export const ThreadEntry = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("message"),
+      message: ChannelMessage,
+      sources: z.array(ThreadSourceReference).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("agent_message"),
+      message: ThreadAgentMessage,
+    })
+    .strict(),
+])
 export type ThreadEntry = z.infer<typeof ThreadEntry>
+
+export const ThreadSourceDetail = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("group_message"),
+      roundNum: z.number().int().nonnegative(),
+      role: z.enum(["user", "agent"]),
+      agentID: z.string().optional(),
+      sessionID: z.string().optional(),
+      runtimeMessageID: z.string().optional(),
+      body: z.string(),
+      status: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("message"),
+      role: z.enum(["user", "assistant"]),
+      agentID: z.string(),
+      sessionID: z.string(),
+      body: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("part"),
+      partType: z.string(),
+      sessionID: z.string(),
+      body: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("unavailable"),
+      reason: z.string(),
+    })
+    .strict(),
+])
 
 export const ThreadSource = z
   .object({
@@ -120,6 +212,7 @@ export const ThreadSource = z
     ordinal: z.number().int().nonnegative(),
     kind: SignalProjectionSourceKind,
     sourceID: z.string().min(1),
+    detail: ThreadSourceDetail,
     time: z.object({ created: z.number().int(), updated: z.number().int() }),
   })
   .strict()
@@ -350,6 +443,26 @@ function encodeCursor(row: typeof ChannelMessageTable.$inferSelect) {
   return Buffer.from(JSON.stringify({ id: row.id, time_created: row.time_created })).toString("base64url")
 }
 
+const ThreadEntryCursor = z.object({
+  id: z.string().min(1),
+  time_created: z.number().int().nonnegative(),
+})
+type ThreadEntryCursor = z.infer<typeof ThreadEntryCursor>
+
+function decodeThreadCursor(before?: string) {
+  return Effect.try({
+    try: () => {
+      if (!before) return
+      return ThreadEntryCursor.parse(JSON.parse(Buffer.from(before, "base64url").toString("utf8")))
+    },
+    catch: () => new InvalidCursor({}),
+  })
+}
+
+function encodeThreadCursor(row: { id: string; time_created: number }) {
+  return Buffer.from(JSON.stringify(row)).toString("base64url")
+}
+
 function listVisibleChannels(input: ListChannelsInput) {
   return Database.use((db) => {
     const membershipIDs = new Set(
@@ -378,7 +491,8 @@ function listVisibleChannels(input: ListChannelsInput) {
 }
 
 function readChannelMessages(input: {
-  channelID: ChannelID
+  companyID: CompanyID
+  channel: typeof ChannelTable.$inferSelect
   before?: ChannelMessageCursor
   limit: number
 }) {
@@ -395,13 +509,33 @@ function readChannelMessages(input: {
         ),
       ),
     )
+    const channelScope =
+      input.channel.kind === "company"
+        ? or(
+            eq(ChannelMessageTable.channel_id, input.channel.id),
+            and(
+              eq(ChannelMessageTable.visibility, "company"),
+              exists(
+                db
+                  .select({ id: ConversationThreadTable.id })
+                  .from(ConversationThreadTable)
+                  .where(
+                    and(
+                      eq(ConversationThreadTable.id, ChannelMessageTable.source_thread_id),
+                      eq(ConversationThreadTable.company_id, input.companyID),
+                    ),
+                  ),
+              ),
+            ),
+          )
+        : eq(ChannelMessageTable.channel_id, input.channel.id)
     return db
       .select()
       .from(ChannelMessageTable)
       .where(
         input.before
           ? and(
-              eq(ChannelMessageTable.channel_id, input.channelID),
+              channelScope,
               mainFeedMessage,
               or(
                 lt(ChannelMessageTable.time_created, input.before.time_created),
@@ -412,7 +546,7 @@ function readChannelMessages(input: {
               ),
             )
           : and(
-              eq(ChannelMessageTable.channel_id, input.channelID),
+              channelScope,
               mainFeedMessage,
             ),
       )
@@ -422,38 +556,173 @@ function readChannelMessages(input: {
   })
 }
 
-function readThreadMessages(input: {
+function projectionSources(channelMessageID: ChannelMessageID): z.infer<typeof ThreadSourceReference>[] {
+  return Database.use((db) => {
+    const projection = db
+      .select({ id: SignalProjectionTable.id })
+      .from(SignalProjectionTable)
+      .where(eq(SignalProjectionTable.channel_message_id, channelMessageID))
+      .get()
+    if (!projection) return []
+    return db
+      .select()
+      .from(SignalProjectionSourceTable)
+      .where(eq(SignalProjectionSourceTable.signal_projection_id, projection.id))
+      .orderBy(SignalProjectionSourceTable.ordinal)
+      .all()
+      .map((source) => ({ ordinal: source.ordinal, kind: source.source_kind, sourceID: source.source_id }))
+  })
+}
+
+function readThreadEntries(input: {
   threadID: ConversationThreadID
   channelID: ChannelID
-  before?: ChannelMessageCursor
+  before?: ThreadEntryCursor
   limit: number
 }) {
-  return Database.use((db) =>
-    db
+  return Database.use((db) => {
+    const channelMessages = db
       .select()
       .from(ChannelMessageTable)
       .where(
-        input.before
-          ? and(
-              eq(ChannelMessageTable.channel_id, input.channelID),
-              eq(ChannelMessageTable.source_thread_id, input.threadID),
-              or(
-                lt(ChannelMessageTable.time_created, input.before.time_created),
-                and(
-                  eq(ChannelMessageTable.time_created, input.before.time_created),
-                  lt(ChannelMessageTable.id, input.before.id),
-                ),
-              ),
-            )
-          : and(
-              eq(ChannelMessageTable.channel_id, input.channelID),
-              eq(ChannelMessageTable.source_thread_id, input.threadID),
-            ),
+        and(
+          eq(ChannelMessageTable.channel_id, input.channelID),
+          eq(ChannelMessageTable.source_thread_id, input.threadID),
+        ),
       )
-      .orderBy(desc(ChannelMessageTable.time_created), desc(ChannelMessageTable.id))
-      .limit(input.limit + 1)
-      .all(),
-  )
+      .all()
+    const runtimeIDs = db
+      .select({ runtime_id: ConversationRunTable.runtime_id })
+      .from(ConversationRunTable)
+      .where(and(eq(ConversationRunTable.conversation_thread_id, input.threadID), isNotNull(ConversationRunTable.runtime_id)))
+      .all()
+      .map((run) => GroupSessionID.zod.safeParse(run.runtime_id).data)
+      .filter((runtimeID): runtimeID is GroupSessionID => Boolean(runtimeID))
+    const agentMessages = runtimeIDs.length
+      ? db
+          .select()
+          .from(GroupMessageTable)
+          .where(and(inArray(GroupMessageTable.group_session_id, runtimeIDs), eq(GroupMessageTable.role, "agent")))
+          .all()
+      : []
+    return [
+      ...channelMessages.map((row) => ({
+        id: `message:${row.id}`,
+        time_created: row.time_created,
+        entry: {
+          type: "message" as const,
+          message: messageFromRow(row),
+          ...(projectionSources(row.id).length ? { sources: projectionSources(row.id) } : {}),
+        },
+      })),
+      ...agentMessages.map((row) => ({
+        id: `agent_message:${row.id}`,
+        time_created: row.time_created,
+        entry: {
+          type: "agent_message" as const,
+          message: {
+            id: row.id,
+            roundNum: row.round_num,
+            agentID: row.company_agent_id ?? "unknown-agent",
+            sessionID: row.session_id ?? undefined,
+            runtimeMessageID: row.runtime_message_id ?? undefined,
+            body: row.content,
+            status: row.status_summary ?? undefined,
+            time: { created: row.time_created, updated: row.time_updated },
+          },
+        },
+      })),
+    ]
+      .filter(
+        (row) =>
+          !input.before ||
+          row.time_created < input.before.time_created ||
+          (row.time_created === input.before.time_created && row.id < input.before.id),
+      )
+      .sort((a, b) => b.time_created - a.time_created || b.id.localeCompare(a.id))
+      .slice(0, input.limit + 1)
+  })
+}
+
+function safePartBody(data: (typeof PartTable.$inferSelect)["data"]) {
+  if (data.type === "text" && "text" in data && typeof data.text === "string") return data.text.slice(0, 20_000)
+  if (data.type === "tool" && "tool" in data) return `${String(data.tool)} (tool result hidden)`
+  return data.type
+}
+
+function hydrateThreadSource(input: {
+  kind: SignalProjectionSourceKind
+  sourceID: string
+  conversationRunID: (typeof ConversationRunTable.$inferSelect)["id"] | null
+}): z.infer<typeof ThreadSourceDetail> | undefined {
+  return Database.use((db) => {
+    const runtimeID = input.conversationRunID
+      ? db
+          .select({ runtime_id: ConversationRunTable.runtime_id })
+          .from(ConversationRunTable)
+          .where(eq(ConversationRunTable.id, input.conversationRunID))
+          .get()?.runtime_id
+      : undefined
+    if (input.kind === "group_message") {
+      const message = db.select().from(GroupMessageTable).where(eq(GroupMessageTable.id, input.sourceID)).get()
+      if (!message || !runtimeID || message.group_session_id !== runtimeID) return
+      return {
+        type: "group_message",
+        roundNum: message.round_num,
+        role: message.role,
+        agentID: message.company_agent_id ?? undefined,
+        sessionID: message.session_id ?? undefined,
+        runtimeMessageID: message.runtime_message_id ?? undefined,
+        body: message.content,
+        status: message.status_summary ?? undefined,
+      }
+    }
+
+    const groupSessionID = GroupSessionID.zod.safeParse(runtimeID).data
+    if (!groupSessionID) return
+    const sessionIDs = new Set(
+      db
+        .select({ session_id: GroupSessionMemberTable.session_id })
+        .from(GroupSessionMemberTable)
+        .where(eq(GroupSessionMemberTable.group_session_id, groupSessionID))
+        .all()
+        .map((member) => member.session_id),
+    )
+    if (input.kind === "message") {
+      const messageID = MessageID.zod.safeParse(input.sourceID).data
+      if (!messageID) return
+      const message = db.select().from(MessageTable).where(eq(MessageTable.id, messageID)).get()
+      if (!message || !sessionIDs.has(message.session_id)) return
+      return {
+        type: "message",
+        role: message.data.role,
+        agentID: message.agent_id,
+        sessionID: message.session_id,
+        body: db
+          .select({ data: PartTable.data })
+          .from(PartTable)
+          .where(eq(PartTable.message_id, message.id))
+          .all()
+          .map((part) => safePartBody(part.data))
+          .filter(Boolean)
+          .join("\n")
+          .slice(0, 20_000),
+      }
+    }
+    if (input.kind === "part") {
+      const partID = PartID.zod.safeParse(input.sourceID).data
+      if (!partID) return
+      const part = db.select().from(PartTable).where(eq(PartTable.id, partID)).get()
+      if (!part || !sessionIDs.has(part.session_id)) return
+      return {
+        type: "part",
+        partType: part.data.type,
+        sessionID: part.session_id,
+        body: safePartBody(part.data),
+      }
+    }
+    return { type: "unavailable", reason: `No M2 hydrator exists for ${input.kind} sources.` }
+  })
 }
 
 function uniqueMembers(members: ConversationPrincipal[]) {
@@ -489,7 +758,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       }
       const before = yield* decodeCursor(input.before)
       const limit = input.limit ?? 50
-      const rows = yield* Effect.sync(() => readChannelMessages({ channelID: channel.id, before, limit }))
+      const rows = yield* Effect.sync(() => readChannelMessages({ companyID: input.companyID, channel, before, limit }))
       const items = rows.slice(0, limit)
       const tail = items.at(-1)
       return {
@@ -513,6 +782,16 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             .all(),
         ),
       )
+      const run = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(ConversationRunTable)
+            .where(eq(ConversationRunTable.conversation_thread_id, thread.id))
+            .orderBy(desc(ConversationRunTable.time_created), desc(ConversationRunTable.id))
+            .get(),
+        ),
+      )
       return {
         id: thread.id,
         channelID: thread.channel_id,
@@ -520,6 +799,21 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         projectScopeID: thread.project_scope_id ?? undefined,
         title: thread.title,
         status: thread.status,
+        run: run
+          ? {
+              id: run.id,
+              state: run.state,
+              attempt: run.attempt,
+              retryable: run.retryable,
+              safeErrorSummary: run.safe_error_summary ?? undefined,
+              time: {
+                created: run.time_created,
+                updated: run.time_updated,
+                started: run.time_started ?? undefined,
+                finished: run.time_finished ?? undefined,
+              },
+            }
+          : undefined,
         members: members.map((member) => ({
           principal: { kind: member.principal_kind, id: member.principal_id },
           time: { joined: member.time_joined, left: member.time_left ?? undefined },
@@ -537,16 +831,16 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (!thread) {
         return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
       }
-      const before = yield* decodeCursor(input.before)
+      const before = yield* decodeThreadCursor(input.before)
       const limit = input.limit ?? 50
       const rows = yield* Effect.sync(() =>
-        readThreadMessages({ threadID: thread.id, channelID: thread.channel_id, before, limit }),
+        readThreadEntries({ threadID: thread.id, channelID: thread.channel_id, before, limit }),
       )
       const items = rows.slice(0, limit)
       const tail = items.at(-1)
       return {
-        items: items.map((row) => ({ type: "message" as const, message: messageFromRow(row) })),
-        nextCursor: rows.length > limit && tail ? encodeCursor(tail) : undefined,
+        items: items.map((row) => row.entry),
+        nextCursor: rows.length > limit && tail ? encodeThreadCursor({ id: tail.id, time_created: tail.time_created }) : undefined,
       }
     })
 
@@ -563,6 +857,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               ordinal: SignalProjectionSourceTable.ordinal,
               source_kind: SignalProjectionSourceTable.source_kind,
               source_id: SignalProjectionSourceTable.source_id,
+              conversation_run_id: SignalProjectionTable.conversation_run_id,
               time_created: SignalProjectionSourceTable.time_created,
               time_updated: SignalProjectionSourceTable.time_updated,
             })
@@ -584,11 +879,22 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (!source) {
         return yield* Effect.fail(new SourceNotFound({ thread_id: input.threadID, source_id: input.sourceID }))
       }
+      const detail = yield* Effect.sync(() =>
+        hydrateThreadSource({
+          kind: source.source_kind,
+          sourceID: source.source_id,
+          conversationRunID: source.conversation_run_id,
+        }),
+      )
+      if (!detail) {
+        return yield* Effect.fail(new SourceNotFound({ thread_id: input.threadID, source_id: input.sourceID }))
+      }
       return {
         projectionID: source.projection_id,
         ordinal: source.ordinal,
         kind: source.source_kind,
         sourceID: source.source_id,
+        detail,
         time: { created: source.time_created, updated: source.time_updated },
       }
     })

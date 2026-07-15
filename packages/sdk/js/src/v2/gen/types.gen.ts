@@ -358,6 +358,13 @@ export type ConversationMention =
       role: "ceo" | "cto" | "product_lead"
     }
 
+export type ConversationBoardMessagesDisabled = {
+  name: "ConversationBoardMessagesDisabled"
+  data: {
+    company_id: CompanyId
+  }
+}
+
 export type ConversationChannelNotVisible = {
   name: "ConversationChannelNotVisible"
   data: {
@@ -438,7 +445,7 @@ export type ChannelSendInput = {
 
 export type ConversationThreadStatus = "active" | "completed" | "interrupted"
 
-export type SignalProjectionId = string
+export type ConversationRunState = "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
 
 export type SignalProjectionSourceKind =
   | "group_message"
@@ -448,6 +455,8 @@ export type SignalProjectionSourceKind =
   | "decision"
   | "artifact"
   | "gate"
+
+export type SignalProjectionId = string
 
 export type ThreadActionInput = {
   kind: "interrupt"
@@ -522,8 +531,6 @@ export type EventCompanyThreadInvalidated = {
     thread_id: ConversationThreadId
   }
 }
-
-export type ConversationRunState = "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
 
 export type EventCompanyConversationRunUpdated = {
   type: "company.conversation_run.updated"
@@ -4293,6 +4300,7 @@ export type CompanyChannelMessagesErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4359,6 +4367,7 @@ export type CompanyChannelSendErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4419,6 +4428,7 @@ export type CompanyThreadErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4443,6 +4453,19 @@ export type CompanyThreadResponses = {
     projectScopeID?: string
     title: string
     status: ConversationThreadStatus
+    run?: {
+      id: string
+      state: ConversationRunState
+      attempt: number
+      retryable: boolean
+      safeErrorSummary?: string
+      time: {
+        created: number
+        updated: number
+        started?: number
+        finished?: number
+      }
+    }
     members: Array<{
       principal: ConversationPrincipal
       time: {
@@ -4486,6 +4509,7 @@ export type CompanyThreadEntriesErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4504,27 +4528,50 @@ export type CompanyThreadEntriesResponses = {
    * A page of thread entries
    */
   200: {
-    items: Array<{
-      type: "message"
-      message: {
-        id: ChannelMessageId
-        channelID: ChannelId
-        rootNeedID?: RootNeedId
-        sourceThreadID?: ConversationThreadId
-        replyToID?: ChannelMessageId
-        requestID?: string
-        author: MessageAuthor
-        body: string
-        signalType?: SignalType
-        dri?: ConversationPrincipal
-        visibility: MessageVisibility
-        mentions: Array<ConversationMention>
-        time: {
-          created: number
-          updated: number
+    items: Array<
+      | {
+          type: "message"
+          message: {
+            id: ChannelMessageId
+            channelID: ChannelId
+            rootNeedID?: RootNeedId
+            sourceThreadID?: ConversationThreadId
+            replyToID?: ChannelMessageId
+            requestID?: string
+            author: MessageAuthor
+            body: string
+            signalType?: SignalType
+            dri?: ConversationPrincipal
+            visibility: MessageVisibility
+            mentions: Array<ConversationMention>
+            time: {
+              created: number
+              updated: number
+            }
+          }
+          sources?: Array<{
+            ordinal: number
+            kind: SignalProjectionSourceKind
+            sourceID: string
+          }>
         }
-      }
-    }>
+      | {
+          type: "agent_message"
+          message: {
+            id: string
+            roundNum: number
+            agentID: string
+            sessionID?: string
+            runtimeMessageID?: string
+            body: string
+            status?: string
+            time: {
+              created: number
+              updated: number
+            }
+          }
+        }
+    >
     nextCursor?: string
   }
 }
@@ -4556,6 +4603,7 @@ export type CompanyThreadSourceErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4582,6 +4630,34 @@ export type CompanyThreadSourceResponses = {
     ordinal: number
     kind: SignalProjectionSourceKind
     sourceID: string
+    detail:
+      | {
+          type: "group_message"
+          roundNum: number
+          role: "user" | "agent"
+          agentID?: string
+          sessionID?: string
+          runtimeMessageID?: string
+          body: string
+          status?: string
+        }
+      | {
+          type: "message"
+          role: "user" | "assistant"
+          agentID: string
+          sessionID: string
+          body: string
+        }
+      | {
+          type: "part"
+          partType: string
+          sessionID: string
+          body: string
+        }
+      | {
+          type: "unavailable"
+          reason: string
+        }
     time: {
       created: number
       updated: number
@@ -4615,6 +4691,7 @@ export type CompanyThreadActionErrors = {
    * Conversation resource not visible or writable
    */
   403:
+    | ConversationBoardMessagesDisabled
     | ConversationChannelNotVisible
     | ConversationChannelNotWritable
     | ConversationThreadNotWritable
@@ -4639,6 +4716,19 @@ export type CompanyThreadActionResponses = {
     projectScopeID?: string
     title: string
     status: ConversationThreadStatus
+    run?: {
+      id: string
+      state: ConversationRunState
+      attempt: number
+      retryable: boolean
+      safeErrorSummary?: string
+      time: {
+        created: number
+        updated: number
+        started?: number
+        finished?: number
+      }
+    }
     members: Array<{
       principal: ConversationPrincipal
       time: {
@@ -5950,6 +6040,7 @@ export type GroupSessionListResponse = GroupSessionListResponses[keyof GroupSess
 
 export type GroupSessionCreateData = {
   body?: {
+    id?: string
     title: string
     agentIDs: Array<string>
     contextPolicy?: "work_scoped"

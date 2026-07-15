@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { createOpencodeClient, type CompanyState } from "@agents-company/sdk/v2/client"
-import { createSdkCompanyWorkspaceDataSource } from "./company-data-source"
+import { createSdkCompanyWorkspaceDataSource, installCompanyRefreshTriggers } from "./company-data-source"
 
 const needsBootstrap: CompanyState = {
   state: "needs_bootstrap",
@@ -219,4 +219,54 @@ test("disconnected source has no conversation store", () => {
   const source = createDisconnectedCompanyWorkspaceDataSource()
   expect(source.conversation).toBeUndefined()
   expect(source.getSnapshot().status).toBe("disconnected")
+})
+
+test("server.connected re-reads company, auth session, and conversation snapshot", async () => {
+  let companyCalls = 0
+  let sessionCalls = 0
+  const fetcher = Object.assign(
+    async (...args: Parameters<typeof fetch>) => {
+      const path = new URL(new Request(args[0], args[1]).url).pathname
+      if (path === "/company") {
+        companyCalls += 1
+        return Response.json(ready)
+      }
+      if (path === "/local-auth/session") {
+        sessionCalls += 1
+        return Response.json({ authenticated: true, kind: "basic" })
+      }
+      if (path === "/company/channels") return Response.json(companyChannel)
+      return Response.json({ name: "UnexpectedRequest" }, { status: 500 })
+    },
+    { preconnect: fetch.preconnect },
+  )
+  const source = createSdkCompanyWorkspaceDataSource(
+    createOpencodeClient({ baseUrl: "http://company.test", fetch: fetcher }),
+  )
+
+  await source.refresh()
+  source.handleEvent?.({ type: "server.connected", properties: {} })
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  expect(companyCalls).toBe(2)
+  expect(sessionCalls).toBe(2)
+  expect(source.getSnapshot().status).toBe("ready")
+})
+
+test("visible-page trigger performs a full refresh and unregisters cleanly", () => {
+  const target = Object.assign(new EventTarget(), { visibilityState: "hidden" })
+  let refreshes = 0
+  const cleanup = installCompanyRefreshTriggers(
+    { refresh: async () => void (refreshes += 1) },
+    target,
+  )
+
+  target.dispatchEvent(new Event("visibilitychange"))
+  expect(refreshes).toBe(0)
+  target.visibilityState = "visible"
+  target.dispatchEvent(new Event("visibilitychange"))
+  expect(refreshes).toBe(1)
+  cleanup()
+  target.dispatchEvent(new Event("visibilitychange"))
+  expect(refreshes).toBe(1)
 })

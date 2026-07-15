@@ -11,6 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsgo -b",
+    "test:e2e": "bun run build && playwright test --config playwright.config.ts",
     "predev": "bun ./scripts/predev.ts",
     "dev": "electron-vite dev",
     "prebuild": "bun ./scripts/prebuild.ts",
@@ -31,6 +32,7 @@
     "electron-updater": "^6",
     "electron-window-state": "^5.0.3",
     "drizzle-orm": "catalog:",
+    "jsonc-parser": "3.3.1",
     "marked": "^15"
   },
   "devDependencies": {
@@ -38,6 +40,7 @@
     "@lydell/node-pty": "catalog:",
     "@agents-company/app": "workspace:*",
     "@agents-company/ui": "workspace:*",
+    "@playwright/test": "catalog:",
     "@solid-primitives/i18n": "2.2.1",
     "@solid-primitives/storage": "catalog:",
     "@solidjs/meta": "catalog:",

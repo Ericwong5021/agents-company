@@ -6,11 +6,13 @@ import type {
   ConversationMention,
   ConversationPrincipal,
   ConversationThreadId,
-  ConversationThreadStatus,
   MessageAuthor,
   MessageVisibility,
   RootNeedId,
   SignalType,
+  CompanyThreadResponse,
+  CompanyThreadEntriesResponse,
+  CompanyThreadSourceResponse,
 } from "@agents-company/sdk/v2/client"
 
 export type { ChannelKind, SignalType }
@@ -72,50 +74,9 @@ export type ConversationPendingMessage = {
   runID?: string
 }
 
-export type ConversationThreadMember = {
-  principal: ConversationPrincipal
-  time: {
-    joined: number
-    left?: number
-  }
-}
-
-export type ConversationThreadDetail = {
-  id: ConversationThreadId
-  channelID: ChannelId
-  rootNeedID?: RootNeedId
-  projectScopeID?: string
-  title: string
-  status: ConversationThreadStatus
-  members: ConversationThreadMember[]
-  time: {
-    created: number
-    updated: number
-    archived?: number
-  }
-}
-
-export type ConversationThreadEntryItem = {
-  type: "message"
-  message: {
-    id: ChannelMessageId
-    channelID: ChannelId
-    rootNeedID?: RootNeedId
-    sourceThreadID?: ConversationThreadId
-    replyToID?: ChannelMessageId
-    requestID?: string
-    author: MessageAuthor
-    body: string
-    signalType?: SignalType
-    dri?: ConversationPrincipal
-    visibility: MessageVisibility
-    mentions: Array<ConversationMention>
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
+export type ConversationThreadDetail = CompanyThreadResponse
+export type ConversationThreadEntryItem = CompanyThreadEntriesResponse["items"][number]
+export type ConversationThreadSource = CompanyThreadSourceResponse
 
 export type ConversationError = {
   title: string
@@ -132,6 +93,8 @@ export type ConversationSnapshot = {
   thread: ConversationThreadDetail | null
   threadEntries: ConversationThreadEntryItem[]
   threadEntriesBefore: string | null
+  threadSources: Record<string, ConversationThreadSource>
+  loadingThreadSourceIDs: string[]
   loadingChannels: boolean
   loadingMessages: boolean
   sending: boolean

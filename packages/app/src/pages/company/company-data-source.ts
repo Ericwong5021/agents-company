@@ -41,6 +41,24 @@ export type CompanyWorkspaceDataSource = {
   handleEvent?(event: Event): void
 }
 
+type VisibilityTarget = {
+  visibilityState: string
+  addEventListener(type: "visibilitychange", listener: EventListener): void
+  removeEventListener(type: "visibilitychange", listener: EventListener): void
+}
+
+export function installCompanyRefreshTriggers(
+  source: Pick<CompanyWorkspaceDataSource, "refresh">,
+  target: VisibilityTarget,
+) {
+  const refresh = () => {
+    if (target.visibilityState !== "visible") return
+    void source.refresh()
+  }
+  target.addEventListener("visibilitychange", refresh)
+  return () => target.removeEventListener("visibilitychange", refresh)
+}
+
 type SdkResult<T, E = unknown> = { data?: T; error?: E; response: Response }
 
 function unwrap<T, E>(result: SdkResult<T, E>) {
@@ -79,6 +97,8 @@ function toReadySnapshot(
       thread: null,
       threadEntries: [],
       threadEntriesBefore: null,
+      threadSources: {},
+      loadingThreadSourceIDs: [],
       loadingChannels: true,
       loadingMessages: false,
       sending: false,
@@ -134,6 +154,7 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
 
 export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): CompanyWorkspaceDataSource {
   let current: CompanyWorkspaceSnapshot = { status: "loading" }
+  let refreshGeneration = 0
   const listeners = new Set<(snapshot: CompanyWorkspaceSnapshot) => void>()
   const publish = (next: CompanyWorkspaceSnapshot) => {
     current = next
@@ -166,22 +187,31 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
   }
 
   const refresh = async () => {
-    publish({ status: "loading" })
+    const generation = ++refreshGeneration
+    const previous = current
+    if (previous.status !== "ready") publish({ status: "loading" })
     try {
       const [company, session] = await Promise.all([client.company.current(), client.localAuth.session()])
       const companyState = unwrap(company) as CompanyState
       const sessionState = unwrap(session)
+      if (generation !== refreshGeneration) return
 
       if (companyState.state === "ready") {
         // Initialize or refresh conversation store
         const cs = ensureConversationStore(companyState.company.id)
         await cs.refresh()
+        if (generation !== refreshGeneration) return
         publish(toReadySnapshot(companyState, sessionState, cs.getState()))
       } else {
         disposeConversationStore()
         publish(toSnapshot(companyState, sessionState))
       }
     } catch (error) {
+      if (generation !== refreshGeneration) return
+      if (previous.status === "ready") {
+        publish(previous)
+        return
+      }
       disposeConversationStore()
       publish(errorSnapshot(error))
     }
@@ -218,6 +248,10 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     revokeCredential: (input) => request(client.localAuth.revoke(input)),
     get conversation() { return conversationStore },
     handleEvent(event: Event) {
+      if (event.type === "server.connected") {
+        void refresh()
+        return
+      }
       if (
         event.type === "company.channel.invalidated" ||
         event.type === "company.thread.invalidated" ||

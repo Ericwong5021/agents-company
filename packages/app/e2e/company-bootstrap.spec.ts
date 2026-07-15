@@ -52,13 +52,11 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
   await expect(page.getByText("提供商与模型", { exact: true })).toBeVisible()
   await page.getByRole("button", { name: "创建 Company", exact: true }).click()
 
-  await expect(page.getByRole("heading", { name: "Agent Company" })).toBeVisible()
-  // M2: ready state renders the live workspace (channel sidebar + read-only
-  // feed). Board messaging stays disabled until the release gate closes, so the
-  // composer is replaced by a capability notice — no fabricated send entry.
+  await expect(page.getByRole("heading", { name: "Board" })).toBeVisible()
+  // M2: the gate server explicitly enables the real conversation capability.
   await expect(page.locator(".company-channels")).toBeVisible()
-  await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
-  await expect(page.locator(".company-composer")).toHaveCount(0)
+  await expect(page.locator(".company-composer")).toBeVisible()
+  await expect(page.locator('[data-capability="board-messages-disabled"]')).toHaveCount(0)
   await expect(page.locator(".company-approval, .company-delivery")).toHaveCount(0)
 
   // M1 company facts and browser pairing remain reachable via the Context Panel.
@@ -72,8 +70,8 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
   expect(reused.status()).toBe(400)
 
   await page.reload()
-  // After reload the workspace rebuilds from the persisted snapshot; channels
-  // and the capability notice reappear without re-bootstrap.
+  // After reload the workspace rebuilds from the persisted snapshot without
+  // re-bootstrap and preserves the enabled capability.
   await expect(page.locator(".company-channels")).toBeVisible()
-  await expect(page.locator('[data-capability="board-messages-disabled"]')).toBeVisible()
+  await expect(page.locator(".company-composer")).toBeVisible()
 })

@@ -1,7 +1,7 @@
 # Implementation Plan：Pre-Public 纵向交付
 
-> 状态：M1 代码与 Windows 自动化验证已完成；原生 Desktop 已通过 Windows 启动冒烟，交互清单仍待可可靠采集窗口的环境完成，M1 尚未标记为完成
-> 代码盘点基线：2026-07-13；M1 实施验证更新：2026-07-14
+> 状态：M0、M1、M2 已完成；当前进入 M3 Charter、治理与真实软件交付闭环
+> 代码盘点基线：2026-07-13；M1/M2 关闭验证更新：2026-07-15
 > 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -26,23 +26,23 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | 区域 | 当前事实 | 当前结论 |
 |---|---|---|
 | 产品文档 | 宪法、PRD、00–08 专题设计和本计划已有单向优先级 | S0 产品收敛基本完成 |
-| Company Workspace | M1 已接入真实 `/company` 契约、浏览器配对与 bootstrap；M2 会话仍未实现 | 不把 M1 的静态能力边界当成董事会会话 |
+| Company Workspace | M2 已接入持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影 | 当前可作为真实公司会话入口；M3 才增加 Charter、治理与交付事实 |
 | 共享 App Shell | M0 已把根路由、Titlebar、通知、Deep Link 与构建 CSS 接入同一 App Chrome；M1 在其上接入 Company data source | 可以继续承接 M2 的真实会话数据 |
-| Local Server / Runtime | M1 已提供受认证的 Company/Provider/Repository/Local Auth API、SQLite 事务与跨进程恢复测试 | 是 M1 Company Bootstrap 闭环，不代表 M2–M6 已完成 |
+| Local Server / Runtime | M1/M2 已提供受认证的 Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成 |
 | Company Project | 已有 Project、Plan、Work Item、Artifact 和两个人工 Gate | 当前仍是固定游戏 MVP 流程，创建新空仓库，不处理导入仓库、严格 Worktree、合并或主分支验证 |
-| SDK | M1 Company 与 Local Auth operation 已生成具体 response/error 类型 | 新产品接口不以 `unknown` 作为契约 |
-| Desktop | M1 已切换 Agent Company 品牌、App ID、协议、数据目录 preflight 与内嵌 Server | M4 的托盘、关窗后台运行、通知恢复仍未实现；原生首启手工验收待完成 |
+| SDK | M1 Company/Local Auth 与 M2 Conversation operation 已生成具体 response/error 类型 | 新产品接口不以 `unknown` 作为契约 |
+| Desktop | M1/M2 Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、发送、Thread、配对、重启与 revoke；发布目录包含 sidecar 运行依赖 | M4 的托盘、关窗后台运行、通知恢复仍未实现 |
 | Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
 | Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
-| E2E / 发布 | M1 有真实 Playwright bootstrap、跨进程 restart/isolation、Desktop 静态契约、Windows 生产构建与 NSIS 安装包证据 | 原生 Desktop 交互验收待关闭；Windows/macOS 干净设备安装与升级矩阵仍在 M6 |
+| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI；M2 有真实发送/Thread/鉴权/恢复纵向，Windows unpacked 打包已验证运行依赖 | Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
 
 因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
 ```text
 S0 产品事实基线：基本完成
 视觉验证：完成
-M1 Company Bootstrap：代码与 Windows 自动化验证完成，原生 Windows 启动冒烟通过，等待 Desktop 交互验收
-真实 IM 用户旅程：M2 尚未完成
+M1 Company Bootstrap：完成
+真实 IM 用户旅程：M2 完成
 自治软件交付闭环：只有可复用原型
 Agent 生命层与 Pre-Public 发布：尚未进入验收
 ```
@@ -129,7 +129,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：在干净数据目录中创建一家公司、最小董事会和一个真实仓库绑定。
 
-状态：代码、自动化 Gate、浏览器与 TUI 验收已于 2026-07-14 完成；Windows 原生 Desktop 已完成隔离数据目录启动冒烟，但窗口采集接口返回 `0x80004002`，无法可靠继续点击验收，故本里程碑仍处于验收中。
+状态：已完成（2026-07-15）。浏览器、TUI 与 Windows 原生 Electron Gate 均通过；原生 Gate 以真实 main/preload/renderer/sidecar 覆盖目录选择、bootstrap、配对、重启和 revoke。
 
 实施验证：2026-07-14。M1 实际覆盖范围与文件级计划以 [2026-07-13 M1 Company Bootstrap 实施计划](../compose/plans/2026-07-13-m1-company-bootstrap.md) 为准。
 
@@ -151,20 +151,20 @@ Local Control Plane（唯一权威写入者）
 - SDK 中本里程碑产品接口没有 `unknown` response；
 - 首次引导失败不会留下不可恢复的半初始化状态。
 
-#### 2026-07-14 验证证据
+#### 2026-07-14/15 验证证据
 
 - 根目录 `bun script/generate-agent-company-brand.ts --check` 与 `./packages/sdk/js/script/build.ts` 通过；后者重复生成后输出哈希一致。
 - `packages/opencode` 的 migration check、M1 Company/Local Auth/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；真实 child-process restart/isolation 测试覆盖 Company 与浏览器 Bearer 的持久化和 revoke。
 - `packages/sdk/js` 的类型检查和 Company contract 测试通过；`packages/app` 的单元测试、类型检查、生产构建与真实 Playwright bootstrap E2E 通过；`packages/ui` 类型检查通过。
 - `packages/desktop` 的 Company home、品牌、shell env、renderer HTML 测试、类型检查和 Electron 生产构建均在 Windows 通过；生产身份静态扫描未发现 OpenCode 用户可见残留。`electron-builder` 已使用本机 Electron 分发目录和可访问的构建依赖镜像生成 `win-unpacked`、NSIS 安装包与 blockmap；本地构建未配置发布证书，签名仍由 CI 发布流程负责。
 - 浏览器手工完成配对、五步初始化、刷新持久化和控制台无错误核验；TUI 手工覆盖未初始化、错误仓库目录和正确仓库目录三种入口。
-- 原生 Desktop 已在隔离 Windows `APPDATA` 中启动并显示 `Agent Company` 窗口；测试机的窗口截图/可访问性采集返回 `0x80004002（不支持此接口）`，因此没有盲点目录选择、取消、重启、配对和 revoke。须在可可靠观测窗口的 Windows 或 macOS 会话完成该清单，才可将 M1 标记为完成。
+- 2026-07-15 新增可重复的 Windows 原生 Electron Gate：真实 main/preload/renderer/sidecar 覆盖目录选择取消/成功、首次引导、Desktop 消息与 Thread、浏览器配对、进程重启恢复和 revoke 后 401。操作系统目录对话框返回值在测试内替换，IPC 与后续产品路径运行真实实现；Windows 交互辅助工具因 `GetCursorPos 0x80070005` 未能提供额外人工点击证据，不计入关闭依据。
 
 ### M2 — 真实 IM、董事会与高信号 Thread
 
 目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-状态：Task 1–9 已完成并提交推送。Conversation schema/迁移、频道与 Thread 读取模型、董事会幂等 intake、GroupSession 精确来源、高信号投影与进程恢复、认证 HTTP contract 与生成 SDK、Web 会话数据层、TUI 统一入口与真实 Company Workspace UI 均已落地并通过目标测试；生产 fixture 已删除。Task 10 已完成进程重启恢复测试（`conversation/restart.test.ts`，真实 child-process kill/restart 验证持久化与幂等）、M2 Playwright 纵向（`company-conversation.spec.ts`，验证发送 202、消息回读、Thread/source、interrupt、幂等重放与 401/403/404）与 M1 bootstrap E2E 回归修正；`capabilities.board_messages` 仍由 `AGENTCOMPANY_BOARD_MESSAGES_TEST` 仅在测试中开启，生产值在 M1 原生 Desktop 手工 Gate 关闭前保持 `false`。详细任务勾选见 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
+状态：已完成（2026-07-15）。历史提交审查发现的 interrupt 越权副作用、发送未即时启动 runtime、终态竞争、恢复关联窗口、来源未精确 hydrate、Thread entry 缺项、SSE 重连不全量刷新、Playwright Gate 不稳定和 Desktop sidecar 依赖缺失均已收口。Browser 与 Windows 原生 Electron 纵向 Gate 已纳入 CI；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。详细证据见 [M2 关闭报告](../compose/reports/2026-07-15-m2-real-im-board.md)与 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
 
 预计：约 3 周（双工作流 12–15 个工程日；单线顺序实施约 4 周）。详细代码审计与任务拆解见 [M2 实施计划](../compose/plans/2026-07-14-m2-real-im-board.md)。
 
@@ -464,4 +464,4 @@ M0 App Shell 修复
 - M3 必须证明现有 Workflow/Admission 能在导入仓库和严格 Worktree 状态机下完成一次交付；
 - 如果任一验证失败，只重写对应产品 application service / adaptor，不重写共享 WebUI 或整个 Agent Runtime。
 
-M0 已完成并通过退出标准。M1 已完成代码、Windows 自动化 Gate 与 NSIS 安装包构建，原生 Windows 启动冒烟也已通过，但 Desktop 交互验收尚未关闭；当前下一步是在可可靠观测窗口的原生会话完成交互清单，再将 M1 标记为完成。M2 的真实董事会消息、Thread 与输入能力尚未开始验收。
+M0、M1、M2 已完成并通过各自退出标准。当前下一步是 M3：建立 `Goal → Charter → Project → Work Item` 正式领域链路、治理策略与严格 Worktree 交付闭环；M4 的常驻、托盘、通知与系统级恢复仍按原计划并行推进。

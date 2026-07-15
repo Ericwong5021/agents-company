@@ -4,7 +4,9 @@ import { Effect } from "effect"
 import z from "zod"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Conversation, ConversationRuntime } from "@/conversation"
+import { ConversationCommand } from "@/conversation/command"
 import {
+  BoardMessagesDisabled,
   ChannelID,
   ChannelNotVisible,
   ChannelNotWritable,
@@ -73,6 +75,7 @@ const notFound = namedErrorResponse("Conversation resource not found", [
   ThreadNotVisible.Schema,
 ] as const)
 const forbidden = namedErrorResponse("Conversation resource not visible or writable", [
+  BoardMessagesDisabled.Schema,
   ChannelNotVisible.Schema,
   ChannelNotWritable.Schema,
   ThreadNotWritable.Schema,
@@ -170,7 +173,7 @@ export const CompanyChannelRoutes = lazy(() =>
         const { company_id } = c.req.valid("query")
         const input = c.req.valid("json")
         const accepted = await AppRuntime.runPromise(
-          Conversation.Service.use((service) =>
+          ConversationCommand.Service.use((service) =>
             service.sendMessage({
               companyID: company_id,
               channelID,

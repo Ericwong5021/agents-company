@@ -9,6 +9,7 @@ import { ToolRegistry } from "../../src/tool"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { testEffect } from "../lib/effect"
+import { Global } from "../../src/global"
 
 const itTool = testEffect(
   Layer.mergeAll(ToolRegistry.defaultLayer, Agent.defaultLayer, CrossSpawnSpawner.defaultLayer),
@@ -60,7 +61,7 @@ test("build agent has correct default properties", async () => {
   })
 })
 
-test("plan agent denies edits except .agentcompany/plans/*", async () => {
+test("plan agent denies edits except the shared company plans directory", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -69,8 +70,14 @@ test("plan agent denies edits except .agentcompany/plans/*", async () => {
       expect(plan).toBeDefined()
       // Wildcard is denied
       expect(evalPerm(plan, "edit")).toBe("deny")
-      // But specific path is allowed
-      expect(Permission.evaluate("edit", ".agentcompany/plans/foo.md", plan!.permission).action).toBe("allow")
+      // But a specific plan in the shared company data directory is allowed.
+      expect(
+        Permission.evaluate(
+          "edit",
+          path.relative(Instance.worktree, path.join(Global.Path.data, "company", "plans", "foo.md")),
+          plan!.permission,
+        ).action,
+      ).toBe("allow")
     },
   })
 })
@@ -737,7 +744,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
   })
 })
 
-test("bounded computation agents are exactly title, summary, compaction, checkpoint-writer, dream, distill", async () => {
+test("hidden native internal agents are enumerated explicitly", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -747,7 +754,16 @@ test("bounded computation agents are exactly title, summary, compaction, checkpo
         .filter((a) => a.native === true && a.hidden === true)
         .map((a) => a.name)
         .sort()
-      expect(boundedComputations).toEqual(["checkpoint-writer", "compaction", "distill", "dream", "summary", "title"])
+      expect(boundedComputations).toEqual([
+        "board-discussion",
+        "checkpoint-writer",
+        "compaction",
+        "distill",
+        "dream",
+        "probe",
+        "summary",
+        "title",
+      ])
 
       // Spot-check a few durable agents are NOT classified as bounded.
       const build = agents.find((a) => a.name === "build")
@@ -799,6 +815,25 @@ test("checkpoint-writer agent has no toolAllowlist (fork agents must mirror pare
       // apply_patch is now permission-allowed (for GPT-5+ models where it
       // replaces edit/write at the registry patch-swap step)
       expect(Permission.evaluate("apply_patch", "any/path", cp!.permission).action).toBe("allow")
+    },
+  })
+})
+
+test("board discussion agent is hidden and cannot access tools or private runtime capabilities", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = await load(tmp.path, (svc) => svc.get("board-discussion"))
+      expect(board).toBeDefined()
+      expect(board?.mode).toBe("subagent")
+      expect(board?.hidden).toBe(true)
+      expect(board?.toolAllowlist).toEqual([])
+      expect(Permission.evaluate("read", "any/path", board!.permission).action).toBe("deny")
+      expect(Permission.evaluate("memory", "*", board!.permission).action).toBe("deny")
+      expect(Permission.evaluate("bash", "*", board!.permission).action).toBe("deny")
+      expect(Permission.evaluate("task", "*", board!.permission).action).toBe("deny")
+      expect(Permission.evaluate("StructuredOutput", "*", board!.permission).action).toBe("allow")
     },
   })
 })
