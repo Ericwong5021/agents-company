@@ -1,4 +1,5 @@
 import { For, Show, type Accessor } from "solid-js"
+import { Avatar } from "@agents-company/ui/avatar"
 import { Icon } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
 import type {
@@ -22,8 +23,22 @@ function isHighSignal(type: SignalType | undefined): type is SignalType {
   return type !== undefined && HIGH_SIGNAL.has(type)
 }
 
-function authorName(author: ConversationMessageItem["author"]): string {
-  return author.kind === "user" ? "local-user" : author.id
+function authorName(author: ConversationMessageItem["author"], language: ReturnType<typeof useLanguage>): string {
+  return author.kind === "user" ? language.t("company.feed.you") : author.id
+}
+
+function MessageAvatar(props: { label: string; kind: ConversationMessageItem["author"]["kind"] }) {
+  return (
+    <span class="company-avatar-wrap" data-author-kind={props.kind} aria-hidden="true">
+      <Avatar
+        fallback={props.label}
+        size="large"
+        background={props.kind === "user" ? "#dce8ff" : props.kind === "agent" ? "#e8e4ff" : "#eceef1"}
+        foreground={props.kind === "user" ? "#3159b8" : props.kind === "agent" ? "#5b51aa" : "#656872"}
+      />
+      <span class="company-presence" />
+    </span>
+  )
 }
 
 function timeLabel(created: number, language: ReturnType<typeof useLanguage>): string {
@@ -79,6 +94,7 @@ export function MessageFeed(props: {
       <For each={props.pendingMessages()}>
         {(pending) => (
           <article class="company-message" classList={{ bubble: true }} data-state="pending">
+            <MessageAvatar label={language.t("company.feed.you")} kind="user" />
             <div class="company-message-body">
               <header>
                 <strong>{language.t("company.feed.you")}</strong>
@@ -111,9 +127,10 @@ function MessageRow(props: {
       classList={{ bubble: props.message.author.kind === "user" }}
       data-signal={high() ? props.message.signalType : undefined}
     >
+      <MessageAvatar label={authorName(props.message.author, language)} kind={props.message.author.kind} />
       <div class="company-message-body">
         <header>
-          <strong>{authorName(props.message.author)}</strong>
+          <strong>{authorName(props.message.author, language)}</strong>
           <Show when={high()}>
             <span class="company-message-signal" data-signal={props.message.signalType}>
               {language.t(`company.signal.${props.message.signalType}`)}
