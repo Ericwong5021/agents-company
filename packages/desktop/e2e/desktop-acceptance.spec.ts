@@ -46,7 +46,11 @@ async function stop() {
   const current = application
   application = undefined
   if (!current) return
-  await current.close()
+  const closed = current.waitForEvent("close", { timeout: 30_000 })
+  await current.evaluate(({ app }) => {
+    setImmediate(() => app.quit())
+  })
+  await closed
 }
 
 async function firstWindow(app: ElectronApplication) {
