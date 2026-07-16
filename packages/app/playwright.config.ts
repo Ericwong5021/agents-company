@@ -8,7 +8,7 @@ const serverURL = `http://${serverHost}:${serverPort}`
 const command = `bun run dev -- --host 0.0.0.0 --port ${port}`
 const reuse = !process.env.CI
 // These projects intentionally exercise one persisted local-first lifecycle:
-// anonymous shell -> bootstrap -> ready conversation. Keep the shared Control
+// trusted loopback entry -> bootstrap -> ready conversation. Keep the shared Control
 // Plane single-worker and express the lifecycle with project dependencies.
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? 1) || 1
 const reporter = [["html", { outputFolder: "e2e/playwright-report", open: "never" }], ["line"]] as const

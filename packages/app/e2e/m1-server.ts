@@ -25,26 +25,17 @@ for (const command of [
 }
 
 const env = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "AGENTCOMPANY_DB")),
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !["AGENTCOMPANY_DB", "AGENTCOMPANY_SERVER_USERNAME", "AGENTCOMPANY_SERVER_PASSWORD"].includes(key),
+    ),
+  ),
   AGENTCOMPANY_HOME: home,
-  AGENTCOMPANY_SERVER_USERNAME: "agentcompany",
-  AGENTCOMPANY_SERVER_PASSWORD: "m1-e2e-secret",
   AGENTCOMPANY_DISABLE_MODELS_FETCH: "true",
 }
 
 const child = Bun.spawn({
-  cmd: [
-    "bun",
-    "run",
-    "src/index.ts",
-    "serve",
-    "--hostname",
-    hostname,
-    "--port",
-    port,
-    "--cors",
-    uiOrigin,
-  ],
+  cmd: ["bun", "run", "src/index.ts", "serve", "--hostname", hostname, "--port", port, "--cors", uiOrigin],
   cwd: path.resolve(app, "../opencode"),
   env,
   stdout: "inherit",

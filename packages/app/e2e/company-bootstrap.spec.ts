@@ -1,32 +1,23 @@
-import { Buffer } from "node:buffer"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { expect, test } from "@playwright/test"
 
 const serverUrl = "http://127.0.0.1:4096"
-const basic = "Basic " + Buffer.from("agentcompany:m1-e2e-secret").toString("base64")
 
-test("pairs a browser and completes real M1 bootstrap", async ({ page, request }) => {
+test("enters trusted loopback and completes real M1 bootstrap", async ({ page, request }) => {
   const repository =
-    process.env.PLAYWRIGHT_M1_REPOSITORY ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.artifacts/m1-e2e/repository")
+    process.env.PLAYWRIGHT_M1_REPOSITORY ??
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.artifacts/m1-e2e/repository")
 
-  expect((await request.get(serverUrl + "/company")).status()).toBe(401)
-  expect((await request.get(serverUrl + "/company/providers")).status()).toBe(401)
-  expect((await request.get(serverUrl + "/global/event")).status()).toBe(401)
+  expect((await request.get(serverUrl + "/company")).status()).toBe(200)
 
-  const pairing = await request.post(serverUrl + "/local-auth/pairings", {
-    headers: { authorization: basic },
-    data: { label: "Playwright Chromium" },
-  })
-  expect(pairing.ok()).toBe(true)
-  const pair = (await pairing.json()) as { code: string }
-
-  await page.goto("/?pair=" + encodeURIComponent(pair.code))
-  await page.getByLabel("浏览器名称").fill("Playwright Chromium")
   const providers = page.waitForResponse((response) => new URL(response.url()).pathname === "/company/providers")
-  const providerAuth = page.waitForResponse((response) => new URL(response.url()).pathname === "/company/providers/auth")
-  await page.getByRole("button", { name: "安全连接" }).click()
+  const providerAuth = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/company/providers/auth",
+  )
+  await page.goto("/")
   await expect(page.getByRole("heading", { name: "初始化本地 Company" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "配对此浏览器" })).toHaveCount(0)
   expect((await providers).status()).toBe(200)
   expect((await providerAuth).status()).toBe(200)
 
@@ -59,15 +50,10 @@ test("pairs a browser and completes real M1 bootstrap", async ({ page, request }
   await expect(page.locator('[data-capability="board-messages-disabled"]')).toHaveCount(0)
   await expect(page.locator(".company-approval, .company-delivery")).toHaveCount(0)
 
-  // M1 company facts and browser pairing remain reachable via the Context Panel.
-  await page.getByRole("button", { name: "公司配置" }).click()
+  // M1 company facts remain reachable in the context-preserving settings dialog.
+  await page.getByRole("button", { name: "打开设置" }).click()
   await expect(page.getByText("Balanced", { exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Company 初始化完成" })).toBeVisible()
-
-  const reused = await request.post(serverUrl + "/local-auth/exchange", {
-    data: { code: pair.code, label: "Reused code" },
-  })
-  expect(reused.status()).toBe(400)
 
   await page.reload()
   // After reload the workspace rebuilds from the persisted snapshot without
