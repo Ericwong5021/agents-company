@@ -145,16 +145,14 @@ test.describe("M2 company conversation vertical", () => {
     const body = "Playwright UI sends a real M2 board goal"
     await page.getByLabel("发送消息").fill(body)
     await page.getByRole("button", { name: "发送", exact: true }).click()
-    const message = page.locator(".company-message", { hasText: body })
-    await expect(message).toBeVisible()
-    await message.getByRole("button", { name: "查看来源 Thread" }).click()
+    const roundtable = page.locator(".company-board")
+    await expect(roundtable).toContainText(body)
     await expect(page.getByRole("complementary", { name: "Thread" })).toBeVisible()
 
     // A document reload has no in-memory event history. The persisted message
-    // and its source Thread must be rebuilt from the snapshot APIs.
+    // and its source Thread must rebuild the roundtable from the snapshot APIs.
     await page.reload()
-    await expect(message).toBeVisible()
-    await message.getByRole("button", { name: "查看来源 Thread" }).click()
+    await expect(roundtable).toContainText(body)
     await expect(page.getByRole("complementary", { name: "Thread" })).toBeVisible()
   })
 })
