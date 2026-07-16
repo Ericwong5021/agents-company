@@ -1,7 +1,7 @@
 # Implementation Plan：Pre-Public 纵向交付
 
 > 状态：M0、M1、M2 已完成；当前进入 M3 Charter、治理与真实软件交付闭环
-> 代码盘点基线：2026-07-13；M1/M2 关闭验证更新：2026-07-15
+> 代码盘点基线：2026-07-13；M1/M2 关闭验证更新：2026-07-17
 > 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -28,13 +28,13 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | 产品文档 | 宪法、PRD、00–08 专题设计和本计划已有单向优先级 | S0 产品收敛基本完成 |
 | Company Workspace | M2 已接入持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影 | 当前可作为真实公司会话入口；M3 才增加 Charter、治理与交付事实 |
 | 共享 App Shell | M0 已把根路由、Titlebar、通知、Deep Link 与构建 CSS 接入同一 App Chrome；M1 在其上接入 Company data source | 可以继续承接 M2 的真实会话数据 |
-| Local Server / Runtime | M1/M2 已提供受认证的 Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成 |
+| Local Server / Runtime | M1/M2 已提供仅绑定 loopback 的 trusted Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成；非回环监听仍不属于当前主路径 |
 | Company Project | 已有 Project、Plan、Work Item、Artifact 和两个人工 Gate | 当前仍是固定游戏 MVP 流程，创建新空仓库，不处理导入仓库、严格 Worktree、合并或主分支验证 |
 | SDK | M1 Company/Local Auth 与 M2 Conversation operation 已生成具体 response/error 类型 | 新产品接口不以 `unknown` 作为契约 |
-| Desktop | M1/M2 Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、发送、Thread、配对、重启与 revoke；发布目录包含 sidecar 运行依赖 | M4 的托盘、关窗后台运行、通知恢复仍未实现 |
+| Desktop | M1/M2 Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、发送、Thread、trusted loopback API 与重启恢复；发布目录包含 sidecar 运行依赖 | M4 的托盘、关窗后台运行、通知恢复仍未实现 |
 | Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
 | Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
-| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI；M2 有真实发送/Thread/鉴权/恢复纵向，Windows unpacked 打包已验证运行依赖 | Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
+| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI；M2 有真实发送/Thread/作用域拒绝/恢复纵向，Windows unpacked 打包已验证运行依赖 | Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
 
 因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
@@ -53,7 +53,7 @@ Agent 生命层与 Pre-Public 发布：尚未进入验收
 Electron / Browser / TUI
           │
           ▼
-Generated SDK + authenticated local API + SSE invalidation
+Generated SDK + loopback-only trusted local API + SSE invalidation
           │
           ▼
 Local Control Plane（唯一权威写入者）
@@ -147,7 +147,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：在干净数据目录中创建一家公司、最小董事会和一个真实仓库绑定。
 
-状态：已完成（2026-07-15）。浏览器、TUI 与 Windows 原生 Electron Gate 均通过；原生 Gate 以真实 main/preload/renderer/sidecar 覆盖目录选择、bootstrap、配对、重启和 revoke。
+状态：已完成（2026-07-17）。浏览器、TUI 与 Windows 原生 Electron Gate 均通过；原生 Gate 以真实 main/preload/renderer/sidecar 覆盖目录选择、bootstrap、trusted loopback、消息、Thread 与重启恢复。
 
 实施验证：2026-07-14。M1 实际覆盖范围与文件级计划以 [2026-07-13 M1 Company Bootstrap 实施计划](../compose/plans/2026-07-13-m1-company-bootstrap.md) 为准。
 
@@ -158,25 +158,25 @@ Local Control Plane（唯一权威写入者）
 3. 复用现有 Provider 和 Project 探测能力，但 Company 只保存一个项目一个主仓库的产品绑定；
 4. 新建带完整 Zod response 的 `/company` 产品路由，修复 SDK `unknown`，并运行 `./packages/sdk/js/script/build.ts`；
 5. 将 Desktop 品牌、App ID、协议和新数据目录切换为 Agent Company；本产品不为旧 AgentCompany/OpenCode 数据布局提供隐式兼容桥；
-6. 明确桌面短期凭据与浏览器显式配对凭据，默认仅绑定 loopback；
+6. Desktop sidecar 与本地浏览器共享仅绑定 loopback 的 trusted 服务契约；当前单用户阶段不认证用户；
 7. 所有创建步骤幂等，失败时可继续首次引导而不生成第二家公司或重复董事会。
 
 退出标准：
 
 - 干净环境完成 PRD 6.1 的七个步骤；
 - 刷新和重启后仍打开同一家公司、董事会和仓库；
-- 浏览器未提供凭据时无法读取公司数据；
+- 本地浏览器无需凭据即可读取同一家公司，且 Control Plane 默认只监听 loopback；
 - SDK 中本里程碑产品接口没有 `unknown` response；
 - 首次引导失败不会留下不可恢复的半初始化状态。
 
 #### 2026-07-14/15 验证证据
 
 - 根目录 `bun script/generate-agent-company-brand.ts --check` 与 `./packages/sdk/js/script/build.ts` 通过；后者重复生成后输出哈希一致。
-- `packages/opencode` 的 migration check、M1 Company/Local Auth/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；真实 child-process restart/isolation 测试覆盖 Company 与浏览器 Bearer 的持久化和 revoke。
+- `packages/opencode` 的 migration check、M1 Company/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；network-auth 回归测试确认 loopback listener 默认 trusted，显式 network auth 仍保持受保护。
 - `packages/sdk/js` 的类型检查和 Company contract 测试通过；`packages/app` 的单元测试、类型检查、生产构建与真实 Playwright bootstrap E2E 通过；`packages/ui` 类型检查通过。
 - `packages/desktop` 的 Company home、品牌、shell env、renderer HTML 测试、类型检查和 Electron 生产构建均在 Windows 通过；生产身份静态扫描未发现 OpenCode 用户可见残留。`electron-builder` 已使用本机 Electron 分发目录和可访问的构建依赖镜像生成 `win-unpacked`、NSIS 安装包与 blockmap；本地构建未配置发布证书，签名仍由 CI 发布流程负责。
-- 浏览器手工完成配对、五步初始化、刷新持久化和控制台无错误核验；TUI 手工覆盖未初始化、错误仓库目录和正确仓库目录三种入口。
-- 2026-07-15 新增可重复的 Windows 原生 Electron Gate：真实 main/preload/renderer/sidecar 覆盖目录选择取消/成功、首次引导、Desktop 消息与 Thread、浏览器配对、进程重启恢复和 revoke 后 401。操作系统目录对话框返回值在测试内替换，IPC 与后续产品路径运行真实实现；Windows 交互辅助工具因 `GetCursorPos 0x80070005` 未能提供额外人工点击证据，不计入关闭依据。
+- 浏览器手工完成 trusted loopback 直入、五步初始化、刷新持久化和控制台无错误核验；TUI 手工覆盖未初始化、错误仓库目录和正确仓库目录三种入口。
+- 2026-07-17 更新可重复的 Windows 原生 Electron Gate：真实 main/preload/renderer/sidecar 覆盖目录选择取消/成功、首次引导、Desktop 圆桌消息与 Thread、loopback API 直读和进程重启恢复。操作系统目录对话框返回值在测试内替换，IPC 与后续产品路径运行真实实现。
 
 ### M2 — 真实 IM、董事会与高信号 Thread
 
@@ -428,7 +428,7 @@ M0 App Shell 修复
 
 | PRD 需求族 | 负责里程碑 | 覆盖说明 |
 |---|---|---|
-| LCP-01–03、LCP-09 | M1 | 认证本地 API、单写者、共享契约、浏览器凭据 |
+| LCP-01–03、LCP-09 | M1 | loopback trusted 本地 API、单写者、Desktop/Browser 共享契约；非回环监听不在当前主路径 |
 | LCP-04–08 | M4，M6 硬化 | 关窗继续、托盘/状态栏、通知、重启恢复、备份导出 |
 | IM-01 | M2 + M5 | M2 完成公司/董事会/项目；M5 在私域硬边界后开放部门和 Direct |
 | IM-02–09 | M2 | 项目群、高信号、Thread、来源、工具折叠、@/动作、辅助视图 |

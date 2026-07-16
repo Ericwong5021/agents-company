@@ -228,7 +228,7 @@ export function mountApp(root: HTMLElement) {
           displayName: "Local Server",
           type: "sidecar",
           variant: "base",
-          http: { url: data.url, username: data.username, password: data.password },
+          http: { url: data.url },
         } satisfies ServerConnection.Sidecar,
       ] as ServerConnection.Any[]
     }

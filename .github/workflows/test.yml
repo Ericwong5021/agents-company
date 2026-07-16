@@ -120,6 +120,7 @@ jobs:
         working-directory: packages/desktop
         env:
           PLAYWRIGHT_JUNIT_OUTPUT: .artifacts/m2-desktop/junit.xml
+          MODELS_DEV_API_JSON: test/tool/fixtures/models-api.json
         run: bun run test:e2e
 
       - name: Upload M2 Desktop artifacts

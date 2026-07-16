@@ -4,8 +4,6 @@ export type InitStep = { phase: "server_waiting" } | { phase: "done" }
 
 export type ServerReadyData = {
   url: string
-  username: string
-  password: string
 }
 
 export type WslConfig = { enabled: boolean }

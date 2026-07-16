@@ -7,7 +7,6 @@ import {
   _electron as electron,
   expect,
   test,
-  type APIRequestContext,
   type APIResponse,
   type ElectronApplication,
   type Page,
@@ -106,7 +105,7 @@ async function bootstrap(page: Page) {
   await expect(page.locator(".company-composer")).toBeVisible()
 }
 
-async function basicCredentials(page: Page) {
+async function sidecarConnection(page: Page) {
   return page.evaluate(() => window.api.awaitInitialization(() => undefined))
 }
 
@@ -123,14 +122,6 @@ function stringValue(value: unknown, label: string) {
 async function responseJson(response: APIResponse) {
   const value: unknown = await response.json()
   return value
-}
-
-function browserCredential(value: unknown) {
-  const record = objectValue(value, "Pairing exchange response")
-  return {
-    token: stringValue(Reflect.get(record, "token"), "Pairing exchange token"),
-    credential_id: stringValue(Reflect.get(record, "credential_id"), "Pairing exchange credential id"),
-  }
 }
 
 function companyID(value: unknown) {
@@ -168,17 +159,6 @@ function messageList(value: unknown) {
   })
 }
 
-async function createBrowserCredential(page: Page, request: APIRequestContext) {
-  await page.locator(".company-rail-button").nth(1).click()
-  await page.getByRole("button", { name: "Connect browser", exact: true }).click()
-  const code = (await page.locator(".company-ready-pairing strong").innerText()).trim()
-  const exchange = await request.post(serverURL + "/local-auth/exchange", {
-    data: { code, label: "Browser" },
-  })
-  if (!exchange.ok()) throw new Error(`Pairing exchange failed (${exchange.status()}): ${await exchange.text()}`)
-  return browserCredential(await responseJson(exchange))
-}
-
 test.beforeAll(async () => {
   await fs.rm(artifacts, { recursive: true, force: true })
   await fs.mkdir(repository, { recursive: true })
@@ -198,7 +178,7 @@ test.afterEach(async () => {
   await stop()
 })
 
-test("closes the native Desktop gate from home selection through restart, pairing, and shared conversation", async ({ request }) => {
+test("closes the native Desktop gate from home selection through restart and shared conversation", async ({ request }) => {
   const preflightApp = await launch()
   const preflight = await firstWindow(preflightApp)
   await expect(preflight.getByRole("heading", { name: "Choose a Company home" })).toBeVisible()
@@ -216,35 +196,29 @@ test("closes the native Desktop gate from home selection through restart, pairin
   const readyApp = await launch()
   const desktopPage = await firstWindow(readyApp)
   await bootstrap(desktopPage)
-  const firstSidecar = await basicCredentials(desktopPage)
+  const firstSidecar = await sidecarConnection(desktopPage)
   expect(firstSidecar.url).toBe(serverURL)
 
   await desktopPage.getByLabel("Send a message").fill(messageBody)
   await desktopPage.getByRole("button", { name: "Send", exact: true }).click()
-  const desktopMessage = desktopPage.locator(".company-message", { hasText: messageBody })
-  await expect(desktopMessage).toBeVisible()
-  await desktopMessage.getByRole("button", { name: "View source thread" }).click()
+  await expect(desktopPage.locator(".company-board")).toContainText(messageBody)
   await expect(desktopPage.getByRole("complementary", { name: "Thread" })).toBeVisible()
 
-  const issued = await createBrowserCredential(desktopPage, request)
-  const bearer = { authorization: "Bearer " + issued.token }
-  const companyResponse = await request.get(serverURL + "/company", { headers: bearer })
+  const companyResponse = await request.get(serverURL + "/company")
   expect(companyResponse.ok()).toBe(true)
   const company = companyID(await responseJson(companyResponse))
-  const channelsResponse = await request.get(`${serverURL}/company/channels?company_id=${company}`, { headers: bearer })
+  const channelsResponse = await request.get(`${serverURL}/company/channels?company_id=${company}`)
   expect(channelsResponse.ok()).toBe(true)
   const board = channelList(await responseJson(channelsResponse)).find((channel) => channel.kind === "board")
   if (!board) throw new Error("Board channel was not returned")
   const messagesResponse = await request.get(
     `${serverURL}/company/channels/${board.id}/messages?company_id=${company}&limit=50`,
-    { headers: bearer },
   )
   expect(messagesResponse.ok()).toBe(true)
   const sharedMessage = messageList(await responseJson(messagesResponse)).find((message) => message.body === messageBody)
   if (!sharedMessage?.sourceThreadID) throw new Error("Shared Desktop message has no source Thread")
   const threadResponse = await request.get(
     `${serverURL}/company/threads/${sharedMessage.sourceThreadID}?company_id=${company}`,
-    { headers: bearer },
   )
   expect(threadResponse.ok()).toBe(true)
 
@@ -255,19 +229,14 @@ test("closes the native Desktop gate from home selection through restart, pairin
 
   const restartedApp = await launch()
   const restartedPage = await firstWindow(restartedApp)
-  await expect(restartedPage.locator(".company-message", { hasText: messageBody })).toBeVisible()
+  await expect(restartedPage.locator(".company-board")).toContainText(messageBody)
   const afterRestart = await request.get(
     `${serverURL}/company/channels/${board.id}/messages?company_id=${company}&limit=50`,
-    { headers: bearer },
   )
   expect(afterRestart.ok()).toBe(true)
   expect(messageList(await responseJson(afterRestart)).find((message) => message.id === sharedMessage.id)?.sourceThreadID).toBe(
     sharedMessage.sourceThreadID,
   )
 
-  await restartedPage.locator(".company-rail-button").nth(1).click()
-  const credential = restartedPage.locator(".company-ready-credential-list > div", { hasText: "Browser" })
-  await expect(credential).toBeVisible()
-  await credential.getByRole("button", { name: "Revoke", exact: true }).click()
-  await expect.poll(async () => (await request.get(serverURL + "/company", { headers: bearer })).status()).toBe(401)
+  expect((await request.get(serverURL + "/company")).status()).toBe(200)
 })

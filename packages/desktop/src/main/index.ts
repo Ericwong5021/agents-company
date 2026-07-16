@@ -227,9 +227,9 @@ async function initialize(companyHome: string) {
   const url = `http://${hostname}:${port}`
   logger.log("sidecar connection started", { url })
 
-  const { listener, credentials, health } = await spawnLocalServer(hostname, port, companyHome)
+  const { listener, health } = await spawnLocalServer(hostname, port, companyHome)
   server = listener
-  serverReady.resolve({ url, username: credentials.username, password: credentials.password })
+  serverReady.resolve({ url })
 
   await Promise.race([
     health.wait,
