@@ -92,36 +92,36 @@ export function CompanyComposer(props: {
       </div>
 
       <div class="company-composer-actions">
-        <div>
-          <button
-            type="button"
-            aria-label={language.t("company.composer.mention.label")}
-            disabled={props.sending()}
-            onClick={() => setShowMentions((current) => !current)}
-          >
-            @
-          </button>
-          <button
-            type="button"
-            aria-label={language.t("company.composer.interrupt")}
-            disabled={!props.hasOpenThread() || props.sending()}
-            onClick={props.onInterrupt}
-          >
-            /
-          </button>
-        </div>
+        <button type="button" class="company-attachment" aria-disabled="true" tabIndex={-1}>
+          <Icon name="plus-small" size="small" />
+          <span>选择文件</span>
+        </button>
         <span class="company-composer-status" aria-live="polite">
           <Show when={props.sending()}>{language.t("company.composer.sending")}</Show>
         </span>
-        <button
-          type="button"
-          class="company-send"
-          aria-label={language.t("company.composer.send")}
-          disabled={!canSend()}
-          onClick={send}
+        <Show
+          when={props.sending() && props.hasOpenThread()}
+          fallback={
+            <button
+              type="button"
+              class="company-send"
+              aria-label={language.t("company.composer.send")}
+              disabled={!canSend()}
+              onClick={send}
+            >
+              <Icon name="arrow-up" />
+            </button>
+          }
         >
-          <Icon name="arrow-up" />
-        </button>
+          <button
+            type="button"
+            class="company-send company-stop"
+            aria-label={language.t("company.composer.interrupt")}
+            onClick={props.onInterrupt}
+          >
+            <Icon name="stop" />
+          </button>
+        </Show>
       </div>
     </div>
   )

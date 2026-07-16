@@ -1,5 +1,4 @@
 import type { Accessor } from "solid-js"
-import { Mark } from "@agents-company/ui/logo"
 import { Icon } from "@agents-company/ui/icon"
 import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import {
@@ -8,42 +7,19 @@ import {
   type CompanyWorkspaceDataSource,
 } from "./company-data-source"
 import { useGlobalSDK } from "@/context/global-sdk"
-import type { CompanyWorkspaceSnapshot, CompanyReadyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
+import type { CompanyWorkspaceSnapshot, CompanyReadyWorkspaceSnapshot } from "./company-model"
 import { CompanyBootstrap, type CompanyBootstrapSnapshot } from "./company-bootstrap"
 import { CompanyReady } from "./company-ready"
-import { ChannelSidebar } from "./channel-sidebar"
+import { ChannelSidebar, type CompanyWorkspaceView } from "./channel-sidebar"
 import { MessageFeed } from "./message-feed"
 import { ThreadPanel } from "./thread-panel"
 import { CompanyComposer } from "./company-composer"
+import { BoardRoundtable } from "./board-roundtable"
+import { OfficeSurface } from "./office-surface"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
-
-function CompanyRail(props: { onToggleContext: () => void; onToggleChannels: () => void }) {
-  return (
-    <aside class="company-rail" aria-label="公司导航">
-      <div class="company-mark" aria-label="Agent Company">
-        <Mark class="company-mark-icon" />
-      </div>
-      <nav class="company-rail-nav">
-        <button type="button" class="company-rail-button active" aria-label="消息" onClick={props.onToggleChannels}>
-          <Icon name="bubble-5" size="medium" />
-        </button>
-        <button type="button" class="company-rail-button" aria-label="公司配置" onClick={props.onToggleContext}>
-          <Icon name="settings-gear" size="medium" />
-        </button>
-      </nav>
-    </aside>
-  )
-}
-
-function channelTitle(conv: ConversationSnapshot, fallback: string): string {
-  const active = conv.channels.find((channel) => channel.id === conv.activeChannelID)
-  if (active) return active.title
-  const board = conv.channels.find((channel) => channel.kind === "board")
-  return board?.title ?? fallback
-}
 
 /**
  * Live IM workspace rendered when the company is ready. Every channel, message,
@@ -58,8 +34,14 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
   const [contextOpen, setContextOpen] = createSignal(false)
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
   const [interrupting, setInterrupting] = createSignal(false)
+  const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
+  const [workPanelOpen, setWorkPanelOpen] = createSignal(true)
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)
+  const activeChannel = createMemo(() =>
+    conversation().channels.find((channel) => channel.id === conversation().activeChannelID),
+  )
+  const boardChannel = createMemo(() => activeChannel()?.kind === "board")
   const hasOpenThread = createMemo(() => conversation().thread !== null)
   const hasMoreMessages = createMemo(() => conversation().messagesBefore !== null)
   const hasMoreEntries = createMemo(() => conversation().threadEntriesBefore !== null)
@@ -71,11 +53,14 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
 
   const selectChannel = (channelID: string) => {
     setMobileChannelsOpen(false)
+    setView("conversation")
+    setWorkPanelOpen(true)
     void store()?.setActiveChannel(channelID)
   }
 
   const openThread = (threadID: string) => {
     if (!threadID) return
+    setWorkPanelOpen(true)
     void store()?.openThread(threadID)
   }
 
@@ -89,11 +74,12 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
   }
 
   return (
-    <div class="company-workspace" data-thread-open={hasOpenThread() ? "true" : "false"} data-state="ready">
-      <CompanyRail
-        onToggleContext={() => setContextOpen((current) => !current)}
-        onToggleChannels={() => setMobileChannelsOpen((current) => !current)}
-      />
+    <div
+      class="company-workspace"
+      data-thread-open={workPanelOpen() && view() !== "office" ? "true" : "false"}
+      data-view={view()}
+      data-state="ready"
+    >
       <Show when={mobileChannelsOpen()}>
         <button
           type="button"
@@ -106,59 +92,128 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
         <ChannelSidebar
           channels={() => conversation().channels}
           activeChannelID={activeChannelID}
+          activeView={view}
           loading={() => conversation().loadingChannels}
           onSelect={selectChannel}
+          onNewConversation={() => {
+            setView("new")
+            setWorkPanelOpen(true)
+            void store()?.openThread("")
+          }}
+          onOpenOffice={() => {
+            setView("office")
+            setWorkPanelOpen(false)
+          }}
+          onOpenSettings={() => setContextOpen(true)}
         />
       </div>
 
-      <main class="company-conversation">
-        <header class="company-conversation-header">
-          <h1>{channelTitle(conversation(), props.snapshot().company.name)}</h1>
-          <Show when={conversation().loadingMessages}>
-            <span class="company-sidebar-loading" aria-live="polite">…</span>
-          </Show>
-        </header>
-        <MessageFeed
-          messages={() => conversation().messages}
-          pendingMessages={() => conversation().pendingMessages}
-          loading={() => conversation().loadingMessages}
-          hasMore={hasMoreMessages}
-          onLoadMore={() => void store()?.pageMessages()}
-          onOpenThread={openThread}
-        />
-        <Show
-          when={boardMessagesEnabled()}
-          fallback={
-            <div class="company-composer-disabled" data-capability="board-messages-disabled" role="status">
-              {companyDisabledText()}
-            </div>
-          }
-        >
-          <CompanyComposer
-            sending={() => conversation().sending}
-            error={() => conversation().error}
-            hasOpenThread={hasOpenThread}
-            onSend={(body) => void store()?.sendMessage(body)}
-            onInterrupt={() => void interrupt()}
-            onRetry={() => void store()?.refresh()}
-          />
-        </Show>
-      </main>
+      <Show
+        when={view() === "office"}
+        fallback={
+          <>
+            <main class="company-conversation">
+              <header class="company-conversation-header">
+                <h1>
+                  {view() === "new"
+                    ? "新建对话"
+                    : boardChannel()
+                      ? "董事会圆桌会议"
+                      : `与 ${props.snapshot().company.name} 的对话`}
+                </h1>
+                <Show when={conversation().loadingMessages}>
+                  <span class="company-sidebar-loading" aria-live="polite">…</span>
+                </Show>
+              </header>
 
-      <Show when={hasOpenThread()}>
-        <ThreadPanel
-          thread={() => conversation().thread}
-          entries={() => conversation().threadEntries}
-          loading={() => conversation().loadingMessages}
-          hasMore={hasMoreEntries}
-          interrupting={interrupting}
-          threadSources={() => conversation().threadSources}
-          loadingSourceIDs={() => conversation().loadingThreadSourceIDs}
-          onClose={() => void store()?.openThread("")}
-          onInterrupt={() => void interrupt()}
-          onLoadMore={() => void store()?.pageThreadEntries()}
-          onLoadSource={(sourceID) => void store()?.loadThreadSource(sourceID)}
-        />
+              <Switch>
+                <Match when={view() === "new"}>
+                  <div class="company-channel-placeholder" data-state="empty">
+                    <span class="company-empty-icon"><Icon name="brain" /></span>
+                    <h2>今天想完成什么？</h2>
+                    <p>从一条任务开始，Agent Company 会在本地协调团队。</p>
+                  </div>
+                </Match>
+                <Match when={boardChannel()}>
+                  <BoardRoundtable
+                    members={() => props.snapshot().company.board}
+                    thread={() => conversation().thread}
+                    entries={() => conversation().threadEntries}
+                    messages={() => conversation().messages}
+                  />
+                </Match>
+                <Match when={true}>
+                  <MessageFeed
+                    messages={() => conversation().messages}
+                    pendingMessages={() => conversation().pendingMessages}
+                    loading={() => conversation().loadingMessages}
+                    hasMore={hasMoreMessages}
+                    onLoadMore={() => void store()?.pageMessages()}
+                    onOpenThread={openThread}
+                  />
+                </Match>
+              </Switch>
+
+              <Show
+                when={boardMessagesEnabled()}
+                fallback={
+                  <div class="company-composer-disabled" data-capability="board-messages-disabled" role="status">
+                    {companyDisabledText()}
+                  </div>
+                }
+              >
+                <CompanyComposer
+                  sending={() => conversation().sending}
+                  error={() => conversation().error}
+                  hasOpenThread={hasOpenThread}
+                  onSend={(body) => {
+                    const current = store()
+                    if (!current) return
+                    setView("conversation")
+                    void current.sendMessage(body).then((accepted) => {
+                      if (!accepted.threadID) return
+                      const threadID = accepted.threadID
+                      setWorkPanelOpen(true)
+                      void current.openThread(threadID)
+                      window.setTimeout(() => void current.openThread(threadID), 1_200)
+                    })
+                  }}
+                  onInterrupt={() => void interrupt()}
+                  onRetry={() => void store()?.refresh()}
+                />
+              </Show>
+              <span class="company-ai-disclaimer">以上内容由 AI 生成</span>
+            </main>
+
+            <Show when={workPanelOpen()}>
+              <ThreadPanel
+                thread={() => conversation().thread}
+                entries={() => conversation().threadEntries}
+                loading={() => conversation().loadingMessages}
+                hasMore={hasMoreEntries}
+                interrupting={interrupting}
+                threadSources={() => conversation().threadSources}
+                loadingSourceIDs={() => conversation().loadingThreadSourceIDs}
+                onClose={() => setWorkPanelOpen(false)}
+                onInterrupt={() => void interrupt()}
+                onLoadMore={() => void store()?.pageThreadEntries()}
+                onLoadSource={(sourceID) => void store()?.loadThreadSource(sourceID)}
+              />
+            </Show>
+            <Show when={!workPanelOpen()}>
+              <button
+                type="button"
+                class="company-panel-reopen"
+                aria-label="展开侧边栏"
+                onClick={() => setWorkPanelOpen(true)}
+              >
+                <Icon name="prompt" size="small" />
+              </button>
+            </Show>
+          </>
+        }
+      >
+        <OfficeSurface snapshot={props.snapshot} conversation={conversation} />
       </Show>
 
       <Show when={contextOpen()}>
