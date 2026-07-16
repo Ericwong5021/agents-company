@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsgo -b",
-    "test:e2e": "bun run build && playwright test --config playwright.config.ts",
+    "test:e2e": "bun run build && bun run test:node-entry && playwright test --config playwright.config.ts",
+    "test:node-entry": "node --input-type=module -e \"await import('./out/main/chunks/node.js')\"",
     "predev": "bun ./scripts/predev.ts",
     "dev": "electron-vite dev",
     "prebuild": "bun ./scripts/prebuild.ts",

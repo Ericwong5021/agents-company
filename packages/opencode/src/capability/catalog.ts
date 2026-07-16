@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { RuntimeCapabilities, RuntimePermissionMode } from "@/runtime"
 
 export type CapabilityPackDefinition = {
@@ -26,7 +27,7 @@ function canonical(value: unknown): string {
 function pack(input: CapabilityPackDefinition): CapabilityPack {
   return {
     ...input,
-    checksum: new Bun.CryptoHasher("sha256").update(canonical(input)).digest("hex"),
+    checksum: createHash("sha256").update(canonical(input)).digest("hex"),
   }
 }
 
