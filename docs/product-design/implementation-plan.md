@@ -59,7 +59,7 @@ Generated SDK + authenticated local API + SSE invalidation
 Local Control Plane（唯一权威写入者）
   ├─ Company / Conversation application services
   ├─ Governance / Approval / Audit
-  ├─ Agent / Session / Workflow runtime
+  ├─ Agent Execution Kernel / Session / Workflow runtime
   ├─ Delivery / Admission / Worktree lifecycle
   └─ Context Resolver / Privacy boundary
           │
@@ -78,6 +78,24 @@ Local Control Plane（唯一权威写入者）
 - `GroupSession`、Bidding 和 Workflow 是运行实现，不直接定义用户可见的频道模型；
 - 当前 `/company-project` 原型可以拆解复用，但不承担新产品兼容责任；新契约稳定后删除或转为内部适配层；
 - Worktree 的通用 `remove --force` 只能由通过生命周期校验的 disposition service 调用。
+
+### 3.1 wanman 机制吸收边界
+
+`ref/wanman` 作为 Agent Execution Kernel 的参考实现，不成为运行时依赖，也不引入 `@wanman/*` package、JSON-RPC API、配置文件、数据目录或 CLI 兼容层。AgentCompany 吸收其已经验证的执行机制，并按 Bun、Effect、Drizzle、现有 Local API 和产品领域模型重新接线。
+
+吸收范围：
+
+- 统一 Claude Code / Codex 运行时适配契约，覆盖启动、结构化事件流、中断、停止、退出分类、模型配置和后端能力声明；
+- Supervisor 对 Agent Run 的生命周期管理，以及 `steer` / `follow_up` 两级内部投递语义；
+- 每次运行独立 Runtime Home、独立 `.claude` / `.codex` 状态、受管 Worktree、最小凭据暴露和不可变 Skill 快照；
+- 消息与运行事实先持久化再广播、事务性领取、重启恢复和孤儿资源扫描；
+- Role Template 中可复用的职责、能力、工具、生命周期和模型偏好，映射到 AgentCompany 的候选池、正式岗位、权限、声誉和三空间身份模型；
+- 结构化 Task、Artifact、Initiative、Hypothesis 和 Change Capsule 的方法，分别收敛进 Charter、Work Item、Artifact/Evidence、Decision 和受治理的变更流程，不复制平行领域对象；
+- Cron 与外部事件只作为 Control Plane 的触发入口，不定义产品信息架构，也不能绕过批准策略。
+
+明确不吸收：wanman 托管版能力、FinOps、db9 依赖、固定 CEO/dev/devops/marketing 组织、默认 24/7 执行、原始消息/API 形状以及其文件系统兼容性。
+
+统一运行时事件只描述执行事实；`ChannelMessage`、`ConversationThread` 和高信号协议继续是产品会话事实。运行时适配器必须提供能力矩阵，至少覆盖 runtime × lifecycle × model × permission × workspace；Codex 与 Claude Code 都通过各自正式会话标识恢复，缺失标识或能力时必须在启动前失败。
 
 ## 4. 交付方法
 
@@ -191,7 +209,37 @@ Local Control Plane（唯一权威写入者）
 
 目标：让一个导入的真实仓库完成目标到主分支交付，而不是在空目录生成演示 MVP。
 
-预计：3–4 周。
+预计：4–6 周，分为两个可独立合并的 Gate；M3A 完成后现有 GroupSession/Workflow 可以使用可靠的本地 Agent 执行内核，M3B 再完成受治理的软件交付闭环。
+
+#### M3A — Agent Execution Kernel
+
+目标：建立以 Pi 为内置默认、Codex 与 Claude Code 为可选平级实现的统一 Agent Runtime；Workflow Engine 负责公司流程，不建设第二套 CLI、数据库或产品消息系统。
+
+状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通；Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及完整真实仓库交付 Gate 仍是关闭项。
+
+主要工作：
+
+1. 在 `packages/opencode/src/runtime` 建立统一 `AgentRuntimePort`，固定 discover、capabilities、start/resume、deliver、interrupt、stop 和结构化事件；Pi、Codex、Claude Code 是平级实现，Pi 使用现有 Provider 凭据并作为默认选择；
+2. 新建持久化 `AgentRun` 状态机：queued → starting → running → interrupting/recovering → completed/failed/stopped，并将 Agent、Session、GroupSession、Workflow、Project、Work Item 和 WorktreeRun 作为显式关联；
+3. 建立 runtime × lifecycle × model × permission × workspace 能力矩阵；不支持 resume、中断、工具或写入范围的组合在启动前返回结构化错误，不允许静默降级；
+4. 将内部 `steer` 定义为经授权、可审计的当前运行中断，将 `follow_up` 定义为持久化队列投递；领取和 delivered 状态在同一事务完成，重试使用幂等键避免重复执行；
+5. 所有 Agent Run 事件先写入 SQLite append-only 记录，再发布 SSE/Bus 失效通知；Session、ConversationThread 和高信号消息从这些事实投影，不把工具输出直接写成产品消息；
+6. 为每次运行创建 `runs/<run-id>/home`、`logs` 和 `skills`，只注入当前 adapter 所需的最小认证能力、包装器和不可变 Skill 快照；禁止复制用户完整 HOME、Shell Profile 或其他 Agent 状态；
+7. Claude Code 与 Codex adapter 捕获并验证各自 session/thread id 后才允许恢复；Codex 优先 app-server、Claude Code 优先官方 Agent SDK，当前结构化 CLI 协议仅作为兼容路径；
+8. 保留 QuickJS Workflow Runtime，并把版本化 Workflow 与 Capability Pack 节点接到 Runtime Resolver；GroupSession 的动态选人保留为圆桌组件，不增加 `wanman send/recv/takeover` 兼容命令；
+9. Control Plane 启动时恢复非终态 Agent Run，交叉核对进程、Runtime Home、Skill 快照、Worktree 和数据库；不确定资源进入待处置状态，禁止自动删除；
+10. Skill 文档和运行快照记录版本、校验和、来源与激活原因；运行结束后可复盘当时真实可用的 Skill，不读取其他 Agent 的 private 空间。
+
+M3A 退出标准：
+
+- 同一个受授权开发任务可以分别使用已认证的 Claude Code CLI 和 Codex CLI 执行，产生相同结构的 Agent Run 事件；
+- 中断、follow-up、子进程异常退出和 Control Plane 重启不会丢失消息、重复领取任务或伪造完成状态；
+- 每次运行使用独立 Runtime Home 和明确 Worktree，用户 dirty checkout、真实 HOME 与其他 Agent 身份空间不被修改；
+- 不支持的 runtime/lifecycle/permission 组合在启动前失败，并返回可供 UI 和审计使用的明确原因；
+- 运行事实可以重建 Session、Thread 和高信号投影，SSE 断线不影响权威状态；
+- 没有新增平行数据库、wanman API 或产品消息模型。
+
+#### M3B — Charter、治理与真实软件交付
 
 主要工作：
 
@@ -210,6 +258,8 @@ Local Control Plane（唯一权威写入者）
 退出标准：
 
 - PRD 14.1 第 4–11 步在一个带测试的真实仓库通过；
+- Claude Code 与 Codex adapter 都至少完成一次真实仓库的实现、测试、Review 和证据投影路径；
+- Agent Run、内部投递、Runtime Home 和 Skill 快照在异常退出与重启后可恢复或进入明确待处置状态；
 - 平衡模式只在最终合并等重大节点打扰用户；
 - 批准、拒绝、冲突、主分支验证失败和进程中断均有恢复测试；
 - 未合并或未验证状态无法调用销毁；
@@ -229,7 +279,7 @@ Local Control Plane（唯一权威写入者）
 3. BrowserWindow 销毁后可从托盘、协议或通知重新创建；
 4. 状态栏只展示真实 idle/working/waiting/reviewing/blocked/error 状态；
 5. 审批、阻塞、完成和异常通知定位到对应高信号消息与 Thread；
-6. 建立 Project、ConversationThread、Workflow、Gate 和 Worktree 的恢复注册表；
+6. 建立 Project、ConversationThread、Workflow、AgentRun、RuntimeHome、SkillSnapshot、Gate 和 Worktree 的恢复注册表；
 7. 启动时执行 schema migration、运行恢复和孤儿 Worktree 扫描；
 8. 建立备份、导出、恢复和脱敏诊断包的最小可用路径。
 
@@ -350,6 +400,11 @@ M0 App Shell 修复
 | ChannelMessage | SQLite | signal_type、source_thread、reply_to、visibility |
 | Charter | SQLite + version | Project、acceptance、DRI、open decisions |
 | ApprovalPolicy / Approval | SQLite | company→project→one-off、resource、expiry |
+| AgentRun | SQLite | agent、runtime、session、workflow、project、work item、worktree、lifecycle、capabilities |
+| AgentRunEvent | SQLite append-only | run、sequence、kind、payload、source timestamp、projection status |
+| InternalExecutionMessage | SQLite | sender、target run/agent、steer/follow_up、delivery、idempotency key、audit |
+| RuntimeHome | SQLite metadata + file system | run、path、runtime、credential mode、disposition、recovery status |
+| SkillSnapshot | SQLite metadata + immutable files | run、skill、version、checksum、source、activation reason |
 | WorktreeRun | SQLite + Git 校验 | project、work item、branch、base/merge commit、disposition |
 | AgentLifecycle | SQLite | candidate/assigned/employee/archived |
 | IdentityManifest | SQLite metadata + versioned files | checksum、space、authorship、version |

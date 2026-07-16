@@ -4,6 +4,18 @@ import { authorization, Server } from "../../src/server/server"
 const credentials = { username: "agentcompany", password: "secret" }
 
 describe("network authentication", () => {
+  test("trusts a loopback listener without pairing by default", async () => {
+    const server = await Server.listen({ hostname: "127.0.0.1", port: 0 })
+    try {
+      expect(server.credentials).toBeUndefined()
+      const response = await fetch(new URL("/local-auth/session", server.url))
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ authenticated: true, kind: "trusted" })
+    } finally {
+      await server.stop(true)
+    }
+  })
+
   test("protects data while keeping health and WebUI public", async () => {
     const built = Server.create({ auth: { mode: "network", basic: credentials } })
     expect((await built.app.request("/global/health")).status).toBe(200)

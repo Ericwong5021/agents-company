@@ -12,6 +12,8 @@ export const ServeCommand = cmd({
     console.log(`agentcompany server listening on http://${server.hostname}:${server.port}`)
     if (opts.noAuth) {
       console.warn("Warning: authentication is disabled; this server is unauthenticated.")
+    } else if (!server.credentials) {
+      console.log("Local WebUI access is trusted on loopback; no pairing is required.")
     } else if (server.credentials) {
       const response = await fetch(new URL("/local-auth/pairings", server.url), {
         method: "POST",

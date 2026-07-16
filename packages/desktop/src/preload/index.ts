@@ -49,7 +49,13 @@ const api: ElectronAPI = {
   openLink: (url) => ipcRenderer.send("open-link", url),
   openPath: (path, app) => ipcRenderer.invoke("open-path", path, app),
   readClipboardImage: () => ipcRenderer.invoke("read-clipboard-image"),
-  showNotification: (title, body) => ipcRenderer.send("show-notification", title, body),
+  showNotification: (input) => ipcRenderer.send("show-notification", input),
+  onNotificationClick: (cb) => {
+    const handler = (_: unknown, href: string) => cb(href)
+    ipcRenderer.on("notification-click", handler)
+    return () => ipcRenderer.removeListener("notification-click", handler)
+  },
+  clearDesktopNotificationHistory: () => ipcRenderer.invoke("clear-desktop-notification-history"),
   getWindowFocused: () => ipcRenderer.invoke("get-window-focused"),
   setWindowFocus: () => ipcRenderer.invoke("set-window-focus"),
   showWindow: () => ipcRenderer.invoke("show-window"),

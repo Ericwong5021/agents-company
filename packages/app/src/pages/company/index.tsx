@@ -49,8 +49,7 @@ function channelTitle(conv: ConversationSnapshot, fallback: string): string {
  * Live IM workspace rendered when the company is ready. Every channel, message,
  * thread entry, member and status comes from the conversation store snapshot —
  * no fixture data, no fabricated approval/delivery cards. The Context Panel
- * (company facts + browser pairing) is collapsible so the M1 facts and credential
- * management stay reachable without dominating the IM surface.
+ * is collapsible so company facts stay reachable without dominating the IM surface.
  */
 function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspaceSnapshot>; dataSource: CompanyWorkspaceDataSource }) {
   const language = useLanguage()
@@ -176,7 +175,7 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
             </button>
           </header>
           <div class="company-context-body">
-            <CompanyReady snapshot={props.snapshot()} dataSource={props.dataSource} />
+            <CompanyReady snapshot={props.snapshot()} />
           </div>
         </aside>
       </Show>

@@ -1000,36 +1000,52 @@ export type EventTaskUpdated = {
   }
 }
 
-export type CompanyAgent = {
-  id: string
-  name: string
-  description?: string
-  system_prompt?: string
-  instruct?: string
-  relationships?: string
-  kanban?: string
-  skills?: Array<string>
-  model?: string
-  color?: string
-  icon?: string
-  org_layer?: string
-  department?: string
-  reports_to?: string
-  responsibilities?: Array<string>
-  time: {
-    created: number
-    updated: number
-  }
-}
-
 export type EventCompanyAgentCreated = {
   type: "company_agent.created"
-  properties: CompanyAgent
+  properties: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
 }
 
 export type EventCompanyAgentUpdated = {
   type: "company_agent.updated"
-  properties: CompanyAgent
+  properties: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
 }
 
 export type EventCompanyAgentDeleted = {
@@ -1457,6 +1473,88 @@ export type EventPtyDeleted = {
   type: "pty.deleted"
   properties: {
     id: string
+  }
+}
+
+export type EventAgentRunCreated = {
+  type: "agent_run.created"
+  properties: {
+    id: string
+    agentID: string
+    runtime: "pi" | "claude-code" | "codex"
+    runtimeVersion?: string
+    workflowVersion?: string
+    capabilityChecksum?: string
+    lifecycle: "on_demand" | "idle_cached"
+    permissionMode: "read_only" | "workspace_write" | "full_access"
+    state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
+    sessionID?: string
+    groupSessionID?: string
+    workflowRunID?: string
+    conversationThreadID?: string
+    companyProjectID?: string
+    workItemID?: string
+    worktreeRunID?: string
+    model?: string
+    reasoningEffort?: "low" | "medium" | "high" | "xhigh"
+    cwd: string
+    runtimeHomePath: string
+    resumeSessionID?: string
+    exitCode?: number
+    safeErrorSummary?: string
+    time: {
+      created: number
+      updated: number
+      started?: number
+      finished?: number
+    }
+  }
+}
+
+export type EventAgentRunUpdated = {
+  type: "agent_run.updated"
+  properties: {
+    id: string
+    agentID: string
+    runtime: "pi" | "claude-code" | "codex"
+    runtimeVersion?: string
+    workflowVersion?: string
+    capabilityChecksum?: string
+    lifecycle: "on_demand" | "idle_cached"
+    permissionMode: "read_only" | "workspace_write" | "full_access"
+    state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
+    sessionID?: string
+    groupSessionID?: string
+    workflowRunID?: string
+    conversationThreadID?: string
+    companyProjectID?: string
+    workItemID?: string
+    worktreeRunID?: string
+    model?: string
+    reasoningEffort?: "low" | "medium" | "high" | "xhigh"
+    cwd: string
+    runtimeHomePath: string
+    resumeSessionID?: string
+    exitCode?: number
+    safeErrorSummary?: string
+    time: {
+      created: number
+      updated: number
+      started?: number
+      finished?: number
+    }
+  }
+}
+
+export type EventAgentRunEvent = {
+  type: "agent_run.event"
+  properties: {
+    id: string
+    runID: string
+    sequence: number
+    type: string
+    payloadJSON: string
+    timeCreated: number
   }
 }
 
@@ -2368,6 +2466,9 @@ export type GlobalEvent = {
     | EventPtyUpdated
     | EventPtyExited
     | EventPtyDeleted
+    | EventAgentRunCreated
+    | EventAgentRunUpdated
+    | EventAgentRunEvent
     | EventWorkflowPhase
     | EventWorkflowLog
     | EventWorkflowStarted
@@ -3643,6 +3744,9 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
+  | EventAgentRunCreated
+  | EventAgentRunUpdated
+  | EventAgentRunEvent
   | EventWorkflowPhase
   | EventWorkflowLog
   | EventWorkflowStarted
@@ -4746,6 +4850,50 @@ export type CompanyThreadActionResponses = {
 
 export type CompanyThreadActionResponse = CompanyThreadActionResponses[keyof CompanyThreadActionResponses]
 
+export type GlobalRuntimeListData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/runtime"
+}
+
+export type GlobalRuntimeListResponses = {
+  /**
+   * Available Agent runtimes
+   */
+  200: unknown
+}
+
+export type GlobalReadinessData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/readiness"
+}
+
+export type GlobalReadinessResponses = {
+  /**
+   * Local release readiness
+   */
+  200: unknown
+}
+
+export type GlobalBackupData = {
+  body?: {
+    include_runtime_homes?: boolean
+  }
+  path?: never
+  query?: never
+  url: "/global/backup"
+}
+
+export type GlobalBackupResponses = {
+  /**
+   * Created local backup
+   */
+  200: unknown
+}
+
 export type GlobalEventData = {
   body?: never
   path?: never
@@ -5646,7 +5794,26 @@ export type CompanyAgentListResponses = {
   /**
    * List of company agents
    */
-  200: Array<CompanyAgent>
+  200: Array<{
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }>
 }
 
 export type CompanyAgentListResponse = CompanyAgentListResponses[keyof CompanyAgentListResponses]
@@ -5655,10 +5822,12 @@ export type CompanyAgentCreateData = {
   body?: {
     id: string
     name: string
+    lifecycle?: "candidate" | "employee"
     description?: string
     system_prompt?: string
     instruct?: string
     model?: string
+    preferred_runtime?: "pi" | "claude-code" | "codex"
     color?: string
     icon?: string
     org_layer?: "board" | "department" | "project" | "execution" | "tool"
@@ -5687,7 +5856,26 @@ export type CompanyAgentCreateResponses = {
   /**
    * Created company agent
    */
-  200: CompanyAgent
+  200: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
 }
 
 export type CompanyAgentCreateResponse = CompanyAgentCreateResponses[keyof CompanyAgentCreateResponses]
@@ -5751,7 +5939,26 @@ export type CompanyAgentGetResponses = {
   /**
    * Company agent
    */
-  200: CompanyAgent
+  200: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
 }
 
 export type CompanyAgentGetResponse = CompanyAgentGetResponses[keyof CompanyAgentGetResponses]
@@ -5765,6 +5972,7 @@ export type CompanyAgentUpdateData = {
     relationships?: string
     kanban?: string
     model?: string
+    preferred_runtime?: "pi" | "claude-code" | "codex"
     color?: string
     icon?: string
     org_layer?: "board" | "department" | "project" | "execution" | "tool"
@@ -5799,10 +6007,82 @@ export type CompanyAgentUpdateResponses = {
   /**
    * Updated company agent
    */
-  200: CompanyAgent
+  200: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
 }
 
 export type CompanyAgentUpdateResponse = CompanyAgentUpdateResponses[keyof CompanyAgentUpdateResponses]
+
+export type CompanyAgentPromoteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-agent/{id}/promote"
+}
+
+export type CompanyAgentPromoteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type CompanyAgentPromoteError = CompanyAgentPromoteErrors[keyof CompanyAgentPromoteErrors]
+
+export type CompanyAgentPromoteResponses = {
+  /**
+   * Promoted company agent
+   */
+  200: {
+    id: string
+    lifecycle: "candidate" | "employee"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type CompanyAgentPromoteResponse = CompanyAgentPromoteResponses[keyof CompanyAgentPromoteResponses]
 
 export type CompanyAgentTemplatesDivisionsData = {
   body?: never
@@ -5910,6 +6190,158 @@ export type CompanyAgentTemplatesGetResponses = {
 
 export type CompanyAgentTemplatesGetResponse =
   CompanyAgentTemplatesGetResponses[keyof CompanyAgentTemplatesGetResponses]
+
+export type AgentRunListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    agent_id?: string
+    workflow_run_id?: string
+    group_session_id?: string
+    company_project_id?: string
+    limit?: number
+  }
+  url: "/agent-run"
+}
+
+export type AgentRunListResponses = {
+  /**
+   * Agent Runs
+   */
+  200: Array<{
+    id: string
+    agentID: string
+    runtime: "pi" | "claude-code" | "codex"
+    runtimeVersion?: string
+    workflowVersion?: string
+    capabilityChecksum?: string
+    lifecycle: "on_demand" | "idle_cached"
+    permissionMode: "read_only" | "workspace_write" | "full_access"
+    state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
+    sessionID?: string
+    groupSessionID?: string
+    workflowRunID?: string
+    conversationThreadID?: string
+    companyProjectID?: string
+    workItemID?: string
+    worktreeRunID?: string
+    model?: string
+    reasoningEffort?: "low" | "medium" | "high" | "xhigh"
+    cwd: string
+    runtimeHomePath: string
+    resumeSessionID?: string
+    exitCode?: number
+    safeErrorSummary?: string
+    time: {
+      created: number
+      updated: number
+      started?: number
+      finished?: number
+    }
+  }>
+}
+
+export type AgentRunListResponse = AgentRunListResponses[keyof AgentRunListResponses]
+
+export type AgentRunGetData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent-run/{runID}"
+}
+
+export type AgentRunGetResponses = {
+  /**
+   * Agent Run
+   */
+  200: unknown
+}
+
+export type AgentRunEventsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent-run/{runID}/events"
+}
+
+export type AgentRunEventsResponses = {
+  /**
+   * Ordered runtime events
+   */
+  200: unknown
+}
+
+export type AgentRunMessageData = {
+  body?: {
+    content: string
+    priority?: "steer" | "follow_up"
+  }
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent-run/{runID}/message"
+}
+
+export type AgentRunMessageResponses = {
+  /**
+   * Delivered
+   */
+  200: unknown
+}
+
+export type AgentRunInterruptData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent-run/{runID}/interrupt"
+}
+
+export type AgentRunInterruptResponses = {
+  /**
+   * Interrupt result
+   */
+  200: unknown
+}
+
+export type AgentRunStopData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent-run/{runID}/stop"
+}
+
+export type AgentRunStopResponses = {
+  /**
+   * Stop result
+   */
+  200: unknown
+}
 
 export type CompanyProjectListData = {
   body?: never
@@ -6197,6 +6629,7 @@ export type GroupSessionMessagesResponses = {
     statusSummary?: string
     externalMessageID?: ChannelMessageId
     runtimeMessageID?: string
+    agentRunID?: string
     time: {
       created: number
       updated: number
@@ -6613,7 +7046,26 @@ export type AgentLifecycleStartResponses = {
    * Agent started with primary thread created
    */
   200: {
-    agent: CompanyAgent
+    agent: {
+      id: string
+      lifecycle: "candidate" | "employee"
+      name: string
+      description?: string
+      public_profile?: string
+      skills?: Array<string>
+      model?: string
+      preferred_runtime: string
+      color?: string
+      icon?: string
+      org_layer?: string
+      department?: string
+      reports_to?: string
+      responsibilities?: Array<string>
+      time: {
+        created: number
+        updated: number
+      }
+    }
     thread: {
       id: string
       agentID: string
@@ -6709,7 +7161,26 @@ export type AgentLifecycleStatusResponses = {
    * Agent status with activity rollup
    */
   200: {
-    agent: CompanyAgent
+    agent: {
+      id: string
+      lifecycle: "candidate" | "employee"
+      name: string
+      description?: string
+      public_profile?: string
+      skills?: Array<string>
+      model?: string
+      preferred_runtime: string
+      color?: string
+      icon?: string
+      org_layer?: string
+      department?: string
+      reports_to?: string
+      responsibilities?: Array<string>
+      time: {
+        created: number
+        updated: number
+      }
+    }
     activity: {
       agentID: string
       activeThreads: Array<{
@@ -6756,7 +7227,26 @@ export type AgentLifecycleStatusAllResponses = {
    */
   200: {
     agents: Array<{
-      agent: CompanyAgent
+      agent: {
+        id: string
+        lifecycle: "candidate" | "employee"
+        name: string
+        description?: string
+        public_profile?: string
+        skills?: Array<string>
+        model?: string
+        preferred_runtime: string
+        color?: string
+        icon?: string
+        org_layer?: string
+        department?: string
+        reports_to?: string
+        responsibilities?: Array<string>
+        time: {
+          created: number
+          updated: number
+        }
+      }
       activity: {
         agentID: string
         activeThreads: Array<{

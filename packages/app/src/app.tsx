@@ -25,7 +25,6 @@ import {
 import { Dynamic } from "solid-js/web"
 import { CommandProvider } from "@/context/command"
 import { AppChrome } from "@/components/app-chrome"
-import { ConnectionAuthGate } from "@/components/connection-auth-gate"
 import { ConnectionError } from "@/components/connection-error"
 import { CommentsProvider } from "@/context/comments"
 import { FileProvider } from "@/context/file"
@@ -247,26 +246,24 @@ export function AppInterface(props: {
       servers={props.servers}
     >
       <ConnectionGate disableHealthCheck={props.disableHealthCheck}>
-        <ConnectionAuthGate>
-          <ServerKey>
-            <QueryProvider>
-              <GlobalSDKProvider>
-                <GlobalSyncProvider>
-                  <Dynamic
-                    component={props.router ?? Router}
-                    root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
-                  >
-                    <Route path="/" component={HomeRoute} />
-                    <Route path="/:dir" component={DirectoryRoute}>
-                      <Route path="/" component={SessionIndexRoute} />
-                      <Route path="/session/:id?" component={SessionRoute} />
-                    </Route>
-                  </Dynamic>
-                </GlobalSyncProvider>
-              </GlobalSDKProvider>
-            </QueryProvider>
-          </ServerKey>
-        </ConnectionAuthGate>
+        <ServerKey>
+          <QueryProvider>
+            <GlobalSDKProvider>
+              <GlobalSyncProvider>
+                <Dynamic
+                  component={props.router ?? Router}
+                  root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
+                >
+                  <Route path="/" component={HomeRoute} />
+                  <Route path="/:dir" component={DirectoryRoute}>
+                    <Route path="/" component={SessionIndexRoute} />
+                    <Route path="/session/:id?" component={SessionRoute} />
+                  </Route>
+                </Dynamic>
+              </GlobalSyncProvider>
+            </GlobalSDKProvider>
+          </QueryProvider>
+        </ServerKey>
       </ConnectionGate>
     </ServerProvider>
   )

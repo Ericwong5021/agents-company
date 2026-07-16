@@ -5,7 +5,7 @@ import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 import { EventEmitter } from "node:events"
 import type { Event } from "electron"
-import { app, BrowserWindow, dialog } from "electron"
+import { app, BrowserWindow, dialog, Menu, Tray } from "electron"
 import pkg from "electron-updater"
 import contextMenu from "electron-context-menu"
 
@@ -20,7 +20,7 @@ import { parseMarkdown } from "./markdown"
 import { createMenu } from "./menu"
 import { getDefaultServerUrl, getWslConfig, setDefaultServerUrl, setWslConfig, spawnLocalServer } from "./server"
 import { getStore } from "./store"
-import { createMainWindow, registerRendererProtocol, setBackgroundColor, setDockIcon } from "./windows"
+import { createMainWindow, getAppIconPath, registerRendererProtocol, setBackgroundColor, setDockIcon } from "./windows"
 
 contextMenu({ showSaveImageAs: true, showLookUpSelection: false, showSearchWithGoogle: false })
 
@@ -47,6 +47,8 @@ const logger = initLogging()
 let initStep: InitStep = { phase: "server_waiting" }
 let mainWindow: BrowserWindow | null = null
 let server: Awaited<ReturnType<typeof spawnLocalServer>>["listener"] | null = null
+let tray: Tray | null = null
+let quitting = false
 
 logger.log("app starting", { version: app.getVersion(), packaged: app.isPackaged })
 
@@ -111,8 +113,12 @@ function setupApp() {
     emitDeepLinks([url])
   })
 
-  app.on("before-quit", () => killSidecar())
+  app.on("before-quit", () => {
+    quitting = true
+    killSidecar()
+  })
   app.on("will-quit", () => killSidecar())
+  app.on("activate", () => focusMainWindow())
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
@@ -131,6 +137,7 @@ function setupApp() {
     if (state.state === "needs_company_home") {
       mainWindow = createMainWindow()
       wireMenu()
+      wireWindowLifecycle()
       return
     }
 
@@ -170,8 +177,42 @@ function emitDeepLinks(urls: string[]) {
 
 function focusMainWindow() {
   if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()
+}
+
+function wireWindowLifecycle() {
+  if (!mainWindow) return
+  mainWindow.on("close", (event) => {
+    if (quitting) return
+    event.preventDefault()
+    mainWindow?.hide()
+  })
+  mainWindow.on("closed", () => {
+    mainWindow = null
+  })
+  if (tray) return
+  tray = new Tray(getAppIconPath())
+  tray.setToolTip(PRODUCT_BRAND.names.prod)
+  tray.on("click", () => focusMainWindow())
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Show Agent Company", click: () => focusMainWindow() },
+      {
+        label: "Hide Window",
+        click: () => mainWindow?.hide(),
+      },
+      { type: "separator" },
+      {
+        label: "Quit Agent Company",
+        click: () => {
+          quitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
 }
 
 function setInitStep(step: InitStep) {
@@ -200,6 +241,7 @@ async function initialize(companyHome: string) {
   setInitStep({ phase: "done" })
   mainWindow = createMainWindow()
   wireMenu()
+  wireWindowLifecycle()
 }
 
 function wireMenu() {

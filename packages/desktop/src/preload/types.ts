@@ -63,7 +63,9 @@ export type ElectronAPI = {
   openLink: (url: string) => void
   openPath: (path: string, app?: string) => Promise<void>
   readClipboardImage: () => Promise<{ buffer: ArrayBuffer; width: number; height: number } | null>
-  showNotification: (title: string, body?: string) => void
+  showNotification: (input: { id: string; title: string; body?: string; href?: string }) => void
+  onNotificationClick: (cb: (href: string) => void) => () => void
+  clearDesktopNotificationHistory: () => Promise<void>
   getWindowFocused: () => Promise<boolean>
   setWindowFocus: () => Promise<void>
   showWindow: () => Promise<void>

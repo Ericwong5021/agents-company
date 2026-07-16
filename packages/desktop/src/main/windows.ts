@@ -40,6 +40,10 @@ function iconPath() {
   return join(iconsDir(), `icon.${ext}`)
 }
 
+export function getAppIconPath() {
+  return iconPath()
+}
+
 function tone() {
   return nativeTheme.shouldUseDarkColors ? "dark" : "light"
 }

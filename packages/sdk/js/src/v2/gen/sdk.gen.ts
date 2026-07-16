@@ -11,6 +11,12 @@ import type {
   AgentLifecycleStopErrors,
   AgentLifecycleStopResponses,
   AgentPartInput,
+  AgentRunEventsResponses,
+  AgentRunGetResponses,
+  AgentRunInterruptResponses,
+  AgentRunListResponses,
+  AgentRunMessageResponses,
+  AgentRunStopResponses,
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
@@ -34,6 +40,8 @@ import type {
   CompanyAgentGetErrors,
   CompanyAgentGetResponses,
   CompanyAgentListResponses,
+  CompanyAgentPromoteErrors,
+  CompanyAgentPromoteResponses,
   CompanyAgentTemplatesByDivisionErrors,
   CompanyAgentTemplatesByDivisionResponses,
   CompanyAgentTemplatesDivisionsResponses,
@@ -117,6 +125,7 @@ import type {
   FindSymbolsResponses,
   FindTextResponses,
   FormatterStatusResponses,
+  GlobalBackupResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
@@ -126,6 +135,8 @@ import type {
   GlobalImportRunErrors,
   GlobalImportRunResponses,
   GlobalImportScanResponses,
+  GlobalReadinessResponses,
+  GlobalRuntimeListResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
   GroupSessionChatErrors,
@@ -388,6 +399,20 @@ class HeyApiRegistry<T> {
   }
 }
 
+export class Runtime extends HeyApiClient {
+  /**
+   * Discover Agent runtimes
+   *
+   * Report installation, version, authentication and normalized capabilities for Pi, Codex and Claude Code.
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalRuntimeListResponses, unknown, ThrowOnError>({
+      url: "/global/runtime",
+      ...options,
+    })
+  }
+}
+
 export class Config extends HeyApiClient {
   /**
    * Get global configuration
@@ -489,6 +514,42 @@ export class Global extends HeyApiClient {
   }
 
   /**
+   * Get local release readiness
+   *
+   * Report local database, migration, durable-directory, and backup readiness without changing state.
+   */
+  public readiness<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalReadinessResponses, unknown, ThrowOnError>({
+      url: "/global/readiness",
+      ...options,
+    })
+  }
+
+  /**
+   * Create a local release backup
+   *
+   * Create a consistent SQLite snapshot and copy durable local state. Restore must be performed offline.
+   */
+  public backup<ThrowOnError extends boolean = false>(
+    parameters?: {
+      include_runtime_homes?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "include_runtime_homes" }] }])
+    return (options?.client ?? this.client).post<GlobalBackupResponses, unknown, ThrowOnError>({
+      url: "/global/backup",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Get global events
    *
    * Subscribe to global events from the OpenCode system using server-sent events.
@@ -534,6 +595,11 @@ export class Global extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _runtime?: Runtime
+  get runtime(): Runtime {
+    return (this._runtime ??= new Runtime({ client: this.client }))
   }
 
   private _config?: Config
@@ -2149,10 +2215,12 @@ export class CompanyAgent extends HeyApiClient {
       workspace?: string
       id?: string
       name?: string
+      lifecycle?: "candidate" | "employee"
       description?: string
       system_prompt?: string
       instruct?: string
       model?: string
+      preferred_runtime?: "pi" | "claude-code" | "codex"
       color?: string
       icon?: string
       org_layer?: "board" | "department" | "project" | "execution" | "tool"
@@ -2171,10 +2239,12 @@ export class CompanyAgent extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "id" },
             { in: "body", key: "name" },
+            { in: "body", key: "lifecycle" },
             { in: "body", key: "description" },
             { in: "body", key: "system_prompt" },
             { in: "body", key: "instruct" },
             { in: "body", key: "model" },
+            { in: "body", key: "preferred_runtime" },
             { in: "body", key: "color" },
             { in: "body", key: "icon" },
             { in: "body", key: "org_layer" },
@@ -2280,6 +2350,7 @@ export class CompanyAgent extends HeyApiClient {
       relationships?: string
       kanban?: string
       model?: string
+      preferred_runtime?: "pi" | "claude-code" | "codex"
       color?: string
       icon?: string
       org_layer?: "board" | "department" | "project" | "execution" | "tool"
@@ -2304,6 +2375,7 @@ export class CompanyAgent extends HeyApiClient {
             { in: "body", key: "relationships" },
             { in: "body", key: "kanban" },
             { in: "body", key: "model" },
+            { in: "body", key: "preferred_runtime" },
             { in: "body", key: "color" },
             { in: "body", key: "icon" },
             { in: "body", key: "org_layer" },
@@ -2326,9 +2398,242 @@ export class CompanyAgent extends HeyApiClient {
     })
   }
 
+  /**
+   * Promote a candidate agent
+   *
+   * Promote a candidate after its private identity and public profile have been prepared.
+   */
+  public promote<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyAgentPromoteResponses, CompanyAgentPromoteErrors, ThrowOnError>(
+      {
+        url: "/company-agent/{id}/promote",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
   private _templates?: Templates
   get templates(): Templates {
     return (this._templates ??= new Templates({ client: this.client }))
+  }
+}
+
+export class AgentRun extends HeyApiClient {
+  /**
+   * List Agent Runs
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      agent_id?: string
+      workflow_run_id?: string
+      group_session_id?: string
+      company_project_id?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "agent_id" },
+            { in: "query", key: "workflow_run_id" },
+            { in: "query", key: "group_session_id" },
+            { in: "query", key: "company_project_id" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AgentRunListResponses, unknown, ThrowOnError>({
+      url: "/agent-run",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get an Agent Run
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AgentRunGetResponses, unknown, ThrowOnError>({
+      url: "/agent-run/{runID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List persisted Agent Run events
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AgentRunEventsResponses, unknown, ThrowOnError>({
+      url: "/agent-run/{runID}/events",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Deliver a live Agent Run message
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      workspace?: string
+      content?: string
+      priority?: "steer" | "follow_up"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "content" },
+            { in: "body", key: "priority" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AgentRunMessageResponses, unknown, ThrowOnError>({
+      url: "/agent-run/{runID}/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Interrupt an Agent Run
+   */
+  public interrupt<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AgentRunInterruptResponses, unknown, ThrowOnError>({
+      url: "/agent-run/{runID}/interrupt",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Stop an Agent Run
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AgentRunStopResponses, unknown, ThrowOnError>({
+      url: "/agent-run/{runID}/stop",
+      ...options,
+      ...params,
+    })
   }
 }
 
@@ -7167,6 +7472,11 @@ export class OpencodeClient extends HeyApiClient {
   private _companyAgent?: CompanyAgent
   get companyAgent(): CompanyAgent {
     return (this._companyAgent ??= new CompanyAgent({ client: this.client }))
+  }
+
+  private _agentRun?: AgentRun
+  get agentRun(): AgentRun {
+    return (this._agentRun ??= new AgentRun({ client: this.client }))
   }
 
   private _companyProject?: CompanyProject

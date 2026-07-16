@@ -1,7 +1,6 @@
-import type { CompanyReadyState, LocalCredential, LocalPairing } from "@agents-company/sdk/v2/client"
-import { For, Show, createSignal, onMount } from "solid-js"
+import type { CompanyReadyState } from "@agents-company/sdk/v2/client"
+import { For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import type { CompanyWorkspaceDataSource } from "./company-data-source"
 import type { CompanyWorkspaceAccess } from "./company-model"
 
 export type CompanyReadySnapshot = CompanyReadyState & {
@@ -15,58 +14,8 @@ function policyLabel(preset: CompanyReadyState["company"]["approval_policy"]["pr
   return "Balanced"
 }
 
-export function CompanyReady(props: { snapshot: CompanyReadySnapshot; dataSource: CompanyWorkspaceDataSource }) {
+export function CompanyReady(props: { snapshot: CompanyReadySnapshot }) {
   const language = useLanguage()
-  const [credentials, setCredentials] = createSignal<LocalCredential[]>([])
-  const [pairing, setPairing] = createSignal<LocalPairing>()
-  const [pending, setPending] = createSignal(false)
-  const [error, setError] = createSignal<string>()
-  const canManageCredentials = () => props.snapshot.access.can_manage_credentials
-
-  const loadCredentials = async () => {
-    if (!canManageCredentials()) return
-    try {
-      setCredentials((await props.dataSource.listCredentials()) ?? [])
-    } catch {
-      setError(language.t("company.ready.credentials.error"))
-    }
-  }
-
-  onMount(() => {
-    void loadCredentials()
-  })
-
-  const pairBrowser = async () => {
-    if (!canManageCredentials() || pending()) return
-    setPending(true)
-    setError()
-    try {
-      setPairing(
-        await props.dataSource.createPairing({
-          localPairingInput: { label: "Browser" },
-        }),
-      )
-      await loadCredentials()
-    } catch {
-      setError(language.t("company.ready.credentials.error"))
-    } finally {
-      setPending(false)
-    }
-  }
-
-  const revoke = async (id: string) => {
-    if (!canManageCredentials() || pending()) return
-    setPending(true)
-    setError()
-    try {
-      await props.dataSource.revokeCredential({ id })
-      await loadCredentials()
-    } catch {
-      setError(language.t("company.ready.credentials.error"))
-    } finally {
-      setPending(false)
-    }
-  }
 
   return (
     <main class="company-ready" data-company-state="ready">
@@ -141,51 +90,6 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot; dataSource
         </section>
       </Show>
 
-      <section class="company-ready-credentials" aria-labelledby="company-ready-credentials-title">
-        <div class="company-ready-section-heading">
-          <div>
-            <span class="company-ready-eyebrow">{language.t("company.ready.credentials.eyebrow")}</span>
-            <h2 id="company-ready-credentials-title">{language.t("company.ready.credentials.title")}</h2>
-          </div>
-          <Show when={canManageCredentials()}>
-            <button type="button" onClick={() => void pairBrowser()} disabled={pending()}>
-              {pending() ? language.t("company.ready.credentials.pending") : language.t("company.ready.credentials.pair")}
-            </button>
-          </Show>
-        </div>
-        <Show when={!canManageCredentials()}>
-          <p class="company-ready-paired">{language.t("company.ready.credentials.paired")}</p>
-        </Show>
-        <Show when={pairing()}>
-          {(created) => (
-            <div class="company-ready-pairing">
-              <strong>{created().code}</strong>
-              <a href={created().pairing_url}>{created().pairing_url}</a>
-            </div>
-          )}
-        </Show>
-        <Show when={canManageCredentials()}>
-          <div class="company-ready-credential-list">
-            <For each={credentials()}>
-              {(credential) => (
-                <div>
-                  <span>{credential.label}</span>
-                  <small>{credential.revoked_at ? language.t("company.ready.credentials.revoked") : credential.id}</small>
-                  <Show when={!credential.revoked_at}>
-                    <button type="button" onClick={() => void revoke(credential.id)} disabled={pending()}>
-                      {language.t("company.ready.credentials.revoke")}
-                    </button>
-                  </Show>
-                </div>
-              )}
-            </For>
-            <Show when={credentials().length === 0}>
-              <p>{language.t("company.ready.credentials.empty")}</p>
-            </Show>
-          </div>
-        </Show>
-        <Show when={error()}>{(message) => <p class="company-ready-error">{message()}</p>}</Show>
-      </section>
     </main>
   )
 }

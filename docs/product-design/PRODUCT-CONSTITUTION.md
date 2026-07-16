@@ -166,6 +166,14 @@ Web 与桌面工作台是首要产品界面，二者共用同一套 WebUI。TUI 
 - Agent 不得自行扩大权限；
 - 梦境不得改变正式职位、公司宪法或安全策略。
 
+以下本地 Agent 运行时规则同样属于不可协商的硬边界：
+
+- Local Control Plane 是 Agent 进程、运行状态、SQLite、身份文件与 Git/Worktree 协调的唯一权威写入者；客户端和 Agent 子进程不得绕过它直接改变正式状态；
+- Claude Code、Codex 和其他执行后端必须通过统一的运行时适配契约接入，并显式声明会话恢复、中断、工具、模型、推理等级和工作区能力；不支持的组合必须在启动前失败，不能静默降级为不同语义；
+- 会改变正式状态的消息、运行事件、任务结果、审批事实和资源状态必须先持久化成功，再向 UI、SSE 或其他 Agent 广播；内存事件只能用于通知，不能成为恢复依据；
+- Agent 内部执行事件、工具输出和协作消息不能直接冒充产品频道消息；用户可见的 Conclusion、Decision、Plan、Status、Risk、Approval 和 Delivery 必须由可追溯的正式事实投影生成；
+- 中断、steer、重试和恢复必须服从权限、批准策略与审计要求，不能成为绕过 Gate、扩大写入范围或覆盖他人工作的通道。
+
 ## 第五章：项目、仓库与交付
 
 ### 第十五条：一个项目一个主仓库
@@ -188,6 +196,10 @@ Web 与桌面工作台是首要产品界面，二者共用同一套 WebUI。TUI 
 - 只有验证主分支达到验收标准后，任务才算交付完成。
 
 关闭 Worktree 时进入单工作区直接模式。系统必须限制并发写入者，明确当前写锁所有者，避免多个 Agent 同时修改同一工作区。
+
+每次 Agent 执行必须关联一个持久化 Agent Run，并绑定明确的 Agent、Project、Work Item、运行时后端、权限、基础提交和工作目录。执行进程使用独立的临时 Runtime Home；项目代码只能位于项目仓库或受管 Worktree 中，Runtime Home 和 Agent Home 都不得成为代码事实源。
+
+Control Plane 启动时必须交叉核对 SQLite 中的 Agent Run、操作系统进程、Git Worktree 列表、分支和磁盘目录。无法确认安全处置的孤儿进程、孤儿 Runtime Home 和孤儿 Worktree 必须进入待处置状态并保留证据，不得自动伪装成已完成或直接删除。
 
 ### 第十七条：软件交付闭环
 
@@ -238,6 +250,17 @@ agents/<agent-id>/
 ```text
 projects/<project-id>/worktrees/<worktree-id>/
 ```
+
+一次执行的临时运行环境独立存放：
+
+```text
+runs/<run-id>/
+  home/          # 隔离的 HOME、.claude/ 或 .codex/ 与运行时包装器
+  logs/          # 可审计、可脱敏的结构化运行日志
+  skills/        # 本次运行实际使用的不可变 Skill 快照
+```
+
+Agent Home 表示长期身份与职业连续性，Runtime Home 表示一次执行的隔离环境，Project Worktree 表示代码修改现场，三者不得混用。系统不得默认复制用户真实 HOME、Shell Profile、完整凭据目录或其他 Agent 的运行状态到 Runtime Home；认证只通过当前执行后端所需的最小授权能力提供。
 
 ### 第二十一条：私人空间访问矩阵
 
@@ -333,7 +356,7 @@ Local Control Plane
   └─ Git repositories / Worktrees
 ```
 
-客户端不得直接修改数据库。Control Plane 必须使用回环地址认证、单写者语义、幂等恢复和清晰的版本迁移。
+客户端不得直接修改数据库。Control Plane 必须默认只监听回环地址，并使用单写者语义、幂等恢复和清晰的版本迁移。当前本地单用户阶段不要求身份认证；如果未来开放非回环访问，必须先建立独立的认证与威胁模型。
 
 ### 第三十条：桌面常驻体验
 
@@ -357,7 +380,7 @@ Local Control Plane
 Pre-Public 与首次公开版本必须形成以下完整能力：
 
 1. 本地安装、升级、备份、导出与恢复；
-2. 常驻 Control Plane、托盘/状态栏、本地认证和通知；
+2. 常驻 Control Plane、托盘/状态栏、回环地址隔离和通知；
 3. 共享 WebUI 的桌面与浏览器工作台；
 4. 公司群、董事会、项目群、Direct、主会话与 Thread；
 5. Charter、动态组队、委派、审批、Gate、声誉和审计；

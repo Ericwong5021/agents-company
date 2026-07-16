@@ -21,6 +21,7 @@ import { LocalAuthPublicRoutes, LocalAuthRoutes } from "./routes/local-auth"
 import { WorkspaceRouterMiddleware } from "./workspace"
 import { InstanceMiddleware } from "./routes/instance/middleware"
 import { WorkspaceRoutes } from "./routes/control/workspace"
+import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { AppRuntime } from "@/effect/app-runtime"
 
@@ -108,7 +109,7 @@ export async function openapi() {
       info: {
         title: "Agent Company Local API",
         version: "1.0.0",
-        description: "Authenticated local Control Plane API for Agent Company",
+        description: "Local Control Plane API for Agent Company",
       },
       openapi: "3.1.1",
     },
@@ -124,11 +125,21 @@ function listenAuth(opts: ListenOptions): AuthMode {
     if ("mode" in opts.auth) return opts.auth
     return { mode: "network", basic: opts.auth }
   }
+  if (Flag.AGENTCOMPANY_SERVER_PASSWORD) {
+    return {
+      mode: "network",
+      basic: {
+        username: Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany",
+        password: Flag.AGENTCOMPANY_SERVER_PASSWORD,
+      },
+    }
+  }
+  if (["127.0.0.1", "localhost", "::1"].includes(opts.hostname)) return { mode: "trusted" }
   return {
     mode: "network",
     basic: {
       username: Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany",
-      password: Flag.AGENTCOMPANY_SERVER_PASSWORD ?? randomBytes(32).toString("base64url"),
+      password: randomBytes(32).toString("base64url"),
     },
   }
 }
@@ -137,6 +148,7 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   const auth = listenAuth(opts)
   const built = create({ cors: opts.cors, auth })
   await AppRuntime.runPromise(ConversationRuntime.Service.use((runtime) => runtime.recover()).pipe(Effect.ignore))
+  await AppRuntime.runPromise(AgentRunSupervisor.Service.use((supervisor) => supervisor.recover()).pipe(Effect.ignore))
   const server = await built.runtime.listen({ port: opts.port, hostname: opts.hostname })
 
   const next = new URL("http://localhost")

@@ -10,6 +10,7 @@ import type {
   WslConfig,
 } from "../preload/types"
 import type { LauncherState } from "./company-home"
+import { DESKTOP_NOTIFICATION_KEYS } from "./constants"
 import { getStore } from "./store"
 import { setTitlebar } from "./windows"
 
@@ -158,8 +159,26 @@ export function registerIpcHandlers(deps: Deps) {
     return { buffer, width: size.width, height: size.height }
   })
 
-  ipcMain.on("show-notification", (_event: IpcMainEvent, title: string, body?: string) => {
-    new Notification({ title, body }).show()
+  ipcMain.on(
+    "show-notification",
+    (event: IpcMainEvent, input: { id: string; title: string; body?: string; href?: string }) => {
+      const seen = getStore().get(DESKTOP_NOTIFICATION_KEYS)
+      const keys = Array.isArray(seen) ? seen.filter((item): item is string => typeof item === "string") : []
+      if (keys.includes(input.id)) return
+      getStore().set(DESKTOP_NOTIFICATION_KEYS, [...keys.slice(-199), input.id])
+      const source = BrowserWindow.fromWebContents(event.sender)
+      const notification = new Notification({ title: input.title, body: input.body })
+      notification.on("click", () => {
+        source?.show()
+        source?.focus()
+        if (input.href) source?.webContents.send("notification-click", input.href)
+      })
+      notification.show()
+    },
+  )
+
+  ipcMain.handle("clear-desktop-notification-history", () => {
+    getStore().delete(DESKTOP_NOTIFICATION_KEYS)
   })
 
   ipcMain.handle("get-window-count", () => BrowserWindow.getAllWindows().length)

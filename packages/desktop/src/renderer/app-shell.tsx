@@ -165,16 +165,12 @@ const createPlatform = (): Platform => {
     notify: async (title, description, href) => {
       const focused = await window.api.getWindowFocused().catch(() => document.hasFocus())
       if (focused) return
-      const notification = new Notification(title, {
-        body: description ?? "",
-        icon: new URL("./agent-company-icon-192.png", window.location.href).toString(),
+      window.api.showNotification({
+        id: JSON.stringify([href ?? "", title, description ?? ""]),
+        title,
+        body: description,
+        href,
       })
-      notification.onclick = () => {
-        void window.api.showWindow()
-        void window.api.setWindowFocus()
-        handleNotificationClick(href)
-        notification.close()
-      }
     },
     fetch: globalThis.fetch,
     getWslEnabled: () => isWslEnabled(),
@@ -204,6 +200,7 @@ export function mountApp(root: HTMLElement) {
   let menuTrigger: ((id: string) => void) | undefined
   window.api.onMenuCommand((id) => menuTrigger?.(id))
   listenForDeepLinks()
+  window.api.onNotificationClick((href) => handleNotificationClick(href))
 
   render(() => {
     const platform = createPlatform()
