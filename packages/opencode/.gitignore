@@ -10,3 +10,4 @@ script/build-*.ts
 !script/build-support.ts
 temporary-*.md
 .agents-company-test-fixtures-*
+.agentcompany-cli-scenarios/

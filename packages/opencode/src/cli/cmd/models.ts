@@ -8,6 +8,7 @@ import { UI } from "../ui"
 import { EOL } from "os"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Effect } from "effect"
+import { printSuccess } from "../output"
 
 export const ModelsCommand = cmd({
   command: "models [provider]",
@@ -27,6 +28,10 @@ export const ModelsCommand = cmd({
         describe: "refresh the models cache from models.dev",
         type: "boolean",
       })
+      .option("json", {
+        describe: "output structured JSON",
+        type: "boolean",
+      })
   },
   handler: async (args) => {
     if (args.refresh) {
@@ -41,6 +46,31 @@ export const ModelsCommand = cmd({
           Effect.gen(function* () {
             const svc = yield* Provider.Service
             const providers = yield* svc.list()
+
+            if (args.json) {
+              const ids = args.provider ? [args.provider] : Object.keys(providers)
+              yield* Effect.sync(() =>
+                printSuccess(
+                  args,
+                  "models.list",
+                  ids
+                    .flatMap((id) => {
+                      const provider = providers[ProviderID.make(id)]
+                      if (!provider) return []
+                      return [{
+                        providerID: id,
+                        models: Object.entries(provider.models)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([modelID, model]) => ({
+                            id: modelID,
+                            ...(args.verbose ? { metadata: model } : {}),
+                          })),
+                      }]
+                    }),
+                ),
+              )
+              return
+            }
 
             const print = (providerID: ProviderID, verbose?: boolean) => {
               const provider = providers[providerID]

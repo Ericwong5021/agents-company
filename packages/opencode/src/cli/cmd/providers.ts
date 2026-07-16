@@ -20,6 +20,7 @@ import { PROVIDER_PRIORITY } from "../../util/provider-priority"
 import { text } from "node:stream/consumers"
 import { Effect } from "effect"
 import * as readline from "readline"
+import { printSuccess } from "../output"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -373,11 +374,7 @@ export const ProvidersListCommand = cmd({
   aliases: ["ls"],
   describe: "list providers and credentials",
   async handler(_args) {
-    UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
-    const homedir = os.homedir()
-    const displayPath = authPath.startsWith(homedir) ? authPath.replace(homedir, "~") : authPath
-    prompts.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
     const results = await AppRuntime.runPromise(
       Effect.gen(function* () {
         const auth = yield* Auth.Service
@@ -385,6 +382,33 @@ export const ProvidersListCommand = cmd({
       }),
     )
     const database = await ModelsDev.get()
+    const activeEnvVars = Object.entries(database).flatMap(([providerID, provider]) =>
+      provider.env
+        .filter((envVar) => process.env[envVar])
+        .map((envVar) => ({
+          providerID,
+          provider: provider.name || providerID,
+          envVar,
+        })),
+    )
+
+    if (_args.json) {
+      printSuccess(_args, "providers.list", {
+        authPath,
+        credentials: results.map(([providerID, result]) => ({
+          providerID,
+          name: database[providerID]?.name || providerID,
+          type: result.type,
+        })),
+        environment: activeEnvVars,
+      })
+      return
+    }
+
+    UI.empty()
+    const homedir = os.homedir()
+    const displayPath = authPath.startsWith(homedir) ? authPath.replace(homedir, "~") : authPath
+    prompts.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
 
     for (const [providerID, result] of results) {
       const name = database[providerID]?.name || providerID
@@ -392,19 +416,6 @@ export const ProvidersListCommand = cmd({
     }
 
     prompts.outro(`${results.length} credentials`)
-
-    const activeEnvVars: Array<{ provider: string; envVar: string }> = []
-
-    for (const [providerID, provider] of Object.entries(database)) {
-      for (const envVar of provider.env) {
-        if (process.env[envVar]) {
-          activeEnvVars.push({
-            provider: provider.name || providerID,
-            envVar,
-          })
-        }
-      }
-    }
 
     if (activeEnvVars.length > 0) {
       UI.empty()
@@ -689,14 +700,24 @@ export const ProvidersWhoamiCommand = cmd({
   command: "whoami",
   describe: "show current logged-in user info",
   async handler(_args) {
-    UI.empty()
-    prompts.intro("Current user")
     const info = await AppRuntime.runPromise(
       Effect.gen(function* () {
         const auth = yield* Auth.Service
         return yield* auth.get("xiaomi")
       }),
     )
+    if (_args.json) {
+      printSuccess(_args, "providers.whoami", {
+        providerID: "xiaomi",
+        authenticated: !!info,
+        type: info?.type,
+        metadata: info?.type === "api" ? info.metadata : undefined,
+      })
+      return
+    }
+
+    UI.empty()
+    prompts.intro("Current user")
     if (!info) {
       prompts.log.error("Not logged in. Run `agents auth login` to log in.")
       return

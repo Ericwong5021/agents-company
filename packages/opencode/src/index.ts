@@ -41,6 +41,12 @@ import { PluginCommand } from "./cli/cmd/plug"
 import { Heap } from "./cli/heap"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import { ensureProcessMetadata } from "./util/mimo-process"
+import { CompanyAgentCommand } from "./cli/cmd/company-agent"
+import { GroupCommand } from "./cli/cmd/group"
+import { QuestionCommand } from "./cli/cmd/question"
+import { PermissionCommand } from "./cli/cmd/permission"
+import { SettingsCommand } from "./cli/cmd/settings"
+import { printFailure } from "./cli/output"
 
 const processMetadata = ensureProcessMetadata("main")
 
@@ -89,7 +95,20 @@ const cli = yargs(args)
     describe: "run without external plugins",
     type: "boolean",
   })
+  .option("json", {
+    describe: "output structured JSON",
+    type: "boolean",
+  })
+  .option("cwd", {
+    describe: "working directory",
+    type: "string",
+    hidden: true,
+  })
   .middleware(async (opts) => {
+    if (opts.cwd) {
+      process.chdir(opts.cwd)
+    }
+
     if (opts.pure) {
       process.env.AGENTCOMPANY_PURE = "1"
     }
@@ -190,6 +209,11 @@ const cli = yargs(args)
   .command(GithubCommand)
   .command(PrCommand)
   .command(SessionCommand)
+  .command(CompanyAgentCommand)
+  .command(GroupCommand)
+  .command(QuestionCommand)
+  .command(PermissionCommand)
+  .command(SettingsCommand)
   .command(PluginCommand)
   .command(DbCommand)
   .fail((msg, err) => {
@@ -246,6 +270,11 @@ try {
     })
   }
   Log.Default.error("fatal", data)
+  if (args.includes("--json")) {
+    printFailure("cli.error", "CLI_ERROR", e, data)
+    process.exitCode = 1
+    process.exit()
+  }
   const formatted = FormatError(e)
   if (formatted) UI.error(formatted)
   if (formatted === undefined) {
