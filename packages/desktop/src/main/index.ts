@@ -127,22 +127,29 @@ function setupApp() {
     })
   }
 
-  void app.whenReady().then(async () => {
-    app.setAsDefaultProtocolClient(PRODUCT_BRAND.deep_link_protocol)
-    registerRendererProtocol()
-    setDockIcon()
-    setupAutoUpdater()
+  void app
+    .whenReady()
+    .then(async () => {
+      logger.log("app ready")
+      app.setAsDefaultProtocolClient(PRODUCT_BRAND.deep_link_protocol)
+      registerRendererProtocol()
+      setDockIcon()
+      setupAutoUpdater()
 
-    const state = currentLauncherState()
-    if (state.state === "needs_company_home") {
-      mainWindow = createMainWindow()
-      wireMenu()
-      wireWindowLifecycle()
-      return
-    }
+      const state = currentLauncherState()
+      logger.log("launcher state resolved", { state: state.state })
+      if (state.state === "needs_company_home") {
+        mainWindow = createMainWindow()
+        wireMenu()
+        wireWindowLifecycle()
+        return
+      }
 
-    await loadCompanyRuntime(state.company_home, () => initialize(state.company_home))
-  })
+      logger.log("company runtime loading")
+      await loadCompanyRuntime(state.company_home, () => initialize(state.company_home))
+      logger.log("company runtime initialized")
+    })
+    .catch((error) => logger.error("app initialization failed", error))
 }
 
 function currentLauncherState(): LauncherState {
@@ -222,12 +229,15 @@ function setInitStep(step: InitStep) {
 }
 
 async function initialize(companyHome: string) {
+  logger.log("sidecar port resolving")
   const port = await getSidecarPort()
   const hostname = "127.0.0.1"
   const url = `http://${hostname}:${port}`
   logger.log("sidecar connection started", { url })
 
-  const { listener, health } = await spawnLocalServer(hostname, port, companyHome)
+  const { listener, health } = await spawnLocalServer(hostname, port, companyHome, (step) => {
+    logger.log("sidecar initialization", { step })
+  })
   server = listener
   serverReady.resolve({ url })
 

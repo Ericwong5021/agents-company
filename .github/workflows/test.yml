@@ -131,4 +131,5 @@ jobs:
           path: |
             packages/desktop/.artifacts/m2-desktop/junit.xml
             packages/desktop/.artifacts/m2-desktop/test-results
+            packages/desktop/.artifacts/m2-desktop/app-data/user-data/logs
           if-no-files-found: warn

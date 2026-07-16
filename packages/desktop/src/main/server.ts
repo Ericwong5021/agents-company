@@ -6,6 +6,12 @@ export type WslConfig = { enabled: boolean }
 
 export type HealthCheck = { wait: Promise<void> }
 
+export type SidecarInitializationStep =
+  | "environment_prepared"
+  | "module_loaded"
+  | "logging_ready"
+  | "listener_ready"
+
 export function getDefaultServerUrl(): string | null {
   const value = getStore().get(DEFAULT_SERVER_URL_KEY)
   return typeof value === "string" ? value : null
@@ -29,16 +35,25 @@ export function setWslConfig(config: WslConfig) {
   getStore().set(WSL_ENABLED_KEY, config.enabled)
 }
 
-export async function spawnLocalServer(hostname: string, port: number, companyHome: string) {
+export async function spawnLocalServer(
+  hostname: string,
+  port: number,
+  companyHome: string,
+  report: (step: SidecarInitializationStep) => void = () => undefined,
+) {
   prepareServerEnv(companyHome)
+  report("environment_prepared")
   const { Log, Server } = await import("virtual:opencode-server")
+  report("module_loaded")
   await Log.init({ level: "WARN", print: false })
+  report("logging_ready")
   const listener = await Server.listen({
     port,
     hostname,
     noAuth: true,
     cors: ["ac://renderer"],
   })
+  report("listener_ready")
 
   const wait = (async () => {
     const url = `http://${hostname}:${port}`

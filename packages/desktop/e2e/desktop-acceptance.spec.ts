@@ -54,7 +54,27 @@ async function stop() {
 }
 
 async function firstWindow(app: ElectronApplication) {
-  const page = await app.firstWindow({ timeout: 120_000 })
+  const page = await app.firstWindow({ timeout: 120_000 }).catch(async (error) => {
+    const snapshot = await app
+      .evaluate(({ app, BrowserWindow }) => ({
+        ready: app.isReady(),
+        windows: BrowserWindow.getAllWindows().length,
+        userData: app.getPath("userData"),
+      }))
+      .catch((snapshotError) => ({ error: String(snapshotError) }))
+    const health = await fetch(serverURL + "/global/health", { signal: AbortSignal.timeout(1_000) })
+      .then((response) => ({ status: response.status }))
+      .catch((healthError) => ({ error: String(healthError) }))
+    const mainLog = await fs
+      .readFile(path.join(appData, "user-data", "logs", "main.log"), "utf8")
+      .catch((logError) => `Desktop main log unavailable: ${String(logError)}`)
+    await test.info().attach("desktop-initialization", {
+      body: Buffer.from(JSON.stringify({ snapshot, health }, null, 2)),
+      contentType: "application/json",
+    })
+    await test.info().attach("desktop-main-log", { body: Buffer.from(mainLog), contentType: "text/plain" })
+    throw error
+  })
   await page.waitForLoadState("domcontentloaded")
   return page
 }
