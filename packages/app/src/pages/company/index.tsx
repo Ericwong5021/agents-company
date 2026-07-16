@@ -18,6 +18,9 @@ import { BoardRoundtable } from "./board-roundtable"
 import { OfficeSurface } from "./office-surface"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
+import { useDialog } from "@agents-company/ui/context/dialog"
+import { useLayout } from "@/context/layout"
+import { projectWorkspacePath } from "@/utils/shell-navigation"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
 
@@ -27,11 +30,15 @@ import "./workspace.css"
  * no fixture data, no fabricated approval/delivery cards. The Context Panel
  * is collapsible so company facts stay reachable without dominating the IM surface.
  */
-function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspaceSnapshot>; dataSource: CompanyWorkspaceDataSource }) {
+function CompanyReadyWorkspace(props: {
+  snapshot: Accessor<CompanyReadyWorkspaceSnapshot>
+  dataSource: CompanyWorkspaceDataSource
+}) {
   const language = useLanguage()
+  const dialog = useDialog()
+  const layout = useLayout()
   const conversation = createMemo(() => props.snapshot().conversation)
   const store = (): ConversationStore | undefined => props.dataSource.conversation
-  const [contextOpen, setContextOpen] = createSignal(false)
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
@@ -50,6 +57,37 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
   // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
+
+  const openSettings = () =>
+    void import("@/components/dialog-settings").then((settings) =>
+      dialog.show(() => (
+        <settings.DialogSettings
+          defaultValue="company"
+          extension={{
+            value: "company",
+            sectionTitle: "公司",
+            label: "公司概览",
+            icon: "server",
+            render: () => <CompanyReady snapshot={props.snapshot()} onOpenBoard={openBoard} />,
+          }}
+        />
+      )),
+    )
+
+  const openBoard = () => {
+    dialog.close()
+    setView("conversation")
+    setWorkPanelOpen(true)
+    const board = conversation().channels.find((channel) => channel.kind === "board")
+    if (board) void store()?.setActiveChannel(board.id)
+  }
+
+  const openProject = () => {
+    setMobileChannelsOpen(false)
+    const directory = props.snapshot().company.repository.root_path
+    layout.projects.open(directory)
+    window.location.assign(projectWorkspacePath(directory))
+  }
 
   const selectChannel = (channelID: string) => {
     setMobileChannelsOpen(false)
@@ -80,6 +118,15 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
       data-view={view()}
       data-state="ready"
     >
+      <button
+        type="button"
+        class="company-mobile-channels-toggle"
+        aria-label="打开频道列表"
+        aria-expanded={mobileChannelsOpen()}
+        onClick={() => setMobileChannelsOpen(true)}
+      >
+        <Icon name="menu" size="small" />
+      </button>
       <Show when={mobileChannelsOpen()}>
         <button
           type="button"
@@ -96,15 +143,21 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
           loading={() => conversation().loadingChannels}
           onSelect={selectChannel}
           onNewConversation={() => {
+            setMobileChannelsOpen(false)
             setView("new")
             setWorkPanelOpen(true)
             void store()?.openThread("")
           }}
+          onOpenProject={openProject}
           onOpenOffice={() => {
+            setMobileChannelsOpen(false)
             setView("office")
             setWorkPanelOpen(false)
           }}
-          onOpenSettings={() => setContextOpen(true)}
+          onOpenSettings={() => {
+            setMobileChannelsOpen(false)
+            openSettings()
+          }}
         />
       </div>
 
@@ -122,14 +175,18 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
                       : `与 ${props.snapshot().company.name} 的对话`}
                 </h1>
                 <Show when={conversation().loadingMessages}>
-                  <span class="company-sidebar-loading" aria-live="polite">…</span>
+                  <span class="company-sidebar-loading" aria-live="polite">
+                    …
+                  </span>
                 </Show>
               </header>
 
               <Switch>
                 <Match when={view() === "new"}>
                   <div class="company-channel-placeholder" data-state="empty">
-                    <span class="company-empty-icon"><Icon name="brain" /></span>
+                    <span class="company-empty-icon">
+                      <Icon name="brain" />
+                    </span>
                     <h2>今天想完成什么？</h2>
                     <p>从一条任务开始，Agent Company 会在本地协调团队。</p>
                   </div>
@@ -215,25 +272,6 @@ function CompanyReadyWorkspace(props: { snapshot: Accessor<CompanyReadyWorkspace
       >
         <OfficeSurface snapshot={props.snapshot} conversation={conversation} />
       </Show>
-
-      <Show when={contextOpen()}>
-        <aside class="company-context-panel" aria-label="公司配置">
-          <header class="company-context-header">
-            <strong>{props.snapshot().company.name}</strong>
-            <button
-              type="button"
-              class="company-icon-button"
-              aria-label="关闭配置"
-              onClick={() => setContextOpen(false)}
-            >
-              <Icon name="close" />
-            </button>
-          </header>
-          <div class="company-context-body">
-            <CompanyReady snapshot={props.snapshot()} />
-          </div>
-        </aside>
-      </Show>
     </div>
   )
 }
@@ -262,7 +300,13 @@ function CompanyLiveWorkspace(props: {
   }
 
   return (
-    <Switch fallback={<main class="company-state-panel" data-company-state="loading">正在读取本地 Company…</main>}>
+    <Switch
+      fallback={
+        <main class="company-state-panel" data-company-state="loading">
+          正在读取本地 Company…
+        </main>
+      }
+    >
       <Match when={needsBootstrap()}>
         {(snapshot) => (
           <CompanyBootstrap
@@ -273,14 +317,18 @@ function CompanyLiveWorkspace(props: {
           />
         )}
       </Match>
-      <Match when={ready()}>{(snapshot) => <CompanyReadyWorkspace snapshot={snapshot} dataSource={props.dataSource} />}</Match>
+      <Match when={ready()}>
+        {(snapshot) => <CompanyReadyWorkspace snapshot={snapshot} dataSource={props.dataSource} />}
+      </Match>
       <Match when={failed()}>
         {(snapshot) => (
           <main class="company-state-panel" data-company-state="error">
             <h1>{snapshot().title}</h1>
             <p>{snapshot().description}</p>
             <Show when={snapshot().retryable}>
-              <button type="button" onClick={props.onRefresh}>重试</button>
+              <button type="button" onClick={props.onRefresh}>
+                重试
+              </button>
             </Show>
           </main>
         )}

@@ -1,11 +1,7 @@
 import { For, Match, Show, Switch, createMemo, createSignal, type Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
-import type {
-  ConversationThreadDetail,
-  ConversationThreadEntryItem,
-  ConversationThreadSource,
-} from "./company-model"
+import type { ConversationThreadDetail, ConversationThreadEntryItem, ConversationThreadSource } from "./company-model"
 
 function entryAuthorName(entry: ConversationThreadEntryItem): string {
   if (entry.type === "agent_message") return entry.message.agentID
@@ -64,30 +60,38 @@ export function ThreadPanel(props: {
           <Icon name="prompt" size="small" />
         </button>
         <div class="company-work-tabs" role="tablist" aria-label="线程面板">
-          <button type="button" role="tab" aria-selected={tab() === "worklog"} onClick={() => setTab("worklog")}>工作日志</button>
-          <button type="button" role="tab" aria-selected={tab() === "outputs"} onClick={() => setTab("outputs")}>产出物</button>
-          <button type="button" role="tab" aria-selected={tab() === "preview"} onClick={() => setTab("preview")}>预览</button>
+          <button type="button" role="tab" aria-selected={tab() === "worklog"} onClick={() => setTab("worklog")}>
+            工作日志
+          </button>
+          <button type="button" role="tab" aria-selected={tab() === "outputs"} onClick={() => setTab("outputs")}>
+            产出物
+          </button>
+          <button type="button" role="tab" aria-selected={tab() === "preview"} onClick={() => setTab("preview")}>
+            预览
+          </button>
         </div>
       </header>
 
       <Switch>
         <Match when={tab() === "worklog"}>
           <div class="company-work-summary">
-            <button type="button">
+            <article>
               <strong>{panelStatus()}</strong>
-              <span>查看全部 ›</span>
-            </button>
-            <button type="button">
+              <span>当前线程</span>
+            </article>
+            <article>
               <strong>{props.entries().length}</strong>
               <span>协作事件</span>
-            </button>
+            </article>
           </div>
 
           <Show
             when={thread()}
             fallback={
               <div class="company-panel-empty" data-context="worklog">
-                <span><Icon name="task" /></span>
+                <span>
+                  <Icon name="task" />
+                </span>
                 <strong>任务尚未开始</strong>
                 <p>开始任务后，工作日志会显示在这里</p>
               </div>
@@ -109,9 +113,7 @@ export function ThreadPanel(props: {
                       {(run) => (
                         <div class="company-thread-run" data-run-state={run().state}>
                           <span>{language.t(`company.thread.run.${run().state}`)}</span>
-                          <Show when={run().safeErrorSummary}>
-                            {(summary) => <p role="alert">{summary()}</p>}
-                          </Show>
+                          <Show when={run().safeErrorSummary}>{(summary) => <p role="alert">{summary()}</p>}</Show>
                         </div>
                       )}
                     </Show>
@@ -122,7 +124,9 @@ export function ThreadPanel(props: {
                   <span class="company-thread-members" aria-label={language.t("company.thread.members")}>
                     <For each={th().members}>
                       {(member) => (
-                        <span>{member.principal.kind === "user" ? language.t("company.feed.you") : member.principal.id}</span>
+                        <span>
+                          {member.principal.kind === "user" ? language.t("company.feed.you") : member.principal.id}
+                        </span>
                       )}
                     </For>
                   </span>
@@ -179,7 +183,9 @@ export function ThreadPanel(props: {
                                       <button
                                         type="button"
                                         aria-expanded={props.threadSources()[source.sourceID] ? "true" : "false"}
-                                        aria-busy={props.loadingSourceIDs().includes(source.sourceID) ? "true" : "false"}
+                                        aria-busy={
+                                          props.loadingSourceIDs().includes(source.sourceID) ? "true" : "false"
+                                        }
                                         onClick={() => props.onLoadSource(source.sourceID)}
                                       >
                                         {language.t("company.thread.source.open")} · {source.kind}
@@ -211,7 +217,9 @@ export function ThreadPanel(props: {
             <For each={sources()}>
               {(source) => (
                 <button type="button" class="company-output-row" onClick={() => selectSource(source.sourceID)}>
-                  <span><Icon name="folder" /></span>
+                  <span>
+                    <Icon name="folder" />
+                  </span>
                   <span>
                     <strong>{source.kind}</strong>
                     <small>线程产出 · {source.sourceID}</small>
@@ -221,7 +229,9 @@ export function ThreadPanel(props: {
             </For>
             <Show when={sources().length === 0}>
               <div class="company-panel-empty" data-context="outputs">
-                <span><Icon name="folder" /></span>
+                <span>
+                  <Icon name="folder" />
+                </span>
                 <strong>暂无产出物</strong>
                 <p>线程产生的文件会显示在这里</p>
               </div>
@@ -234,7 +244,9 @@ export function ThreadPanel(props: {
             when={selectedSource()}
             fallback={
               <div class="company-panel-empty" data-context="preview">
-                <span><Icon name="photo" /></span>
+                <span>
+                  <Icon name="photo" />
+                </span>
                 <strong>未选择要预览的文件</strong>
               </div>
             }

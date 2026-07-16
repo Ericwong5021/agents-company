@@ -1,7 +1,7 @@
-import { Component } from "solid-js"
+import { Show, type Component, type JSX } from "solid-js"
 import { Dialog } from "@agents-company/ui/dialog"
 import { Tabs } from "@agents-company/ui/tabs"
-import { Icon } from "@agents-company/ui/icon"
+import { Icon, type IconProps } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { SettingsGeneral } from "./settings-general"
@@ -9,17 +9,52 @@ import { SettingsKeybinds } from "./settings-keybinds"
 import { SettingsProviders } from "./settings-providers"
 import { SettingsModels } from "./settings-models"
 
-export const DialogSettings: Component = () => {
+type DialogSettingsProps = {
+  extension?: {
+    value: string
+    sectionTitle: JSX.Element
+    label: JSX.Element
+    icon: IconProps["name"]
+    render: () => JSX.Element
+  }
+  defaultValue?: string
+}
+
+export const DialogSettings: Component<DialogSettingsProps> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
 
   return (
-    <Dialog size="x-large" transition>
-      <Tabs orientation="vertical" variant="settings" defaultValue="general" class="h-full settings-dialog">
+    <Dialog
+      size={props.extension ? "large" : "x-large"}
+      title={props.extension ? language.t("sidebar.settings") : undefined}
+      class={props.extension ? "company-settings-dialog" : undefined}
+      transition
+    >
+      <Tabs
+        orientation="vertical"
+        variant="settings"
+        defaultValue={props.defaultValue ?? props.extension?.value ?? "general"}
+        class="h-full settings-dialog"
+      >
         <Tabs.List>
           <div class="flex flex-col justify-between h-full w-full">
             <div class="flex flex-col gap-3 w-full pt-3">
               <div class="flex flex-col gap-3">
+                <Show when={props.extension}>
+                  {(extension) => (
+                    <div class="flex flex-col gap-1.5">
+                      <Tabs.SectionTitle>{extension().sectionTitle}</Tabs.SectionTitle>
+                      <div class="flex flex-col gap-1.5 w-full">
+                        <Tabs.Trigger value={extension().value}>
+                          <Icon name={extension().icon} />
+                          {extension().label}
+                        </Tabs.Trigger>
+                      </div>
+                    </div>
+                  )}
+                </Show>
+
                 <div class="flex flex-col gap-1.5">
                   <Tabs.SectionTitle>{language.t("settings.section.desktop")}</Tabs.SectionTitle>
                   <div class="flex flex-col gap-1.5 w-full">
@@ -55,6 +90,13 @@ export const DialogSettings: Component = () => {
             </div>
           </div>
         </Tabs.List>
+        <Show when={props.extension}>
+          {(extension) => (
+            <Tabs.Content value={extension().value} class="no-scrollbar">
+              {extension().render()}
+            </Tabs.Content>
+          )}
+        </Show>
         <Tabs.Content value="general" class="no-scrollbar">
           <SettingsGeneral />
         </Tabs.Content>

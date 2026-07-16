@@ -48,6 +48,7 @@ import {
 import { useNotification } from "@/context/notification"
 import { Binary } from "@agents-company/shared/util/binary"
 import { retry } from "@agents-company/shared/util/retry"
+import { companyWorkspacePath } from "@/utils/shell-navigation"
 import { createAim } from "@/utils/aim"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 
@@ -2142,6 +2143,8 @@ export default function Layout(props: ParentProps) {
       openProjectKeybind={() => command.keybind("project.open")}
       onOpenProject={chooseProject}
       renderProjectOverlay={projectOverlay}
+      companyLabel={() => "Agent Company"}
+      onOpenCompany={() => window.location.assign(companyWorkspacePath)}
       settingsLabel={() => language.t("sidebar.settings")}
       settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}

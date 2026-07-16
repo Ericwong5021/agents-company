@@ -79,7 +79,11 @@ export function CompanyComposer(props: {
           }}
         />
         <Show when={showMentions()}>
-          <div class="company-composer-mentions" role="listbox" aria-label={language.t("company.composer.mention.label")}>
+          <div
+            class="company-composer-mentions"
+            role="listbox"
+            aria-label={language.t("company.composer.mention.label")}
+          >
             <For each={ROLE_MENTIONS}>
               {(role) => (
                 <button type="button" role="option" onClick={() => insertMention(role.key)}>
@@ -92,7 +96,13 @@ export function CompanyComposer(props: {
       </div>
 
       <div class="company-composer-actions">
-        <button type="button" class="company-attachment" aria-disabled="true" tabIndex={-1}>
+        <button
+          type="button"
+          class="company-attachment"
+          aria-disabled="true"
+          disabled
+          title="当前 Company 会话暂不支持文件附件，可在项目工作台中附加文件"
+        >
           <Icon name="plus-small" size="small" />
           <span>选择文件</span>
         </button>

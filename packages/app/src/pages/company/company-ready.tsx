@@ -14,7 +14,7 @@ function policyLabel(preset: CompanyReadyState["company"]["approval_policy"]["pr
   return "Balanced"
 }
 
-export function CompanyReady(props: { snapshot: CompanyReadySnapshot }) {
+export function CompanyReady(props: { snapshot: CompanyReadySnapshot; onOpenBoard?: () => void }) {
   const language = useLanguage()
 
   return (
@@ -42,13 +42,18 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot }) {
           <span>{language.t("company.ready.repository")}</span>
           <strong>{props.snapshot.company.repository.root_path}</strong>
           <small>
-            {props.snapshot.company.repository.default_branch} · {props.snapshot.company.repository.bootstrap_head_commit ?? "HEAD"}
+            {props.snapshot.company.repository.default_branch} ·{" "}
+            {props.snapshot.company.repository.bootstrap_head_commit ?? "HEAD"}
           </small>
         </article>
         <article>
           <span>{language.t("company.ready.policy")}</span>
           <strong>{policyLabel(props.snapshot.company.approval_policy.preset)}</strong>
-          <small>{props.snapshot.company.repository.dirty ? language.t("company.ready.dirty") : language.t("company.ready.clean")}</small>
+          <small>
+            {props.snapshot.company.repository.dirty
+              ? language.t("company.ready.dirty")
+              : language.t("company.ready.clean")}
+          </small>
         </article>
       </section>
 
@@ -75,10 +80,17 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot }) {
       <section class="company-ready-start" aria-labelledby="company-ready-start-title">
         <div>
           <span class="company-ready-eyebrow">{language.t("company.ready.start.eyebrow")}</span>
-          <h2 id="company-ready-start-title">{language.t(`company.ready.start.${props.snapshot.start_suggestion.kind}.title`)}</h2>
+          <h2 id="company-ready-start-title">
+            {language.t(`company.ready.start.${props.snapshot.start_suggestion.kind}.title`)}
+          </h2>
           <p>{language.t(`company.ready.start.${props.snapshot.start_suggestion.kind}.body`)}</p>
         </div>
-        <button type="button" disabled title={language.t("company.ready.start.m2")}>
+        <button
+          type="button"
+          disabled={!props.onOpenBoard}
+          title={props.onOpenBoard ? undefined : language.t("company.ready.start.m2")}
+          onClick={props.onOpenBoard}
+        >
           {language.t("company.ready.start.action")}
         </button>
       </section>
@@ -89,7 +101,6 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot }) {
           <p>{language.t("company.ready.capability.body")}</p>
         </section>
       </Show>
-
     </main>
   )
 }

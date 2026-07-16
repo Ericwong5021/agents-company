@@ -29,6 +29,7 @@ const MSG_PAGE_1 = [
     channelID: "chn_board",
     author: { kind: "user", id: "local-user" },
     body: "Let's implement M2",
+    sourceThreadID: "cth_1",
     visibility: "channel",
     mentions: [],
     time: { created: 200, updated: 200 },
@@ -114,13 +115,14 @@ function createMockClient(): { company: Record<string, (...args: any[]) => any> 
     company: {
       channels: async (...args: any[]) => mockResult(CHANNEL_RESPONSE),
       channelMessages: async (...args: any[]) => mockResult({ items: MSG_PAGE_1, nextCursor: "100" }),
-      channelSend: async (...args: any[]) => mockResult({
-        messageID: "cmsg_new",
-        rootNeedID: "need_1",
-        threadID: "cth_1",
-        runID: "crun_1",
-        replayed: false,
-      }),
+      channelSend: async (...args: any[]) =>
+        mockResult({
+          messageID: "cmsg_new",
+          rootNeedID: "need_1",
+          threadID: "cth_1",
+          runID: "crun_1",
+          replayed: false,
+        }),
       thread: async (...args: any[]) => mockResult(THREAD_DETAIL),
       threadEntries: async (...args: any[]) => mockResult({ items: THREAD_ENTRIES_PAGE_1, nextCursor: undefined }),
       threadSource: async (...args: any[]) => mockResult(THREAD_SOURCE),
@@ -161,11 +163,13 @@ describe("ConversationStore", () => {
     expect(state.channels).toHaveLength(3)
   })
 
-  test("first refresh selects the board and loads its persisted messages", async () => {
+  test("first refresh selects the board and restores its latest persisted thread", async () => {
     await store.refresh()
 
     expect(store.getState().activeChannelID).toBe("chn_board")
     expect(store.getState().messages.map((message) => message.id)).toEqual(["cmsg_1", "cmsg_2"])
+    expect(store.getOpenThreadID()).toBe("cth_1")
+    expect(store.getState().threadEntries).toHaveLength(1)
   })
 
   test("handles network error gracefully on refresh", async () => {
@@ -218,8 +222,7 @@ describe("ConversationStore", () => {
     await store.setActiveChannel("chn_board")
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    client.company.channelMessages = async () =>
-      mockResult({ items: MSG_PAGE_2, nextCursor: undefined })
+    client.company.channelMessages = async () => mockResult({ items: MSG_PAGE_2, nextCursor: undefined })
 
     await store.pageMessages()
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -232,8 +235,7 @@ describe("ConversationStore", () => {
     await store.setActiveChannel("chn_board")
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    client.company.channelMessages = async () =>
-      mockResult({ items: MSG_PAGE_1, nextCursor: "50" })
+    client.company.channelMessages = async () => mockResult({ items: MSG_PAGE_1, nextCursor: "50" })
 
     await store.pageMessages()
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -493,7 +495,9 @@ describe("ConversationStore", () => {
 
   test("subscribe returns unsubscriber that stops updates", async () => {
     let count = 0
-    const unsub = store.subscribe(() => { count++ })
+    const unsub = store.subscribe(() => {
+      count++
+    })
     await new Promise((resolve) => setTimeout(resolve, 50))
     const countAfterSubscribe = count
 

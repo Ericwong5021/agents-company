@@ -29,6 +29,14 @@ function entryBody(entry: ConversationThreadEntryItem | undefined) {
   return entry.message.body
 }
 
+export function boardMemberStatus(state: { active: boolean; running: boolean; completed: boolean; failed: boolean }) {
+  if (state.active) return "发言中"
+  if (state.completed) return "已完成"
+  if (state.failed) return "已结束"
+  if (state.running) return "倾听中"
+  return "待命中"
+}
+
 export function BoardRoundtable(props: {
   members: Accessor<CompanyReadyWorkspaceSnapshot["company"]["board"]>
   thread: Accessor<ConversationThreadDetail | null>
@@ -43,6 +51,7 @@ export function BoardRoundtable(props: {
     () => props.thread()?.status === "active" && ["queued", "running", "projecting"].includes(runState() ?? ""),
   )
   const completed = createMemo(() => props.thread()?.status === "completed" || runState() === "completed")
+  const failed = createMemo(() => runState() === "failed")
   const active = createMemo(() => {
     if (!running() || members().length === 0) return -1
     const last = agentEntries().at(0)
@@ -73,16 +82,25 @@ export function BoardRoundtable(props: {
       <div class="company-board-meta">
         <span class="company-board-status" data-running={running() ? "true" : "false"}>
           <span aria-hidden="true" />
-          {running() ? "执行中" : completed() ? "已完成" : runState() === "failed" ? "已失败" : "空闲中"}
+          {running() ? "执行中" : completed() ? "已完成" : failed() ? "已失败" : "空闲中"}
         </span>
         <span>第 {round()} 轮</span>
-        <span>{new Date(props.thread()?.time.updated ?? Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        <span>
+          {new Date(props.thread()?.time.updated ?? Date.now()).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
       </div>
 
       <div class="company-board-stage">
         <For each={members()}>
           {(member, index) => (
-            <article class="company-board-member" data-slot={index()} data-active={active() === index() ? "true" : "false"}>
+            <article
+              class="company-board-member"
+              data-slot={index()}
+              data-active={active() === index() ? "true" : "false"}
+            >
               <div class="company-board-avatar">
                 <img src={ROLE_AVATAR[member.role] ?? FALLBACK_AVATARS[index() % FALLBACK_AVATARS.length]} alt="" />
               </div>
@@ -90,7 +108,12 @@ export function BoardRoundtable(props: {
               <span>{member.role}</span>
               <small data-active={active() === index() ? "true" : "false"}>
                 <span aria-hidden="true" />
-                {active() === index() ? "发言中" : running() ? "倾听中" : "待命中"}
+                {boardMemberStatus({
+                  active: active() === index(),
+                  running: running(),
+                  completed: completed(),
+                  failed: failed(),
+                })}
               </small>
             </article>
           )}
@@ -99,11 +122,13 @@ export function BoardRoundtable(props: {
         <div class="company-board-agenda">
           <header>
             <strong>议题 · {props.thread()?.title ?? latestUserMessage()?.body ?? "等待新议题"}</strong>
-            <span>{running() ? "执行中" : completed() ? "已完成" : runState() === "failed" ? "已失败" : "待开始"}</span>
+            <span>{running() ? "执行中" : completed() ? "已完成" : failed() ? "已失败" : "待开始"}</span>
           </header>
           <p>{currentSpeech()}</p>
           <footer>
-            <span>共识 {Math.min(progress(), members().length)} / {members().length}</span>
+            <span>
+              共识 {Math.min(progress(), members().length)} / {members().length}
+            </span>
             <span>{props.thread()?.run?.state ?? "等待讨论"}</span>
           </footer>
         </div>

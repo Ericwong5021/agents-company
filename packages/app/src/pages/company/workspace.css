@@ -91,6 +91,10 @@
   display: none;
 }
 
+.company-mobile-channels-toggle {
+  display: none;
+}
+
 .company-rail {
   display: flex;
   flex-direction: column;
@@ -1532,6 +1536,22 @@
     transform: translateX(0);
   }
 
+  .company-mobile-channels-toggle {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 60;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 1px solid var(--company-border);
+    border-radius: 8px;
+    color: var(--company-text-muted);
+    background: var(--company-surface);
+    box-shadow: 0 2px 10px rgb(24 28 40 / 8%);
+  }
+
   .company-mobile-scrim {
     position: fixed;
     inset: 0 0 0 58px;
@@ -2170,7 +2190,7 @@
   inset: 0;
   z-index: 5;
   height: 100dvh;
-  grid-template-columns: 120px minmax(560px, 1fr) 310px;
+  grid-template-columns: 168px minmax(560px, 1fr) 426px;
   background: var(--company-canvas);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", Inter, sans-serif;
   font-size: 12px;
@@ -2179,7 +2199,7 @@
 
 .company-workspace[data-thread-open="false"],
 .company-workspace[data-view="office"] {
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 .company-rail {
@@ -2192,8 +2212,8 @@
 
 .company-channels {
   position: relative;
-  width: 120px;
-  padding: 28px 8px 12px;
+  width: 168px;
+  padding: 36px 8px 22px;
   border-right: 1px solid var(--company-border);
   background: var(--company-sidebar);
 }
@@ -2224,8 +2244,8 @@
 
 .company-sidebar-search {
   display: flex;
-  width: 104px;
-  height: 28px;
+  width: 152px;
+  height: 30px;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
@@ -2257,6 +2277,14 @@
   margin-top: 10px;
 }
 
+.company-channels > .company-primary-nav:first-of-type {
+  margin-top: 16px;
+}
+
+.company-channels > .company-sidebar-section-label + .company-primary-nav {
+  margin-top: 20px;
+}
+
 .company-nav-item,
 .company-sidebar-profile button {
   border: 0;
@@ -2269,8 +2297,8 @@
   grid-template-columns: 14px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  width: 104px;
-  height: 28px;
+  width: 152px;
+  height: 32px;
   padding: 0 8px;
   border-radius: 6px;
   text-align: left;
@@ -2312,7 +2340,7 @@
 .company-channel-scroll {
   min-height: 0;
   flex: 1;
-  margin: 2px -0px 0;
+  margin: 10px 0 0;
   padding: 0;
 }
 
@@ -2332,8 +2360,8 @@
 .company-channel {
   grid-template-columns: 14px minmax(0, 1fr);
   gap: 8px;
-  width: 104px;
-  min-height: 28px;
+  width: 152px;
+  min-height: 32px;
   padding: 0 8px;
   border-radius: 6px;
 }
@@ -2363,7 +2391,7 @@
   grid-template-columns: 8px minmax(0, 1fr) 20px;
   gap: 6px;
   align-items: center;
-  width: 104px;
+  width: 152px;
   height: 28px;
   margin-top: auto;
   padding: 0 4px 0 8px;
@@ -2404,7 +2432,7 @@
 }
 
 .company-conversation-header {
-  min-height: 52px;
+  min-height: 68px;
   justify-content: center;
   padding: 0 24px;
   border: 0;
@@ -2475,7 +2503,7 @@
   width: min(580px, calc(100% - 32px));
   flex: none;
   margin: 0 auto 32px;
-  padding: 12px;
+  padding: 16px 12px 20px;
   border-color: var(--company-border);
   border-radius: 14px;
   box-shadow:
@@ -2619,7 +2647,7 @@
   width: min(760px, 100%);
   min-height: 420px;
   flex: 1;
-  max-height: 530px;
+  max-height: 520px;
   overflow: hidden;
   border: 1px solid var(--company-border);
   border-radius: 12px;
@@ -2641,12 +2669,12 @@
 }
 
 .company-board-member[data-slot="1"] {
-  top: calc(50% - 61px);
+  top: calc(50% - 51px);
   left: 40px;
 }
 
 .company-board-member[data-slot="2"] {
-  top: calc(50% - 61px);
+  top: calc(50% - 51px);
   right: 40px;
 }
 
@@ -2775,7 +2803,7 @@
 
 .company-thread {
   position: relative;
-  width: 310px;
+  width: 426px;
   border-left: 1px solid var(--company-border);
   background: var(--company-surface);
   box-shadow: -12px 0 32px rgb(24 28 40 / 6%);
@@ -2784,14 +2812,16 @@
 .company-work-panel-header {
   position: relative;
   display: flex;
-  height: 64px;
+  height: 88px;
   flex: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 36px;
 }
 
 .company-panel-collapse {
   position: absolute;
+  top: 36px;
   left: 20px;
   display: grid;
   width: 28px;
@@ -2811,9 +2841,9 @@
 
 .company-work-tabs {
   display: grid;
-  grid-template-columns: 60px 56px 56px;
-  width: 176px;
-  height: 28px;
+  grid-template-columns: repeat(3, 1fr);
+  width: 222px;
+  height: 32px;
   padding: 2px;
   border-radius: 8px;
   background: var(--company-surface-subtle);
@@ -2842,11 +2872,12 @@
   padding: 0 24px 10px;
 }
 
-.company-work-summary button {
+.company-work-summary article {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
+  min-height: 62px;
   padding: 8px 10px;
   border: 0;
   border-radius: 8px;
@@ -3072,11 +3103,11 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(520px, 760px) 392px;
-  gap: 46px;
+  grid-template-columns: minmax(0, 721px) 325px;
+  gap: 83px;
   align-items: stretch;
-  justify-content: center;
-  padding: 82px 40px 66px;
+  justify-content: start;
+  padding: 84px 47px 37px 77px;
   background: var(--company-canvas);
 }
 
@@ -3109,7 +3140,7 @@
 .company-office-metric {
   display: flex;
   min-width: 0;
-  min-height: 74px;
+  min-height: 53px;
   flex-direction: column;
   border-bottom: 1px solid var(--company-border);
 }
@@ -3141,13 +3172,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 28px;
+  margin-top: 36px;
 }
 
 .company-office-summary {
   grid-column: 1 / -1;
   display: grid;
-  height: 86px;
+  height: 80px;
   grid-template-columns: repeat(3, 1fr);
   margin-top: 10px;
   border-radius: 12px;
@@ -3169,7 +3200,7 @@
 
 .company-office-conversation {
   grid-column: 1 / -1;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .company-office-conversation header,
@@ -3200,20 +3231,171 @@
 
 .company-office-end {
   grid-column: 1 / -1;
-  margin-top: 68px;
+  margin-top: 55px;
   text-align: center;
+}
+
+/* Marvis-style settings dialog. The generic settings controls remain the
+   source of truth; this layer only gives the Company entry the same centered,
+   reversible configuration flow as the reference product. */
+[data-component="dialog"]:has(.company-settings-dialog) [data-slot="dialog-container"] {
+  width: min(calc(100vw - 32px), 646px);
+  height: min(calc(100vh - 32px), 486px);
+}
+
+[data-component="dialog-overlay"]:has(+ [data-component="dialog"] .company-settings-dialog),
+[data-component="dialog-stack"]:has(.company-settings-dialog) [data-component="dialog-overlay"] {
+  background: rgb(21 23 29 / 28%);
+  backdrop-filter: blur(1.5px);
+}
+
+.company-settings-dialog {
+  --company-surface: var(--surface-base, #ffffff);
+  --company-border: var(--border-base, #e4e4e8);
+  --company-text-faint: var(--text-weak, #9698a0);
+
+  position: relative;
+  overflow: hidden !important;
+  border: 1px solid var(--company-border);
+  border-radius: 16px !important;
+  background: var(--company-surface) !important;
+  box-shadow: 0 24px 70px rgb(17 20 28 / 20%) !important;
+}
+
+.company-settings-dialog > [data-slot="dialog-header"] {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  min-height: 50px;
+  padding: 12px 16px !important;
+  border-bottom: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.company-settings-dialog > [data-slot="dialog-header"] > [data-slot="dialog-title"] {
+  width: 134px;
+}
+
+.company-settings-dialog > [data-slot="dialog-header"] > [data-slot="dialog-close-button"] {
+  pointer-events: auto;
+}
+
+.company-settings-dialog > [data-slot="dialog-body"] {
+  height: 100%;
+  min-height: 0;
+}
+
+.company-settings-dialog [data-component="tabs"] {
+  background: var(--company-surface);
+}
+
+.company-settings-dialog [data-slot="tabs-list"] {
+  width: 166px !important;
+  min-width: 166px !important;
+  padding: 50px 10px 10px !important;
+  background: #fafafa !important;
+  border-right-color: var(--company-border) !important;
+}
+
+.company-settings-dialog [data-slot="tabs-trigger-wrapper"] {
+  height: 34px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+}
+
+.company-settings-dialog [data-slot="tabs-trigger"] {
+  gap: 9px !important;
+}
+
+.company-settings-dialog [data-slot="tabs-section-title"] {
+  padding-left: 8px !important;
+  color: var(--company-text-faint) !important;
+  font-size: 10px !important;
+}
+
+.company-settings-dialog [data-slot="tabs-content"] {
+  background: #fbfbfc !important;
+}
+
+.company-settings-dialog .company-ready {
+  min-height: 100%;
+  gap: 18px;
+  padding: 66px 28px 28px;
+  overflow-y: auto;
+}
+
+.company-settings-dialog .company-ready-header {
+  gap: 12px;
+}
+
+.company-settings-dialog .company-ready-header h1 {
+  font-size: 28px;
+  line-height: 1.08;
+  white-space: nowrap;
+}
+
+.company-settings-dialog .company-ready-header p {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.company-settings-dialog .company-ready-eyebrow {
+  margin-bottom: 4px;
+  font-size: 9px;
+}
+
+.company-settings-dialog .company-ready-status {
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+.company-settings-dialog .company-ready-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.company-settings-dialog .company-ready-board,
+.company-settings-dialog .company-ready-start,
+.company-settings-dialog .company-ready-capability {
+  padding: 16px;
+}
+
+.company-settings-dialog .company-ready-board h2,
+.company-settings-dialog .company-ready-start h2 {
+  font-size: 17px;
+}
+
+.company-settings-dialog .company-ready-board-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.company-settings-dialog .company-ready-member {
+  gap: 3px;
+  padding: 10px;
+}
+
+.company-settings-dialog .company-ready-member h3 {
+  font-size: 13px;
+}
+
+.company-settings-dialog .company-ready-member p {
+  font-size: 10px;
 }
 
 @media (max-width: 1180px) {
   .company-workspace {
-    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-columns: 168px minmax(0, 1fr);
   }
 
   .company-thread {
     position: fixed;
     inset: 0 0 0 auto;
     z-index: 50;
-    width: 310px;
+    width: 426px;
   }
 
   .company-office {
@@ -3234,7 +3416,7 @@
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 65;
-    width: 120px;
+    width: 168px;
     transform: translateX(-100%);
     box-shadow: 18px 0 48px rgb(24 28 40 / 16%);
     transition: transform 180ms ease;
@@ -3244,15 +3426,84 @@
     transform: translateX(0);
   }
 
+  .company-thread {
+    width: 100vw;
+    max-width: 426px;
+  }
+
+  .company-panel-collapse {
+    top: 54px;
+    left: 14px;
+  }
+
+  .company-conversation-header {
+    padding-inline: 54px;
+  }
+
+  .company-board {
+    padding-inline: 14px;
+  }
+
+  .company-board-stage {
+    min-height: 420px;
+  }
+
+  .company-board-member {
+    width: 88px;
+  }
+
+  .company-board-member[data-slot="0"] {
+    top: 12px;
+    left: calc(50% - 44px);
+  }
+
+  .company-board-member[data-slot="1"],
+  .company-board-member[data-slot="2"] {
+    top: auto;
+    bottom: 18px;
+  }
+
+  .company-board-member[data-slot="1"] {
+    left: 18px;
+  }
+
+  .company-board-member[data-slot="2"] {
+    right: 18px;
+  }
+
+  .company-board-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .company-board-agenda {
+    top: 52%;
+    width: calc(100% - 28px);
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .company-composer {
+    width: calc(100% - 28px);
+    margin-bottom: 22px;
+  }
+
   .company-mobile-scrim {
     inset: 0;
   }
 
   .company-office {
     grid-template-columns: 1fr;
+    align-content: start;
+    padding: 64px 20px 32px;
+    overflow-y: auto;
   }
 
   .company-office-stage {
     min-height: 360px;
+  }
+
+  .company-office > h1 {
+    top: 22px;
   }
 }

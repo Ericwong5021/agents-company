@@ -39,7 +39,10 @@ export type ConversationStore = {
   /** Switch active channel and load its first page of messages */
   setActiveChannel(channelID: ChannelId): Promise<void>
   /** Send a message to the active channel; returns immediately after 202 */
-  sendMessage(body: string, opts?: { reply_to?: string; referenced_thread_id?: ConversationThreadId; mentions?: Array<ConversationMention> }): Promise<MessageAccepted>
+  sendMessage(
+    body: string,
+    opts?: { reply_to?: string; referenced_thread_id?: ConversationThreadId; mentions?: Array<ConversationMention> },
+  ): Promise<MessageAccepted>
   /** Load older messages for the active channel (cursor-based before) */
   pageMessages(limit?: number): Promise<void>
   /** Open a thread and load its first page of entries */
@@ -143,11 +146,13 @@ export function createConversationStore(options: {
     messages = items
     messagesBefore = nextCursor ?? null
     const persistedIDs = new Set(items.map((message) => message.id))
-    const persistedRequests = new Set(items.map((message) => message.requestID).filter((id): id is string => Boolean(id)))
+    const persistedRequests = new Set(
+      items.map((message) => message.requestID).filter((id): id is string => Boolean(id)),
+    )
     pendingMessages = pendingMessages.filter(
       (pending) =>
         pending.channelID !== channelID ||
-        (!pending.messageID || !persistedIDs.has(pending.messageID)) && !persistedRequests.has(pending.requestID),
+        ((!pending.messageID || !persistedIDs.has(pending.messageID)) && !persistedRequests.has(pending.requestID)),
     )
   }
 
@@ -224,7 +229,8 @@ export function createConversationStore(options: {
           }
         }
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Conversation refresh failed", message, true)
       }
       publish()
@@ -297,7 +303,8 @@ export function createConversationStore(options: {
 
         clearError()
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to load conversation", message, true)
       }
       publish()
@@ -334,10 +341,16 @@ export function createConversationStore(options: {
           )
           loadingMessages = false
           clearError()
+          const latestThreadID =
+            channels.find((channel) => channel.id === channelID)?.kind === "board"
+              ? messages.find((message) => message.sourceThreadID)?.sourceThreadID
+              : undefined
+          if (latestThreadID) await store.openThread(latestThreadID)
         }
       } catch (err: unknown) {
         if (generation !== messagesGeneration || activeChannelID !== channelID) return
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to load messages", message, true)
         loadingMessages = false
       }
@@ -387,7 +400,8 @@ export function createConversationStore(options: {
 
         return accepted as MessageAccepted
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to send message", message, true)
         sending = false
         publish()
@@ -413,7 +427,9 @@ export function createConversationStore(options: {
         const page = result.data
         if (page) {
           const existingIDs = new Set(messages.map((m) => m.id))
-          const newItems = page.items.filter((item) => !existingIDs.has(item.id)).map((raw) => raw as unknown as ConversationMessageItem)
+          const newItems = page.items
+            .filter((item) => !existingIDs.has(item.id))
+            .map((raw) => raw as unknown as ConversationMessageItem)
           messages = [...messages, ...newItems]
           messagesBefore = page.nextCursor ?? null
         } else {
@@ -421,7 +437,8 @@ export function createConversationStore(options: {
         }
         clearError()
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to load more messages", message, true)
       }
       publish()
@@ -454,7 +471,8 @@ export function createConversationStore(options: {
         clearError()
       } catch (err: unknown) {
         if (generation !== threadGeneration) return
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to load thread", message, true)
       }
       publish()
@@ -486,7 +504,8 @@ export function createConversationStore(options: {
         }
         clearError()
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to load more thread entries", message, true)
       }
       publish()
@@ -510,7 +529,8 @@ export function createConversationStore(options: {
         return result.data
       } catch (err: unknown) {
         if (generation === threadGeneration && thread?.id === threadID) {
-          const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+          const message =
+            err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
           setError("Failed to load thread evidence", message, true)
         }
         throw err
@@ -537,7 +557,8 @@ export function createConversationStore(options: {
           publish()
         }
       } catch (err: unknown) {
-        const message = err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
+        const message =
+          err && typeof err === "object" && "name" in err ? String((err as { name: string }).name) : String(err)
         setError("Failed to interrupt thread", message, false)
         publish()
         throw err

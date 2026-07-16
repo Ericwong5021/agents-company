@@ -42,6 +42,7 @@ export function ChannelSidebar(props: {
   loading: Accessor<boolean>
   onSelect: (channelID: string) => void
   onNewConversation: () => void
+  onOpenProject: () => void
   onOpenOffice: () => void
   onOpenSettings: () => void
 }) {
@@ -83,11 +84,11 @@ export function ChannelSidebar(props: {
           <Icon name="new-session" size="small" />
           <span>新建对话</span>
         </button>
-        <button type="button" class="company-nav-item" aria-disabled="true">
+        <button type="button" class="company-nav-item" aria-disabled="true" disabled title="自动任务将在后续版本开放">
           <Icon name="task" size="small" />
           <span>自动任务</span>
         </button>
-        <button type="button" class="company-nav-item" aria-disabled="true">
+        <button type="button" class="company-nav-item" aria-disabled="true" disabled title="技能广场将在后续版本开放">
           <Icon name="brain" size="small" />
           <span>技能广场</span>
         </button>
@@ -97,7 +98,13 @@ export function ChannelSidebar(props: {
       <nav class="company-primary-nav" aria-label="本地知识库">
         <For each={KNOWLEDGE_NAV}>
           {(item) => (
-            <button type="button" class="company-nav-item" aria-disabled="true">
+            <button
+              type="button"
+              class="company-nav-item"
+              aria-disabled="true"
+              disabled
+              title={`${item.label}将在后续版本开放`}
+            >
               <Icon name={item.icon} size="small" />
               <span>{item.label}</span>
             </button>
@@ -121,6 +128,19 @@ export function ChannelSidebar(props: {
           {(group) => (
             <section class="company-channel-section" aria-label={language.t(group.labelKey)}>
               <div class="company-channel-list">
+                <Show when={group.kind === "project"}>
+                  <button
+                    type="button"
+                    class="company-channel company-project-launcher"
+                    title="打开完整项目、会话、终端与文件工作台"
+                    onClick={props.onOpenProject}
+                  >
+                    <Icon name="folder" size="small" />
+                    <span class="company-channel-copy">
+                      <span class="company-channel-name">项目工作台</span>
+                    </span>
+                  </button>
+                </Show>
                 <For each={visible(group.kind)}>
                   {(channel) => (
                     <button

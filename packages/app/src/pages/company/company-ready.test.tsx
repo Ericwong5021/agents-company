@@ -48,11 +48,17 @@ describe("CompanyReady", () => {
     expect(snapshot.company.approval_policy.preset).toBe("balanced")
     expect(snapshot.company.board).toHaveLength(3)
     expect(snapshot.start_suggestion.kind).toBe("bootstrap_complete")
-    expect(component).toContain("data-capability=\"board-messages-disabled\"")
+    expect(component).toContain('data-capability="board-messages-disabled"')
     expect(component).not.toContain("company-channels")
     expect(component).not.toContain("company-composer")
     expect(component).not.toContain("company-thread")
     expect(component).not.toContain("company-approval")
     expect(component).not.toContain("company-delivery")
+  })
+
+  test("opens the real board when the settings dialog supplies the action", () => {
+    expect(component).toContain("onOpenBoard?: () => void")
+    expect(component).toContain("disabled={!props.onOpenBoard}")
+    expect(component).toContain("onClick={props.onOpenBoard}")
   })
 })

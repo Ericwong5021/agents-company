@@ -21,6 +21,12 @@ describe("Company Workspace visual contract", () => {
     expect(workspace).toContain(".company-channels-wrap.mobile-open > .company-channels")
   })
 
+  test("pins the approved desktop shell and Marvis settings geometry", () => {
+    expect(workspace).toContain("grid-template-columns: 168px minmax(560px, 1fr) 426px")
+    expect(workspace).toContain("width: min(calc(100vw - 32px), 646px)")
+    expect(workspace).toContain("height: min(calc(100vh - 32px), 486px)")
+  })
+
   test("styles every M2 state and metadata affordance explicitly", () => {
     const classes = [
       "company-channel-empty",
@@ -33,6 +39,7 @@ describe("Company Workspace visual contract", () => {
       "company-message-dri",
       "company-message-pending",
       "company-message-signal",
+      "company-mobile-channels-toggle",
       "company-sidebar-loading",
       "company-source-button",
       "company-thread-empty",

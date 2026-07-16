@@ -1,6 +1,6 @@
 # Agent Company 文档导航
 
-> 最近清理：2026-07-15
+> 最近清理：2026-07-17
 
 本文档目录采用“一个主题、一个事实源”的原则。阅读或修改前先确认文档层级，避免把历史计划当成当前产品定义。
 
@@ -32,6 +32,7 @@
 
 ## 组件与历史文档
 
+- [Marvis 视觉复刻设计源与验收](design/README.md)：记录 Pencil、Figma 和同视口 QA 证据；它是实现参考，不覆盖产品宪法或 PRD。
 - [Autonomous-Bidding PRD](product-design/bidding-prd.md) 与[技术文档](product-design/bidding-technical-document.md)描述群聊内部的发言调度组件。它是 Thread/群聊的实现机制之一，不定义整个产品的信息架构。
 - [M1 Company Bootstrap 实施计划](compose/plans/2026-07-13-m1-company-bootstrap.md)记录 M1 的文件级实现、验证与恢复要求；当前验收状态以[实施计划](product-design/implementation-plan.md)为准。
 - [M2 真实 IM、董事会与高信号 Thread 实施计划](compose/plans/2026-07-14-m2-real-im-board.md)记录 M2 的领域契约、Runtime 适配、恢复策略、共享 WebUI/TUI 接线和纵向 Gate；M2 已于 2026-07-15 关闭，审查发现、修复与验证证据见 [M2 关闭报告](compose/reports/2026-07-15-m2-real-im-board.md)。

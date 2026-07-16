@@ -19,7 +19,7 @@ describe("ChannelSidebar", () => {
     // and absence of any onClick that creates a channel.
     expect(component).not.toContain("company-channel-create")
     expect(component).not.toContain("createChannel")
-    expect(component).not.toContain("aria-label=\"新建频道\"")
+    expect(component).not.toContain('aria-label="新建频道"')
   })
 
   test("renders an empty group placeholder instead of faking channels", () => {
@@ -29,5 +29,17 @@ describe("ChannelSidebar", () => {
   test("channels come from a snapshot accessor, not a hardcoded list", () => {
     expect(component).toContain("props.channels")
     expect(component).not.toContain("pre-public-webui")
+  })
+
+  test("links the Marvis shell to the real project workspace", () => {
+    expect(component).toContain("onOpenProject: () => void")
+    expect(component).toContain("onClick={props.onOpenProject}")
+    expect(component).toContain("项目工作台")
+  })
+
+  test("marks future surfaces as unavailable instead of rendering no-op controls", () => {
+    expect(component).toContain("自动任务将在后续版本开放")
+    expect(component).toContain("技能广场将在后续版本开放")
+    expect(component).toContain("disabled")
   })
 })
