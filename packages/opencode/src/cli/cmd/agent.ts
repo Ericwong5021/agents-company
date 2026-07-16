@@ -11,18 +11,11 @@ import { Filesystem } from "../../util"
 import matter from "gray-matter"
 import { Instance } from "../../project/instance"
 import { EOL } from "os"
-import { HermesProfileCompiler } from "../../runtime/hermes/compiler"
-import { FileBindingStore } from "../../runtime/hermes/binding-store"
-import type { AgentProfile } from "../../runtime/interface"
 import type { Argv } from "yargs"
 
 type AgentMode = "all" | "primary" | "subagent"
 
 const AVAILABLE_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "webfetch", "actor", "task"]
-
-const HERMES_BINDING_STORE_PATH = ".agentcompany/runtime/hermes/bindings.json"
-
-const HERMES_TOOLS: string[] = ["read", "edit", "bash", "grep", "glob", "websearch", "webfetch"]
 
 const AgentCreateCommand = cmd({
   command: "create",
@@ -54,11 +47,6 @@ const AgentCreateCommand = cmd({
       .option("role", {
         type: "string",
         describe: "role description (e.g. 'Chief Executive Officer')",
-      })
-      .option("hermes", {
-        type: "boolean",
-        describe: "also compile to a Hermes profile after creation",
-        default: false,
       }),
   async handler(args) {
     await Instance.provide({
@@ -195,39 +183,6 @@ const AgentCreateCommand = cmd({
         }
 
         await Filesystem.write(filePath, content)
-
-        // Optionally compile to Hermes profile.
-        if (args.hermes) {
-          const spinner2 = prompts.spinner()
-          spinner2.start("Compiling to Hermes profile...")
-          try {
-            const hermesConfig = {
-              commandTemplate: "hermes -p <profileName> -z <prompt>",
-              defaultTimeout: 300_000,
-              profilePrefix: "agentcompany",
-              bindingStorePath: HERMES_BINDING_STORE_PATH,
-              cloneModePreferred: true,
-            }
-            const bindingStore = new FileBindingStore(HERMES_BINDING_STORE_PATH)
-            const compiler = new HermesProfileCompiler(hermesConfig, bindingStore, process.cwd())
-
-            const agentId = generated.identifier
-            const agentProfile: AgentProfile = {
-              id: agentId,
-              name: generated.identifier,
-              role: args.role ?? "General-purpose agent",
-              description: args.role ?? generated.whenToUse,
-              persona: generated.systemPrompt,
-              tools: selectedTools.filter((t) => HERMES_TOOLS.includes(t)),
-              model: model ? `${model.providerID}/${model.modelID}` : undefined,
-            }
-
-            const binding = await compiler.compile(agentId, agentProfile)
-            spinner2.stop(`Compiled to Hermes profile: ${binding.profileName}`)
-          } catch (error) {
-            spinner2.stop(`Hermes compilation failed: ${error instanceof Error ? error.message : String(error)}`, 1)
-          }
-        }
 
         if (isFullyNonInteractive) {
           console.log(filePath)

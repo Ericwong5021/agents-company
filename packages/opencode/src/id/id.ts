@@ -19,6 +19,8 @@ const prefixes = {
   companyProject: "cprj",
   companyPlan: "cpln",
   companyWorkItem: "cwi",
+  projectCharter: "cchr",
+  worktreeRun: "wrun",
   artifact: "art",
   gate: "gate",
   localCredential: "lcr",
@@ -28,6 +30,11 @@ const prefixes = {
   channelMessage: "cmsg",
   conversationRun: "crun",
   signalProjection: "spr",
+  agentRun: "arun",
+  agentRunEvent: "arev",
+  executionMessage: "exmsg",
+  runtimeHome: "rhome",
+  skillSnapshot: "ssnap",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {

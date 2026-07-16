@@ -12,7 +12,7 @@ import { HermesProfileCompiler } from "./hermes/compiler"
 import { HermesRuntimeAdapter } from "./hermes/adapter"
 import { FileBindingStore } from "./hermes/binding-store"
 import { RoundtableOrchestrator, runStandardRoundtable } from "./roundtable"
-import type { AgentProfile } from "./interface"
+import type { AgentProfile } from "./legacy-interface"
 import type { HermesRuntimeConfig } from "./hermes/types"
 
 // Example configuration

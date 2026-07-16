@@ -1,5 +1,5 @@
 import { z } from "zod"
-import type { RuntimeBinding } from "../interface"
+import type { RuntimeBinding } from "../legacy-interface"
 
 // HermesRuntimeBinding - Extended binding with Hermes-specific metadata
 export const HermesRuntimeBinding = z.object({

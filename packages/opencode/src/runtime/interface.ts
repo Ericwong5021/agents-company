@@ -1,114 +1,103 @@
 import { z } from "zod"
 
 // ---------------------------------------------------------------------------
-// Compiler version — bumped when the hash algorithm or mapping logic changes.
-// Every RuntimeCompiler MUST incorporate this into compiledHash.
+// AgentCompany runtime contract
 // ---------------------------------------------------------------------------
-export const RUNTIME_COMPILER_VERSION = "0.1.0"
 
-// ---------------------------------------------------------------------------
-// AgentProfile — the uniform input contract for all runtime compilers.
-// AgentCompany owns this type. Each runtime compiler receives it as-is.
-// ---------------------------------------------------------------------------
-export interface AgentProfile {
-  id: string
-  name: string
-  description?: string
-  role?: string
+export const RuntimeID = z.enum(["pi", "codex", "claude-code"])
+export type RuntimeID = z.infer<typeof RuntimeID>
 
-  /** Stable persona written into SOUL.md / equivalent. Per-turn context is NOT stored here. */
-  persona?: string
+export const RuntimeLifecycle = z.enum(["on_demand", "idle_cached"])
+export type RuntimeLifecycle = z.infer<typeof RuntimeLifecycle>
 
-  /** Behavioral instructions (evolvable, separate from identity). */
-  instruct?: string
+export const RuntimePermissionMode = z.enum(["read_only", "workspace_write", "full_access"])
+export type RuntimePermissionMode = z.infer<typeof RuntimePermissionMode>
 
-  /** Tool capabilities the agent is allowed to use. */
-  tools: string[]
-
-  model?: string
-
-  workspace?: {
-    strategy: "shared-project" | "per-agent" | "per-task-worktree"
-    /** Absolute path – MUST exist before compile. */
-    cwd?: string
-  }
-
-  responsibilities?: string[]
-  skills?: string[]
-}
-
-// ---------------------------------------------------------------------------
-// AgentRunInput
-// ---------------------------------------------------------------------------
-export const AgentRunInput = z.object({
-  agentId: z.string(),
-  prompt: z.string(),
-  context: z.record(z.string(), z.unknown()).optional(),
-  timeout: z.number().optional(), // milliseconds
-  cwd: z.string().optional(),
+export const RuntimeCapabilities = z.object({
+  resume: z.boolean(),
+  interrupt: z.boolean(),
+  liveInput: z.boolean(),
+  structuredEvents: z.boolean(),
+  toolCalls: z.boolean(),
+  structuredOutput: z.boolean(),
+  workspaceRead: z.boolean(),
+  workspaceWrite: z.boolean(),
+  approvals: z.boolean(),
+  reasoningEffort: z.boolean(),
+  subagents: z.boolean(),
 })
-export type AgentRunInput = z.infer<typeof AgentRunInput>
+export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilities>
 
-// ---------------------------------------------------------------------------
-// AgentRunOutput — generic output for ANY runtime backend.
-// - rawStdout  = unmodified process stdout
-// - rawStderr  = unmodified process stderr (optional if runtime doesn't capture it)
-// - content    = semantically meaningful response (may equal rawStdout for simple
-//   runtimes, or a parsed/filtered subset for richer ones)
-// - runtime    = discriminator string (e.g. "hermes", "claude-code", "openclaw")
-// ---------------------------------------------------------------------------
-export const AgentRunOutput = z.object({
-  agentId: z.string(),
-  runtime: z.string(),
+export const RuntimeAvailability = z.object({
+  runtime: RuntimeID,
+  available: z.boolean(),
+  version: z.string().optional(),
+  authenticated: z.boolean().optional(),
+  reason: z.string().optional(),
+})
+export type RuntimeAvailability = z.infer<typeof RuntimeAvailability>
+
+export const AgentRunSpec = z.object({
+  runID: z.string(),
+  agentID: z.string(),
+  runtime: RuntimeID,
+  lifecycle: RuntimeLifecycle.default("on_demand"),
+  permissionMode: RuntimePermissionMode.default("workspace_write"),
+  cwd: z.string().min(1),
+  runtimeHome: z.string().min(1),
+  prompt: z.string().min(1),
+  systemPrompt: z.string().default(""),
+  model: z.string().min(1).optional(),
+  reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]).optional(),
+  resumeSessionID: z.string().min(1).optional(),
+  maxTurns: z.number().int().positive().optional(),
+  role: z.string().optional(),
+  capabilityPacks: z.array(z.string()).default([]),
+  requiredRuntimeCapabilities: z.array(z.keyof(RuntimeCapabilities)).default([]),
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
+  workflowVersion: z.string().optional(),
+})
+export type AgentRunSpec = z.infer<typeof AgentRunSpec>
+
+export const AgentRunEvent = z.object({
+  runID: z.string(),
+  sequence: z.number().int().nonnegative(),
+  type: z.enum(["started", "runtime", "session", "message", "tool", "stderr", "completed", "failed"]),
+  payload: z.record(z.string(), z.unknown()),
+  time: z.number(),
+})
+export type AgentRunEvent = z.infer<typeof AgentRunEvent>
+
+export const AgentRunResult = z.object({
+  runID: z.string(),
+  runtime: RuntimeID,
   content: z.string(),
-  rawStdout: z.string(),
-  rawStderr: z.string().optional(),
   exitCode: z.number(),
+  sessionID: z.string().optional(),
   startedAt: z.number(),
   finishedAt: z.number(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
 })
-export type AgentRunOutput = z.infer<typeof AgentRunOutput>
+export type AgentRunResult = z.infer<typeof AgentRunResult>
 
-// ---------------------------------------------------------------------------
-// RuntimeBinding — metadata linking an AgentCompany agent to a runtime profile.
-// runtimeType discriminates: "hermes", "claude-code", "openclaw", …
-// ---------------------------------------------------------------------------
-export const RuntimeBinding = z.object({
-  agentId: z.string(),
-  runtimeType: z.string(),
-  profileName: z.string(),
-  compiledHash: z.string(),
-  compiledAt: z.number(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+export const RuntimeMessage = z.object({
+  runID: z.string(),
+  content: z.string().min(1),
+  priority: z.enum(["steer", "follow_up"]).default("follow_up"),
 })
-export type RuntimeBinding = z.infer<typeof RuntimeBinding>
+export type RuntimeMessage = z.infer<typeof RuntimeMessage>
 
-// ---------------------------------------------------------------------------
-// RuntimeCompiler — compiles an AgentProfile into a runtime-specific profile
-// (Hermes profile, Claude Code project, etc.).
-// ---------------------------------------------------------------------------
-export interface RuntimeCompiler {
-  readonly runtimeType: string
-  compile(agentId: string, profile: AgentProfile): Promise<RuntimeBinding>
-  isCompiled(agentId: string): Promise<boolean>
-  getBinding(agentId: string): Promise<RuntimeBinding | null>
+export interface AgentRunHandle {
+  readonly completion: Promise<AgentRunResult>
+  interrupt(): void
 }
 
-// ---------------------------------------------------------------------------
-// RuntimeAdapter — runs one agent turn through a backend runtime.
-// ---------------------------------------------------------------------------
-export interface RuntimeAdapter {
-  readonly runtimeType: string
-  run(input: AgentRunInput): Promise<AgentRunOutput>
-}
-
-// ---------------------------------------------------------------------------
-// RuntimeBindingStore — persistence for RuntimeBinding records.
-// ---------------------------------------------------------------------------
-export interface RuntimeBindingStore {
-  save(binding: RuntimeBinding): Promise<void>
-  get(agentId: string): Promise<RuntimeBinding | null>
-  getAll(): Promise<RuntimeBinding[]>
-  delete(agentId: string): Promise<void>
+export interface AgentRuntimePort {
+  readonly runtime: RuntimeID
+  capabilities(): RuntimeCapabilities
+  discover(): Promise<RuntimeAvailability>
+  start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): AgentRunHandle
+  resume(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): AgentRunHandle
+  deliver(message: RuntimeMessage): Promise<void>
+  interrupt(runID: string): Promise<boolean>
+  stop(runID: string): Promise<boolean>
 }

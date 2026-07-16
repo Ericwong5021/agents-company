@@ -49,6 +49,8 @@ import { Pty } from "@/pty"
 import { Installation } from "@/installation"
 import { ShareNext } from "@/share"
 import { AgentMessage } from "@/agent-message/agent-message"
+import { AgentRun } from "@/agent-run/agent-run"
+import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { AuditEvent } from "@/audit-event/audit-event"
 import { SessionShare } from "@/share"
 import { Npm } from "@/npm"
@@ -151,6 +153,8 @@ export const AppLayer = Layer.suspend(() => {
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
+    AgentRun.defaultLayer,
+    AgentRunSupervisor.layer.pipe(Layer.provide(AgentRun.defaultLayer)),
     AuditEvent.defaultLayer,
     Org.defaultLayer,
     ReputationLayer,

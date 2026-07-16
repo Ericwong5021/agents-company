@@ -6,8 +6,8 @@ import type {
   RuntimeBinding,
   RuntimeCompiler,
   RuntimeBindingStore,
-} from "../interface"
-import { RUNTIME_COMPILER_VERSION } from "../interface"
+} from "../legacy-interface"
+import { RUNTIME_COMPILER_VERSION } from "../legacy-interface"
 import { HermesRuntimeError, TOOLSET_MAPPING } from "./types"
 import type { HermesRuntimeConfig, HermesRuntimeBinding } from "./types"
 

@@ -1,4 +1,4 @@
-import type { RuntimeAdapter } from "./interface"
+import type { RuntimeAdapter } from "./legacy-interface"
 
 // ---------------------------------------------------------------------------
 // RoundtableMessage — an agent's single utterance in a roundtable.

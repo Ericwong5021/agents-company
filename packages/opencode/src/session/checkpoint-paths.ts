@@ -34,10 +34,23 @@ export function memoryPath(projectID: ProjectID): string {
 
 /**
  * Root directory for a company agent at `<data>/workspace/agents/<aid>/`.
- * Houses SOUL.md, settings.json, MEMORY.md, and per-project memory.
+ * The root separates private identity, professional capabilities, and the
+ * profile that is safe to expose to other agents.
  */
 export function agentDir(agentID: CompanyAgentID): string {
   return path.join(Global.Path.data, "workspace", "agents", agentID)
+}
+
+export function agentPrivateDir(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "private")
+}
+
+export function agentProfessionalDir(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "professional")
+}
+
+export function agentPublicDir(agentID: CompanyAgentID): string {
+  return path.join(agentDir(agentID), "public")
 }
 
 /**
@@ -45,7 +58,7 @@ export function agentDir(agentID: CompanyAgentID): string {
  * Contains the raw system_prompt text; edit directly to change agent personality.
  */
 export function agentSoulPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "SOUL.md")
+  return path.join(agentPrivateDir(agentID), "SOUL.md")
 }
 
 /**
@@ -53,7 +66,7 @@ export function agentSoulPath(agentID: CompanyAgentID): string {
  * Stores model override, and will expand to include skills and MCP config.
  */
 export function agentSettingsPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "settings.json")
+  return path.join(agentPrivateDir(agentID), "settings.json")
 }
 
 /**
@@ -61,7 +74,7 @@ export function agentSettingsPath(agentID: CompanyAgentID): string {
  * Cross-project long-term memory scoped to one company agent.
  */
 export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "MEMORY.md")
+  return path.join(agentPrivateDir(agentID), "MEMORY.md")
 }
 
 /**
@@ -69,7 +82,7 @@ export function companyAgentMemoryPath(agentID: CompanyAgentID): string {
  * Evolvable instructions: how to judge, communicate, when to escalate.
  */
 export function agentInstructPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "INSTRUCT.md")
+  return path.join(agentPrivateDir(agentID), "INSTRUCT.md")
 }
 
 /**
@@ -77,7 +90,7 @@ export function agentInstructPath(agentID: CompanyAgentID): string {
  * Colleague relationships: collaboration preferences, communication style, trust level.
  */
 export function agentRelationshipsPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "relationships.md")
+  return path.join(agentPrivateDir(agentID), "relationships.md")
 }
 
 /**
@@ -85,15 +98,15 @@ export function agentRelationshipsPath(agentID: CompanyAgentID): string {
  * Personal task view: current projects, todos, progress.
  */
 export function agentKanbanPath(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "kanban.md")
+  return path.join(agentPrivateDir(agentID), "kanban.md")
 }
 
 /**
- * Agent skills directory at `<data>/workspace/agents/<aid>/skills/`.
- * Private skills: reusable capabilities crystallized from experience.
+ * Agent skills directory at `<data>/workspace/agents/<aid>/professional/skills/`.
+ * Reusable professional capabilities that may be snapshotted into a Runtime Home.
  */
 export function agentSkillsDir(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "skills")
+  return path.join(agentProfessionalDir(agentID), "skills")
 }
 
 /**
@@ -101,7 +114,7 @@ export function agentSkillsDir(agentID: CompanyAgentID): string {
  * Houses per-agent memory files indexed by the FTS5 search system.
  */
 export function agentMemoryDir(agentID: CompanyAgentID): string {
-  return path.join(agentDir(agentID), "memory")
+  return path.join(agentPrivateDir(agentID), "memory")
 }
 
 /**
@@ -110,7 +123,45 @@ export function agentMemoryDir(agentID: CompanyAgentID): string {
  * Captures knowledge this agent accumulated specifically within one project.
  */
 export function companyAgentProjectMemoryPath(agentID: CompanyAgentID, projectID: ProjectID): string {
-  return path.join(agentDir(agentID), "projects", projectID, "MEMORY.md")
+  return path.join(agentPrivateDir(agentID), "projects", projectID, "MEMORY.md")
+}
+
+export function agentPublicProfilePath(agentID: CompanyAgentID): string {
+  return path.join(agentPublicDir(agentID), "PROFILE.md")
+}
+
+export async function migrateAgentHome(agentID: CompanyAgentID): Promise<void> {
+  const root = agentDir(agentID)
+  const privateDir = agentPrivateDir(agentID)
+  const professionalDir = agentProfessionalDir(agentID)
+  await Promise.all([
+    fs.mkdir(privateDir, { recursive: true }),
+    fs.mkdir(professionalDir, { recursive: true }),
+    fs.mkdir(agentPublicDir(agentID), { recursive: true }),
+  ])
+  const move = async (legacy: string, target: string) => {
+    const exists = async (value: string) =>
+      fs.stat(value).then(
+        () => true,
+        () => false,
+      )
+    if (await exists(target)) return
+    if (!(await exists(legacy))) return
+    await fs.rename(legacy, target).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    })
+  }
+  await Promise.all([
+    move(path.join(root, "SOUL.md"), agentSoulPath(agentID)),
+    move(path.join(root, "settings.json"), agentSettingsPath(agentID)),
+    move(path.join(root, "MEMORY.md"), companyAgentMemoryPath(agentID)),
+    move(path.join(root, "INSTRUCT.md"), agentInstructPath(agentID)),
+    move(path.join(root, "relationships.md"), agentRelationshipsPath(agentID)),
+    move(path.join(root, "kanban.md"), agentKanbanPath(agentID)),
+    move(path.join(root, "skills"), agentSkillsDir(agentID)),
+    move(path.join(root, "memory"), agentMemoryDir(agentID)),
+    move(path.join(root, "projects"), path.join(agentPrivateDir(agentID), "projects")),
+  ])
 }
 
 /**

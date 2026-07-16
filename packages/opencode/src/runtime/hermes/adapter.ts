@@ -1,5 +1,5 @@
 import { spawn } from "child_process"
-import type { AgentRunInput, AgentRunOutput, RuntimeAdapter, RuntimeBindingStore } from "../interface"
+import type { AgentRunInput, AgentRunOutput, RuntimeAdapter, RuntimeBindingStore } from "../legacy-interface"
 import { HermesRuntimeError } from "./types"
 import type { HermesRuntimeConfig } from "./types"
 

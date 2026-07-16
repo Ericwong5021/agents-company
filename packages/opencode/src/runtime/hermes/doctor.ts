@@ -3,7 +3,7 @@ import * as path from "path"
 import { execSync } from "child_process"
 import { FileBindingStore } from "./binding-store"
 import type { HermesRuntimeConfig } from "./types"
-import type { RuntimeBinding } from "../interface"
+import type { RuntimeBinding } from "../legacy-interface"
 
 // ---------------------------------------------------------------------------
 // Doctor result types

@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import type { RuntimeBinding, RuntimeBindingStore } from "../interface"
+import type { RuntimeBinding, RuntimeBindingStore } from "../legacy-interface"
 
 export class FileBindingStore implements RuntimeBindingStore {
   private readonly storePath: string

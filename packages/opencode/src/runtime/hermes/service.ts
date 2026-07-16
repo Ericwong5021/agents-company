@@ -1,6 +1,6 @@
 import * as Context from "effect/Context"
 import * as Layer from "effect/Layer"
-import type { RuntimeAdapter, RuntimeCompiler, RuntimeBindingStore } from "../interface"
+import type { RuntimeAdapter, RuntimeCompiler, RuntimeBindingStore } from "../legacy-interface"
 import { HermesProfileCompiler } from "./compiler"
 import { HermesRuntimeAdapter } from "./adapter"
 import { FileBindingStore } from "./binding-store"

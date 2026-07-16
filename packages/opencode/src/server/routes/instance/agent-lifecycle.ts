@@ -15,7 +15,7 @@ import { runRequest } from "./trace"
 // ---------------------------------------------------------------------------
 
 const AgentStartResponse = z.object({
-  agent: CompanyAgent.Info.zod,
+  agent: CompanyAgent.PublicInfo,
   thread: Thread.Info,
 })
 
@@ -25,7 +25,7 @@ const AgentStopResponse = z.object({
 })
 
 const AgentStatusResponse = z.object({
-  agent: CompanyAgent.Info.zod,
+  agent: CompanyAgent.PublicInfo,
   activity: Thread.AgentActivity,
   status: z.enum(["idle", "busy", "paused"]),
 })
@@ -72,6 +72,7 @@ export const AgentLifecycleRoutes = lazy(() =>
           }),
         )
         if (!agent) return c.json({ error: "agent not found" }, 404)
+        if (agent.lifecycle !== "employee") return c.json({ error: "candidate must be promoted before starting" }, 409)
 
         // Check if agent can accept a primary thread
         const canAccept = await runRequest(
@@ -94,7 +95,7 @@ export const AgentLifecycleRoutes = lazy(() =>
           }),
         )
 
-        return c.json({ agent, thread })
+        return c.json({ agent: CompanyAgent.toPublicInfo(agent), thread })
       },
     )
     // -----------------------------------------------------------------------
@@ -197,7 +198,7 @@ export const AgentLifecycleRoutes = lazy(() =>
           }),
         )
 
-        return c.json({ agent, activity, status })
+        return c.json({ agent: CompanyAgent.toPublicInfo(agent), activity, status })
       },
     )
     // -----------------------------------------------------------------------
@@ -234,7 +235,7 @@ export const AgentLifecycleRoutes = lazy(() =>
                     [threadSvc.agentActivity(agent.id), threadSvc.agentStatus(agent.id)],
                     { concurrency: 2 },
                   )
-                  return { agent, activity, status }
+                  return { agent: CompanyAgent.toPublicInfo(agent), activity, status }
                 }),
               ),
               { concurrency: "unbounded" },

@@ -25,6 +25,7 @@ import { GroupSessionRoutes } from "./group-session"
 import { ThreadRoutes } from "./thread"
 import { WorkstationRoutes } from "./workstation"
 import { AgentLifecycleRoutes } from "./agent-lifecycle"
+import { AgentRunRoutes } from "./agent-run"
 import { OrgRoutes } from "./org"
 import { SessionRoutes } from "./session"
 import { PtyRoutes } from "./pty"
@@ -61,6 +62,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
   return app
     .route("/project", ProjectRoutes())
     .route("/company-agent", CompanyAgentRoutes())
+    .route("/agent-run", AgentRunRoutes())
     .route("/company-project", CompanyProjectRoutes())
     .route("/group-session", GroupSessionRoutes())
     .route("/thread", ThreadRoutes())

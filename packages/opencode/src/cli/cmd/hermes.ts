@@ -4,7 +4,7 @@ import { HermesRuntimeAdapter } from "../../runtime/hermes/adapter"
 import { FileBindingStore } from "../../runtime/hermes/binding-store"
 import { runStandardRoundtable } from "../../runtime/roundtable"
 import { runDoctor, formatDoctorReport } from "../../runtime/hermes/doctor"
-import type { AgentProfile } from "../../runtime/interface"
+import type { AgentProfile } from "../../runtime/legacy-interface"
 import type { HermesRuntimeConfig } from "../../runtime/hermes/types"
 import type { Argv } from "yargs"
 

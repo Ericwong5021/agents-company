@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test"
 import * as fs from "fs/promises"
 import * as path from "path"
-import type { AgentProfile, RuntimeAdapter, AgentRunInput } from "../interface"
+import type { AgentProfile, RuntimeAdapter, AgentRunInput } from "../legacy-interface"
 import { HermesProfileCompiler } from "./compiler"
 import { HermesRuntimeAdapter } from "./adapter"
 import { FileBindingStore } from "./binding-store"

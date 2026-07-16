@@ -11,10 +11,19 @@ export { WorkflowRunTable } from "../workflow/workflow.sql"
 export { HistoryFtsTable } from "../history/fts.sql"
 export { AgentMessageTable } from "../agent-message/agent-message.sql"
 export {
+  AgentRunTable,
+  AgentRunEventTable,
+  InternalExecutionMessageTable,
+  RuntimeHomeTable,
+  SkillSnapshotTable,
+} from "../agent-run/agent-run.sql"
+export {
   CompanyProjectTable,
+  CompanyProjectCharterTable,
   CompanyPlanTable,
   CompanyWorkItemTable,
   CompanyWorkItemDependencyTable,
+  CompanyWorktreeRunTable,
   CompanyArtifactTable,
   CompanyApprovalGateTable,
   CompanyProjectEventTable,
