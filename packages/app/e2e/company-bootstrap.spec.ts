@@ -43,7 +43,7 @@ test("enters trusted loopback and completes real M1 bootstrap", async ({ page, r
   await expect(page.getByText("提供商与模型", { exact: true })).toBeVisible()
   await page.getByRole("button", { name: "创建 Company", exact: true }).click()
 
-  await expect(page.getByRole("heading", { name: "Board" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "董事会圆桌会议" })).toBeVisible()
   // M2: the gate server explicitly enables the real conversation capability.
   await expect(page.locator(".company-channels")).toBeVisible()
   await expect(page.locator(".company-composer")).toBeVisible()
