@@ -32,6 +32,7 @@ const env = {
   ),
   AGENTCOMPANY_HOME: home,
   AGENTCOMPANY_DISABLE_MODELS_FETCH: "true",
+  AGENTCOMPANY_MODELS_PATH: path.resolve(app, "../opencode/test/tool/fixtures/models-api.json"),
 }
 
 const child = Bun.spawn({
