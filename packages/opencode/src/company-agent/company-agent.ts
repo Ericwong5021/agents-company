@@ -7,6 +7,10 @@ import { CompanyAgentTable } from "./company-agent.sql"
 import { CompanyAgentID } from "./schema"
 import {
   agentDir,
+  agentPrivateDir,
+  agentProfessionalDir,
+  agentPublicDir,
+  agentPublicProfilePath,
   agentSoulPath,
   agentSettingsPath,
   companyAgentMemoryPath,
@@ -15,6 +19,7 @@ import {
   agentKanbanPath,
   agentSkillsDir,
   agentMemoryDir,
+  migrateAgentHome,
 } from "@/session/checkpoint-paths"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -29,14 +34,17 @@ import { parseFrontMatter, stringifyFrontMatter, type FrontMatter } from "@/work
 
 export const Info = Schema.Struct({
   id: CompanyAgentID,
+  lifecycle: Schema.Literals(["candidate", "employee"]),
   name: Schema.String,
   description: Schema.optional(Schema.String),
+  public_profile: Schema.optional(Schema.String),
   system_prompt: Schema.optional(Schema.String),
   instruct: Schema.optional(Schema.String),
   relationships: Schema.optional(Schema.String),
   kanban: Schema.optional(Schema.String),
   skills: Schema.optional(Schema.Array(Schema.String)),
   model: Schema.optional(Schema.String),
+  preferred_runtime: Schema.String,
   color: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.String),
   org_layer: Schema.optional(Schema.String),
@@ -53,6 +61,45 @@ export const Info = Schema.Struct({
 
 export type Info = Types.DeepMutable<Schema.Schema.Type<typeof Info>>
 
+export const PublicInfo = z.object({
+  id: CompanyAgentID.zod,
+  lifecycle: z.enum(["candidate", "employee"]),
+  name: z.string(),
+  description: z.string().optional(),
+  public_profile: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  model: z.string().optional(),
+  preferred_runtime: z.string(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  org_layer: z.string().optional(),
+  department: z.string().optional(),
+  reports_to: z.string().optional(),
+  responsibilities: z.array(z.string()).optional(),
+  time: z.object({ created: z.number(), updated: z.number() }),
+})
+export type PublicInfo = z.infer<typeof PublicInfo>
+
+export function toPublicInfo(info: Info): PublicInfo {
+  return PublicInfo.parse({
+    id: info.id,
+    lifecycle: info.lifecycle,
+    name: info.name,
+    description: info.description,
+    public_profile: info.public_profile,
+    skills: info.skills,
+    model: info.model,
+    preferred_runtime: info.preferred_runtime,
+    color: info.color,
+    icon: info.icon,
+    org_layer: info.org_layer,
+    department: info.department,
+    reports_to: info.reports_to,
+    responsibilities: info.responsibilities,
+    time: info.time,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Input schemas
 // ---------------------------------------------------------------------------
@@ -63,10 +110,12 @@ export const CreateInput = z.object({
     .min(1)
     .regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with dashes"),
   name: z.string().min(1),
+  lifecycle: z.enum(["candidate", "employee"]).optional(),
   description: z.string().optional(),
   system_prompt: z.string().optional(),
   instruct: z.string().optional(),
   model: z.string().optional(),
+  preferred_runtime: z.enum(["pi", "claude-code", "codex"]).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   org_layer: z.enum(["board", "department", "project", "execution", "tool"]).optional(),
@@ -85,6 +134,7 @@ export const UpdateInput = z.object({
   relationships: z.string().optional(),
   kanban: z.string().optional(),
   model: z.string().optional(),
+  preferred_runtime: z.enum(["pi", "claude-code", "codex"]).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   org_layer: z.enum(["board", "department", "project", "execution", "tool"]).optional(),
@@ -99,8 +149,8 @@ export type UpdateInput = z.infer<typeof UpdateInput>
 // ---------------------------------------------------------------------------
 
 export const Event = {
-  Created: BusEvent.define("company_agent.created", Info.zod),
-  Updated: BusEvent.define("company_agent.updated", Info.zod),
+  Created: BusEvent.define("company_agent.created", PublicInfo),
+  Updated: BusEvent.define("company_agent.updated", PublicInfo),
   Deleted: BusEvent.define("company_agent.deleted", z.object({ id: CompanyAgentID.zod })),
 }
 
@@ -204,8 +254,10 @@ function orgContextFromRow(row: Row): OrgContext | undefined {
 function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
   return {
     id: row.id as CompanyAgentID,
+    lifecycle: row.lifecycle === "candidate" ? "candidate" : "employee",
     name: row.name,
     description: row.description ?? undefined,
+    preferred_runtime: row.preferred_runtime,
     color: row.color ?? undefined,
     icon: row.icon ?? undefined,
     org_layer: row.org_layer ?? undefined,
@@ -238,6 +290,26 @@ async function readFileIfExists(filePath: string): Promise<string | undefined> {
   return readMarkdownBody(filePath)
 }
 
+async function ensurePublicProfile(id: CompanyAgentID, name: string, description?: string, org?: OrgContext): Promise<void> {
+  const profile = Bun.file(agentPublicProfilePath(id))
+  if (await profile.exists()) return
+  await fs.mkdir(agentPublicDir(id), { recursive: true })
+  await Bun.write(
+    agentPublicProfilePath(id),
+    [
+      `# ${name}`,
+      "",
+      description ?? "Agent Company professional agent.",
+      "",
+      "## Public Role",
+      "",
+      `- Organization layer: ${org?.org_layer ?? "execution"}`,
+      `- Department: ${org?.department ?? "Unassigned"}`,
+      `- Responsibilities: ${org?.responsibilities?.join("; ") ?? "To be assigned"}`,
+    ].join("\n") + "\n",
+  )
+}
+
 async function readSkillNames(id: CompanyAgentID): Promise<string[]> {
   const dir = agentSkillsDir(id)
   const exists = await Bun.file(dir).exists()
@@ -251,16 +323,19 @@ async function fromRowWithFiles(row: Row): Promise<Info> {
   const org = orgContextFromRow(row)
   // Validate file bundle on every read — recreates any missing files
   await validateFileBundle(id, row.name, org)
-  const [soul, settings, instruct, relationships, kanban, skills] = await Promise.all([
+  await ensurePublicProfile(id, row.name, row.description ?? undefined, org)
+  const [soul, settings, instruct, relationships, kanban, skills, public_profile] = await Promise.all([
     readSoul(id),
     readSettings(id),
     readFileIfExists(agentInstructPath(id)),
     readFileIfExists(agentRelationshipsPath(id)),
     readFileIfExists(agentKanbanPath(id)),
     readSkillNames(id),
+    readFileIfExists(agentPublicProfilePath(id)),
   ])
   return {
     ...fromRow(row),
+    public_profile,
     system_prompt: soul,
     instruct,
     relationships,
@@ -383,7 +458,12 @@ function generateInstructTemplate(name: string, org: OrgContext): string {
  * Safe to call on every list/get — all writes are idempotent (no-overwrite).
  */
 async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext): Promise<void> {
-  await fs.mkdir(agentDir(id), { recursive: true })
+  await Promise.all([
+    fs.mkdir(agentDir(id), { recursive: true }),
+    fs.mkdir(agentPrivateDir(id), { recursive: true }),
+    fs.mkdir(agentProfessionalDir(id), { recursive: true }),
+    fs.mkdir(agentPublicDir(id), { recursive: true }),
+  ])
 
   // MEMORY.md — create placeholder if absent
   const memPath = companyAgentMemoryPath(id)
@@ -524,6 +604,7 @@ async function initAgentDir(id: CompanyAgentID, name: string, org?: OrgContext):
  * partial corruption or manual deletion.
  */
 async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgContext): Promise<void> {
+  await migrateAgentHome(id)
   const dir = agentDir(id)
   const dirExists = await fs.stat(dir).then(
     (stat) => stat.isDirectory(),
@@ -561,6 +642,9 @@ async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgCon
 
   // Ensure subdirectories exist
   await Promise.all([
+    fs.mkdir(agentPrivateDir(id), { recursive: true }),
+    fs.mkdir(agentProfessionalDir(id), { recursive: true }),
+    fs.mkdir(agentPublicDir(id), { recursive: true }),
     fs.mkdir(agentSkillsDir(id), { recursive: true }),
     fs.mkdir(agentMemoryDir(id), { recursive: true }),
   ])
@@ -571,7 +655,11 @@ async function writeAgentFiles(
   patch: { system_prompt?: string; instruct?: string; relationships?: string; kanban?: string; model?: string },
   org?: OrgContext,
 ): Promise<void> {
-  await fs.mkdir(agentDir(id), { recursive: true })
+  await Promise.all([
+    fs.mkdir(agentPrivateDir(id), { recursive: true }),
+    fs.mkdir(agentProfessionalDir(id), { recursive: true }),
+    fs.mkdir(agentPublicDir(id), { recursive: true }),
+  ])
 
   if (patch.system_prompt !== undefined) {
     await Bun.write(agentSoulPath(id), agentDocument(id, "soul", patch.system_prompt, org))
@@ -606,6 +694,7 @@ export interface Interface {
   readonly get: (id: CompanyAgentID) => Effect.Effect<Info | undefined>
   readonly list: () => Effect.Effect<Info[]>
   readonly update: (input: UpdateInput) => Effect.Effect<Info>
+  readonly promote: (id: CompanyAgentID) => Effect.Effect<Info>
   readonly remove: (id: CompanyAgentID) => Effect.Effect<void>
 }
 
@@ -626,6 +715,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             .insert(CompanyAgentTable)
             .values({
               id: input.id,
+              lifecycle: input.lifecycle ?? "candidate",
               name: input.name,
               description: input.description ?? null,
               color: input.color ?? null,
@@ -634,6 +724,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               department: input.department ?? null,
               reports_to: input.reports_to ?? null,
               responsibilities: input.responsibilities ? JSON.stringify(input.responsibilities) : null,
+              preferred_runtime: input.preferred_runtime ?? "pi",
               time_created: now,
               time_updated: now,
             })
@@ -650,6 +741,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         : undefined
       yield* Effect.promise(async () => {
         await initAgentDir(input.id as CompanyAgentID, input.name, org)
+        await ensurePublicProfile(input.id as CompanyAgentID, input.name, input.description, org)
         await writeAgentFiles(
           input.id as CompanyAgentID,
           {
@@ -671,7 +763,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
-          payload: { type: Event.Created.type, properties: info },
+          payload: { type: Event.Created.type, properties: toPublicInfo(info) },
         }),
       )
       return info
@@ -702,6 +794,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (input.department !== undefined) dbPatch.department = input.department
       if (input.reports_to !== undefined) dbPatch.reports_to = input.reports_to
       if (input.responsibilities !== undefined) dbPatch.responsibilities = JSON.stringify(input.responsibilities)
+      if (input.preferred_runtime !== undefined) dbPatch.preferred_runtime = input.preferred_runtime
 
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
@@ -736,10 +829,40 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       yield* Effect.sync(() =>
         GlobalBus.emit("event", {
           directory: "global",
-          payload: { type: Event.Updated.type, properties: info },
+          payload: { type: Event.Updated.type, properties: toPublicInfo(info) },
         }),
       )
       return info
+    })
+
+    const promote = Effect.fn("CompanyAgent.promote")(function* (id: CompanyAgentID) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) => db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, id)).get()),
+      )
+      if (!row) throw new Error(`Company agent not found: ${id}`)
+      if (row.lifecycle === "employee") return yield* Effect.promise(() => fromRowWithFiles(row))
+      const info = yield* Effect.promise(() => fromRowWithFiles(row))
+      if (!info.public_profile || !info.instruct || !info.system_prompt)
+        throw new Error("Candidate needs a public profile, private SOUL, and instruction document before promotion")
+      const updated = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyAgentTable)
+            .set({ lifecycle: "employee", time_updated: Date.now() })
+            .where(eq(CompanyAgentTable.id, id))
+            .returning()
+            .get(),
+        ),
+      )
+      if (!updated) throw new Error(`Company agent promotion failed: ${id}`)
+      const promoted = yield* Effect.promise(() => fromRowWithFiles(updated))
+      yield* Effect.sync(() =>
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: { type: Event.Updated.type, properties: toPublicInfo(promoted) },
+        }),
+      )
+      return promoted
     })
 
     const remove = Effect.fn("CompanyAgent.remove")(function* (id: CompanyAgentID) {
@@ -756,7 +879,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       )
     })
 
-    return { create, get, list, update, remove }
+    return { create, get, list, update, promote, remove }
   }),
 )
 

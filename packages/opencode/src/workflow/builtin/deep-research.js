@@ -1,5 +1,6 @@
 export const meta = {
   name: 'deep-research',
+  version: '1',
   description: 'Deep research orchestrator — runs parallel web searches, reads the strongest sources, cross-checks each fact with an adversarial jury, and writes a cited report.',
   whenToUse: 'Use when the user wants a thorough, multi-source, fact-checked answer rather than a quick reply. If the request is broad or ambiguous (missing budget, region, use-case, time frame, etc.), ask one or two narrowing questions first, then fold the answers into the question you pass as args.',
   phases: [

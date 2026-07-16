@@ -1,4 +1,4 @@
-import { Context, Deferred, Effect, Exit, Fiber, Layer, Scope } from "effect"
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Scope } from "effect"
 import os from "node:os"
 import { createHash } from "node:crypto"
 import { spawnRef } from "@/actor/spawn-ref"
@@ -19,6 +19,7 @@ import { parseMeta } from "./meta"
 import { evalScript, type HostFn } from "./sandbox"
 import { makeFileHooks, resolveInWorkspace } from "./workspace"
 import { isInlineScript, resolveWorkflowScript } from "./resolve"
+import { validateJSONSchema } from "./schema"
 import {
   WorkflowAgentFailed,
   WorkflowChildFailed,
@@ -30,6 +31,10 @@ import {
 import { WorkflowPersistence, journalKeyBase } from "./persistence"
 import type { RunSummary } from "./persistence"
 import { Log, Lock } from "@/util"
+import { AgentRunSupervisor } from "@/agent-run/supervisor"
+import { CapabilityCatalog } from "@/capability"
+import { CompanyAgent } from "@/company-agent"
+import type { RuntimeCapabilities, RuntimeID, RuntimePermissionMode } from "@/runtime"
 
 const log = Log.create({ service: "workflow.runtime" })
 
@@ -72,6 +77,7 @@ interface RunEntry {
   childActorIDs: Set<string>
   worktrees: Set<string> // worktree directories pending disposition, for cancel cleanup
   childRunIDs: Set<string> // child workflow runIDs, for recursive cancel/reclaim
+  childAgentRunIDs: Set<string>
   name: string
   running: number
   succeeded: number
@@ -140,8 +146,15 @@ interface StartInput {
 /** Options the guest may pass to `agent(prompt, opts?)`. */
 interface AgentOpts {
   agentType?: string
+  role?: string
   companyAgentID?: CompanyAgentID
   tools?: readonly string[]
+  capabilityPacks?: readonly string[]
+  requiredRuntimeCapabilities?: readonly (keyof RuntimeCapabilities)[]
+  runtime?: RuntimeID
+  permissionMode?: RuntimePermissionMode
+  maxTurns?: number
+  workspace?: string
   /** A model reference resolved host-side via Provider.resolveModelRef: either a
    *  "provider/model" literal or a configured tier/group name (e.g. "lite").
    *  Omitted → the run's default model. Unknown group → falls back to the run
@@ -216,6 +229,13 @@ export const layer = Layer.effect(
     const inbox = yield* Inbox.Service
     const worktree = yield* Worktree.Service
     const provider = yield* Provider.Service
+    // Runtime-backed nodes are an additive host capability. Keep both services
+    // optional at layer construction so legacy/third-party workflows that only
+    // use the Actor host do not acquire a new hard dependency. A node that asks
+    // for runtime features fails locally and visibly when the host did not wire
+    // them, while the production defaultLayer always provides both services.
+    const agentRunSupervisor = Option.getOrUndefined(yield* Effect.serviceOption(AgentRunSupervisor.Service))
+    const companyAgents = Option.getOrUndefined(yield* Effect.serviceOption(CompanyAgent.Service))
     // Resolve the Config service handle at layer scope (a legitimate layer dep,
     // satisfied by Config.defaultLayer) so the requirement is discharged here and
     // does NOT leak into start/resume's effect signatures. Only config.get() runs
@@ -355,6 +375,14 @@ export const layer = Layer.effect(
           discard: true,
         })
         entry.worktrees.clear()
+        if (agentRunSupervisor) {
+          yield* Effect.forEach(
+            [...entry.childAgentRunIDs],
+            (runID) => agentRunSupervisor.interrupt(runID).pipe(Effect.ignore),
+            { concurrency: "unbounded", discard: true },
+          )
+        }
+        entry.childAgentRunIDs.clear()
         // Recurse into child workflow RUNS (populated by workflow()). Cancelling the
         // orchestrator tears down the whole tree — a child still "running" here is
         // cancelled via cancelEntry (mutually recursive with reclaim).
@@ -417,6 +445,7 @@ export const layer = Layer.effect(
         childActorIDs: new Set<string>(),
         worktrees: new Set<string>(),
         childRunIDs: new Set<string>(),
+        childAgentRunIDs: new Set<string>(),
         name,
         running: 0,
         succeeded: 0,
@@ -606,6 +635,145 @@ export const layer = Layer.effect(
       // the actor registry stores and the /workflows view surfaces.
       const spawnDescription = (o: AgentOpts) =>
         o.label ? (o.phase ? `[${o.phase}] ${o.label}` : o.label) : o.phase ? `[${o.phase}]` : undefined
+
+      const spawnRuntime = async (
+        prompt: string,
+        o: AgentOpts,
+        resolvedModel: { providerID: ProviderID; modelID: ModelID } | undefined,
+      ) => {
+        entry.running++
+        scheduleFlush(entry)
+        let isolated: { directory: string; branch: string; base: string } | undefined
+        let agentRunID: string | undefined
+        let succeeded = false
+        let failureReason: FailReason = "actor-error"
+        try {
+          if (!agentRunSupervisor) throw new Error("Agent runtime execution service is unavailable")
+          if (o.workspace && o.workspace !== workspaceRoot && !entry.worktrees.has(o.workspace)) {
+            throw new Error("Workflow runtime workspace was not created by this run")
+          }
+          if (o.isolation === "worktree") {
+            const info = await bridge.promise(
+              Effect.gen(function* () {
+                const created = yield* worktree.makeWorktreeInfo()
+                yield* worktree.createFromInfo(created)
+                return created
+              }),
+            )
+            entry.worktrees.add(info.directory)
+            isolated = { ...info, base: await bridge.promise(worktree.head(info.directory)) }
+          }
+          const packs = (o.capabilityPacks ?? []).map((reference) => CapabilityCatalog.resolve(reference))
+          const permissionRank: Record<RuntimePermissionMode, number> = {
+            read_only: 0,
+            workspace_write: 1,
+            full_access: 2,
+          }
+          const packPermission = packs
+            .map((pack) => pack.permissionMode)
+            .sort((left, right) => permissionRank[right] - permissionRank[left])[0] ?? "read_only"
+          const permissionMode = o.permissionMode ?? packPermission
+          if (permissionRank[permissionMode] > permissionRank[packPermission]) {
+            throw new Error(`Workflow node permission ${permissionMode} exceeds its capability packs`)
+          }
+          const companyAgent = o.companyAgentID && companyAgents
+            ? await bridge.promise(companyAgents.get(o.companyAgentID))
+            : undefined
+          const runtime = o.runtime ?? companyAgent?.preferred_runtime ?? (parsed.ok ? parsed.meta.defaultRuntime : undefined) ?? "pi"
+          const started = await bridge.promise(
+            agentRunSupervisor.start({
+              agentID: o.companyAgentID ?? o.role ?? o.agentType ?? "workflow-agent",
+              runtime: runtime === "codex" || runtime === "claude-code" ? runtime : "pi",
+              lifecycle: "on_demand",
+              permissionMode,
+              cwd: o.workspace ?? isolated?.directory ?? workspaceRoot,
+              prompt,
+              systemPrompt: o.role ? `You are the ${o.role} in AgentCompany.` : "You are an AgentCompany workflow agent.",
+              model: resolvedModel ? `${resolvedModel.providerID}/${resolvedModel.modelID}` : undefined,
+              maxTurns: o.maxTurns ?? packs.map((pack) => pack.maxTurns).sort((left, right) => left - right)[0],
+              role: o.role,
+              capabilityPacks: [...(o.capabilityPacks ?? [])],
+              requiredRuntimeCapabilities: [
+                ...new Set([
+                  ...(o.requiredRuntimeCapabilities ?? []),
+                  ...packs.flatMap((pack) => pack.requiredRuntimeCapabilities),
+                ]),
+              ],
+              outputSchema: o.schema,
+              workflowVersion: parsed.ok ? parsed.meta.version ?? "1" : "1",
+              workflowRunID: runID,
+            }),
+          )
+          agentRunID = started.runID
+          entry.childAgentRunIDs.add(started.runID)
+          const timeoutMs = o.timeoutMs ?? packs.map((pack) => pack.timeoutMs).sort((left, right) => left - right)[0] ?? runAgentTimeoutMs
+          let timeout: ReturnType<typeof setTimeout> | undefined
+          const result = await (timeoutMs && timeoutMs > 0
+            ? Promise.race([
+                started.completion,
+                new Promise<typeof STRAGGLER_TIMEOUT>((resolve) => {
+                  timeout = setTimeout(() => resolve(STRAGGLER_TIMEOUT), timeoutMs)
+                }),
+              ]).finally(() => clearTimeout(timeout))
+            : started.completion)
+          if (result === STRAGGLER_TIMEOUT) {
+            failureReason = "timeout"
+            await bridge.promise(agentRunSupervisor.interrupt(started.runID)).catch(() => false)
+            throw new Error(`Agent Run ${started.runID} exceeded ${timeoutMs}ms`)
+          }
+          entry.childAgentRunIDs.delete(started.runID)
+          if (result.exitCode !== 0) throw new Error(`Agent Run ${started.runID} failed`)
+          const value = o.schema
+            ? (() => {
+                try {
+                  return JSON.parse(result.content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")) as unknown
+                } catch {
+                  return null
+                }
+              })()
+            : result.content
+          if (value === null) throw new Error(`Agent Run ${started.runID} did not return structured output`)
+          const schemaErrors = o.schema ? validateJSONSchema(o.schema, value) : []
+          if (schemaErrors.length) {
+            throw new Error(`Agent Run ${started.runID} returned invalid structured output: ${schemaErrors.join("; ")}`)
+          }
+          if (!isolated) {
+            succeeded = true
+            return value
+          }
+          const pristine = isolated.base
+            ? await bridge.promise(worktree.isPristine(isolated.directory, isolated.base)).catch(() => false)
+            : false
+          if (pristine) {
+            await bridge.promise(worktree.remove({ directory: isolated.directory })).catch(() => undefined)
+            entry.worktrees.delete(isolated.directory)
+            succeeded = true
+            return value
+          }
+          const worktreeResult = { branch: isolated.branch, directory: isolated.directory, changed: true }
+          if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+            succeeded = true
+            return { ...value, _worktree: worktreeResult }
+          }
+          succeeded = true
+          return { result: value, _worktree: worktreeResult }
+        } catch (error) {
+          if (isolated) {
+            await bridge.promise(worktree.remove({ directory: isolated.directory })).catch(() => undefined)
+            entry.worktrees.delete(isolated.directory)
+          }
+          publishAgentFailed(o, failureReason, {
+            errorMessage: error instanceof Error ? error.message : String(error),
+          })
+          return null
+        } finally {
+          if (agentRunID) entry.childAgentRunIDs.delete(agentRunID)
+          entry.running--
+          if (succeeded) entry.succeeded++
+          if (!succeeded) entry.failed++
+          scheduleFlush(entry)
+        }
+      }
 
       // Shared-tree spawn (default): the existing behavior. SUBAGENT mode — the
       // worker shares the run's parent session (cheaper, no per-agent session).
@@ -861,6 +1029,9 @@ export const layer = Layer.effect(
       const agent: HostFn = (prompt: unknown, opts?: unknown) => {
         const o = (opts ?? {}) as AgentOpts
         const promptStr = String(prompt)
+        const useRuntime = Boolean(
+          o.runtime || o.role || o.capabilityPacks?.length || o.requiredRuntimeCapabilities?.length,
+        )
         // Isolated agents are never journaled in v1 (their deliverable is a
         // worktree the journal can't reconstruct) — always spawn.
         if (o.isolation !== "worktree") {
@@ -892,8 +1063,6 @@ export const layer = Layer.effect(
                   return null
                 }
                 entry.agentCount++
-                const actor = spawnRef.current
-                if (!actor) throw new Error("Actor service unavailable")
                 // Resolve the guest's model ref host-side AFTER the journal key was
                 // computed above (the key hashes the raw `o.model` ref, NOT the
                 // resolved struct, so resume keys stay stable across config changes).
@@ -901,6 +1070,9 @@ export const layer = Layer.effect(
                 const resolvedModel = await bridge.promise(
                   resolveAgentModel(o.model, input.model, entry.warnedModelRefs),
                 )
+                if (useRuntime) return spawnRuntime(promptStr, o, resolvedModel)
+                const actor = spawnRef.current
+                if (!actor) throw new Error("Actor service unavailable")
                 return spawnShared(actor, promptStr, o, resolvedModel)
               }),
             )
@@ -927,11 +1099,12 @@ export const layer = Layer.effect(
               return null
             }
             entry.agentCount++
-            const actor = spawnRef.current
-            if (!actor) throw new Error("Actor service unavailable")
             // Resolve the guest's model ref host-side (isolated agents aren't
             // journaled, so there's no key to keep stable here). Never-throws.
             const resolvedModel = await bridge.promise(resolveAgentModel(o.model, input.model, entry.warnedModelRefs))
+            if (useRuntime) return spawnRuntime(promptStr, o, resolvedModel)
+            const actor = spawnRef.current
+            if (!actor) throw new Error("Actor service unavailable")
             return spawnIsolated(actor, promptStr, o, resolvedModel)
           }),
         )
@@ -1327,6 +1500,8 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Worktree.defaultLayer),
   Layer.provide(Provider.defaultLayer),
   Layer.provide(Config.defaultLayer),
+  Layer.provide(AgentRunSupervisor.defaultLayer),
+  Layer.provide(CompanyAgent.defaultLayer),
 )
 
 export * as WorkflowRuntime from "./runtime"

@@ -3,6 +3,7 @@ import { ProjectTable } from "../project/project.sql"
 import { ChannelMessageTable } from "../conversation/conversation.sql"
 import { MessageTable, SessionTable } from "../session/session.sql"
 import { CompanyAgentTable } from "../company-agent/company-agent.sql"
+import { AgentRunTable } from "../agent-run/agent-run.sql"
 import { Timestamps } from "../storage/schema.sql"
 import type { ChannelMessageID } from "../conversation/schema"
 import type { GroupContextPolicy, GroupSessionID } from "./schema"
@@ -79,11 +80,13 @@ export const GroupMessageTable = sqliteTable(
     runtime_message_id: text()
       .$type<MessageID>()
       .references(() => MessageTable.id, { onDelete: "set null" }),
+    agent_run_id: text().references(() => AgentRunTable.id, { onDelete: "set null" }),
     ...Timestamps,
   },
   (table) => [
     index("group_message_group_round_idx").on(table.group_session_id, table.round_num),
     uniqueIndex("group_message_group_external_message_idx").on(table.group_session_id, table.external_message_id),
     uniqueIndex("group_message_runtime_message_idx").on(table.runtime_message_id),
+    uniqueIndex("group_message_agent_run_idx").on(table.agent_run_id),
   ],
 )

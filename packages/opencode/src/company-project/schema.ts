@@ -17,7 +17,18 @@ export type ProjectStatus = z.infer<typeof ProjectStatus>
 export const WorkItemStatus = z.enum(["pending", "running", "blocked", "failed", "completed", "cancelled"])
 export type WorkItemStatus = z.infer<typeof WorkItemStatus>
 
-export const GateKind = z.enum(["project_approval", "development_approval"])
+export const DeliveryPolicy = z
+  .object({
+    source_approval_preset: z.string().min(1),
+    allow_workspace_write_after_development_approval: z.boolean(),
+    require_human_merge: z.boolean(),
+    require_clean_worktree: z.boolean(),
+    require_main_branch_verification: z.boolean(),
+  })
+  .strict()
+export type DeliveryPolicy = z.infer<typeof DeliveryPolicy>
+
+export const GateKind = z.enum(["project_approval", "development_approval", "merge_approval"])
 export type GateKind = z.infer<typeof GateKind>
 
 export const GateStatus = z.enum(["pending", "approved", "rejected"])
@@ -43,6 +54,18 @@ export const Project = z.object({
   completed_at: z.number().optional(),
 })
 export type Project = z.infer<typeof Project>
+
+export const ProjectCharter = z.object({
+  project_id: z.string(),
+  scope: z.array(z.string()),
+  success_criteria: z.array(z.string()),
+  constraints: z.array(z.string()),
+  acceptance_criteria: z.array(z.string()),
+  policy: DeliveryPolicy,
+  created_at: z.number(),
+  updated_at: z.number(),
+})
+export type ProjectCharter = z.infer<typeof ProjectCharter>
 
 export const Plan = z.object({
   id: z.string(),
@@ -79,6 +102,43 @@ export const WorkItem = z.object({
 })
 export type WorkItem = z.infer<typeof WorkItem>
 
+export const WorktreeRunStatus = z.enum([
+  "preparing",
+  "ready",
+  "running",
+  "verifying",
+  "awaiting_merge_approval",
+  "approved",
+  "review_rejected",
+  "merged",
+  "failed",
+  "cancelled",
+  "recovery_needed",
+])
+export type WorktreeRunStatus = z.infer<typeof WorktreeRunStatus>
+
+export const WorktreeRun = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  work_item_id: z.string().optional(),
+  agent_run_id: z.string().optional(),
+  status: WorktreeRunStatus,
+  repository_path: z.string(),
+  directory: z.string(),
+  branch: z.string(),
+  base_commit: z.string(),
+  head_commit: z.string().optional(),
+  verification_commands: z.array(z.string()),
+  verification: z.record(z.string(), z.unknown()),
+  review: z.record(z.string(), z.unknown()),
+  merge_gate_id: z.string().optional(),
+  error: z.string().optional(),
+  created_at: z.number(),
+  updated_at: z.number(),
+  merged_at: z.number().optional(),
+})
+export type WorktreeRun = z.infer<typeof WorktreeRun>
+
 export const Artifact = z.object({
   id: z.string(),
   project_id: z.string(),
@@ -101,6 +161,7 @@ export const ApprovalGate = z.object({
   title: z.string(),
   summary: z.string(),
   requested_by_agent_id: z.string().optional(),
+  worktree_run_id: z.string().optional(),
   decision_note: z.string().optional(),
   requested_at: z.number(),
   decided_at: z.number().optional(),

@@ -20,9 +20,14 @@
 export type WorkflowMeta = {
   name: string
   description: string
+  version?: string
   whenToUse?: string
   phases?: { title: string; detail?: string }[]
   model?: string
+  capabilityPacks?: string[]
+  requiredRuntimeCapabilities?: string[]
+  defaultRuntime?: "pi" | "codex" | "claude-code"
+  outputSchema?: Record<string, unknown>
 }
 
 export type ParseResult =

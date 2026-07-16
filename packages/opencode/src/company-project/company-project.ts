@@ -10,12 +10,27 @@ import {
   CompanyApprovalGateTable,
   CompanyArtifactTable,
   CompanyPlanTable,
+  CompanyProjectCharterTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
   CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
+  CompanyWorktreeRunTable,
 } from "./company-project.sql"
-import { ApprovalGate, Artifact, GateKind, Plan, type PlanPhase, Project, type ProjectStatus, WorkItem } from "./schema"
+import {
+  ApprovalGate,
+  Artifact,
+  DeliveryPolicy,
+  GateKind,
+  Plan,
+  Project,
+  ProjectCharter,
+  type PlanPhase,
+  type ProjectStatus,
+  WorkItem,
+  WorktreeRun,
+  type WorktreeRunStatus,
+} from "./schema"
 
 const parseList = (value: string) => JSON.parse(value) as string[]
 const parseRecord = (value: string) => JSON.parse(value) as Record<string, unknown>
@@ -60,8 +75,31 @@ const gateFromRow = (row: typeof CompanyApprovalGateTable.$inferSelect) =>
   ApprovalGate.parse({
     ...row,
     requested_by_agent_id: row.requested_by_agent_id ?? undefined,
+    worktree_run_id: row.worktree_run_id ?? undefined,
     decision_note: row.decision_note ?? undefined,
     decided_at: row.decided_at ?? undefined,
+  })
+const charterFromRow = (row: typeof CompanyProjectCharterTable.$inferSelect) =>
+  ProjectCharter.parse({
+    ...row,
+    scope: parseList(row.scope_json),
+    success_criteria: parseList(row.success_criteria_json),
+    constraints: parseList(row.constraints_json),
+    acceptance_criteria: parseList(row.acceptance_criteria_json),
+    policy: parseRecord(row.policy_json),
+  })
+const worktreeRunFromRow = (row: typeof CompanyWorktreeRunTable.$inferSelect) =>
+  WorktreeRun.parse({
+    ...row,
+    work_item_id: row.work_item_id ?? undefined,
+    agent_run_id: row.agent_run_id ?? undefined,
+    head_commit: row.head_commit ?? undefined,
+    verification_commands: parseList(row.verification_commands_json),
+    verification: parseRecord(row.verification_json),
+    review: parseRecord(row.review_json),
+    merge_gate_id: row.merge_gate_id ?? undefined,
+    error: row.error ?? undefined,
+    merged_at: row.merged_at ?? undefined,
   })
 
 const PROJECT_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
@@ -88,6 +126,15 @@ export interface Interface {
   }) => Effect.Effect<Project>
   readonly get: (id: string) => Effect.Effect<Project | undefined>
   readonly list: () => Effect.Effect<Project[]>
+  readonly createCharter: (input: {
+    project_id: string
+    scope: string[]
+    success_criteria: string[]
+    constraints?: string[]
+    acceptance_criteria: string[]
+    policy?: DeliveryPolicy
+  }) => Effect.Effect<ProjectCharter>
+  readonly getCharter: (project_id: string) => Effect.Effect<ProjectCharter | undefined>
   readonly transition: (input: {
     id: string
     status: ProjectStatus
@@ -122,6 +169,23 @@ export interface Interface {
   readonly blockWorkItem: (input: { id: string; error: string }) => Effect.Effect<WorkItem>
   readonly retryWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly completeWorkItem: (id: string) => Effect.Effect<WorkItem>
+  readonly createWorktreeRun: (input: {
+    project_id: string
+    work_item_id?: string
+    agent_run_id?: string
+  }) => Effect.Effect<WorktreeRun>
+  readonly getWorktreeRun: (id: string) => Effect.Effect<WorktreeRun | undefined>
+  readonly listWorktreeRuns: (project_id: string) => Effect.Effect<WorktreeRun[]>
+  readonly startWorktreeRun: (input: { id: string; agent_run_id?: string }) => Effect.Effect<WorktreeRun>
+  readonly verifyWorktreeRun: (input: { id: string; commands: string[] }) => Effect.Effect<WorktreeRun>
+  readonly requestMergeApproval: (input: {
+    id: string
+    title: string
+    summary: string
+    requested_by_agent_id?: string
+    review?: Record<string, unknown>
+  }) => Effect.Effect<ApprovalGate>
+  readonly mergeWorktreeRun: (id: string) => Effect.Effect<WorktreeRun>
   readonly addArtifact: (input: {
     project_id: string
     work_item_id?: string
@@ -139,6 +203,7 @@ export interface Interface {
     title: string
     summary: string
     requested_by_agent_id?: string
+    worktree_run_id?: string
   }) => Effect.Effect<ApprovalGate>
   readonly resolveGate: (input: {
     id: string
@@ -235,6 +300,67 @@ export const layer = Layer.effect(
       return (yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyProjectTable).orderBy(desc(CompanyProjectTable.updated_at)).all()),
       )).map(projectFromRow)
+    })
+
+    const getCharter = Effect.fn("CompanyProject.getCharter")(function* (project_id: string) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db.select().from(CompanyProjectCharterTable).where(eq(CompanyProjectCharterTable.project_id, project_id)).get(),
+        ),
+      )
+      return row ? charterFromRow(row) : undefined
+    })
+
+    const createCharter = Effect.fn("CompanyProject.createCharter")(function* (input: {
+      project_id: string
+      scope: string[]
+      success_criteria: string[]
+      constraints?: string[]
+      acceptance_criteria: string[]
+      policy?: DeliveryPolicy
+    }) {
+      if (!(yield* get(input.project_id))) throw new Error(`Company project not found: ${input.project_id}`)
+      const now = Date.now()
+      const policy = DeliveryPolicy.parse(
+        input.policy ?? {
+          source_approval_preset: "balanced",
+          allow_workspace_write_after_development_approval: true,
+          require_human_merge: true,
+          require_clean_worktree: true,
+          require_main_branch_verification: true,
+        },
+      )
+      const row = {
+        project_id: input.project_id,
+        scope_json: JSON.stringify(input.scope),
+        success_criteria_json: JSON.stringify(input.success_criteria),
+        constraints_json: JSON.stringify(input.constraints ?? []),
+        acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
+        policy_json: JSON.stringify(policy),
+        created_at: now,
+        updated_at: now,
+      }
+      yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .insert(CompanyProjectCharterTable)
+            .values(row)
+            .onConflictDoUpdate({
+              target: CompanyProjectCharterTable.project_id,
+              set: {
+                scope_json: row.scope_json,
+                success_criteria_json: row.success_criteria_json,
+                constraints_json: row.constraints_json,
+                acceptance_criteria_json: row.acceptance_criteria_json,
+                policy_json: row.policy_json,
+                updated_at: row.updated_at,
+              },
+            })
+            .run(),
+        ),
+      )
+      yield* event(input.project_id, "charter.saved", { policy, scope: input.scope })
+      return (yield* getCharter(input.project_id))!
     })
 
     const setActiveRun = Effect.fn("CompanyProject.setActiveRun")(function* (input: { id: string; run_id?: string }) {
@@ -561,12 +687,15 @@ export const layer = Layer.effect(
       title: string
       summary: string
       requested_by_agent_id?: string
+      worktree_run_id?: string
     }) {
       const current = yield* get(input.project_id)
       if (!current) throw new Error(`Company project not found: ${input.project_id}`)
-      const expected = input.kind === "project_approval" ? "researching" : "planning"
-      if (current.status !== expected)
+      const expected = input.kind === "project_approval" ? "researching" : input.kind === "development_approval" ? "planning" : undefined
+      if (expected && current.status !== expected)
         throw new Error(`${input.kind} cannot be requested while project is ${current.status}`)
+      if (input.kind === "merge_approval" && !input.worktree_run_id)
+        throw new Error("Merge approval must belong to a worktree run")
       const pending = yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -592,16 +721,18 @@ export const layer = Layer.effect(
         title: input.title,
         summary: input.summary,
         requested_by_agent_id: input.requested_by_agent_id ?? null,
+        worktree_run_id: input.worktree_run_id ?? null,
         decision_note: null,
         requested_at: Date.now(),
         decided_at: null,
       }
       yield* Effect.sync(() => Database.use((db) => db.insert(CompanyApprovalGateTable).values(row).run()))
-      yield* transition({
-        id: input.project_id,
-        status: input.kind === "project_approval" ? "awaiting_project_approval" : "awaiting_development_approval",
-        actor_id: input.requested_by_agent_id,
-      })
+      if (input.kind === "project_approval" || input.kind === "development_approval")
+        yield* transition({
+          id: input.project_id,
+          status: input.kind === "project_approval" ? "awaiting_project_approval" : "awaiting_development_approval",
+          actor_id: input.requested_by_agent_id,
+        })
       yield* event(input.project_id, "gate.requested", { gate_id: id, kind: input.kind }, input.requested_by_agent_id)
       return gateFromRow(row)
     })
@@ -639,12 +770,26 @@ export const layer = Layer.effect(
         ),
       )
       if (!updated) throw new Error(`Approval gate ${input.id} was resolved concurrently`)
-      yield* transition({
-        id: gate.project_id,
-        status: input.decision === "reject" ? "rejected" : gate.kind === "project_approval" ? "planning" : "developing",
-        actor_id: "user",
-        reason: input.note,
-      })
+      if (gate.kind === "merge_approval" && gate.worktree_run_id)
+        yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .update(CompanyWorktreeRunTable)
+              .set({
+                status: input.decision === "approve" ? "approved" : "review_rejected",
+                updated_at: decided_at,
+              })
+              .where(eq(CompanyWorktreeRunTable.id, gate.worktree_run_id as string))
+              .run(),
+          ),
+        )
+      if (gate.kind === "project_approval" || gate.kind === "development_approval")
+        yield* transition({
+          id: gate.project_id,
+          status: input.decision === "reject" ? "rejected" : gate.kind === "project_approval" ? "planning" : "developing",
+          actor_id: "user",
+          reason: input.note,
+        })
       yield* event(
         gate.project_id,
         "gate.resolved",
@@ -711,10 +856,335 @@ export const layer = Layer.effect(
       return repo
     })
 
+    const getWorktreeRun = Effect.fn("CompanyProject.getWorktreeRun")(function* (id: string) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) => db.select().from(CompanyWorktreeRunTable).where(eq(CompanyWorktreeRunTable.id, id)).get()),
+      )
+      return row ? worktreeRunFromRow(row) : undefined
+    })
+
+    const listWorktreeRuns = Effect.fn("CompanyProject.listWorktreeRuns")(function* (project_id: string) {
+      return (yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyWorktreeRunTable)
+            .where(eq(CompanyWorktreeRunTable.project_id, project_id))
+            .orderBy(asc(CompanyWorktreeRunTable.created_at))
+            .all(),
+        ),
+      )).map(worktreeRunFromRow)
+    })
+
+    const git = (cwd: string, args: string[]) =>
+      Effect.promise(async () => {
+        const child = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" })
+        const [stdout, stderr, code] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ])
+        return { code, output: `${stdout}\n${stderr}`.trim() }
+      })
+
+    const command = (cwd: string, value: string) =>
+      Effect.promise(async () => {
+        const args = process.platform === "win32" ? ["cmd", "/c", value] : ["/bin/sh", "-lc", value]
+        const child = Bun.spawn(args, { cwd, stdout: "pipe", stderr: "pipe" })
+        const [stdout, stderr, code] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ])
+        return { command: value, code, output: `${stdout}\n${stderr}`.trim().slice(-8000) }
+      })
+
+    const updateWorktreeRun = Effect.fn("CompanyProject.updateWorktreeRun")(function* (input: {
+      id: string
+      status: WorktreeRunStatus
+      agent_run_id?: string
+      head_commit?: string
+      verification_commands?: string[]
+      verification?: Record<string, unknown>
+      review?: Record<string, unknown>
+      merge_gate_id?: string
+      error?: string
+      merged_at?: number
+    }) {
+      if (!(yield* getWorktreeRun(input.id))) throw new Error(`Company worktree run not found: ${input.id}`)
+      yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyWorktreeRunTable)
+            .set({
+              status: input.status,
+              agent_run_id: input.agent_run_id,
+              head_commit: input.head_commit,
+              verification_commands_json: input.verification_commands
+                ? JSON.stringify(input.verification_commands)
+                : undefined,
+              verification_json: input.verification ? JSON.stringify(input.verification) : undefined,
+              review_json: input.review ? JSON.stringify(input.review) : undefined,
+              merge_gate_id: input.merge_gate_id,
+              error: input.error,
+              merged_at: input.merged_at,
+              updated_at: Date.now(),
+            })
+            .where(eq(CompanyWorktreeRunTable.id, input.id))
+            .run(),
+        ),
+      )
+      return (yield* getWorktreeRun(input.id))!
+    })
+
+    const createWorktreeRun = Effect.fn("CompanyProject.createWorktreeRun")(function* (input: {
+      project_id: string
+      work_item_id?: string
+      agent_run_id?: string
+    }) {
+      const project = yield* get(input.project_id)
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
+      const charter = yield* getCharter(input.project_id)
+      if (!charter) throw new Error("Project Charter is required before creating a worktree run")
+      const approved = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ id: CompanyApprovalGateTable.id })
+            .from(CompanyApprovalGateTable)
+            .where(
+              and(
+                eq(CompanyApprovalGateTable.project_id, input.project_id),
+                eq(CompanyApprovalGateTable.kind, "development_approval"),
+                eq(CompanyApprovalGateTable.status, "approved"),
+              ),
+            )
+            .get(),
+        ),
+      )
+      if (!approved || !charter.policy.allow_workspace_write_after_development_approval)
+        throw new Error("Development approval is required before a writable worktree can be created")
+      const repository_path = yield* initRepository(input.project_id)
+      const initial = yield* git(repository_path, ["rev-parse", "HEAD"])
+      if (initial.code !== 0) {
+        const committed = yield* git(repository_path, [
+          "-c",
+          "user.name=AgentCompany",
+          "-c",
+          "user.email=agentcompany@local",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "Initialize Agent Company project",
+        ])
+        if (committed.code !== 0) throw new Error(`Failed to initialize project history: ${committed.output}`)
+      }
+      const base = yield* git(repository_path, ["rev-parse", "HEAD"])
+      if (base.code !== 0) throw new Error(`Failed to resolve project base commit: ${base.output}`)
+      const id = Identifier.ascending("worktreeRun")
+      const directory = path.join(project.output_dir, "worktrees", id)
+      const branch = `agent-company/${id}`
+      const now = Date.now()
+      const row = {
+        id,
+        project_id: input.project_id,
+        work_item_id: input.work_item_id ?? null,
+        agent_run_id: input.agent_run_id ?? null,
+        status: "preparing",
+        repository_path,
+        directory,
+        branch,
+        base_commit: base.output,
+        head_commit: null,
+        verification_commands_json: "[]",
+        verification_json: "{}",
+        review_json: "{}",
+        merge_gate_id: null,
+        error: null,
+        created_at: now,
+        updated_at: now,
+        merged_at: null,
+      }
+      yield* Effect.sync(() => Database.use((db) => db.insert(CompanyWorktreeRunTable).values(row).run()))
+      yield* Effect.promise(() => fs.mkdir(path.dirname(directory), { recursive: true }))
+      const created = yield* git(repository_path, ["worktree", "add", "-b", branch, directory, "main"])
+      if (created.code !== 0) {
+        yield* updateWorktreeRun({ id, status: "failed", error: created.output })
+        throw new Error(`Failed to create project worktree: ${created.output}`)
+      }
+      const ready = yield* updateWorktreeRun({ id, status: "ready" })
+      yield* event(input.project_id, "worktree_run.created", { worktree_run_id: id, branch, directory })
+      return ready
+    })
+
+    const startWorktreeRun = Effect.fn("CompanyProject.startWorktreeRun")(function* (input: {
+      id: string
+      agent_run_id?: string
+    }) {
+      const current = yield* getWorktreeRun(input.id)
+      if (!current) throw new Error(`Company worktree run not found: ${input.id}`)
+      if (current.status !== "ready") throw new Error(`Worktree run ${input.id} is not ready`)
+      const started = yield* updateWorktreeRun({ id: input.id, status: "running", agent_run_id: input.agent_run_id })
+      yield* event(started.project_id, "worktree_run.started", { worktree_run_id: started.id }, started.agent_run_id)
+      return started
+    })
+
+    const verifyWorktreeRun = Effect.fn("CompanyProject.verifyWorktreeRun")(function* (input: {
+      id: string
+      commands: string[]
+    }) {
+      const current = yield* getWorktreeRun(input.id)
+      if (!current) throw new Error(`Company worktree run not found: ${input.id}`)
+      if (current.status !== "running") throw new Error(`Worktree run ${input.id} is not running`)
+      if (!input.commands.length) throw new Error("At least one verification command is required")
+      yield* updateWorktreeRun({ id: input.id, status: "verifying" })
+      const results = yield* Effect.forEach(input.commands, (item) => command(current.directory, item))
+      const failed = results.find((item) => item.code !== 0)
+      if (!failed) {
+        const dirty = yield* git(current.directory, ["status", "--porcelain"])
+        if (dirty.code !== 0) {
+          const failedRun = yield* updateWorktreeRun({
+            id: input.id,
+            status: "failed",
+            verification_commands: input.commands,
+            verification: { passed: false, worktree: results },
+            error: dirty.output,
+          })
+          yield* event(current.project_id, "worktree_run.verification_failed", {
+            worktree_run_id: current.id,
+            error: dirty.output,
+          })
+          return failedRun
+        }
+        if (dirty.output) {
+          const staged = yield* git(current.directory, ["add", "--all"])
+          const committed = staged.code === 0
+            ? yield* git(current.directory, [
+                "-c",
+                "user.name=AgentCompany",
+                "-c",
+                "user.email=agentcompany@local",
+                "commit",
+                "-m",
+                `AgentCompany delivery ${current.work_item_id}`,
+              ])
+            : staged
+          if (committed.code !== 0) {
+            const failedRun = yield* updateWorktreeRun({
+              id: input.id,
+              status: "failed",
+              verification_commands: input.commands,
+              verification: { passed: false, worktree: results },
+              error: committed.output,
+            })
+            yield* event(current.project_id, "worktree_run.verification_failed", {
+              worktree_run_id: current.id,
+              error: committed.output,
+            })
+            return failedRun
+          }
+        }
+      }
+      const head = yield* git(current.directory, ["rev-parse", "HEAD"])
+      if (!failed && head.code === 0) {
+        const verified = yield* updateWorktreeRun({
+          id: input.id,
+          status: "awaiting_merge_approval",
+          head_commit: head.output,
+          verification_commands: input.commands,
+          verification: { passed: true, worktree: results },
+        })
+        yield* event(current.project_id, "worktree_run.verified", { worktree_run_id: current.id, results })
+        return verified
+      }
+      const error = failed ? `${failed.command}\n${failed.output}` : head.output
+      const failedRun = yield* updateWorktreeRun({
+        id: input.id,
+        status: "failed",
+        verification_commands: input.commands,
+        verification: { passed: false, worktree: results },
+        error,
+      })
+      yield* event(current.project_id, "worktree_run.verification_failed", { worktree_run_id: current.id, error })
+      return failedRun
+    })
+
+    const requestMergeApproval = Effect.fn("CompanyProject.requestMergeApproval")(function* (input: {
+      id: string
+      title: string
+      summary: string
+      requested_by_agent_id?: string
+      review?: Record<string, unknown>
+    }) {
+      const current = yield* getWorktreeRun(input.id)
+      if (!current) throw new Error(`Company worktree run not found: ${input.id}`)
+      if (current.status !== "awaiting_merge_approval")
+        throw new Error(`Worktree run ${input.id} is not ready for merge approval`)
+      const gate = yield* requestGate({
+        project_id: current.project_id,
+        kind: "merge_approval",
+        title: input.title,
+        summary: input.summary,
+        requested_by_agent_id: input.requested_by_agent_id,
+        worktree_run_id: input.id,
+      })
+      yield* updateWorktreeRun({
+        id: input.id,
+        status: "awaiting_merge_approval",
+        merge_gate_id: gate.id,
+        review: input.review,
+      })
+      return gate
+    })
+
+    const mergeWorktreeRun = Effect.fn("CompanyProject.mergeWorktreeRun")(function* (id: string) {
+      const current = yield* getWorktreeRun(id)
+      if (!current) throw new Error(`Company worktree run not found: ${id}`)
+      if (current.status !== "approved") throw new Error(`Worktree run ${id} is not approved for merge`)
+      const charter = yield* getCharter(current.project_id)
+      if (!charter) throw new Error("Project Charter is missing")
+      const clean = yield* git(current.directory, ["status", "--porcelain"])
+      if (clean.code !== 0) throw new Error(`Failed to inspect worktree: ${clean.output}`)
+      if (charter.policy.require_clean_worktree && clean.output) {
+        yield* updateWorktreeRun({ id, status: "failed", error: `Worktree has uncommitted changes:\n${clean.output}` })
+        throw new Error(`Worktree has uncommitted changes:\n${clean.output}`)
+      }
+      const merged = yield* git(current.repository_path, ["merge", "--no-ff", "--no-edit", current.branch])
+      if (merged.code !== 0) {
+        yield* updateWorktreeRun({ id, status: "failed", error: merged.output })
+        throw new Error(`Failed to merge worktree branch: ${merged.output}`)
+      }
+      const mainResults = charter.policy.require_main_branch_verification
+        ? yield* Effect.forEach(current.verification_commands, (item) => command(current.repository_path, item))
+        : []
+      const failed = mainResults.find((item) => item.code !== 0)
+      if (failed) {
+        yield* updateWorktreeRun({
+          id,
+          status: "failed",
+          verification: { ...current.verification, main: mainResults },
+          error: `${failed.command}\n${failed.output}`,
+        })
+        throw new Error(`Main branch verification failed: ${failed.command}\n${failed.output}`)
+      }
+      const head = yield* git(current.repository_path, ["rev-parse", "HEAD"])
+      if (head.code !== 0) throw new Error(`Failed to resolve merged commit: ${head.output}`)
+      const completed = yield* updateWorktreeRun({
+        id,
+        status: "merged",
+        head_commit: head.output,
+        verification: { ...current.verification, main: mainResults },
+        merged_at: Date.now(),
+      })
+      yield* event(current.project_id, "worktree_run.merged", { worktree_run_id: id, head_commit: head.output })
+      return completed
+    })
+
     return Service.of({
       create,
       get,
       list,
+      createCharter,
+      getCharter,
       transition,
       setActiveRun,
       createPlan,
@@ -726,6 +1196,13 @@ export const layer = Layer.effect(
       blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error),
       retryWorkItem: (id) => updateWorkItem(id, "pending"),
       completeWorkItem: (id) => updateWorkItem(id, "completed"),
+      createWorktreeRun,
+      getWorktreeRun,
+      listWorktreeRuns,
+      startWorktreeRun,
+      verifyWorktreeRun,
+      requestMergeApproval,
+      mergeWorktreeRun,
       addArtifact,
       listArtifacts,
       requestGate,

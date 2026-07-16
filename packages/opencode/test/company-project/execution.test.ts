@@ -10,12 +10,13 @@ import { Bus } from "../../src/bus"
 import { WorkflowAgentFailed } from "../../src/workflow/events"
 import { Session } from "../../src/session"
 import { SessionID } from "../../src/session/schema"
+import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
 
 afterEach(async () => {
   await Instance.disposeAll()
 })
 
-const base = Layer.mergeAll(makeLayer(), CompanyProject.defaultLayer)
+const base = Layer.mergeAll(makeLayer(AgentRunSupervisor.defaultLayer), CompanyProject.defaultLayer)
 const it = testEffect(Layer.mergeAll(base, CompanyProjectExecution.layer.pipe(Layer.provide(base))))
 
 const report = (title: string) => ({
@@ -158,7 +159,7 @@ describe("CompanyProject autonomous execution", () => {
           yield* llm.pushMatch(
             developer,
             reply().tool("write", {
-              filePath: "package.json",
+              path: "package.json",
               content:
                 JSON.stringify(
                   {
@@ -174,7 +175,7 @@ describe("CompanyProject autonomous execution", () => {
           yield* llm.pushMatch(
             developer,
             reply().tool("write", {
-              filePath: "game.ts",
+              path: "game.ts",
               content:
                 "export function play(choices: string[]) { return choices.join(',') === 'torch,left' ? 'WIN' : 'LOSE' }\nif (import.meta.main) console.log(play(['torch','left']))\n",
             }),
@@ -182,7 +183,7 @@ describe("CompanyProject autonomous execution", () => {
           yield* llm.pushMatch(
             developer,
             reply().tool("write", {
-              filePath: "game.test.ts",
+              path: "game.test.ts",
               content:
                 "import { expect, test } from 'bun:test'\nimport { play } from './game'\ntest('winning path', () => expect(play(['torch','left'])).toBe('WIN'))\ntest('losing path', () => expect(play(['right'])).toBe('LOSE'))\n",
             }),
@@ -190,30 +191,27 @@ describe("CompanyProject autonomous execution", () => {
           yield* llm.pushMatch(
             developer,
             reply().tool("write", {
-              filePath: "README.md",
+              path: "README.md",
               content: "# 微光地牢\n\n运行 `bun run start`，测试 `bun test`。选择火把并向左即可获胜。\n",
             }),
           )
           yield* llm.pushMatch(
             developer,
             reply().tool("bash", {
-              command:
-                "git config user.name AgentCompany && git config user.email agent@local && git add -A && git commit -m 'Playable MVP'",
-              description: "Commit playable MVP",
-              workdir: ".",
+              command: "bun",
+              args: ["test"],
             }),
           )
           yield* llm.textMatch(developer, "MVP implemented and committed")
 
           const qa = match("你是独立 QA。检查当前仓库")
           yield* llm.toolMatch(qa, "bash", {
-            command: "bun run test && bun run start",
-            description: "Test and play MVP",
-            workdir: ".",
+            command: "bun",
+            args: ["run", "test"],
           })
-          yield* llm.pushMatch(
+          yield* llm.textMatch(
             qa,
-            reply().tool("StructuredOutput", {
+            JSON.stringify({
               passed: true,
               summary: "tests and smoke playthrough passed",
               commands: [
@@ -271,6 +269,10 @@ describe("CompanyProject autonomous execution", () => {
           yield* waitFor("awaiting_development_approval")
           const developmentGate = (yield* projects.listGates(started.project.id, "pending"))[0]
           yield* execution.resolveGate({ gate_id: developmentGate.id, decision: "approve" })
+          yield* waitFor("verifying")
+          const mergeGate = (yield* projects.listGates(started.project.id, "pending"))[0]
+          expect(mergeGate.kind).toBe("merge_approval")
+          yield* execution.resolveGate({ gate_id: mergeGate.id, decision: "approve" })
           const completed = yield* waitFor("completed")
           const repo = `${completed.output_dir}/repo`
           expect(yield* Effect.promise(() => Bun.file(`${repo}/.git/HEAD`).exists())).toBe(true)
@@ -282,7 +284,7 @@ describe("CompanyProject autonomous execution", () => {
             (item) => item.kind === "verification_report",
           )
           expect(verification).toBeDefined()
-          expect(JSON.parse(verification!.content!).host.commands[0].exit_code).toBe(0)
+          expect(JSON.parse(verification!.content!).host).toMatchObject({ passed: true, worktree: [{ code: 0 }] })
         }),
         { git: true, config: providerCfg },
       ),

@@ -24,6 +24,22 @@ export const CompanyProjectTable = sqliteTable(
   ],
 )
 
+export const CompanyProjectCharterTable = sqliteTable(
+  "company_project_charter",
+  {
+    project_id: text()
+      .primaryKey()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    scope_json: text().notNull(),
+    success_criteria_json: text().notNull(),
+    constraints_json: text().notNull(),
+    acceptance_criteria_json: text().notNull(),
+    policy_json: text().notNull(),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+  },
+)
+
 export const CompanyPlanTable = sqliteTable(
   "company_plan",
   {
@@ -90,6 +106,36 @@ export const CompanyWorkItemDependencyTable = sqliteTable(
   (table) => [primaryKey({ columns: [table.work_item_id, table.depends_on_id] })],
 )
 
+export const CompanyWorktreeRunTable = sqliteTable(
+  "company_worktree_run",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    agent_run_id: text(),
+    status: text().notNull(),
+    repository_path: text().notNull(),
+    directory: text().notNull(),
+    branch: text().notNull(),
+    base_commit: text().notNull(),
+    head_commit: text(),
+    verification_commands_json: text().notNull(),
+    verification_json: text().notNull(),
+    review_json: text().notNull(),
+    merge_gate_id: text(),
+    error: text(),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+    merged_at: integer(),
+  },
+  (table) => [
+    index("company_worktree_run_project_idx").on(table.project_id, table.status),
+    index("company_worktree_run_work_item_idx").on(table.work_item_id),
+  ],
+)
+
 export const CompanyArtifactTable = sqliteTable(
   "company_artifact",
   {
@@ -124,6 +170,7 @@ export const CompanyApprovalGateTable = sqliteTable(
     title: text().notNull(),
     summary: text().notNull(),
     requested_by_agent_id: text(),
+    worktree_run_id: text().references(() => CompanyWorktreeRunTable.id, { onDelete: "set null" }),
     decision_note: text(),
     requested_at: integer().notNull(),
     decided_at: integer(),

@@ -75,13 +75,15 @@ export const CompanyProjectRoutes = lazy(() =>
           const service = yield* CompanyProject.Service
           const project = yield* service.get(c.req.valid("param").projectID)
           if (!project) return yield* Effect.fail(new Error("Company project not found"))
-          const [plans, work_items, artifacts, gates] = yield* Effect.all([
+          const [plans, work_items, artifacts, gates, charter, worktree_runs] = yield* Effect.all([
             service.listPlans(project.id),
             service.listWorkItems(project.id),
             service.listArtifacts(project.id),
             service.listGates(project.id),
+            service.getCharter(project.id),
+            service.listWorktreeRuns(project.id),
           ])
-          return { project, plans, work_items, artifacts, gates }
+          return { project, charter, plans, work_items, worktree_runs, artifacts, gates }
         }),
     )
     .post(

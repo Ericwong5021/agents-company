@@ -25,6 +25,8 @@ import { Memory } from "@/memory"
 import { Agent, BOARD_DISCUSSION_AGENT_ID } from "@/agent/agent"
 import { Provider } from "@/provider"
 import { LLM } from "@/session/llm"
+import { AgentRun } from "@/agent-run/agent-run"
+import { AgentRunSupervisor } from "@/agent-run/supervisor"
 
 const MEMBER_CONCURRENCY = 3
 
@@ -64,6 +66,7 @@ export const GroupMessage = z.object({
   statusSummary: z.string().optional(),
   externalMessageID: ChannelMessageID.optional(),
   runtimeMessageID: MessageID.zod.optional(),
+  agentRunID: z.string().optional(),
   time: z.object({ created: z.number(), updated: z.number() }),
 })
 export type GroupMessage = z.infer<typeof GroupMessage>
@@ -328,6 +331,7 @@ function insertGroupMessage(input: {
   statusSummary?: string
   externalMessageID?: z.infer<typeof ChannelMessageID>
   runtimeMessageID?: MessageID
+  agentRunID?: string
 }) {
   const now = Date.now()
   const id = Identifier.ascending("message")
@@ -345,6 +349,7 @@ function insertGroupMessage(input: {
         status_summary: input.statusSummary ?? null,
         external_message_id: input.externalMessageID ?? null,
         runtime_message_id: input.runtimeMessageID ?? null,
+        agent_run_id: input.agentRunID ?? null,
         time_created: now,
         time_updated: now,
       })
@@ -382,6 +387,8 @@ type PublicCompanyAgent = {
   description: string
   role: string
   responsibilities: string[]
+  model?: string
+  runtime: "pi" | "claude-code" | "codex"
 }
 
 function loadPublicCompanyAgent(id: CompanyAgentID): PublicCompanyAgent | undefined {
@@ -392,17 +399,22 @@ function loadPublicCompanyAgent(id: CompanyAgentID): PublicCompanyAgent | undefi
         description: CompanyAgentTable.description,
         role: CompanyAgentTable.role_key,
         responsibilities: CompanyAgentTable.responsibilities,
+        model: CompanyAgentTable.model,
+        runtime: CompanyAgentTable.preferred_runtime,
+        lifecycle: CompanyAgentTable.lifecycle,
       })
       .from(CompanyAgentTable)
       .where(eq(CompanyAgentTable.id, id))
       .get(),
   )
-  if (!row) return
+    if (!row || row.lifecycle !== "employee") return
   return {
     name: row.name,
     description: row.description ?? "",
     role: row.role ?? id,
     responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : [],
+    model: row.model ?? undefined,
+    runtime: row.runtime === "claude-code" || row.runtime === "codex" ? row.runtime : "pi",
   }
 }
 
@@ -422,6 +434,7 @@ export const layer: Layer.Layer<
   | Agent.Service
   | Provider.Service
   | LLM.Service
+  | AgentRunSupervisor.Service
 > =
   Layer.effect(
     Service,
@@ -435,8 +448,10 @@ export const layer: Layer.Layer<
       const agentSvc = yield* Agent.Service
       const provider = yield* Provider.Service
       const llmSvc = yield* LLM.Service
+      const agentRunSupervisor = yield* AgentRunSupervisor.Service
       const activeSchedulers = yield* Ref.make(new Set<string>())
       const interruptedSchedulers = yield* Ref.make(new Set<string>())
+      const activeAgentRuns = yield* Ref.make(new Map<string, Set<string>>())
 
       // --- create ---
 
@@ -850,27 +865,93 @@ export const layer: Layer.Layer<
               roundNum: params.roundNum,
             })
 
-            const result = yield* promptSvc.prompt({
-              sessionID: member.sessionID as SessionID,
-              agentID: params.info.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
-              source: "user",
-              parts: [{ type: "text", text: speakerPrompt }],
-            }).pipe(
-              Effect.matchEffect({
-                onSuccess: (msg) =>
-                  Effect.succeed({
-                    content: extractMessageText(msg),
-                    runtimeMessageID: msg.info.id,
-                    statusSummary:
-                      msg.info.role === "assistant" && (msg.info.finish === "cancelled" || msg.info.error)
-                        ? msg.info.finish === "cancelled"
-                          ? ("interrupted" as const)
-                          : ("error" as const)
-                        : ("done" as const),
+            const result = yield* (agentInfo
+              ? Effect.gen(function* () {
+                  const started = yield* agentRunSupervisor.start({
+                    agentID: speakerId,
+                    runtime: agentInfo.runtime,
+                    lifecycle: "on_demand",
+                    permissionMode: "read_only",
+                    model: agentInfo.model,
+                    cwd: Instance.worktree,
+                    prompt: speakerPrompt,
+                    capabilityPacks: ["board-strategy@1"],
+                    requiredRuntimeCapabilities: ["structuredOutput", "workspaceRead"],
+                    systemPrompt: [
+                      `You are ${speakerName}.`,
+                      `Role: ${agentInfo.role}.`,
+                      agentInfo.description,
+                      agentInfo.responsibilities.length
+                        ? `Responsibilities: ${agentInfo.responsibilities.join("; ")}.`
+                        : "",
+                      "Work only inside the assigned repository and follow its local instructions.",
+                    ]
+                      .filter(Boolean)
+                      .join("\n"),
+                    groupSessionID: params.groupSessionID,
+                  })
+                  yield* Ref.update(activeAgentRuns, (runs) => {
+                    const next = new Map(runs)
+                    const ids = new Set(next.get(params.groupSessionID) ?? [])
+                    ids.add(started.runID)
+                    next.set(params.groupSessionID, ids)
+                    return next
+                  })
+                  return yield* Effect.promise(() => started.completion).pipe(
+                    Effect.map((run) => ({
+                      content: run.content || "(no output)",
+                      runtimeMessageID: undefined,
+                      agentRunID: started.runID,
+                      statusSummary: run.exitCode === 0 ? ("done" as const) : ("error" as const),
+                    })),
+                    Effect.catch(() =>
+                      Effect.succeed({
+                        content: "",
+                        runtimeMessageID: undefined,
+                        agentRunID: started.runID,
+                        statusSummary: "error" as const,
+                      }),
+                    ),
+                    Effect.ensuring(
+                      Ref.update(activeAgentRuns, (runs) => {
+                        const next = new Map(runs)
+                        const ids = new Set(next.get(params.groupSessionID) ?? [])
+                        ids.delete(started.runID)
+                        if (ids.size === 0) next.delete(params.groupSessionID)
+                        if (ids.size > 0) next.set(params.groupSessionID, ids)
+                        return next
+                      }),
+                    ),
+                  )
+                })
+              : promptSvc.prompt({
+                  sessionID: member.sessionID as SessionID,
+                  agentID: params.info.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
+                  source: "user",
+                  parts: [{ type: "text", text: speakerPrompt }],
+                }).pipe(
+                  Effect.matchEffect({
+                    onSuccess: (msg) =>
+                      Effect.succeed({
+                        content: extractMessageText(msg),
+                        runtimeMessageID: msg.info.id,
+                        agentRunID: undefined,
+                        statusSummary:
+                          msg.info.role === "assistant" && (msg.info.finish === "cancelled" || msg.info.error)
+                            ? msg.info.finish === "cancelled"
+                              ? ("interrupted" as const)
+                              : ("error" as const)
+                            : ("done" as const),
+                      }),
+                    onFailure: () =>
+                      Effect.succeed({
+                        content: "",
+                        runtimeMessageID: undefined,
+                        agentRunID: undefined,
+                        statusSummary: "error" as const,
+                      }),
                   }),
-                onFailure: () => Effect.succeed({ content: "", runtimeMessageID: undefined, statusSummary: "error" as const }),
-              }),
-            )
+                ))
 
             yield* Effect.sync(() =>
               insertGroupMessage({
@@ -882,6 +963,7 @@ export const layer: Layer.Layer<
                 content: result.content,
                 statusSummary: result.statusSummary,
                 runtimeMessageID: result.runtimeMessageID,
+                agentRunID: result.agentRunID,
               }),
             )
 
@@ -1024,6 +1106,11 @@ export const layer: Layer.Layer<
       const interrupt = Effect.fn("GroupSession.interrupt")(function* (id: GroupSessionID) {
         const info = yield* get(id)
         yield* Ref.update(interruptedSchedulers, (s) => new Set(s).add(id))
+        const cliRuns = [...((yield* Ref.get(activeAgentRuns)).get(id) ?? [])]
+        yield* Effect.forEach(cliRuns, (runID) => agentRunSupervisor.interrupt(runID).pipe(Effect.ignore), {
+          concurrency: MEMBER_CONCURRENCY,
+          discard: true,
+        })
         yield* Effect.forEach(
           info.members,
           (m) =>
@@ -1063,6 +1150,7 @@ export const layer: Layer.Layer<
             statusSummary: row.status_summary ?? undefined,
             externalMessageID: row.external_message_id ?? undefined,
             runtimeMessageID: row.runtime_message_id ?? undefined,
+            agentRunID: row.agent_run_id ?? undefined,
             time: { created: row.time_created, updated: row.time_updated },
           }),
         )
@@ -1102,6 +1190,7 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(Agent.defaultLayer),
     Layer.provide(Provider.defaultLayer),
     Layer.provide(LLM.defaultLayer),
+    Layer.provide(AgentRunSupervisor.defaultLayer),
   ),
 )
 

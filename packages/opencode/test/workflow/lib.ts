@@ -52,6 +52,7 @@ import { WorkflowRuntime } from "../../src/workflow/runtime"
 import { CompanyAgent } from "../../src/company-agent"
 import { AgentMessage } from "../../src/agent-message/agent-message"
 import { Thread } from "../../src/thread/thread"
+import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -109,7 +110,7 @@ const status = SessionStatus.layer.pipe(Layer.provideMerge(Bus.layer))
 const run = SessionRunState.layer.pipe(Layer.provide(status))
 const infra = Layer.mergeAll(NodeFileSystem.layer, CrossSpawnSpawner.defaultLayer)
 
-export function makeLayer() {
+export function makeLayer(runtimeLayer?: Layer.Layer<AgentRunSupervisor.Service>) {
   const deps = Layer.mergeAll(
     Session.defaultLayer,
     Snapshot.defaultLayer,
@@ -186,15 +187,18 @@ export function makeLayer() {
     // on terminal. Mirrors prod WorkflowRuntime.defaultLayer providing Inbox.
     Layer.provideMerge(Inbox.defaultLayer),
   )
+  const workflow = runtimeLayer
+    ? WorkflowRuntime.layer.pipe(
+        Layer.provide(runtimeLayer),
+        Layer.provideMerge(actor),
+        Layer.provideMerge(Worktree.defaultLayer),
+      )
+    : WorkflowRuntime.layer.pipe(Layer.provideMerge(actor), Layer.provideMerge(Worktree.defaultLayer))
   return Layer.mergeAll(
     TestLLMServer.layer,
-    WorkflowRuntime.layer.pipe(
-      Layer.provideMerge(actor),
-      // provideMerge (not provide) so Worktree.Service stays in the output
-      // context — the worktree-isolation test resolves it to clean up the kept
-      // worktree before the tmpdir fixture finalizer runs.
-      Layer.provideMerge(Worktree.defaultLayer),
-    ),
+    // provideMerge keeps Worktree.Service in the output context so isolation
+    // tests can clean up retained worktrees before the tmpdir finalizer runs.
+    workflow,
   ).pipe(Layer.provide(summary))
 }
 

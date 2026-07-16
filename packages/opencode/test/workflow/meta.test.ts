@@ -81,6 +81,20 @@ describe("workflow meta parser", () => {
     }
   })
 
+  test("accepts immutable workflow and runtime capability metadata", () => {
+    const result = parseMeta(
+      `export const meta = { name: "delivery", description: "d", version: "1", capabilityPacks: ["software-implementation@1"], requiredRuntimeCapabilities: ["toolCalls", "workspaceWrite"], defaultRuntime: "pi", outputSchema: { type: "object" } }\nreturn 1`,
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.meta.version).toBe("1")
+      expect(result.meta.capabilityPacks).toEqual(["software-implementation@1"])
+      expect(result.meta.requiredRuntimeCapabilities).toEqual(["toolCalls", "workspaceWrite"])
+      expect(result.meta.defaultRuntime).toBe("pi")
+      expect(result.meta.outputSchema).toEqual({ type: "object" })
+    }
+  })
+
   // --- Security (P0 RCE): the meta literal must be parsed as DATA, never executed
   // in the host realm. These payloads previously ran through `new Function`. ---
 

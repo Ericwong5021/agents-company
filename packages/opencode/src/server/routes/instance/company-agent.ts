@@ -51,7 +51,7 @@ export const CompanyAgentRoutes = lazy(() =>
             description: "List of company agents",
             content: {
               "application/json": {
-                schema: resolver(CompanyAgent.Info.zod.array()),
+                schema: resolver(CompanyAgent.PublicInfo.array()),
               },
             },
           },
@@ -60,7 +60,7 @@ export const CompanyAgentRoutes = lazy(() =>
       async (c) =>
         jsonRequest("CompanyAgentRoutes.list", c, function* () {
           const svc = yield* CompanyAgent.Service
-          return yield* svc.list()
+          return (yield* svc.list()).map(CompanyAgent.toPublicInfo)
         }),
     )
     .get(
@@ -74,7 +74,7 @@ export const CompanyAgentRoutes = lazy(() =>
             description: "Company agent",
             content: {
               "application/json": {
-                schema: resolver(CompanyAgent.Info.zod),
+                schema: resolver(CompanyAgent.PublicInfo),
               },
             },
           },
@@ -93,7 +93,7 @@ export const CompanyAgentRoutes = lazy(() =>
           }),
         )
         if (!agent) return c.json({ error: "not found" }, 404)
-        return c.json(agent)
+        return c.json(CompanyAgent.toPublicInfo(agent))
       },
     )
     .post(
@@ -107,7 +107,7 @@ export const CompanyAgentRoutes = lazy(() =>
             description: "Created company agent",
             content: {
               "application/json": {
-                schema: resolver(CompanyAgent.Info.zod),
+                schema: resolver(CompanyAgent.PublicInfo),
               },
             },
           },
@@ -118,7 +118,7 @@ export const CompanyAgentRoutes = lazy(() =>
       async (c) =>
         jsonRequest("CompanyAgentRoutes.create", c, function* () {
           const svc = yield* CompanyAgent.Service
-          return yield* svc.create(c.req.valid("json"))
+          return CompanyAgent.toPublicInfo(yield* svc.create(c.req.valid("json")))
         }),
     )
     .patch(
@@ -132,7 +132,7 @@ export const CompanyAgentRoutes = lazy(() =>
             description: "Updated company agent",
             content: {
               "application/json": {
-                schema: resolver(CompanyAgent.Info.zod),
+                schema: resolver(CompanyAgent.PublicInfo),
               },
             },
           },
@@ -144,7 +144,30 @@ export const CompanyAgentRoutes = lazy(() =>
       async (c) =>
         jsonRequest("CompanyAgentRoutes.update", c, function* () {
           const svc = yield* CompanyAgent.Service
-          return yield* svc.update({ ...c.req.valid("json"), id: c.req.valid("param").id })
+          return CompanyAgent.toPublicInfo(
+            yield* svc.update({ ...c.req.valid("json"), id: c.req.valid("param").id }),
+          )
+        }),
+    )
+    .post(
+      "/:id/promote",
+      describeRoute({
+        summary: "Promote a candidate agent",
+        description: "Promote a candidate after its private identity and public profile have been prepared.",
+        operationId: "companyAgent.promote",
+        responses: {
+          200: {
+            description: "Promoted company agent",
+            content: { "application/json": { schema: resolver(CompanyAgent.PublicInfo) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ id: CompanyAgentID.zod })),
+      async (c) =>
+        jsonRequest("CompanyAgentRoutes.promote", c, function* () {
+          const svc = yield* CompanyAgent.Service
+          return CompanyAgent.toPublicInfo(yield* svc.promote(c.req.valid("param").id))
         }),
     )
     .delete(

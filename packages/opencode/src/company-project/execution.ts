@@ -253,18 +253,18 @@ function developmentScript(goal: string, context: unknown) {
       `const goal = ${json(goal)}`,
       `const context = ${json(context)}`,
       `phase("实现可试玩 MVP")`,
-      `const implementation = await agent("在当前独立 Git 仓库中完成 MVP。你拥有开发阶段自主权。严格依据以下上下文实现，但可为完成目标修正细节。必须创建 README、依赖清单、源代码和自动化测试；亲自安装依赖、运行测试、启动冒烟并进行本地 git commit。禁止修改仓库外文件、付费、注册账号、公开部署或发布。\\n目标：" + goal + "\\n上下文：" + JSON.stringify(context), { companyAgentID: "mvp-developer", tools: ["read", "write", "edit", "apply_patch", "glob", "grep", "bash", "webfetch"], label: "实现 MVP", phase: "Develop", timeoutMs: 7200000 })`,
+      `const implementation = await agent("在当前独立 Git 仓库中完成 MVP。你拥有开发阶段自主权。严格依据以下上下文实现，但可为完成目标修正细节。必须创建 README、依赖清单、源代码和自动化测试；亲自安装依赖、运行测试、启动冒烟。禁止修改仓库外文件、付费、注册账号、公开部署或发布。\\n目标：" + goal + "\\n上下文：" + JSON.stringify(context), { companyAgentID: "mvp-developer", role: "implementation-engineer", capabilityPacks: ["software-implementation@1"], requiredRuntimeCapabilities: ["toolCalls", "workspaceWrite"], permissionMode: "workspace_write", label: "实现 MVP", phase: "Develop", timeoutMs: 7200000 })`,
       `if (!implementation) throw new Error("implementation agent failed")`,
       `let attempts = 0`,
       `let verification`,
       `while (attempts < 3) {`,
       `  attempts++`,
       `  phase("独立 QA 验证 #" + attempts)`,
-      `  verification = await agent("你是独立 QA。检查当前仓库并亲自执行安装、测试、启动冒烟和至少一条完整试玩路径。必须记录真实命令结果；任何关键项未验证都判定 passed=false。\\n验收上下文：" + JSON.stringify(context), { companyAgentID: "qa-engineer", tools: ["read", "glob", "grep", "bash"], schema: ${qaSchema}, label: "QA #" + attempts, phase: "Verify", timeoutMs: 1800000 })`,
+      `  verification = await agent("你是独立 QA。检查当前仓库并亲自执行测试、构建和启动冒烟。必须记录真实命令结果；任何关键项未验证都判定 passed=false。\\n验收上下文：" + JSON.stringify(context), { companyAgentID: "qa-engineer", role: "verification-engineer", capabilityPacks: ["verification-testing@1"], requiredRuntimeCapabilities: ["toolCalls", "structuredOutput"], permissionMode: "read_only", schema: ${qaSchema}, label: "QA #" + attempts, phase: "Verify", timeoutMs: 1800000 })`,
       `  if (verification && verification.passed) break`,
       `  if (attempts >= 3) break`,
       `  phase("根据 QA 证据修复")`,
-      `  const repair = await agent("根据以下 QA 失败证据修复当前仓库。只做可复现的必要修改，修复后运行相关测试。\\n" + JSON.stringify(verification), { companyAgentID: "repair-engineer", tools: ["read", "write", "edit", "apply_patch", "glob", "grep", "bash"], label: "修复 #" + attempts, phase: "Repair", timeoutMs: 3600000 })`,
+      `  const repair = await agent("根据以下 QA 失败证据修复当前仓库。只做可复现的必要修改，修复后运行相关测试。\\n" + JSON.stringify(verification), { companyAgentID: "repair-engineer", role: "repair-engineer", capabilityPacks: ["software-implementation@1"], requiredRuntimeCapabilities: ["toolCalls", "workspaceWrite"], permissionMode: "workspace_write", label: "修复 #" + attempts, phase: "Repair", timeoutMs: 3600000 })`,
       `  if (!repair) throw new Error("repair agent failed")`,
       `}`,
       `if (!verification) throw new Error("verification agent failed")`,
@@ -314,6 +314,7 @@ export const layer = Layer.effect(
               department: "临时项目组",
               reports_to: member.id === "project-lead" ? "assistant" : "project-lead",
               responsibilities: [...member.responsibilities],
+              lifecycle: "employee",
             })
           }),
         { concurrency: 1, discard: true },
@@ -489,7 +490,6 @@ export const layer = Layer.effect(
 
     const startDevelopment = Effect.fn("CompanyProjectExecution.startDevelopment")(function* (project: Project) {
       yield* ensureTeam(DEVELOPMENT_TEAM)
-      const repo = yield* projects.initRepository(project.id)
       const artifacts = yield* projects.listArtifacts(project.id)
       const context = Object.fromEntries(
         artifacts
@@ -522,10 +522,12 @@ export const layer = Layer.effect(
         acceptance_criteria: ["命令证据完整", "完整试玩路径通过"],
         depends_on: [coding.id],
       })
+      const worktree = yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: coding.id })
+      yield* projects.startWorktreeRun({ id: worktree.id })
       yield* projects.startWorkItem(coding.id)
       return yield* launch({
         project,
-        workspace: repo,
+        workspace: worktree.directory,
         script: developmentScript(project.goal, context),
         onSuccess: (value) =>
           Effect.gen(function* () {
@@ -533,14 +535,24 @@ export const layer = Layer.effect(
             if (!result.verification.passed) {
               throw new Error(result.verification.failures.join("; ") || result.verification.summary)
             }
-            const hostVerification = yield* Effect.promise(() => verifyRepository(repo, architecturePlan))
+            const hostVerification = yield* projects.verifyWorktreeRun({
+              id: worktree.id,
+              commands: architecturePlan.run_commands.filter((command) => /\b(test|check|build)\b/i.test(command)),
+            })
+            if (hostVerification.status !== "awaiting_merge_approval")
+              throw new Error(hostVerification.error ?? "Worktree verification failed")
             yield* projects.addArtifact({
               project_id: project.id,
               work_item_id: coding.id,
               kind: "repository",
               title: "可试玩 MVP 代码仓库",
               path: "repo",
-              evidence: { implementation: result.implementation, attempts: result.attempts },
+              evidence: {
+                implementation: result.implementation,
+                attempts: result.attempts,
+                worktree_run_id: worktree.id,
+                branch: worktree.branch,
+              },
               created_by_agent_id: "mvp-developer",
             })
             yield* projects.completeWorkItem(coding.id)
@@ -551,13 +563,19 @@ export const layer = Layer.effect(
               kind: "verification_report",
               title: "独立 QA 验收报告",
               path: "artifacts/verification/final.json",
-              content: JSON.stringify({ agent: result.verification, host: hostVerification }, null, 2) + "\n",
-              evidence: { agent_commands: result.verification.commands, host: hostVerification },
+              content: JSON.stringify({ agent: result.verification, host: hostVerification.verification }, null, 2) + "\n",
+              evidence: { agent_commands: result.verification.commands, host: hostVerification.verification },
               created_by_agent_id: "qa-engineer",
             })
             yield* projects.completeWorkItem(qa.id)
             yield* projects.transition({ id: project.id, status: "verifying", actor_id: "qa-engineer" })
-            yield* projects.transition({ id: project.id, status: "completed", actor_id: "project-lead" })
+            yield* projects.requestMergeApproval({
+              id: worktree.id,
+              title: "批准合并已验证交付",
+              summary: `分支 ${worktree.branch} 已通过独立 QA 与宿主验证。批准后会合并到 main，并重新执行相同验证命令。`,
+              requested_by_agent_id: "project-lead",
+              review: { agent: result.verification, host: hostVerification.verification },
+            })
           }),
       })
     })
@@ -584,6 +602,13 @@ export const layer = Layer.effect(
         coordinator_session_id: session.id,
         provider_id: input.provider_id,
         model_id: input.model_id,
+      })
+      yield* projects.createCharter({
+        project_id: project.id,
+        scope: [input.goal],
+        success_criteria: ["交付物可在本地独立验证", "范围、证据与审批链完整"],
+        constraints: ["禁止公开部署或发布", "禁止绕过运行时权限与人工合并审批"],
+        acceptance_criteria: ["代码位于独立 Git 工作树", "验证证据已持久化", "主分支复验通过"],
       })
       yield* projects.transition({ id: project.id, status: "researching", actor_id: "project-lead" })
       const plan = yield* projects.createPlan({
@@ -714,6 +739,27 @@ export const layer = Layer.effect(
       note?: string
     }) {
       const gate = yield* projects.resolveGate({ id: input.gate_id, decision: input.decision, note: input.note })
+      if (gate.kind === "merge_approval") {
+        const project = yield* projects.get(gate.project_id)
+        if (!project) throw new Error(`Company project not found: ${gate.project_id}`)
+        if (input.decision === "reject") {
+          yield* projects.transition({ id: project.id, status: "developing", actor_id: "user", reason: input.note })
+          return { gate }
+        }
+        if (!gate.worktree_run_id) throw new Error("Merge approval has no worktree run")
+        const merged = yield* projects.mergeWorktreeRun(gate.worktree_run_id)
+        yield* projects.addArtifact({
+          project_id: project.id,
+          kind: "merge_report",
+          title: "主分支合并与复验报告",
+          path: "artifacts/verification/merge.json",
+          content: JSON.stringify(merged, null, 2) + "\n",
+          evidence: merged.verification,
+          created_by_agent_id: "project-lead",
+        })
+        yield* projects.transition({ id: project.id, status: "completed", actor_id: "project-lead" })
+        return { gate }
+      }
       if (input.decision === "reject") return { gate }
       const project = yield* projects.get(gate.project_id)
       if (!project) throw new Error(`Company project not found: ${gate.project_id}`)

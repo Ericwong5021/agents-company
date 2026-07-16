@@ -35,6 +35,7 @@ function makeMockCompanyAgentService(agents: CompanyAgent.Info[]) {
     get: (id: CompanyAgentID) => Effect.succeed(agents.find((a) => a.id === id)),
     list: () => Effect.succeed(agents),
     update: () => Effect.die("unexpected update"),
+    promote: () => Effect.die("unexpected promote"),
     remove: () => Effect.die("unexpected remove"),
   })
 }
@@ -260,7 +261,13 @@ function provideDelegation(
 // Test fixtures
 // ---------------------------------------------------------------------------
 
+const runtimeDefaults = {
+  lifecycle: "employee" as const,
+  preferred_runtime: "pi",
+}
+
 const boardAgent: CompanyAgent.Info = {
+  ...runtimeDefaults,
   id: "board-lead" as CompanyAgentID,
   name: "Board Lead",
   org_layer: "board",
@@ -271,6 +278,7 @@ const boardAgent: CompanyAgent.Info = {
 }
 
 const departmentAgent: CompanyAgent.Info = {
+  ...runtimeDefaults,
   id: "dept-head" as CompanyAgentID,
   name: "Department Head",
   org_layer: "department",
@@ -281,6 +289,7 @@ const departmentAgent: CompanyAgent.Info = {
 }
 
 const projectAgent: CompanyAgent.Info = {
+  ...runtimeDefaults,
   id: "proj-manager" as CompanyAgentID,
   name: "Project Manager",
   org_layer: "project",
@@ -291,6 +300,7 @@ const projectAgent: CompanyAgent.Info = {
 }
 
 const executionAgent: CompanyAgent.Info = {
+  ...runtimeDefaults,
   id: "executor" as CompanyAgentID,
   name: "Executor",
   org_layer: "execution",
@@ -301,6 +311,7 @@ const executionAgent: CompanyAgent.Info = {
 }
 
 const toolAgent: CompanyAgent.Info = {
+  ...runtimeDefaults,
   id: "tool-bot" as CompanyAgentID,
   name: "Tool Bot",
   org_layer: "tool",

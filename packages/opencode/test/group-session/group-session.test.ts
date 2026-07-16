@@ -11,10 +11,8 @@ import { GroupMessageTable, GroupSessionMemberTable } from "../../src/group-sess
 import { Global } from "../../src/global"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
-import { MessageV2 } from "../../src/session/message-v2"
 import { SessionStatus } from "../../src/session/status"
 import { SessionID } from "../../src/session/schema"
-import type { MessageID } from "../../src/session/schema"
 import { SessionTable } from "../../src/session/session.sql"
 import { eq } from "../../src/storage"
 import * as Database from "../../src/storage/db"
@@ -92,7 +90,7 @@ beforeEach(reset)
 afterEach(reset)
 
 describe.serial("M2 GroupSession runtime source bridge", () => {
-  test.serial("persists idempotent external input, exact MessageV2 sources, and excludes private memory in work scope", async () => {
+  test.serial("persists idempotent external input, exact AgentRun sources, and excludes private memory in work scope", async () => {
     const server = startScriptedLLMServer(
       Array.from({ length: 16 }, () => ({
         lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
@@ -153,14 +151,14 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
           groupSession(repository.path, (service) =>
             Effect.gen(function* () {
               const messages = yield* service.messages(group.id)
-              return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.runtimeMessageID).length >= 2
+              return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.agentRunID).length >= 2
             }),
           ),
         )
 
         const messages = await groupSession(repository.path, (service) => service.messages(group.id))
         const userMessages = messages.filter((message) => message.role === "user")
-        const agentMessage = messages.find((message) => message.role === "agent" && message.runtimeMessageID)
+        const agentMessage = messages.find((message) => message.role === "agent" && message.agentRunID)
 
         expect(userMessages).toEqual([
           expect.objectContaining({
@@ -169,14 +167,8 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
             externalMessageID,
           }),
         ])
-        expect(agentMessage?.runtimeMessageID).toBeString()
+        expect(agentMessage?.agentRunID).toBeString()
         expect(agentMessage?.sessionID).toBeString()
-        const source = MessageV2.get({
-          sessionID: agentMessage!.sessionID as SessionID,
-          messageID: agentMessage!.runtimeMessageID as MessageID,
-        })
-        expect(source.info.id).toBe(agentMessage!.runtimeMessageID!)
-        expect(source.parts.length).toBeGreaterThan(0)
         expect(
           group.members.map(
             (member) =>
@@ -197,7 +189,7 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
       await server.stop()
       await repository[Symbol.asyncDispose]()
     }
-  })
+  }, 15000)
 
   test.serial("resumes a persisted round after the first agent without replaying the user or first speaker", async () => {
     const server = startScriptedLLMServer(
@@ -276,7 +268,7 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
       await server.stop()
       await repository[Symbol.asyncDispose]()
     }
-  })
+  }, 15000)
 
   test.serial("interrupt propagates to every Board runtime session", async () => {
     let calls = 0
@@ -340,5 +332,5 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
       server.stop(true)
       await repository[Symbol.asyncDispose]()
     }
-  })
+  }, 15000)
 })

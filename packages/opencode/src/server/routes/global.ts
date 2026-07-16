@@ -15,6 +15,8 @@ import { Log } from "../../util"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config"
 import { ExternalImport } from "../../session/external-import"
+import { ReleaseReadiness } from "@/release/readiness"
+import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { errors } from "../error"
 
 const log = Log.create({ service: "server" })
@@ -105,6 +107,42 @@ export const GlobalHealthRoutes = lazy(() =>
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/runtime",
+      describeRoute({
+        summary: "Discover Agent runtimes",
+        description: "Report installation, version, authentication and normalized capabilities for Pi, Codex and Claude Code.",
+        operationId: "global.runtime.list",
+        responses: { 200: { description: "Available Agent runtimes" } },
+      }),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            AgentRunSupervisor.Service.use((supervisor) => supervisor.discover()),
+          ),
+        ),
+    )
+    .get(
+      "/readiness",
+      describeRoute({
+        summary: "Get local release readiness",
+        description: "Report local database, migration, durable-directory, and backup readiness without changing state.",
+        operationId: "global.readiness",
+        responses: { 200: { description: "Local release readiness" } },
+      }),
+      async (c) => c.json(await ReleaseReadiness.inspect()),
+    )
+    .post(
+      "/backup",
+      describeRoute({
+        summary: "Create a local release backup",
+        description: "Create a consistent SQLite snapshot and copy durable local state. Restore must be performed offline.",
+        operationId: "global.backup",
+        responses: { 200: { description: "Created local backup" } },
+      }),
+      validator("json", z.object({ include_runtime_homes: z.boolean().optional() })),
+      async (c) => c.json(await ReleaseReadiness.createBackup(c.req.valid("json"))),
+    )
     .get(
       "/event",
       describeRoute({

@@ -26,6 +26,13 @@ describe("CompanyProject execution state machine", () => {
 
         expect(project.status).toBe("intake")
         expect(path.basename(project.output_dir)).toBe(project.id)
+        yield* service.createCharter({
+          project_id: project.id,
+          scope: [project.goal],
+          success_criteria: ["Verified delivery"],
+          constraints: ["Local only"],
+          acceptance_criteria: ["Host checks pass"],
+        })
         const repositoryBeforeApproval = yield* Effect.exit(service.initRepository(project.id))
         expect(Exit.isFailure(repositoryBeforeApproval)).toBe(true)
         if (Exit.isFailure(repositoryBeforeApproval))
@@ -91,7 +98,7 @@ describe("CompanyProject execution state machine", () => {
         yield* service.resolveGate({ id: projectGate.id, decision: "approve" })
         expect((yield* service.get(project.id))?.status).toBe("planning")
 
-        yield* service.createPlan({
+        const developmentPlan = yield* service.createPlan({
           project_id: project.id,
           phase: "development",
           summary: "Implement and verify the approved MVP",
@@ -107,6 +114,27 @@ describe("CompanyProject execution state machine", () => {
         const repo = yield* service.initRepository(project.id)
         expect(yield* Effect.promise(() => Bun.file(path.join(repo, ".git", "HEAD")).exists())).toBe(true)
         expect((yield* service.get(project.id))?.status).toBe("developing")
+
+        const implementation = yield* service.createWorkItem({
+          project_id: project.id,
+          plan_id: developmentPlan.id,
+          title: "Implement runtime proof",
+          description: "Create a verified file",
+          kind: "implementation",
+          acceptance_criteria: ["Host verification passes"],
+        })
+        const worktree = yield* service.createWorktreeRun({ project_id: project.id, work_item_id: implementation.id })
+        yield* service.startWorktreeRun({ id: worktree.id })
+        yield* Effect.promise(() => Bun.write(path.join(worktree.directory, "runtime-proof.txt"), "verified\n"))
+        const verified = yield* service.verifyWorktreeRun({ id: worktree.id, commands: ["bun --version"] })
+        const status = yield* Effect.promise(async () => {
+          const child = Bun.spawn(["git", "status", "--porcelain"], { cwd: worktree.directory, stdout: "pipe" })
+          return { output: (await new Response(child.stdout).text()).trim(), code: await child.exited }
+        })
+
+        expect(verified.status).toBe("awaiting_merge_approval")
+        expect(verified.head_commit).not.toBe(verified.base_commit)
+        expect(status).toEqual({ output: "", code: 0 })
       }),
     ),
   )
