@@ -193,6 +193,41 @@ test("refreshing after bootstrap creates conversation store", async () => {
   expect(snapshot.conversation.channels).toHaveLength(2)
 })
 
+test("keeps the bootstrap wizard mounted during a background refresh", async () => {
+  const gate = Promise.withResolvers<void>()
+  let companyCalls = 0
+  const fetcher = Object.assign(
+    async (...args: Parameters<typeof fetch>) => {
+      const path = new URL(new Request(args[0], args[1]).url).pathname
+      if (path === "/local-auth/session") return Response.json({ authenticated: true, kind: "trusted" })
+      if (path === "/company") {
+        companyCalls += 1
+        if (companyCalls > 1) await gate.promise
+        return Response.json(needsBootstrap)
+      }
+      return Response.json({ name: "UnexpectedRequest" }, { status: 500 })
+    },
+    { preconnect: fetch.preconnect },
+  )
+  const source = createSdkCompanyWorkspaceDataSource(
+    createOpencodeClient({ baseUrl: "http://company.test", fetch: fetcher }),
+  )
+
+  await source.refresh()
+  const published: string[] = []
+  const unsubscribe = source.subscribe((snapshot) => published.push(snapshot.status))
+  const refresh = source.refresh()
+  await Promise.resolve()
+
+  expect(source.getSnapshot().status).toBe("needs_bootstrap")
+  expect(published).not.toContain("loading")
+
+  gate.resolve()
+  await refresh
+  unsubscribe()
+  expect(source.getSnapshot().status).toBe("needs_bootstrap")
+})
+
 test("error snapshot on failed company fetch", async () => {
   const fetcher = Object.assign(
     async () => {

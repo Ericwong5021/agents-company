@@ -189,7 +189,8 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
   const refresh = async () => {
     const generation = ++refreshGeneration
     const previous = current
-    if (previous.status !== "ready") publish({ status: "loading" })
+    const preserve = previous.status === "ready" || previous.status === "needs_bootstrap"
+    if (!preserve) publish({ status: "loading" })
     try {
       const [company, session] = await Promise.all([client.company.current(), client.localAuth.session()])
       const companyState = unwrap(company) as CompanyState
@@ -208,7 +209,7 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
       }
     } catch (error) {
       if (generation !== refreshGeneration) return
-      if (previous.status === "ready") {
+      if (preserve) {
         publish(previous)
         return
       }
