@@ -32,12 +32,12 @@ const env = {
   ),
   AGENTCOMPANY_HOME: home,
   AGENTCOMPANY_DISABLE_MODELS_FETCH: "true",
-  AGENTCOMPANY_MODELS_PATH: path.resolve(app, "../opencode/test/tool/fixtures/models-api.json"),
+  AGENTCOMPANY_MODELS_PATH: path.resolve(app, "../control-plane/test/tool/fixtures/models-api.json"),
 }
 
 const child = Bun.spawn({
   cmd: ["bun", "run", "src/index.ts", "serve", "--hostname", hostname, "--port", port, "--cors", uiOrigin],
-  cwd: path.resolve(app, "../opencode"),
+  cwd: path.resolve(app, "../control-plane"),
   env,
   stdout: "inherit",
   stderr: "inherit",

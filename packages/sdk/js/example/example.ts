@@ -1,8 +1,8 @@
-import { createOpencodeClient, createOpencodeServer } from "@agents-company/sdk"
+import { createControlPlaneClient, createControlPlaneServer } from "@agents-company/sdk"
 import { pathToFileURL } from "bun"
 
-const server = await createOpencodeServer()
-const client = createOpencodeClient({ baseUrl: server.url })
+const server = await createControlPlaneServer()
+const client = createControlPlaneClient({ baseUrl: server.url })
 
 const input = await Array.fromAsync(new Bun.Glob("packages/core/*.ts").scan())
 

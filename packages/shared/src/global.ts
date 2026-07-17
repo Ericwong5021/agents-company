@@ -48,7 +48,7 @@ export function resolveAgentCompanyHome(env: NodeJS.ProcessEnv = process.env): R
 }
 
 export namespace Global {
-  export class Service extends Context.Service<Service, Interface>()("@opencode/Global") {}
+  export class Service extends Context.Service<Service, Interface>()("@control-plane/Global") {}
 
   export interface Interface {
     readonly home: string

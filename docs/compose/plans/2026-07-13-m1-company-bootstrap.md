@@ -289,7 +289,7 @@ TUI 不写 Company、Board 或 Policy，不建设第二套 wizard。
 
 ### [M1-S8] Node/Desktop 构建与嵌入 WebUI
 
-packages/opencode/script/build-node.ts 当前只存在于 .gitignore 覆盖的本地忽略文件中，且引用错误的 @mimo-ai/script；干净 clone 不具备 Desktop 构建链。M1 必须提交可追踪的 Node build script，抽取 migration/WebUI bundle helper，并让 CLI build 与 Node build 都嵌入 packages/app 的生产构建。
+packages/control-plane/script/build-node.ts 当前只存在于 .gitignore 覆盖的本地忽略文件中，且引用错误的 @mimo-ai/script；干净 clone 不具备 Desktop 构建链。M1 必须提交可追踪的 Node build script，抽取 migration/WebUI bundle helper，并让 CLI build 与 Node build 都嵌入 packages/app 的生产构建。
 
 Desktop prebuild/build 必须产出可导入的 dist/node/node.js，并把 WebUI/wasm 文件带入 Electron out。浏览器访问 Desktop sidecar 的 / 能得到共享 WebUI，而不是 503。
 
@@ -367,47 +367,47 @@ TUI internal fetch ── trusted app ─────────────┤
 
 ### 构建与静态 WebUI
 
-- Create packages/opencode/script/build-support.ts：迁移和 WebUI 虚拟模块生成。
-- Create packages/opencode/script/build-node.ts：可追踪 Node/Electron server build。
-- Modify packages/opencode/.gitignore：显式放行 build-node.ts。
-- Modify packages/opencode/script/build.ts：复用 helper，恢复默认嵌入 WebUI。
-- Modify packages/opencode/src/server/routes/ui.ts：Agent Company 虚拟模块和静态公开路由。
-- Create packages/opencode/test/script/build-node.test.ts：Node import 与 embedded UI smoke。
+- Create packages/control-plane/script/build-support.ts：迁移和 WebUI 虚拟模块生成。
+- Create packages/control-plane/script/build-node.ts：可追踪 Node/Electron server build。
+- Modify packages/control-plane/.gitignore：显式放行 build-node.ts。
+- Modify packages/control-plane/script/build.ts：复用 helper，恢复默认嵌入 WebUI。
+- Modify packages/control-plane/src/server/routes/ui.ts：Agent Company 虚拟模块和静态公开路由。
+- Create packages/control-plane/test/script/build-node.test.ts：Node import 与 embedded UI smoke。
 
 ### Company 与 Local Auth 领域
 
-- Create packages/opencode/src/company/schema.ts：M1 DTO、enum、errors。
-- Create packages/opencode/src/company/company.sql.ts：Company、Policy、RepositoryBinding。
-- Create packages/opencode/src/company/company.ts：current/inspect/bootstrap service。
-- Create packages/opencode/src/company/setup-instance.ts：Provider setup 的稳定 Instance context。
-- Create packages/opencode/src/company/index.ts：namespace export。
-- Modify packages/opencode/src/company-agent/company-agent.sql.ts：company/role/lifecycle。
-- Create packages/opencode/src/local-auth/schema.ts：pairing/credential DTO 与 errors。
-- Create packages/opencode/src/local-auth/local-auth.sql.ts：credential hash table。
-- Create packages/opencode/src/local-auth/local-auth.ts：pair/exchange/verify/list/revoke。
-- Create packages/opencode/src/local-auth/index.ts：namespace export。
-- Modify packages/opencode/src/id/id.ts：localCredential prefix；Company/Binding 使用固定 singleton literals。
-- Modify packages/opencode/src/storage/schema.ts：导出新 tables。
-- Modify packages/opencode/src/effect/app-runtime.ts：注入 Company 和 LocalAuth layers。
-- Create packages/opencode/migration/20260713120000_m1_company_bootstrap/migration.sql：增量 schema。
-- Create packages/opencode/test/company/company.test.ts：领域、事务、幂等与恢复。
-- Create packages/opencode/test/local-auth/local-auth.test.ts：token 生命周期。
+- Create packages/control-plane/src/company/schema.ts：M1 DTO、enum、errors。
+- Create packages/control-plane/src/company/company.sql.ts：Company、Policy、RepositoryBinding。
+- Create packages/control-plane/src/company/company.ts：current/inspect/bootstrap service。
+- Create packages/control-plane/src/company/setup-instance.ts：Provider setup 的稳定 Instance context。
+- Create packages/control-plane/src/company/index.ts：namespace export。
+- Modify packages/control-plane/src/company-agent/company-agent.sql.ts：company/role/lifecycle。
+- Create packages/control-plane/src/local-auth/schema.ts：pairing/credential DTO 与 errors。
+- Create packages/control-plane/src/local-auth/local-auth.sql.ts：credential hash table。
+- Create packages/control-plane/src/local-auth/local-auth.ts：pair/exchange/verify/list/revoke。
+- Create packages/control-plane/src/local-auth/index.ts：namespace export。
+- Modify packages/control-plane/src/id/id.ts：localCredential prefix；Company/Binding 使用固定 singleton literals。
+- Modify packages/control-plane/src/storage/schema.ts：导出新 tables。
+- Modify packages/control-plane/src/effect/app-runtime.ts：注入 Company 和 LocalAuth layers。
+- Create packages/control-plane/migration/20260713120000_m1_company_bootstrap/migration.sql：增量 schema。
+- Create packages/control-plane/test/company/company.test.ts：领域、事务、幂等与恢复。
+- Create packages/control-plane/test/local-auth/local-auth.test.ts：token 生命周期。
 
 ### HTTP 与 SDK
 
-- Create packages/opencode/src/server/routes/company.ts：/company 产品路由。
-- Create packages/opencode/src/server/routes/local-auth.ts：public/protected local auth routes。
-- Modify packages/opencode/src/server/routes/global.ts：拆分 public health。
-- Modify packages/opencode/src/server/server.ts：trusted/protected app composition。
-- Modify packages/opencode/src/server/middleware.ts：Basic/Bearer middleware 与错误映射。
-- Modify packages/opencode/src/cli/network.ts：默认认证语义。
-- Modify packages/opencode/src/cli/cmd/serve.ts：输出一次性浏览器 pairing URL。
-- Modify packages/opencode/src/cli/cmd/acp.ts：传递 Listener Basic header。
-- Modify packages/opencode/src/cli/cmd/tui/worker.ts：返回 external listener credentials。
-- Modify packages/opencode/src/cli/cmd/tui/thread.ts：给 external TUI SDK 传 auth header。
-- Create packages/opencode/test/server/company-route.test.ts：Company OpenAPI/route。
-- Create packages/opencode/test/server/network-auth.test.ts：public/protected matrix。
-- Create packages/opencode/test/server/local-auth-route.test.ts：pairing route 权限。
+- Create packages/control-plane/src/server/routes/company.ts：/company 产品路由。
+- Create packages/control-plane/src/server/routes/local-auth.ts：public/protected local auth routes。
+- Modify packages/control-plane/src/server/routes/global.ts：拆分 public health。
+- Modify packages/control-plane/src/server/server.ts：trusted/protected app composition。
+- Modify packages/control-plane/src/server/middleware.ts：Basic/Bearer middleware 与错误映射。
+- Modify packages/control-plane/src/cli/network.ts：默认认证语义。
+- Modify packages/control-plane/src/cli/cmd/serve.ts：输出一次性浏览器 pairing URL。
+- Modify packages/control-plane/src/cli/cmd/acp.ts：传递 Listener Basic header。
+- Modify packages/control-plane/src/cli/cmd/tui/worker.ts：返回 external listener credentials。
+- Modify packages/control-plane/src/cli/cmd/tui/thread.ts：给 external TUI SDK 传 auth header。
+- Create packages/control-plane/test/server/company-route.test.ts：Company OpenAPI/route。
+- Create packages/control-plane/test/server/network-auth.test.ts：public/protected matrix。
+- Create packages/control-plane/test/server/local-auth-route.test.ts：pairing route 权限。
 - Modify packages/sdk/js/script/build.ts：Agent Company OpenAPI metadata/生成契约。
 - Modify packages/sdk/js/package.json：Agent Company SDK public metadata 与 package-local typecheck。
 - Modify packages/sdk/js/src/v2/server.ts：spawned server 的随机密码和 headers。
@@ -483,19 +483,19 @@ TUI internal fetch ── trusted app ─────────────┤
 
 ### TUI、E2E 与文档
 
-- Create packages/opencode/src/cli/cmd/tui/routes/company-entry.ts：pure gate decision。
-- Create packages/opencode/src/cli/cmd/tui/routes/company-entry.test.ts：needs/ready/mismatch。
-- Create packages/opencode/src/cli/cmd/tui/routes/company-setup-required.tsx：只读指引。
-- Modify packages/opencode/src/cli/cmd/tui/app.tsx：以 company.current 替代 KV gate。
-- Modify packages/opencode/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx：移除 onboarding_done 写入。
-- Delete packages/opencode/src/cli/cmd/tui/routes/onboarding/ 下 11 个旧 wizard 文件。
-- Modify packages/opencode/src/cli/cmd/tui/i18n/en.ts、zh.ts、zht.ts：新 gate 文案。
+- Create packages/control-plane/src/cli/cmd/tui/routes/company-entry.ts：pure gate decision。
+- Create packages/control-plane/src/cli/cmd/tui/routes/company-entry.test.ts：needs/ready/mismatch。
+- Create packages/control-plane/src/cli/cmd/tui/routes/company-setup-required.tsx：只读指引。
+- Modify packages/control-plane/src/cli/cmd/tui/app.tsx：以 company.current 替代 KV gate。
+- Modify packages/control-plane/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx：移除 onboarding_done 写入。
+- Delete packages/control-plane/src/cli/cmd/tui/routes/onboarding/ 下 11 个旧 wizard 文件。
+- Modify packages/control-plane/src/cli/cmd/tui/i18n/en.ts、zh.ts、zht.ts：新 gate 文案。
 - Create packages/app/e2e/m1-server.ts：真实临时 home/repository server。
 - Create packages/app/e2e/company-bootstrap.spec.ts：配对和 bootstrap 纵向路径。
 - Modify packages/app/e2e/app-shell.spec.ts：改为匿名 pairing shell，不读取生产 fixture。
 - Modify packages/app/playwright.config.ts：同时启动真实 Control Plane 和 Vite。
 - Modify packages/app/.gitignore：忽略测试自有 `.artifacts/m1-e2e`。
-- Create packages/opencode/test/company/restart.test.ts：真实进程重启与 Bearer 恢复。
+- Create packages/control-plane/test/company/restart.test.ts：真实进程重启与 Bearer 恢复。
 - Modify docs/Agent Company 产品 PRD.md：数据目录技术前置。
 - Modify docs/product-design/implementation-plan.md：M1 实施状态和验证证据。
 - Modify docs/README.md：索引本计划和 M1 决策。
@@ -506,20 +506,20 @@ TUI internal fetch ── trusted app ─────────────┤
 
 **Files:**
 
-- Create: packages/opencode/script/build-support.ts
-- Create: packages/opencode/script/build-node.ts
-- Modify: packages/opencode/.gitignore
-- Modify: packages/opencode/script/build.ts
-- Modify: packages/opencode/src/server/routes/ui.ts
+- Create: packages/control-plane/script/build-support.ts
+- Create: packages/control-plane/script/build-node.ts
+- Modify: packages/control-plane/.gitignore
+- Modify: packages/control-plane/script/build.ts
+- Modify: packages/control-plane/src/server/routes/ui.ts
 - Modify: packages/desktop/src/main/env.d.ts
 - Modify: packages/desktop/electron.vite.config.ts
-- Test: packages/opencode/test/script/build-node.test.ts
+- Test: packages/control-plane/test/script/build-node.test.ts
 
 **Interfaces:**
 
 - Produces: loadMigrations(): Promise<Migration[]>、createEmbeddedWebUIBundle(): Promise<string>、dist/node/node.js。
 - Produces: virtual module agent-company-web-ui.gen.ts whose default export is Record<string, string>。
-- Consumes: packages/app 的 bun run build 和 packages/opencode/src/node.ts。
+- Consumes: packages/app 的 bun run build 和 packages/control-plane/src/node.ts。
 
 - [ ] **Step 1: 写失败的 build contract test**
 
@@ -563,13 +563,13 @@ describe("build-node", () => {
 
 Run: bun test test/script/build-node.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL；干净 clone 中 script/build-node.ts 不存在，当前本地忽略版本也会因 @mimo-ai/script 或空 WebUI 失败。
 
 - [ ] **Step 3: 提交 build helper 和 Node entry build**
 
-packages/opencode/.gitignore 增加精确 negation：
+packages/control-plane/.gitignore 增加精确 negation：
 
 ~~~gitignore
 script/build-*.ts
@@ -683,13 +683,13 @@ UIRoutes 给 HTML/asset response 写入 production CSP：script-src 仅 self，o
 
 Run: bun test test/script/build-node.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS；dist/node/node.js 可由 Node import，GET / 返回 200 HTML。
 
 Run: bun typecheck
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
@@ -702,7 +702,7 @@ Expected: PASS；不再出现 missing script/build-node.ts 或 missing dist/type
 - [ ] **Step 5: Commit**
 
 ~~~bash
-git add packages/opencode/.gitignore packages/opencode/script/build-support.ts packages/opencode/script/build-node.ts packages/opencode/script/build.ts packages/opencode/src/server/routes/ui.ts packages/opencode/test/script/build-node.test.ts packages/desktop/src/main/env.d.ts packages/desktop/electron.vite.config.ts
+git add packages/control-plane/.gitignore packages/control-plane/script/build-support.ts packages/control-plane/script/build-node.ts packages/control-plane/script/build.ts packages/control-plane/src/server/routes/ui.ts packages/control-plane/test/script/build-node.test.ts packages/desktop/src/main/env.d.ts packages/desktop/electron.vite.config.ts
 git commit -m "build: restore embedded node control plane"
 ~~~
 
@@ -712,17 +712,17 @@ git commit -m "build: restore embedded node control plane"
 
 **Files:**
 
-- Create: packages/opencode/src/company/schema.ts
-- Create: packages/opencode/src/company/company.sql.ts
-- Create: packages/opencode/src/company/index.ts
-- Create: packages/opencode/src/local-auth/schema.ts
-- Create: packages/opencode/src/local-auth/local-auth.sql.ts
-- Create: packages/opencode/src/local-auth/index.ts
-- Modify: packages/opencode/src/company-agent/company-agent.sql.ts
-- Modify: packages/opencode/src/id/id.ts
-- Modify: packages/opencode/src/storage/schema.ts
-- Create: packages/opencode/migration/20260713120000_m1_company_bootstrap/migration.sql
-- Test: packages/opencode/test/company/schema.test.ts
+- Create: packages/control-plane/src/company/schema.ts
+- Create: packages/control-plane/src/company/company.sql.ts
+- Create: packages/control-plane/src/company/index.ts
+- Create: packages/control-plane/src/local-auth/schema.ts
+- Create: packages/control-plane/src/local-auth/local-auth.sql.ts
+- Create: packages/control-plane/src/local-auth/index.ts
+- Modify: packages/control-plane/src/company-agent/company-agent.sql.ts
+- Modify: packages/control-plane/src/id/id.ts
+- Modify: packages/control-plane/src/storage/schema.ts
+- Create: packages/control-plane/migration/20260713120000_m1_company_bootstrap/migration.sql
+- Test: packages/control-plane/test/company/schema.test.ts
 
 **Interfaces:**
 
@@ -789,7 +789,7 @@ describe("M1 company schema", () => {
 
 Run: bun test test/company/schema.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL with Cannot find module ../../src/company/schema。
 
@@ -933,20 +933,20 @@ CREATE UNIQUE INDEX local_client_credential_hash_idx ON local_client_credential(
 
 Run: bun script/check-migrations.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: Migrations are up to date。
 
 Run: bun test test/company/schema.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 - [ ] **Step 5: Commit**
 
 ~~~bash
-git add packages/opencode/src/company/schema.ts packages/opencode/src/company/company.sql.ts packages/opencode/src/company/index.ts packages/opencode/src/local-auth/schema.ts packages/opencode/src/local-auth/local-auth.sql.ts packages/opencode/src/local-auth/index.ts packages/opencode/src/company-agent/company-agent.sql.ts packages/opencode/src/id/id.ts packages/opencode/src/storage/schema.ts packages/opencode/migration/20260713120000_m1_company_bootstrap/migration.sql packages/opencode/test/company/schema.test.ts
+git add packages/control-plane/src/company/schema.ts packages/control-plane/src/company/company.sql.ts packages/control-plane/src/company/index.ts packages/control-plane/src/local-auth/schema.ts packages/control-plane/src/local-auth/local-auth.sql.ts packages/control-plane/src/local-auth/index.ts packages/control-plane/src/company-agent/company-agent.sql.ts packages/control-plane/src/id/id.ts packages/control-plane/src/storage/schema.ts packages/control-plane/migration/20260713120000_m1_company_bootstrap/migration.sql packages/control-plane/test/company/schema.test.ts
 git commit -m "feat(company): add M1 bootstrap schema"
 ~~~
 
@@ -956,11 +956,11 @@ git commit -m "feat(company): add M1 bootstrap schema"
 
 **Files:**
 
-- Create: packages/opencode/src/company/company.ts
-- Create: packages/opencode/src/company/setup-instance.ts
-- Modify: packages/opencode/src/company/index.ts
-- Modify: packages/opencode/src/effect/app-runtime.ts
-- Test: packages/opencode/test/company/company.test.ts
+- Create: packages/control-plane/src/company/company.ts
+- Create: packages/control-plane/src/company/setup-instance.ts
+- Modify: packages/control-plane/src/company/index.ts
+- Modify: packages/control-plane/src/effect/app-runtime.ts
+- Test: packages/control-plane/test/company/company.test.ts
 
 **Interfaces:**
 
@@ -1063,7 +1063,7 @@ describe("Company bootstrap", () => {
 
 Run: bun test test/company/company.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL with Company.Service is undefined。
 
@@ -1136,20 +1136,20 @@ Provider/Model 与 Git 验证必须在此 transaction 之前完成；transaction
 
 Run: bun test test/company/company.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS，包括 invalid git、unconnected provider、same retry、credential 移除/仓库暂时改名/HEAD 改变后的 same retry、复用 request_id 改 payload、new request alias 到同一 canonical root、concurrent calls 和 transaction failure 后零 Company row。
 
 Run: bun typecheck
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 - [ ] **Step 6: Commit**
 
 ~~~bash
-git add packages/opencode/src/company/company.ts packages/opencode/src/company/setup-instance.ts packages/opencode/src/company/index.ts packages/opencode/src/effect/app-runtime.ts packages/opencode/test/company/company.test.ts
+git add packages/control-plane/src/company/company.ts packages/control-plane/src/company/setup-instance.ts packages/control-plane/src/company/index.ts packages/control-plane/src/effect/app-runtime.ts packages/control-plane/test/company/company.test.ts
 git commit -m "feat(company): add atomic company bootstrap"
 ~~~
 
@@ -1159,11 +1159,11 @@ git commit -m "feat(company): add atomic company bootstrap"
 
 **Files:**
 
-- Create: packages/opencode/src/server/routes/company.ts
-- Modify: packages/opencode/src/server/server.ts
-- Modify: packages/opencode/src/server/middleware.ts
-- Modify: packages/opencode/src/server/error.ts
-- Test: packages/opencode/test/server/company-route.test.ts
+- Create: packages/control-plane/src/server/routes/company.ts
+- Modify: packages/control-plane/src/server/server.ts
+- Modify: packages/control-plane/src/server/middleware.ts
+- Modify: packages/control-plane/src/server/error.ts
+- Test: packages/control-plane/test/server/company-route.test.ts
 
 **Interfaces:**
 
@@ -1236,7 +1236,7 @@ describe("/company", () => {
 
 Run: bun test test/server/company-route.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL；GET /company 当前落入 UI/404，JSON 不符合 CompanyState。
 
@@ -1312,14 +1312,14 @@ test("declares non-empty schemas for every M1 company operation", async () => {
 
 Run: bun test test/server/company-route.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS；干净 Auth 仍能列出可配置 OpenAI、credential mutation 后同一 route 立即显示 connected，且不会返回 secret 或上游托管 provider。
 
 - [ ] **Step 5: Commit**
 
 ~~~bash
-git add packages/opencode/src/server/routes/company.ts packages/opencode/src/server/server.ts packages/opencode/src/server/middleware.ts packages/opencode/src/server/error.ts packages/opencode/test/server/company-route.test.ts
+git add packages/control-plane/src/server/routes/company.ts packages/control-plane/src/server/server.ts packages/control-plane/src/server/middleware.ts packages/control-plane/src/server/error.ts packages/control-plane/test/server/company-route.test.ts
 git commit -m "feat(server): expose typed company bootstrap API"
 ~~~
 
@@ -1329,22 +1329,22 @@ git commit -m "feat(server): expose typed company bootstrap API"
 
 **Files:**
 
-- Create: packages/opencode/src/local-auth/local-auth.ts
-- Create: packages/opencode/src/server/routes/local-auth.ts
-- Modify: packages/opencode/src/local-auth/index.ts
-- Modify: packages/opencode/src/effect/app-runtime.ts
-- Modify: packages/opencode/src/server/routes/company.ts
-- Modify: packages/opencode/src/server/routes/global.ts
-- Modify: packages/opencode/src/server/server.ts
-- Modify: packages/opencode/src/server/middleware.ts
-- Modify: packages/opencode/src/cli/network.ts
-- Modify: packages/opencode/src/cli/cmd/serve.ts
-- Modify: packages/opencode/src/cli/cmd/acp.ts
-- Modify: packages/opencode/src/cli/cmd/tui/worker.ts
-- Modify: packages/opencode/src/cli/cmd/tui/thread.ts
-- Test: packages/opencode/test/local-auth/local-auth.test.ts
-- Test: packages/opencode/test/server/network-auth.test.ts
-- Test: packages/opencode/test/server/local-auth-route.test.ts
+- Create: packages/control-plane/src/local-auth/local-auth.ts
+- Create: packages/control-plane/src/server/routes/local-auth.ts
+- Modify: packages/control-plane/src/local-auth/index.ts
+- Modify: packages/control-plane/src/effect/app-runtime.ts
+- Modify: packages/control-plane/src/server/routes/company.ts
+- Modify: packages/control-plane/src/server/routes/global.ts
+- Modify: packages/control-plane/src/server/server.ts
+- Modify: packages/control-plane/src/server/middleware.ts
+- Modify: packages/control-plane/src/cli/network.ts
+- Modify: packages/control-plane/src/cli/cmd/serve.ts
+- Modify: packages/control-plane/src/cli/cmd/acp.ts
+- Modify: packages/control-plane/src/cli/cmd/tui/worker.ts
+- Modify: packages/control-plane/src/cli/cmd/tui/thread.ts
+- Test: packages/control-plane/test/local-auth/local-auth.test.ts
+- Test: packages/control-plane/test/server/network-auth.test.ts
+- Test: packages/control-plane/test/server/local-auth-route.test.ts
 
 **Interfaces:**
 
@@ -1417,7 +1417,7 @@ describe("network authentication", () => {
 
 Run: bun test test/local-auth/local-auth.test.ts test/server/network-auth.test.ts test/server/local-auth-route.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL；LocalAuth service、Server.create auth option 和 routes 尚不存在。
 
@@ -1505,20 +1505,20 @@ export function authorization(credentials: BasicCredentials) {
 
 Run: bun test test/local-auth/local-auth.test.ts test/server/network-auth.test.ts test/server/local-auth-route.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS，包括 expired、one-time、wrong code、Bearer restart lookup、revoke、Basic-only management、SSE 401、URL auth_token 被拒绝、旧 opencode/Tauri CORS origin 被拒绝和显式 noAuth。
 
 Run: bun typecheck
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 - [ ] **Step 7: Commit**
 
 ~~~bash
-git add packages/opencode/src/local-auth/local-auth.ts packages/opencode/src/local-auth/index.ts packages/opencode/src/effect/app-runtime.ts packages/opencode/src/server/routes/local-auth.ts packages/opencode/src/server/routes/company.ts packages/opencode/src/server/routes/global.ts packages/opencode/src/server/server.ts packages/opencode/src/server/middleware.ts packages/opencode/src/cli/network.ts packages/opencode/src/cli/cmd/serve.ts packages/opencode/src/cli/cmd/acp.ts packages/opencode/src/cli/cmd/tui/worker.ts packages/opencode/src/cli/cmd/tui/thread.ts packages/opencode/test/local-auth/local-auth.test.ts packages/opencode/test/server/network-auth.test.ts packages/opencode/test/server/local-auth-route.test.ts
+git add packages/control-plane/src/local-auth/local-auth.ts packages/control-plane/src/local-auth/index.ts packages/control-plane/src/effect/app-runtime.ts packages/control-plane/src/server/routes/local-auth.ts packages/control-plane/src/server/routes/company.ts packages/control-plane/src/server/routes/global.ts packages/control-plane/src/server/server.ts packages/control-plane/src/server/middleware.ts packages/control-plane/src/cli/network.ts packages/control-plane/src/cli/cmd/serve.ts packages/control-plane/src/cli/cmd/acp.ts packages/control-plane/src/cli/cmd/tui/worker.ts packages/control-plane/src/cli/cmd/tui/thread.ts packages/control-plane/test/local-auth/local-auth.test.ts packages/control-plane/test/server/network-auth.test.ts packages/control-plane/test/server/local-auth-route.test.ts
 git commit -m "feat(auth): secure local control plane with browser pairing"
 ~~~
 
@@ -1528,8 +1528,8 @@ git commit -m "feat(auth): secure local control plane with browser pairing"
 
 **Files:**
 
-- Modify: packages/opencode/src/server/server.ts
-- Modify: packages/opencode/src/server/routes/control/index.ts
+- Modify: packages/control-plane/src/server/server.ts
+- Modify: packages/control-plane/src/server/routes/control/index.ts
 - Modify: packages/sdk/js/script/build.ts
 - Modify: packages/sdk/js/package.json
 - Modify: packages/sdk/js/src/v2/server.ts
@@ -1675,7 +1675,7 @@ Expected: no output，exit 1。
 - [ ] **Step 5: Commit**
 
 ~~~bash
-git add packages/opencode/src/server/server.ts packages/opencode/src/server/routes/control/index.ts packages/sdk/js/script/build.ts packages/sdk/js/package.json packages/sdk/js/src/v2/server.ts packages/sdk/js/src/v2/index.ts packages/sdk/js/src/v2/client.ts packages/sdk/js/src/v2/company-contract.test.ts packages/sdk/js/src/v2/gen
+git add packages/control-plane/src/server/server.ts packages/control-plane/src/server/routes/control/index.ts packages/sdk/js/script/build.ts packages/sdk/js/package.json packages/sdk/js/src/v2/server.ts packages/sdk/js/src/v2/index.ts packages/sdk/js/src/v2/client.ts packages/sdk/js/src/v2/company-contract.test.ts packages/sdk/js/src/v2/gen
 git commit -m "feat(sdk): generate typed M1 product contract"
 ~~~
 
@@ -2518,25 +2518,25 @@ git commit -m "feat(desktop): adopt Agent Company home and identity"
 
 **Files:**
 
-- Create: packages/opencode/src/cli/cmd/tui/routes/company-entry.ts
-- Create: packages/opencode/src/cli/cmd/tui/routes/company-entry.test.ts
-- Create: packages/opencode/src/cli/cmd/tui/routes/company-setup-required.tsx
-- Modify: packages/opencode/src/cli/cmd/tui/app.tsx
-- Modify: packages/opencode/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx
-- Modify: packages/opencode/src/cli/cmd/tui/i18n/en.ts
-- Modify: packages/opencode/src/cli/cmd/tui/i18n/zh.ts
-- Modify: packages/opencode/src/cli/cmd/tui/i18n/zht.ts
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/business-scope-cards.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/cofounder-recruit-skill.ts
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/founding-roles.ts
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/frame.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/index.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/prompts.ts
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/step-founding-team.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/step-mission.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/step-profile.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/step-template-select.tsx
-- Delete: packages/opencode/src/cli/cmd/tui/routes/onboarding/step-welcome.tsx
+- Create: packages/control-plane/src/cli/cmd/tui/routes/company-entry.ts
+- Create: packages/control-plane/src/cli/cmd/tui/routes/company-entry.test.ts
+- Create: packages/control-plane/src/cli/cmd/tui/routes/company-setup-required.tsx
+- Modify: packages/control-plane/src/cli/cmd/tui/app.tsx
+- Modify: packages/control-plane/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx
+- Modify: packages/control-plane/src/cli/cmd/tui/i18n/en.ts
+- Modify: packages/control-plane/src/cli/cmd/tui/i18n/zh.ts
+- Modify: packages/control-plane/src/cli/cmd/tui/i18n/zht.ts
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/business-scope-cards.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/cofounder-recruit-skill.ts
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/founding-roles.ts
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/frame.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/index.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/prompts.ts
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-founding-team.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-mission.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-profile.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-template-select.tsx
+- Delete: packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-welcome.tsx
 
 **Interfaces:**
 
@@ -2583,7 +2583,7 @@ describe("TUI company entry", () => {
 
 Run: bun test src/cli/cmd/tui/routes/company-entry.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: FAIL；company-entry.ts 尚不存在。
 
@@ -2629,7 +2629,7 @@ CompanySetupRequired 文案只给出 Desktop/browser 下一步和绑定路径；
 
 Run: rg -n "onboarding_done|content-strategist|cofounder-|<Onboarding" src/cli/cmd/tui
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: no output，exit 1。
 
@@ -2637,20 +2637,20 @@ Expected: no output，exit 1。
 
 Run: bun test src/cli/cmd/tui/routes/company-entry.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 Run: bun typecheck
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 - [ ] **Step 5: Commit**
 
 ~~~bash
-git add packages/opencode/src/cli/cmd/tui/routes/company-entry.ts packages/opencode/src/cli/cmd/tui/routes/company-entry.test.ts packages/opencode/src/cli/cmd/tui/routes/company-setup-required.tsx packages/opencode/src/cli/cmd/tui/app.tsx packages/opencode/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx packages/opencode/src/cli/cmd/tui/i18n/en.ts packages/opencode/src/cli/cmd/tui/i18n/zh.ts packages/opencode/src/cli/cmd/tui/i18n/zht.ts packages/opencode/src/cli/cmd/tui/routes/onboarding/business-scope-cards.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/cofounder-recruit-skill.ts packages/opencode/src/cli/cmd/tui/routes/onboarding/founding-roles.ts packages/opencode/src/cli/cmd/tui/routes/onboarding/frame.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/index.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/prompts.ts packages/opencode/src/cli/cmd/tui/routes/onboarding/step-founding-team.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/step-mission.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/step-profile.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/step-template-select.tsx packages/opencode/src/cli/cmd/tui/routes/onboarding/step-welcome.tsx
+git add packages/control-plane/src/cli/cmd/tui/routes/company-entry.ts packages/control-plane/src/cli/cmd/tui/routes/company-entry.test.ts packages/control-plane/src/cli/cmd/tui/routes/company-setup-required.tsx packages/control-plane/src/cli/cmd/tui/app.tsx packages/control-plane/src/cli/cmd/tui/feature-plugins/system/org-disband.tsx packages/control-plane/src/cli/cmd/tui/i18n/en.ts packages/control-plane/src/cli/cmd/tui/i18n/zh.ts packages/control-plane/src/cli/cmd/tui/i18n/zht.ts packages/control-plane/src/cli/cmd/tui/routes/onboarding/business-scope-cards.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/cofounder-recruit-skill.ts packages/control-plane/src/cli/cmd/tui/routes/onboarding/founding-roles.ts packages/control-plane/src/cli/cmd/tui/routes/onboarding/frame.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/index.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/prompts.ts packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-founding-team.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-mission.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-profile.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-template-select.tsx packages/control-plane/src/cli/cmd/tui/routes/onboarding/step-welcome.tsx
 git commit -m "feat(tui): gate entry on the shared company contract"
 ~~~
 
@@ -2665,7 +2665,7 @@ git commit -m "feat(tui): gate entry on the shared company contract"
 - Modify: packages/app/e2e/app-shell.spec.ts
 - Modify: packages/app/playwright.config.ts
 - Modify: packages/app/.gitignore
-- Create: packages/opencode/test/company/restart.test.ts
+- Create: packages/control-plane/test/company/restart.test.ts
 - Modify: docs/Agent Company 产品 PRD.md
 - Modify: docs/product-design/implementation-plan.md
 - Modify: docs/README.md
@@ -2684,7 +2684,7 @@ m1-server.ts 每次启动：
 2. git init --initial-branch=main；
 3. 写 README.md、git config 本地 test identity、git add/commit；
 4. 设置 AGENTCOMPANY_HOME、AGENTCOMPANY_SERVER_USERNAME=agentcompany、AGENTCOMPANY_SERVER_PASSWORD=m1-e2e-secret、AGENTCOMPANY_DISABLE_MODELS_FETCH=true；
-5. spawn packages/opencode/src/index.ts serve --hostname=127.0.0.1 --port=4096，并显式允许 Playwright Vite origin 的 CORS；
+5. spawn packages/control-plane/src/index.ts serve --hostname=127.0.0.1 --port=4096，并显式允许 Playwright Vite origin 的 CORS；
 6. 转发 signal 并等待 child，禁止遗留 server process。
 
 这是测试 fixture，可以创建/删除自己的 .artifacts；不得触碰用户 home 或仓库。
@@ -2956,7 +2956,7 @@ test("restores company and browser credential after process restart", async () =
 
 Run: bun test test/company/restart.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS，覆盖同 home restart、两 home 隔离、Bearer persistence/revoke，且测试 finally 确认所有 child 都已退出。
 
@@ -2970,19 +2970,19 @@ Expected: PASS；Browser/Desktop 已提交品牌资产与当前唯一 SVG 可复
 
 Run: bun script/check-migrations.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: Migrations are up to date。
 
 Run: bun test test/company test/local-auth test/server/company-route.test.ts test/server/network-auth.test.ts test/server/local-auth-route.test.ts test/script/build-node.test.ts
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
 Run: bun typecheck
 
-Working directory: packages/opencode
+Working directory: packages/control-plane
 
 Expected: PASS。
 
@@ -3093,7 +3093,7 @@ Expected: no production user-visible identity/storage hit；允许 lowercase vir
 - [ ] **Step 7: Commit**
 
 ~~~bash
-git add packages/app/e2e/m1-server.ts packages/app/e2e/company-bootstrap.spec.ts packages/app/e2e/app-shell.spec.ts packages/app/playwright.config.ts packages/app/.gitignore packages/opencode/test/company/restart.test.ts docs/Agent\ Company\ 产品\ PRD.md docs/product-design/implementation-plan.md docs/README.md
+git add packages/app/e2e/m1-server.ts packages/app/e2e/company-bootstrap.spec.ts packages/app/e2e/app-shell.spec.ts packages/app/playwright.config.ts packages/app/.gitignore packages/control-plane/test/company/restart.test.ts docs/Agent\ Company\ 产品\ PRD.md docs/product-design/implementation-plan.md docs/README.md
 git commit -m "test: close M1 bootstrap vertical slice"
 ~~~
 

@@ -99,7 +99,7 @@ Direct 不使用多方 Bidding；两人私聊由普通会话和注意力调度�
 | BID-11 | 在线参数配置 | 默认常量存在 | 提供安全预设、验证和变更审计 |
 | BID-12 | 任务完成重置 | Scheduler 有重置方法 | 与正式 Work Item 事件整合 |
 
-“已实现”只指 `packages/opencode/src/group-session/scheduler/` 和当前 Group Session 循环存在代码，不代表 Web/Desktop 产品验收完成。
+“已实现”只指 `packages/control-plane/src/group-session/scheduler/` 和当前 Group Session 循环存在代码，不代表 Web/Desktop 产品验收完成。
 
 ## 6. 行为规格
 

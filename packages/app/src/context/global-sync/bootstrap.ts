@@ -1,6 +1,6 @@
 import type {
   Config,
-  OpencodeClient,
+  ControlPlaneClient,
   Path,
   PermissionRequest,
   Project,
@@ -67,7 +67,7 @@ function runAll(list: Array<() => Promise<unknown>>) {
 }
 
 export async function bootstrapGlobal(input: {
-  globalSDK: OpencodeClient
+  globalSDK: ControlPlaneClient
   requestFailedTitle: string
   translate: (key: string, vars?: Record<string, string | number>) => string
   formatMoreCount: (count: number) => string
@@ -106,7 +106,7 @@ export async function bootstrapGlobal(input: {
         input.globalSDK.project.list().then((x) => {
           const projects = (x.data ?? [])
             .filter((p) => !!p?.id)
-            .filter((p) => !!p.worktree && !p.worktree.includes("opencode-test"))
+            .filter((p) => !!p.worktree && !p.worktree.includes("control-plane-test"))
             .slice()
             .sort((a, b) => cmp(a.id, b.id))
           input.setGlobalStore("project", projects)
@@ -163,7 +163,7 @@ function warmSessions(input: {
   ids: string[]
   store: Store<State>
   setStore: SetStoreFunction<State>
-  sdk: OpencodeClient
+  sdk: ControlPlaneClient
 }) {
   const known = new Set(input.store.session.map((item) => item.id))
   const ids = [...new Set(input.ids)].filter((id) => !!id && !known.has(id))
@@ -184,8 +184,8 @@ export const loadProvidersQuery = (directory: string | null) =>
 
 export const loadAgentsQuery = (
   directory: string | null,
-  sdk?: OpencodeClient,
-  transform?: (x: Awaited<ReturnType<OpencodeClient["app"]["agents"]>>) => void,
+  sdk?: ControlPlaneClient,
+  transform?: (x: Awaited<ReturnType<ControlPlaneClient["app"]["agents"]>>) => void,
 ) =>
   queryOptions<null>({
     queryKey: [directory, "agents"],
@@ -203,8 +203,8 @@ export const loadAgentsQuery = (
 
 export const loadPathQuery = (
   directory: string | null,
-  sdk?: OpencodeClient,
-  transform?: (x: Awaited<ReturnType<OpencodeClient["path"]["get"]>>) => void,
+  sdk?: ControlPlaneClient,
+  transform?: (x: Awaited<ReturnType<ControlPlaneClient["path"]["get"]>>) => void,
 ) =>
   queryOptions<Path>({
     queryKey: [directory, "path"],
@@ -222,7 +222,7 @@ export const loadPathQuery = (
 
 export async function bootstrapDirectory(input: {
   directory: string
-  sdk: OpencodeClient
+  sdk: ControlPlaneClient
   store: Store<State>
   setStore: SetStoreFunction<State>
   vcsCache: VcsCache

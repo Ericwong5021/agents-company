@@ -172,7 +172,7 @@ Local Control Plane（唯一权威写入者）
 #### 2026-07-14/15 验证证据
 
 - 根目录 `bun script/generate-agent-company-brand.ts --check` 与 `./packages/sdk/js/script/build.ts` 通过；后者重复生成后输出哈希一致。
-- `packages/opencode` 的 migration check、M1 Company/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；network-auth 回归测试确认 loopback listener 默认 trusted，显式 network auth 仍保持受保护。
+- `packages/control-plane` 的 migration check、M1 Company/server/build-node 测试、TUI company-entry 测试与 `bun typecheck` 均在 Windows 通过；network-auth 回归测试确认 loopback listener 默认 trusted，显式 network auth 仍保持受保护。
 - `packages/sdk/js` 的类型检查和 Company contract 测试通过；`packages/app` 的单元测试、类型检查、生产构建与真实 Playwright bootstrap E2E 通过；`packages/ui` 类型检查通过。
 - `packages/desktop` 的 Company home、品牌、shell env、renderer HTML 测试、类型检查和 Electron 生产构建均在 Windows 通过；生产身份静态扫描未发现 OpenCode 用户可见残留。`electron-builder` 已使用本机 Electron 分发目录和可访问的构建依赖镜像生成 `win-unpacked`、NSIS 安装包与 blockmap；本地构建未配置发布证书，签名仍由 CI 发布流程负责。
 - 浏览器手工完成 trusted loopback 直入、五步初始化、刷新持久化和控制台无错误核验；TUI 手工覆盖未初始化、错误仓库目录和正确仓库目录三种入口。
@@ -219,7 +219,7 @@ Local Control Plane（唯一权威写入者）
 
 主要工作：
 
-1. 在 `packages/opencode/src/runtime` 建立统一 `AgentRuntimePort`，固定 discover、capabilities、start/resume、deliver、interrupt、stop 和结构化事件；Pi、Codex、Claude Code 是平级实现，Pi 使用现有 Provider 凭据并作为默认选择；
+1. 在 `packages/control-plane/src/runtime` 建立统一 `AgentRuntimePort`，固定 discover、capabilities、start/resume、deliver、interrupt、stop 和结构化事件；Pi、Codex、Claude Code 是平级实现，Pi 使用现有 Provider 凭据并作为默认选择；
 2. 新建持久化 `AgentRun` 状态机：queued → starting → running → interrupting/recovering → completed/failed/stopped，并将 Agent、Session、GroupSession、Workflow、Project、Work Item 和 WorktreeRun 作为显式关联；
 3. 建立 runtime × lifecycle × model × permission × workspace 能力矩阵；不支持 resume、中断、工具或写入范围的组合在启动前返回结构化错误，不允许静默降级；
 4. 将内部 `steer` 定义为经授权、可审计的当前运行中断，将 `follow_up` 定义为持久化队列投递；领取和 delivered 状态在同一事务完成，重试使用幂等键避免重复执行；

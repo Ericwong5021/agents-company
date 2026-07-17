@@ -73,7 +73,7 @@
 
 ### [M2-S1] 数据对象与权威边界
 
-新增 `packages/opencode/src/conversation/`，使用以下表：
+新增 `packages/control-plane/src/conversation/`，使用以下表：
 
 | 表 | 责任 | 关键约束 |
 |---|---|---|
@@ -248,40 +248,40 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/conversation/schema.ts`
-- `packages/opencode/src/conversation/conversation.sql.ts`
-- `packages/opencode/src/conversation/index.ts`
-- `packages/opencode/migration/20260714000000_m2_conversation/migration.sql`
-- `packages/opencode/test/conversation/schema.test.ts`
-- `packages/opencode/test/conversation/migration.test.ts`
+- `packages/control-plane/src/conversation/schema.ts`
+- `packages/control-plane/src/conversation/conversation.sql.ts`
+- `packages/control-plane/src/conversation/index.ts`
+- `packages/control-plane/migration/20260714000000_m2_conversation/migration.sql`
+- `packages/control-plane/test/conversation/schema.test.ts`
+- `packages/control-plane/test/conversation/migration.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/group-session/group-session.sql.ts`
-- `packages/opencode/src/group-session/group-session.ts`
-- `packages/opencode/src/storage/schema.sql.ts`
-- `packages/opencode/src/company/schema.ts`
-- `packages/opencode/src/company/company.ts`
+- `packages/control-plane/src/group-session/group-session.sql.ts`
+- `packages/control-plane/src/group-session/group-session.ts`
+- `packages/control-plane/src/storage/schema.sql.ts`
+- `packages/control-plane/src/company/schema.ts`
+- `packages/control-plane/src/company/company.ts`
 
 - [x] 先写 schema/refinement 与 migration 失败测试，覆盖五种 channel kind、decision DRI、source kind、游标、唯一索引和外键。
 - [x] migration 为已有 Company 回填唯一 company/board channel 与成员；重复启动不重复数据。
 - [x] 新 bootstrap 在原 immediate transaction 内写默认频道；任一失败整体回滚。
 - [x] `CompanyReadyState.capabilities.board_messages` 的 schema 改为 boolean；Task 10 关闭时生产默认开启，并保留服务端紧急只读开关。
 - [x] GroupSession 增量字段允许旧行为空，不反向迁移、不删除旧数据。
-- [x] 从 `packages/opencode` 运行目标测试与 `bun typecheck`。
+- [x] 从 `packages/control-plane` 运行目标测试与 `bun typecheck`。
 - [x] Commit：`feat(conversation): add M2 channel and thread schema`
 
 ## Task 2：实现频道、成员、分页与项目频道服务（1.5 天）
 
 **Create**
 
-- `packages/opencode/src/conversation/conversation.ts`
-- `packages/opencode/test/conversation/conversation.test.ts`
+- `packages/control-plane/src/conversation/conversation.ts`
+- `packages/control-plane/test/conversation/conversation.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/company/company.ts`
-- `packages/opencode/src/company/index.ts`
+- `packages/control-plane/src/company/company.ts`
+- `packages/control-plane/src/company/index.ts`
 
 - [x] 写真实 SQLite 服务测试：list、membership、archive、稳定 cursor、同时间 ID tie-break、不可见频道拒绝。
 - [x] 实现 `listChannels`、`pageMessages`、`getThread`、`pageEntries`、`getSource`。
@@ -294,13 +294,13 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/conversation/intake.ts`
-- `packages/opencode/test/conversation/intake.test.ts`
+- `packages/control-plane/src/conversation/intake.ts`
+- `packages/control-plane/test/conversation/intake.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/conversation/conversation.ts`
-- `packages/opencode/src/conversation/schema.ts`
+- `packages/control-plane/src/conversation/conversation.ts`
+- `packages/control-plane/src/conversation/schema.ts`
 
 - [x] 写失败测试：原子创建、同 request 重放、同 request 不同 body 409、非法 reply/thread、非成员、归档频道、空白/超长输入。
 - [x] 一个 immediate transaction 写 RootNeed、Thread、members、用户消息和 queued run。
@@ -313,16 +313,16 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/company/repository-instance.ts`
-- `packages/opencode/src/conversation/runtime.ts`
-- `packages/opencode/test/group-session/group-session.test.ts`
-- `packages/opencode/test/conversation/runtime.test.ts`
+- `packages/control-plane/src/company/repository-instance.ts`
+- `packages/control-plane/src/conversation/runtime.ts`
+- `packages/control-plane/test/group-session/group-session.test.ts`
+- `packages/control-plane/test/conversation/runtime.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/group-session/group-session.ts`
-- `packages/opencode/src/group-session/schema.ts`
-- `packages/opencode/src/session/message-v2.ts`
+- `packages/control-plane/src/group-session/group-session.ts`
+- `packages/control-plane/src/group-session/schema.ts`
+- `packages/control-plane/src/session/message-v2.ts`
 
 - [x] 使用真实本地 test LLM server 写 GroupSession 集成测试，不复制 scheduler 逻辑、不 mock GroupSession service。
 - [x] `chat` 接受 external message ID，返回 `{roundNum, userGroupMessageID}`；重复调用不重复消息。
@@ -337,16 +337,16 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/conversation/signal-projector.ts`
-- `packages/opencode/src/conversation/recovery.ts`
-- `packages/opencode/test/conversation/signal-projector.test.ts`
-- `packages/opencode/test/conversation/recovery.test.ts`
+- `packages/control-plane/src/conversation/signal-projector.ts`
+- `packages/control-plane/src/conversation/recovery.ts`
+- `packages/control-plane/test/conversation/signal-projector.test.ts`
+- `packages/control-plane/test/conversation/recovery.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/conversation/runtime.ts`
-- `packages/opencode/src/conversation/conversation.ts`
-- `packages/opencode/src/server/event.ts`
+- `packages/control-plane/src/conversation/runtime.ts`
+- `packages/control-plane/src/conversation/conversation.ts`
+- `packages/control-plane/src/server/event.ts`
 
 - [x] 先写投影拒绝测试：无 source、非法 signal、decision 无 DRI、approval/delivery 无事实来源全部失败。
 - [x] 用 Product Lead Session 生成受 schema 限制的 signal draft；投影事务同时写 ChannelMessage、SignalProjection 和 source rows。
@@ -361,14 +361,14 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/server/routes/company-conversation.ts`
-- `packages/opencode/test/server/company-conversation.test.ts`
+- `packages/control-plane/src/server/routes/company-conversation.ts`
+- `packages/control-plane/test/server/company-conversation.test.ts`
 - `packages/sdk/js/src/v2/company-conversation.contract.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/server/server.ts`
-- `packages/opencode/src/server/routes/company.ts`
+- `packages/control-plane/src/server/server.ts`
+- `packages/control-plane/src/server/routes/company.ts`
 - `packages/sdk/js/src/v2/gen/**`（只由生成命令修改）
 
 - [x] 写 raw HTTP 失败测试，覆盖七个 operation、Basic/Bearer、无凭据 401、作用域 403/404、409 和完整错误 body。
@@ -403,24 +403,24 @@ flowchart LR
 
 **Create**
 
-- `packages/opencode/src/cli/cmd/tui/routes/company-channel.tsx`
-- `packages/opencode/test/cli/tui/company-channel-model.test.ts`
+- `packages/control-plane/src/cli/cmd/tui/routes/company-channel.tsx`
+- `packages/control-plane/test/cli/tui/company-channel-model.test.ts`
 
 **Modify**
 
-- `packages/opencode/src/cli/cmd/tui/component/home-board-prompt.tsx`
-- `packages/opencode/src/cli/cmd/tui/routes/home.tsx`
-- `packages/opencode/src/cli/cmd/tui/app.tsx`
-- `packages/opencode/src/cli/cmd/tui/context/route.tsx`
-- `packages/opencode/src/cli/cmd/tui/i18n/en.ts`
-- `packages/opencode/src/cli/cmd/tui/i18n/zh.ts`
+- `packages/control-plane/src/cli/cmd/tui/component/home-board-prompt.tsx`
+- `packages/control-plane/src/cli/cmd/tui/routes/home.tsx`
+- `packages/control-plane/src/cli/cmd/tui/app.tsx`
+- `packages/control-plane/src/cli/cmd/tui/context/route.tsx`
+- `packages/control-plane/src/cli/cmd/tui/i18n/en.ts`
+- `packages/control-plane/src/cli/cmd/tui/i18n/zh.ts`
 
 - [x] 首页先读取真实 board channel，再通过生成 SDK 发送 request_id/body。
 - [x] `--prompt` 使用同一方法；删除 `board_group_session_id` KV 与自动创建 GroupSession 逻辑。
 - [x] 删除 HomeBoardPrompt 对 `/company-project` 的默认提交；不能再绕过董事会与 Root Need。
 - [x] 最小 CompanyChannel 路由支持主消息分页、打开 Thread 摘要和 interrupt；不复制 Web IA。
 - [x] 手工 GroupSession 创建仍可从诊断入口使用，但首页不可到达。
-- [x] 从 `packages/opencode` 运行 TUI 目标测试与 `bun typecheck`。
+- [x] 从 `packages/control-plane` 运行 TUI 目标测试与 `bun typecheck`。
 - [x] Commit：`feat(tui): route board intake through company channels`
 
 ## Task 9：接入真实 Company Workspace 并删除生产 fixture（3 天）
@@ -463,7 +463,7 @@ flowchart LR
 **Create**
 
 - `packages/app/e2e/company-conversation.spec.ts`
-- `packages/opencode/test/conversation/restart.test.ts`
+- `packages/control-plane/test/conversation/restart.test.ts`
 - `docs/compose/reports/2026-07-15-m2-real-im-board.md`
 
 **Modify**
@@ -471,8 +471,8 @@ flowchart LR
 - `packages/app/e2e/m1-server.ts`（重命名为通用 server fixture 时同步引用）
 - `packages/app/playwright.config.ts`
 - `packages/app/e2e/company-bootstrap.spec.ts`
-- `packages/opencode/src/company/schema.ts`
-- `packages/opencode/src/company/company.ts`
+- `packages/control-plane/src/company/schema.ts`
+- `packages/control-plane/src/company/company.ts`
 - `docs/product-design/implementation-plan.md`
 - `docs/README.md`
 
@@ -508,7 +508,7 @@ flowchart LR
 所有测试从 package 目录运行，禁止从仓库根运行测试；类型检查只运行 `bun typecheck`。
 
 ```powershell
-# packages/opencode
+# packages/control-plane
 bun test test/conversation test/group-session/group-session.test.ts test/server/company-conversation.test.ts test/company
 bun typecheck
 

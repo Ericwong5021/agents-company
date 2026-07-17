@@ -43,7 +43,7 @@ export async function spawnLocalServer(
 ) {
   prepareServerEnv(companyHome)
   report("environment_prepared")
-  const { Log, Server } = await import("virtual:opencode-server")
+  const { Log, Server } = await import("virtual:control-plane-server")
   report("module_loaded")
   await Log.init({ level: "WARN", print: false })
   report("logging_ready")

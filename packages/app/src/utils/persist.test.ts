@@ -114,10 +114,10 @@ describe("persist localStorage resilience", () => {
   })
 
   test("does not read prior product storage keys", () => {
-    storage.setItem("opencode.global.dat:language", '{"locale":"zh"}')
+    storage.setItem("control-plane.global.dat:language", '{"locale":"zh"}')
 
     expect(persistTesting.localStorageWithPrefix("agent-company.global.dat").getItem("language")).toBeNull()
     expect(storage.events).toContain("get:agent-company.global.dat:language")
-    expect(storage.events).not.toContain("get:opencode.global.dat:language")
+    expect(storage.events).not.toContain("get:control-plane.global.dat:language")
   })
 })

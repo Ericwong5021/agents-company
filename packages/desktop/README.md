@@ -1,6 +1,6 @@
 # @agents-company/desktop
 
-The Electron shell for Agent Company. It embeds the shared UI from `packages/app` and starts the local server/runtime from `packages/opencode`.
+The Electron shell for Agent Company. It embeds the shared UI from `packages/app` and starts the local server/runtime from `packages/control-plane`.
 
 ## Commands
 

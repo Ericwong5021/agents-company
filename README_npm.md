@@ -5,7 +5,7 @@ Use Agent Company from your terminal.
 Agent Company CLI is the terminal entry point for delegating software work to a structured group of AI agents. You describe the outcome, inspect the plan, approve important steps, and keep work moving inside a terminal UI designed for real projects.
 
 ```bash
-npm install -g @agents-company/cli
+npm install -g @agents-company/control-plane
 agents
 ```
 
@@ -16,7 +16,7 @@ This npm package exposes the CLI/TUI surface. The broader Agent Company product 
 Install the CLI globally:
 
 ```bash
-npm install -g @agents-company/cli
+npm install -g @agents-company/control-plane
 ```
 
 Start the terminal UI in your project:
@@ -114,7 +114,7 @@ Print CLI help or the installed version.
 
 The public npm packages are intentionally small at this stage:
 
-- `@agents-company/cli` is the user-facing terminal CLI and TUI launcher.
+- `@agents-company/control-plane` is the user-facing terminal CLI and TUI launcher.
 - `@agents-company/sdk` is the TypeScript SDK for API clients and integrations.
 - `@agents-company/plugin` contains plugin-facing extension types and helpers.
 - `@agents-company/shared` contains shared internal utilities used across packages.
@@ -144,8 +144,8 @@ This usually means optional dependencies were skipped during install.
 Try reinstalling without omitting optional dependencies:
 
 ```bash
-npm uninstall -g @agents-company/cli
-npm install -g @agents-company/cli
+npm uninstall -g @agents-company/control-plane
+npm install -g @agents-company/control-plane
 ```
 
 If you use npm config, check that optional dependencies are enabled:
@@ -158,7 +158,7 @@ npm config delete optional
 Avoid installs such as:
 
 ```bash
-npm install -g @agents-company/cli --omit=optional
+npm install -g @agents-company/control-plane --omit=optional
 ```
 
 If your environment intentionally omits optional dependencies, manually install the matching binary package next to the CLI package. For example:
@@ -174,7 +174,7 @@ Use the package name that matches your OS, CPU, libc, and baseline/AVX2 support.
 The recommended install path for the public CLI is npm:
 
 ```bash
-npm install -g @agents-company/cli
+npm install -g @agents-company/control-plane
 ```
 
 pnpm and Bun can install npm packages, but their global-linking and optional-dependency behavior can differ by version and environment. If `agents --version` fails after a pnpm or Bun global install, verify that optional dependencies were installed and try npm before filing an issue.
@@ -184,7 +184,7 @@ pnpm and Bun can install npm packages, but their global-linking and optional-dep
 Use a recent Node.js LTS release and install from PowerShell, Windows Terminal, or another normal user shell:
 
 ```powershell
-npm install -g @agents-company/cli
+npm install -g @agents-company/control-plane
 agents --version
 ```
 
@@ -201,8 +201,8 @@ Corporate endpoint security can also quarantine freshly installed native binarie
 Both Apple Silicon and Intel macOS are supported through separate optional binary packages. If the wrong architecture is installed under Rosetta or a custom Node setup, reinstall from the shell you intend to use:
 
 ```bash
-npm uninstall -g @agents-company/cli
-npm install -g @agents-company/cli
+npm uninstall -g @agents-company/control-plane
+npm install -g @agents-company/control-plane
 agents --version
 ```
 

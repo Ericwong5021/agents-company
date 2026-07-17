@@ -18,7 +18,7 @@ This fixes a hard failure on Bedrock-routed Claude, which rejects any conversati
 
 ## Architecture
 
-The change lives entirely in `packages/opencode/src/session/prompt.ts`, at the two sites that build the per-step LLM request inside the run loop:
+The change lives entirely in `packages/control-plane/src/session/prompt.ts`, at the two sites that build the per-step LLM request inside the run loop:
 
 - **Main-loop send site** (~line 2720/2723)
 - **Fork/subagent send site** (~line 2850/2853)
@@ -44,7 +44,7 @@ No user-facing API or config change. Behavior triggers automatically when an age
 
 ## Verification
 
-- `bun typecheck` (from `packages/opencode`) — exits 0 after both edits.
+- `bun typecheck` (from `packages/control-plane`) — exits 0 after both edits.
 - Grep assertions: zero `role: "assistant" ... MAX_STEPS` matches; two `role: "user" ... MAX_STEPS` matches; two `isLastStep ? "none"` toolChoice lines.
 - Test suites `test/session/prompt.test.ts`, `prompt-sweep.test.ts`, `max-mode.test.ts`, `test/agent/agent.test.ts` — 62 pass, 1 fail. The single failure (`general agent denies todo tools`) is **pre-existing and unrelated**: confirmed by reproducing it on the pre-change `prompt.ts` (it fails identically without this change).
 - Reasoning: on non-last steps both edited lines reduce to the prior behavior (the `isLastStep` ternary takes its false branch), so normal turns are byte-for-byte unchanged.

@@ -18,4 +18,4 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Run oxlint
-        run: bun oxlint packages/opencode/src packages/opencode/test
+        run: bun oxlint packages/control-plane/src packages/control-plane/test

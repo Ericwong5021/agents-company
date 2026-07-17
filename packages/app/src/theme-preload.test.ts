@@ -20,9 +20,9 @@ beforeEach(() => {
 
 describe("theme preload", () => {
   test("ignores prior product theme keys before mount", () => {
-    localStorage.setItem("opencode-theme-id", "oc-1")
-    localStorage.setItem("opencode-theme-css-light", "--background-base:#fff;")
-    localStorage.setItem("opencode-theme-css-dark", "--background-base:#000;")
+    localStorage.setItem("control-plane-theme-id", "oc-1")
+    localStorage.setItem("control-plane-theme-css-light", "--background-base:#fff;")
+    localStorage.setItem("control-plane-theme-css-dark", "--background-base:#000;")
 
     run()
 

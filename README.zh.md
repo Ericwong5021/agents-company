@@ -109,7 +109,7 @@ Local Control Plane
 |---|---|
 | `packages/app` | SolidJS + Vite 共享 WebUI |
 | `packages/desktop` | Electron 桌面壳与本地 Server 宿主 |
-| `packages/opencode` | Bun/Effect/Hono Runtime、Control Plane 服务、SQLite、Git、Workflow 与 TUI |
+| `packages/control-plane` | Bun/Effect/Hono Runtime、Control Plane 服务、SQLite、Git、Workflow 与 TUI |
 
 Renderer 客户端不能直接修改 SQLite 或身份文件；Control Plane 统一负责认证写入、恢复和事件顺序。
 
@@ -145,7 +145,7 @@ bun run dev:desktop
 类型检查和测试必须从具体 package 目录运行，不能在仓库根目录运行测试：
 
 ```bash
-cd packages/opencode
+cd packages/control-plane
 bun typecheck
 bun test
 ```

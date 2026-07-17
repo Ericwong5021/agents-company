@@ -16,8 +16,8 @@ Restored the search input box in the TUI model selector dialog (`/models` comman
 
 The model selector consists of two layers:
 
-- **`DialogModel`** (`packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx`) — builds the options list (favorites, recents, provider models, "+ Add model" entries) and performs custom fuzzysort filtering via a `query` signal.
-- **`DialogSelect`** (`packages/opencode/src/cli/cmd/tui/ui/dialog-select.tsx`) — generic selection dialog with built-in search input, keyboard navigation, and scroll. Renders the input when `skipFilter` is not set.
+- **`DialogModel`** (`packages/control-plane/src/cli/cmd/tui/component/dialog-model.tsx`) — builds the options list (favorites, recents, provider models, "+ Add model" entries) and performs custom fuzzysort filtering via a `query` signal.
+- **`DialogSelect`** (`packages/control-plane/src/cli/cmd/tui/ui/dialog-select.tsx`) — generic selection dialog with built-in search input, keyboard navigation, and scroll. Renders the input when `skipFilter` is not set.
 
 Data flow:
 ```

@@ -68,9 +68,9 @@ Windows Gate 运行真实 Electron main、preload、renderer、内嵌 Control Pl
 
 | 范围 | 结果 |
 |---|---|
-| `packages/opencode` Agent 权限与内部代理 | 43 passed |
-| `packages/opencode` Conversation 主链、10k、恢复、并发幂等与投影 | 32 passed |
-| `packages/opencode` Company、GroupSession、HTTP、TUI | 49 passed |
+| `packages/control-plane` Agent 权限与内部代理 | 43 passed |
+| `packages/control-plane` Conversation 主链、10k、恢复、并发幂等与投影 | 32 passed |
+| `packages/control-plane` Company、GroupSession、HTTP、TUI | 49 passed |
 | `packages/app` Company unit/component | 64 passed |
 | Browser Playwright：shell → bootstrap → conversation | 6 passed |
 | Windows 原生 Electron Playwright | 1 passed |

@@ -25,9 +25,9 @@ The diff now sees ALL cells as different → writes every cell → full repaint.
 
 ## Affected Call Sites (3)
 
-1. `packages/opencode/src/cli/cmd/tui/app.tsx` — interactive bash handler (finally block)
-2. `packages/opencode/src/cli/cmd/tui/app.tsx` — Ctrl+Z SIGCONT handler
-3. `packages/opencode/src/cli/cmd/tui/util/editor.ts` — external editor resume
+1. `packages/control-plane/src/cli/cmd/tui/app.tsx` — interactive bash handler (finally block)
+2. `packages/control-plane/src/cli/cmd/tui/app.tsx` — Ctrl+Z SIGCONT handler
+3. `packages/control-plane/src/cli/cmd/tui/util/editor.ts` — external editor resume
 
 ## Approaches Tried and Rejected
 

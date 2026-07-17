@@ -1,6 +1,6 @@
 import type {
   Config,
-  OpencodeClient,
+  ControlPlaneClient,
   Path,
   Project,
   ProviderAuthResponse,
@@ -51,7 +51,7 @@ function createGlobalSync() {
   const owner = getOwner()
   if (!owner) throw new Error("GlobalSync must be created within owner")
 
-  const sdkCache = new Map<string, OpencodeClient>()
+  const sdkCache = new Map<string, ControlPlaneClient>()
   const booting = new Map<string, Promise<void>>()
   const sessionLoads = new Map<string, Promise<void>>()
   const sessionMeta = new Map<string, { limit: number }>()

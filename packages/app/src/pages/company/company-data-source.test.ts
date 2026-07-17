@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { createOpencodeClient, type CompanyState } from "@agents-company/sdk/v2/client"
+import { createControlPlaneClient, type CompanyState } from "@agents-company/sdk/v2/client"
 import { createSdkCompanyWorkspaceDataSource, installCompanyRefreshTriggers } from "./company-data-source"
 
 const needsBootstrap: CompanyState = {
@@ -90,7 +90,7 @@ test("publishes needs_bootstrap snapshot from SDK responses", async () => {
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({
+    createControlPlaneClient({
       baseUrl: "http://company.test",
       fetch: fetcher,
     }),
@@ -125,7 +125,7 @@ test("publishes ready snapshot with conversation state from SDK responses", asyn
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({
+    createControlPlaneClient({
       baseUrl: "http://company.test",
       fetch: fetcher,
     }),
@@ -171,7 +171,7 @@ test("refreshing after bootstrap creates conversation store", async () => {
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({
+    createControlPlaneClient({
       baseUrl: "http://company.test",
       fetch: fetcher,
     }),
@@ -210,7 +210,7 @@ test("keeps the bootstrap wizard mounted during a background refresh", async () 
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({ baseUrl: "http://company.test", fetch: fetcher }),
+    createControlPlaneClient({ baseUrl: "http://company.test", fetch: fetcher }),
   )
 
   await source.refresh()
@@ -236,7 +236,7 @@ test("error snapshot on failed company fetch", async () => {
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({
+    createControlPlaneClient({
       baseUrl: "http://company.test",
       fetch: fetcher,
     }),
@@ -276,7 +276,7 @@ test("server.connected re-reads company, auth session, and conversation snapshot
     { preconnect: fetch.preconnect },
   )
   const source = createSdkCompanyWorkspaceDataSource(
-    createOpencodeClient({ baseUrl: "http://company.test", fetch: fetcher }),
+    createControlPlaneClient({ baseUrl: "http://company.test", fetch: fetcher }),
   )
 
   await source.refresh()

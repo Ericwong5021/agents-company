@@ -35,7 +35,7 @@ describe("layout deep links", () => {
 
   test("ignores non-project deep links", () => {
     expect(parseDeepLink("agentcompany://other?directory=/tmp/demo")).toBeUndefined()
-    expect(parseDeepLink("opencode://open-project?directory=/tmp/demo")).toBeUndefined()
+    expect(parseDeepLink("control-plane://open-project?directory=/tmp/demo")).toBeUndefined()
     expect(parseDeepLink("https://example.com")).toBeUndefined()
   })
 

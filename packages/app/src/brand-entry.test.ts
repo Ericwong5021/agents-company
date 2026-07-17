@@ -12,7 +12,7 @@ describe("Agent Company browser entry", () => {
     expect(html).toContain("/agent-company-mark.svg")
     expect(html).toContain("/agent-company-icon-192.png")
     expect(html).toContain("/agent-company-theme-preload.js")
-    expect(html).not.toContain("OpenCode")
+    expect(html).not.toContain("Control Plane")
     expect(html).not.toContain("social-share")
   })
 

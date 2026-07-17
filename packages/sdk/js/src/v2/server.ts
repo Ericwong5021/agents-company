@@ -20,7 +20,7 @@ export type TuiOptions = {
   config?: Config
 }
 
-export async function createOpencodeServer(options?: ServerOptions) {
+export async function createControlPlaneServer(options?: ServerOptions) {
   options = Object.assign(
     {
       hostname: "127.0.0.1",
@@ -35,7 +35,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
   const username = "agentcompany"
   const password = randomBytes(32).toString("base64url")
 
-  const proc = launch(`opencode`, args, {
+  const proc = launch(`control-plane`, args, {
     env: {
       ...process.env,
       AGENTCOMPANY_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
@@ -58,7 +58,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
       output += chunk.toString()
       const lines = output.split("\n")
       for (const line of lines) {
-        if (/^(agentcompany|opencode) server listening/.test(line)) {
+        if (/^(agentcompany|control-plane) server listening/.test(line)) {
           const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
           if (!match) {
             clear()
@@ -106,7 +106,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
   }
 }
 
-export function createOpencodeTui(options?: TuiOptions) {
+export function createControlPlaneTui(options?: TuiOptions) {
   const args = []
 
   if (options?.project) {
@@ -122,7 +122,7 @@ export function createOpencodeTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
-  const proc = launch(`opencode`, args, {
+  const proc = launch(`control-plane`, args, {
     stdio: "inherit",
     env: {
       ...process.env,

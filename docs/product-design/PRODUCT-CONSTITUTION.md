@@ -371,7 +371,7 @@ Local Control Plane
 
 ### 第三十一条：延续现有技术基础
 
-产品继续以现有 `packages/app`、`packages/desktop` 和 `packages/opencode` 为基础演进。不得为了模仿其他产品而整体重写为另一套前后端技术栈。
+产品继续以现有 `packages/app`、`packages/desktop` 和 `packages/control-plane` 为基础演进。不得为了模仿其他产品而整体重写为另一套前后端技术栈。
 
 ## 第十一章：首次公开版本
 

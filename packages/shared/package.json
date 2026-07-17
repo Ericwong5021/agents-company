@@ -13,7 +13,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "bin": {
-    "opencode": "./bin/opencode"
+    "control-plane": "./bin/control-plane"
   },
   "exports": {
     "./*": "./src/*.ts"

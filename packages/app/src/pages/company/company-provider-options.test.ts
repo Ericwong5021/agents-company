@@ -6,12 +6,12 @@ const provider = (provider_id: string) =>
   ({ provider_id, name: provider_id, connected: false, models: [] }) satisfies CompanyProviderOption
 
 describe("company provider options", () => {
-  test("keeps only ten ranked providers and includes OpenCode Go", () => {
+  test("keeps only ten ranked providers and includes Control Plane Go", () => {
     const result = companyProviderOptions(
       [
         "groq",
         "unknown",
-        "opencode-go",
+        "control-plane-go",
         "anthropic",
         "openai",
         "xai",
@@ -29,7 +29,7 @@ describe("company provider options", () => {
       "google",
       "github-copilot",
       "deepseek",
-      "opencode-go",
+      "control-plane-go",
       "openrouter",
       "xai",
       "mistral",
@@ -41,7 +41,7 @@ describe("company provider options", () => {
     const result = companyProviderOptions(
       [
         "groq",
-        "opencode-go",
+        "control-plane-go",
         "anthropic",
         "openai",
         "xai",

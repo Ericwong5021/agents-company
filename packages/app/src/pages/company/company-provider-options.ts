@@ -6,7 +6,7 @@ export const companyProviderOrder = [
   "google",
   "github-copilot",
   "deepseek",
-  "opencode-go",
+  "control-plane-go",
   "openrouter",
   "xai",
   "mistral",

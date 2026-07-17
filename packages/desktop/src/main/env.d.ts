@@ -5,7 +5,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
-declare module "virtual:opencode-server" {
+declare module "virtual:control-plane-server" {
   export namespace Server {
     export type Listener = {
       stop: (close?: boolean) => Promise<void>

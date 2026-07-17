@@ -19,5 +19,5 @@ jobs:
 
       - name: Run typecheck
         run: |
-          cd packages/opencode
+          cd packages/control-plane
           bun typecheck

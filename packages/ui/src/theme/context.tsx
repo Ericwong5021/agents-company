@@ -31,7 +31,7 @@ function themeIDs() {
   ids = Object.keys(getFiles())
     .map((path) => {
       const id = path.slice("./themes/".length, -".json".length)
-      return id === "graphite" ? "opencode" : id
+      return id === "graphite" ? "control-plane" : id
     })
     .sort()
   return ids
@@ -69,7 +69,7 @@ const names: Record<string, string> = {
   nord: "Nord",
   "one-dark": "One Dark",
   onedarkpro: "One Dark Pro",
-  opencode: "Graphite",
+  "control-plane": "Graphite",
   orng: "Orng",
   "osaka-jade": "Osaka Jade",
   palenight: "Palenight",
@@ -189,7 +189,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (hit) return Promise.resolve(hit)
       const pending = loads.get(next)
       if (pending) return pending
-      const file = getFiles()[next === "opencode" ? "./themes/graphite.json" : `./themes/${next}.json`]
+      const file = getFiles()[next === "control-plane" ? "./themes/graphite.json" : `./themes/${next}.json`]
       if (!file) return Promise.resolve(undefined)
       const task = file()
         .then((mod) => {

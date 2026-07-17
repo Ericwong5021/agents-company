@@ -1,8 +1,8 @@
-import { type CompanyState, createOpencodeClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
+import { type CompanyState, createControlPlaneClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
 import type { CompanyWorkspaceAccess, CompanyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
 import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 
-export type CompanyClient = Pick<ReturnType<typeof createOpencodeClient>, "company" | "localAuth">
+export type CompanyClient = Pick<ReturnType<typeof createControlPlaneClient>, "company" | "localAuth">
 
 export type CompanyWorkspaceDataSource = {
   getSnapshot(): CompanyWorkspaceSnapshot

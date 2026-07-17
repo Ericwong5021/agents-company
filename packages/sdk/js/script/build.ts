@@ -9,7 +9,7 @@ import path from "path"
 
 import { createClient } from "@hey-api/openapi-ts"
 
-await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../opencode"))
+await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../control-plane"))
 
 const openapiPath = path.join(dir, "openapi.json")
 const openapi = await Bun.file(openapiPath).json()
@@ -62,7 +62,7 @@ await createClient({
     },
     {
       name: "@hey-api/sdk",
-      instance: "OpencodeClient",
+      instance: "ControlPlaneClient",
       exportFromIndex: false,
       auth: false,
       paramsStructure: "flat",

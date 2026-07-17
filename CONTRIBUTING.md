@@ -38,7 +38,7 @@ bun run dev:web
 bun run dev:desktop
 ```
 
-The standalone WebUI expects a local backend, normally on port 4096. The Electron app builds and hosts the backend from `packages/opencode` itself.
+The standalone WebUI expects a local backend, normally on port 4096. The Electron app builds and hosts the backend from `packages/control-plane` itself.
 
 ## Repository map
 
@@ -46,7 +46,7 @@ The standalone WebUI expects a local backend, normally on port 4096. The Electro
 |---|---|
 | `packages/app` | Shared SolidJS + Vite WebUI for browser and Electron |
 | `packages/desktop` | Electron main/preload/renderer shell and packaging |
-| `packages/opencode` | Bun/Effect runtime, server, SQLite, Git, workflows, TUI, and Control Plane services |
+| `packages/control-plane` | Bun/Effect runtime, server, SQLite, Git, workflows, TUI, and Control Plane services |
 | `packages/ui` | Shared UI primitives |
 | `packages/sdk` | Generated and hand-written client SDKs |
 | `docs/product-design` | Canonical product design and implementation plan |
@@ -59,7 +59,7 @@ The TUI is a supported secondary client. New product information architecture sh
 Do not run tests from the repository root; a guard intentionally rejects that. Run checks from the package you changed.
 
 ```bash
-cd packages/opencode
+cd packages/control-plane
 bun typecheck
 bun test
 ```
@@ -89,7 +89,7 @@ To regenerate the JavaScript SDK after API changes:
 Build a single CLI/runtime artifact:
 
 ```bash
-bun run packages/opencode/script/build.ts --single
+bun run packages/control-plane/script/build.ts --single
 ```
 
 Build or package the Electron app from `packages/desktop`:

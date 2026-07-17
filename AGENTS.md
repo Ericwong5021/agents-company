@@ -13,8 +13,8 @@
 The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
 
 - The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
-- The local Control Plane and agent runtime live in `packages/opencode`.
-- The TUI in `packages/opencode/src/cli/cmd/tui/` remains a supported secondary entry point and should share service semantics with the Web/Desktop clients; it must not define the primary product information architecture.
+- The local Control Plane and agent runtime live in `packages/control-plane`.
+- The TUI in `packages/control-plane/src/cli/cmd/tui/` remains a supported secondary entry point and should share service semantics with the Web/Desktop clients; it must not define the primary product information architecture.
 - The first public release focuses on single-user local software development. Do not expand the active scope to multi-user cloud hosting, general-industry delivery, multi-repository projects, Kanban-first project management, or a pixel office without an explicit product decision.
 - Product decisions and document precedence are indexed in `docs/README.md`. When code and target design differ, describe the gap rather than presenting planned behavior as implemented.
 
@@ -110,8 +110,8 @@ const table = sqliteTable("session", {
 
 - Avoid mocks as much as possible
 - Test actual implementation, do not duplicate logic into tests
-- Tests cannot run from repo root (guard: `do-not-run-tests-from-root`); run from package dirs like `packages/opencode`.
+- Tests cannot run from repo root (guard: `do-not-run-tests-from-root`); run from package dirs like `packages/control-plane`.
 
 ## Type Checking
 
-- Always run `bun typecheck` from package directories (e.g., `packages/opencode`), never `tsc` directly.
+- Always run `bun typecheck` from package directories (e.g., `packages/control-plane`), never `tsc` directly.

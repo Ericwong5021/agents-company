@@ -60,7 +60,7 @@ Figma API 已直接读取该文件：共 8 个页面；`Screens / Marvis Replica
 - 项目工作台入口作为现有产品能力放在 Board 之后；这是相对 Pencil/Marvis 增加的唯一一级入口。
 - 浏览器验收遵循 PRD LCP-01/LCP-09：Control Plane 仅监听 loopback，本地浏览器无需身份认证；非回环访问仍不属于当前产品路径。
 - Figma/Pencil 使用固定演示文案，实装使用本地 Control Plane 的真实动态数据；验收以结构、尺寸、交互逻辑和状态语义一致为准。
-- `packages/opencode` 的仓库级全量测试目前仍有既有健康债务：2749 passed、277 failed、2234 errors（另有 11 skipped、1 todo）。抽样隔离复跑定位到未在本次 WebUI 改造中修改的 Memory、Project、Actor 等旧测试/全局状态问题；本次变更涉及及验收链路的后端测试均已通过。
+- `packages/control-plane` 的仓库级全量测试目前仍有既有健康债务：2749 passed、277 failed、2234 errors（另有 11 skipped、1 todo）。抽样隔离复跑定位到未在本次 WebUI 改造中修改的 Memory、Project、Actor 等旧测试/全局状态问题；本次变更涉及及验收链路的后端测试均已通过。
 
 ## 工程验证
 
@@ -69,8 +69,8 @@ Figma API 已直接读取该文件：共 8 个页面；`Screens / Marvis Replica
 - `packages/app`: Company 新会话、事件订阅与 Conversation Store 定向测试 — 36 passed, 0 failed，81 expects（2 files）
 - `packages/app`: `bun run build` — passed
 - CSS 生产校验 — 1 passed, 0 failed
-- `packages/opencode`: `bun typecheck` — passed
-- `packages/opencode`: GroupSession / Pi Provider / Conversation Runtime / Signal Projector / Company Conversation HTTP / Instance Directory Access 定向回归 — 38 passed, 0 failed，264 expects（6 files）
+- `packages/control-plane`: `bun typecheck` — passed
+- `packages/control-plane`: GroupSession / Pi Provider / Conversation Runtime / Signal Projector / Company Conversation HTTP / Instance Directory Access 定向回归 — 38 passed, 0 failed，264 expects（6 files）
 - `packages/desktop`: `bun typecheck` — passed
 - `packages/desktop`: `bun run test:e2e` — 1 passed, 0 failed（Electron 生产构建、重启后公司选择与共享会话链路）
 - `git diff --check` — passed

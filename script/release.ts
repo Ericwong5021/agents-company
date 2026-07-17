@@ -21,7 +21,7 @@ const { Script } = await import("@agents-company/script")
 console.log(`\nReleasing v${Script.version} (channel: ${Script.channel})\n`)
 
 console.log("=== build ===\n")
-await $`./packages/opencode/script/build.ts`
+await $`./packages/control-plane/script/build.ts`
 
 console.log("\n=== publish npm ===\n")
 await $`./script/publish.ts`

@@ -1,5 +1,5 @@
 {
-  description = "OpenCode development flake";
+  description = "Agent Company development flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -30,47 +30,5 @@
         };
       });
 
-      overlays = {
-        default =
-          final: _prev:
-          let
-            node_modules = final.callPackage ./nix/node_modules.nix {
-              inherit rev;
-            };
-            opencode = final.callPackage ./nix/opencode.nix {
-              inherit node_modules;
-            };
-            desktop = final.callPackage ./nix/desktop.nix {
-              inherit opencode;
-            };
-          in
-          {
-            inherit opencode;
-            opencode-desktop = desktop;
-          };
-      };
-
-      packages = forEachSystem (
-        pkgs:
-        let
-          node_modules = pkgs.callPackage ./nix/node_modules.nix {
-            inherit rev;
-          };
-          opencode = pkgs.callPackage ./nix/opencode.nix {
-            inherit node_modules;
-          };
-          desktop = pkgs.callPackage ./nix/desktop.nix {
-            inherit opencode;
-          };
-        in
-        {
-          default = opencode;
-          inherit opencode desktop;
-          # Updater derivation with fakeHash - build fails and reveals correct hash
-          node_modules_updater = node_modules.override {
-            hash = pkgs.lib.fakeHash;
-          };
-        }
-      );
     };
 }

@@ -109,7 +109,7 @@ The current codebase evolves in place:
 |---|---|
 | `packages/app` | Shared SolidJS + Vite WebUI |
 | `packages/desktop` | Electron desktop shell and local server host |
-| `packages/opencode` | Bun/Effect/Hono runtime, Control Plane services, SQLite, Git, workflows, and TUI |
+| `packages/control-plane` | Bun/Effect/Hono runtime, Control Plane services, SQLite, Git, workflows, and TUI |
 
 The renderer clients must not mutate SQLite or identity files directly. The Control Plane owns authenticated writes, recovery, and event ordering.
 
@@ -145,7 +145,7 @@ bun run dev:desktop
 Typecheck and test from package directories, never from the repository root:
 
 ```bash
-cd packages/opencode
+cd packages/control-plane
 bun typecheck
 bun test
 ```

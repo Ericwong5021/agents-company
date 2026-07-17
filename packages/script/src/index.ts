@@ -34,7 +34,7 @@ const IS_PREVIEW = CHANNEL !== "latest"
 const VERSION = await (async () => {
   if (env.AGENTCOMPANY_VERSION) return env.AGENTCOMPANY_VERSION
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
-  const version = await Bun.file(path.resolve(import.meta.dir, "../../opencode/package.json"))
+  const version = await Bun.file(path.resolve(import.meta.dir, "../../control-plane/package.json"))
     .json()
     .then((data: any) => data.version)
   const t = env.AGENTCOMPANY_BUMP?.toLowerCase()

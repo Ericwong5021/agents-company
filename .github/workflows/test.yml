@@ -41,7 +41,7 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 20
         run: |
-          cd packages/opencode
+          cd packages/control-plane
           mkdir -p .artifacts/unit
           bun test --timeout 30000 \
             test/config/config.test.ts \

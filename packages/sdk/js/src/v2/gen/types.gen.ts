@@ -2529,7 +2529,7 @@ export type ServerConfig = {
    */
   mdns?: boolean
   /**
-   * Custom domain name for mDNS service (default: opencode.local)
+   * Custom domain name for mDNS service (default: control-plane.local)
    */
   mdnsDomain?: string
   /**
@@ -2828,7 +2828,7 @@ export type Config = {
   logLevel?: LogLevel
   server?: ServerConfig
   /**
-   * Command configuration, see https://opencode.ai/docs/commands
+   * Command configuration, see https://control-plane.ai/docs/commands
    */
   command?: {
     [key: string]: {
@@ -2937,7 +2937,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://opencode.ai/docs/agents
+   * Agent configuration, see https://control-plane.ai/docs/agents
    */
   agent?: {
     plan?: AgentConfig
@@ -5026,7 +5026,7 @@ export type GlobalImportScanResponse = GlobalImportScanResponses[keyof GlobalImp
 
 export type GlobalImportRunData = {
   body?: {
-    sources?: Array<"cc" | "codex" | "opencode">
+    sources?: Array<"cc" | "codex" | "control-plane">
     force?: boolean
   }
   path?: never

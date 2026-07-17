@@ -2,7 +2,7 @@
 
 > 状态：与当前代码校准
 > 更新日期：2026-07-13
-> 代码位置：`packages/opencode/src/group-session/scheduler/`
+> 代码位置：`packages/control-plane/src/group-session/scheduler/`
 > 产品需求：[bidding-prd.md](bidding-prd.md)
 
 ## 1. 组件边界
@@ -22,7 +22,7 @@ Autonomous-Bidding 在一个 Group Session 内选择下一位 Agent 发言者。
 ## 2. 当前文件结构
 
 ```text
-packages/opencode/src/group-session/
+packages/control-plane/src/group-session/
   group-session.ts                 # 调度循环与 Group Session 集成
   scheduler/
     bidding.types.ts               # Bid、Rights、State、Event 类型
@@ -32,7 +32,7 @@ packages/opencode/src/group-session/
     probe.ts                       # Prompt、解析、小模型调用与降级
     index.ts                       # 模块导出
 
-packages/opencode/test/group-session/scheduler/
+packages/control-plane/test/group-session/scheduler/
   BiddingScheduler.test.ts
   scoring.test.ts
 ```
@@ -209,7 +209,7 @@ Probe 关闭工具，只接受文本流，再由 `parseBid` 提取第一个 `{` 
 
 ## 11. 测试
 
-从 `packages/opencode` 运行：
+从 `packages/control-plane` 运行：
 
 ```bash
 bun test test/group-session/scheduler/BiddingScheduler.test.ts test/group-session/scheduler/scoring.test.ts

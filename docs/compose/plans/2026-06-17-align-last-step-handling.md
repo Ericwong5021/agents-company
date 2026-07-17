@@ -25,10 +25,10 @@
 
 ## File Structure
 
-- Modify: `packages/opencode/src/session/prompt.ts`
+- Modify: `packages/control-plane/src/session/prompt.ts`
   - Main-loop send site (`messages` at `:2720`, `toolChoice` at `:2723`)
   - Fork-loop send site (`messages` at `:2850`, `toolChoice` at `:2853`)
-- Test: `packages/opencode/src/session/classify.test.ts` is unrelated; the build of the messages array is inline in `prompt.ts` and not independently exported, so verification is via typecheck + a targeted assertion in a new/existing prompt-level test if one exists. If no prompt-level unit harness exists, verification is typecheck + manual reasoning (documented in Task 3).
+- Test: `packages/control-plane/src/session/classify.test.ts` is unrelated; the build of the messages array is inline in `prompt.ts` and not independently exported, so verification is via typecheck + a targeted assertion in a new/existing prompt-level test if one exists. If no prompt-level unit harness exists, verification is typecheck + manual reasoning (documented in Task 3).
 
 No new files. `max-steps.txt` content reused verbatim. No `system.ts` change (the instruction now rides on the last-step user message).
 
@@ -39,7 +39,7 @@ No new files. `max-steps.txt` content reused verbatim. No `system.ts` change (th
 **Covers:** core fix (main loop)
 
 **Files:**
-- Modify: `packages/opencode/src/session/prompt.ts:2720` (messages) and `:2723` (toolChoice)
+- Modify: `packages/control-plane/src/session/prompt.ts:2720` (messages) and `:2723` (toolChoice)
 
 - [ ] **Step 1: Edit the `messages` line (main loop, `:2720`)**
 
@@ -71,7 +71,7 @@ New:
 
 - [ ] **Step 3: Typecheck**
 
-Run from `packages/opencode`:
+Run from `packages/control-plane`:
 ```bash
 bun typecheck
 ```
@@ -80,7 +80,7 @@ Expected: PASS (no new errors). `"none"` is a valid `toolChoice` literal per `ll
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/opencode/src/session/prompt.ts
+git add packages/control-plane/src/session/prompt.ts
 git commit -m "fix(session): use user-role MAX_STEPS message + toolChoice none on last step (main loop)
 
 The assistant-prefill MAX_STEPS message made the conversation end on an
@@ -97,7 +97,7 @@ enforced rather than merely requested."
 **Covers:** core fix (fork / subagent loop)
 
 **Files:**
-- Modify: `packages/opencode/src/session/prompt.ts:2850` (messages) and `:2853` (toolChoice)
+- Modify: `packages/control-plane/src/session/prompt.ts:2850` (messages) and `:2853` (toolChoice)
 
 - [ ] **Step 1: Edit the `messages` line (fork loop, `:2850`)**
 
@@ -127,7 +127,7 @@ New:
 
 - [ ] **Step 3: Typecheck**
 
-Run from `packages/opencode`:
+Run from `packages/control-plane`:
 ```bash
 bun typecheck
 ```
@@ -136,7 +136,7 @@ Expected: PASS. The fork path's `processArgs` flows into both `handle.process` a
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/opencode/src/session/prompt.ts
+git add packages/control-plane/src/session/prompt.ts
 git commit -m "fix(session): apply user-role MAX_STEPS + toolChoice none on fork last step
 
 Mirror the main-loop fix on the fork/subagent send site so subagents that
@@ -150,13 +150,13 @@ hit agent.steps also end on a user turn (Bedrock-safe) with tools disabled."
 **Covers:** verification
 
 **Files:**
-- Read-only inspection of `packages/opencode/src/session/prompt.ts`
+- Read-only inspection of `packages/control-plane/src/session/prompt.ts`
 
 - [ ] **Step 1: Confirm no assistant-prefill remains**
 
 Run:
 ```bash
-cd /root/projects/.vibe-board-workspaces/41f7-/opencode && grep -n 'role: "assistant" as const, content: MAX_STEPS' packages/opencode/src/session/prompt.ts
+cd /root/projects/.vibe-board-workspaces/41f7-/opencode && grep -n 'role: "assistant" as const, content: MAX_STEPS' packages/control-plane/src/session/prompt.ts
 ```
 Expected: no output (zero matches).
 
@@ -164,13 +164,13 @@ Expected: no output (zero matches).
 
 Run:
 ```bash
-cd /root/projects/.vibe-board-workspaces/41f7-/opencode && grep -n 'role: "user" as const, content: MAX_STEPS' packages/opencode/src/session/prompt.ts; grep -n 'isLastStep ?' packages/opencode/src/session/prompt.ts | grep -i none
+cd /root/projects/.vibe-board-workspaces/41f7-/opencode && grep -n 'role: "user" as const, content: MAX_STEPS' packages/control-plane/src/session/prompt.ts; grep -n 'isLastStep ?' packages/control-plane/src/session/prompt.ts | grep -i none
 ```
 Expected: two matches for the user-role messages line; two matches for the `isLastStep ? ... none` toolChoice lines.
 
 - [ ] **Step 3: Final typecheck**
 
-Run from `packages/opencode`:
+Run from `packages/control-plane`:
 ```bash
 bun typecheck
 ```

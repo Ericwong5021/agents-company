@@ -9,7 +9,7 @@ const channel = (() => {
   return "dev"
 })()
 
-const CONTROL_PLANE_DIST = "../opencode/dist/node"
+const CONTROL_PLANE_DIST = "../control-plane/dist/node"
 
 const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
 
@@ -36,7 +36,7 @@ export default defineConfig({
         name: "agent-company:virtual-server-module",
         enforce: "pre",
         resolveId(id) {
-          if (id === "virtual:opencode-server") return { id: "./chunks/node.js", external: true }
+          if (id === "virtual:control-plane-server") return { id: "./chunks/node.js", external: true }
         },
       },
       {

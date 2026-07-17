@@ -70,7 +70,7 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Install cross-platform native deps
-        working-directory: packages/opencode
+        working-directory: packages/control-plane
         run: |
           OTUI_VER=$(node -p "require('./package.json').dependencies['@opentui/core']")
           WATCHER_VER=$(node -p "require('./package.json').dependencies['@parcel/watcher']")
@@ -78,14 +78,14 @@ jobs:
           bun install --os="*" --cpu="*" "@parcel/watcher@$WATCHER_VER"
 
       - name: Build all platform binaries
-        working-directory: packages/opencode
+        working-directory: packages/control-plane
         run: bun run script/build.ts --skip-install
 
       - name: Configure npm auth
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
       - name: Publish platform binary packages
-        working-directory: packages/opencode
+        working-directory: packages/control-plane
         run: |
           set -euo pipefail
 
@@ -101,11 +101,11 @@ jobs:
           done
 
       - name: Prepare CLI package
-        working-directory: packages/opencode
+        working-directory: packages/control-plane
         run: bun run script/prepare-npm-package.ts --version "${AGENTCOMPANY_VERSION}"
 
       - name: Publish CLI package
-        working-directory: packages/opencode/dist/cli
+        working-directory: packages/control-plane/dist/cli
         run: |
           set -euo pipefail
 

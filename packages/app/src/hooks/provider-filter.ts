@@ -7,7 +7,7 @@ export const popularProviders = [
   "vercel",
 ]
 
-const excludedProviders = new Set(["opencode", "opencode-go"])
+const excludedProviders = new Set(["control-plane", "control-plane-go"])
 
 export function isAgentCompanyProvider(providerID: string) {
   return !excludedProviders.has(providerID)
