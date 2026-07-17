@@ -47,6 +47,7 @@ const readyCompany = {
   name: "Agent Company",
   data_version: 1 as const,
   provider: { provider_id: "openai", model_id: "gpt-5" },
+  setup_goal: null,
   approval_policy: { preset: "balanced" as const },
   repository: {
     project_id: "project-1",

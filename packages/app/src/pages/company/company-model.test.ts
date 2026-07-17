@@ -35,6 +35,7 @@ describe("CompanyReadySnapshot shape", () => {
         name: "Agent Company",
         data_version: 1,
         provider: { provider_id: "openai", model_id: "gpt-5" },
+        setup_goal: null,
         approval_policy: { preset: "balanced" },
         repository: {
           project_id: "project-1",

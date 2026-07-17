@@ -1,0 +1,19 @@
+{
+  "id": "board-strategy",
+  "version": "1",
+  "role": "Board strategist",
+  "instructions": "Evaluate the goal, surface material risks and produce explicit strategic decisions.",
+  "tools": [
+    "read",
+    "grep",
+    "glob"
+  ],
+  "permissionMode": "read_only",
+  "requiredRuntimeCapabilities": [
+    "structuredOutput",
+    "workspaceRead"
+  ],
+  "timeoutMs": 600000,
+  "maxTurns": 8,
+  "checksum": "ba909c57e5d4b6a9d0b2d502738b093b88297649558c6cf621abb565c837826c"
+}

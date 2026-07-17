@@ -11,6 +11,7 @@ import { createStore, produce } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
+import { COMPANY_PROVIDER_CONFIGURED_EVENT } from "@/pages/company/provider-availability"
 import { type CustomProviderFormat, type FormState, headerRow, modelRow, validateCustomProvider } from "./dialog-custom-provider-form"
 
 type Props = {
@@ -182,6 +183,7 @@ export function DialogCustomProvider(props: Props) {
     },
     onSuccess: async (result) => {
       await props.onSaved?.(result)
+      window.dispatchEvent(new Event(COMPANY_PROVIDER_CONFIGURED_EVENT))
       dialog.close()
       showToast({
         variant: "success",

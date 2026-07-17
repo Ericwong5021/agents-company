@@ -101,5 +101,6 @@
         }
       }
     }
-  }
+  },
+  "model": "talktodo/gpt-5.3-codex-spark"
 }

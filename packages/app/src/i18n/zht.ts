@@ -838,6 +838,12 @@ export const dict = {
   "common.time.daysAgo.short": "{{count}}天前",
   "settings.providers.connected.environmentDescription": "已從環境變數連線",
   "settings.providers.custom.description": "透過基本 URL 新增與 OpenAI 相容的提供者。",
+  "settings.providers.defaultModel.title": "全域預設模型",
+  "settings.providers.defaultModel.description": "用於新建對話及未指定模型的代理程式。",
+  "settings.providers.defaultModel.label": "預設模型",
+  "settings.providers.defaultModel.placeholder": "請選擇模型",
+  "settings.providers.defaultModel.saved.title": "已更新全域預設模型",
+  "settings.providers.defaultModel.saved.description": "將使用 {{model}}。",
 
   "app.server.unreachable": "無法連線至 {{server}}",
   "app.server.retrying": "正在自動重試...",

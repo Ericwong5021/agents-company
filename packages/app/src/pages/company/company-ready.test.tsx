@@ -13,6 +13,7 @@ const snapshot: CompanyReadySnapshot = {
     name: "Agent Company",
     data_version: 1,
     provider: { provider_id: "openai", model_id: "gpt-5" },
+    setup_goal: null,
     approval_policy: { preset: "balanced" },
     repository: {
       project_id: "project-1",
@@ -44,7 +45,7 @@ describe("CompanyReady", () => {
     expect(snapshot.company.name).toBe("Agent Company")
     expect(snapshot.data_directory).toBe("/company/data")
     expect(snapshot.company.provider).toEqual({ provider_id: "openai", model_id: "gpt-5" })
-    expect(snapshot.company.repository.root_path).toBe("/repo")
+    expect(snapshot.company.repository?.root_path).toBe("/repo")
     expect(snapshot.company.approval_policy.preset).toBe("balanced")
     expect(snapshot.company.board).toHaveLength(3)
     expect(snapshot.start_suggestion.kind).toBe("bootstrap_complete")

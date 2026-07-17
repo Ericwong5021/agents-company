@@ -16,6 +16,7 @@ import { ThreadPanel } from "./thread-panel"
 import { CompanyComposer } from "./company-composer"
 import { BoardRoundtable } from "./board-roundtable"
 import { OfficeSurface } from "./office-surface"
+import { COMPANY_PROVIDER_CONFIGURED_EVENT, providerConfigured, shouldShowProviderSetupCard } from "./provider-availability"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import { useDialog } from "@agents-company/ui/context/dialog"
@@ -43,7 +44,7 @@ function CompanyReadyWorkspace(props: {
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
   const [workPanelOpen, setWorkPanelOpen] = createSignal(false)
-  const [providers] = createResource(() => props.dataSource.listProviders())
+  const [providers, { refetch: refetchProviders }] = createResource(() => props.dataSource.listProviders())
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)
   const activeChannel = createMemo(() =>
@@ -57,8 +58,14 @@ function CompanyReadyWorkspace(props: {
   // rollback keeps the persisted read model visible while hiding every send
   // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
-  const providerConfigured = createMemo(() => providers()?.providers.some((provider) => provider.connected) === true)
+  const hasConfiguredProvider = createMemo(() => providerConfigured(providers()))
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
+
+  onMount(() => {
+    const refreshProviderState = () => void refetchProviders()
+    window.addEventListener(COMPANY_PROVIDER_CONFIGURED_EVENT, refreshProviderState)
+    onCleanup(() => window.removeEventListener(COMPANY_PROVIDER_CONFIGURED_EVENT, refreshProviderState))
+  })
 
   const openSettings = (defaultValue = "company") =>
     void import("@/components/dialog-settings").then((settings) =>
@@ -215,7 +222,7 @@ function CompanyReadyWorkspace(props: {
                 </Match>
               </Switch>
 
-              <Show when={props.snapshot().company.setup_goal}>
+              <Show when={shouldShowProviderSetupCard(props.snapshot().company.setup_goal, providers())}>
                 {(goal) => (
                   <section class="company-provider-setup-card" aria-live="polite">
                     <span class="company-provider-setup-icon">
@@ -245,7 +252,7 @@ function CompanyReadyWorkspace(props: {
                   error={() => conversation().error}
                   hasOpenThread={hasOpenThread}
                   onSend={(body) => {
-                    if (!providerConfigured()) {
+                    if (!hasConfiguredProvider()) {
                       void props.dataSource.deferSetupGoal({ companySetupGoalInput: { body } })
                       return
                     }

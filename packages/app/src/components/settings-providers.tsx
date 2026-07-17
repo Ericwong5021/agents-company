@@ -1,6 +1,7 @@
 import { Button } from "@agents-company/ui/button"
 import { useDialog } from "@agents-company/ui/context/dialog"
 import { Icon } from "@agents-company/ui/icon"
+import { Select } from "@agents-company/ui/select"
 import { Tag } from "@agents-company/ui/tag"
 import { showToast } from "@agents-company/ui/toast"
 import { createMemo, type Component, For, Show } from "solid-js"
@@ -8,6 +9,7 @@ import { useLanguage } from "@/context/language"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { DialogCustomProvider } from "./dialog-custom-provider"
+import { globalModelOptions } from "./provider-model-options"
 import { SettingsList } from "./settings-list"
 
 const OPENAI_COMPATIBLE = "@ai-sdk/openai-compatible"
@@ -30,6 +32,30 @@ export const SettingsProviders: Component = () => {
       }]
     }),
   )
+  const models = createMemo(() => globalModelOptions(globalSync.data.config.provider, globalSync.data.config.disabled_providers))
+  const selectedModel = createMemo(() => models().find((item) => item.id === globalSync.data.config.model))
+
+  const chooseModel = async (model: ReturnType<typeof models>[number] | undefined) => {
+    if (!model || model.id === globalSync.data.config.model) return
+    const before = globalSync.data.config.model
+    globalSync.set("config", "model", model.id)
+
+    await globalSync
+      .updateConfig({ model: model.id })
+      .then(() => {
+        showToast({
+          variant: "success",
+          icon: "circle-check",
+          title: language.t("settings.providers.defaultModel.saved.title"),
+          description: language.t("settings.providers.defaultModel.saved.description", { model: model.id }),
+        })
+      })
+      .catch((err: unknown) => {
+        globalSync.set("config", "model", before)
+        const message = err instanceof Error ? err.message : String(err)
+        showToast({ title: language.t("common.requestFailed"), description: message })
+      })
+  }
 
   const disconnect = async (providerID: string, name: string) => {
     const before = globalSync.data.config.disabled_providers ?? []
@@ -67,6 +93,26 @@ export const SettingsProviders: Component = () => {
         class="company-provider-settings-list flex flex-col gap-1 max-w-[720px]"
         data-component="agent-company-compatible-provider-settings"
       >
+        <div class="flex flex-col gap-1 pb-4 border-b border-border-weak-base">
+          <h3 class="text-14-medium text-text-strong">{language.t("settings.providers.defaultModel.title")}</h3>
+          <p class="text-12-regular text-text-weak">{language.t("settings.providers.defaultModel.description")}</p>
+          <div class="flex items-center justify-between gap-4 pt-2">
+            <span class="text-12-medium text-text-weak">{language.t("settings.providers.defaultModel.label")}</span>
+            <Select
+              data-action="settings-global-model"
+              options={models()}
+              current={selectedModel()}
+              value={(item) => item.id}
+              label={(item) => `${item.provider} / ${item.label}`}
+              placeholder={language.t("settings.providers.defaultModel.placeholder")}
+              onSelect={(item) => void chooseModel(item)}
+              disabled={models().length === 0}
+              variant="secondary"
+              size="small"
+              triggerVariant="settings"
+            />
+          </div>
+        </div>
         <div class="flex items-center justify-between gap-4 pb-2">
           <h3 class="text-14-medium text-text-strong">{language.t("settings.providers.section.connected")}</h3>
           <Button
