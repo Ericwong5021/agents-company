@@ -7,6 +7,7 @@ import {
   _electron as electron,
   expect,
   test,
+  type APIRequestContext,
   type APIResponse,
   type ElectronApplication,
   type Page,
@@ -24,6 +25,7 @@ const serverURL = `http://127.0.0.1:${serverPort}`
 const messageBody = "Desktop native gate sends a real M2 board goal"
 
 let application: ElectronApplication | undefined
+const rendererDiagnostics: string[] = []
 
 async function launch() {
   application = await electron.launch({
@@ -75,6 +77,16 @@ async function firstWindow(app: ElectronApplication) {
     await test.info().attach("desktop-main-log", { body: Buffer.from(mainLog), contentType: "text/plain" })
     throw error
   })
+  page.on("console", (message) => rendererDiagnostics.push(`console:${message.type()}: ${message.text()}`))
+  page.on("pageerror", (error) => rendererDiagnostics.push(`pageerror: ${error.stack ?? error.message}`))
+  page.on("requestfailed", (request) => {
+    if (!request.url().includes("/company/")) return
+    rendererDiagnostics.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`)
+  })
+  page.on("response", (response) => {
+    if (!response.url().includes("/company/")) return
+    rendererDiagnostics.push(`response: ${response.status()} ${response.url()}`)
+  })
   await page.waitForLoadState("domcontentloaded")
   return page
 }
@@ -109,6 +121,7 @@ async function restoreAppLifecycle(app: ElectronApplication) {
 
 async function bootstrap(page: Page) {
   await expect(page.getByRole("heading", { name: "Set up your local company" })).toBeVisible()
+  await expect(page.getByLabel("Provider").locator('option[value="openai"]')).toHaveCount(1)
   await page.getByLabel("Provider").selectOption("openai")
   await page.getByPlaceholder("API key").fill("test-openai-key")
   await page.getByRole("button", { name: "Connect", exact: true }).click()
@@ -131,6 +144,54 @@ async function bootstrap(page: Page) {
 
 async function sidecarConnection(page: Page) {
   return page.evaluate(() => window.api.awaitInitialization(() => undefined))
+}
+
+async function probeProviders(page: Page, request: APIRequestContext) {
+  const [serviceProviders, serviceAuth, renderer] = await Promise.all([
+    request.get(serverURL + "/company/providers"),
+    request.get(serverURL + "/company/providers/auth"),
+    page.evaluate(async (url) => {
+      const probe = (path: string) =>
+        fetch(url + path)
+          .then(async (response) => {
+            const body = await response.text()
+            return {
+              status: response.status,
+              hasOpenAI: body.includes('"provider_id":"openai"'),
+              body: body.slice(0, 2_000),
+            }
+          })
+          .catch((error) => ({ error: String(error) }))
+      const [providers, auth] = await Promise.all([probe("/company/providers"), probe("/company/providers/auth")])
+      return { origin: location.origin, providers, auth }
+    }, serverURL),
+  ])
+  const [serviceProviderBody, serviceAuthBody] = await Promise.all([serviceProviders.text(), serviceAuth.text()])
+  await test.info().attach("desktop-provider-probe", {
+    body: Buffer.from(
+      JSON.stringify(
+        {
+          service: {
+            providers: {
+              status: serviceProviders.status(),
+              hasOpenAI: serviceProviderBody.includes('"provider_id":"openai"'),
+              body: serviceProviderBody.slice(0, 2_000),
+            },
+            auth: { status: serviceAuth.status(), body: serviceAuthBody.slice(0, 2_000) },
+          },
+          renderer,
+        },
+        null,
+        2,
+      ),
+    ),
+    contentType: "application/json",
+  })
+  expect(serviceProviders.status()).toBe(200)
+  expect(serviceProviderBody).toContain('"provider_id":"openai"')
+  expect(serviceAuth.status()).toBe(200)
+  expect(renderer.providers).toMatchObject({ status: 200, hasOpenAI: true })
+  expect(renderer.auth).toMatchObject({ status: 200 })
 }
 
 function objectValue(value: unknown, label: string) {
@@ -184,6 +245,7 @@ function messageList(value: unknown) {
 }
 
 test.beforeAll(async () => {
+  rendererDiagnostics.length = 0
   await fs.rm(artifacts, { recursive: true, force: true })
   await fs.mkdir(repository, { recursive: true })
   await fs.writeFile(path.join(repository, "README.md"), "# Desktop M2 acceptance repository\n")
@@ -198,7 +260,17 @@ test.beforeAll(async () => {
   }
 })
 
-test.afterEach(async () => {
+test.afterEach(async ({}, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    const mainLog = await fs
+      .readFile(path.join(appData, "user-data", "logs", "main.log"), "utf8")
+      .catch((error) => `Desktop main log unavailable: ${String(error)}`)
+    await test.info().attach("desktop-renderer-diagnostics", {
+      body: Buffer.from(rendererDiagnostics.join("\n")),
+      contentType: "text/plain",
+    })
+    await test.info().attach("desktop-main-log", { body: Buffer.from(mainLog), contentType: "text/plain" })
+  }
   await stop()
 })
 
@@ -219,9 +291,10 @@ test("closes the native Desktop gate from home selection through restart and sha
 
   const readyApp = await launch()
   const desktopPage = await firstWindow(readyApp)
-  await bootstrap(desktopPage)
   const firstSidecar = await sidecarConnection(desktopPage)
   expect(firstSidecar.url).toBe(serverURL)
+  await probeProviders(desktopPage, request)
+  await bootstrap(desktopPage)
 
   await desktopPage.getByLabel("Send a message").fill(messageBody)
   await desktopPage.getByRole("button", { name: "Send", exact: true }).click()
