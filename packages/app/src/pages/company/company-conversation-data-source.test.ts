@@ -204,6 +204,17 @@ describe("ConversationStore", () => {
     expect(store.getState().threadEntries).toEqual([])
   })
 
+  test("setActiveChannel can start a fresh board conversation without restoring the previous thread", async () => {
+    await store.refresh()
+    expect(store.getOpenThreadID()).toBe("cth_1")
+
+    await store.setActiveChannel("chn_board", { restoreLatestThread: false })
+
+    expect(store.getActiveChannelID()).toBe("chn_board")
+    expect(store.getOpenThreadID()).toBeNull()
+    expect(store.getState().threadEntries).toEqual([])
+  })
+
   test("getActiveChannelID returns current channel", async () => {
     expect(store.getActiveChannelID()).toBeNull()
     await store.setActiveChannel("chn_board")

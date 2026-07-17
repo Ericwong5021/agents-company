@@ -6,7 +6,7 @@ import { AppFileSystem } from "@agents-company/shared/filesystem"
 import { WorkspaceContext } from "@/control-plane/workspace-context"
 import { WorkspaceID } from "@/control-plane/schema"
 import { Flag } from "@/flag/flag"
-import { Filesystem } from "@/util"
+import { isInstanceDirectoryAllowed } from "@/server/directory-access"
 
 export function InstanceMiddleware(workspaceID?: WorkspaceID): MiddlewareHandler {
   return async (c, next) => {
@@ -22,9 +22,11 @@ export function InstanceMiddleware(workspaceID?: WorkspaceID): MiddlewareHandler
     )
 
     if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) {
-      const cwd = Filesystem.resolve(process.cwd())
-      if (!Filesystem.contains(cwd, directory)) {
-        return c.json({ error: "Access denied: directory must be within the server's working directory" }, 403)
+      if (!isInstanceDirectoryAllowed(directory)) {
+        return c.json(
+          { error: "Access denied: directory must be within the server working directory or a bound company repository" },
+          403,
+        )
       }
     }
 

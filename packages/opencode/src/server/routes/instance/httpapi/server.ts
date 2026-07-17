@@ -9,6 +9,7 @@ import { InstanceBootstrap } from "@/project/bootstrap"
 import { Instance } from "@/project/instance"
 import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util"
+import { isInstanceDirectoryAllowed } from "@/server/directory-access"
 import { ConfigApi, configHandlers } from "./config"
 import { PermissionApi, permissionHandlers } from "./permission"
 import { ProjectApi, projectHandlers } from "./project"
@@ -83,10 +84,10 @@ const instance = HttpRouter.middleware()(
         const directory = Filesystem.resolve(decode(raw))
 
         if (!Flag.AGENTCOMPANY_SERVER_PASSWORD) {
-          const cwd = Filesystem.resolve(process.cwd())
-          if (!Filesystem.contains(cwd, directory)) {
+          if (!isInstanceDirectoryAllowed(directory)) {
             return yield* new DirectoryAccessDenied({
-              message: "Access denied: directory must be within the server's working directory",
+              message:
+                "Access denied: directory must be within the server working directory or a bound company repository",
             })
           }
         }

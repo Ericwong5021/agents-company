@@ -37,7 +37,7 @@ export type ConversationStore = {
   subscribe(listener: (state: ConversationSnapshot) => void): Unsubscriber
   refresh(): Promise<void>
   /** Switch active channel and load its first page of messages */
-  setActiveChannel(channelID: ChannelId): Promise<void>
+  setActiveChannel(channelID: ChannelId, options?: { restoreLatestThread?: boolean }): Promise<void>
   /** Send a message to the active channel; returns immediately after 202 */
   sendMessage(
     body: string,
@@ -310,8 +310,11 @@ export function createConversationStore(options: {
       publish()
     },
 
-    async setActiveChannel(channelID) {
-      if (channelID === activeChannelID) return
+    async setActiveChannel(channelID, options) {
+      if (channelID === activeChannelID) {
+        if (options?.restoreLatestThread === false) await store.openThread("")
+        return
+      }
       const generation = ++messagesGeneration
       threadGeneration += 1
       activeChannelID = channelID
@@ -345,7 +348,7 @@ export function createConversationStore(options: {
             channels.find((channel) => channel.id === channelID)?.kind === "board"
               ? messages.find((message) => message.sourceThreadID)?.sourceThreadID
               : undefined
-          if (latestThreadID) await store.openThread(latestThreadID)
+          if (latestThreadID && options?.restoreLatestThread !== false) await store.openThread(latestThreadID)
         }
       } catch (err: unknown) {
         if (generation !== messagesGeneration || activeChannelID !== channelID) return

@@ -37,14 +37,31 @@ const provider: Provider.Info = {
 
 describe("Pi provider bridge", () => {
   test("reuses configured Provider credentials when Auth has no separate record", () => {
-    expect(piProviderCredential(undefined, { key: undefined, options: { apiKey: "config-key" } })).toBe("config-key")
+    expect(
+      piProviderCredential(undefined, { key: undefined, options: { apiKey: "config-key" }, source: "config" }),
+    ).toBe("config-key")
   })
 
   test("prefers the authoritative Auth record and configured base URL", () => {
-    expect(piProviderCredential({ type: "api", key: "auth-key" }, { key: "env-key", options: {} })).toBe("auth-key")
+    expect(
+      piProviderCredential(
+        { type: "api", key: "auth-key" },
+        { key: "env-key", options: {}, source: "env" },
+      ),
+    ).toBe("auth-key")
     expect(piProviderBaseUrl({ options: { baseURL: "http://127.0.0.1:4321/v1" } }, "https://default.invalid")).toBe(
       "http://127.0.0.1:4321/v1",
     )
+  })
+
+  test("allows a config-backed loopback provider to run without a real API key", () => {
+    expect(
+      piProviderCredential(undefined, {
+        key: undefined,
+        options: { baseURL: "http://127.0.0.1:4321/v1" },
+        source: "config",
+      }),
+    ).toBe("agent-company-local-provider")
   })
 
   test("keeps AgentCompany connection overrides for Pi built-in models", () => {

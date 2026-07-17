@@ -5,6 +5,7 @@ import { Provider } from "@/provider"
 import { Agent } from "@/agent/agent"
 import { MessageV2 } from "@/session/message-v2"
 import { MessageID } from "@/session/schema"
+import type { ModelID, ProviderID } from "@/provider/schema"
 
 export interface ProbeInput {
   persona: { name: string; role: string; description: string }
@@ -86,6 +87,7 @@ export interface ProbeCtx {
   provider: Provider.Interface
   llm: LLM.Interface
   probeAgent: Agent.Info
+  model?: { providerID: ProviderID; modelID: ModelID }
 }
 
 /**
@@ -98,9 +100,15 @@ export function probeOne(
   input: ProbeInput,
 ): Effect.Effect<Bid> {
   return Effect.gen(function* () {
-    const defaultConfig = yield* ctx.provider.defaultModel()
-    const smallModel = yield* ctx.provider.getSmallModel(defaultConfig.providerID)
-    const model = smallModel ?? (yield* ctx.provider.getModel(defaultConfig.providerID, defaultConfig.modelID))
+    const model = ctx.model
+      ? yield* ctx.provider.getModel(ctx.model.providerID, ctx.model.modelID)
+      : yield* Effect.gen(function* () {
+          const defaultConfig = yield* ctx.provider.defaultModel()
+          return (
+            (yield* ctx.provider.getSmallModel(defaultConfig.providerID)) ??
+            (yield* ctx.provider.getModel(defaultConfig.providerID, defaultConfig.modelID))
+          )
+        })
     if (!model) return fallbackPass("no model available")
 
     const probePrompt = buildProbePrompt(input)

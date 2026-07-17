@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Effect } from "effect"
+import { AgentRunEventTable, AgentRunTable } from "../../src/agent-run/agent-run.sql"
 import { Company } from "../../src/company"
 import { RepositoryBindingTable } from "../../src/company/company.sql"
 import { BootstrapInput, CompanyID } from "../../src/company/schema"
@@ -17,8 +18,6 @@ import { GroupSession } from "../../src/group-session"
 import { GroupMessageTable, GroupSessionMemberTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
 import { GroupSessionID } from "../../src/group-session/schema"
 import { Instance } from "../../src/project/instance"
-import { MessageV2 } from "../../src/session/message-v2"
-import type { MessageID, SessionID } from "../../src/session/schema"
 import { eq } from "../../src/storage"
 import * as Database from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
@@ -107,7 +106,7 @@ beforeEach(reset)
 afterEach(reset)
 
 describe.serial("M2 conversation runtime", () => {
-  test.serial("uses the repository-bound Instance and preserves an exact GroupSession to MessageV2 source chain", async () => {
+  test.serial("uses the repository-bound Instance and preserves an exact GroupSession to AgentRun source chain", async () => {
     const server = startScriptedLLMServer(
       Array.from({ length: 32 }, () => ({
         lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
@@ -156,7 +155,7 @@ describe.serial("M2 conversation runtime", () => {
             .from(GroupMessageTable)
             .where(eq(GroupMessageTable.group_session_id, started.groupSessionID))
             .all()
-            .some((message) => message.runtime_message_id),
+            .some((message) => message.agent_run_id),
         ),
       )
       await waitFor(
@@ -175,16 +174,31 @@ describe.serial("M2 conversation runtime", () => {
           .all(),
       )
       const userMessage = messages.find((message) => message.role === "user")
-      const agentMessage = messages.find((message) => message.role === "agent" && message.runtime_message_id)
+      const agentMessage = messages.find((message) => message.role === "agent" && message.agent_run_id)
 
       expect(userMessage?.external_message_id).toBe(accepted.messageID)
-      expect(agentMessage?.runtime_message_id).toBeString()
-      const source = MessageV2.get({
-        sessionID: agentMessage!.session_id as SessionID,
-        messageID: agentMessage!.runtime_message_id as MessageID,
+      expect(agentMessage?.agent_run_id).toBeString()
+      expect(
+        Database.use((db) =>
+          db.select().from(AgentRunTable).where(eq(AgentRunTable.id, agentMessage!.agent_run_id!)).get(),
+        ),
+      ).toMatchObject({
+        id: agentMessage!.agent_run_id,
+        group_session_id: started.groupSessionID,
+        state: "completed",
+        model: "m2-test/test-model",
+        cwd: repository.path,
       })
-      expect(source.info.id).toBe(agentMessage!.runtime_message_id!)
-      expect(source.parts.length).toBeGreaterThan(0)
+      expect(
+        Database.use((db) =>
+          db
+            .select()
+            .from(AgentRunEventTable)
+            .where(eq(AgentRunEventTable.agent_run_id, agentMessage!.agent_run_id!))
+            .all()
+            .some((event) => event.type === "runtime.completed"),
+        ),
+      ).toBe(true)
       await Instance.disposeAll()
       await Bun.sleep(500)
     } finally {

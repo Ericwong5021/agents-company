@@ -146,7 +146,8 @@ function CompanyReadyWorkspace(props: {
             setMobileChannelsOpen(false)
             setView("new")
             setWorkPanelOpen(true)
-            void store()?.openThread("")
+            const board = conversation().channels.find((channel) => channel.kind === "board")
+            if (board) void store()?.setActiveChannel(board.id, { restoreLatestThread: false })
           }}
           onOpenProject={openProject}
           onOpenOffice={() => {
@@ -360,8 +361,8 @@ export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceD
     void source.refresh()
 
     if (source.handleEvent) {
-      const unsubEvent = globalSDK.event.on("global", (event) => {
-        source.handleEvent?.(event)
+      const unsubEvent = globalSDK.event.listen((event) => {
+        source.handleEvent?.(event.details)
       })
       onCleanup(unsubEvent)
     }

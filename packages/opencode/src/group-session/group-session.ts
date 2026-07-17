@@ -27,6 +27,7 @@ import { Provider } from "@/provider"
 import { LLM } from "@/session/llm"
 import { AgentRun } from "@/agent-run/agent-run"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
+import { CompanyTable, RepositoryBindingTable } from "@/company/company.sql"
 
 const MEMBER_CONCURRENCY = 3
 
@@ -258,6 +259,20 @@ function loadGroupInfo(groupID: GroupSessionID): Info | undefined {
       archived: row.time_archived ?? undefined,
     },
   }
+}
+
+function loadCompanyModel(projectID: string) {
+  return Database.use((db) =>
+    db
+      .select({
+        providerID: CompanyTable.default_provider_id,
+        modelID: CompanyTable.default_model_id,
+      })
+      .from(CompanyTable)
+      .innerJoin(RepositoryBindingTable, eq(RepositoryBindingTable.company_id, CompanyTable.id))
+      .where(eq(RepositoryBindingTable.project_id, projectID as ProjectID))
+      .get(),
+  )
 }
 
 // Build the group context block injected into each member's prompt.
@@ -692,10 +707,14 @@ export const layer: Layer.Layer<
         )
         if (!member) return yield* Effect.fail(new Error(`Group session member ${input.companyAgentID} was not found`))
         const group = yield* get(input.groupSessionID)
+        const model = group.contextPolicy === "work_scoped"
+          ? yield* Effect.sync(() => loadCompanyModel(group.projectID))
+          : undefined
         return yield* promptSvc.prompt({
           sessionID: member.sessionID as SessionID,
           agentID: group.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
           source: "spawn",
+          ...(model ? { model } : {}),
           format: input.format,
           parts: [{ type: "text", text: input.text }],
         })
@@ -718,6 +737,9 @@ export const layer: Layer.Layer<
       }) {
         const memberIds = params.info.members.map((m) => m.companyAgentID)
         const scheduler = new BiddingScheduler(params.groupSessionID, memberIds)
+        const companyModel = params.info.contextPolicy === "work_scoped"
+          ? yield* Effect.sync(() => loadCompanyModel(params.info.projectID))
+          : undefined
 
         // Work-scoped sessions deliberately use only public company fields.
         const agentInfos: Record<string, PublicCompanyAgent> = {}
@@ -734,7 +756,7 @@ export const layer: Layer.Layer<
         const probeAgent = yield* agentSvc.get("probe").pipe(Effect.orElseSucceed(() => undefined))
         if (!probeAgent) return
 
-        const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent }
+        const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent, model: companyModel }
 
         // A resumed process has only persisted group messages, not scheduler state.
         // Replaying completed speakers restores the deterministic rights ordering and
@@ -872,7 +894,9 @@ export const layer: Layer.Layer<
                     runtime: agentInfo.runtime,
                     lifecycle: "on_demand",
                     permissionMode: "read_only",
-                    model: agentInfo.model,
+                    model:
+                      agentInfo.model ??
+                      (companyModel ? `${companyModel.providerID}/${companyModel.modelID}` : undefined),
                     cwd: Instance.worktree,
                     prompt: speakerPrompt,
                     capabilityPacks: ["board-strategy@1"],
@@ -928,6 +952,7 @@ export const layer: Layer.Layer<
                   sessionID: member.sessionID as SessionID,
                   agentID: params.info.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
                   source: "user",
+                  ...(companyModel ? { model: companyModel } : {}),
                   parts: [{ type: "text", text: speakerPrompt }],
                 }).pipe(
                   Effect.matchEffect({

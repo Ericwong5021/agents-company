@@ -29,4 +29,14 @@ describe("Company shell integration contract", () => {
     expect(composer).toContain("当前 Company 会话暂不支持文件附件，可在项目工作台中附加文件")
     expect(composer).toContain("disabled")
   })
+
+  test("forwards repository-scoped Company events instead of listening only to the global directory", () => {
+    expect(workspace).toContain("globalSDK.event.listen")
+    expect(workspace).not.toContain('globalSDK.event.on("global"')
+  })
+
+  test("routes a fresh conversation to the Board without restoring the previous thread", () => {
+    expect(workspace).toContain('channel.kind === "board"')
+    expect(workspace).toContain("setActiveChannel(board.id, { restoreLatestThread: false })")
+  })
 })

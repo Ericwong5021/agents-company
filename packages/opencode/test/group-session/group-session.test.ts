@@ -19,15 +19,15 @@ import * as Database from "../../src/storage/db"
 import { BootstrapInput } from "../../src/company/schema"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { startScriptedLLMServer, textStopResponse } from "../lib/scripted-llm-server"
+import { startScriptedLLMServer, textStopResponse, toolCallResponse } from "../lib/scripted-llm-server"
 
 const boardAgents = ["board-ceo", "board-cto", "board-product-lead"]
 const canary = "M2_PRIVATE_MEMORY_CANARY_DO_NOT_LEAK"
 
-function providerConfig(baseURL: string) {
+function providerConfig(baseURL: string, fallbackURL = baseURL) {
   return {
-    model: "m2-test/test-model",
-    small_model: "m2-test/test-model",
+    model: "fallback-test/test-model",
+    small_model: "fallback-test/test-model",
     checkpoint: { memory_reconcile_on_search: false },
     provider: {
       "m2-test": {
@@ -42,6 +42,19 @@ function providerConfig(baseURL: string) {
           },
         },
         options: { apiKey: "test-key", baseURL },
+      },
+      "fallback-test": {
+        name: "Fallback Test",
+        npm: "@ai-sdk/openai-compatible",
+        env: [],
+        models: {
+          "test-model": {
+            name: "Fallback Model",
+            tool_call: true,
+            limit: { context: 8_000, output: 2_000 },
+          },
+        },
+        options: { apiKey: "test-key", baseURL: fallbackURL },
       },
     },
   }
@@ -90,6 +103,101 @@ beforeEach(reset)
 afterEach(reset)
 
 describe.serial("M2 GroupSession runtime source bridge", () => {
+  test.serial("routes work-scoped bidding through the Company model instead of the global fallback", async () => {
+    const companyServer = startScriptedLLMServer(
+      Array.from({ length: 24 }, () => ({
+        lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
+      })),
+    )
+    const fallbackServer = startScriptedLLMServer([
+      { lines: textStopResponse("wrong model"), status: 503 },
+    ])
+    const repository = await tmpdir({
+      git: true,
+      config: providerConfig(`${companyServer.origin}/v1`, `${fallbackServer.origin}/v1`),
+    })
+
+    try {
+      await bootstrap(repository.path)
+      const group = await groupSession(repository.path, (service) =>
+        service.create({ title: "Company model routing", agentIDs: boardAgents, contextPolicy: "work_scoped" }),
+      )
+      await groupSession(repository.path, (service) =>
+        service.chat({ groupSessionID: group.id, text: "Use the configured Company model." }),
+      )
+      await waitFor(async () =>
+        groupSession(repository.path, (service) =>
+          Effect.gen(function* () {
+            const messages = yield* service.messages(group.id)
+            return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.role === "agent").length >= 2
+          }),
+        ),
+      )
+
+      expect(companyServer.captures.length).toBeGreaterThan(0)
+      expect(fallbackServer.captures).toHaveLength(0)
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
+      await Promise.all([companyServer.stop(), fallbackServer.stop()])
+      await repository[Symbol.asyncDispose]()
+    }
+  }, 15_000)
+
+  test.serial("routes work-scoped structured prompts through the Company model", async () => {
+    const companyServer = startScriptedLLMServer([
+      {
+        lines: toolCallResponse({
+          id: "company-model-structured",
+          name: "StructuredOutput",
+          args: JSON.stringify({ publish: true }),
+        }),
+      },
+    ])
+    const fallbackServer = startScriptedLLMServer([
+      { lines: textStopResponse("wrong model"), status: 503 },
+    ])
+    const repository = await tmpdir({
+      git: true,
+      config: providerConfig(`${companyServer.origin}/v1`, `${fallbackServer.origin}/v1`),
+    })
+
+    try {
+      await bootstrap(repository.path)
+      const group = await groupSession(repository.path, (service) =>
+        service.create({ title: "Company structured routing", agentIDs: boardAgents, contextPolicy: "work_scoped" }),
+      )
+      const response = await groupSession(repository.path, (service) =>
+        service.promptMember({
+          groupSessionID: group.id,
+          companyAgentID: "board-product-lead",
+          text: "Return the structured result.",
+          format: {
+            type: "json_schema",
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: { publish: { type: "boolean" } },
+              required: ["publish"],
+            },
+            retryCount: 0,
+          },
+        }),
+      )
+
+      expect(response.info.role === "assistant" ? response.info.structured : undefined).toEqual({ publish: true })
+      expect(companyServer.captures).toHaveLength(1)
+      expect(fallbackServer.captures).toHaveLength(0)
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+      await Bun.sleep(500)
+      await Promise.all([companyServer.stop(), fallbackServer.stop()])
+      await repository[Symbol.asyncDispose]()
+    }
+  }, 15_000)
+
   test.serial("persists idempotent external input, exact AgentRun sources, and excludes private memory in work scope", async () => {
     const server = startScriptedLLMServer(
       Array.from({ length: 16 }, () => ({
