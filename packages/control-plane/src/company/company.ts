@@ -9,10 +9,11 @@ import { Git } from "@/git"
 import { Project } from "@/project"
 import { ProjectID } from "@/project/schema"
 import { Provider } from "@/provider"
+import { ModelID, ProviderID } from "@/provider/schema"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Flag } from "@/flag/flag"
 import { ensureCompanyChannels } from "@/conversation/conversation.sql"
-import { ApprovalPolicyTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
+import { ApprovalPolicyTable, CompanySetupGoalTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
 import {
   BootstrapInput,
@@ -27,11 +28,14 @@ import {
   CompanyProviderUnsupported,
   CompanyReadyState,
   CompanyRepositoryNotGit,
+  CompanySetupGoalInput,
   type RepositoryCandidate,
 } from "./schema"
 
 const COMPANY_ID = CompanyID.parse("cmp_local")
 const REPOSITORY_BINDING_ID = "rbd_primary"
+const UNCONFIGURED_PROVIDER = ProviderID.zod.parse("unconfigured")
+const UNCONFIGURED_MODEL = ModelID.zod.parse("unconfigured")
 const unsupportedProviders = new Set(["control-plane"])
 
 export const BOARD = [
@@ -92,6 +96,49 @@ function needsBootstrap(): CompanyState {
   })
 }
 
+function canCreateDefaultCompany(tx: Database.Transaction) {
+  return tx.select().from(CompanyAgentTable).all().length === 0
+}
+
+function createDefaultCompany(tx: Database.Transaction) {
+  const now = Date.now()
+  tx.insert(CompanyTable)
+    .values([
+      {
+        id: COMPANY_ID,
+        name: "Agent Company",
+        data_version: 1,
+        default_provider_id: UNCONFIGURED_PROVIDER,
+        default_model_id: UNCONFIGURED_MODEL,
+        bootstrap_request_id: "default-company",
+        bootstrap_input_path: Global.Path.data,
+        time_created: now,
+        time_updated: now,
+      },
+    ])
+    .run()
+  tx.insert(ApprovalPolicyTable)
+    .values({ company_id: COMPANY_ID, preset: "balanced", time_created: now, time_updated: now })
+    .run()
+  ensureCompanyChannels({ companyID: COMPANY_ID, boardAgentIDs: BOARD.map((member) => member.id), now })
+  tx.insert(CompanyAgentTable)
+    .values(
+      BOARD.map((member) => ({
+        id: member.id,
+        company_id: COMPANY_ID,
+        role_key: member.role,
+        lifecycle: "employee",
+        name: member.name,
+        org_layer: "board",
+        reports_to: member.reports_to,
+        responsibilities: JSON.stringify(member.responsibilities),
+        time_created: now,
+        time_updated: now,
+      })),
+    )
+    .run()
+}
+
 function current(db: TxOrDb): CompanyState {
   const companies = db.select().from(CompanyTable).all()
   if (companies.length === 0) return needsBootstrap()
@@ -107,11 +154,12 @@ function current(db: TxOrDb): CompanyState {
     .where(eq(RepositoryBindingTable.company_id, company.id))
     .all()
   const members = db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.company_id, company.id)).all()
-  if (policies.length !== 1 || bindings.length !== 1 || members.length !== BOARD.length) return corrupt()
+  if (policies.length !== 1 || bindings.length > 1 || members.length !== BOARD.length) return corrupt()
 
   const policy = policies[0]
   const binding = bindings[0]
-  if (!policy || !binding || binding.id !== REPOSITORY_BINDING_ID || policy.company_id !== company.id) return corrupt()
+  if (!policy || (binding && binding.id !== REPOSITORY_BINDING_ID) || policy.company_id !== company.id) return corrupt()
+  const setupGoal = db.select().from(CompanySetupGoalTable).where(eq(CompanySetupGoalTable.company_id, company.id)).get()
 
   const board = BOARD.map((member) => {
     const row = members.find((item) => item.id === member.id)
@@ -145,18 +193,23 @@ function current(db: TxOrDb): CompanyState {
       id: company.id,
       name: company.name,
       data_version: company.data_version,
-      provider: {
-        provider_id: company.default_provider_id,
-        model_id: company.default_model_id,
-      },
+      provider:
+        company.default_provider_id === UNCONFIGURED_PROVIDER || company.default_model_id === UNCONFIGURED_MODEL
+          ? null
+          : { provider_id: company.default_provider_id, model_id: company.default_model_id },
+      setup_goal: setupGoal
+        ? { body: setupGoal.body, created_at: setupGoal.time_created, updated_at: setupGoal.time_updated }
+        : null,
       approval_policy: { preset: policy.preset },
-      repository: {
-        project_id: binding.project_id,
-        root_path: binding.root_path,
-        default_branch: binding.default_branch,
-        bootstrap_head_commit: binding.bootstrap_head_commit,
-        dirty: binding.bootstrap_dirty,
-      },
+      repository: binding
+        ? {
+            project_id: binding.project_id,
+            root_path: binding.root_path,
+            default_branch: binding.default_branch,
+            bootstrap_head_commit: binding.bootstrap_head_commit,
+            dirty: binding.bootstrap_dirty,
+          }
+        : null,
       board,
       created_at: company.time_created,
       updated_at: company.time_updated,
@@ -180,10 +233,12 @@ function readyRecord(db: TxOrDb): ReadyRecord | undefined {
 }
 
 function sameBusiness(record: ReadyRecord, input: BootstrapInputType) {
+  const provider = record.state.company.provider
+  if (!provider) return false
   return (
     record.state.company.name === input.company_name &&
-    record.state.company.provider.provider_id === input.provider_id &&
-    record.state.company.provider.model_id === input.model_id &&
+    provider.provider_id === input.provider_id &&
+    provider.model_id === input.model_id &&
     record.state.company.approval_policy.preset === input.approval_preset
   )
 }
@@ -200,7 +255,7 @@ function existingResult(
   }
   if (!sameBusiness(record, input)) throw new CompanyAlreadyInitialized({})
   if (record.row.bootstrap_input_path === inputPath) return record.state
-  if (candidate?.root_path === record.state.company.repository.root_path) return record.state
+  if (candidate?.root_path === record.state.company.repository?.root_path) return record.state
   throw new CompanyAlreadyInitialized({})
 }
 
@@ -214,7 +269,9 @@ function database<A>(fn: () => A) {
 export interface Interface {
   readonly current: () => Effect.Effect<CompanyState, unknown>
   readonly inspectRepository: (path: string) => Effect.Effect<RepositoryCandidate, unknown, Git.Service | Project.Service>
+  readonly ensureManagedRepository: () => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
   readonly bootstrap: (input: BootstrapInputType) => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
+  readonly deferSetupGoal: (input: CompanySetupGoalInput) => Effect.Effect<CompanyReadyState, unknown>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/Company") {}
@@ -263,7 +320,69 @@ export const layer = Layer.effect(
       )
     })
 
-    const getCurrent = Effect.fn("Company.current")(() => database(() => Database.use(current)))
+    const getCurrent = Effect.fn("Company.current")(() =>
+      database(() =>
+        Database.transaction((tx) => {
+          if (tx.select().from(CompanyTable).all().length === 0 && canCreateDefaultCompany(tx as Database.Transaction))
+            createDefaultCompany(tx as Database.Transaction)
+          return current(tx)
+        }, { behavior: "immediate" }),
+      ),
+    )
+
+    const ensureManagedRepository = Effect.fn("Company.ensureManagedRepository")(function* () {
+      const state = yield* getCurrent()
+      if (state.state !== "ready") return corrupt()
+      if (state.company.repository) return state
+
+      const root = path.join(Global.Path.data, "projects", "company", "repository")
+      yield* Effect.tryPromise({ try: () => fs.mkdir(root, { recursive: true }), catch: (error) => error })
+      const git = yield* Git.Service
+      yield* git.run(["init", "--initial-branch=main"], { cwd: root })
+      const candidate = yield* inspectRepository(root)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          const currentState = current(tx)
+          if (currentState.state !== "ready") return corrupt()
+          if (currentState.company.repository) return currentState
+          const now = Date.now()
+          tx.insert(RepositoryBindingTable)
+            .values({
+              id: REPOSITORY_BINDING_ID,
+              company_id: COMPANY_ID,
+              project_id: candidate.project_id,
+              root_path: candidate.root_path,
+              default_branch: candidate.default_branch,
+              bootstrap_head_commit: candidate.bootstrap_head_commit,
+              bootstrap_dirty: candidate.dirty,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          const result = current(tx)
+          if (result.state !== "ready") return corrupt()
+          return result
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const deferSetupGoal = Effect.fn("Company.deferSetupGoal")(function* (raw: CompanySetupGoalInput) {
+      const input = CompanySetupGoalInput.parse(raw)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          if (tx.select().from(CompanyTable).all().length === 0 && canCreateDefaultCompany(tx as Database.Transaction))
+            createDefaultCompany(tx as Database.Transaction)
+          const now = Date.now()
+          tx.insert(CompanySetupGoalTable)
+            .values({ company_id: COMPANY_ID, body: input.body, time_created: now, time_updated: now })
+            .onConflictDoUpdate({ target: CompanySetupGoalTable.company_id, set: { body: input.body, time_updated: now } })
+            .run()
+          const state = current(tx)
+          if (state.state !== "ready") return corrupt()
+          return state
+        }, { behavior: "immediate" }),
+      )
+    })
 
     const bootstrap = Effect.fn("Company.bootstrap")(function* (raw: BootstrapInputType) {
       const input = BootstrapInput.parse(raw)
@@ -357,7 +476,9 @@ export const layer = Layer.effect(
     return Service.of({
       current: getCurrent,
       inspectRepository,
+      ensureManagedRepository,
       bootstrap,
+      deferSetupGoal,
     })
   }),
 )

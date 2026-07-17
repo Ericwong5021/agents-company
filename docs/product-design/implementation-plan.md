@@ -145,7 +145,7 @@ Local Control Plane（唯一权威写入者）
 
 ### M1 — Company Bootstrap 与本地产品契约
 
-目标：在干净数据目录中创建一家公司、最小董事会和一个真实仓库绑定。
+目标：在干净数据目录中创建一家公司和最小董事会，并将 Provider、公司名称与仓库绑定改为可在主工作台后续完成的渐进式配置。
 
 状态：已完成（2026-07-17）。浏览器、TUI 与 Windows 原生 Electron Gate 均通过；原生 Gate 以真实 main/preload/renderer/sidecar 覆盖目录选择、bootstrap、trusted loopback、消息、Thread 与重启恢复。
 
@@ -154,8 +154,8 @@ Local Control Plane（唯一权威写入者）
 主要工作：
 
 1. 新建 `Company`、`RepositoryBinding`、`ApprovalPolicy` 和最小 `AgentLifecycle` schema；
-2. 实现首次引导：模型提供方、公司数据目录、CEO/CTO/Product Lead、Git 仓库、平衡预设；
-3. 复用现有 Provider 和 Project 探测能力，但 Company 只保存一个项目一个主仓库的产品绑定；
+2. 实现渐进式首次进入：固定数据目录后自动创建 CEO/CTO/Product Lead、默认平衡预设并直接打开 Company Workspace；
+3. Provider 通过 Settings 配置；未配置时，对话将目标持久化为设置卡，不启动董事会运行；仓库可由 Agent 按需在受管本地目录初始化，Company 仍只保存一个项目一个主仓库的产品绑定；
 4. 新建带完整 Zod response 的 `/company` 产品路由，修复 SDK `unknown`，并运行 `./packages/sdk/js/script/build.ts`；
 5. 将 Desktop 品牌、App ID、协议和新数据目录切换为 Agent Company；本产品不为旧 AgentCompany/OpenCode 数据布局提供隐式兼容桥；
 6. Desktop sidecar 与本地浏览器共享仅绑定 loopback 的 trusted 服务契约；当前单用户阶段不认证用户；
@@ -163,8 +163,8 @@ Local Control Plane（唯一权威写入者）
 
 退出标准：
 
-- 干净环境完成 PRD 6.1 的七个步骤；
-- 刷新和重启后仍打开同一家公司、董事会和仓库；
+- 干净环境直接打开默认公司和董事会；未配置 Provider 的目标会显示可直达 Settings 的持久化卡片；
+- 刷新和重启后仍打开同一家公司和董事会；仓库在首次实际交付时创建或绑定；
 - 本地浏览器无需凭据即可读取同一家公司，且 Control Plane 默认只监听 loopback；
 - SDK 中本里程碑产品接口没有 `unknown` response；
 - 首次引导失败不会留下不可恢复的半初始化状态。

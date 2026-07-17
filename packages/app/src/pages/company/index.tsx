@@ -1,6 +1,6 @@
 import type { Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
-import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { Match, Show, Switch, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
 import {
   createCompanyWorkspaceDataSource,
   installCompanyRefreshTriggers,
@@ -43,6 +43,7 @@ function CompanyReadyWorkspace(props: {
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
   const [workPanelOpen, setWorkPanelOpen] = createSignal(true)
+  const [providers] = createResource(() => props.dataSource.listProviders())
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)
   const activeChannel = createMemo(() =>
@@ -56,13 +57,14 @@ function CompanyReadyWorkspace(props: {
   // rollback keeps the persisted read model visible while hiding every send
   // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
+  const providerConfigured = createMemo(() => providers()?.providers.some((provider) => provider.connected) === true)
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
 
-  const openSettings = () =>
+  const openSettings = (defaultValue = "company") =>
     void import("@/components/dialog-settings").then((settings) =>
       dialog.show(() => (
         <settings.DialogSettings
-          defaultValue="company"
+          defaultValue={defaultValue}
           extension={{
             value: "company",
             sectionTitle: "公司",
@@ -84,7 +86,8 @@ function CompanyReadyWorkspace(props: {
 
   const openProject = () => {
     setMobileChannelsOpen(false)
-    const directory = props.snapshot().company.repository.root_path
+    const directory = props.snapshot().company.repository?.root_path
+    if (!directory) return
     layout.projects.open(directory)
     window.location.assign(projectWorkspacePath(directory))
   }
@@ -212,6 +215,23 @@ function CompanyReadyWorkspace(props: {
                 </Match>
               </Switch>
 
+              <Show when={props.snapshot().company.setup_goal}>
+                {(goal) => (
+                  <section class="company-provider-setup-card" aria-live="polite">
+                    <span class="company-provider-setup-icon">
+                      <Icon name="providers" size="small" />
+                    </span>
+                    <div>
+                      <strong>连接模型后继续董事会讨论</strong>
+                      <p>已暂存：{goal().body}</p>
+                    </div>
+                    <button type="button" onClick={() => openSettings("providers")}>
+                      配置 Provider
+                    </button>
+                  </section>
+                )}
+              </Show>
+
               <Show
                 when={boardMessagesEnabled()}
                 fallback={
@@ -225,6 +245,10 @@ function CompanyReadyWorkspace(props: {
                   error={() => conversation().error}
                   hasOpenThread={hasOpenThread}
                   onSend={(body) => {
+                    if (!providerConfigured()) {
+                      void props.dataSource.deferSetupGoal({ companySetupGoalInput: { body } })
+                      return
+                    }
                     const current = store()
                     if (!current) return
                     setView("conversation")

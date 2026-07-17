@@ -28,6 +28,9 @@ export type CompanyWorkspaceDataSource = {
   bootstrap(
     input: Parameters<CompanyClient["company"]["bootstrap"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["company"]["bootstrap"]>>["data"]>
+  deferSetupGoal(
+    input: Parameters<CompanyClient["company"]["deferSetupGoal"]>[0],
+  ): Promise<Awaited<ReturnType<CompanyClient["company"]["deferSetupGoal"]>>["data"]>
   createPairing(
     input: Parameters<CompanyClient["localAuth"]["pair"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["localAuth"]["pair"]>>["data"]>
@@ -145,6 +148,7 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
     completeProviderOAuth: async () => undefined,
     inspectRepository: async () => undefined,
     bootstrap: async () => undefined,
+    deferSetupGoal: async () => undefined,
     createPairing: async () => undefined,
     listCredentials: async () => undefined,
     revokeCredential: async () => undefined,
@@ -241,6 +245,11 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     inspectRepository: (input) => request(client.company.repositoryInspect(input)),
     async bootstrap(input) {
       const result = await request(client.company.bootstrap(input))
+      await refresh()
+      return result
+    },
+    async deferSetupGoal(input) {
+      const result = await request(client.company.deferSetupGoal(input))
       await refresh()
       return result
     },

@@ -17,6 +17,7 @@ import {
   CompanyProviderUnsupported,
   CompanyReadyState,
   CompanyRepositoryNotGit,
+  CompanySetupGoalInput,
   CompanyState,
   ProviderConnection,
   RepositoryCandidate,
@@ -209,6 +210,25 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       async (c) => c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.current()))),
+    )
+    .put(
+      "/setup-goal",
+      describeRoute({
+        operationId: "company.deferSetupGoal",
+        summary: "Persist a board goal until a model provider is configured",
+        responses: {
+          200: {
+            description: "Current company state with the deferred goal",
+            content: { "application/json": { schema: resolver(CompanyReadyState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", CompanySetupGoalInput, productValidationHook),
+      async (c) =>
+        c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.deferSetupGoal(c.req.valid("json"))))),
     )
     .get(
       "/providers",

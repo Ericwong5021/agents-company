@@ -147,7 +147,9 @@ export const AppLayer = Layer.suspend(() => {
     conversation,
     conversationRuntime,
     ConversationCommand.layer.pipe(
-      Layer.provide(Layer.mergeAll(conversation, conversationRuntime, bus)),
+      Layer.provide(
+        Layer.mergeAll(conversation, conversationRuntime, bus, Company.defaultLayer, Git.defaultLayer, Project.defaultLayer),
+      ),
     ),
     CompanyProject.defaultLayer,
     CompanyProjectExecution.defaultLayer,

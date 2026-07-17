@@ -122,6 +122,7 @@ describe.serial("Company process restart", () => {
     const restoredResult = await json(server.url, "/company", {}, bearer)
     expect(restoredResult.response.status).toBe(200)
     const restored = CompanyReadyState.parse(restoredResult.body)
+    if (!restored.company.repository || !first.company.company.repository) throw new Error("Expected repository binding")
     expect(restored.company.id).toBe(first.company.company.id)
     expect(restored.company.board.map((member) => member.id)).toEqual(
       first.company.company.board.map((member) => member.id),

@@ -266,9 +266,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       return decideCompanyEntry({ state: "needs_bootstrap", data_directory: data.data_directory }, cwd)
     }
 
-    const repositoryPath = await fs.realpath(data.company.repository.root_path).catch(() => undefined)
+    const repository = data.company.repository
+    if (!repository) return { type: "setup_required" as const, data_directory: data.data_directory }
+    const repositoryPath = await fs.realpath(repository.root_path).catch(() => undefined)
     if (!repositoryPath) {
-      return { type: "repository_mismatch" as const, repository_path: data.company.repository.root_path }
+      return { type: "repository_mismatch" as const, repository_path: repository.root_path }
     }
 
     return decideCompanyEntry({ state: "ready", repository_path: repositoryPath }, cwd)

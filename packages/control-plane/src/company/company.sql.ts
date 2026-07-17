@@ -52,3 +52,12 @@ export const RepositoryBindingTable = sqliteTable(
     uniqueIndex("repository_binding_project_idx").on(table.project_id),
   ],
 )
+
+export const CompanySetupGoalTable = sqliteTable("company_setup_goal", {
+  company_id: text()
+    .$type<CompanyID>()
+    .primaryKey()
+    .references(() => CompanyTable.id, { onDelete: "cascade" }),
+  body: text().notNull(),
+  ...Timestamps,
+})

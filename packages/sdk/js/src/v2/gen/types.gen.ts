@@ -63,6 +63,12 @@ export type CompanyNeedsBootstrapState = {
 
 export type CompanyId = string
 
+export type CompanySetupGoal = {
+  body: string
+  created_at: number
+  updated_at: number
+}
+
 export type ApprovalPreset = "autonomous" | "balanced" | "strict"
 
 export type RepositoryCandidate = {
@@ -88,11 +94,12 @@ export type CompanyReadyState = {
     provider: {
       provider_id: string
       model_id: string
-    }
+    } | null
+    setup_goal: CompanySetupGoal | null
     approval_policy: {
       preset: ApprovalPreset
     }
-    repository: RepositoryCandidate
+    repository: RepositoryCandidate | null
     board: [BoardMember, BoardMember, BoardMember]
     created_at: number
     updated_at: number
@@ -117,6 +124,54 @@ export type CompanyCorruptState = {
   data: {
     [key: string]: never
   }
+}
+
+export type CompanyRepositoryNotGit = {
+  name: "CompanyRepositoryNotGit"
+  data: {
+    path: string
+  }
+}
+
+export type CompanyProviderUnsupported = {
+  name: "CompanyProviderUnsupported"
+  data: {
+    provider_id: string
+  }
+}
+
+export type CompanyProviderNotConnected = {
+  name: "CompanyProviderNotConnected"
+  data: {
+    provider_id: string
+  }
+}
+
+export type CompanyModelNotAvailable = {
+  name: "CompanyModelNotAvailable"
+  data: {
+    provider_id: string
+    model_id: string
+  }
+}
+
+export type ProviderAuthValidationFailed = {
+  name: "ProviderAuthValidationFailed"
+  data: {
+    field: string
+    message: string
+  }
+}
+
+export type CustomProviderModelsFailed = {
+  name: "CustomProviderModelsFailed"
+  data: {
+    message: string
+  }
+}
+
+export type CompanySetupGoalInput = {
+  body: string
 }
 
 export type CompanyModelOption = {
@@ -177,50 +232,6 @@ export type CustomProviderModels = Array<{
   model_id: string
   name: string
 }>
-
-export type CompanyRepositoryNotGit = {
-  name: "CompanyRepositoryNotGit"
-  data: {
-    path: string
-  }
-}
-
-export type CompanyProviderUnsupported = {
-  name: "CompanyProviderUnsupported"
-  data: {
-    provider_id: string
-  }
-}
-
-export type CompanyProviderNotConnected = {
-  name: "CompanyProviderNotConnected"
-  data: {
-    provider_id: string
-  }
-}
-
-export type CompanyModelNotAvailable = {
-  name: "CompanyModelNotAvailable"
-  data: {
-    provider_id: string
-    model_id: string
-  }
-}
-
-export type ProviderAuthValidationFailed = {
-  name: "ProviderAuthValidationFailed"
-  data: {
-    field: string
-    message: string
-  }
-}
-
-export type CustomProviderModelsFailed = {
-  name: "CustomProviderModelsFailed"
-  data: {
-    message: string
-  }
-}
 
 export type CustomProviderModelsInput = {
   format: "openai" | "anthropic"
@@ -3959,6 +3970,46 @@ export type CompanyCurrentResponses = {
 
 export type CompanyCurrentResponse = CompanyCurrentResponses[keyof CompanyCurrentResponses]
 
+export type CompanyDeferSetupGoalData = {
+  body?: CompanySetupGoalInput
+  path?: never
+  query?: never
+  url: "/company/setup-goal"
+}
+
+export type CompanyDeferSetupGoalErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyDeferSetupGoalError = CompanyDeferSetupGoalErrors[keyof CompanyDeferSetupGoalErrors]
+
+export type CompanyDeferSetupGoalResponses = {
+  /**
+   * Current company state with the deferred goal
+   */
+  200: CompanyReadyState
+}
+
+export type CompanyDeferSetupGoalResponse = CompanyDeferSetupGoalResponses[keyof CompanyDeferSetupGoalResponses]
+
 export type CompanyProvidersData = {
   body?: never
   path?: never
@@ -5026,7 +5077,7 @@ export type GlobalImportScanResponse = GlobalImportScanResponses[keyof GlobalImp
 
 export type GlobalImportRunData = {
   body?: {
-    sources?: Array<"cc" | "codex" | "control-plane">
+    sources?: Array<"cc" | "codex">
     force?: boolean
   }
   path?: never

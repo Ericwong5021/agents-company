@@ -2,6 +2,8 @@ import { Bus } from "@/bus"
 import { Company } from "@/company"
 import { CompanyID } from "@/company/schema"
 import { RepositoryInstance } from "@/company/repository-instance"
+import { Git } from "@/git"
+import { Project } from "@/project"
 import { BoardMessagesDisabled, ChannelID } from "./schema"
 import { Event as ServerEvent } from "@/server/event"
 import { Context, Effect, Layer } from "effect"
@@ -18,18 +20,26 @@ export class Service extends Context.Service<Service, Interface>()("@control-pla
 export const layer: Layer.Layer<
   Service,
   never,
-  Conversation.Service | ConversationRuntime.Service | Bus.Service
+  Conversation.Service | ConversationRuntime.Service | Bus.Service | Company.Service | Git.Service | Project.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
     const conversation = yield* Conversation.Service
     const runtime = yield* ConversationRuntime.Service
     const bus = yield* Bus.Service
+    const company = yield* Company.Service
+    const git = yield* Git.Service
+    const project = yield* Project.Service
 
     const sendMessage = Effect.fn("ConversationCommand.sendMessage")(function* (input: SendMessageInput) {
       if (!Company.boardMessagesEnabled()) {
         return yield* Effect.fail(new BoardMessagesDisabled({ company_id: input.companyID }))
       }
+
+      yield* company.ensureManagedRepository().pipe(
+        Effect.provideService(Git.Service, git),
+        Effect.provideService(Project.Service, project),
+      )
 
       const accepted = yield* conversation.sendMessage(input)
       yield* RepositoryInstance.provide(CompanyID.parse(input.companyID))(

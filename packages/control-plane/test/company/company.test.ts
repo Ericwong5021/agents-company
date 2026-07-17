@@ -89,6 +89,7 @@ describe.serial("Company bootstrap", () => {
       const result = await bootstrap(repo.path)
       expect(result.state).toBe("ready")
       if (result.state !== "ready") throw new Error("Expected ready state")
+      if (!result.company.repository) throw new Error("Expected repository binding")
       expect(result.company.board).toHaveLength(3)
       expect(result.company.repository.root_path).toBe(repo.path)
       expect(Database.use((db) => db.select().from(CompanyTable).all())).toHaveLength(1)

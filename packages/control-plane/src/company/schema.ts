@@ -122,6 +122,22 @@ export const StartSuggestion = z
   .meta({ ref: "StartSuggestion" })
 export type StartSuggestion = z.infer<typeof StartSuggestion>
 
+export const CompanySetupGoal = z
+  .object({
+    body: z.string(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+  })
+  .strict()
+  .meta({ ref: "CompanySetupGoal" })
+export type CompanySetupGoal = z.infer<typeof CompanySetupGoal>
+
+export const CompanySetupGoalInput = z
+  .object({ body: z.string().trim().min(1).max(20_000) })
+  .strict()
+  .meta({ ref: "CompanySetupGoalInput" })
+export type CompanySetupGoalInput = z.infer<typeof CompanySetupGoalInput>
+
 export const CompanyNeedsBootstrapState = z
   .object({
     state: z.literal("needs_bootstrap"),
@@ -153,9 +169,11 @@ export const CompanyReadyState = z
             provider_id: ProviderID.zod,
             model_id: ModelID.zod,
           })
-          .strict(),
+          .strict()
+          .nullable(),
+        setup_goal: CompanySetupGoal.nullable(),
         approval_policy: z.object({ preset: ApprovalPreset }).strict(),
-        repository: RepositoryCandidate,
+        repository: RepositoryCandidate.nullable(),
         board: z.array(BoardMember).length(3),
         created_at: z.number().int(),
         updated_at: z.number().int(),

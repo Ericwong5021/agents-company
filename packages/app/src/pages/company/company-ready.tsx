@@ -35,24 +35,27 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot; onOpenBoar
         </article>
         <article>
           <span>{language.t("company.ready.provider")}</span>
-          <strong>{props.snapshot.company.provider.provider_id}</strong>
-          <small>{props.snapshot.company.provider.model_id}</small>
+          <strong>{props.snapshot.company.provider?.provider_id ?? "未配置"}</strong>
+          <small>{props.snapshot.company.provider?.model_id ?? "请在设置中连接模型"}</small>
         </article>
         <article>
           <span>{language.t("company.ready.repository")}</span>
-          <strong>{props.snapshot.company.repository.root_path}</strong>
+          <strong>{props.snapshot.company.repository?.root_path ?? "由 Agent 在需要时创建"}</strong>
           <small>
-            {props.snapshot.company.repository.default_branch} ·{" "}
-            {props.snapshot.company.repository.bootstrap_head_commit ?? "HEAD"}
+            {props.snapshot.company.repository
+              ? `${props.snapshot.company.repository.default_branch} · ${props.snapshot.company.repository.bootstrap_head_commit ?? "HEAD"}`
+              : "本地 Git 仓库"}
           </small>
         </article>
         <article>
           <span>{language.t("company.ready.policy")}</span>
           <strong>{policyLabel(props.snapshot.company.approval_policy.preset)}</strong>
           <small>
-            {props.snapshot.company.repository.dirty
-              ? language.t("company.ready.dirty")
-              : language.t("company.ready.clean")}
+            {props.snapshot.company.repository
+              ? props.snapshot.company.repository.dirty
+                ? language.t("company.ready.dirty")
+                : language.t("company.ready.clean")
+              : "首次交付时创建仓库"}
           </small>
         </article>
       </section>

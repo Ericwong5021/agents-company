@@ -60,6 +60,8 @@ import type {
   CompanyChannelsResponses,
   CompanyCurrentErrors,
   CompanyCurrentResponses,
+  CompanyDeferSetupGoalErrors,
+  CompanyDeferSetupGoalResponses,
   CompanyId,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
@@ -81,6 +83,7 @@ import type {
   CompanyProvidersResponses,
   CompanyRepositoryInspectErrors,
   CompanyRepositoryInspectResponses,
+  CompanySetupGoalInput,
   CompanyThreadActionErrors,
   CompanyThreadActionResponses,
   CompanyThreadEntriesErrors,
@@ -455,7 +458,7 @@ export class Import extends HeyApiClient {
   /**
    * Scan external session sources
    *
-   * Detect availability and session counts of external AI tool session stores (Claude Code, Codex, control-plane). Read-only.
+   * Detect availability and session counts of external AI tool session stores (Claude Code, Codex, controlPlane). Read-only.
    */
   public scan<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalImportScanResponses, unknown, ThrowOnError>({
@@ -467,11 +470,11 @@ export class Import extends HeyApiClient {
   /**
    * Import external sessions
    *
-   * Import sessions from external AI tools (Claude Code, Codex, control-plane) into agentcompany. Idempotent; pass force to re-sync. Per-source failures are not thrown as HTTP errors — they are collected into the corresponding stats.errors[] while other sources continue.
+   * Import sessions from external AI tools (Claude Code, Codex) into Agent Company. Idempotent; pass force to re-sync. Per-source failures are not thrown as HTTP errors — they are collected into the corresponding stats.errors[] while other sources continue.
    */
   public run<ThrowOnError extends boolean = false>(
     parameters?: {
-      sources?: Array<"cc" | "codex" | "control-plane">
+      sources?: Array<"cc" | "codex">
       force?: boolean
     },
     options?: Options<never, ThrowOnError>,
@@ -705,6 +708,32 @@ export class Company extends HeyApiClient {
     return (options?.client ?? this.client).get<CompanyCurrentResponses, CompanyCurrentErrors, ThrowOnError>({
       url: "/company",
       ...options,
+    })
+  }
+
+  /**
+   * Persist a board goal until a model provider is configured
+   */
+  public deferSetupGoal<ThrowOnError extends boolean = false>(
+    parameters?: {
+      companySetupGoalInput?: CompanySetupGoalInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "companySetupGoalInput", map: "body" }] }])
+    return (options?.client ?? this.client).put<
+      CompanyDeferSetupGoalResponses,
+      CompanyDeferSetupGoalErrors,
+      ThrowOnError
+    >({
+      url: "/company/setup-goal",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

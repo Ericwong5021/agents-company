@@ -2580,6 +2580,65 @@
   text-align: center;
 }
 
+.company-provider-setup-card {
+  display: flex;
+  width: min(720px, calc(100% - 48px));
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--company-border);
+  border-radius: 12px;
+  background: var(--company-accent-soft);
+}
+
+.company-provider-setup-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--company-accent);
+  background: var(--company-surface);
+}
+
+.company-provider-setup-card > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.company-provider-setup-card strong,
+.company-provider-setup-card p {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-provider-setup-card strong {
+  color: var(--company-text);
+  font-size: 12px;
+}
+
+.company-provider-setup-card p {
+  margin-top: 2px;
+  color: var(--company-text-muted);
+  font-size: 11px;
+}
+
+.company-provider-setup-card button {
+  flex: none;
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: #fff;
+  background: var(--company-accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .company-ai-disclaimer {
   position: absolute;
   right: 0;
