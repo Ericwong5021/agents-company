@@ -13,6 +13,11 @@ async function run<A, E, R>(effect: Effect.Effect<A, E, R>): Promise<A> {
   return AppRuntime.runPromise(effect)
 }
 
+async function bootstrap() {
+  const { BootstrapRuntime } = await import("@/effect/bootstrap-runtime")
+  return BootstrapRuntime.runPromise(InstanceBootstrap)
+}
+
 export const provide = <A, E, R>(self: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const source = yield* InstanceRef
@@ -21,7 +26,7 @@ export const provide = <A, E, R>(self: Effect.Effect<A, E, R>) =>
       return Instance.provide({
         directory,
         configDirectory: source?.configDirectory ?? source?.directory,
-        init: () => run(InstanceBootstrap),
+        init: bootstrap,
         fn: () => run(self),
       })
     })
