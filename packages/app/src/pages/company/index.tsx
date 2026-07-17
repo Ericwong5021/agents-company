@@ -42,7 +42,7 @@ function CompanyReadyWorkspace(props: {
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
-  const [workPanelOpen, setWorkPanelOpen] = createSignal(true)
+  const [workPanelOpen, setWorkPanelOpen] = createSignal(false)
   const [providers] = createResource(() => props.dataSource.listProviders())
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)

@@ -16,10 +16,10 @@ describe("Company shell integration contract", () => {
     expect(workspace).not.toContain('searchParams.has("pair")')
   })
 
-  test("opens Marvis-style settings without replacing the active conversation", () => {
+  test("opens workspace-style settings without replacing the active conversation", () => {
     expect(workspace).toContain("dialog.show")
-    expect(workspace).toContain('defaultValue="company"')
-    expect(settings).toContain('class={props.extension ? "company-settings-dialog" : undefined}')
+    expect(workspace).toContain('const openSettings = (defaultValue = "company")')
+    expect(settings).toContain('class="company-settings-dialog"')
     expect(workspace).toContain('label: "公司概览"')
     expect(settings).toContain("extension().render()")
   })

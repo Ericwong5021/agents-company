@@ -2,12 +2,10 @@ import { Button } from "@agents-company/ui/button"
 import { useDialog } from "@agents-company/ui/context/dialog"
 import { Dialog } from "@agents-company/ui/dialog"
 import { List, type ListRef } from "@agents-company/ui/list"
-import { ProviderIcon } from "@agents-company/ui/provider-icon"
 import { Tag } from "@agents-company/ui/tag"
 import { Tooltip } from "@agents-company/ui/tooltip"
 import { type Component, Show } from "solid-js"
 import { useLocal } from "@/context/local"
-import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { ModelTooltip } from "./model-tooltip"
 import { useLanguage } from "@/context/language"
 
@@ -16,16 +14,9 @@ type ModelState = ReturnType<typeof useLocal>["model"]
 export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props) => {
   const model = props.model ?? useLocal().model
   const dialog = useDialog()
-  const providers = useProviders()
   const language = useLanguage()
 
-  const connect = (provider: string) => {
-    void import("./dialog-connect-provider").then((x) => {
-      dialog.show(() => <x.DialogConnectProvider provider={provider} />)
-    })
-  }
-
-  const all = () => {
+  const connect = () => {
     void import("./dialog-select-provider").then((x) => {
       dialog.show(() => <x.DialogSelectProvider />)
     })
@@ -88,55 +79,10 @@ export const DialogSelectModelUnpaid: Component<{ model?: ModelState }> = (props
         <div class="w-full rounded-sm border border-border-weak-base bg-surface-raised-base">
           <div class="w-full flex flex-col items-start gap-4 px-1.5 pt-4 pb-4">
             <div class="px-2 text-14-medium text-text-base">{language.t("dialog.model.unpaid.addMore.title")}</div>
-            <div class="w-full">
-              <List
-                class="w-full px-0"
-                key={(x) => x?.id}
-                items={providers.popular}
-                activeIcon="plus-small"
-                sortBy={(a, b) => {
-                  if (popularProviders.includes(a.id) && popularProviders.includes(b.id))
-                    return popularProviders.indexOf(a.id) - popularProviders.indexOf(b.id)
-                  return a.name.localeCompare(b.name)
-                }}
-                onSelect={(x) => {
-                  if (!x) return
-                  connect(x.id)
-                }}
-              >
-                {(i) => (
-                  <div class="w-full flex items-center gap-x-3">
-                    <ProviderIcon data-slot="list-item-extra-icon" id={i.id} />
-                    <span>{i.name}</span>
-                    <Show when={i.id === "control-plane"}>
-                      <div class="text-14-regular text-text-weak">{language.t("dialog.provider.controlPlane.tagline")}</div>
-                    </Show>
-                    <Show when={i.id === "control-plane"}>
-                      <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
-                    </Show>
-                    <Show when={i.id === "control-plane-go"}>
-                      <>
-                        <div class="text-14-regular text-text-weak">
-                          {language.t("dialog.provider.controlPlaneGo.tagline")}
-                        </div>
-                        <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
-                      </>
-                    </Show>
-                    <Show when={i.id === "anthropic"}>
-                      <div class="text-14-regular text-text-weak">{language.t("dialog.provider.anthropic.note")}</div>
-                    </Show>
-                  </div>
-                )}
-              </List>
-              <Button
-                variant="ghost"
-                class="w-full justify-start px-[11px] py-3.5 gap-4.5 text-14-medium"
-                icon="dot-grid"
-                onClick={all}
-              >
-                {language.t("dialog.provider.viewAll")}
-              </Button>
-            </div>
+            <p class="px-2 text-12-regular text-text-weak">{language.t("settings.providers.custom.description")}</p>
+            <Button class="ml-2" variant="secondary" icon="plus-small" onClick={connect}>
+              {language.t("command.provider.connect")}
+            </Button>
           </div>
         </div>
       </div>

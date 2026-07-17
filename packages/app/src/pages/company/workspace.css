@@ -3294,46 +3294,55 @@
   text-align: center;
 }
 
-/* Marvis-style settings dialog. The generic settings controls remain the
-   source of truth; this layer only gives the Company entry the same centered,
-   reversible configuration flow as the reference product. */
+/* Company settings reuse the workspace material: a quiet canvas, a practical
+   navigation rail, and rows separated by rules rather than nested cards. */
 [data-component="dialog"]:has(.company-settings-dialog) [data-slot="dialog-container"] {
-  width: min(calc(100vw - 32px), 646px);
-  height: min(calc(100vh - 32px), 486px);
+  width: min(calc(100vw - 32px), 760px);
+  height: min(calc(100vh - 32px), 560px);
 }
 
 [data-component="dialog-overlay"]:has(+ [data-component="dialog"] .company-settings-dialog),
 [data-component="dialog-stack"]:has(.company-settings-dialog) [data-component="dialog-overlay"] {
-  background: rgb(21 23 29 / 28%);
-  backdrop-filter: blur(1.5px);
+  background: rgb(21 23 29 / 24%);
 }
 
 .company-settings-dialog {
-  --company-surface: var(--surface-base, #ffffff);
-  --company-border: var(--border-base, #e4e4e8);
-  --company-text-faint: var(--text-weak, #9698a0);
+  --company-surface: #ffffff;
+  --company-canvas: #fbfbfc;
+  --company-sidebar: #f7f7f8;
+  --company-surface-subtle: #f5f5f7;
+  --company-border: #e4e4e8;
+  --company-border-strong: #d8d8de;
+  --company-text: #16171a;
+  --company-text-muted: #6f7179;
+  --company-text-faint: #9698a0;
+  --company-accent: #6d66df;
+  --company-accent-soft: #eff0ff;
 
   position: relative;
   overflow: hidden !important;
   border: 1px solid var(--company-border);
-  border-radius: 16px !important;
-  background: var(--company-surface) !important;
-  box-shadow: 0 24px 70px rgb(17 20 28 / 20%) !important;
+  border-radius: 12px !important;
+  background: var(--company-canvas) !important;
+  box-shadow: 0 18px 48px rgb(17 20 28 / 18%) !important;
 }
 
 .company-settings-dialog > [data-slot="dialog-header"] {
   position: absolute;
   inset: 0 0 auto;
   z-index: 3;
-  min-height: 50px;
-  padding: 12px 16px !important;
+  min-height: 56px;
+  padding: 16px 18px !important;
   border-bottom: 0;
   background: transparent;
   pointer-events: none;
 }
 
 .company-settings-dialog > [data-slot="dialog-header"] > [data-slot="dialog-title"] {
-  width: 134px;
+  width: 146px;
+  color: var(--company-text);
+  font-size: 13px !important;
+  font-weight: 620 !important;
 }
 
 .company-settings-dialog > [data-slot="dialog-header"] > [data-slot="dialog-close-button"] {
@@ -3346,21 +3355,39 @@
 }
 
 .company-settings-dialog [data-component="tabs"] {
-  background: var(--company-surface);
+  background: var(--company-canvas);
 }
 
 .company-settings-dialog [data-slot="tabs-list"] {
-  width: 166px !important;
-  min-width: 166px !important;
-  padding: 50px 10px 10px !important;
-  background: #fafafa !important;
+  width: 182px !important;
+  min-width: 182px !important;
+  padding: 60px 10px 12px !important;
+  background: var(--company-sidebar) !important;
   border-right-color: var(--company-border) !important;
 }
 
 .company-settings-dialog [data-slot="tabs-trigger-wrapper"] {
-  height: 34px !important;
-  border-radius: 7px !important;
-  font-size: 12px !important;
+  height: 36px !important;
+  border-radius: 9px !important;
+  color: var(--company-text-muted) !important;
+  font-size: 13px !important;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease !important;
+}
+
+.company-settings-dialog [data-slot="tabs-trigger-wrapper"]:hover:not(:disabled) {
+  color: var(--company-text) !important;
+  background: var(--company-surface-subtle) !important;
+}
+
+.company-settings-dialog [data-slot="tabs-trigger-wrapper"]:has([data-selected]) {
+  color: var(--company-accent) !important;
+  background: var(--company-accent-soft) !important;
+}
+
+.company-settings-dialog [data-slot="tabs-trigger-wrapper"]:has([data-selected]) [data-component="icon"] {
+  color: var(--company-accent) !important;
 }
 
 .company-settings-dialog [data-slot="tabs-trigger"] {
@@ -3368,28 +3395,34 @@
 }
 
 .company-settings-dialog [data-slot="tabs-section-title"] {
-  padding-left: 8px !important;
+  padding-left: 9px !important;
   color: var(--company-text-faint) !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
 }
 
 .company-settings-dialog [data-slot="tabs-content"] {
-  background: #fbfbfc !important;
+  background: var(--company-canvas) !important;
 }
 
 .company-settings-dialog .company-ready {
   min-height: 100%;
-  gap: 18px;
-  padding: 66px 28px 28px;
+  gap: 0;
+  padding: 28px;
   overflow-y: auto;
+  color: var(--company-text);
+  background: var(--company-canvas);
 }
 
 .company-settings-dialog .company-ready-header {
-  gap: 12px;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--company-border);
 }
 
 .company-settings-dialog .company-ready-header h1 {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1.08;
   white-space: nowrap;
 }
@@ -3412,14 +3445,37 @@
 
 .company-settings-dialog .company-ready-facts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px;
+  gap: 0;
+  padding: 18px 0;
+  border: 0;
+  border-bottom: 1px solid var(--company-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.company-settings-dialog .company-ready-facts article {
+  gap: 4px;
+  padding: 0 18px;
+  border-left: 1px solid var(--company-border);
+}
+
+.company-settings-dialog .company-ready-facts article:nth-child(odd) {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.company-settings-dialog .company-ready-facts article:nth-child(n + 3) {
+  margin-top: 16px;
 }
 
 .company-settings-dialog .company-ready-board,
 .company-settings-dialog .company-ready-start,
 .company-settings-dialog .company-ready-capability {
-  padding: 16px;
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid var(--company-border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .company-settings-dialog .company-ready-board h2,
@@ -3429,12 +3485,21 @@
 
 .company-settings-dialog .company-ready-board-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
+  margin-top: 16px;
 }
 
 .company-settings-dialog .company-ready-member {
-  gap: 3px;
-  padding: 10px;
+  gap: 4px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 1px solid var(--company-border);
+  border-radius: 0;
+}
+
+.company-settings-dialog .company-ready-member:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .company-settings-dialog .company-ready-member h3 {
@@ -3443,6 +3508,184 @@
 
 .company-settings-dialog .company-ready-member p {
   font-size: 10px;
+}
+
+.company-settings-dialog .company-ready-start {
+  align-items: flex-end;
+}
+
+.company-settings-dialog .company-ready-start button {
+  min-height: 36px;
+  border-color: var(--company-accent);
+  color: #ffffff;
+  background: var(--company-accent);
+}
+
+.company-settings-dialog .company-ready-capability {
+  border-bottom: 0;
+}
+
+.company-settings-dialog .company-provider-settings {
+  padding: 0 28px 28px !important;
+  color: var(--company-text);
+  background: var(--company-canvas);
+}
+
+.company-settings-dialog .company-provider-settings-header {
+  position: sticky;
+  top: 0;
+  margin: 0 -28px;
+  padding: 28px 28px 20px;
+  border-bottom: 1px solid var(--company-border);
+  background: var(--company-canvas) !important;
+}
+
+.company-settings-dialog .company-provider-settings-header > div {
+  gap: 5px !important;
+  max-width: none !important;
+  padding: 0 !important;
+}
+
+.company-settings-dialog .company-provider-settings-header h2 {
+  color: var(--company-text) !important;
+  font-size: 20px !important;
+  font-weight: 620 !important;
+  letter-spacing: -0.02em;
+}
+
+.company-settings-dialog .company-provider-settings-header p {
+  max-width: 440px;
+  color: var(--company-text-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.5;
+}
+
+.company-settings-dialog .company-provider-settings-list {
+  max-width: none !important;
+  padding-top: 20px;
+}
+
+.company-settings-dialog .company-provider-settings-list > div:first-child {
+  min-height: 36px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--company-border);
+}
+
+.company-settings-dialog .company-provider-settings-list h3 {
+  color: var(--company-text) !important;
+  font-size: 13px !important;
+  font-weight: 620 !important;
+}
+
+.company-settings-dialog .company-provider-settings-list [data-component="button"][data-variant="primary"] {
+  min-height: 34px;
+  border-color: var(--company-accent);
+  border-radius: 9px;
+  background: var(--company-accent);
+}
+
+.company-settings-dialog .company-provider-settings-list > .bg-surface-base {
+  padding: 0 !important;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.company-settings-dialog .company-provider-settings-row {
+  min-height: 72px;
+  padding: 14px 0 !important;
+  border-color: var(--company-border) !important;
+}
+
+.company-settings-dialog .company-provider-settings-row > div:first-child > div:first-child {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--company-border);
+  border-radius: 9px;
+  color: var(--company-accent);
+  background: var(--company-accent-soft);
+}
+
+.company-settings-dialog .company-provider-settings-row [data-component="tag"] {
+  border-color: var(--company-border);
+  color: var(--company-text-muted);
+  background: var(--company-sidebar);
+}
+
+.company-settings-dialog .company-provider-settings-row [data-component="button"][data-variant="ghost"] {
+  min-height: 32px;
+  border: 1px solid var(--company-border);
+  border-radius: 8px;
+  color: var(--company-text-muted);
+}
+
+.company-settings-dialog .company-provider-settings-row [data-component="button"][data-variant="ghost"]:hover {
+  color: var(--company-text);
+  background: var(--company-sidebar);
+}
+
+.company-settings-dialog .company-provider-settings-empty {
+  min-height: 128px;
+  justify-content: center;
+  padding: 24px 0 !important;
+  color: var(--company-text-muted);
+}
+
+[data-component="dialog"]:has(.company-provider-dialog) [data-slot="dialog-container"] {
+  width: min(calc(100vw - 32px), 640px);
+  height: min(calc(100vh - 32px), 640px);
+}
+
+.company-provider-dialog {
+  --company-canvas: #fbfbfc;
+  --company-sidebar: #f7f7f8;
+  --company-border: #e4e4e8;
+  --company-text: #16171a;
+  --company-text-muted: #6f7179;
+  --company-accent: #6d66df;
+
+  overflow: hidden !important;
+  border: 1px solid var(--company-border);
+  border-radius: 12px !important;
+  background: var(--company-canvas) !important;
+  box-shadow: 0 18px 48px rgb(17 20 28 / 18%) !important;
+}
+
+.company-provider-dialog > [data-slot="dialog-header"] {
+  min-height: 56px;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--company-border);
+  background: var(--company-sidebar);
+}
+
+.company-provider-dialog > [data-slot="dialog-body"] {
+  background: var(--company-canvas);
+}
+
+.company-provider-dialog .company-provider-form {
+  max-height: none !important;
+  padding: 24px 28px 28px !important;
+  color: var(--company-text);
+}
+
+.company-provider-dialog .company-provider-form > div:first-child {
+  padding: 0 !important;
+}
+
+.company-provider-dialog .company-provider-form form {
+  padding: 0 0 4px !important;
+}
+
+.company-provider-dialog .company-provider-form [data-component="text-field"] input {
+  border-color: var(--company-border);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.company-provider-dialog .company-provider-form [data-component="button"][data-variant="primary"] {
+  border-color: var(--company-accent);
+  border-radius: 9px;
+  background: var(--company-accent);
 }
 
 @media (max-width: 1180px) {

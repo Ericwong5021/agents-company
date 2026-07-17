@@ -3,11 +3,7 @@ import { Dialog } from "@agents-company/ui/dialog"
 import { Tabs } from "@agents-company/ui/tabs"
 import { Icon, type IconProps } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
-import { usePlatform } from "@/context/platform"
-import { SettingsGeneral } from "./settings-general"
-import { SettingsKeybinds } from "./settings-keybinds"
 import { SettingsProviders } from "./settings-providers"
-import { SettingsModels } from "./settings-models"
 
 type DialogSettingsProps = {
   extension?: {
@@ -22,71 +18,34 @@ type DialogSettingsProps = {
 
 export const DialogSettings: Component<DialogSettingsProps> = (props) => {
   const language = useLanguage()
-  const platform = usePlatform()
 
   return (
-    <Dialog
-      size={props.extension ? "large" : "x-large"}
-      title={props.extension ? language.t("sidebar.settings") : undefined}
-      class={props.extension ? "company-settings-dialog" : undefined}
-      transition
-    >
+    <Dialog size="large" title={language.t("sidebar.settings")} class="company-settings-dialog" transition>
       <Tabs
         orientation="vertical"
         variant="settings"
-        defaultValue={props.defaultValue ?? props.extension?.value ?? "general"}
+        defaultValue={props.defaultValue ?? props.extension?.value ?? "providers"}
         class="h-full settings-dialog"
       >
         <Tabs.List>
-          <div class="flex flex-col justify-between h-full w-full">
-            <div class="flex flex-col gap-3 w-full pt-3">
-              <div class="flex flex-col gap-3">
-                <Show when={props.extension}>
-                  {(extension) => (
-                    <div class="flex flex-col gap-1.5">
-                      <Tabs.SectionTitle>{extension().sectionTitle}</Tabs.SectionTitle>
-                      <div class="flex flex-col gap-1.5 w-full">
-                        <Tabs.Trigger value={extension().value}>
-                          <Icon name={extension().icon} />
-                          {extension().label}
-                        </Tabs.Trigger>
-                      </div>
-                    </div>
-                  )}
-                </Show>
-
+          <div class="flex flex-col gap-5 h-full w-full pt-3">
+            <Show when={props.extension}>
+              {(extension) => (
                 <div class="flex flex-col gap-1.5">
-                  <Tabs.SectionTitle>{language.t("settings.section.desktop")}</Tabs.SectionTitle>
-                  <div class="flex flex-col gap-1.5 w-full">
-                    <Tabs.Trigger value="general">
-                      <Icon name="sliders" />
-                      {language.t("settings.tab.general")}
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="shortcuts">
-                      <Icon name="keyboard" />
-                      {language.t("settings.tab.shortcuts")}
-                    </Tabs.Trigger>
-                  </div>
+                  <Tabs.SectionTitle>{extension().sectionTitle}</Tabs.SectionTitle>
+                  <Tabs.Trigger value={extension().value}>
+                    <Icon name={extension().icon} />
+                    {extension().label}
+                  </Tabs.Trigger>
                 </div>
-
-                <div class="flex flex-col gap-1.5">
-                  <Tabs.SectionTitle>{language.t("settings.section.server")}</Tabs.SectionTitle>
-                  <div class="flex flex-col gap-1.5 w-full">
-                    <Tabs.Trigger value="providers">
-                      <Icon name="providers" />
-                      {language.t("settings.providers.title")}
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="models">
-                      <Icon name="models" />
-                      {language.t("settings.models.title")}
-                    </Tabs.Trigger>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="flex flex-col gap-1 pl-1 py-1 text-12-medium text-text-weak">
-              <span>{language.t("app.name.desktop")}</span>
-              <span class="text-11-regular">v{platform.version}</span>
+              )}
+            </Show>
+            <div class="flex flex-col gap-1.5">
+              <Tabs.SectionTitle>{language.t("settings.section.server")}</Tabs.SectionTitle>
+              <Tabs.Trigger value="providers">
+                <Icon name="providers" />
+                {language.t("settings.providers.title")}
+              </Tabs.Trigger>
             </div>
           </div>
         </Tabs.List>
@@ -97,17 +56,8 @@ export const DialogSettings: Component<DialogSettingsProps> = (props) => {
             </Tabs.Content>
           )}
         </Show>
-        <Tabs.Content value="general" class="no-scrollbar">
-          <SettingsGeneral />
-        </Tabs.Content>
-        <Tabs.Content value="shortcuts" class="no-scrollbar">
-          <SettingsKeybinds />
-        </Tabs.Content>
         <Tabs.Content value="providers" class="no-scrollbar">
           <SettingsProviders />
-        </Tabs.Content>
-        <Tabs.Content value="models" class="no-scrollbar">
-          <SettingsModels />
         </Tabs.Content>
       </Tabs>
     </Dialog>

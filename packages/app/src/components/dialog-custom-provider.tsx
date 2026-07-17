@@ -1,8 +1,8 @@
 import { Button } from "@agents-company/ui/button"
 import { useDialog } from "@agents-company/ui/context/dialog"
 import { Dialog } from "@agents-company/ui/dialog"
+import { Icon } from "@agents-company/ui/icon"
 import { IconButton } from "@agents-company/ui/icon-button"
-import { ProviderIcon } from "@agents-company/ui/provider-icon"
 import { useMutation } from "@tanstack/solid-query"
 import { TextField } from "@agents-company/ui/text-field"
 import { showToast } from "@agents-company/ui/toast"
@@ -11,18 +11,10 @@ import { createStore, produce } from "solid-js/store"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import {
-  type CustomProviderFormat,
-  type FormState,
-  headerRow,
-  modelRow,
-  validateCustomProvider,
-} from "./dialog-custom-provider-form"
-import { DialogSelectProvider } from "./dialog-select-provider"
+import { type CustomProviderFormat, type FormState, headerRow, modelRow, validateCustomProvider } from "./dialog-custom-provider-form"
 
 type Props = {
-  back?: "providers" | "close"
-  initialFormat?: CustomProviderFormat
+  back?: "close"
   onSaved?: (result: NonNullable<ReturnType<typeof validateCustomProvider>["result"]>) => void | Promise<void>
   onFetchModels?: (input: {
     format: CustomProviderFormat
@@ -39,7 +31,7 @@ export function DialogCustomProvider(props: Props) {
   const language = useLanguage()
 
   const [form, setForm] = createStore<FormState>({
-    format: props.initialFormat ?? "openai",
+    format: "openai",
     providerID: "",
     name: "",
     baseURL: "",
@@ -50,11 +42,7 @@ export function DialogCustomProvider(props: Props) {
   })
 
   const goBack = () => {
-    if (props.back === "close") {
-      dialog.close()
-      return
-    }
-    dialog.show(() => <DialogSelectProvider />)
+    dialog.close()
   }
 
   const addModel = () => {
@@ -219,6 +207,7 @@ export function DialogCustomProvider(props: Props) {
 
   return (
     <Dialog
+      class="company-provider-dialog"
       title={
         <IconButton
           tabIndex={-1}
@@ -230,9 +219,11 @@ export function DialogCustomProvider(props: Props) {
       }
       transition
     >
-      <div class="flex flex-col gap-6 px-2.5 pb-3 overflow-y-auto max-h-[60vh]">
+      <div class="company-provider-form flex flex-col gap-6 px-2.5 pb-3 overflow-y-auto max-h-[60vh]">
         <div class="px-2.5 flex gap-4 items-center">
-          <ProviderIcon id="synthetic" class="size-5 shrink-0 icon-strong-base" />
+          <div class="size-8 rounded-md bg-surface-raised-base flex items-center justify-center shrink-0">
+            <Icon name="providers" class="size-4 icon-strong-base" />
+          </div>
           <div class="text-16-medium text-text-strong">{language.t("provider.custom.title")}</div>
         </div>
 
@@ -240,17 +231,10 @@ export function DialogCustomProvider(props: Props) {
           <p class="text-14-regular text-text-base">{language.t("provider.custom.description.prefix")}</p>
 
           <div class="flex flex-col gap-4">
-            <label class="flex flex-col gap-2 text-12-medium text-text-weak">
-              {language.t("provider.custom.field.format.label")}
-              <select
-                class="h-10 px-3 rounded-md border border-border-base bg-background-base text-14-regular text-text-base"
-                value={form.format}
-                onChange={(event) => setForm("format", event.currentTarget.value as CustomProviderFormat)}
-              >
-                <option value="openai">{language.t("provider.custom.field.format.openai")}</option>
-                <option value="anthropic">{language.t("provider.custom.field.format.anthropic")}</option>
-              </select>
-            </label>
+            <div class="flex items-center justify-between gap-3 rounded-md border border-border-weak-base bg-surface-raised-base px-3 py-2.5">
+              <span class="text-12-medium text-text-weak">{language.t("provider.custom.field.format.label")}</span>
+              <span class="text-13-medium text-text-strong">{language.t("provider.custom.field.format.openai")}</span>
+            </div>
             <TextField
               autofocus
               label={language.t("provider.custom.field.providerID.label")}

@@ -80,24 +80,4 @@ describe("validateCustomProvider", () => {
     })
   })
 
-  test("builds an Anthropic-compatible provider", () => {
-    const result = validateCustomProvider({
-      form: {
-        format: "anthropic",
-        providerID: "anthropic-proxy",
-        name: "Anthropic Proxy",
-        baseURL: "https://anthropic.example.com/v1",
-        apiKey: "secret",
-        models: [{ row: "m0", id: "claude-custom", name: "Claude Custom", err: {} }],
-        headers: [{ row: "h0", key: "", value: "", err: {} }],
-        err: {},
-      },
-      t,
-      disabledProviders: [],
-      existingProviderIDs: new Set(),
-    })
-
-    expect(result.result?.config.npm).toBe("@ai-sdk/anthropic")
-    expect(result.result?.key).toBe("secret")
-  })
 })

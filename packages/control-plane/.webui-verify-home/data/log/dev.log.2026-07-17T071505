@@ -1,0 +1,512 @@
+INFO  2026-07-17T06:41:19 +1717ms service=server-proxy version=local args=["serve","--hostname","127.0.0.1","--port","4096","--cors","http://127.0.0.1:3000"] process_role=main run_id=8df3365d-4baf-4555-afe2-dc9104dbb45d agentcompany
+INFO  2026-07-17T06:41:19 +4ms service=db path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\agent-company.db opening database
+INFO  2026-07-17T06:41:19 +295ms service=db count=51 mode=dev applying migrations
+INFO  2026-07-17T06:41:20 +294ms service=json-migration storage directory does not exist, skipping migration
+INFO  2026-07-17T06:41:39 +19663ms service=claude-import scanned=121 imported=121 resynced=0 skipped=0 errors=0 claude import
+INFO  2026-07-17T06:41:39 +121ms service=file init
+INFO  2026-07-17T06:41:39 +36ms service=actor.registry orphan recovery complete
+INFO  2026-07-17T06:41:39 +31ms service=inbox inbox gc-on-init complete
+INFO  2026-07-17T06:41:40 +122ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\config.json loading
+INFO  2026-07-17T06:41:40 +2ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.json loading
+INFO  2026-07-17T06:41:40 +1ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T06:42:23 +43506ms service=server method=GET path=/global/health request
+INFO  2026-07-17T06:42:23 +0ms service=server status=started method=GET path=/global/health request
+INFO  2026-07-17T06:42:23 +21ms service=server status=completed duration=21 method=GET path=/global/health request
+INFO  2026-07-17T06:44:25 +122310ms service=server method=GET path=/global/config request
+INFO  2026-07-17T06:44:25 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T06:44:25 +55ms service=server status=completed duration=55 method=GET path=/global/config request
+INFO  2026-07-17T06:44:25 +10ms service=server method=GET path=/global/event request
+INFO  2026-07-17T06:44:25 +1ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T06:44:25 +0ms service=server global event connected
+INFO  2026-07-17T06:44:25 +21ms service=server status=completed duration=21 method=GET path=/global/event request
+INFO  2026-07-17T06:44:26 +34ms service=server method=GET path=/provider request
+INFO  2026-07-17T06:44:26 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T06:44:26 +10ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane creating instance
+INFO  2026-07-17T06:44:26 +2ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane fromDirectory
+INFO  2026-07-17T06:44:26 +171ms service=server method=GET path=/path request
+INFO  2026-07-17T06:44:26 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T06:44:26 +124ms service=server method=GET path=/project request
+INFO  2026-07-17T06:44:26 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T06:44:26 +338ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane bootstrapping
+INFO  2026-07-17T06:44:26 +16ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.json loading
+INFO  2026-07-17T06:44:26 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T06:44:53 +26540ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +0ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +1ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T06:44:53 +4ms service=bus type=* subscribing
+INFO  2026-07-17T06:44:53 +12ms service=bus type=command.executed subscribing
+INFO  2026-07-17T06:44:53 +5ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T06:44:53 +1ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T06:44:53 +1ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T06:44:53 +15ms service=server status=completed duration=27062 method=GET path=/path request
+INFO  2026-07-17T06:44:53 +0ms service=server status=completed duration=26938 method=GET path=/project request
+INFO  2026-07-17T06:44:53 +44ms service=provider status=started state
+INFO  2026-07-17T06:44:53 +81ms service=provider init
+INFO  2026-07-17T06:44:53 +42ms service=lsp all LSPs are disabled
+INFO  2026-07-17T06:44:53 +3ms service=bus type=session.updated subscribing
+INFO  2026-07-17T06:44:53 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T06:44:53 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T06:44:53 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T06:44:53 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T06:44:53 +4ms service=format all formatters are disabled
+INFO  2026-07-17T06:44:53 +0ms service=format init
+INFO  2026-07-17T06:44:53 +9ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane init
+INFO  2026-07-17T06:44:53 +157ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane platform=win32 backend=windows watcher backend
+INFO  2026-07-17T06:44:53 +7ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T06:44:53 +1ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T06:44:53 +6ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T06:44:53 +1ms service=server method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +274ms service=server method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +0ms service=server global event connected
+INFO  2026-07-17T06:44:53 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +1ms service=server method=GET path=/company request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:44:53 +7ms service=server status=completed duration=7 method=GET path=/company request
+INFO  2026-07-17T06:44:53 +0ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +1ms service=server method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +4ms service=server status=completed duration=3 method=GET path=/global/config request
+INFO  2026-07-17T06:44:53 +0ms service=server method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +0ms service=server global event connected
+INFO  2026-07-17T06:44:53 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T06:44:53 +0ms service=server method=GET path=/company request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:44:53 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T06:44:53 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:53 +82ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T06:44:53 +0ms service=server method=GET path=/company request
+INFO  2026-07-17T06:44:53 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:44:53 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T06:44:54 +348ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:54 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:44:54 +1ms service=server method=GET path=/provider request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T06:44:54 +5ms service=server method=GET path=/path request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T06:44:54 +4ms service=server status=completed duration=4 method=GET path=/path request
+INFO  2026-07-17T06:44:54 +93ms service=provider providerID=xiaomi found
+INFO  2026-07-17T06:44:54 +1ms service=provider status=completed duration=1148 state
+INFO  2026-07-17T06:44:54 +257ms service=server status=completed duration=360 method=GET path=/provider request
+INFO  2026-07-17T06:44:54 +0ms service=server status=completed duration=28694 method=GET path=/provider request
+INFO  2026-07-17T06:44:54 +20ms service=server method=GET path=/project request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T06:44:54 +3ms service=server status=completed duration=3 method=GET path=/project request
+INFO  2026-07-17T06:44:54 +1ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T06:44:54 +2ms service=server method=GET path=/company/providers/auth request
+INFO  2026-07-17T06:44:54 +0ms service=server status=started method=GET path=/company/providers/auth request
+INFO  2026-07-17T06:44:54 +1ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T06:44:54 +0ms service=bus type=file.watcher.updated subscribing
+INFO  2026-07-17T06:44:55 +272ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\bootstrap-runtime creating instance
+INFO  2026-07-17T06:44:55 +1ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\bootstrap-runtime fromDirectory
+INFO  2026-07-17T06:44:55 +529ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\bootstrap-runtime bootstrapping
+INFO  2026-07-17T06:44:55 +3ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.json loading
+INFO  2026-07-17T06:44:55 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T06:44:55 +19ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +1ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T06:44:55 +0ms service=bus type=* subscribing
+INFO  2026-07-17T06:44:55 +5ms service=bus type=command.executed subscribing
+INFO  2026-07-17T06:44:55 +1ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T06:44:55 +1ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T06:44:55 +0ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T06:44:55 +32ms service=provider status=started state
+INFO  2026-07-17T06:44:55 +22ms service=provider init
+INFO  2026-07-17T06:44:55 +4ms service=server status=completed duration=891 method=GET path=/company/providers/auth request
+INFO  2026-07-17T06:44:55 +7ms service=lsp all LSPs are disabled
+INFO  2026-07-17T06:44:55 +1ms service=bus type=session.updated subscribing
+INFO  2026-07-17T06:44:55 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T06:44:55 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T06:44:55 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T06:44:55 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T06:44:55 +1ms service=format all formatters are disabled
+INFO  2026-07-17T06:44:55 +0ms service=format init
+INFO  2026-07-17T06:44:55 +1ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\bootstrap-runtime init
+INFO  2026-07-17T06:44:55 +0ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\data\bootstrap-runtime platform=win32 backend=windows watcher backend
+INFO  2026-07-17T06:44:55 +1ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T06:44:55 +1ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T06:44:55 +89ms service=provider providerID=xiaomi found
+INFO  2026-07-17T06:44:55 +0ms service=provider status=completed duration=127 state
+INFO  2026-07-17T06:44:55 +74ms service=server status=completed duration=1068 method=GET path=/company/providers request
+INFO  2026-07-17T06:44:55 +150ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T06:44:55 +0ms service=bus type=file.watcher.updated subscribing
+WARN  2026-07-17T06:44:58 +2185ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+WARN  2026-07-17T06:44:58 +471ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T06:45:19 +21023ms service=history.backfill sessions=121 backfill complete
+INFO  2026-07-17T06:45:19 +16ms service=history.backfill sessions=121 backfill complete
+INFO  2026-07-17T06:47:14 +114942ms service=server method=GET path=/company request
+INFO  2026-07-17T06:47:14 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:47:14 +52ms service=server status=completed duration=52 method=GET path=/company request
+INFO  2026-07-17T06:47:14 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:47:14 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:47:14 +3ms service=server status=completed duration=3 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:29 +74592ms service=server method=GET path=/company request
+INFO  2026-07-17T06:48:29 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:48:29 +17ms service=server status=completed duration=17 method=GET path=/company request
+INFO  2026-07-17T06:48:29 +8ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:29 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:29 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:37 +8020ms service=server method=GET path=/company request
+INFO  2026-07-17T06:48:37 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:48:37 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T06:48:37 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:37 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:37 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:48:37 +42ms service=server buffered=0 global event disconnected
+DEBUG 2026-07-17T06:50:51 +134059ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T06:50:51 +42ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T06:50:51 +24ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T06:50:51 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T06:51:08 +16624ms service=server method=GET path=/company request
+INFO  2026-07-17T06:51:08 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:51:08 +56ms service=server status=completed duration=56 method=GET path=/company request
+INFO  2026-07-17T06:55:19 +250979ms service=server method=GET path=/global/config request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T06:55:19 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T06:55:19 +27ms service=server method=GET path=/global/event request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T06:55:19 +1ms service=server global event connected
+INFO  2026-07-17T06:55:19 +0ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T06:55:19 +39ms service=server method=GET path=/provider request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T06:55:19 +93ms service=server status=completed duration=93 method=GET path=/provider request
+INFO  2026-07-17T06:55:19 +55ms service=server method=GET path=/path request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T06:55:19 +4ms service=server status=completed duration=3 method=GET path=/path request
+INFO  2026-07-17T06:55:19 +2ms service=server method=GET path=/project request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T06:55:19 +5ms service=server status=completed duration=5 method=GET path=/project request
+INFO  2026-07-17T06:55:19 +5ms service=server method=GET path=/company request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T06:55:19 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T06:55:19 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T06:55:19 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T06:55:19 +96ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T06:55:19 +0ms service=server method=GET path=/company/providers/auth request
+INFO  2026-07-17T06:55:19 +0ms service=server status=started method=GET path=/company/providers/auth request
+INFO  2026-07-17T06:55:19 +46ms service=server status=completed duration=46 method=GET path=/company/providers request
+INFO  2026-07-17T06:55:19 +7ms service=server status=completed duration=53 method=GET path=/company/providers/auth request
+INFO  2026-07-17T07:00:14 +294675ms service=server method=GET path=/company request
+INFO  2026-07-17T07:00:14 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:00:14 +7ms service=server status=completed duration=7 method=GET path=/company request
+INFO  2026-07-17T07:00:14 +3ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:00:14 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:00:14 +3ms service=server status=completed duration=3 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:00:14 +16ms service=server buffered=0 global event disconnected
+DEBUG 2026-07-17T07:03:46 +212270ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:46 +10ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:46 +74ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:46 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:55 +9188ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:55 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:55 +80ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:55 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:56 +442ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:56 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:58 +1795ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:58 +40ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:03:58 +17ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:26 +28327ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:26 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:26 +39ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:26 +4ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:28 +2244ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:28 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:29 +853ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:29 +17ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:35 +5701ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:35 +3ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:41 +5909ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:41 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:41 +26ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:41 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:42 +1506ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:42 +6ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:42 +67ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:42 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:45 +3154ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:45 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:46 +67ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:04:46 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:07 +381926ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:07 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:08 +21ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:08 +5ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:09 +1412ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:09 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:09 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:09 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:15 +5627ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:15 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:15 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:15 +17ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:16 +1551ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:16 +11ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:16 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:16 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:23 +6299ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:23 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:23 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:23 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:24 +1731ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:24 +49ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:24 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:32 +7690ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:32 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:32 +94ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:32 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:36 +3843ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:36 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:36 +64ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:36 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:37 +1348ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:37 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:38 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:38 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:40 +2691ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:40 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:40 +67ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:40 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:42 +1617ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:42 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:42 +52ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:42 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:43 +1407ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:43 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:43 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:43 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:47 +4032ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:47 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:48 +55ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:48 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:49 +1453ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:49 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:49 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:49 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:53 +4322ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:53 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:53 +51ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:53 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:55 +1462ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:55 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:55 +60ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:55 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:59 +4000ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:59 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:59 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:11:59 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:00 +1475ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:00 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:01 +73ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:01 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:05 +4121ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:05 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:05 +68ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:05 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:06 +1363ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:06 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:06 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:06 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:10 +3913ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:10 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:10 +59ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:10 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:12 +1377ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:12 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:12 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:12 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:15 +3150ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:15 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:15 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:15 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:17 +2425ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:17 +61ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:17 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:19 +1340ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:19 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:19 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:23 +4038ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:23 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:23 +70ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:23 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:24 +1362ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:24 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:30 +5535ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:30 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:30 +85ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:30 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:33 +3248ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:33 +20ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:33 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:33 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:35 +1801ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:35 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:35 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:35 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:40 +4982ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:40 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:40 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:40 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:42 +1441ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:42 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:42 +55ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:42 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:46 +4748ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:46 +18ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:46 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:46 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:48 +1509ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:48 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:48 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:48 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:50 +2412ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:50 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:50 +40ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:50 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:52 +1522ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:52 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:52 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:12:52 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:00 +7686ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:00 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:00 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:00 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:02 +1775ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:02 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:02 +32ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:02 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:09 +7859ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:09 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:09 +76ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:09 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:11 +1649ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:11 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:11 +54ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:11 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:16 +5254ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:16 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:17 +60ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:18 +1700ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:18 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:18 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:18 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:23 +4765ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:23 +4ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:23 +55ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:23 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:24 +1386ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:25 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:25 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:29 +4405ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:29 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:29 +60ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:29 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:30 +1404ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:30 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:30 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:30 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:35 +4935ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:35 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:35 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:35 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:37 +1847ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:37 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:37 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:37 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:44 +6743ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:44 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:44 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:44 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:46 +2110ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:46 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:46 +75ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:46 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:52 +5846ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:52 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:52 +60ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:52 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:54 +1650ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:54 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:54 +51ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:54 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:57 +2800ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:57 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:57 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:57 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:58 +1566ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:58 +61ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:13:58 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:01 +2785ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:01 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:01 +73ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:01 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:03 +1357ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:03 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:03 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:03 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:04 +1356ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:04 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:04 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:04 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:09 +5296ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:09 +14ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:10 +71ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:10 +3ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:19 +9384ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:19 +83ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:21 +2425ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:21 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:21 +51ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:21 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:24 +2482ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:24 +61ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:24 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:26 +1917ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:26 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:26 +45ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:26 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:28 +1545ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:28 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:28 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:28 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:32 +4383ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:32 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:32 +50ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:32 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:33 +1375ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:33 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:33 +54ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:14:33 +0ms service=bus type=file.watcher.updated publishing

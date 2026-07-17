@@ -158,7 +158,7 @@ Agent 有工作职责，也有其他 Agent 不可见的私人空间。人格连�
 2. 选择或创建本地公司数据目录；
 3. Control Plane 创建默认公司、CEO/CTO/Product Lead 最小董事会和“平衡”批准策略；
 4. 直接进入 Company 主工作台；
-5. Provider 在 Settings 中按需配置。未配置时发送目标，主会话必须保留目标并显示可直达设置的 Provider 配置卡，不得把它伪装成已开始的董事会讨论；
+5. Provider 在 Settings 中按需配置。首发只提供 OpenAI 兼容 Provider 的端点、密钥、模型与 Header 配置，不展示或预置旧 OpenCode Provider。未配置时发送目标，主会话必须保留目标并显示可直达设置的 Provider 配置卡，不得把它伪装成已开始的董事会讨论；
 6. 公司名称可在后续与董事会对话或 Settings 中生成和修改；
 7. 不要求预先导入代码仓库。需要交付时可由 Agent 在受管本地目录初始化 Git 仓库；用户也可以在获得授权后选择现有本地仓库。
 

@@ -1,0 +1,1166 @@
+INFO  2026-07-17T07:23:39 +506ms service=server-proxy version=local args=["serve","--hostname","127.0.0.1","--port","4096","--cors","http://127.0.0.1:3000"] process_role=main run_id=08985f70-ac63-4919-9d33-883efdcbf577 agentcompany
+INFO  2026-07-17T07:23:39 +1ms service=db path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\agent-company.db opening database
+INFO  2026-07-17T07:23:39 +129ms service=db count=52 mode=dev applying migrations
+INFO  2026-07-17T07:23:40 +114ms service=json-migration storage directory does not exist, skipping migration
+INFO  2026-07-17T07:23:50 +10101ms service=claude-import scanned=121 imported=121 resynced=0 skipped=0 errors=0 claude import
+INFO  2026-07-17T07:23:50 +33ms service=file init
+INFO  2026-07-17T07:23:50 +29ms service=actor.registry orphan recovery complete
+INFO  2026-07-17T07:23:50 +33ms service=inbox inbox gc-on-init complete
+INFO  2026-07-17T07:23:50 +164ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\config.json loading
+INFO  2026-07-17T07:23:50 +3ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T07:23:50 +3ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T07:23:51 +1268ms service=server method=GET path=/global/event request
+INFO  2026-07-17T07:23:51 +1ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T07:23:51 +1ms service=server global event connected
+INFO  2026-07-17T07:23:51 +9ms service=server status=completed duration=10 method=GET path=/global/event request
+INFO  2026-07-17T07:23:51 +226ms service=server method=GET path=/company request
+INFO  2026-07-17T07:23:51 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:23:51 +18ms service=server status=completed duration=18 method=GET path=/company request
+INFO  2026-07-17T07:23:51 +14ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:23:51 +1ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:23:51 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:23:51 +5ms service=server method=GET path=/global/config request
+INFO  2026-07-17T07:23:51 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T07:23:51 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T07:23:51 +6ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:23:51 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:23:51 +8ms service=server status=completed duration=8 method=GET path=/company/channels request
+INFO  2026-07-17T07:23:51 +3ms service=server method=GET path=/provider request
+INFO  2026-07-17T07:23:51 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T07:23:51 +6ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane creating instance
+INFO  2026-07-17T07:23:51 +5ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane fromDirectory
+INFO  2026-07-17T07:23:52 +79ms service=server method=GET path=/project request
+INFO  2026-07-17T07:23:52 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T07:23:52 +5ms service=server method=GET path=/path request
+INFO  2026-07-17T07:23:52 +1ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T07:23:52 +3ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:23:52 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:23:52 +8ms service=server status=completed duration=8 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:23:52 +64ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:23:52 +1ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:23:52 +3ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime creating instance
+INFO  2026-07-17T07:23:52 +1ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime fromDirectory
+INFO  2026-07-17T07:23:52 +269ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane bootstrapping
+INFO  2026-07-17T07:23:52 +16ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T07:23:52 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T07:23:53 +1288ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +1ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +0ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +1ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +0ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +1ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T07:23:53 +2ms service=bus type=* subscribing
+INFO  2026-07-17T07:23:53 +15ms service=bus type=command.executed subscribing
+INFO  2026-07-17T07:23:53 +17ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T07:23:53 +1ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T07:23:53 +0ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T07:23:53 +9ms service=server status=completed duration=1706 method=GET path=/project request
+INFO  2026-07-17T07:23:53 +0ms service=server status=completed duration=1700 method=GET path=/path request
+INFO  2026-07-17T07:23:53 +49ms service=provider status=started state
+INFO  2026-07-17T07:23:53 +52ms service=provider init
+INFO  2026-07-17T07:23:53 +77ms service=lsp all LSPs are disabled
+INFO  2026-07-17T07:23:53 +2ms service=bus type=session.updated subscribing
+INFO  2026-07-17T07:23:53 +1ms service=bus type=message.updated subscribing
+INFO  2026-07-17T07:23:53 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:23:53 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T07:23:53 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T07:23:53 +2ms service=format all formatters are disabled
+INFO  2026-07-17T07:23:53 +0ms service=format init
+INFO  2026-07-17T07:23:53 +6ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane init
+INFO  2026-07-17T07:23:53 +3ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane platform=win32 backend=windows watcher backend
+INFO  2026-07-17T07:23:53 +8ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:23:53 +1ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T07:23:53 +11ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime bootstrapping
+INFO  2026-07-17T07:23:54 +46ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T07:23:54 +5ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T07:23:54 +17ms service=provider providerID=xiaomi found
+INFO  2026-07-17T07:23:54 +0ms service=provider status=completed duration=231 state
+INFO  2026-07-17T07:23:54 +138ms service=server status=completed duration=2214 method=GET path=/provider request
+INFO  2026-07-17T07:23:54 +193ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +0ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +1ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T07:23:54 +1ms service=bus type=* subscribing
+INFO  2026-07-17T07:23:54 +4ms service=bus type=command.executed subscribing
+INFO  2026-07-17T07:23:54 +1ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T07:23:54 +0ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T07:23:54 +1ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T07:23:54 +39ms service=provider status=started state
+INFO  2026-07-17T07:23:54 +37ms service=provider init
+INFO  2026-07-17T07:23:54 +23ms service=lsp all LSPs are disabled
+INFO  2026-07-17T07:23:54 +0ms service=bus type=session.updated subscribing
+INFO  2026-07-17T07:23:54 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T07:23:54 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:23:54 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T07:23:54 +1ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T07:23:54 +0ms service=format all formatters are disabled
+INFO  2026-07-17T07:23:54 +0ms service=format init
+INFO  2026-07-17T07:23:54 +1ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime init
+INFO  2026-07-17T07:23:54 +0ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime platform=win32 backend=windows watcher backend
+INFO  2026-07-17T07:23:54 +1ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:23:54 +1ms service=bus type=message.part.removed subscribing
+WARN  2026-07-17T07:23:54 +459ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T07:23:55 +508ms service=provider providerID=xiaomi found
+INFO  2026-07-17T07:23:55 +0ms service=provider status=completed duration=1031 state
+INFO  2026-07-17T07:23:55 +41ms service=server status=completed duration=3354 method=GET path=/company/providers request
+INFO  2026-07-17T07:23:55 +9ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T07:23:55 +0ms service=bus type=file.watcher.updated subscribing
+INFO  2026-07-17T07:23:55 +207ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T07:23:55 +0ms service=bus type=file.watcher.updated subscribing
+WARN  2026-07-17T07:23:55 +3ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T07:23:56 +1161ms service=server method=GET path=/company request
+INFO  2026-07-17T07:23:56 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:23:56 +5ms service=server status=completed duration=5 method=GET path=/company request
+DEBUG 2026-07-17T07:23:58 +1218ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:23:58 +3ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:23:58 +180ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:23:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:00 +1905ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:00 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:00 +74ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:00 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:02 +2189ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:02 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:02 +139ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:02 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:04 +1762ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:04 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:04 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:04 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:07 +2628ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:07 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:07 +61ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:07 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:09 +2481ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:09 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:09 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:09 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:12 +2546ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:12 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:12 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:12 +0ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:24:13 +1351ms service=history.backfill sessions=121 backfill complete
+INFO  2026-07-17T07:24:13 +16ms service=history.backfill sessions=121 backfill complete
+DEBUG 2026-07-17T07:24:14 +848ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:14 +19ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:14 +46ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:14 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:15 +1504ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:15 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:15 +59ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:15 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:20 +4781ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:20 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:20 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:20 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:22 +1555ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:22 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:22 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:22 +0ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:24:25 +3471ms service=server method=PUT path=/company/setup-goal request
+INFO  2026-07-17T07:24:25 +0ms service=server status=started method=PUT path=/company/setup-goal request
+INFO  2026-07-17T07:24:25 +11ms service=server status=completed duration=10 method=PUT path=/company/setup-goal request
+INFO  2026-07-17T07:24:25 +2ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:24:25 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:24:26 +87ms service=server status=completed duration=87 method=GET path=/company/providers request
+DEBUG 2026-07-17T07:24:28 +2273ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:28 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:28 +75ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:28 +8ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:29 +1496ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:29 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:29 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:29 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:24:33 +3534ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T07:24:34 +789ms service=server method=GET path=/global/config request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T07:24:34 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T07:24:34 +27ms service=server method=GET path=/global/event request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T07:24:34 +0ms service=server global event connected
+INFO  2026-07-17T07:24:34 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T07:24:34 +27ms service=server method=GET path=/provider request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T07:24:34 +154ms service=server status=completed duration=154 method=GET path=/provider request
+INFO  2026-07-17T07:24:34 +20ms service=server method=GET path=/path request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T07:24:34 +5ms service=server status=completed duration=5 method=GET path=/path request
+INFO  2026-07-17T07:24:34 +1ms service=server method=GET path=/project request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T07:24:34 +5ms service=server status=completed duration=5 method=GET path=/project request
+INFO  2026-07-17T07:24:34 +6ms service=server method=GET path=/company request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:24:34 +6ms service=server status=completed duration=6 method=GET path=/company request
+INFO  2026-07-17T07:24:34 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:24:34 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:24:34 +12ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:24:34 +3ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T07:24:34 +6ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:24:34 +5ms service=server status=completed duration=5 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:24:34 +185ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:24:34 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:24:34 +61ms service=server status=completed duration=61 method=GET path=/company/providers request
+DEBUG 2026-07-17T07:24:35 +872ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:35 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:35 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:35 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:37 +1586ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:37 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:37 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:37 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:42 +5340ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:42 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:42 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:42 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:44 +1729ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:44 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:44 +78ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:44 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:49 +5397ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:49 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:50 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:50 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:51 +1558ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:51 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:51 +59ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:51 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:56 +5132ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:56 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:56 +48ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:56 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:58 +1558ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:58 +52ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:24:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:03 +5082ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:03 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:03 +38ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:03 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:05 +1522ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:05 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:05 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:05 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:10 +4967ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:10 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:10 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:10 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:11 +1602ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:11 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:11 +68ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:11 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:17 +5581ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:17 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:17 +41ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:17 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:19 +1669ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:19 +49ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:24 +5575ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:24 +9ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:24 +68ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:24 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:26 +1802ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:26 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:26 +62ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:26 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:31 +4995ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:31 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:31 +49ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:31 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:33 +1517ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:33 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:33 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:33 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:25:37 +4045ms service=server method=GET path=/company request
+INFO  2026-07-17T07:25:37 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:25:37 +6ms service=server status=completed duration=6 method=GET path=/company request
+INFO  2026-07-17T07:25:37 +7ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:25:37 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:25:37 +6ms service=server status=completed duration=6 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:25:37 +13ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:25:37 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:25:37 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T07:25:37 +25ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:25:37 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:25:37 +4ms service=server status=completed duration=4 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:25:37 +17ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:25:37 +1ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:25:37 +55ms service=server status=completed duration=56 method=GET path=/company/providers request
+DEBUG 2026-07-17T07:25:38 +1318ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:38 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:38 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:38 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:40 +1516ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:40 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:40 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:40 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:48 +7612ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:48 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:48 +57ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:48 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:49 +1784ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:49 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:49 +54ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:49 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:56 +6137ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:56 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:56 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:56 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:58 +2049ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:58 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:58 +59ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:25:58 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:04 +6526ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:04 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:04 +117ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:04 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:08 +3612ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:08 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:08 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:08 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:10 +1497ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:10 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:10 +64ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:10 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:26:14 +4179ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T07:26:14 +590ms service=server method=GET path=/global/config request
+INFO  2026-07-17T07:26:14 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T07:26:14 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T07:26:14 +1ms service=server method=GET path=/global/event request
+INFO  2026-07-17T07:26:14 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T07:26:14 +0ms service=server global event connected
+INFO  2026-07-17T07:26:14 +2ms service=server status=completed duration=2 method=GET path=/global/event request
+INFO  2026-07-17T07:26:14 +40ms service=server method=GET path=/provider request
+INFO  2026-07-17T07:26:14 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T07:26:15 +194ms service=server status=completed duration=194 method=GET path=/provider request
+INFO  2026-07-17T07:26:15 +1ms service=server method=GET path=/path request
+INFO  2026-07-17T07:26:15 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T07:26:15 +4ms service=server status=completed duration=4 method=GET path=/path request
+INFO  2026-07-17T07:26:15 +22ms service=server method=GET path=/project request
+INFO  2026-07-17T07:26:15 +1ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T07:26:15 +4ms service=server status=completed duration=4 method=GET path=/project request
+INFO  2026-07-17T07:26:15 +13ms service=server method=GET path=/company request
+INFO  2026-07-17T07:26:15 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:26:15 +4ms service=server status=completed duration=4 method=GET path=/company request
+INFO  2026-07-17T07:26:15 +7ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:26:15 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:26:15 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:26:15 +195ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:26:15 +1ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:26:15 +2ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T07:26:15 +15ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:26:15 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:26:15 +15ms service=server status=completed duration=15 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:26:15 +40ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:26:15 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:26:15 +112ms service=server status=completed duration=112 method=GET path=/company/providers request
+DEBUG 2026-07-17T07:26:17 +1852ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:17 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:19 +1550ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:19 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:19 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:25 +6585ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:25 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:25 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:25 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:27 +1510ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:27 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:27 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:27 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:34 +7218ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:34 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:34 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:34 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:36 +1842ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:36 +4ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:36 +47ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:36 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +5073ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +431ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:41 +12ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:42 +10ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:44 +2381ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:44 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:44 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:44 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:46 +1924ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:46 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:46 +51ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:46 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:48 +1605ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:48 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:48 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:48 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:51 +3019ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:51 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:51 +53ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:26:51 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:02 +11384ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:02 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:02 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:02 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:06 +3550ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:06 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:06 +119ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:06 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:07 +1331ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:07 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:07 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:07 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:08 +1315ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:09 +14ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:09 +58ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:09 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:15 +6399ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:15 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:15 +61ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:15 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:17 +1814ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:17 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:17 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:24 +6913ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:24 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:24 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:24 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:26 +1832ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:26 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:26 +65ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:26 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:28 +2289ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:28 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:28 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:28 +5ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:30 +1506ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:30 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:30 +63ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:30 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:32 +2305ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:32 +3ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:32 +48ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:32 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:42 +10381ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:27:42 +0ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:29:33 +110200ms service=server method=GET path=/company request
+INFO  2026-07-17T07:29:33 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:29:33 +9ms service=server status=completed duration=9 method=GET path=/company request
+INFO  2026-07-17T07:31:35 +122238ms service=server method=GET path=/company request
+INFO  2026-07-17T07:31:35 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:31:35 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T07:31:35 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:31:35 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:31:35 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:31:35 +4ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:31:35 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:31:35 +3ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T07:31:35 +4ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:31:35 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:31:35 +4ms service=server status=completed duration=4 method=GET path=/company/channels/chn_board/messages request
+DEBUG 2026-07-17T07:32:14 +39021ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:14 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:14 +498ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:14 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:15 +319ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:15 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:15 +530ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:15 +6ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:16 +870ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:16 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:16 +51ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:16 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:17 +1118ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:17 +94ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:17 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:32 +14118ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:32 +2ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:32 +56ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:32:32 +0ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T07:44:06 +693936ms service=server method=GET path=/company request
+INFO  2026-07-17T07:44:06 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:44:06 +7ms service=server status=completed duration=7 method=GET path=/company request
+INFO  2026-07-17T07:44:06 +0ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:06 +1ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:06 +0ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:06 +4ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:44:06 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:44:06 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T07:44:06 +4ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:06 +1ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:06 +8ms service=server status=completed duration=8 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:08 +2293ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T07:44:09 +861ms service=server method=GET path=/global/config request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T07:44:09 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T07:44:09 +24ms service=server method=GET path=/global/event request
+INFO  2026-07-17T07:44:09 +1ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T07:44:09 +0ms service=server global event connected
+INFO  2026-07-17T07:44:09 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T07:44:09 +56ms service=server method=GET path=/provider request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T07:44:09 +229ms service=server status=completed duration=229 method=GET path=/provider request
+INFO  2026-07-17T07:44:09 +58ms service=server method=GET path=/path request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T07:44:09 +6ms service=server status=completed duration=6 method=GET path=/path request
+INFO  2026-07-17T07:44:09 +3ms service=server method=GET path=/project request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T07:44:09 +6ms service=server status=completed duration=6 method=GET path=/project request
+INFO  2026-07-17T07:44:09 +3ms service=server method=GET path=/company request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:44:09 +5ms service=server status=completed duration=5 method=GET path=/company request
+INFO  2026-07-17T07:44:09 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:09 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:44:09 +146ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:44:09 +5ms service=server status=completed duration=5 method=GET path=/company/channels request
+INFO  2026-07-17T07:44:09 +14ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:09 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:44:09 +20ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T07:44:09 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T07:44:09 +66ms service=server status=completed duration=66 method=GET path=/company/providers request
+INFO  2026-07-17T07:44:26 +16253ms service=server method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:44:26 +1ms service=server status=started method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:44:26 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:44:39 +13570ms service=server method=DELETE path=/auth/xiaomi request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=DELETE path=/auth/xiaomi request
+INFO  2026-07-17T07:44:39 +9ms service=server status=completed duration=9 method=DELETE path=/auth/xiaomi request
+INFO  2026-07-17T07:44:39 +3ms service=server method=POST path=/global/dispose request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=POST path=/global/dispose request
+INFO  2026-07-17T07:44:39 +5ms service=server-proxy disposing all instances
+INFO  2026-07-17T07:44:39 +0ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane disposing instance
+INFO  2026-07-17T07:44:39 +3ms service=bus type=* unsubscribing
+INFO  2026-07-17T07:44:39 +5ms service=bus type=message.part.updated unsubscribing
+INFO  2026-07-17T07:44:39 +1ms service=bus type=session.updated unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=message.updated unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=session.diff unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=session.deleted unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=file.watcher.updated unsubscribing
+INFO  2026-07-17T07:44:39 +5ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime disposing instance
+INFO  2026-07-17T07:44:39 +0ms service=bus type=* unsubscribing
+INFO  2026-07-17T07:44:39 +1ms service=bus type=message.part.updated unsubscribing
+INFO  2026-07-17T07:44:39 +1ms service=bus type=session.updated unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=message.updated unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=session.diff unsubscribing
+INFO  2026-07-17T07:44:39 +0ms service=bus type=session.deleted unsubscribing
+INFO  2026-07-17T07:44:39 +1ms service=bus type=file.watcher.updated unsubscribing
+INFO  2026-07-17T07:44:39 +8ms service=server status=completed duration=30 method=POST path=/global/dispose request
+INFO  2026-07-17T07:44:39 +30ms service=server method=GET path=/global/config request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T07:44:39 +1ms service=server status=completed duration=1 method=GET path=/global/config request
+INFO  2026-07-17T07:44:39 +26ms service=server method=GET path=/provider request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T07:44:39 +3ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane creating instance
+INFO  2026-07-17T07:44:39 +1ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane fromDirectory
+INFO  2026-07-17T07:44:39 +2ms service=server method=GET path=/path request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T07:44:39 +4ms service=server method=GET path=/project request
+INFO  2026-07-17T07:44:39 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T07:44:40 +213ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane bootstrapping
+INFO  2026-07-17T07:44:40 +5ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T07:44:40 +1ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T07:44:40 +31ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +1ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +0ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T07:44:40 +1ms service=bus type=* subscribing
+INFO  2026-07-17T07:44:40 +5ms service=bus type=command.executed subscribing
+INFO  2026-07-17T07:44:40 +1ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T07:44:40 +1ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T07:44:40 +0ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T07:44:40 +3ms service=provider status=started state
+INFO  2026-07-17T07:44:40 +32ms service=provider init
+INFO  2026-07-17T07:44:40 +3ms service=server status=completed duration=301 method=GET path=/path request
+INFO  2026-07-17T07:44:40 +0ms service=server status=completed duration=297 method=GET path=/project request
+INFO  2026-07-17T07:44:40 +12ms service=lsp all LSPs are disabled
+INFO  2026-07-17T07:44:40 +2ms service=bus type=session.updated subscribing
+INFO  2026-07-17T07:44:40 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T07:44:40 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:44:40 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T07:44:40 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T07:44:40 +1ms service=format all formatters are disabled
+INFO  2026-07-17T07:44:40 +0ms service=format init
+INFO  2026-07-17T07:44:40 +3ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane init
+INFO  2026-07-17T07:44:40 +0ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane platform=win32 backend=windows watcher backend
+INFO  2026-07-17T07:44:40 +2ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T07:44:40 +1ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T07:44:40 +102ms service=provider providerID=xiaomi found
+INFO  2026-07-17T07:44:40 +0ms service=provider status=completed duration=158 state
+INFO  2026-07-17T07:44:40 +149ms service=server status=completed duration=579 method=GET path=/provider request
+INFO  2026-07-17T07:44:40 +148ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T07:44:40 +0ms service=bus type=file.watcher.updated subscribing
+WARN  2026-07-17T07:44:41 +995ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T07:44:49 +8182ms service=history.backfill sessions=121 backfill complete
+INFO  2026-07-17T07:45:15 +25662ms service=server method=POST path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:45:15 +0ms service=server status=started method=POST path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:45:15 +156ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\projects\company\repository fromDirectory
+INFO  2026-07-17T07:45:16 +572ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\projects\company\repository creating instance
+INFO  2026-07-17T07:45:16 +1ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\projects\company\repository fromDirectory
+DEBUG 2026-07-17T07:45:16 +149ms service=bus type=company.channel.invalidated publishing
+INFO  2026-07-17T07:45:16 +2ms service=server status=completed duration=880 method=POST path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:45:16 +320ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:45:16 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:45:16 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T07:45:16 +4ms service=server method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:45:16 +0ms service=server status=started method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:45:16 +3ms service=server status=completed duration=3 method=GET path=/company/channels/chn_company/messages request
+INFO  2026-07-17T07:46:23 +66625ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:23 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:23 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:43 +20325ms service=server method=GET path=/company request
+INFO  2026-07-17T07:46:43 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T07:46:43 +2ms service=server status=completed duration=2 method=GET path=/company request
+INFO  2026-07-17T07:46:43 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T07:46:43 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T07:46:43 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T07:46:43 +4ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T07:46:43 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T07:46:43 +3ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T07:46:43 +3ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:43 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:43 +7ms service=server status=completed duration=7 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T07:46:43 +26ms service=server buffered=0 global event disconnected
+DEBUG 2026-07-17T07:59:06 +742551ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T07:59:06 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T08:06:33 +447795ms service=server method=GET path=/global/config request
+INFO  2026-07-17T08:06:33 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T08:06:33 +4ms service=server status=completed duration=4 method=GET path=/global/config request
+INFO  2026-07-17T08:06:33 +1ms service=server method=GET path=/global/event request
+INFO  2026-07-17T08:06:33 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T08:06:33 +0ms service=server global event connected
+INFO  2026-07-17T08:06:33 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T08:06:33 +0ms service=server method=GET path=/company request
+INFO  2026-07-17T08:06:33 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:06:33 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T08:06:33 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:33 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:33 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:33 +1ms service=server method=GET path=/provider request
+INFO  2026-07-17T08:06:33 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T08:06:33 +73ms service=server status=completed duration=73 method=GET path=/provider request
+INFO  2026-07-17T08:06:34 +33ms service=server method=GET path=/path request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T08:06:34 +4ms service=server status=completed duration=4 method=GET path=/path request
+INFO  2026-07-17T08:06:34 +2ms service=server method=GET path=/project request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T08:06:34 +4ms service=server status=completed duration=4 method=GET path=/project request
+INFO  2026-07-17T08:06:34 +1ms service=server method=GET path=/company request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:06:34 +2ms service=server status=completed duration=2 method=GET path=/company request
+INFO  2026-07-17T08:06:34 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:34 +0ms service=server status=completed duration=0 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:06:34 +104ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:06:34 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T08:06:34 +7ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:06:34 +2ms service=server status=completed duration=2 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:06:34 +16ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T08:06:34 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T08:06:34 +4ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime creating instance
+INFO  2026-07-17T08:06:34 +1ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime fromDirectory
+INFO  2026-07-17T08:06:34 +158ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime bootstrapping
+INFO  2026-07-17T08:06:34 +2ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T08:06:34 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T08:06:34 +17ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +3ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +1ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T08:06:34 +0ms service=bus type=* subscribing
+INFO  2026-07-17T08:06:34 +2ms service=bus type=command.executed subscribing
+INFO  2026-07-17T08:06:34 +1ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T08:06:34 +22ms service=provider status=started state
+INFO  2026-07-17T08:06:34 +25ms service=provider init
+INFO  2026-07-17T08:06:34 +5ms service=lsp all LSPs are disabled
+INFO  2026-07-17T08:06:34 +0ms service=bus type=session.updated subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T08:06:34 +0ms service=format all formatters are disabled
+INFO  2026-07-17T08:06:34 +1ms service=format init
+INFO  2026-07-17T08:06:34 +0ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime init
+INFO  2026-07-17T08:06:34 +0ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime platform=win32 backend=windows watcher backend
+INFO  2026-07-17T08:06:34 +2ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T08:06:34 +0ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T08:06:34 +71ms service=provider providerID=xiaomi found
+INFO  2026-07-17T08:06:34 +0ms service=provider status=completed duration=104 state
+INFO  2026-07-17T08:06:34 +27ms service=server status=completed duration=342 method=GET path=/company/providers request
+INFO  2026-07-17T08:06:34 +96ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T08:06:34 +0ms service=bus type=file.watcher.updated subscribing
+WARN  2026-07-17T08:06:35 +415ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T08:06:43 +8723ms service=history.backfill sessions=121 backfill complete
+DEBUG 2026-07-17T08:07:11 +27523ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:07:11 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:07:11 +55ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:07:11 +3ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T08:08:45 +94079ms service=server method=GET path=/company request
+INFO  2026-07-17T08:08:45 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:08:45 +11ms service=server status=completed duration=11 method=GET path=/company request
+INFO  2026-07-17T08:08:45 +24ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:08:45 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:08:45 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:08:45 +61ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:08:45 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:08:45 +21ms service=server status=completed duration=21 method=GET path=/company/channels request
+INFO  2026-07-17T08:08:45 +26ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:08:45 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:08:45 +4ms service=server status=completed duration=4 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:31:24 +1358921ms service=server method=GET path=/company request
+INFO  2026-07-17T08:31:24 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:31:24 +5ms service=server status=completed duration=5 method=GET path=/company request
+INFO  2026-07-17T08:31:24 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:31:24 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:31:24 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:31:24 +6ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:31:24 +4ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:31:24 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T08:31:24 +4ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:31:24 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:31:24 +3ms service=server status=completed duration=3 method=GET path=/company/channels/chn_board/messages request
+DEBUG 2026-07-17T08:32:11 +47386ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:32:11 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:32:11 +29ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:32:11 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T08:32:49 +37771ms service=server method=GET path=/company request
+INFO  2026-07-17T08:32:49 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:32:49 +6ms service=server status=completed duration=6 method=GET path=/company request
+INFO  2026-07-17T08:32:49 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:32:49 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:32:49 +2ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:32:49 +12ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:32:49 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:32:49 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T08:32:49 +6ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:32:49 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:32:49 +19ms service=server status=completed duration=19 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:32:49 +19ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T08:32:49 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T08:32:49 +108ms service=server status=completed duration=108 method=GET path=/company/providers request
+INFO  2026-07-17T08:33:08 +18932ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T08:33:08 +79ms service=server method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +54ms service=server method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T08:33:08 +1ms service=server method=GET path=/global/event request
+INFO  2026-07-17T08:33:08 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T08:33:08 +0ms service=server global event connected
+INFO  2026-07-17T08:33:08 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T08:33:08 +12ms service=server method=GET path=/company request
+INFO  2026-07-17T08:33:08 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:33:08 +4ms service=server status=completed duration=4 method=GET path=/company request
+INFO  2026-07-17T08:33:08 +29ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:08 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:08 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:09 +61ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T08:33:10 +1147ms service=server method=GET path=/global/config request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T08:33:10 +1ms service=server status=completed duration=1 method=GET path=/global/config request
+INFO  2026-07-17T08:33:10 +2ms service=server method=GET path=/global/event request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T08:33:10 +0ms service=server global event connected
+INFO  2026-07-17T08:33:10 +1ms service=server status=completed duration=0 method=GET path=/global/event request
+INFO  2026-07-17T08:33:10 +78ms service=server method=GET path=/provider request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T08:33:10 +199ms service=server status=completed duration=199 method=GET path=/provider request
+INFO  2026-07-17T08:33:10 +3ms service=server method=GET path=/path request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T08:33:10 +4ms service=server status=completed duration=4 method=GET path=/path request
+INFO  2026-07-17T08:33:10 +1ms service=server method=GET path=/project request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T08:33:10 +5ms service=server status=completed duration=5 method=GET path=/project request
+INFO  2026-07-17T08:33:10 +15ms service=server method=GET path=/company request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:33:10 +4ms service=server status=completed duration=4 method=GET path=/company request
+INFO  2026-07-17T08:33:10 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:10 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:33:10 +60ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:33:10 +1ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:33:10 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T08:33:10 +402ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:33:10 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:33:10 +3ms service=server status=completed duration=3 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:33:11 +179ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T08:33:11 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T08:33:11 +109ms service=server status=completed duration=109 method=GET path=/company/providers request
+INFO  2026-07-17T08:33:59 +48639ms service=server method=GET path=/global/config request
+INFO  2026-07-17T08:33:59 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T08:33:59 +3ms service=server status=completed duration=3 method=GET path=/global/config request
+INFO  2026-07-17T08:33:59 +0ms service=server method=GET path=/global/event request
+INFO  2026-07-17T08:33:59 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T08:33:59 +1ms service=server global event connected
+INFO  2026-07-17T08:33:59 +0ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T08:33:59 +70ms service=server method=GET path=/provider request
+INFO  2026-07-17T08:33:59 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T08:34:00 +193ms service=server status=completed duration=193 method=GET path=/provider request
+INFO  2026-07-17T08:34:00 +43ms service=server method=GET path=/path request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T08:34:00 +7ms service=server status=completed duration=7 method=GET path=/path request
+INFO  2026-07-17T08:34:00 +21ms service=server method=GET path=/project request
+INFO  2026-07-17T08:34:00 +1ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T08:34:00 +4ms service=server status=completed duration=4 method=GET path=/project request
+INFO  2026-07-17T08:34:00 +23ms service=server method=GET path=/company request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:34:00 +5ms service=server status=completed duration=5 method=GET path=/company request
+INFO  2026-07-17T08:34:00 +4ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:00 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:00 +212ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:34:00 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T08:34:00 +13ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:34:00 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:34:00 +45ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T08:34:00 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T08:34:00 +76ms service=server status=completed duration=76 method=GET path=/company/providers request
+INFO  2026-07-17T08:34:13 +12450ms service=server method=GET path=/company request
+INFO  2026-07-17T08:34:13 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:34:13 +7ms service=server status=completed duration=7 method=GET path=/company request
+INFO  2026-07-17T08:34:13 +3ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:13 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:13 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:34:13 +9ms service=server buffered=0 global event disconnected
+DEBUG 2026-07-17T08:34:16 +3803ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:34:16 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:34:16 +60ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:34:16 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T08:52:37 +1100989ms service=server method=GET path=/company request
+INFO  2026-07-17T08:52:37 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:52:37 +2ms service=server status=completed duration=2 method=GET path=/company request
+INFO  2026-07-17T08:52:37 +0ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:52:37 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:52:37 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:52:37 +4ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:52:37 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:52:37 +5ms service=server status=completed duration=5 method=GET path=/company/channels request
+INFO  2026-07-17T08:52:37 +4ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:52:37 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:52:37 +2ms service=server status=completed duration=2 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:53:07 +29535ms service=server method=GET path=/company request
+INFO  2026-07-17T08:53:07 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:53:07 +5ms service=server status=completed duration=5 method=GET path=/company request
+INFO  2026-07-17T08:53:07 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:53:07 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:53:07 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:53:07 +30ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:53:07 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:53:07 +29ms service=server status=completed duration=29 method=GET path=/company/channels request
+INFO  2026-07-17T08:53:07 +5ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:53:07 +1ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:53:07 +7ms service=server status=completed duration=7 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:27 +140314ms service=server method=GET path=/company request
+INFO  2026-07-17T08:55:27 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:55:27 +5ms service=server status=completed duration=5 method=GET path=/company request
+INFO  2026-07-17T08:55:27 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:27 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:27 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:27 +10ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:55:27 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:55:27 +3ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T08:55:27 +9ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:27 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:27 +12ms service=server status=completed duration=12 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:39 +11741ms service=server method=GET path=/company request
+INFO  2026-07-17T08:55:39 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:55:39 +6ms service=server status=completed duration=6 method=GET path=/company request
+INFO  2026-07-17T08:55:39 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:39 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:39 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:55:39 +11ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:55:39 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:55:39 +5ms service=server status=completed duration=5 method=GET path=/company/channels request
+INFO  2026-07-17T08:55:39 +6ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:39 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:55:39 +3ms service=server status=completed duration=3 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:56:02 +22656ms service=server method=GET path=/company request
+INFO  2026-07-17T08:56:02 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T08:56:02 +2ms service=server status=completed duration=2 method=GET path=/company request
+INFO  2026-07-17T08:56:02 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T08:56:02 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T08:56:02 +0ms service=server status=completed duration=0 method=GET path=/local-auth/session request
+INFO  2026-07-17T08:56:02 +3ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T08:56:02 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T08:56:02 +1ms service=server status=completed duration=1 method=GET path=/company/channels request
+INFO  2026-07-17T08:56:02 +2ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:56:02 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T08:56:02 +2ms service=server status=completed duration=2 method=GET path=/company/channels/chn_board/messages request
+DEBUG 2026-07-17T08:57:48 +106437ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:57:48 +4ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:57:48 +69ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T08:57:48 +1ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T09:02:36 +287553ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T09:02:36 +44ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T09:02:36 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T09:02:36 +1ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T09:03:24 +48098ms service=server method=GET path=/global/health request
+INFO  2026-07-17T09:03:24 +0ms service=server status=started method=GET path=/global/health request
+INFO  2026-07-17T09:03:24 +9ms service=server status=completed duration=9 method=GET path=/global/health request
+INFO  2026-07-17T09:04:35 +70738ms service=server method=GET path=/company request
+INFO  2026-07-17T09:04:35 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:04:35 +40ms service=server status=completed duration=40 method=GET path=/company request
+INFO  2026-07-17T09:04:48 +12701ms service=server method=GET path=/company request
+INFO  2026-07-17T09:04:48 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:04:48 +163ms service=server status=completed duration=163 method=GET path=/company request
+INFO  2026-07-17T09:15:10 +622500ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:10 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:10 +4ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T09:15:10 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:10 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:10 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:10 +7ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:10 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:10 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:10 +8ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:10 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:10 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:13 +2578ms service=server buffered=0 global event disconnected
+INFO  2026-07-17T09:15:13 +1ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:13 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:13 +3ms service=server status=completed duration=3 method=GET path=/company request
+INFO  2026-07-17T09:15:13 +588ms service=server method=GET path=/global/config request
+INFO  2026-07-17T09:15:13 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T09:15:13 +2ms service=server status=completed duration=2 method=GET path=/global/config request
+INFO  2026-07-17T09:15:13 +33ms service=server method=GET path=/global/event request
+INFO  2026-07-17T09:15:13 +0ms service=server status=started method=GET path=/global/event request
+INFO  2026-07-17T09:15:13 +0ms service=server global event connected
+INFO  2026-07-17T09:15:13 +1ms service=server status=completed duration=1 method=GET path=/global/event request
+INFO  2026-07-17T09:15:14 +387ms service=server method=GET path=/provider request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T09:15:14 +148ms service=server status=completed duration=148 method=GET path=/provider request
+INFO  2026-07-17T09:15:14 +6ms service=server method=GET path=/path request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T09:15:14 +8ms service=server status=completed duration=8 method=GET path=/path request
+INFO  2026-07-17T09:15:14 +1ms service=server method=GET path=/project request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T09:15:14 +5ms service=server status=completed duration=5 method=GET path=/project request
+INFO  2026-07-17T09:15:14 +4ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:14 +9ms service=server status=completed duration=9 method=GET path=/company request
+INFO  2026-07-17T09:15:14 +0ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:14 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:14 +12ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:14 +1ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:14 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:14 +7ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:14 +12ms service=server status=completed duration=12 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:14 +15ms service=server method=GET path=/company/providers request
+INFO  2026-07-17T09:15:14 +0ms service=server status=started method=GET path=/company/providers request
+INFO  2026-07-17T09:15:14 +81ms service=server status=completed duration=81 method=GET path=/company/providers request
+INFO  2026-07-17T09:15:33 +18373ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:33 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:33 +24ms service=server status=completed duration=24 method=GET path=/company request
+INFO  2026-07-17T09:15:33 +1ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:33 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:33 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:33 +8ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:33 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:33 +1ms service=server status=completed duration=1 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:33 +3ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:33 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:33 +2ms service=server status=completed duration=2 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:38 +5019ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:38 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:38 +9ms service=server status=completed duration=9 method=GET path=/company request
+INFO  2026-07-17T09:15:38 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:38 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:38 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:38 +7ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:38 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:38 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:38 +15ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:38 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:38 +4ms service=server status=completed duration=4 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:46 +8335ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:46 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:46 +8ms service=server status=completed duration=8 method=GET path=/company request
+INFO  2026-07-17T09:15:46 +0ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:46 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:46 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:46 +5ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:46 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:46 +2ms service=server status=completed duration=2 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:46 +4ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:46 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:46 +3ms service=server status=completed duration=3 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:51 +4808ms service=server method=GET path=/company request
+INFO  2026-07-17T09:15:51 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:15:51 +19ms service=server status=completed duration=19 method=GET path=/company request
+INFO  2026-07-17T09:15:51 +2ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:51 +1ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:51 +1ms service=server status=completed duration=1 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:15:51 +4ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:15:51 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:15:51 +3ms service=server status=completed duration=3 method=GET path=/company/channels request
+INFO  2026-07-17T09:15:51 +9ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:51 +0ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:15:51 +8ms service=server status=completed duration=8 method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:16:04 +12781ms service=server method=POST path=/company/providers/models request
+INFO  2026-07-17T09:16:04 +0ms service=server status=started method=POST path=/company/providers/models request
+INFO  2026-07-17T09:16:04 +274ms service=server status=completed duration=274 method=POST path=/company/providers/models request
+INFO  2026-07-17T09:16:09 +5138ms service=server method=PUT path=/auth/talktodo request
+INFO  2026-07-17T09:16:09 +0ms service=server status=started method=PUT path=/auth/talktodo request
+INFO  2026-07-17T09:16:09 +26ms service=server status=completed duration=26 method=PUT path=/auth/talktodo request
+INFO  2026-07-17T09:16:09 +3ms service=server method=PATCH path=/global/config request
+INFO  2026-07-17T09:16:09 +1ms service=server status=started method=PATCH path=/global/config request
+INFO  2026-07-17T09:16:09 +20ms service=server-proxy disposing all instances
+INFO  2026-07-17T09:16:09 +0ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane disposing instance
+INFO  2026-07-17T09:16:09 +11ms service=bus type=* unsubscribing
+INFO  2026-07-17T09:16:09 +1ms service=bus type=message.part.updated unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.updated unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.updated unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.diff unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.deleted unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=file.watcher.updated unsubscribing
+INFO  2026-07-17T09:16:09 +4ms service=server status=completed duration=37 method=PATCH path=/global/config request
+INFO  2026-07-17T09:16:09 +9ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\projects\company\repository disposing instance
+INFO  2026-07-17T09:16:09 +2ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\data\bootstrap-runtime disposing instance
+INFO  2026-07-17T09:16:09 +0ms service=bus type=* unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.part.updated unsubscribing
+INFO  2026-07-17T09:16:09 +1ms service=bus type=session.updated unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.updated unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.diff unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.deleted unsubscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=file.watcher.updated unsubscribing
+INFO  2026-07-17T09:16:09 +5ms service=server method=GET path=/global/config request
+INFO  2026-07-17T09:16:09 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T09:16:09 +1ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\config.json loading
+INFO  2026-07-17T09:16:09 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T09:16:09 +1ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T09:16:09 +7ms service=server status=completed duration=9 method=GET path=/global/config request
+INFO  2026-07-17T09:16:09 +3ms service=server method=GET path=/provider request
+INFO  2026-07-17T09:16:09 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T09:16:09 +2ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane creating instance
+INFO  2026-07-17T09:16:09 +0ms service=project directory=D:\repos\ai-agents\agents-company\packages\control-plane fromDirectory
+INFO  2026-07-17T09:16:09 +1ms service=server method=GET path=/path request
+INFO  2026-07-17T09:16:09 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T09:16:09 +2ms service=server method=GET path=/project request
+INFO  2026-07-17T09:16:09 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T09:16:09 +149ms service=server-proxy directory=D:\repos\ai-agents\agents-company\packages\control-plane bootstrapping
+INFO  2026-07-17T09:16:09 +27ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.json loading
+INFO  2026-07-17T09:16:09 +0ms service=config path=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config\agent-company.jsonc loading
+INFO  2026-07-17T09:16:09 +31ms service=plugin name=MimoAuthPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=AnthropicProxyPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=CodexAuthPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=CopilotAuthPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=CloudflareWorkersAuthPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=CloudflareAIGatewayAuthPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=plugin name=CheckpointSplitoverPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +1ms service=plugin name=SubagentProgressCheckerPlugin loading internal plugin
+INFO  2026-07-17T09:16:09 +0ms service=bus type=* subscribing
+INFO  2026-07-17T09:16:09 +3ms service=bus type=command.executed subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=metrics.model_call subscribing
+INFO  2026-07-17T09:16:09 +1ms service=bus type=metrics.tool_call subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=metrics.agent_request subscribing
+INFO  2026-07-17T09:16:09 +2ms service=provider status=started state
+INFO  2026-07-17T09:16:09 +13ms service=provider init
+WARN  2026-07-17T09:16:09 +1ms service=provider providerID=talktodo modelID=codex-auto-review defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.codex-auto-review limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +14ms service=provider providerID=talktodo modelID=deepseek-v4-flash defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.deepseek-v4-flash limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=deepseek-v4-pro defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.deepseek-v4-pro limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=glm-5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.glm-5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=glm-5.1 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.glm-5.1 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=glm-5.2 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.glm-5.2 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.3-codex-spark defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.3-codex-spark limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.4 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.4 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.4-mini defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.4-mini limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.6-luna defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.6-luna limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.6-sol defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.6-sol limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-5.6-terra defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-5.6-terra limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-image-1.5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-image-1.5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=gpt-image-2 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.gpt-image-2 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=hy3-preview defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.hy3-preview limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +1ms service=provider providerID=talktodo modelID=kimi-k2.5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.kimi-k2.5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=kimi-k2.6 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.kimi-k2.6 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=kimi-k2.7-code defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.kimi-k2.7-code limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=mimo-v2-omni defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.mimo-v2-omni limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=mimo-v2-pro defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.mimo-v2-pro limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=mimo-v2.5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.mimo-v2.5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=mimo-v2.5-pro defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.mimo-v2.5-pro limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=minimax-m2.5 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.minimax-m2.5 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=minimax-m2.7 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.minimax-m2.7 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=minimax-m3 defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.minimax-m3 limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=qwen3.5-plus defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.qwen3.5-plus limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=qwen3.6-plus defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.qwen3.6-plus limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=qwen3.7-max defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.qwen3.7-max limit.context not configured and not found in models.dev
+WARN  2026-07-17T09:16:09 +0ms service=provider providerID=talktodo modelID=qwen3.7-plus defaulting_to=1000000 fix=Set limit.context explicitly in agentcompany.json under provider.talktodo.models.qwen3.7-plus limit.context not configured and not found in models.dev
+INFO  2026-07-17T09:16:09 +2ms service=server status=completed duration=247 method=GET path=/path request
+INFO  2026-07-17T09:16:09 +0ms service=server status=completed duration=245 method=GET path=/project request
+INFO  2026-07-17T09:16:09 +17ms service=lsp all LSPs are disabled
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.updated subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.updated subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.diff subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=session.deleted subscribing
+INFO  2026-07-17T09:16:09 +0ms service=format all formatters are disabled
+INFO  2026-07-17T09:16:09 +0ms service=format init
+INFO  2026-07-17T09:16:09 +1ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane init
+INFO  2026-07-17T09:16:09 +1ms service=file.watcher directory=D:\repos\ai-agents\agents-company\packages\control-plane platform=win32 backend=windows watcher backend
+INFO  2026-07-17T09:16:09 +2ms service=bus type=message.part.updated subscribing
+INFO  2026-07-17T09:16:09 +0ms service=bus type=message.part.removed subscribing
+INFO  2026-07-17T09:16:09 +17ms service=provider providerID=talktodo found
+INFO  2026-07-17T09:16:09 +0ms service=provider providerID=xiaomi found
+INFO  2026-07-17T09:16:09 +0ms service=provider status=completed duration=69 state
+INFO  2026-07-17T09:16:10 +72ms service=server status=completed duration=360 method=GET path=/provider request
+INFO  2026-07-17T09:16:10 +164ms service=vcs branch=main default_branch=main initialized
+INFO  2026-07-17T09:16:10 +0ms service=bus type=file.watcher.updated subscribing
+INFO  2026-07-17T09:16:10 +67ms service=server method=GET path=/global/config request
+INFO  2026-07-17T09:16:10 +0ms service=server status=started method=GET path=/global/config request
+INFO  2026-07-17T09:16:10 +1ms service=server status=completed duration=1 method=GET path=/global/config request
+INFO  2026-07-17T09:16:10 +26ms service=server method=GET path=/provider request
+INFO  2026-07-17T09:16:10 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-07-17T09:16:10 +79ms service=server status=completed duration=79 method=GET path=/provider request
+INFO  2026-07-17T09:16:10 +1ms service=server method=GET path=/path request
+INFO  2026-07-17T09:16:10 +0ms service=server status=started method=GET path=/path request
+INFO  2026-07-17T09:16:10 +3ms service=server status=completed duration=3 method=GET path=/path request
+INFO  2026-07-17T09:16:10 +0ms service=server method=GET path=/project request
+INFO  2026-07-17T09:16:10 +0ms service=server status=started method=GET path=/project request
+INFO  2026-07-17T09:16:10 +2ms service=server status=completed duration=2 method=GET path=/project request
+WARN  2026-07-17T09:16:10 +151ms service=config dir=D:\repos\ai-agents\agents-company\packages\control-plane\.webui-progressive-verify-home\config error=Cause([Fail(NpmInstallFailedError (cause: HttpErrorGeneral: 404 Not Found - GET https://registry.npmjs.org/@agents-company%2fplugin - Not found))]) background dependency install failed
+INFO  2026-07-17T09:16:19 +8901ms service=history.backfill sessions=121 backfill complete
+INFO  2026-07-17T09:16:34 +14746ms service=server method=GET path=/company request
+INFO  2026-07-17T09:16:34 +1ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T09:16:34 +17ms service=server status=completed duration=17 method=GET path=/company request
+INFO  2026-07-17T09:16:34 +3ms service=server method=GET path=/local-auth/session request
+INFO  2026-07-17T09:16:34 +0ms service=server status=started method=GET path=/local-auth/session request
+INFO  2026-07-17T09:16:34 +2ms service=server status=completed duration=2 method=GET path=/local-auth/session request
+INFO  2026-07-17T09:16:34 +11ms service=server method=GET path=/company/channels request
+INFO  2026-07-17T09:16:34 +0ms service=server status=started method=GET path=/company/channels request
+INFO  2026-07-17T09:16:34 +4ms service=server status=completed duration=4 method=GET path=/company/channels request
+INFO  2026-07-17T09:16:34 +9ms service=server method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:16:34 +1ms service=server status=started method=GET path=/company/channels/chn_board/messages request
+INFO  2026-07-17T09:16:34 +6ms service=server status=completed duration=6 method=GET path=/company/channels/chn_board/messages request

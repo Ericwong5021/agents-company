@@ -21,10 +21,12 @@ describe("Company Workspace visual contract", () => {
     expect(workspace).toContain(".company-channels-wrap.mobile-open > .company-channels")
   })
 
-  test("pins the approved desktop shell and Marvis settings geometry", () => {
+  test("pins the approved desktop shell and workspace-style settings geometry", () => {
     expect(workspace).toContain("grid-template-columns: 168px minmax(560px, 1fr) 426px")
-    expect(workspace).toContain("width: min(calc(100vw - 32px), 646px)")
-    expect(workspace).toContain("height: min(calc(100vh - 32px), 486px)")
+    expect(workspace).toContain("width: min(calc(100vw - 32px), 760px)")
+    expect(workspace).toContain("height: min(calc(100vh - 32px), 560px)")
+    expect(workspace).toContain("background: var(--company-sidebar) !important")
+    expect(workspace).toContain("background: var(--company-accent-soft) !important")
   })
 
   test("styles every M2 state and metadata affordance explicitly", () => {
