@@ -4,6 +4,7 @@ import * as CompanyActivity from "../../src/company/activity"
 import { CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import * as Database from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 
@@ -19,8 +20,8 @@ describe("Company activity projection", () => {
           id: companyID,
           name: "Agent Company",
           data_version: 1,
-          default_provider_id: "test",
-          default_model_id: "test",
+          default_provider_id: ProviderID.zod.parse("test"),
+          default_model_id: ModelID.zod.parse("test"),
           bootstrap_request_id: "req_activity",
           bootstrap_input_path: "/tmp/activity",
           time_created: 1,
