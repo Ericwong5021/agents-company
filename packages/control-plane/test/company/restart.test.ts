@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer"
 import { randomUUID } from "node:crypto"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
-import { CompanyNeedsBootstrapState, CompanyProviderList, CompanyReadyState } from "../../src/company/schema"
+import { CompanyProviderList, CompanyReadyState } from "../../src/company/schema"
 import { IssuedCredential, LocalPairing } from "../../src/local-auth/schema"
 import { tmpdir } from "../fixture/fixture"
 
@@ -143,8 +143,10 @@ describe.serial("Company process restart", () => {
     await using serverB = await start(homeB.path)
     const freshResult = await json(serverB.url, "/company")
     expect(freshResult.response.status).toBe(200)
-    const fresh = CompanyNeedsBootstrapState.parse(freshResult.body)
+    const fresh = CompanyReadyState.parse(freshResult.body)
     expect(fresh.data_directory).toBe(path.join(homeB.path, "data"))
+    expect(fresh.company.provider).toBeNull()
+    expect(fresh.company.repository).toBeNull()
     expect((await json(serverB.url, "/company", {}, "Bearer " + first.issued.token)).response.status).toBe(401)
 
     await using serverA = await start(homeA.path)

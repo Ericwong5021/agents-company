@@ -24,6 +24,7 @@ import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Memory } from "@/memory"
 import { Agent, BOARD_DISCUSSION_AGENT_ID } from "@/agent/agent"
 import { Provider } from "@/provider"
+import type { ModelID, ProviderID } from "@/provider/schema"
 import { LLM } from "@/session/llm"
 import { AgentRun } from "@/agent-run/agent-run"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
@@ -123,7 +124,7 @@ export const Event = {
     }),
   ),
   // Fires after the user message has been persisted to GroupMessageTable,
-  // before agent fan-out starts. TUI uses this to show the user bubble.
+  // before agent fan-out starts. Clients use this to show the user bubble.
   UserMessagePersisted: BusEvent.define(
     "group_session.user_message_persisted",
     z.object({
@@ -131,7 +132,7 @@ export const Event = {
       roundNum: z.number(),
     }),
   ),
-  // Fires per-member when an agent's prompt begins. TUI uses this to show
+  // Fires per-member when an agent's prompt begins. Clients use this to show
   // the "working" bubble for that specific agent.
   AgentStarted: BusEvent.define(
     "group_session.agent_started",
@@ -143,7 +144,7 @@ export const Event = {
     }),
   ),
   // Fires per-member when an agent finishes (success, error, or interrupted).
-  // statusSummary distinguishes the outcome for the TUI.
+  // statusSummary distinguishes the outcome for clients.
   AgentCompleted: BusEvent.define(
     "group_session.agent_completed",
     z.object({
@@ -261,8 +262,8 @@ function loadGroupInfo(groupID: GroupSessionID): Info | undefined {
   }
 }
 
-function loadCompanyModel(projectID: string) {
-  return Database.use((db) =>
+function loadCompanyModel(projectID: string, fallback?: { providerID: ProviderID; modelID: ModelID }) {
+  const company = Database.use((db) =>
     db
       .select({
         providerID: CompanyTable.default_provider_id,
@@ -273,6 +274,9 @@ function loadCompanyModel(projectID: string) {
       .where(eq(RepositoryBindingTable.project_id, projectID as ProjectID))
       .get(),
   )
+  if (!company) return fallback
+  if (company.providerID === "unconfigured" || company.modelID === "unconfigured") return fallback
+  return company
 }
 
 // Build the group context block injected into each member's prompt.
@@ -467,6 +471,11 @@ export const layer: Layer.Layer<
       const activeSchedulers = yield* Ref.make(new Set<string>())
       const interruptedSchedulers = yield* Ref.make(new Set<string>())
       const activeAgentRuns = yield* Ref.make(new Map<string, Set<string>>())
+
+      const resolveCompanyModel = Effect.fn("GroupSession.resolveCompanyModel")(function* (projectID: string) {
+        const globalModel = yield* provider.defaultModel().pipe(Effect.catch(() => Effect.succeed(undefined)))
+        return yield* Effect.sync(() => loadCompanyModel(projectID, globalModel))
+      })
 
       // --- create ---
 
@@ -708,7 +717,7 @@ export const layer: Layer.Layer<
         if (!member) return yield* Effect.fail(new Error(`Group session member ${input.companyAgentID} was not found`))
         const group = yield* get(input.groupSessionID)
         const model = group.contextPolicy === "work_scoped"
-          ? yield* Effect.sync(() => loadCompanyModel(group.projectID))
+          ? yield* resolveCompanyModel(group.projectID)
           : undefined
         return yield* promptSvc.prompt({
           sessionID: member.sessionID as SessionID,
@@ -738,7 +747,7 @@ export const layer: Layer.Layer<
         const memberIds = params.info.members.map((m) => m.companyAgentID)
         const scheduler = new BiddingScheduler(params.groupSessionID, memberIds)
         const companyModel = params.info.contextPolicy === "work_scoped"
-          ? yield* Effect.sync(() => loadCompanyModel(params.info.projectID))
+          ? yield* resolveCompanyModel(params.info.projectID)
           : undefined
 
         // Work-scoped sessions deliberately use only public company fields.

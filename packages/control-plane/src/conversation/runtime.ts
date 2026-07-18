@@ -373,9 +373,13 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       threadID: RuntimeInput["thread"]["id"]
       state: "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
     }) {
-      yield* bus
-        .publish(ServerEvent.ConversationRunUpdated, { thread_id: input.threadID, state: input.state })
-        .pipe(Effect.ignore)
+      yield* Effect.all(
+        [
+          bus.publish(ServerEvent.ConversationRunUpdated, { thread_id: input.threadID, state: input.state }).pipe(Effect.ignore),
+          bus.publish(ServerEvent.AgentActivityInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
+        ],
+        { discard: true },
+      )
     })
 
     const monitor = Effect.fn("ConversationRuntime.monitor")(function* (input: RuntimeInput & Started) {
@@ -442,9 +446,7 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
         [
           bus.publish(ServerEvent.ChannelInvalidated, { channel_id: input.thread.channel_id }).pipe(Effect.ignore),
           bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.thread.id }).pipe(Effect.ignore),
-          bus
-            .publish(ServerEvent.ConversationRunUpdated, { thread_id: input.thread.id, state: "completed" })
-            .pipe(Effect.ignore),
+          publishRunState({ threadID: input.thread.id, state: "completed" }),
         ],
         { discard: true },
       ).pipe(Effect.forkDetach)

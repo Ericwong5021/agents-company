@@ -23,7 +23,6 @@ import {
   CompanyCorruptState,
   CompanyID,
   CompanyModelNotAvailable,
-  CompanyNeedsBootstrapState,
   CompanyProviderNotConnected,
   CompanyProviderUnsupported,
   CompanyReadyState,
@@ -77,29 +76,6 @@ export function boardMessagesEnabled() {
   return !Flag.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
 }
 
-function needsBootstrap(): CompanyState {
-  return CompanyNeedsBootstrapState.parse({
-    state: "needs_bootstrap",
-    data_directory: Global.Path.data,
-    defaults: {
-      company_name: "Agent Company",
-      approval_preset: "balanced",
-      board: BOARD.map((member) => ({
-        id: member.id,
-        role: member.role,
-        name: member.name,
-        lifecycle: "employee",
-        responsibilities: [...member.responsibilities],
-      })),
-    },
-    capabilities: { board_messages: boardMessagesEnabled() },
-  })
-}
-
-function canCreateDefaultCompany(tx: Database.Transaction) {
-  return tx.select().from(CompanyAgentTable).all().length === 0
-}
-
 function createDefaultCompany(tx: Database.Transaction) {
   const now = Date.now()
   tx.insert(CompanyTable)
@@ -139,9 +115,23 @@ function createDefaultCompany(tx: Database.Transaction) {
     .run()
 }
 
+function ensureDefaultCompany(tx: Database.Transaction) {
+  if (tx.select().from(CompanyTable).all().length > 0) return
+
+  // A failed or interrupted legacy bootstrap can leave orphan CompanyAgent,
+  // policy, binding, or setup-goal rows behind. There is no valid Company to
+  // preserve in this branch, so repair the singleton before creating the
+  // default empty workspace.
+  tx.delete(CompanySetupGoalTable).run()
+  tx.delete(RepositoryBindingTable).run()
+  tx.delete(ApprovalPolicyTable).run()
+  tx.delete(CompanyAgentTable).run()
+  createDefaultCompany(tx)
+}
+
 function current(db: TxOrDb): CompanyState {
   const companies = db.select().from(CompanyTable).all()
-  if (companies.length === 0) return needsBootstrap()
+  if (companies.length === 0) return corrupt()
   if (companies.length !== 1) return corrupt()
 
   const company = companies[0]
@@ -225,6 +215,7 @@ function current(db: TxOrDb): CompanyState {
 }
 
 function readyRecord(db: TxOrDb): ReadyRecord | undefined {
+  if (db.select().from(CompanyTable).all().length === 0) return
   const state = current(db)
   if (state.state !== "ready") return
   const row = db.select().from(CompanyTable).where(eq(CompanyTable.id, state.company.id)).get()
@@ -323,9 +314,8 @@ export const layer = Layer.effect(
     const getCurrent = Effect.fn("Company.current")(() =>
       database(() =>
         Database.transaction((tx) => {
-          if (tx.select().from(CompanyTable).all().length === 0 && canCreateDefaultCompany(tx as Database.Transaction))
-            createDefaultCompany(tx as Database.Transaction)
-          return current(tx)
+          ensureDefaultCompany(tx as Database.Transaction)
+          return current(tx as Database.Transaction)
         }, { behavior: "immediate" }),
       ),
     )
@@ -370,8 +360,7 @@ export const layer = Layer.effect(
       const input = CompanySetupGoalInput.parse(raw)
       return yield* database(() =>
         Database.transaction((tx) => {
-          if (tx.select().from(CompanyTable).all().length === 0 && canCreateDefaultCompany(tx as Database.Transaction))
-            createDefaultCompany(tx as Database.Transaction)
+          ensureDefaultCompany(tx as Database.Transaction)
           const now = Date.now()
           tx.insert(CompanySetupGoalTable)
             .values({ company_id: COMPANY_ID, body: input.body, time_created: now, time_updated: now })

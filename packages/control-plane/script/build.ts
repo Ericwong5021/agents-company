@@ -4,7 +4,6 @@ import { $ } from "bun"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
-import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import { createEmbeddedWebUIBundle, createExtensionManifest, loadMigrations } from "./build-support"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -26,7 +25,6 @@ console.log(`Loaded ${migrations.length} migrations`)
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
-const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
 const embeddedFileMap = skipEmbedWebUi ? null : await createEmbeddedWebUIBundle(dir)
 
@@ -125,7 +123,6 @@ process.on("exit", () => {
 
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
-  await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
   await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
 }
 for (const item of targets) {
@@ -142,19 +139,9 @@ for (const item of targets) {
   console.log(`building ${name}`)
   await $`mkdir -p dist/${name}/bin`
 
-  const localPath = path.resolve(dir, "node_modules/@opentui/core/parser.worker.js")
-  const rootPath = path.resolve(dir, "../../node_modules/@opentui/core/parser.worker.js")
-  const parserWorker = fs.realpathSync(fs.existsSync(localPath) ? localPath : rootPath)
-  const workerPath = "./src/cli/cmd/tui/worker.ts"
-
-  // Use platform-specific bunfs root path based on target OS
-  const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
-  const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
-
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
-    plugins: [plugin],
     external: ["node-gyp"],
     format: "esm",
     minify: true,
@@ -170,12 +157,10 @@ for (const item of targets) {
       windows: {},
     },
     files: embeddedFileMap ? { "agent-company-web-ui.gen.ts": embeddedFileMap } : {},
-    entrypoints: ["./src/index.ts", parserWorker, workerPath, ...(embeddedFileMap ? ["agent-company-web-ui.gen.ts"] : [])],
+    entrypoints: ["./src/index.ts", ...(embeddedFileMap ? ["agent-company-web-ui.gen.ts"] : [])],
     define: {
       AGENTCOMPANY_VERSION: `'${Script.version}'`,
       CONTROL_PLANE_MIGRATIONS: JSON.stringify(migrations),
-      OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      CONTROL_PLANE_WORKER_PATH: workerPath,
       AGENTCOMPANY_CHANNEL: `'${Script.channel}'`,
       CONTROL_PLANE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
@@ -194,7 +179,6 @@ for (const item of targets) {
     }
   }
 
-  await $`rm -rf ./dist/${name}/bin/tui`
   await Bun.file(`dist/${name}/README.md`).write(
     `This is the ${item.os}-${item.arch} binary for [@agents-company/control-plane](https://www.npmjs.com/package/@agents-company/control-plane). Install that package directly.\n`,
   )

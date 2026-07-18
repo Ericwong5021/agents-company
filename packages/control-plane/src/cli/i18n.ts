@@ -1,15 +1,13 @@
-import { dict as en } from "./cmd/tui/i18n/en"
-import { dict as zh } from "./cmd/tui/i18n/zh"
-import { dict as ja } from "./cmd/tui/i18n/ja"
-import { dict as fr } from "./cmd/tui/i18n/fr"
-import { dict as ru } from "./cmd/tui/i18n/ru"
-import { detectSystemLocale } from "./cmd/tui/util/system-locale"
-
-const dicts: Record<string, Partial<Record<string, string>>> = { en, zh, ja, fr, ru }
-const dict = dicts[detectSystemLocale()] ?? en
+const dict: Record<string, string> = {
+  "cli.providers.mimo_login.decrypt_retry": "Decryption failed. {remaining} attempts remaining.",
+  "cli.providers.mimo_login.decrypt_exhausted": "Decryption failed too many times.",
+  "cli.providers.select": "Select a provider",
+  "cli.providers.mimo.recommended_hint": "Recommended",
+  "cli.providers.other": "Other",
+}
 
 export function t(key: string, params?: Record<string, string | number>): string {
-  const raw = dict[key] ?? (en as Record<string, string>)[key] ?? key
+  const raw = dict[key] ?? key
   if (!params) return raw
-  return raw.replace(/\{(\w+)\}/g, (_, k) => (k in params ? String(params[k]) : `{${k}}`))
+  return raw.replace(/\{(\w+)\}/g, (_, name) => (name in params ? String(params[name]) : `{${name}}`))
 }

@@ -11,7 +11,7 @@ import { RecoverableError } from "@/tool/recoverable"
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // Shared recovery message for every mutate-by-id miss, so the agent learns one
-// pattern. Wrapped in RecoverableError at each call site so the TUI mutes it
+// pattern. Wrapped in RecoverableError at each call site so clients can mute it
 // (agent-recoverable) while the guidance still reaches the model.
 const notFoundMessage = (id: string) =>
   `Task ${id} not found. Use \`task list\` to see valid task IDs, or \`task create\` to add one.`
@@ -282,7 +282,7 @@ export const layer: Layer.Layer<Service, never, Bus.Service | Config.Service> = 
       }
 
       // Idempotent re-start by the same owner is a no-op: re-emitting `started` would
-      // spam the task_event log and the SSE/TUI stream for zero state change. A
+      // spam the task_event log and SSE stream for zero state change. A
       // *different* owner is a genuine handoff (replacement actor picking up the task)
       // and falls through to update owner + re-emit.
       const owner = input.owner ?? existing.owner

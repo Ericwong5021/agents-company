@@ -112,12 +112,8 @@ export interface Interface {
   readonly list: () => Effect.Effect<Hooks[]>
   readonly init: () => Effect.Effect<void>
   readonly reloadFileHooks: () => Effect.Effect<void>
-  readonly triggerActorPreStop: (
-    input: ActorPreStopInput,
-  ) => Effect.Effect<ActorStopAggregatedDecision>
-  readonly triggerActorPostStop: (
-    input: ActorPostStopInput,
-  ) => Effect.Effect<ActorStopAggregatedDecision>
+  readonly triggerActorPreStop: (input: ActorPreStopInput) => Effect.Effect<ActorStopAggregatedDecision>
+  readonly triggerActorPostStop: (input: ActorPostStopInput) => Effect.Effect<ActorStopAggregatedDecision>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/Plugin") {}
@@ -160,12 +156,7 @@ function getLegacyPlugins(mod: Record<string, unknown>) {
   return result
 }
 
-async function applyPlugin(
-  load: PluginLoader.Loaded,
-  input: PluginInput,
-  hooks: Hooks[],
-  hooksWithMeta: HookEntry[],
-) {
+async function applyPlugin(load: PluginLoader.Loaded, input: PluginInput, hooks: Hooks[], hooksWithMeta: HookEntry[]) {
   const plugin = readV1Plugin(load.mod, load.spec, "server", "detect")
   if (plugin) {
     await resolvePluginId(load.source, load.spec, load.target, readPluginId(plugin.id, load.spec), load.pkg)
@@ -182,9 +173,7 @@ async function applyPlugin(
 
   for (const server of getLegacyPlugins(load.mod)) {
     const fnName = (server as { name?: string }).name
-    const pluginName = fnName && fnName !== "default" && fnName !== ""
-      ? fnName
-      : (load.pkg?.pkg ?? load.spec)
+    const pluginName = fnName && fnName !== "default" && fnName !== "" ? fnName : (load.pkg?.pkg ?? load.spec)
     const hookObj = await server(input, load.options)
     hooks.push(hookObj)
     hooksWithMeta.push({
@@ -221,7 +210,8 @@ export const layer = Layer.effect(
                 Authorization: `Basic ${Buffer.from(`${Flag.AGENTCOMPANY_SERVER_USERNAME ?? "agentcompany"}:${Flag.AGENTCOMPANY_SERVER_PASSWORD}`).toString("base64")}`,
               }
             : undefined,
-          fetch: async (...args) => (await Server.Default()).app.fetch(...args),
+          fetch: (async (input: RequestInfo | URL, init?: RequestInit) =>
+            (await Server.Default()).app.fetch(new Request(input, init))) as typeof fetch,
         })
         const cfg = yield* config.get()
         const input: PluginInput = {
@@ -413,21 +403,32 @@ export const layer = Layer.effect(
         const dirs = yield* config.directories()
 
         for (const dir of dirs) {
-          const matches = Glob.scanSync("{hook,hooks}/*.{js,ts}", { cwd: dir, absolute: true, dot: true, symlink: true })
+          const matches = Glob.scanSync("{hook,hooks}/*.{js,ts}", {
+            cwd: dir,
+            absolute: true,
+            dot: true,
+            symlink: true,
+          })
           for (const match of matches) {
             const mod = yield* Effect.tryPromise({
               try: () => import(`${pathToFileURL(match).href}?v=${Date.now()}`),
               catch: (err) => err,
-            }).pipe(Effect.catch((err) => {
-              log.error("failed to load file hook", { path: match, error: errorMessage(err) })
-              return Effect.succeed(undefined)
-            }))
+            }).pipe(
+              Effect.catch((err) => {
+                log.error("failed to load file hook", { path: match, error: errorMessage(err) })
+                return Effect.succeed(undefined)
+              }),
+            )
             if (!mod) continue
             const hookObj: Hooks = mod.default ?? mod
             if (hookObj && typeof hookObj === "object") {
               const name = path.basename(match, path.extname(match))
               hooks.push(hookObj)
-              meta.push({ hook: hookObj, pluginName: `file:${name}`, hookIDFor: (event: string) => `file:${name}#${event}` })
+              meta.push({
+                hook: hookObj,
+                pluginName: `file:${name}`,
+                hookIDFor: (event: string) => `file:${name}#${event}`,
+              })
               log.info("loaded file hook", { path: match, name })
             }
           }
@@ -454,8 +455,7 @@ export const layer = Layer.effect(
           if (!reg) continue
 
           const fn = typeof reg === "function" ? reg : reg.run
-          const matcher: ActorMatcher | undefined =
-            typeof reg === "function" ? undefined : reg.matcher
+          const matcher: ActorMatcher | undefined = typeof reg === "function" ? undefined : reg.matcher
 
           if (!matchesActor(matcher, input)) {
             yield* bus.publish(HookEvent.Executed, {
@@ -488,7 +488,11 @@ export const layer = Layer.effect(
             Effect.tapError((err) =>
               Effect.gen(function* () {
                 hookOutcome = "error"
-                log.error(`${eventName} hook failed`, { pluginName: entry.pluginName, hookID: entry.hookIDFor(eventName), error: err })
+                log.error(`${eventName} hook failed`, {
+                  pluginName: entry.pluginName,
+                  hookID: entry.hookIDFor(eventName),
+                  error: err,
+                })
                 yield* bus.publish(Session.Event.Error, {
                   sessionID: input.sessionID as SessionID,
                   error: new NamedError.Unknown({
@@ -534,15 +538,11 @@ export const layer = Layer.effect(
         return aggregated
       })
 
-    const triggerActorPreStop = Effect.fn("Plugin.triggerActorPreStop")(function* (
-      input: ActorPreStopInput,
-    ) {
+    const triggerActorPreStop = Effect.fn("Plugin.triggerActorPreStop")(function* (input: ActorPreStopInput) {
       return yield* aggregateDecision(input, "actor.preStop")
     })
 
-    const triggerActorPostStop = Effect.fn("Plugin.triggerActorPostStop")(function* (
-      input: ActorPostStopInput,
-    ) {
+    const triggerActorPostStop = Effect.fn("Plugin.triggerActorPostStop")(function* (input: ActorPostStopInput) {
       return yield* aggregateDecision(input, "actor.postStop")
     })
 

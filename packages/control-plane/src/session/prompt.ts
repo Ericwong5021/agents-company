@@ -24,7 +24,6 @@ import { Bus } from "../bus"
 import { ProviderTransform } from "../provider"
 import { SystemPrompt } from "./system"
 import { Instruction } from "./instruction"
-import { TuiEvent } from "@/cli/cmd/tui/event"
 import { Plugin } from "../plugin"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
@@ -246,10 +245,6 @@ export const layer = Layer.effect(
     const inbox = yield* Inbox.Service
     const agentMessageSvc = yield* AgentMessage.Service
     const threadService = yield* Thread.Service
-
-    // Track sessions that have already shown the "loaded instructions" toast so we
-    // surface it once per primary session rather than on every run-loop turn.
-    const instructionsNotified = new Set<SessionID>()
 
     // Late-bind prefix-capture helper so SessionCheckpoint.tryStartCheckpointWriter
     // can call buildLLMRequestPrefix without forming a layer cycle
@@ -2060,7 +2055,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             agentID: "main",
           })
           // Anchor the verdict to the assistant turn the judge just evaluated, so
-          // the TUI can render a per-turn marker the user can trace back to.
+          // clients can render a per-turn marker the user can trace back to.
           const judgedMessageID = transcriptMsgs.findLast((m) => m.info.role === "assistant")?.info.id
           const verdict = yield* goal
             .evaluate({
@@ -2084,9 +2079,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               sessionID,
               impossible: verdict.impossible === true,
             })
-            // Publish the final verdict (goal cleared) so the TUI can render the
+            // Publish the final verdict (goal cleared) so clients can render the
             // ✓/⊘ result line before the indicator disappears. goal.clear also
-            // publishes goal:undefined, but the TUI keeps lastVerdict sticky.
+            // publishes goal:undefined, but clients may keep lastVerdict sticky.
             yield* bus.publish(Goal.Event.Updated, {
               sessionID,
               goal: undefined,
@@ -3066,16 +3061,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               Effect.sync(() => sys.environment(model, session.time.created)),
               instruction.system().pipe(Effect.orDie),
             ])
-            // Surface which instruction files (CLAUDE.md, AGENTS.md, ...) were loaded.
-            // Only for primary sessions (subagents would be noisy) and once per session.
-            if (!session.parentID && !instructionsNotified.has(sessionID)) {
-              instructionsNotified.add(sessionID)
-              const worktree = (yield* InstanceState.context).worktree
-              const files = Array.from(instructions.paths, (p) => Instruction.display(p, worktree))
-              if (files.length > 0) {
-                yield* bus.publish(TuiEvent.InstructionsLoaded, { files }).pipe(Effect.ignore)
-              }
-            }
             const additions = [
               ...env,
               ...(skills ? [skills] : []),

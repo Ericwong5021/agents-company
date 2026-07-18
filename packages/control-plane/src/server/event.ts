@@ -17,4 +17,8 @@ export const Event = {
     "company.conversation_run.updated",
     z.object({ thread_id: ConversationThreadID, state: ConversationRunState }).strict(),
   ),
+  AgentActivityInvalidated: BusEvent.define(
+    "company.agent_activity.invalidated",
+    z.object({ thread_id: ConversationThreadID }).strict(),
+  ),
 }

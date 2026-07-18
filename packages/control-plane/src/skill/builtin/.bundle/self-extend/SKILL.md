@@ -101,7 +101,6 @@ Instructions here...
 | Tools | `.agentcompany/tools/*.ts` | next turn |
 | Hooks | `.agentcompany/hooks/*.ts` | next turn |
 | Skills | `.agentcompany/skills/*/SKILL.md` | next turn |
-| TUI | `.agentcompany/tui/*.tsx` | restart |
 
 ## When to Use What
 
@@ -112,7 +111,6 @@ Instructions here...
 | Inject context into system prompt | Hook (`chat.system.transform`) |
 | Accumulate domain knowledge for future use | Skill |
 | Override how a built-in tool works | Tool (same name as builtin) |
-| Add a custom UI panel or command | TUI plugin |
 
 ## Detailed API Reference
 
@@ -121,7 +119,6 @@ For full type signatures, all available fields, and more examples:
 - See @reference/tool-api.md for Tool schema and ToolContext
 - See @reference/hook-api.md for all hook events with input/output types
 - See @reference/skill-api.md for SKILL.md format and frontmatter fields
-- See @reference/tui-api.md for TUI plugin slots, commands, dialogs, and state
 
 ## Constraints
 

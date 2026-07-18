@@ -138,23 +138,6 @@ export const CompanySetupGoalInput = z
   .meta({ ref: "CompanySetupGoalInput" })
 export type CompanySetupGoalInput = z.infer<typeof CompanySetupGoalInput>
 
-export const CompanyNeedsBootstrapState = z
-  .object({
-    state: z.literal("needs_bootstrap"),
-    data_directory: z.string(),
-    defaults: z
-      .object({
-        company_name: z.literal("Agent Company"),
-        approval_preset: z.literal("balanced"),
-        board: z.array(BoardMember).length(3),
-      })
-      .strict(),
-    capabilities: z.object({ board_messages: z.boolean() }).strict(),
-  })
-  .strict()
-  .meta({ ref: "CompanyNeedsBootstrapState" })
-export type CompanyNeedsBootstrapState = z.infer<typeof CompanyNeedsBootstrapState>
-
 export const CompanyReadyState = z
   .object({
     state: z.literal("ready"),
@@ -186,9 +169,7 @@ export const CompanyReadyState = z
   .meta({ ref: "CompanyReadyState" })
 export type CompanyReadyState = z.infer<typeof CompanyReadyState>
 
-export const CompanyState = z
-  .discriminatedUnion("state", [CompanyNeedsBootstrapState, CompanyReadyState])
-  .meta({ ref: "CompanyState" })
+export const CompanyState = CompanyReadyState.meta({ ref: "CompanyState" })
 export type CompanyState = z.infer<typeof CompanyState>
 
 export const CompanyAlreadyInitialized = NamedError.create("CompanyAlreadyInitialized", z.object({}).strict())

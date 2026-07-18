@@ -1468,7 +1468,7 @@ export const layer = Layer.effect(
             // Per-agent timeout: caller's explicit override > persisted value > undefined (off).
             // The row's agent_timeout_ms was stamped at the original launch (or last resume
             // that supplied an explicit override), so a UI-side resume that doesn't know
-            // the original launch params (e.g. TUI's /workflows resume) inherits the
+            // the original launch params inherits the
             // original timeout instead of silently dropping to unbounded — which used to
             // let a wedged agents TTFT stall the resumed run forever.
             agentTimeoutMs: input.agentTimeoutMs ?? row.agentTimeoutMs,

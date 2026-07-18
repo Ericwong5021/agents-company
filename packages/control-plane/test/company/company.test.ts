@@ -99,6 +99,27 @@ describe.serial("Company bootstrap", () => {
     { timeout: 30_000 },
   )
 
+  test.serial("repairs orphan company rows into the default empty workspace", async () => {
+    await using repo = await tmpdir({ git: true, config: providerConfig })
+    Database.use((db) => db.insert(CompanyAgentTable).values({ id: "board-ceo", name: "Orphaned agent" }).run())
+
+    const state = await Instance.provide({
+      directory: repo.path,
+      fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
+    })
+
+    expect(state.state).toBe("ready")
+    if (state.state !== "ready") throw new Error("Expected repaired ready state")
+    expect(state.company.provider).toBeNull()
+    expect(state.company.repository).toBeNull()
+    expect(state.company.board.map((member) => member.name)).toEqual(["CEO", "CTO", "Product Lead"])
+    expect(Database.use((db) => db.select().from(CompanyAgentTable).all().map((agent) => agent.name))).toEqual([
+      "CEO",
+      "CTO",
+      "Product Lead",
+    ])
+  })
+
   test.serial("same request is idempotent and changed request conflicts", async () => {
     await using repo = await tmpdir({
       git: true,
@@ -175,6 +196,10 @@ describe.serial("Company bootstrap", () => {
       directory: repo.path,
       fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
     })
-    expect(state.state).toBe("needs_bootstrap")
+    expect(state.state).toBe("ready")
+    if (state.state !== "ready") throw new Error("Expected repaired ready state")
+    expect(state.company.provider).toBeNull()
+    expect(state.company.repository).toBeNull()
+    expect(state.company.board.map((member) => member.name)).toEqual(["CEO", "CTO", "Product Lead"])
   })
 })

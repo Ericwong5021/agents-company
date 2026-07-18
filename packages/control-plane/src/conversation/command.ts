@@ -57,6 +57,9 @@ export const layer: Layer.Layer<
                       state: "queued" as const,
                     })
                     .pipe(Effect.ignore),
+                  bus
+                    .publish(ServerEvent.AgentActivityInvalidated, { thread_id: accepted.threadID })
+                    .pipe(Effect.ignore),
                 ]
               : []),
           ],

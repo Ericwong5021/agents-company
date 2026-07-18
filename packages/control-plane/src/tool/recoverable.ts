@@ -2,7 +2,7 @@ import { isRecord } from "@/util/record"
 
 // Marks a tool failure as agent-recoverable: the model can fix it on the next
 // turn (bad arguments, a malformed shell call, a nonexistent task/actor id).
-// These are NOT genuine system faults, so the TUI renders them muted (struck
+// These are NOT genuine system faults, so clients render them muted (struck
 // through, no red error block) to avoid alarming the user, while the full
 // actionable message still flows to the agent as the tool result.
 //

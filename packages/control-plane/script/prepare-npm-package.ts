@@ -58,7 +58,7 @@ await Bun.write(
       bugs: {
         url: "https://github.com/Ericwong5021/agents-company/issues",
       },
-      keywords: ["ai", "agent", "agents", "agents-company", "cli", "coding", "developer-tools", "terminal", "tui"],
+      keywords: ["ai", "agent", "agents", "agents-company", "cli", "coding", "developer-tools"],
       bin: {
         agents: "./bin/agents.cjs",
       },

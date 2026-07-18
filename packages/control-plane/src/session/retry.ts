@@ -5,11 +5,11 @@ import { iife } from "@/util/iife"
 
 export type Err = ReturnType<NamedError["toObject"]>
 
-// This exported message is shared with the TUI upsell detector. Matching on a
+// This exported message is shared with presentation-layer upsell detection. Matching on a
 // literal error string kind of sucks, but it is the simplest for now.
 export const GO_UPSELL_MESSAGE = "Free usage exceeded, subscribe to Go https://control-plane.ai/go"
 
-// Shared with the TUI: does this retry status message indicate a rate-limit /
+// Shared with clients: does this retry status message indicate a rate-limit /
 // queue ("too many requests" / HTTP 429) condition? retryable() normalizes
 // every 429 variant into a message containing one of these substrings.
 export function isRateLimitMessage(message: string): boolean {

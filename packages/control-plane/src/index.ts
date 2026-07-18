@@ -22,8 +22,6 @@ import { McpCommand } from "./cli/cmd/mcp"
 import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
 import { ImportCommand } from "./cli/cmd/import"
-import { AttachCommand } from "./cli/cmd/tui/attach"
-import { TuiThreadCommand } from "./cli/cmd/tui/thread"
 import { AcpCommand } from "./cli/cmd/acp"
 import { EOL } from "os"
 // Web command temporarily disabled
@@ -45,7 +43,6 @@ import { CompanyAgentCommand } from "./cli/cmd/company-agent"
 import { GroupCommand } from "./cli/cmd/group"
 import { QuestionCommand } from "./cli/cmd/question"
 import { PermissionCommand } from "./cli/cmd/permission"
-import { SettingsCommand } from "./cli/cmd/settings"
 import { printFailure } from "./cli/output"
 
 const processMetadata = ensureProcessMetadata("main")
@@ -189,8 +186,6 @@ const cli = yargs(args)
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
-  .command(TuiThreadCommand)
-  .command(AttachCommand)
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)
@@ -213,7 +208,6 @@ const cli = yargs(args)
   .command(GroupCommand)
   .command(QuestionCommand)
   .command(PermissionCommand)
-  .command(SettingsCommand)
   .command(PluginCommand)
   .command(DbCommand)
   .fail((msg, err) => {

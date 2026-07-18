@@ -367,7 +367,7 @@ describe("Actor.spawn auto-starts bound task", () => {
 
         // TaskRegistry.create + .start publish through their (encapsulated) Bus,
         // which fans out to the module-level GlobalBus singleton — the same channel
-        // the server SSE stream / TUI live-update path consumes. The in-process Bus
+        // the server SSE stream and client live-update path consume. The in-process Bus
         // PubSub (Bus.subscribe) is a *separate* instance from the registry's Bus in
         // this layer composition, so we observe via GlobalBus to catch the publish.
         //

@@ -28,14 +28,15 @@ async function nonGitDirectory() {
 }
 
 describe.serial("/company", () => {
-  test.serial("returns typed needs_bootstrap state", async () => {
+  test.serial("creates a ready empty company on first access", async () => {
     const response = await Server.Default().app.request("/company")
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      state: "needs_bootstrap",
-      defaults: {
-        company_name: "Agent Company",
-        approval_preset: "balanced",
+      state: "ready",
+      company: {
+        name: "Agent Company",
+        provider: null,
+        repository: null,
       },
       capabilities: { board_messages: true },
     })

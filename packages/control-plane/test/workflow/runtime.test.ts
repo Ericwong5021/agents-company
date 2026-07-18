@@ -1018,12 +1018,11 @@ describe("WorkflowRuntime PRNG seeding (cross-run divergence)", () => {
 })
 
 // agent_timeout_ms is persisted on the workflow_run row at start time so a
-// resume that doesn't supply its own override (e.g. the TUI's /workflows resume
-// command, which currently passes only runID) inherits the original timeout
+// resume that doesn't supply its own override inherits the original timeout
 // instead of silently dropping to unbounded — which used to let a wedged mimo
 // TTFT stall the resumed run forever. This test pins the "implicit-resume
 // inherits the persisted timeout" contract end-to-end via the persistence layer.
-describe("WorkflowRuntime persists agentTimeoutMs across resume (TUI-style)", () => {
+describe("WorkflowRuntime persists agentTimeoutMs across resume", () => {
   it.live("a row started with agentTimeoutMs is readable via persistence.load", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* () {

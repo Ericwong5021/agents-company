@@ -660,7 +660,7 @@ it.live("recoverable tool failure flags the error tool state for muted display",
 
       // `task start` on a nonexistent id is valid args that fail at execution
       // with a RecoverableError. This drives failToolCall, which must flag the
-      // error part recoverable so the TUI mutes it instead of showing a red block.
+      // error part recoverable so clients can mute it instead of showing a red block.
       yield* llm.tool("task", { operation: { action: "start", id: "T99" } })
       yield* llm.text("done")
       yield* user(session.id, "start task T99")

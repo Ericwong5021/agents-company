@@ -167,14 +167,14 @@ export const WorkflowTool = Tool.define<typeof parameters, Metadata, Config.Serv
         // subscribing to the bus: that avoids the subscribe-after-start head race,
         // cross-event reordering, the post-wait tail race, and any subscription
         // leak on interrupt. The buffer flushes to part-state metadata as it grows
-        // — the TUI re-renders each delta via the existing message.part.delta path.
+        // — clients re-render each delta via the existing message.part.delta path.
         yield* ctx.metadata({
           metadata: { runID, status: "running", transcript: [] } satisfies Metadata,
         })
 
         // A 250ms flush loop reads the runtime's transcript and pushes a CAPPED
         // snapshot through ctx.metadata (reusing the per-part-state delta channel,
-        // so TUI consumers need no new subscription). The cap keeps each delta
+        // so consumers need no new subscription). The cap keeps each delta
         // bounded regardless of event count. forkScoped binds the fiber to the
         // execute scope below, so it is interrupted on completion OR interrupt.
         let lastLen = 0

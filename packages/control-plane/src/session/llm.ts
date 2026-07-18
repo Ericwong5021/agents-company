@@ -699,7 +699,7 @@ const live: Layer.Layer<
           "User-Agent": `agentcompany/${InstallationVersion}`,
         },
         // AI SDK's internal retry loop is SILENT — it emits no events and does
-        // not update session status, so the TUI shows only a dead spinner while
+        // not update session status, so clients show only a stale active state while
         // it runs. Its backoff is also UNCAPPED (delay *= 2 each attempt, capped
         // only by a retry-after header), so the prior default of 10 meant up to
         // ~34 min (2+4+…+1024s) of invisible retrying before the error surfaced.

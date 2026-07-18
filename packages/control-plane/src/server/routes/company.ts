@@ -4,10 +4,12 @@ import { Effect } from "effect"
 import z from "zod"
 import { Auth } from "@/auth"
 import { Company, CompanySetupInstance } from "@/company"
+import * as CompanyActivity from "@/company/activity"
 import {
   BootstrapInput,
   CompanyAlreadyInitialized,
   CompanyCorruptState,
+  CompanyID,
   CustomProviderModels,
   CustomProviderModelsFailed,
   CustomProviderModelsInput,
@@ -41,6 +43,7 @@ const RepositoryInspectInput = z
   .object({ repository_path: z.string().min(1) })
   .strict()
   .meta({ ref: "RepositoryInspectInput" })
+const CompanyAgentsQuery = z.object({ company_id: CompanyID }).strict()
 
 function isUnsupported(providerID: string) {
   return unsupportedProviders.has(providerID)
@@ -210,6 +213,24 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       async (c) => c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.current()))),
+    )
+    .get(
+      "/agents",
+      describeRoute({
+        operationId: "company.agents",
+        summary: "List public employee facts with evidence-backed activity projections",
+        responses: {
+          200: {
+            description: "Visible employees and their current public activity",
+            content: { "application/json": { schema: resolver(z.array(CompanyActivity.AgentActivityProjection)) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("query", CompanyAgentsQuery, productValidationHook),
+      async (c) => c.json(CompanyActivity.list(c.req.valid("query").company_id)),
     )
     .put(
       "/setup-goal",

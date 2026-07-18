@@ -235,7 +235,7 @@ type HermesRuntimeErrorCode =
 
 - ❌ Do not use Hermes `delegate_task` for AgentCompany orchestration
 - ❌ Do not integrate Hermes gateway
-- ❌ Do not inject messages into a live Hermes TUI session
+- ❌ Do not inject messages into a live Hermes client session
 - ❌ Do not implement streaming
 - ❌ Do not treat Hermes profiles as sandboxes
 

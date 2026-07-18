@@ -59,7 +59,7 @@ return "Result text shown to LLM"
 return {
   output: "Result text",
   metadata: {
-    // Arbitrary data, shown in TUI tool result panel
+    // Arbitrary data available to clients rendering the tool result
     files_changed: 3,
     duration_ms: 1200,
   }

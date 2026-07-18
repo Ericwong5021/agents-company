@@ -83,7 +83,7 @@ const scriptDir = () => path.join(Global.Path.data, "workflow")
 // is interpolated directly into a filename, so a value containing a path separator
 // or dot-dot (`../../../etc/passwd`, `wf_../x`, an absolute path) would escape
 // scriptDir. The HTTP route already rejects these, but resume()/journal IO are also
-// reachable from the workflow tool and the TUI, so we re-enforce the minted shape
+// reachable from the workflow tool and API, so we re-enforce the minted shape
 // here (`wf_` + base62 — a charset with no `.` or `/`). A throw here surfaces as an
 // Effect defect: on the async IO paths (readScript/loadJournal) resume() captures it
 // via Effect.exit and treats it as not-resumable; on the synchronous journal appends
@@ -128,7 +128,7 @@ const recordStart = (input: {
   args?: unknown
   scriptSha?: string
   /** The per-agent timeout for this run, persisted so a subsequent resume
-   * (especially via TUI / API where the caller doesn't know the original
+   * (especially via API where the caller doesn't know the original
    * launch parameters) can read it back instead of silently defaulting to
    * unbounded — which would let a wedged agents TTFT stall the run forever. */
   agentTimeoutMs?: number

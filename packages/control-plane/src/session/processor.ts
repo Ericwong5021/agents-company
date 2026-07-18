@@ -210,7 +210,7 @@ export const layer: Layer.Layer<
       // general, checkpoint-writer, etc.) share the parent sessionID but their
       // run-state onIdle deliberately does NOT reset status (run-state.ts) — so
       // if a subagent's stream sets session status here, nothing ever clears it
-      // and the TUI spinner stays spinning after the main agent has finished.
+      // and clients keep showing the main agent as active after it has finished.
       const isMain = !ctx.assistantMessage.agentID || ctx.assistantMessage.agentID === "main"
       const slog = log.clone().tag("session.id", input.sessionID).tag("messageID", input.assistantMessage.id)
 
@@ -287,7 +287,7 @@ export const layer: Layer.Layer<
         const match = yield* readToolCall(toolCallID)
         if (!match || match.part.state.status !== "running") return false
         // Agent-recoverable failures (bad args, malformed call, unknown task/actor
-        // id) carry a marker the TUI reads to render them muted instead of as a red
+        // id) carry a marker clients read to render them muted instead of as a red
         // error block. The full actionable message still flows to the model.
         const recoverable = isRecoverableError(error)
         yield* session.updatePart({

@@ -125,7 +125,7 @@ describe("workflows routes", () => {
   })
 
   // ── P0 (MR104 #3): defense-in-depth at the persistence layer ──────────────
-  // readScript / journal IO are reachable from the tool + TUI, not only the HTTP
+  // readScript / journal IO are reachable from the tool and API, not only the HTTP
   // route, so the persistence path functions must themselves refuse a traversal
   // runID. A direct readScript("../../../etc/passwd") must FAIL (the guard throws,
   // surfacing as an Effect defect) rather than open a file outside scriptDir.
@@ -163,7 +163,7 @@ describe("workflows routes", () => {
   })
 })
 
-// The LIVE path the TUI /workflows dialog consumes: the route returns REAL run
+// The live path the WebUI workflows view consumes: the route returns real run
 // data (not the degenerate []). These run under the workflow test layer
 // (makeLayer) so WorkflowRuntime.layer is live and populates the module-global
 // `workflowRef` that the route reads through. Crucially the data path is the
@@ -244,7 +244,7 @@ describe("workflows routes — live runtime", () => {
         const outcome = yield* runtime.wait({ runID, timeoutMs: 8000 })
         expect(outcome.status).toBe("completed")
 
-        // #when — drive the REAL HTTP route the TUI list reads. The directory header
+        // #when — drive the real HTTP route the WebUI list reads. The directory header
         // makes InstanceMiddleware re-enter the same cached tmpdir Instance the run
         // used; sessionID scopes to this run. app.request's Hono overload is
         // `Promise<Response> | Response`, so the async wrapper normalizes it to a
@@ -263,7 +263,7 @@ describe("workflows routes — live runtime", () => {
         }>
 
         // #then — the live run is visible over HTTP with its real fields: this is
-        // the exact data path the TUI /workflows list reads (counter from a real spawn).
+        // the exact data path the WebUI workflows list reads (counter from a real spawn).
         const row = rows.find((r) => r.runID === runID)
         expect(row).toBeDefined()
         expect(row!.status).toBe("completed")

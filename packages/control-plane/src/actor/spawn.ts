@@ -165,7 +165,7 @@ export interface SpawnInput {
   /**
    * Fired as an Effect BEFORE Fiber.join (for non-background spawns). Lets the
    * caller emit metadata (sessionId/actorId) to the tool part state while the
-   * tool is still "running" — critical for the TUI to navigate into a running
+   * tool is still "running" — critical for clients to navigate into a running
    * subagent. The callback receives the allocated actorID and sessionID.
    * Swallowed on failure (best-effort, same as onActorID).
    */

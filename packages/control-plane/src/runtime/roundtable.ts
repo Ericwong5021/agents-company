@@ -2,7 +2,7 @@ import type { RuntimeAdapter } from "./legacy-interface"
 
 // ---------------------------------------------------------------------------
 // RoundtableMessage — an agent's single utterance in a roundtable.
-// runtime metadata tells downstream consumers (TUI, logs) which backend
+// runtime metadata tells downstream consumers and logs which backend
 // produced the message and which runtime profile was used.
 // ---------------------------------------------------------------------------
 export interface RoundtableMessage {

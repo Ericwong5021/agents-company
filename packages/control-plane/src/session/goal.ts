@@ -39,7 +39,7 @@ export type Verdict = z.infer<typeof Verdict>
 
 /**
  * Broadcast whenever a session's goal changes — set, judged, or cleared. The
- * TUI mirrors this into its sync store to render the active-goal indicator and
+ * Clients mirror this into their stores to render the active-goal indicator and
  * the latest judge verdict. `goal` undefined means there is no active goal
  * (cleared / satisfied / impossible). Mirrors session/status.ts's Event.Status.
  */

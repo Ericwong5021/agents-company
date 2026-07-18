@@ -100,7 +100,7 @@ Successfully implemented Hermes runtime support for AgentCompany. The implementa
 ✅ **Non-goals respected**:
   - No delegate_task for orchestration
   - No Hermes gateway integration
-  - No TUI session injection
+  - No live client session injection
   - No streaming
   - No sandbox treatment
 

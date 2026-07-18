@@ -168,9 +168,6 @@ export const Flag = {
   get AGENTCOMPANY_DISABLE_PROJECT_CONFIG() {
     return truthy("AGENTCOMPANY_DISABLE_PROJECT_CONFIG")
   },
-  get AGENTCOMPANY_TUI_CONFIG() {
-    return process.env["AGENTCOMPANY_TUI_CONFIG"]
-  },
   get AGENTCOMPANY_CONFIG_DIR() {
     return process.env["AGENTCOMPANY_CONFIG_DIR"]
   },

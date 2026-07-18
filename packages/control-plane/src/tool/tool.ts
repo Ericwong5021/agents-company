@@ -113,7 +113,7 @@ function wrap<Parameters extends z.ZodType, Result extends Metadata>(
             try: () => toolInfo.parameters.parse(args),
             catch: (error) => {
               // Bad arguments are always agent-recoverable: the model sees the
-              // message and rewrites the call next turn. Mark it so the TUI
+              // message and rewrites the call next turn. Mark it so clients
               // renders it muted instead of alarming the user with a red block.
               if (error instanceof z.ZodError && toolInfo.formatValidationError) {
                 return new RecoverableError(toolInfo.formatValidationError(error), { cause: error })
