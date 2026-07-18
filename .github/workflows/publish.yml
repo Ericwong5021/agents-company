@@ -72,9 +72,7 @@ jobs:
       - name: Install cross-platform native deps
         working-directory: packages/control-plane
         run: |
-          OTUI_VER=$(node -p "require('./package.json').dependencies['@opentui/core']")
           WATCHER_VER=$(node -p "require('./package.json').dependencies['@parcel/watcher']")
-          bun install --os="*" --cpu="*" "@opentui/core@$OTUI_VER"
           bun install --os="*" --cpu="*" "@parcel/watcher@$WATCHER_VER"
 
       - name: Build all platform binaries

@@ -25,8 +25,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./tool": "./src/tool.ts",
-    "./tui": "./src/tui.ts"
+    "./tool": "./src/tool.ts"
   },
   "files": [
     "dist"
@@ -36,21 +35,7 @@
     "effect": "catalog:",
     "zod": "catalog:"
   },
-  "peerDependencies": {
-    "@opentui/core": ">=0.1.101",
-    "@opentui/solid": ">=0.1.101"
-  },
-  "peerDependenciesMeta": {
-    "@opentui/core": {
-      "optional": true
-    },
-    "@opentui/solid": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "@opentui/core": "0.1.101",
-    "@opentui/solid": "0.1.101",
     "@tsconfig/node22": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",

@@ -45,7 +45,6 @@ jobs:
           mkdir -p .artifacts/unit
           bun test --timeout 30000 \
             test/config/config.test.ts \
-            test/config/tui.test.ts \
             test/permission-task.test.ts \
             test/plugin/install.test.ts \
             test/plugin/install-concurrency.test.ts \

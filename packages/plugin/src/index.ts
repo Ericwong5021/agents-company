@@ -4,7 +4,7 @@ import type {
   Project,
   Model,
   Provider,
-  Permission,
+  PermissionRequest,
   UserMessage,
   Message,
   Part,
@@ -77,7 +77,6 @@ export type Plugin = (input: PluginInput, options?: PluginOptions) => Promise<Ho
 export type PluginModule = {
   id?: string
   server: Plugin
-  tui?: never
 }
 
 type Rule = {
@@ -230,8 +229,16 @@ export type AuthOuathResult = AuthOAuthResult
  * that are never spawned via the agent registry.
  */
 export const BUILT_IN_AGENTS = [
-  "main", "general", "build", "explore", "summary",
-  "title", "checkpoint-writer", "dream", "distill", "compaction",
+  "main",
+  "general",
+  "build",
+  "explore",
+  "summary",
+  "title",
+  "checkpoint-writer",
+  "dream",
+  "distill",
+  "compaction",
 ] as const
 
 export type BuiltInAgent = (typeof BUILT_IN_AGENTS)[number]
@@ -241,11 +248,7 @@ export type ActorOutcome = "success" | "failure" | "cancelled"
 
 export type ActorMatcher = {
   mode?: ActorMode
-  agentType?:
-    | string
-    | string[]
-    | { include: string[]; exclude?: string[] }
-    | { excludeOnly: string[] } // matches every agent (incl. built-ins) except those listed
+  agentType?: string | string[] | { include: string[]; exclude?: string[] } | { excludeOnly: string[] } // matches every agent (incl. built-ins) except those listed
 }
 
 export type ActorStopBaseInput = {
@@ -262,7 +265,7 @@ export type ActorStopBaseInput = {
   task: string
   description?: string
   finalText?: string
-  task_id?: string  // Spec ②: if set, postStop hooks can validate tasks/<task_id>/progress.md
+  task_id?: string // Spec ②: if set, postStop hooks can validate tasks/<task_id>/progress.md
   iteration: number
 }
 
@@ -270,7 +273,7 @@ export type ActorPreStopInput = ActorStopBaseInput
 
 export type ActorPostStopInput = ActorStopBaseInput & {
   outcome: ActorOutcome
-  error?: string  // outcome === "failure" 时存在
+  error?: string // outcome === "failure" 时存在
   // false → the spawned agent cannot use the Write tool (read-only, e.g. explore).
   // Absent/undefined → unknown; hooks must NOT suppress on absence (fail-open).
   canWrite?: boolean
@@ -281,23 +284,13 @@ export type ActorStopOutput = {
   reason?: string
 }
 
-export type ActorPreStopHook = (
-  input: ActorPreStopInput,
-  output: ActorStopOutput,
-) => Promise<void>
+export type ActorPreStopHook = (input: ActorPreStopInput, output: ActorStopOutput) => Promise<void>
 
-export type ActorPostStopHook = (
-  input: ActorPostStopInput,
-  output: ActorStopOutput,
-) => Promise<void>
+export type ActorPostStopHook = (input: ActorPostStopInput, output: ActorStopOutput) => Promise<void>
 
-export type ActorPreStopRegistration =
-  | ActorPreStopHook
-  | { matcher?: ActorMatcher; run: ActorPreStopHook }
+export type ActorPreStopRegistration = ActorPreStopHook | { matcher?: ActorMatcher; run: ActorPreStopHook }
 
-export type ActorPostStopRegistration =
-  | ActorPostStopHook
-  | { matcher?: ActorMatcher; run: ActorPostStopHook }
+export type ActorPostStopRegistration = ActorPostStopHook | { matcher?: ActorMatcher; run: ActorPostStopHook }
 
 /**
  * Wire-format part inside a trajectory. Mirrors MessageV2.Part with full
@@ -457,7 +450,7 @@ export interface Hooks {
     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
     output: { headers: Record<string, string> },
   ) => Promise<void>
-  "permission.ask"?: (input: Permission, output: { status: "ask" | "deny" | "allow" }) => Promise<void>
+  "permission.ask"?: (input: PermissionRequest, output: { status: "ask" | "deny" | "allow" }) => Promise<void>
   "command.execute.before"?: (
     input: { command: string; sessionID: string; arguments: string },
     output: { parts: Part[] },
