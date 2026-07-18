@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Accessor } from "solid-js"
+import { For, Show, createMemo, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
 import type { ConversationError } from "./company-model"
@@ -19,6 +19,7 @@ const ROLE_MENTIONS = [
 ] as const
 
 export function CompanyComposer(props: {
+  mode?: "conversation" | "goal"
   sending: Accessor<boolean>
   error: Accessor<ConversationError | null>
   hasOpenThread: Accessor<boolean>
@@ -30,6 +31,16 @@ export function CompanyComposer(props: {
   const [value, setValue] = createSignal("")
   const [showMentions, setShowMentions] = createSignal(false)
   const canSend = createMemo(() => !props.sending() && value().trim().length > 0)
+  let root: HTMLDivElement | undefined
+
+  onMount(() => {
+    const applyPreset = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== "string") return
+      setValue(event.detail)
+    }
+    root?.parentElement?.addEventListener("company:goal-preset", applyPreset)
+    onCleanup(() => root?.parentElement?.removeEventListener("company:goal-preset", applyPreset))
+  })
 
   function send() {
     const body = value().trim()
@@ -43,7 +54,7 @@ export function CompanyComposer(props: {
     setShowMentions(false)
   }
 
-  function onInput(event: InputEvent & { currentTarget: HTMLInputElement }) {
+  function onInput(event: InputEvent & { currentTarget: HTMLTextAreaElement }) {
     const next = event.currentTarget.value
     setValue(next)
     // `/` at start or `@` toggles the mention menu
@@ -51,7 +62,7 @@ export function CompanyComposer(props: {
   }
 
   return (
-    <div class="company-composer" data-state={props.sending() ? "sending" : props.error() ? "failed" : "idle"}>
+    <div ref={root} class="company-composer" data-mode={props.mode ?? "conversation"} data-state={props.sending() ? "sending" : props.error() ? "failed" : "idle"}>
       <Show when={props.error()}>
         {(err) => (
           <div class="company-composer-error" role="alert">
@@ -66,14 +77,14 @@ export function CompanyComposer(props: {
       </Show>
 
       <div class="company-composer-input">
-        <input
+        <textarea
           value={value()}
-          placeholder={language.t("company.composer.placeholder")}
+          placeholder={props.mode === "goal" ? "请输入目标，交给公司来推进" : language.t("company.composer.placeholder")}
           aria-label={language.t("company.composer.label")}
           disabled={props.sending()}
           onInput={onInput}
           onKeyDown={(event) => {
-            if (event.key !== "Enter") return
+            if (event.key !== "Enter" || event.shiftKey) return
             event.preventDefault()
             send()
           }}

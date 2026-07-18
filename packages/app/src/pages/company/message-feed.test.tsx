@@ -3,19 +3,16 @@ import { describe, expect, test } from "bun:test"
 const component = await Bun.file(new URL("./message-feed.tsx", import.meta.url)).text()
 
 describe("MessageFeed", () => {
-  test("only badges the four real M2 high-signal types", () => {
-    // conclusion/status/risk/intervention are the only signals M2 runtime may
-    // produce. The HIGH_SIGNAL set is the source of truth for badge eligibility.
+  test("supports all eight server-authored high-signal types", () => {
     const highSignalSet = component.match(/const HIGH_SIGNAL[\s\S]*?\)/)?.[0] ?? ""
     expect(highSignalSet).toContain('"conclusion"')
     expect(highSignalSet).toContain('"status"')
     expect(highSignalSet).toContain('"risk"')
     expect(highSignalSet).toContain('"intervention"')
-    // decision/approval/delivery/plan need M3 facts and must not badge
-    expect(highSignalSet).not.toContain('"decision"')
-    expect(highSignalSet).not.toContain('"approval"')
-    expect(highSignalSet).not.toContain('"delivery"')
-    expect(highSignalSet).not.toContain('"plan"')
+    expect(highSignalSet).toContain('"decision"')
+    expect(highSignalSet).toContain('"approval"')
+    expect(highSignalSet).toContain('"delivery"')
+    expect(highSignalSet).toContain('"plan"')
   })
 
   test("has accessible loading, empty and pending states that are not color-only", () => {

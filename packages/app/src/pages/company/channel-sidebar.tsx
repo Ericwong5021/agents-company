@@ -17,12 +17,6 @@ const GROUPS: readonly ChannelGroup[] = [
   { kind: "project", labelKey: "company.sidebar.group.project", icon: "folder" },
 ]
 
-const KNOWLEDGE_NAV = [
-  { label: "应用", icon: "dot-grid" },
-  { label: "文档", icon: "folder" },
-  { label: "图库", icon: "photo" },
-] satisfies ReadonlyArray<{ label: string; icon: Parameters<typeof Icon>[0]["name"] }>
-
 function groupChannels(channels: ConversationChannelItem[]): Record<ChannelKind, ConversationChannelItem[]> {
   const byKind: Record<ChannelKind, ConversationChannelItem[]> = {
     company: [],
@@ -82,37 +76,11 @@ export function ChannelSidebar(props: {
           onClick={props.onNewConversation}
         >
           <Icon name="new-session" size="small" />
-          <span>新建对话</span>
-        </button>
-        <button type="button" class="company-nav-item" aria-disabled="true" disabled title="自动任务将在后续版本开放">
-          <Icon name="task" size="small" />
-          <span>自动任务</span>
-        </button>
-        <button type="button" class="company-nav-item" aria-disabled="true" disabled title="技能广场将在后续版本开放">
-          <Icon name="brain" size="small" />
-          <span>技能广场</span>
+          <span>新建目标</span>
         </button>
       </nav>
 
-      <div class="company-sidebar-section-label">本地知识库</div>
-      <nav class="company-primary-nav" aria-label="本地知识库">
-        <For each={KNOWLEDGE_NAV}>
-          {(item) => (
-            <button
-              type="button"
-              class="company-nav-item"
-              aria-disabled="true"
-              disabled
-              title={`${item.label}将在后续版本开放`}
-            >
-              <Icon name={item.icon} size="small" />
-              <span>{item.label}</span>
-            </button>
-          )}
-        </For>
-      </nav>
-
-      <div class="company-sidebar-section-label">对话</div>
+      <div class="company-sidebar-section-label">公司协作</div>
       <div class="company-channel-scroll">
         <button
           type="button"
@@ -174,7 +142,7 @@ export function ChannelSidebar(props: {
 
       <div class="company-sidebar-profile">
         <span class="company-profile-dot" aria-hidden="true" />
-        <span>大东</span>
+        <span>本地用户</span>
         <button type="button" aria-label="打开设置" onClick={props.onOpenSettings}>
           <Icon name="settings-gear" size="small" />
         </button>

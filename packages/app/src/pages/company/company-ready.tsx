@@ -1,5 +1,6 @@
 import type { CompanyReadyState } from "@agents-company/sdk/v2/client"
-import { For, Show } from "solid-js"
+import { createMemo, For, Show } from "solid-js"
+import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import type { CompanyWorkspaceAccess } from "./company-model"
 
@@ -16,6 +17,18 @@ function policyLabel(preset: CompanyReadyState["company"]["approval_policy"]["pr
 
 export function CompanyReady(props: { snapshot: CompanyReadySnapshot; onOpenBoard?: () => void }) {
   const language = useLanguage()
+  const globalSync = useGlobalSync()
+  const effectiveProvider = createMemo(() => {
+    if (props.snapshot.company.provider) return props.snapshot.company.provider
+    const configured = globalSync.data.config.model
+    if (!configured) return undefined
+    const separator = configured.indexOf("/")
+    if (separator <= 0 || separator === configured.length - 1) return undefined
+    return {
+      provider_id: configured.slice(0, separator),
+      model_id: configured.slice(separator + 1),
+    }
+  })
 
   return (
     <main class="company-ready" data-company-state="ready">
@@ -35,8 +48,8 @@ export function CompanyReady(props: { snapshot: CompanyReadySnapshot; onOpenBoar
         </article>
         <article>
           <span>{language.t("company.ready.provider")}</span>
-          <strong>{props.snapshot.company.provider?.provider_id ?? "未配置"}</strong>
-          <small>{props.snapshot.company.provider?.model_id ?? "请在设置中连接模型"}</small>
+          <strong>{effectiveProvider()?.provider_id ?? "未配置"}</strong>
+          <small>{effectiveProvider()?.model_id ?? "请在设置中配置全局模型"}</small>
         </article>
         <article>
           <span>{language.t("company.ready.repository")}</span>

@@ -1,3 +1,5 @@
+@import "./company-fusion.css";
+
 .company-workspace {
   --company-canvas: #fbfbfc;
   --company-sidebar: #f7f7f8;
@@ -2174,17 +2176,22 @@
 /* Marvis-aligned product shell -------------------------------------------------
  * The earlier rules remain as the bootstrap/ready-state baseline. These final
  * rules intentionally own the live workspace so the local-first runtime keeps
- * its real data semantics while matching the approved Figma surface.
+ * its real data semantics while matching the approved Pencil surface.
  */
 .company-workspace {
-  --company-canvas: #fbfbfc;
-  --company-sidebar: #f8f8f9;
-  --company-surface: #ffffff;
-  --company-surface-subtle: #f5f5f7;
+  --company-canvas: var(--ac-canvas);
+  --company-sidebar: var(--ac-sidebar);
+  --company-surface: var(--ac-surface);
+  --company-surface-subtle: var(--ac-surface-subtle);
   --company-selected: #efeff1;
   --company-selected-strong: #e7e7ea;
-  --company-border: #e7e7ea;
-  --company-border-strong: #dedee3;
+  --company-border: var(--ac-border);
+  --company-border-strong: var(--ac-border-strong);
+  --company-text: var(--ac-text);
+  --company-text-muted: var(--ac-text-muted);
+  --company-accent: var(--ac-accent);
+  --company-success: var(--ac-success);
+  --company-warning: var(--ac-warning);
 
   position: fixed;
   inset: 0;
@@ -2192,7 +2199,7 @@
   height: 100dvh;
   grid-template-columns: 168px minmax(560px, 1fr) 426px;
   background: var(--company-canvas);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", Inter, sans-serif;
+  font-family: var(--company-font);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -3690,14 +3697,20 @@
 
 @media (max-width: 1180px) {
   .company-workspace {
+    grid-template-columns: 168px minmax(0, 1fr) minmax(280px, 36vw);
+  }
+
+  .company-workspace[data-thread-open="false"],
+  .company-workspace[data-view="office"] {
     grid-template-columns: 168px minmax(0, 1fr);
   }
 
   .company-thread {
-    position: fixed;
-    inset: 0 0 0 auto;
-    z-index: 50;
-    width: 426px;
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: auto;
+    max-width: none;
   }
 
   .company-office {
@@ -3729,8 +3742,8 @@
   }
 
   .company-thread {
-    width: 100vw;
-    max-width: 426px;
+    width: auto;
+    max-width: none;
   }
 
   .company-panel-collapse {

@@ -17,7 +17,16 @@ import type {
  * already persisted server-side, never a fabricated agent response.
  */
 
-const HIGH_SIGNAL: ReadonlySet<SignalType> = new Set(["conclusion", "status", "risk", "intervention"])
+const HIGH_SIGNAL: ReadonlySet<SignalType> = new Set([
+  "conclusion",
+  "decision",
+  "plan",
+  "status",
+  "risk",
+  "approval",
+  "delivery",
+  "intervention",
+])
 
 function isHighSignal(type: SignalType | undefined): type is SignalType {
   return type !== undefined && HIGH_SIGNAL.has(type)

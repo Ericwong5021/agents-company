@@ -23,6 +23,6 @@ The standalone development server defaults to `http://localhost:3000` and expect
 
 ## Product role
 
-This package is the primary product UI. Electron embeds it rather than maintaining a separate desktop frontend. TUI features should share Control Plane semantics with this app, but the TUI does not define this package's information architecture.
+This package is the primary product UI. Electron embeds it rather than maintaining a separate desktop frontend. The non-interactive CLI and other clients share Control Plane semantics with this app, while product information architecture remains here.
 
 Current product direction and target behavior are defined in [`docs/product-design/PRODUCT-CONSTITUTION.md`](../../docs/product-design/PRODUCT-CONSTITUTION.md) and the [implementation plan](../../docs/product-design/implementation-plan.md).

@@ -8,7 +8,6 @@ import {
 } from "./company-data-source"
 import { useGlobalSDK } from "@/context/global-sdk"
 import type { CompanyWorkspaceSnapshot, CompanyReadyWorkspaceSnapshot } from "./company-model"
-import { CompanyBootstrap, type CompanyBootstrapSnapshot } from "./company-bootstrap"
 import { CompanyReady } from "./company-ready"
 import { ChannelSidebar, type CompanyWorkspaceView } from "./channel-sidebar"
 import { MessageFeed } from "./message-feed"
@@ -16,6 +15,7 @@ import { ThreadPanel } from "./thread-panel"
 import { CompanyComposer } from "./company-composer"
 import { BoardRoundtable } from "./board-roundtable"
 import { OfficeSurface } from "./office-surface"
+import { NewGoalSurface } from "./new-goal-surface"
 import { COMPANY_PROVIDER_CONFIGURED_EVENT, providerConfigured, shouldShowProviderSetupCard } from "./provider-availability"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
@@ -44,6 +44,7 @@ function CompanyReadyWorkspace(props: {
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
   const [workPanelOpen, setWorkPanelOpen] = createSignal(false)
+  let threadReturnTarget: HTMLElement | undefined
   const [providers, { refetch: refetchProviders }] = createResource(() => props.dataSource.listProviders())
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)
@@ -108,8 +109,14 @@ function CompanyReadyWorkspace(props: {
 
   const openThread = (threadID: string) => {
     if (!threadID) return
+    threadReturnTarget = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
     setWorkPanelOpen(true)
     void store()?.openThread(threadID)
+  }
+
+  const closeThread = () => {
+    setWorkPanelOpen(false)
+    queueMicrotask(() => threadReturnTarget?.focus())
   }
 
   const interrupt = async () => {
@@ -121,6 +128,21 @@ function CompanyReadyWorkspace(props: {
     }
   }
 
+  const sendGoal = (body: string) => {
+    if (!hasConfiguredProvider()) {
+      void props.dataSource.deferSetupGoal({ companySetupGoalInput: { body } })
+      return
+    }
+    const current = store()
+    if (!current) return
+    setView("conversation")
+    void current.sendMessage(body).then((accepted) => {
+      if (!accepted.threadID) return
+      openThread(accepted.threadID)
+      window.setTimeout(() => void current.openThread(accepted.threadID!), 1_200)
+    })
+  }
+
   return (
     <div
       class="company-workspace"
@@ -128,6 +150,7 @@ function CompanyReadyWorkspace(props: {
       data-view={view()}
       data-state="ready"
     >
+      <a class="company-skip-link" href="#company-main-content">跳到主要内容</a>
       <button
         type="button"
         class="company-mobile-channels-toggle"
@@ -176,11 +199,11 @@ function CompanyReadyWorkspace(props: {
         when={view() === "office"}
         fallback={
           <>
-            <main class="company-conversation">
+            <main id="company-main-content" class="company-conversation" tabindex="-1">
               <header class="company-conversation-header">
                 <h1>
                   {view() === "new"
-                    ? "新建对话"
+                    ? "新建目标"
                     : boardChannel()
                       ? "董事会圆桌会议"
                       : `与 ${props.snapshot().company.name} 的对话`}
@@ -194,13 +217,15 @@ function CompanyReadyWorkspace(props: {
 
               <Switch>
                 <Match when={view() === "new"}>
-                  <div class="company-channel-placeholder" data-state="empty">
-                    <span class="company-empty-icon">
-                      <Icon name="brain" />
-                    </span>
-                    <h2>今天想完成什么？</h2>
-                    <p>从一条任务开始，Agent Company 会在本地协调团队。</p>
-                  </div>
+                  <NewGoalSurface
+                    companyName={props.snapshot().company.name}
+                    sending={() => conversation().sending}
+                    error={() => conversation().error}
+                    hasOpenThread={hasOpenThread}
+                    onSend={sendGoal}
+                    onInterrupt={() => void interrupt()}
+                    onRetry={() => void store()?.refresh()}
+                  />
                 </Match>
                 <Match when={boardChannel()}>
                   <BoardRoundtable
@@ -239,6 +264,7 @@ function CompanyReadyWorkspace(props: {
                 )}
               </Show>
 
+              <Show when={view() !== "new"}>
               <Show
                 when={boardMessagesEnabled()}
                 fallback={
@@ -251,25 +277,11 @@ function CompanyReadyWorkspace(props: {
                   sending={() => conversation().sending}
                   error={() => conversation().error}
                   hasOpenThread={hasOpenThread}
-                  onSend={(body) => {
-                    if (!hasConfiguredProvider()) {
-                      void props.dataSource.deferSetupGoal({ companySetupGoalInput: { body } })
-                      return
-                    }
-                    const current = store()
-                    if (!current) return
-                    setView("conversation")
-                    void current.sendMessage(body).then((accepted) => {
-                      if (!accepted.threadID) return
-                      const threadID = accepted.threadID
-                      setWorkPanelOpen(true)
-                      void current.openThread(threadID)
-                      window.setTimeout(() => void current.openThread(threadID), 1_200)
-                    })
-                  }}
+                  onSend={sendGoal}
                   onInterrupt={() => void interrupt()}
                   onRetry={() => void store()?.refresh()}
                 />
+              </Show>
               </Show>
               <span class="company-ai-disclaimer">以上内容由 AI 生成</span>
             </main>
@@ -283,7 +295,7 @@ function CompanyReadyWorkspace(props: {
                 interrupting={interrupting}
                 threadSources={() => conversation().threadSources}
                 loadingSourceIDs={() => conversation().loadingThreadSourceIDs}
-                onClose={() => setWorkPanelOpen(false)}
+                onClose={closeThread}
                 onInterrupt={() => void interrupt()}
                 onLoadMore={() => void store()?.pageThreadEntries()}
                 onLoadSource={(sourceID) => void store()?.loadThreadSource(sourceID)}
@@ -302,7 +314,7 @@ function CompanyReadyWorkspace(props: {
           </>
         }
       >
-        <OfficeSurface snapshot={props.snapshot} conversation={conversation} />
+        <OfficeSurface snapshot={props.snapshot} conversation={conversation} onOpenThread={openThread} />
       </Show>
     </div>
   )
@@ -311,13 +323,8 @@ function CompanyReadyWorkspace(props: {
 function CompanyLiveWorkspace(props: {
   snapshot: CompanyWorkspaceSnapshot
   dataSource: CompanyWorkspaceDataSource
-  serverUrl: string
   onRefresh: () => void
 }) {
-  const needsBootstrap = () => {
-    const snapshot = props.snapshot
-    return snapshot.status === "needs_bootstrap" ? (snapshot satisfies CompanyBootstrapSnapshot) : undefined
-  }
   const ready = () => {
     const snapshot = props.snapshot
     return snapshot.status === "ready" ? (snapshot satisfies CompanyReadyWorkspaceSnapshot) : undefined
@@ -339,16 +346,6 @@ function CompanyLiveWorkspace(props: {
         </main>
       }
     >
-      <Match when={needsBootstrap()}>
-        {(snapshot) => (
-          <CompanyBootstrap
-            snapshot={snapshot()}
-            dataSource={props.dataSource}
-            serverUrl={props.serverUrl}
-            onComplete={props.onRefresh}
-          />
-        )}
-      </Match>
       <Match when={ready()}>
         {(snapshot) => <CompanyReadyWorkspace snapshot={snapshot} dataSource={props.dataSource} />}
       </Match>
@@ -403,7 +400,6 @@ export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceD
     <CompanyLiveWorkspace
       snapshot={state()}
       dataSource={source}
-      serverUrl={server.current?.http.url ?? ""}
       onRefresh={() => void source.refresh()}
     />
   )

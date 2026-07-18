@@ -1,4 +1,4 @@
-import type { CompanyNeedsBootstrapState, CompanyReadyState } from "@agents-company/sdk/v2/client"
+import type { AgentActivityProjection, CompanyReadyState } from "@agents-company/sdk/v2/client"
 import type {
   ChannelId,
   ChannelKind,
@@ -104,11 +104,11 @@ export type ConversationSnapshot = {
 export type CompanyReadyWorkspaceSnapshot = {
   status: "ready"
   access: CompanyWorkspaceAccess
+  agents?: AgentActivityProjection[]
 } & CompanyReadyState & { conversation: ConversationSnapshot }
 
 export type CompanyWorkspaceSnapshot =
   | { status: "loading" }
-  | ({ status: "needs_bootstrap"; access: CompanyWorkspaceAccess } & CompanyNeedsBootstrapState)
   | CompanyReadyWorkspaceSnapshot
   | { status: "error"; title: string; description: string; retryable: boolean }
   | CompanyDisconnectedSnapshot

@@ -1,5 +1,10 @@
-import { type CompanyState, createControlPlaneClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
-import type { CompanyWorkspaceAccess, CompanyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
+import { type CompanyReadyState, createControlPlaneClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
+import type {
+  CompanyReadyWorkspaceSnapshot,
+  CompanyWorkspaceAccess,
+  CompanyWorkspaceSnapshot,
+  ConversationSnapshot,
+} from "./company-model"
 import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 
 export type CompanyClient = Pick<ReturnType<typeof createControlPlaneClient>, "company" | "localAuth">
@@ -8,26 +13,13 @@ export type CompanyWorkspaceDataSource = {
   getSnapshot(): CompanyWorkspaceSnapshot
   subscribe(listener: (snapshot: CompanyWorkspaceSnapshot) => void): () => void
   refresh(): Promise<void>
+  listAgents(
+    input: Parameters<CompanyClient["company"]["agents"]>[0],
+  ): Promise<Awaited<ReturnType<CompanyClient["company"]["agents"]>>["data"]>
   listProviders(): Promise<Awaited<ReturnType<CompanyClient["company"]["providers"]>>["data"]>
-  listProviderAuth(): Promise<Awaited<ReturnType<CompanyClient["company"]["providerAuth"]>>["data"]>
-  listCustomProviderModels(
-    input: Parameters<CompanyClient["company"]["providerModels"]>[0],
-  ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerModels"]>>["data"]>
   setProvider(
     input: Parameters<CompanyClient["company"]["providerSet"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerSet"]>>["data"]>
-  authorizeProvider(
-    input: Parameters<CompanyClient["company"]["providerOauthAuthorize"]>[0],
-  ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerOauthAuthorize"]>>["data"]>
-  completeProviderOAuth(
-    input: Parameters<CompanyClient["company"]["providerOauthCallback"]>[0],
-  ): Promise<Awaited<ReturnType<CompanyClient["company"]["providerOauthCallback"]>>["data"]>
-  inspectRepository(
-    input: Parameters<CompanyClient["company"]["repositoryInspect"]>[0],
-  ): Promise<Awaited<ReturnType<CompanyClient["company"]["repositoryInspect"]>>["data"]>
-  bootstrap(
-    input: Parameters<CompanyClient["company"]["bootstrap"]>[0],
-  ): Promise<Awaited<ReturnType<CompanyClient["company"]["bootstrap"]>>["data"]>
   deferSetupGoal(
     input: Parameters<CompanyClient["company"]["deferSetupGoal"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["company"]["deferSetupGoal"]>>["data"]>
@@ -79,18 +71,20 @@ function access(session: LocalAuthSession): CompanyWorkspaceAccess {
 
 /** Build a ready snapshot that includes the conversation state, if available. */
 function toReadySnapshot(
-  state: CompanyState & { state: "ready" },
+  state: CompanyReadyState,
   session: LocalAuthSession,
   conversation?: ConversationSnapshot,
+  agents: CompanyReadyWorkspaceSnapshot["agents"] = [],
 ): CompanyWorkspaceSnapshot {
   if (state.state !== "ready") throw new Error("Expected ready state")
   const base = { status: "ready" as const, access: access(session), ...state }
   if (conversation) {
-    return { ...base, conversation }
+    return { ...base, conversation, agents }
   }
   // Default empty conversation state when store is not yet initialized
   return {
     ...base,
+    agents,
     conversation: {
       channels: [],
       activeChannelID: null,
@@ -140,14 +134,9 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
     getSnapshot: () => current,
     subscribe: () => () => undefined,
     refresh: async () => undefined,
+    listAgents: async () => undefined,
     listProviders: async () => undefined,
-    listProviderAuth: async () => undefined,
-    listCustomProviderModels: async () => undefined,
     setProvider: async () => undefined,
-    authorizeProvider: async () => undefined,
-    completeProviderOAuth: async () => undefined,
-    inspectRepository: async () => undefined,
-    bootstrap: async () => undefined,
     deferSetupGoal: async () => undefined,
     createPairing: async () => undefined,
     listCredentials: async () => undefined,
@@ -193,23 +182,23 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
   const refresh = async () => {
     const generation = ++refreshGeneration
     const previous = current
-    const preserve = previous.status === "ready" || previous.status === "needs_bootstrap"
+    const preserve = previous.status === "ready"
     if (!preserve) publish({ status: "loading" })
     try {
       const [company, session] = await Promise.all([client.company.current(), client.localAuth.session()])
-      const companyState = unwrap(company) as CompanyState
+      const companyState = unwrap(company) as CompanyReadyState
       const sessionState = unwrap(session)
       if (generation !== refreshGeneration) return
 
       if (companyState.state === "ready") {
         // Initialize or refresh conversation store
         const cs = ensureConversationStore(companyState.company.id)
-        await cs.refresh()
+        const [, agents] = await Promise.all([
+          cs.refresh(),
+          client.company.agents({ company_id: companyState.company.id }).then(unwrap),
+        ])
         if (generation !== refreshGeneration) return
-        publish(toReadySnapshot(companyState, sessionState, cs.getState()))
-      } else {
-        disposeConversationStore()
-        publish(toSnapshot(companyState, sessionState))
+        publish(toReadySnapshot(companyState, sessionState, cs.getState(), agents))
       }
     } catch (error) {
       if (generation !== refreshGeneration) return
@@ -222,11 +211,6 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     }
   }
 
-  function toSnapshot(state: CompanyState, session: LocalAuthSession): CompanyWorkspaceSnapshot {
-    if (state.state === "needs_bootstrap") return { status: "needs_bootstrap", access: access(session), ...state }
-    return toReadySnapshot(state as CompanyState & { state: "ready" }, session)
-  }
-
   const request = async <T, E>(operation: Promise<SdkResult<T, E>>) => unwrap(await operation)
 
   return {
@@ -236,18 +220,9 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
       return () => listeners.delete(listener)
     },
     refresh,
+    listAgents: (input) => request(client.company.agents(input)),
     listProviders: () => request(client.company.providers()),
-    listProviderAuth: () => request(client.company.providerAuth()),
-    listCustomProviderModels: (input) => request(client.company.providerModels(input)),
     setProvider: (input) => request(client.company.providerSet(input)),
-    authorizeProvider: (input) => request(client.company.providerOauthAuthorize(input)),
-    completeProviderOAuth: (input) => request(client.company.providerOauthCallback(input)),
-    inspectRepository: (input) => request(client.company.repositoryInspect(input)),
-    async bootstrap(input) {
-      const result = await request(client.company.bootstrap(input))
-      await refresh()
-      return result
-    },
     async deferSetupGoal(input) {
       const result = await request(client.company.deferSetupGoal(input))
       await refresh()
@@ -269,6 +244,7 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
       ) {
         conversationStore?.handleEvent(event)
       }
+      if (event.type === "company.agent_activity.invalidated") void refresh()
     },
   }
 }

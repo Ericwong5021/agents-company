@@ -37,9 +37,10 @@ describe("ChannelSidebar", () => {
     expect(component).toContain("项目工作台")
   })
 
-  test("marks future surfaces as unavailable instead of rendering no-op controls", () => {
-    expect(component).toContain("自动任务将在后续版本开放")
-    expect(component).toContain("技能广场将在后续版本开放")
-    expect(component).toContain("disabled")
+  test("removes unavailable Marvis navigation replicas", () => {
+    expect(component).not.toContain("自动任务")
+    expect(component).not.toContain("技能广场")
+    expect(component).not.toContain("本地知识库")
+    expect(component).toContain("新建目标")
   })
 })

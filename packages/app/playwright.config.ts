@@ -8,8 +8,8 @@ const serverURL = `http://${serverHost}:${serverPort}`
 const command = `bun run dev -- --host 0.0.0.0 --port ${port}`
 const reuse = !process.env.CI
 // These projects intentionally exercise one persisted local-first lifecycle:
-// trusted loopback entry -> bootstrap -> ready conversation. Keep the shared Control
-// Plane single-worker and express the lifecycle with project dependencies.
+// trusted loopback entry -> default empty workspace -> provider settings -> conversation.
+// Keep the shared Control Plane single-worker and express the lifecycle with project dependencies.
 const workers = Number(process.env.PLAYWRIGHT_WORKERS ?? 1) || 1
 const reporter = [["html", { outputFolder: "e2e/playwright-report", open: "never" }], ["line"]] as const
 
@@ -66,8 +66,8 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], locale: "zh-CN" },
     },
     {
-      name: "company-bootstrap",
-      testMatch: "company-bootstrap.spec.ts",
+      name: "company-default",
+      testMatch: "company-default.spec.ts",
       dependencies: ["app-shell"],
       retries: 0,
       use: { ...devices["Desktop Chrome"], locale: "zh-CN" },
@@ -75,7 +75,7 @@ export default defineConfig({
     {
       name: "company-conversation",
       testMatch: "company-conversation.spec.ts",
-      dependencies: ["company-bootstrap"],
+      dependencies: ["company-default"],
       retries: 0,
       use: { ...devices["Desktop Chrome"], locale: "zh-CN" },
     },

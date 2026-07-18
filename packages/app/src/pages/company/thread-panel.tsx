@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createMemo, createSignal, type Accessor } from "solid-js"
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
 import type { ConversationThreadDetail, ConversationThreadEntryItem, ConversationThreadSource } from "./company-model"
@@ -12,6 +12,9 @@ function sourceBody(source: ConversationThreadSource) {
   if (source.detail.type === "unavailable") return source.detail.reason
   return source.detail.body
 }
+
+type ThreadTab = "worklog" | "outputs" | "preview"
+const threadPanelMemory = new Map<string, { tab: ThreadTab; selectedSourceID?: string }>()
 
 export function ThreadPanel(props: {
   thread: Accessor<ConversationThreadDetail | null>
@@ -27,7 +30,7 @@ export function ThreadPanel(props: {
   onLoadSource: (sourceID: string) => void
 }) {
   const language = useLanguage()
-  const [tab, setTab] = createSignal<"worklog" | "outputs" | "preview">("worklog")
+  const [tab, setTab] = createSignal<ThreadTab>("worklog")
   const [selectedSourceID, setSelectedSourceID] = createSignal<string>()
   const thread = props.thread
   const runState = createMemo(() => thread()?.run?.state)
@@ -38,8 +41,10 @@ export function ThreadPanel(props: {
     if (thread()?.status === "active") return "执行中"
     return "空闲中"
   })
-  const sources = createMemo(() =>
-    props.entries().flatMap((entry) => (entry.type === "message" ? (entry.sources ?? []) : [])),
+  const artifacts = createMemo(() =>
+    props.entries().flatMap((entry) =>
+      entry.type === "message" ? (entry.sources ?? []).filter((source) => source.kind === "artifact") : [],
+    ),
   )
   const selectedSource = createMemo(() => {
     const id = selectedSourceID()
@@ -53,20 +58,43 @@ export function ThreadPanel(props: {
     setTab("preview")
   }
 
+  let activeThreadID: string | undefined
+  createEffect(() => {
+    const nextThreadID = thread()?.id
+    if (nextThreadID === activeThreadID) return
+    if (activeThreadID) threadPanelMemory.set(activeThreadID, { tab: tab(), selectedSourceID: selectedSourceID() })
+    activeThreadID = nextThreadID
+    const remembered = nextThreadID ? threadPanelMemory.get(nextThreadID) : undefined
+    setTab(remembered?.tab ?? "worklog")
+    setSelectedSourceID(remembered?.selectedSourceID)
+  })
+  onCleanup(() => {
+    if (activeThreadID) threadPanelMemory.set(activeThreadID, { tab: tab(), selectedSourceID: selectedSourceID() })
+  })
+
   return (
-    <aside class="company-thread" aria-label={language.t("company.thread.label")} data-open="true">
+    <aside
+      class="company-thread"
+      aria-label={language.t("company.thread.label")}
+      data-open="true"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return
+        event.stopPropagation()
+        props.onClose()
+      }}
+    >
       <header class="company-work-panel-header">
         <button type="button" class="company-panel-collapse" aria-label="收起侧边栏" onClick={props.onClose}>
           <Icon name="prompt" size="small" />
         </button>
         <div class="company-work-tabs" role="tablist" aria-label="线程面板">
-          <button type="button" role="tab" aria-selected={tab() === "worklog"} onClick={() => setTab("worklog")}>
+          <button id="company-thread-tab-worklog" type="button" role="tab" aria-controls="company-thread-panel-worklog" aria-selected={tab() === "worklog"} tabindex={tab() === "worklog" ? 0 : -1} onClick={() => setTab("worklog")}>
             工作日志
           </button>
-          <button type="button" role="tab" aria-selected={tab() === "outputs"} onClick={() => setTab("outputs")}>
+          <button id="company-thread-tab-outputs" type="button" role="tab" aria-controls="company-thread-panel-outputs" aria-selected={tab() === "outputs"} tabindex={tab() === "outputs" ? 0 : -1} onClick={() => setTab("outputs")}>
             产出物
           </button>
-          <button type="button" role="tab" aria-selected={tab() === "preview"} onClick={() => setTab("preview")}>
+          <button id="company-thread-tab-preview" type="button" role="tab" aria-controls="company-thread-panel-preview" aria-selected={tab() === "preview"} tabindex={tab() === "preview" ? 0 : -1} onClick={() => setTab("preview")}>
             预览
           </button>
         </div>
@@ -74,6 +102,7 @@ export function ThreadPanel(props: {
 
       <Switch>
         <Match when={tab() === "worklog"}>
+          <div id="company-thread-panel-worklog" role="tabpanel" aria-labelledby="company-thread-tab-worklog">
           <div class="company-work-summary">
             <article>
               <strong>{panelStatus()}</strong>
@@ -119,6 +148,20 @@ export function ThreadPanel(props: {
                     </Show>
                   </div>
                 </header>
+
+                <Show when={th().run && ["failed", "interrupted"].includes(th().run!.state)}>
+                  <article class="company-attempt-card" data-state={th().run!.state}>
+                    <header>
+                      <span>Attempt {Math.max(1, th().run!.attempt)}</span>
+                      <strong>{th().run!.state === "failed" ? "执行失败" : "执行被中断"}</strong>
+                    </header>
+                    <p>{th().run!.safeErrorSummary ?? "现场已保留，可从当前 Thread 继续分析或恢复。"}</p>
+                    <footer>
+                      <span>影响：当前目标尚未形成可验证交付</span>
+                      <span>{th().run!.retryable ? "可重试" : "需要人工介入"}</span>
+                    </footer>
+                  </article>
+                </Show>
 
                 <div class="company-thread-meta">
                   <span class="company-thread-members" aria-label={language.t("company.thread.members")}>
@@ -210,11 +253,12 @@ export function ThreadPanel(props: {
               </>
             )}
           </Show>
+          </div>
         </Match>
 
         <Match when={tab() === "outputs"}>
-          <div class="company-output-list">
-            <For each={sources()}>
+          <div id="company-thread-panel-outputs" class="company-output-list" role="tabpanel" aria-labelledby="company-thread-tab-outputs">
+            <For each={artifacts()}>
               {(source) => (
                 <button type="button" class="company-output-row" onClick={() => selectSource(source.sourceID)}>
                   <span>
@@ -227,7 +271,7 @@ export function ThreadPanel(props: {
                 </button>
               )}
             </For>
-            <Show when={sources().length === 0}>
+            <Show when={artifacts().length === 0}>
               <div class="company-panel-empty" data-context="outputs">
                 <span>
                   <Icon name="folder" />
@@ -240,6 +284,7 @@ export function ThreadPanel(props: {
         </Match>
 
         <Match when={tab() === "preview"}>
+          <div id="company-thread-panel-preview" role="tabpanel" aria-labelledby="company-thread-tab-preview">
           <Show
             when={selectedSource()}
             fallback={
@@ -258,6 +303,7 @@ export function ThreadPanel(props: {
               </div>
             )}
           </Show>
+          </div>
         </Match>
       </Switch>
     </aside>
