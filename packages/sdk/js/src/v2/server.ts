@@ -11,15 +11,6 @@ export type ServerOptions = {
   config?: Config
 }
 
-export type TuiOptions = {
-  project?: string
-  model?: string
-  session?: string
-  agent?: string
-  signal?: AbortSignal
-  config?: Config
-}
-
 export async function createControlPlaneServer(options?: ServerOptions) {
   options = Object.assign(
     {
@@ -99,40 +90,6 @@ export async function createControlPlaneServer(options?: ServerOptions) {
     url,
     username,
     password,
-    close() {
-      clear()
-      stop(proc)
-    },
-  }
-}
-
-export function createControlPlaneTui(options?: TuiOptions) {
-  const args = []
-
-  if (options?.project) {
-    args.push(`--project=${options.project}`)
-  }
-  if (options?.model) {
-    args.push(`--model=${options.model}`)
-  }
-  if (options?.session) {
-    args.push(`--session=${options.session}`)
-  }
-  if (options?.agent) {
-    args.push(`--agent=${options.agent}`)
-  }
-
-  const proc = launch(`control-plane`, args, {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      AGENTCOMPANY_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
-    },
-  })
-
-  const clear = bindAbort(proc, options?.signal)
-
-  return {
     close() {
       clear()
       stop(proc)

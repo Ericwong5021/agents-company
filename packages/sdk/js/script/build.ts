@@ -46,36 +46,44 @@ function promoteLocalDefs(value: unknown) {
 
 promoteLocalDefs(openapi)
 rewriteRefs(openapi)
-await Bun.write(openapiPath, JSON.stringify(openapi, null, 2))
+const serialized = JSON.stringify(openapi, null, 2)
+await Bun.write(openapiPath, serialized)
+await Bun.write(path.resolve(dir, "../openapi.json"), serialized)
 
-await createClient({
-  input: "./openapi.json",
-  output: {
-    path: "./src/v2/gen",
-    tsConfigPath: path.join(dir, "tsconfig.json"),
-    clean: true,
-  },
-  plugins: [
-    {
-      name: "@hey-api/typescript",
-      exportFromIndex: false,
+async function generate(output: string) {
+  await createClient({
+    input: "./openapi.json",
+    output: {
+      path: output,
+      tsConfigPath: path.join(dir, "tsconfig.json"),
+      clean: true,
     },
-    {
-      name: "@hey-api/sdk",
-      instance: "ControlPlaneClient",
-      exportFromIndex: false,
-      auth: false,
-      paramsStructure: "flat",
-    },
-    {
-      name: "@hey-api/client-fetch",
-      exportFromIndex: false,
-      baseUrl: "http://localhost:4096",
-    },
-  ],
-})
+    plugins: [
+      {
+        name: "@hey-api/typescript",
+        exportFromIndex: false,
+      },
+      {
+        name: "@hey-api/sdk",
+        instance: "ControlPlaneClient",
+        exportFromIndex: false,
+        auth: false,
+        paramsStructure: "flat",
+      },
+      {
+        name: "@hey-api/client-fetch",
+        exportFromIndex: false,
+        baseUrl: "http://localhost:4096",
+      },
+    ],
+  })
+}
 
-await $`bun prettier --write src/v2`
+await generate("./src/v2/gen")
+
+for (const file of await Array.fromAsync(new Bun.Glob("src/v2/**/*.ts").scan())) {
+  await $`bun prettier --write ${file}`
+}
 await $`rm -rf dist`
 await $`bun typecheck`
 await $`rm openapi.json`
