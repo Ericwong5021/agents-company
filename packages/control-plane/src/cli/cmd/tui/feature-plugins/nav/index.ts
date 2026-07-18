@@ -1,5 +1,0 @@
-export { default as NavOrgChart } from "./org-chart"
-export { default as NavProjectManagement } from "./project-management"
-export { default as NavAgentManagement } from "./agent-management"
-export { default as NavWorkstation } from "./workstation"
-export { default as NavSettings } from "./settings"
