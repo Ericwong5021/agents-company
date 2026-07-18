@@ -11,7 +11,8 @@
 2. 用户可以追溯公司的正式运行；
 3. 私人空间和 Direct 形成真实、不可越级的空间边界；
 4. 上下文压缩不改变权限；
-5. 磁盘文件、数据库和 UI 对同一事实有清晰权威源。
+5. 磁盘文件、数据库和 UI 对同一事实有清晰权威源；
+6. 员工卡片、托盘和未来办公室画面不会各自发明 Agent 状态。
 
 ## 2. 四类信息
 
@@ -38,6 +39,7 @@ workspace/
     CHARTER.md
     decisions/
     artifacts/
+    resources/
     shared-memory/
     worktrees/<worktree-id>/
   departments/<department-id>/
@@ -135,8 +137,8 @@ flowchart LR
 正式协作记录分三层：
 
 1. 主会话的高信号事件；
-2. Thread 内的完整消息与决定形成过程；
-3. Tool run、日志、diff 和原始证据。
+2. Thread 内按工作日志、产出物和预览组织的完整过程；
+3. Tool run、失败 Attempt、日志、diff 和原始证据。
 
 每一层都保留到下一层的引用。系统生成主会话摘要时必须保留结论来源、决定 DRI、风险和未决项，不能只生成不可追溯的自然语言摘要。
 
@@ -146,10 +148,14 @@ flowchart LR
 |---|---|
 | 事务状态、任务、Gate、事件索引 | SQLite |
 | Agent 人格与可读身份内容 | 版本化文件系统 |
+| 项目制品与受管资源 | 对应领域的受管文件、应用事实或外部资源引用 |
 | 代码与软件制品 | Git 仓库 / Worktree |
+| Agent 行为状态 | SQLite 中的 Thread、Agent Run、Direct 与 Ambient 事件投影 |
 | UI 派生视图、缓存、搜索索引 | 可重建缓存 |
 
 客户端不能直接修改 SQLite 或身份文件；写入必须经 Control Plane 的授权 API。用户在文件系统做的外部修改只作为可检测输入，不绕过身份协议。
+
+Agent 行为状态至少包含 Presence、Attention、Activity、Location、Subject、Interruptibility、Evidence 和 Since。员工卡片、组织视图、托盘以及后续二维或三维办公室只能读取该投影，不能把动画播放状态写回为公司事实。
 
 ## 10. 隐私验收
 

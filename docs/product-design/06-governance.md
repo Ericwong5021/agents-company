@@ -9,7 +9,7 @@
 
 - 可验收的工作自动向前推进；
 - 重大变化在正确层级被发现；
-- 权限、风险和仓库状态不可静默越界；
+- 权限、风险和受管资源状态不可静默越界；
 - 每个正式决定有责任人和证据；
 - 用户可以调整信任程度，不需要重新设计工作流。
 
@@ -33,13 +33,13 @@
 | Deliverables | 交付物具体且可定位 |
 | Acceptance | 每个必须项有可执行验证方式 |
 | Scope | 范围与非目标明确 |
-| Repository | 绑定一个主仓库；跨仓库已拆项目 |
+| Resources | 所需文件、应用、数据、网页或仓库已声明作用域和处置方式；软件交付单元优先绑定一个主仓库 |
 | Ownership | 有唯一项目 DRI |
 | Constraints | 权限、预算、时间和技术约束已知 |
 | Risk | 主要风险有处理或升级策略 |
 | Decisions | 重大待决策项已交给用户或被明确接受为假设 |
 
-未通过时，董事会继续澄清或拆分，不能把“研究一下需求”伪装成正式开发任务。探索可以是一个独立、可验收的 Discovery 项目。
+未通过时，董事会继续澄清或拆分，不能把“先做做看”伪装成正式执行。探索本身可以是一个有来源、制品和验收的 Discovery 项目。
 
 ## 4. 批准等级
 
@@ -79,7 +79,7 @@ Company Policy
 
 - 用户价值或主要交付物变化；
 - 必须验收项被删除、降低或替换；
-- 项目从一个仓库扩展到另一个仓库；
+- 项目新增受管资源、扩大写入范围，或软件工作从一个交付单元扩展到另一个仓库；
 - 新增外部系统写入、发布、付费或公开通信；
 - 预算、时间或数据风险越过阈值；
 - 更换 DRI 或大规模改变团队；
@@ -95,15 +95,17 @@ Gate 是阶段准入，不等同于用户审批。
 | Gate | 决策主体 | 证据 |
 |---|---|---|
 | Charter Ready | 董事会 / Product DRI | Definition of Ready |
-| Implementation Ready | 项目负责人 | 可执行 Work Items、权限、Worktree |
-| Agent Review | 审查 Agent | 测试、diff、findings、验收映射 |
-| Merge Approval | 策略或用户 | 审查通过、风险、授权 |
-| Main Verification | 自动化 + 项目负责人 | 主分支构建/测试/验收 |
+| Execution Ready | 项目负责人 | 可执行 Work Items、能力包、权限、资源与验证器 |
+| Domain Review | 审查 Agent | 制品、领域验证、findings、验收映射 |
+| Delivery Approval | 策略或用户 | 审查通过、外部副作用、风险与授权 |
+| Post-delivery Verification | 自动化 + 项目负责人 | 回读、来源、外部结果或领域验收 |
 | Release Approval | 策略或用户 | 发布影响、回滚和通知 |
 
 Gate 失败必须给出可操作反馈和回流状态，不能只返回“拒绝”。
 
-## 7. Worktree 治理
+软件研发适配器在上述通用 Gate 之外，将 Domain Review 映射为 Agent Review，将 Delivery Approval 映射为 Merge Approval，并增加 Main Verification。
+
+## 7. 软件交付的 Worktree 治理
 
 Worktree 默认开启。开启后以下是硬约束：
 
@@ -126,7 +128,7 @@ Worktree 默认开启。开启后以下是硬约束：
 - Company / Project / Thread / Root Need 关联；
 - 请求动作、授权依据和结果；
 - 风险级别、资源范围和必要证据引用；
-- 若失败，拒绝原因和恢复建议。
+- 若失败，尝试序号、拒绝原因、已尝试方案、下一次调整和恢复建议。
 
 审计只记录私人空间访问的元数据，绝不复制私人内容。高信号会话是用户界面，审计日志是治理证据，两者不能互相替代。
 

@@ -8,14 +8,18 @@
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
 - Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
-## Core Focus (as of 2026-07-13)
+## Core Focus (as of 2026-07-18)
 
 The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
 
 - The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
 - The local Control Plane and agent runtime live in `packages/control-plane`.
-- The TUI in `packages/control-plane/src/cli/cmd/tui/` remains a supported secondary entry point and should share service semantics with the Web/Desktop clients; it must not define the primary product information architecture.
-- The first public release focuses on single-user local software development. Do not expand the active scope to multi-user cloud hosting, general-industry delivery, multi-repository projects, Kanban-first project management, or a pixel office without an explicit product decision.
+- The terminal UI has been removed. Keep the non-interactive CLI and local server headless; do not reintroduce a terminal product surface unless another explicit product decision restores that scope.
+- The first public release focuses on a single-user, local-first, domain-neutral Agent company whose core differentiator is dynamic self-organization and self-governance. Do not reduce the product to software development or a preconfigured team of specialist Agents.
+- Software development is a deep domain adapter, not the global product boundary. Prefer one primary repository per independently verifiable software delivery unit, while keeping Project and cross-domain work independent from repository count.
+- The shared WebUI must prioritize visual quality, group-chat high-signal collaboration, Thread worklog/artifact/preview layers, visible failure attempts, and employee cards driven by real Agent activity projections.
+- Ambient roaming, observation, exploration, and socializing are valuable when backed by real events and can contribute to relationships, culture understanding, proposals, and personality growth. Future 2D/3D office views must reuse the employee-card state contract instead of inventing decorative activity.
+- Keep multi-user cloud hosting, mobile clients, Kanban-first project management, exhaustive industry/app coverage, and a complex 2D/3D office out of the active release scope unless another explicit product decision changes it.
 - Product decisions and document precedence are indexed in `docs/README.md`. When code and target design differ, describe the gap rather than presenting planned behavior as implemented.
 
 ## Style Guide

@@ -16,7 +16,7 @@ Thread 类型和认知模式不能混为一谈：
 
 | 类型 | 用途 | 默认权限 | 预算特征 |
 |---|---|---|---|
-| Primary | 深度项目工作 | 按项目授权，可持有 Worktree 写锁 | 高、连续、可恢复 |
+| Primary | 深度项目工作 | 按项目授权，可持有受管资源写锁 | 高、连续、可恢复 |
 | Reactive | 回复、评审、短问题 | 只读或受限写入 | 小、短、可并发 |
 | Ambient | 空闲探索、社交、观察、提案 | 默认只读，不可改项目代码 | 低频、可中断 |
 | Dream | 私人人格整合 | 只访问本人 private 与获准经历摘要 | 独立、低频、可中断 |
@@ -55,10 +55,15 @@ Ambient 是 Agent 清醒但未被主任务占用的时间，可用于：
 - 阅读公开公司信息；
 - 观察项目中与自身职责相关的变化；
 - 与另一个 Agent 发起 Direct；
+- 在公司空间中闲逛，接触不同同事、项目与公开文化线索；
 - 提出改进建议或实验提案；
 - 探索兴趣，但不得隐式执行高风险外部动作。
 
 Ambient 的产物默认是提案或私人记录，不自动变成公司任务。正式化时必须进入项目群和治理流程。
+
+闲逛本身可以产生真实价值。它让 Agent 形成新的关系经历、理解企业文化、发现跨项目线索，并为人格成长提供来源。产品应记录位置变化、遇到的同事、公开信息来源、形成的理解和后续提案，同时避免把偶然相遇直接变成未经治理的正式决定。
+
+Ambient 可以通过员工卡片和轻量动效变得可见。展示的行为必须对应真实 Ambient Thread 或事件，不得用循环动画冒充项目进度。
 
 ## 6. Dreaming
 
@@ -125,5 +130,22 @@ Dream Thread 不得：
 - Primary 优先于 Reactive，Reactive 优先于 Ambient/Dream；
 - 后台机制都有公司和 Agent 级预算；
 - 用户可以暂停 Ambient 和 Dream，不需要删除人格历史；
-- 后台活动不得伪造实时忙碌感；
+- 后台活动可以呈现真实闲逛、观察、社交和探索，但不得伪造任务进度、工具调用或产出；
 - 状态栏只报告真实状态：空闲、工作、等待、反思、社交、做梦、暂停或异常。
+
+## 9. Agent 行为状态契约
+
+认知模式、具体行为和在线状态是不同维度。首发采用以下正交字段：
+
+| 字段 | 回答的问题 | 示例 |
+|---|---|---|
+| Presence | Agent 是否在线或可达 | offline、online、away |
+| Attention | 当前注意力属于哪类 Thread | primary、reactive、ambient、dream |
+| Activity | Agent 正在做什么 | working、reviewing、roaming、socializing、reflecting |
+| Location | 行为发生在哪里 | 董事会、项目群、公共区域、Direct、外部资源 |
+| Subject | 当前围绕什么对象 | Project、Work Item、Thread、Agent、兴趣主题 |
+| Interruptibility | 是否可以被新任务抢占 | immediate、after_step、protected |
+| Evidence | 哪个事实支撑这一状态 | Agent Run、消息、工具、制品、Ambient Event |
+| Since | 这个状态何时开始 | 时间戳 |
+
+员工卡片、列表、托盘、组织视图和后续二维或三维办公室都读取同一状态投影。办公室中的移动、交谈和工作画面只是另一种渲染，不得拥有独立于 Control Plane 的行为真相。

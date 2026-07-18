@@ -12,14 +12,14 @@ For untrusted repositories, tools, plugins, MCP servers, or prompts, use a dispo
 
 ### Local server
 
-The Electron shell starts a loopback server with generated credentials. CLI/server modes can be configured separately.
+The Electron shell starts a local server. The current single-user Pre-Public path trusts loopback clients; CLI/server modes can be configured separately.
 
 - Keep the server bound to loopback unless remote access is an intentional, reviewed choice.
 - Set `AGENTCOMPANY_SERVER_PASSWORD` when running a separately reachable server.
-- Do not publish the local port or credentials through logs, screenshots, shell history, or URLs.
+- Do not publish the local port or any configured credentials through logs, screenshots, shell history, or URLs.
 - A reverse proxy, tunnel, or LAN bind expands the threat model and is the operator's responsibility.
 
-Unauthenticated loopback access can still be dangerous when other local processes or browser content are untrusted. The Pre-Public product target therefore requires authenticated clients and explicit browser pairing; consult release notes for what the current build enforces.
+Trusted loopback access can still be dangerous when other local processes or browser content are untrusted. Keep the Control Plane on loopback, avoid using the product in a hostile local account, and treat any future browser-pairing or non-loopback mode as a separate security boundary that must be explicitly documented and tested before release.
 
 ### Private Agent data
 

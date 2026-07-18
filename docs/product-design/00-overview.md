@@ -6,25 +6,25 @@
 
 ## 1. 产品定义
 
-Agent Company 是一个 **local-first、IM-first 的 AI 公司操作系统**。一个用户在自己的电脑上提出方向，由一个最小董事会把方向变成可验收项目，再由动态形成的 Agent 团队完成软件交付。
+Agent Company 是一个 **local-first、IM-first 的 AI 公司操作系统**。一个用户在自己的电脑上提出方向，由一个最小董事会把方向变成可验收项目，再由动态形成的 Agent 团队跨领域完成交付。
 
 产品不是：
 
 - 多 Agent SDK 的可视化外壳；
 - 以看板为主的项目管理工具；
 - 需要用户逐步编排的工作流编辑器；
-- 用像素办公室模拟忙碌的 Agent 玩具。
+- 用循环动画模拟忙碌、却没有真实组织状态的 Agent 玩具。
 
 ## 2. 产品公式
 
-> **Multica 级视觉完成度 + Bloome 式 IM-first 交互 + Agent Company 的自治治理与 Agent 人格**
+> **Marvis 式办公室氛围与结果分层 + Multica 级视觉完成度 + 群聊式 IM-first 协作 + Agent Company 的自组织、自治理与 Agent 人格**
 
 三个参照分别回答不同问题：
 
 | 维度 | 目标 |
 |---|---|
-| 视觉 | 克制的色调、精确的间距、状态和动效细节，形成长期工作台质感 |
-| 交互 | 人与 Agent 在会话中共同工作，结构化协作藏在自然对话之后 |
+| 视觉 | 用员工卡片、状态与适度动效建立公司空间感，形成长期工作台质感 |
+| 交互 | 人与 Agent 在群聊中共同工作，主会话高信号，工作日志、产出物和预览进入 Thread |
 | 核心差异 | 组织能够自治；Agent 有职业历史、私人空间、社交关系和人格成长 |
 
 ## 3. 三层产品模型
@@ -32,7 +32,7 @@ Agent Company 是一个 **local-first、IM-first 的 AI 公司操作系统**。�
 ```mermaid
 flowchart TB
     U["用户：创办者与最终治理者"]
-    W["工作层：IM、项目、代码、测试、交付"]
+    W["工作层：IM、项目、能力组合、验证、交付"]
     G["治理层：董事会、委派、审批、Gate、审计、声誉"]
     L["生命层：身份、私人空间、社交、Reflection、Dreaming"]
     U --> W
@@ -53,8 +53,7 @@ flowchart TB
 ### 4.1 主要入口
 
 - **桌面工作台**：默认使用方式，承载常驻公司体验；
-- **浏览器工作台**：连接同一个本地 Control Plane，使用同一套 WebUI；
-- **TUI**：次级入口，用于快速操作、诊断和终端用户偏好。
+- **浏览器工作台**：连接同一个本地 Control Plane，使用同一套 WebUI。
 
 ### 4.2 信息层级
 
@@ -62,8 +61,8 @@ flowchart TB
 
 ```text
 主会话（高信号）
-  └─ Thread（完整协作）
-       └─ Tool run / log / diff（执行细节）
+  └─ Thread（工作日志 / 产出物 / 预览）
+       └─ Tool run / log / diff / attempt（执行细节）
 ```
 
 ### 4.3 频道模型
@@ -72,16 +71,16 @@ flowchart TB
 
 ## 5. 组织运行方式
 
-新公司以 CEO、CTO、Product Lead 组成最小固定董事会。董事会读取用户目标和代码仓库，产出 Project Charter，并按需要动态建立部门、项目组和临时岗位。
+新公司以 CEO、CTO、Product Lead 组成最小固定董事会。董事会读取用户目标、资源和可用能力，产出 Project Charter，并按需要动态建立部门、项目组和临时责任。
 
 ```mermaid
 flowchart LR
     Goal["用户目标"] --> Board["最小董事会"]
     Board --> Charter["可验收 Project Charter"]
     Charter --> Team["动态项目团队"]
-    Team --> Work["实现 / 测试 / Agent Review"]
-    Work --> Gate["按策略审批"]
-    Gate --> Merge["合并 / 主分支验证 / 清理"]
+    Team --> Work["受管执行 / 领域验证"]
+    Work --> Gate["Review / 按策略审批"]
+    Gate --> Merge["交付 / 资源处置 / 复盘"]
 ```
 
 组织路径是适应性的。简单任务不需要制造五层汇报链；大目标也不能跳过 Charter 直接压给执行层。
@@ -97,9 +96,9 @@ flowchart LR
 | Channel | 公司群、董事会、部门、项目或 Direct 的协作边界 |
 | Thread | 一项议题的完整协作过程，也是主要展开单元 |
 | Project Charter | 董事会把目标变成可验收项目的契约 |
-| Project | 在一个主仓库上完成一组可验收交付 |
+| Project | 围绕目标、Charter、团队、预算和验收形成的治理容器 |
 | Work Item | 有负责人、依赖、状态和验收的执行单元 |
-| Artifact | 代码、测试结果、文档、决策或其他可审查产物 |
+| Artifact | 研究证据、文档、代码、测试结果、决策或其他可审查产物 |
 | Gate | 由规则或用户批准决定能否进入下一阶段的关卡 |
 | Decision | 有 DRI、理由、异议和影响范围的正式决定 |
 | Audit Event | 不可静默改写的治理元数据 |
@@ -110,7 +109,6 @@ flowchart LR
 flowchart TB
     E["Electron"] --> API["Local API + Event Stream"]
     B["Browser"] --> API
-    T["TUI"] --> API
     API --> CP["Control Plane：唯一权威写入者"]
     CP --> R["Runtime / Workflow / Policy / Context"]
     CP --> DB["SQLite"]
@@ -118,7 +116,7 @@ flowchart TB
     CP --> Git["Git repositories / Worktrees"]
 ```
 
-Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不直接写数据库；Control Plane 负责认证、单写者语义、任务恢复和孤儿 Worktree 恢复。
+Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不直接写数据库；Control Plane 负责权限边界、单写者语义、任务恢复和孤儿 Worktree 恢复。
 
 现有技术基础继续复用：
 
@@ -136,11 +134,11 @@ Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不�
 | [注意力与成长](04-attention-modes.md) | Agent 何时工作、响应、反思、社交和做梦 |
 | [交互原语](05-interaction-primitives.md) | 用户与 Agent 如何在 IM 中协作 |
 | [治理](06-governance.md) | 哪些动作自动、哪些需要批准、如何审计 |
-| [工作类型](07-work-types.md) | 软件研发主线如何交付，未来如何扩展 |
-| [产品阶段](08-product-phases.md) | Pre-Public 如何收敛为首次公开版本 |
+| [工作类型](07-work-types.md) | 领域中立工作契约如何组合能力，软件适配器如何保持深度治理 |
+| [实施计划](implementation-plan.md) | Pre-Public 的当前事实、里程碑与发布 Gate |
 
 ## 9. 当前实现与目标的区别
 
 仓库中已有大量可复用模块，包括 Session、Actor、Group Session、Thread、Delegation、Admission、Reputation、Trust Dial、Audit、Token Governance、Workflow、Control Plane 和 Worktree。
 
-模块存在不等于产品闭环已经完成。当前阶段的关键工作是把这些能力收敛进共享 WebUI、本地常驻进程、严格隐私边界和一条可验收的软件交付旅程。具体以[实施计划](implementation-plan.md)为准。
+模块存在不等于产品闭环已经完成。当前阶段的关键工作是把这些能力收敛进共享 WebUI、本地常驻进程、严格隐私边界、领域中立交付内核和跨任务纵向验收。具体以[实施计划](implementation-plan.md)为准。

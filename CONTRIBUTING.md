@@ -25,7 +25,7 @@ cd agents-company
 bun install
 ```
 
-Run the current CLI/TUI development entry:
+Run the local Control Plane server:
 
 ```bash
 bun run dev
@@ -46,13 +46,12 @@ The standalone WebUI expects a local backend, normally on port 4096. The Electro
 |---|---|
 | `packages/app` | Shared SolidJS + Vite WebUI for browser and Electron |
 | `packages/desktop` | Electron main/preload/renderer shell and packaging |
-| `packages/control-plane` | Bun/Effect runtime, server, SQLite, Git, workflows, TUI, and Control Plane services |
+| `packages/control-plane` | Bun/Effect runtime, server, SQLite, Git, workflows, internal CLI tooling, and Control Plane services |
 | `packages/ui` | Shared UI primitives |
 | `packages/sdk` | Generated and hand-written client SDKs |
 | `docs/product-design` | Canonical product design and implementation plan |
-| `docs/compose` | Historical implementation plans and reports |
 
-The TUI is a supported secondary client. New product information architecture should be designed in the shared WebUI and exposed through common Control Plane semantics, not implemented as a TUI-only product model.
+The CLI is a non-interactive automation and maintenance surface, not a separate product interface. New user journeys belong in the shared WebUI and Electron experience.
 
 ## Checks
 
@@ -120,10 +119,11 @@ Without an explicit product decision, do not expand the active Pre-Public scope 
 
 - multi-user or cloud-hosted companies;
 - mobile clients;
-- one Project writing multiple repositories;
 - Kanban-first project management;
-- general-industry delivery claims;
-- pixel-office simulation;
+- exhaustive industry or external-application coverage;
+- a complex 2D/3D office before the shared employee-state contract is stable;
 - weaker private-space, approval, audit, or Worktree boundaries.
+
+The product itself is domain-neutral: do not reduce it to software development or a preconfigured specialist team. Software development remains a deep adapter, and each independently verifiable software delivery unit should normally use one primary repository.
 
 Agent Company is rebuilt from AgentCompany foundations and does not preserve legacy filesystem, config, or API compatibility unless a migration bridge is explicitly requested and documented.

@@ -1,29 +1,22 @@
-# Agent Company CLI
+# Agent Company Developer CLI
 
-Use Agent Company from your terminal.
+Command-oriented tooling for automation, repository work, and diagnostics.
 
-Agent Company CLI is the terminal entry point for delegating software work to a structured group of AI agents. You describe the outcome, inspect the plan, approve important steps, and keep work moving inside a terminal UI designed for real projects.
+Agent Company CLI is retained for maintainers, scripts, and one-shot Agent runs. It is not a separate product UI and does not carry feature-parity commitments with the shared Web/Desktop product.
 
 ```bash
 npm install -g @agents-company/control-plane
-agents
+agents --help
 ```
 
-This npm package exposes the CLI/TUI surface. The broader Agent Company product is moving toward a shared Web/Desktop workbench with the TUI retained as a secondary client; Web and desktop binaries are not distributed through this package.
+This npm package exposes a headless local server and command-line operations. New Agent Company product journeys are designed for the shared WebUI and Electron application; Web and desktop binaries are not distributed through this package.
 
-## Quick Start
+## Existing CLI usage
 
 Install the CLI globally:
 
 ```bash
 npm install -g @agents-company/control-plane
-```
-
-Start the terminal UI in your project:
-
-```bash
-cd path/to/your/project
-agents
 ```
 
 Run a one-shot task from the shell:
@@ -46,7 +39,7 @@ agents models
 
 ## What It Does
 
-Agent Company is built around a terminal UI that treats software work as coordinated company work. Instead of a single chat transcript, the product gives you a place to start goals, inspect agent activity, route tasks, review outputs, and keep project context close to the codebase.
+This package supports repository work and automation through explicit commands. The broader Agent Company product is domain-neutral and uses the shared Web/Desktop group workspace as its primary surface.
 
 Use it for:
 
@@ -54,41 +47,23 @@ Use it for:
 - Asking agents to implement focused changes in a repository.
 - Running reviews before you commit or open a pull request.
 - Coordinating multi-step tasks while keeping human approval in the loop.
-- Reusing project-specific commands, agents, tools, and plugins from `.agentcompany`.
+- Reusing project-specific commands, agents, tools, and server plugins from `.agentcompany`.
 
 The CLI entrypoint is `agents`. The package installs a small JavaScript launcher plus an optional platform-specific binary package for your operating system and CPU.
-
-## TUI Basics
-
-Start from the project directory you want Agent Company to understand:
-
-```bash
-agents
-```
-
-Inside the TUI, common patterns include:
-
-- Reference files with `@file` when you want the agent to inspect a specific path.
-- Run shell commands with `!command` when you need terminal output in the conversation.
-- Use `/connect` to connect or manage provider access.
-- Use `/models` to inspect and switch models.
-- Use `/help` to see available commands in the current TUI.
-
-The TUI is the core surface of this CLI package, not the primary information architecture of the broader product. Agent Company is not trying to preserve legacy AgentCompany or OpenCode compatibility unless a migration bridge is explicitly documented.
 
 ## Shell Commands
 
 ```bash
-agents
+agents serve
 ```
 
-Open the terminal UI in the current directory.
+Start the local Control Plane HTTP server.
 
 ```bash
 agents run "summarize this repository"
 ```
 
-Run a task without opening the full TUI.
+Run a one-shot task and print its result.
 
 ```bash
 agents providers
@@ -114,7 +89,7 @@ Print CLI help or the installed version.
 
 The public npm packages are intentionally small at this stage:
 
-- `@agents-company/control-plane` is the user-facing terminal CLI and TUI launcher.
+- `@agents-company/control-plane` contains the Control Plane server and command-line launcher.
 - `@agents-company/sdk` is the TypeScript SDK for API clients and integrations.
 - `@agents-company/plugin` contains plugin-facing extension types and helpers.
 - `@agents-company/shared` contains shared internal utilities used across packages.
