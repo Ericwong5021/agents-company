@@ -38,7 +38,7 @@ const BUILTIN_TIERS = new Set(["ultra", "standard", "lite"])
 // F41: warn once per (providerID, modelID) when limit.context falls back to default
 const warnedContextDefaults = new Set<string>()
 
-export const DEFAULT_CHUNK_TIMEOUT = 480_000 // 8 minutes — bounds single-attempt SSE stall.
+export const DEFAULT_CHUNK_TIMEOUT = 480_000 // 8 minutes — bounds response-header and SSE stalls.
 // Tuned for mimo-v2.5-pro on MiMo Router whose cold-path TTFT after context
 // rebuild can dip to ~5 minutes silent. Reasoning models with multi-minute
 // thinking still emit partial chunks / heartbeats within this window. Override
@@ -1516,10 +1516,12 @@ const layer: Layer.Layer<
           const fetchFn = customFetch ?? fetch
           const opts = init ?? {}
           const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
+          const headerAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
           const signals: AbortSignal[] = []
 
           if (opts.signal) signals.push(opts.signal)
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
+          if (headerAbortCtl) signals.push(headerAbortCtl.signal)
           if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
             signals.push(AbortSignal.timeout(options["timeout"]))
 
@@ -1541,10 +1543,18 @@ const layer: Layer.Layer<
             }
           }
 
+          const headerTimeout = headerAbortCtl
+            ? setTimeout(
+                () => headerAbortCtl.abort(new Error("SSE read timed out waiting for response headers")),
+                chunkTimeout,
+              )
+            : undefined
           const res = await fetchFn(input, {
             ...opts,
             // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
             timeout: false,
+          }).finally(() => {
+            if (headerTimeout) clearTimeout(headerTimeout)
           })
 
           if (!chunkAbortCtl) return res

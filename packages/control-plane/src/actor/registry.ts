@@ -8,6 +8,7 @@ import * as Events from "./events"
 import { Lock, Log } from "@/util"
 import { SYSTEM_SPAWNED_AGENT_TYPES } from "@/agent/config"
 import type { ThreadID } from "@/thread/schema"
+import { ThreadTable } from "@/thread/thread.sql"
 
 const log = Log.create({ service: "actor.registry" })
 
@@ -334,6 +335,17 @@ export const layer: Layer.Layer<Service, never, Bus.Service> = Layer.effect(
     yield* Effect.sync(() =>
       Database.use((db) => {
         const now = Date.now()
+        const orphanThreadIDs = db
+          .select({ thread_id: ActorRegistryTable.thread_id })
+          .from(ActorRegistryTable)
+          .all()
+          .flatMap((row) => (row.thread_id ? [row.thread_id] : []))
+        if (orphanThreadIDs.length) {
+          db.update(ThreadTable)
+            .set({ status: "completed", time_completed: now, time_updated: now })
+            .where(and(inArray(ThreadTable.id, orphanThreadIDs), eq(ThreadTable.status, "active")))
+            .run()
+        }
         db.update(ActorRegistryTable)
           .set({
             status: "idle",

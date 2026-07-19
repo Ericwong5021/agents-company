@@ -745,10 +745,14 @@ export const layer = Layer.effect(
       // Auto-inject return-format instruction for non-specialized subagents.
       // Excluded: agents with hardcoded `prompt` (explore/title/summary — own
       // contracts), checkpoint-writer (special — task is itself a complete
-      // writer-instruction string), and peer mode (routes via spawnPeer).
+      // writer-instruction string), structured-output agents (their schema is
+      // the return contract), and peer mode (routes via spawnPeer).
       const agentInfo = yield* agents.get(input.agentType)
       const gateEligible =
-        agentInfo?.mode === "subagent" && !agentInfo?.prompt && input.agentType !== "checkpoint-writer"
+        agentInfo?.mode === "subagent" &&
+        !agentInfo?.prompt &&
+        input.agentType !== "checkpoint-writer" &&
+        input.format?.type !== "json_schema"
       const taskWithFormat = gateEligible ? input.task + RETURN_FORMAT_INSTRUCTION : input.task
 
       const { fiber, outcome } = yield* forkWork({

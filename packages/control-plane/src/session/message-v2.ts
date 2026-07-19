@@ -756,6 +756,16 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           })
         if (part.type === "tool") {
           toolNames.add(part.tool)
+          // Tool protocols require function arguments to decode to an object.
+          // A model can still emit truncated or double-encoded arguments; those
+          // parts are stored as failed tool calls so a structured-output repair
+          // turn can continue. Wrap their non-object input before replaying the
+          // history, otherwise OpenAI-compatible providers reject the request
+          // before the model gets a chance to repair it.
+          const replayInput =
+            typeof part.state.input === "object" && part.state.input !== null && !Array.isArray(part.state.input)
+              ? part.state.input
+              : { invalid_input: part.state.input }
           if (part.state.status === "completed") {
             const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
             const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
@@ -781,7 +791,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               type: ("tool-" + part.tool) as `tool-${string}`,
               state: "output-available",
               toolCallId: part.callID,
-              input: part.state.input,
+              input: replayInput,
               output,
               ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
               ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -794,7 +804,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: replayInput,
                 output,
                 ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
                 ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -804,7 +814,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: replayInput,
                 errorText: part.state.error,
                 ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
                 ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -818,7 +828,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               type: ("tool-" + part.tool) as `tool-${string}`,
               state: "output-error",
               toolCallId: part.callID,
-              input: part.state.input,
+              input: replayInput,
               errorText: "[Tool execution was interrupted]",
               ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
               ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),

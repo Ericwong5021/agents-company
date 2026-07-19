@@ -31,6 +31,7 @@ import { Effect, Layer } from "effect"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { CompanyAgentID } from "../../src/company-agent/schema"
 import { Log } from "../../src/util"
 import { tmpdir } from "../fixture/fixture"
 import { startScriptedLLMServer, toolCallResponse, textStopResponse, textLengthResponse } from "../lib/scripted-llm-server"
@@ -166,12 +167,19 @@ describe("main runLoop history monotonic-growth invariant", () => {
               const final = yield* prompt.prompt({
                 sessionID: session.id,
                 agent: "build",
+                companyAgentID: CompanyAgentID.make("technical-researcher"),
                 parts: [{ type: "text", text: "Produce an answer that may need continuation." }],
               })
 
               expect(stub.captures.length).toBe(2)
               expect(JSON.stringify(stub.captures[1].messages)).toContain("output token limit")
               expect(final.parts.some((part) => part.type === "text" && part.text === "done.")).toBe(true)
+              expect(
+                (yield* sessions.messages({ sessionID: session.id, agentID: "*" }))
+                  .map((message) => message.info)
+                  .filter((message) => message.role === "user")
+                  .map((message) => String(message.companyAgentID)),
+              ).toEqual(["technical-researcher", "technical-researcher"])
             }),
           ),
       })

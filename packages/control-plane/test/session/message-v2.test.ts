@@ -861,6 +861,55 @@ describe("session.message-v2.toModelMessage", () => {
     expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([])
   })
 
+  test("wraps malformed tool input as an object before replay", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+    const result = await MessageV2.toModelMessages(
+      [
+        {
+          info: userInfo(userID),
+          parts: [
+            {
+              ...basePart(userID, "u1"),
+              type: "text",
+              text: "return structured output",
+            },
+          ] as MessageV2.Part[],
+        },
+        {
+          info: assistantInfo(assistantID, userID),
+          parts: [
+            {
+              ...basePart(assistantID, "a1"),
+              type: "tool",
+              callID: "call-malformed",
+              tool: "StructuredOutput",
+              state: {
+                status: "error",
+                input: '{"title":',
+                error: "Invalid tool arguments",
+                time: { start: 0, end: 1 },
+              },
+            },
+          ] as unknown as MessageV2.Part[],
+        },
+      ],
+      model,
+    )
+
+    expect(result[1]).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "call-malformed",
+          toolName: "StructuredOutput",
+          input: { invalid_input: '{"title":' },
+        },
+      ],
+    })
+  })
+
   test("converts pending/running tool calls to error results to prevent dangling tool_use", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"

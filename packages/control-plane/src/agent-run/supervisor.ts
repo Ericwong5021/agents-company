@@ -55,13 +55,17 @@ export const layer = Layer.effect(
     const pi = new PiRuntimeAdapter(
       createPiRuntimeEngineFactory({
         resolveModel: async (spec) => {
-          if (spec.model) {
-            const model = await Effect.runPromise(provider.resolveModelRef(spec.model))
-            return piProviderModel(model, await Effect.runPromise(provider.getProvider(model.providerID)))
+          const model = spec.model
+            ? await Effect.runPromise(provider.resolveModelRef(spec.model))
+            : await Effect.runPromise(provider.defaultModel()).then((fallback) =>
+                Effect.runPromise(provider.getModel(fallback.providerID, fallback.modelID)),
+              )
+          const connection = await Effect.runPromise(provider.getProvider(model.providerID))
+          return {
+            model: piProviderModel(model, connection),
+            idleTimeoutMs:
+              typeof connection.options.chunkTimeout === "number" ? connection.options.chunkTimeout : undefined,
           }
-          const fallback = await Effect.runPromise(provider.defaultModel())
-          const model = await Effect.runPromise(provider.getModel(fallback.providerID, fallback.modelID))
-          return piProviderModel(model, await Effect.runPromise(provider.getProvider(model.providerID)))
         },
         getApiKey: async (providerID) => {
           const [credential, connection] = await Promise.all([

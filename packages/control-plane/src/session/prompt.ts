@@ -631,6 +631,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       // of a registered actor (subagent or peer), look up the actor row and,
       // if `actor.tools` is an array, reject calls to tools not in the
       // whitelist. `INHERIT` and a missing actor row both mean full access.
+      //
+      // An actor with an explicit tool contract exposes only that contract to
+      // every provider. Besides being least privilege, this keeps requests
+      // small enough for gateways that reject large unrelated tool catalogs,
+      // and it remains stable across synthetic continuation turns where the
+      // latest user message may no longer carry companyAgentID. Checkpoint
+      // writer is the one exception: it deliberately mirrors the parent tool
+      // schema for Anthropic prefix-cache parity. The execution-time rejection
+      // remains below as a defense-in-depth guard for every provider.
       const whitelistFor = Effect.fn("SessionPrompt.whitelistFor")(function* () {
         if (!input.agentID) return undefined
         const actor = yield* actorRegistry.get(input.session.id, input.agentID)
@@ -638,6 +647,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         return new Set(actor.tools)
       })
       const whitelist = yield* whitelistFor()
+      const compactWhitelist = whitelist && input.agent.name !== "checkpoint-writer"
       const rejectionFor = (toolID: string) => ({
         title: "Tool not permitted",
         output: `The "${toolID}" tool is not in this actor's whitelist. Allowed tools: ${
@@ -693,6 +703,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         providerID: input.model.providerID,
         agent: input.agent,
       })) {
+        if (compactWhitelist && !whitelist.has(item.id)) continue
         const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
         tools[item.id] = tool({
           description: item.description,
@@ -794,6 +805,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       for (const [key, item] of Object.entries(yield* mcp.tools())) {
         const execute = item.execute
         if (!execute) continue
+        if (compactWhitelist && !whitelist.has(key)) continue
 
         const schema = yield* Effect.promise(() => Promise.resolve(asSchema(item.inputSchema).jsonSchema))
         const transformed = ProviderTransform.schema(input.model, schema)
@@ -1941,6 +1953,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID: input.lastUser.sessionID,
             agentID: input.lastUser.agentID,
+            companyAgentID: input.lastUser.companyAgentID,
             agent: input.lastUser.agent,
             model: input.lastUser.model,
             tools: input.lastUser.tools,
@@ -2176,6 +2189,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID: input.lastUser.sessionID,
             agentID: input.lastUser.agentID,
+            companyAgentID: input.lastUser.companyAgentID,
             agent: input.lastUser.agent,
             model: input.lastUser.model,
             tools: input.lastUser.tools,
@@ -2231,6 +2245,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID: input.lastUser.sessionID,
             agentID: input.lastUser.agentID,
+            companyAgentID: input.lastUser.companyAgentID,
             agent: input.lastUser.agent,
             model: input.lastUser.model,
             tools: input.lastUser.tools,
@@ -2279,6 +2294,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             role: "user" as const,
             sessionID,
             agentID: input.lastUser.agentID,
+            companyAgentID: input.lastUser.companyAgentID,
             agent: input.lastUser.agent,
             model: input.lastUser.model,
             tools: input.lastUser.tools,
@@ -3056,8 +3072,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               return "continue" as const
             }
 
+            const actorContract = lastUser.agentID
+              ? yield* actorRegistry.get(session.id, lastUser.agentID)
+              : undefined
             const [skills, env, instructions] = yield* Effect.all([
-              sys.skills(agent, lastUser.companyAgentID ?? session.companyAgentID),
+              Array.isArray(actorContract?.tools) && !actorContract.tools.includes("skill")
+                ? Effect.succeed(undefined)
+                : sys.skills(agent, lastUser.companyAgentID ?? session.companyAgentID),
               Effect.sync(() => sys.environment(model, session.time.created)),
               instruction.system().pipe(Effect.orDie),
             ])

@@ -1,5 +1,5 @@
 import type { Auth } from "@/auth"
-import type { Provider } from "@/provider"
+import { ProviderTransform, type Provider } from "@/provider"
 import { getModel, type Model } from "@earendil-works/pi-ai/compat"
 
 type ProviderConnection = Pick<Provider.Info, "key" | "options" | "source">
@@ -35,13 +35,15 @@ function api(model: Provider.Model) {
 
 export function piProviderModel(model: Provider.Model, provider: Provider.Info): Model<string> {
   const builtin = getModel(model.providerID as never, model.id as never)
+  const modelApi = builtin?.api ?? api(model)
+  const baseUrl = piProviderBaseUrl(provider, model.api.url || builtin?.baseUrl || "")
   return {
     ...builtin,
     id: model.id,
     name: model.name,
-    api: builtin?.api ?? api(model),
+    api: modelApi,
     provider: model.providerID,
-    baseUrl: piProviderBaseUrl(provider, model.api.url || builtin?.baseUrl || ""),
+    baseUrl: modelApi === "anthropic-messages" ? baseUrl.replace(/\/v1\/?$/, "") : baseUrl,
     reasoning: model.capabilities.reasoning,
     input: model.capabilities.input.image ? ["text", "image"] : ["text"],
     cost: {
@@ -51,7 +53,7 @@ export function piProviderModel(model: Provider.Model, provider: Provider.Info):
       cacheWrite: model.cost.cache.write,
     },
     contextWindow: model.limit.context,
-    maxTokens: model.limit.output,
+    maxTokens: ProviderTransform.maxOutputTokens(model),
     headers: { ...builtin?.headers, ...model.headers },
   }
 }

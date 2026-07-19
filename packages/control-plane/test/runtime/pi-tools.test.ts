@@ -65,4 +65,46 @@ describe("Pi governed tools", () => {
       bash.execute("call-3", { command: "rg", args: ["--pre=malicious", "needle"] }, new AbortController().signal),
     ).rejects.toThrow("not allowed")
   })
+
+  test("accepts a simple embedded command emitted by the local model", async () => {
+    const input = await workspace("read_only")
+    const bash = createPiTools(input.spec, ["bash"]).find((tool) => tool.name === "bash")!
+
+    await expect(
+      bash.execute("call-4", { command: "bun test", args: [] }, new AbortController().signal),
+    ).resolves.toBeDefined()
+  })
+
+  test("allows bun install only for workspace-write implementation runs", async () => {
+    const readOnly = await workspace("read_only")
+    const readOnlyBash = createPiTools(readOnly.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    await expect(
+      readOnlyBash.execute("call-5", { command: "bun install", args: [] }, new AbortController().signal),
+    ).rejects.toThrow("not allowed")
+
+    const writable = await workspace("workspace_write")
+    await Bun.write(path.join(writable.cwd, "package.json"), '{"name":"pi-install-test","private":true}\n')
+    const writableBash = createPiTools(writable.spec, ["bash"]).find((tool) => tool.name === "bash")!
+
+    await expect(
+      writableBash.execute("call-6", { command: "bun install", args: [] }, new AbortController().signal),
+    ).resolves.toBeDefined()
+  })
+
+  test("terminates a timed-out command together with descendants holding output pipes", async () => {
+    const input = await workspace("workspace_write")
+    await Bun.write(
+      path.join(input.cwd, "package.json"),
+      '{"name":"pi-timeout-test","private":true,"scripts":{"dev":"bun -e \\"setInterval(() => {}, 1000)\\""}}\n',
+    )
+    const bash = createPiTools(input.spec, ["bash"]).find((tool) => tool.name === "bash")!
+
+    await expect(
+      bash.execute(
+        "call-7",
+        { command: "bun", args: ["run", "dev"], timeoutMs: 100 },
+        new AbortController().signal,
+      ),
+    ).resolves.toBeDefined()
+  })
 })

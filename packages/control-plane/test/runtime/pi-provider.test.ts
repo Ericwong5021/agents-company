@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Provider } from "../../src/provider"
+import { ProviderTransform } from "../../src/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { piProviderBaseUrl, piProviderCredential, piProviderModel } from "../../src/runtime/pi/provider"
 
@@ -71,7 +72,25 @@ describe("Pi provider bridge", () => {
       baseUrl: "http://127.0.0.1:4321/v1",
       headers: { "x-agent-company": "configured" },
       contextWindow: 128_000,
-      maxTokens: 16_384,
+      maxTokens: ProviderTransform.maxOutputTokens(model),
+    })
+  })
+
+  test("removes the version suffix expected to be added by the Anthropic transport", () => {
+    const anthropicModel = {
+      ...model,
+      id: ModelID.make("qwen-compatible"),
+      api: { id: "qwen-compatible", url: "https://gateway.example/zen/go/v1", npm: "@ai-sdk/anthropic" },
+    }
+    const anthropicProvider = {
+      ...provider,
+      options: {},
+      models: { [anthropicModel.id]: anthropicModel },
+    }
+
+    expect(piProviderModel(anthropicModel, anthropicProvider)).toMatchObject({
+      api: "anthropic-messages",
+      baseUrl: "https://gateway.example/zen/go",
     })
   })
 })

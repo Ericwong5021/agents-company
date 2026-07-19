@@ -4,7 +4,7 @@ import type { AgentRunSpec } from "../interface"
 import type { PiRuntimeEngine, PiRuntimeEngineFactory, PiRuntimeEventType } from "./adapter"
 
 type EngineOptions = {
-  resolveModel(spec: AgentRunSpec): Promise<Model<string>>
+  resolveModel(spec: AgentRunSpec): Promise<{ model: Model<string>; idleTimeoutMs?: number }>
   getApiKey(provider: string): Promise<string | undefined>
   getTools?(spec: AgentRunSpec): Promise<AgentTool[]>
   authorizeTool?(spec: AgentRunSpec, toolName: string, args: unknown): Promise<string | undefined>
@@ -29,6 +29,38 @@ export function createPiTurnBudget(maxTurns?: number) {
   return () => {
     if (maxTurns && turns >= maxTurns) throw new Error(`Pi runtime exceeded its maximum turn budget of ${maxTurns}`)
     return ++turns
+  }
+}
+
+export function createPiIdleTimer(input: {
+  timeoutMs?: number
+  abort(): void
+  schedule?: typeof setTimeout
+  cancel?: typeof clearTimeout
+}) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let runningTools = 0
+  const cancel = () => {
+    if (timer) (input.cancel ?? clearTimeout)(timer)
+    timer = undefined
+  }
+  const reset = () => {
+    cancel()
+    if (!input.timeoutMs || runningTools > 0) return
+    timer = (input.schedule ?? setTimeout)(input.abort, input.timeoutMs)
+  }
+  return {
+    start: reset,
+    stop: cancel,
+    event(event: AgentEvent) {
+      if (event.type === "tool_execution_start") {
+        runningTools++
+        cancel()
+        return
+      }
+      if (event.type === "tool_execution_end") runningTools = Math.max(0, runningTools - 1)
+      if (runningTools === 0) reset()
+    },
   }
 }
 
@@ -76,6 +108,7 @@ class CorePiRuntimeEngine implements PiRuntimeEngine {
     model: Model<string>,
     tools: AgentTool[],
     options: EngineOptions,
+    private readonly idleTimeoutMs?: number,
   ) {
     const consumeTurn = createPiTurnBudget(spec.maxTurns)
     this.agent = new Agent({
@@ -103,12 +136,18 @@ class CorePiRuntimeEngine implements PiRuntimeEngine {
   }
 
   async run(prompt: string, onEvent: (type: PiRuntimeEventType, payload: Record<string, unknown>) => void) {
-    const unsubscribe = this.agent.subscribe((event) => onEvent(eventType(event), payload(event)))
+    const idle = createPiIdleTimer({ timeoutMs: this.idleTimeoutMs, abort: () => this.agent.abort() })
+    const unsubscribe = this.agent.subscribe((event) => {
+      idle.event(event)
+      onEvent(eventType(event), payload(event))
+    })
+    idle.start()
     try {
       await this.agent.prompt(prompt)
       if (this.agent.state.errorMessage) throw new Error(this.agent.state.errorMessage)
       return finalText(this.agent.state.messages)
     } finally {
+      idle.stop()
       unsubscribe()
     }
   }
@@ -127,6 +166,8 @@ class CorePiRuntimeEngine implements PiRuntimeEngine {
 }
 
 export function createPiRuntimeEngineFactory(options: EngineOptions): PiRuntimeEngineFactory {
-  return async (spec) =>
-    new CorePiRuntimeEngine(spec, await options.resolveModel(spec), await options.getTools?.(spec) ?? [], options)
+  return async (spec) => {
+    const [resolved, tools] = await Promise.all([options.resolveModel(spec), options.getTools?.(spec) ?? []])
+    return new CorePiRuntimeEngine(spec, resolved.model, tools, options, resolved.idleTimeoutMs)
+  }
 }

@@ -36,13 +36,21 @@ function guard(root: string) {
   }
 }
 
-function allowedCommand(command: string, args: string[]) {
+function normalizeCommand(command: string, args: string[]) {
+  const tokens = command.trim().split(/\s+/)
+  if (tokens.length === 1) return { command: tokens[0]!, args }
+  if (args.length > 0 || /[\0\r\n'"\\]/.test(command)) return
+  return { command: tokens[0]!, args: tokens.slice(1) }
+}
+
+function allowedCommand(command: string, args: string[], permissionMode: AgentRunSpec["permissionMode"]) {
   if (args.some((arg) => /(^|--)(pre|hostname-bin|ext-diff|textconv|script-shell|preload|eval|require)(=|$)/i.test(arg))) {
     return false
   }
   if (command === "rg") return true
   if (command === "git") return ["diff", "status", "show", "log", "ls-files", "rev-parse"].includes(args[0] ?? "")
   if (command === "bun") {
+    if (args[0] === "install") return permissionMode === "workspace_write"
     if (["test", "typecheck"].includes(args[0] ?? "")) return true
     return args[0] === "run" && /^(test|build|lint|typecheck|check|verify|start|dev)(:|$)/.test(args[1] ?? "")
   }
@@ -159,7 +167,8 @@ export function createPiTools(spec: AgentRunSpec, allowedToolIDs: readonly strin
     {
       name: "bash",
       label: "Run verification command",
-      description: "Run a non-shell repository verification command. Supported commands: rg; read-only git; bun/npm/pnpm/yarn test, build, lint, typecheck, check or verify scripts.",
+      description:
+        "Run a non-shell repository command. Put the executable in command and arguments in args. Supported commands: rg; read-only git; package-manager checks, start/dev scripts, and bun install for workspace-write runs.",
       parameters: Type.Object({
         command: Type.String(),
         args: Type.Array(Type.String(), { maxItems: 100 }),
@@ -167,21 +176,32 @@ export function createPiTools(spec: AgentRunSpec, allowedToolIDs: readonly strin
       }),
       execute: async (_callID, raw, signal) => {
         const input = raw as { command: string; args: string[]; timeoutMs?: number }
-        if (!allowedCommand(input.command, input.args)) throw new Error(`Command is not allowed by the Control Plane: ${input.command}`)
-        const executable = Bun.which(input.command)
-        if (!executable) throw new Error(`Command is not installed: ${input.command}`)
-        const process = Bun.spawn([executable, ...input.args], {
+        const invocation = normalizeCommand(input.command, input.args)
+        if (!invocation || !allowedCommand(invocation.command, invocation.args, spec.permissionMode)) {
+          throw new Error(`Command is not allowed by the Control Plane: ${input.command}`)
+        }
+        const executable = Bun.which(invocation.command)
+        if (!executable) throw new Error(`Command is not installed: ${invocation.command}`)
+        const child = Bun.spawn([executable, ...invocation.args], {
           cwd: spec.cwd,
           env: safeEnvironment(),
           stdout: "pipe",
           stderr: "pipe",
           signal,
+          detached: process.platform !== "win32",
         })
-        const timeout = setTimeout(() => process.kill(), input.timeoutMs ?? 10 * 60_000)
+        const timeout = setTimeout(() => {
+          if (process.platform === "win32") return child.kill()
+          try {
+            process.kill(-child.pid, "SIGTERM")
+          } catch {
+            child.kill()
+          }
+        }, input.timeoutMs ?? 10 * 60_000)
         const [stdout, stderr, exitCode] = await Promise.all([
-          new Response(process.stdout).text(),
-          new Response(process.stderr).text(),
-          process.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
         ]).finally(() => clearTimeout(timeout))
         return text([stdout, stderr, `exit code: ${exitCode}`].filter(Boolean).join("\n"))
       },

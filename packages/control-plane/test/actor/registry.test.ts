@@ -6,11 +6,12 @@ import { ActorRegistry } from "../../src/actor/registry"
 import { SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util"
 import { tmpdir } from "../fixture/fixture"
+import { Thread } from "../../src/thread/thread"
 
 void Log.init({ print: false })
 
 // Combined layer for tests: Session + ActorRegistry both using the same Bus/DB
-const testLayer = Layer.mergeAll(Session.defaultLayer, ActorRegistry.defaultLayer)
+const testLayer = Layer.mergeAll(Session.defaultLayer, ActorRegistry.defaultLayer, Thread.defaultLayer)
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -21,7 +22,10 @@ afterEach(async () => {
  * This ensures orphan recovery and the stuck-detection fiber are started only
  * once, and all reads/writes share the same layer state.
  */
-async function withRegistry(directory: string, fn: (rt: ManagedRuntime.ManagedRuntime<Session.Service | ActorRegistry.Service, never>) => Promise<void>) {
+async function withRegistry(
+  directory: string,
+  fn: (rt: ManagedRuntime.ManagedRuntime<Session.Service | ActorRegistry.Service | Thread.Service, never>) => Promise<void>,
+) {
   return Instance.provide({
     directory,
     fn: async () => {
@@ -419,6 +423,9 @@ describe("ActorRegistry", () => {
       // First runtime: register and set running
       await withRegistry(tmp.path, async (rt) => {
         const parent = await rt.runPromise(Session.Service.use((svc) => svc.create()))
+        const thread = await rt.runPromise(
+          Thread.Service.use((svc) => svc.create({ agentID: "orphan-test", kind: "primary" })),
+        )
         parentId = parent.id
         taskId = SessionID.descending()
         await rt.runPromise(
@@ -430,6 +437,7 @@ describe("ActorRegistry", () => {
               agent: "explore",
               description: "Orphan test task",
               contextMode: "none",
+              threadID: thread.id,
               background: false,
               lifecycle: "ephemeral",
             }),
@@ -451,6 +459,9 @@ describe("ActorRegistry", () => {
         expect(recovered!.status).toBe("idle")
         expect(recovered!.lastOutcome).toBe("failure")
         expect(recovered!.lastError).toBe("orphaned: process restarted")
+        expect((await rt.runPromise(Thread.Service.use((svc) => svc.listByAgent("orphan-test"))))[0].status).toBe(
+          "completed",
+        )
       })
     })
   })

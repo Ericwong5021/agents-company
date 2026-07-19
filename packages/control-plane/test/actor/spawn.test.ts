@@ -847,6 +847,12 @@ describe("Actor.spawn structured output (P3)", () => {
           // §5.2: structured present → finalText dropped (no preamble duplication)
           expect(outcome.finalText).toBeUndefined()
         }
+        const subAgentUser = (yield* session.messages({ sessionID: result.sessionID })).find(
+          (message) => message.info.role === "user" && message.info.agentID === result.actorID,
+        )
+        expect(subAgentUser?.parts.find((part) => part.type === "text")?.text).not.toContain(
+          "Return format (required)",
+        )
       }),
       { git: true, config: providerCfg },
     ),
