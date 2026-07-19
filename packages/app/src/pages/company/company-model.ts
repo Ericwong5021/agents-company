@@ -101,6 +101,81 @@ export type ConversationSnapshot = {
   error: ConversationError | null
 }
 
+export type CompanyProjectStatus =
+  | "intake"
+  | "researching"
+  | "awaiting_project_approval"
+  | "planning"
+  | "awaiting_development_approval"
+  | "developing"
+  | "verifying"
+  | "completed"
+  | "rejected"
+  | "blocked"
+
+export type CompanyProjectSummary = {
+  id: string
+  goal: string
+  title: string
+  status: CompanyProjectStatus
+  owner_agent_id?: string
+  active_run_id?: string
+  provider_id?: string
+  model_id?: string
+  output_dir: string
+  created_at: number
+  updated_at: number
+  completed_at?: number
+}
+
+export type CompanyProjectWorkItem = {
+  id: string
+  title: string
+  description: string
+  kind: string
+  status: "pending" | "running" | "blocked" | "failed" | "completed" | "cancelled"
+  owner_agent_id?: string
+  error?: string
+  started_at?: number
+  completed_at?: number
+  created_at: number
+  updated_at: number
+}
+
+export type CompanyProjectArtifact = {
+  id: string
+  work_item_id?: string
+  kind: string
+  title: string
+  created_by_agent_id?: string
+  created_at: number
+}
+
+export type CompanyProjectGate = {
+  id: string
+  kind: "project_approval" | "development_approval" | "merge_approval"
+  status: "pending" | "approved" | "rejected"
+  title: string
+  summary: string
+  requested_by_agent_id?: string
+  decision_note?: string
+  requested_at: number
+  decided_at?: number
+}
+
+export type CompanyProjectExecutionState = {
+  project: CompanyProjectSummary
+  charter?: {
+    scope: string[]
+    success_criteria: string[]
+    constraints: string[]
+    acceptance_criteria: string[]
+  }
+  work_items: CompanyProjectWorkItem[]
+  artifacts: CompanyProjectArtifact[]
+  gates: CompanyProjectGate[]
+}
+
 export type CompanyReadyWorkspaceSnapshot = {
   status: "ready"
   access: CompanyWorkspaceAccess

@@ -112,7 +112,7 @@ export function CompanyComposer(props: {
           class="company-attachment"
           aria-disabled="true"
           disabled
-          title="当前 Company 会话暂不支持文件附件，可在项目工作台中附加文件"
+          title="当前 Company 会话暂不支持文件附件"
         >
           <Icon name="plus-small" size="small" />
           <span>选择文件</span>

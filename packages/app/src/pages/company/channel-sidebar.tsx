@@ -36,7 +36,6 @@ export function ChannelSidebar(props: {
   loading: Accessor<boolean>
   onSelect: (channelID: string) => void
   onNewConversation: () => void
-  onOpenProject: () => void
   onOpenOffice: () => void
   onOpenSettings: () => void
 }) {
@@ -75,7 +74,7 @@ export function ChannelSidebar(props: {
           classList={{ active: props.activeView() === "new" }}
           onClick={props.onNewConversation}
         >
-          <Icon name="new-session" size="small" />
+          <Icon name="plus-small" size="small" />
           <span>新建目标</span>
         </button>
       </nav>
@@ -96,19 +95,6 @@ export function ChannelSidebar(props: {
           {(group) => (
             <section class="company-channel-section" aria-label={language.t(group.labelKey)}>
               <div class="company-channel-list">
-                <Show when={group.kind === "project"}>
-                  <button
-                    type="button"
-                    class="company-channel company-project-launcher"
-                    title="打开完整项目、会话、终端与文件工作台"
-                    onClick={props.onOpenProject}
-                  >
-                    <Icon name="folder" size="small" />
-                    <span class="company-channel-copy">
-                      <span class="company-channel-name">项目工作台</span>
-                    </span>
-                  </button>
-                </Show>
                 <For each={visible(group.kind)}>
                   {(channel) => (
                     <button

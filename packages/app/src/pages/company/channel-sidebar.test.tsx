@@ -31,10 +31,9 @@ describe("ChannelSidebar", () => {
     expect(component).not.toContain("pre-public-webui")
   })
 
-  test("links the Marvis shell to the real project workspace", () => {
-    expect(component).toContain("onOpenProject: () => void")
-    expect(component).toContain("onClick={props.onOpenProject}")
-    expect(component).toContain("项目工作台")
+  test("does not expose the removed project workspace launcher", () => {
+    expect(component).not.toContain("onOpenProject")
+    expect(component).not.toContain("项目工作台")
   })
 
   test("removes unavailable Marvis navigation replicas", () => {

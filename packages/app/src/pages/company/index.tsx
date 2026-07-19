@@ -1,13 +1,17 @@
 import type { Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
-import { Match, Show, Switch, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
+import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
 import {
   createCompanyWorkspaceDataSource,
   installCompanyRefreshTriggers,
   type CompanyWorkspaceDataSource,
 } from "./company-data-source"
 import { useGlobalSDK } from "@/context/global-sdk"
-import type { CompanyWorkspaceSnapshot, CompanyReadyWorkspaceSnapshot } from "./company-model"
+import type {
+  CompanyProjectExecutionState,
+  CompanyWorkspaceSnapshot,
+  CompanyReadyWorkspaceSnapshot,
+} from "./company-model"
 import { CompanyReady } from "./company-ready"
 import { ChannelSidebar, type CompanyWorkspaceView } from "./channel-sidebar"
 import { MessageFeed } from "./message-feed"
@@ -16,12 +20,15 @@ import { CompanyComposer } from "./company-composer"
 import { BoardRoundtable } from "./board-roundtable"
 import { OfficeSurface } from "./office-surface"
 import { NewGoalSurface } from "./new-goal-surface"
-import { COMPANY_PROVIDER_CONFIGURED_EVENT, providerConfigured, shouldShowProviderSetupCard } from "./provider-availability"
+import {
+  COMPANY_PROVIDER_CONFIGURED_EVENT,
+  projectExecutionModel,
+  providerConfigured,
+  shouldShowProviderSetupCard,
+} from "./provider-availability"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import { useDialog } from "@agents-company/ui/context/dialog"
-import { useLayout } from "@/context/layout"
-import { projectWorkspacePath } from "@/utils/shell-navigation"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
 
@@ -37,14 +44,19 @@ function CompanyReadyWorkspace(props: {
 }) {
   const language = useLanguage()
   const dialog = useDialog()
-  const layout = useLayout()
   const conversation = createMemo(() => props.snapshot().conversation)
   const store = (): ConversationStore | undefined => props.dataSource.conversation
   const [mobileChannelsOpen, setMobileChannelsOpen] = createSignal(false)
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
   const [workPanelOpen, setWorkPanelOpen] = createSignal(false)
+  const [companyProject, setCompanyProject] = createSignal<CompanyProjectExecutionState | null>(null)
+  const [projectBusy, setProjectBusy] = createSignal(false)
+  const [projectError, setProjectError] = createSignal<string | null>(null)
+  const [failedProjectProviderIDs, setFailedProjectProviderIDs] = createSignal<string[]>([])
+  const [retryModelValue, setRetryModelValue] = createSignal("")
   let threadReturnTarget: HTMLElement | undefined
+  let projectThreadKey = ""
   const [providers, { refetch: refetchProviders }] = createResource(() => props.dataSource.listProviders())
 
   const activeChannelID = createMemo(() => conversation().activeChannelID)
@@ -60,13 +72,140 @@ function CompanyReadyWorkspace(props: {
   // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
   const hasConfiguredProvider = createMemo(() => providerConfigured(providers()))
+  const retryModels = createMemo(() =>
+    (providers()?.providers ?? []).flatMap((provider) =>
+      provider.connected
+        ? provider.models
+            .filter((model) => model.status === "active")
+            .map((model) => ({
+              provider_id: provider.provider_id,
+              model_id: model.model_id,
+              label: `${provider.name} / ${model.name}`,
+            }))
+        : [],
+    ),
+  )
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
+  const boardGoal = createMemo(() => {
+    const entry = conversation().threadEntries.find(
+      (item) => item.type === "message" && item.message.author.kind === "user",
+    )
+    if (entry?.type === "message") return entry.message.body
+    return conversation().messages.find((message) => message.author.kind === "user")?.body ?? ""
+  })
+
+  createEffect(() => {
+    const key = `${conversation().thread?.id ?? ""}:${boardGoal()}`
+    if (key === projectThreadKey) return
+    projectThreadKey = key
+    setCompanyProject(null)
+    setProjectError(null)
+    if (!conversation().thread?.id || !boardGoal()) return
+    void props.dataSource
+      .listCompanyProjects()
+      .then((projects) => {
+        const matching = projects.filter((project) => project.goal === boardGoal())
+        setFailedProjectProviderIDs(
+          matching.flatMap((project) =>
+            project.status === "blocked" && project.provider_id ? [project.provider_id] : [],
+          ),
+        )
+        return matching.at(0)
+      })
+      .then((project) => (project ? props.dataSource.getCompanyProject(project.id) : null))
+      .then((project) => {
+        if (`${conversation().thread?.id ?? ""}:${boardGoal()}` === key) setCompanyProject(project)
+      })
+      .catch((error: unknown) => setProjectError(String(error)))
+  })
 
   onMount(() => {
     const refreshProviderState = () => void refetchProviders()
     window.addEventListener(COMPANY_PROVIDER_CONFIGURED_EVENT, refreshProviderState)
     onCleanup(() => window.removeEventListener(COMPANY_PROVIDER_CONFIGURED_EVENT, refreshProviderState))
+
+    const projectRefresh = window.setInterval(() => {
+      const current = companyProject()
+      if (!current || ["completed", "rejected", "blocked"].includes(current.project.status)) return
+      void props.dataSource
+        .getCompanyProject(current.project.id)
+        .then(setCompanyProject)
+        .catch((error: unknown) => setProjectError(String(error)))
+    }, 1_000)
+    onCleanup(() => window.clearInterval(projectRefresh))
   })
+
+  const startCompanyProject = () => {
+    if (!boardGoal() || projectBusy()) return
+    const executionModel = projectExecutionModel(providers())
+    if (!executionModel) {
+      setProjectError("没有已连接且配置了默认模型的供应商")
+      return
+    }
+    setProjectBusy(true)
+    setProjectError(null)
+    void props.dataSource
+      .startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title, ...executionModel })
+      .then((project) => props.dataSource.getCompanyProject(project.id))
+      .then(setCompanyProject)
+      .catch((error: unknown) => setProjectError(String(error)))
+      .finally(() => setProjectBusy(false))
+  }
+
+  const retryCompanyProject = () => {
+    const current = companyProject()
+    const selectedModel = retryModels().find(
+      (model) => `${model.provider_id}:${model.model_id}` === retryModelValue(),
+    )
+    const executionModel =
+      selectedModel ??
+      projectExecutionModel(providers(), [
+        ...new Set([
+          ...failedProjectProviderIDs(),
+          ...(current?.project.provider_id ? [current.project.provider_id] : []),
+        ]),
+      ])
+    if (!current || current.project.status !== "blocked" || !executionModel || projectBusy()) return
+    setProjectBusy(true)
+    setProjectError(null)
+    void props.dataSource
+      .retryCompanyProject({ projectID: current.project.id, ...executionModel })
+      .then((project) => props.dataSource.getCompanyProject(project.id))
+      .then(setCompanyProject)
+      .catch((error: unknown) => setProjectError(String(error)))
+      .finally(() => setProjectBusy(false))
+  }
+
+  const cancelCompanyProject = () => {
+    const current = companyProject()
+    if (!current?.project.active_run_id || projectBusy()) return
+    setProjectBusy(true)
+    setProjectError(null)
+    void props.dataSource
+      .cancelCompanyProject({ projectID: current.project.id, reason: "模型长时间未返回，停止本轮执行" })
+      .then(() => props.dataSource.getCompanyProject(current.project.id))
+      .then((project) => {
+        setCompanyProject(project)
+        if (project.project.provider_id) {
+          setFailedProjectProviderIDs((currentIDs) => [...new Set([...currentIDs, project.project.provider_id!])])
+        }
+      })
+      .catch((error: unknown) => setProjectError(String(error)))
+      .finally(() => setProjectBusy(false))
+  }
+
+  const resolveCompanyProjectGate = (gateID: string, decision: "approve" | "reject") => {
+    const current = companyProject()
+    if (!current || projectBusy()) return
+    setProjectBusy(true)
+    setProjectError(null)
+    void props.dataSource
+      .resolveCompanyProjectGate({ projectID: current.project.id, gateID, decision })
+      .then(() => props.dataSource.getCompanyProject(current.project.id))
+      .then(setCompanyProject)
+      .catch((error: unknown) => setProjectError(String(error)))
+      .finally(() => setProjectBusy(false))
+  }
 
   const openSettings = (defaultValue = "company") =>
     void import("@/components/dialog-settings").then((settings) =>
@@ -90,14 +229,6 @@ function CompanyReadyWorkspace(props: {
     setWorkPanelOpen(true)
     const board = conversation().channels.find((channel) => channel.kind === "board")
     if (board) void store()?.setActiveChannel(board.id)
-  }
-
-  const openProject = () => {
-    setMobileChannelsOpen(false)
-    const directory = props.snapshot().company.repository?.root_path
-    if (!directory) return
-    layout.projects.open(directory)
-    window.location.assign(projectWorkspacePath(directory))
   }
 
   const selectChannel = (channelID: string) => {
@@ -182,7 +313,6 @@ function CompanyReadyWorkspace(props: {
             const board = conversation().channels.find((channel) => channel.kind === "board")
             if (board) void store()?.setActiveChannel(board.id, { restoreLatestThread: false })
           }}
-          onOpenProject={openProject}
           onOpenOffice={() => {
             setMobileChannelsOpen(false)
             setView("office")
@@ -233,6 +363,17 @@ function CompanyReadyWorkspace(props: {
                     thread={() => conversation().thread}
                     entries={() => conversation().threadEntries}
                     messages={() => conversation().messages}
+                    project={companyProject}
+                    projectBusy={projectBusy}
+                    projectError={projectError}
+                    onStartProject={startCompanyProject}
+                    onRetryProject={retryCompanyProject}
+                    onCancelProject={cancelCompanyProject}
+                    retryModels={retryModels}
+                    retryModelValue={retryModelValue}
+                    onRetryModelChange={setRetryModelValue}
+                    onResolveGate={resolveCompanyProjectGate}
+                    onOpenThread={openThread}
                   />
                 </Match>
                 <Match when={true}>

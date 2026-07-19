@@ -1,5 +1,7 @@
 import { type CompanyReadyState, createControlPlaneClient, type LocalAuthSession, type Event } from "@agents-company/sdk/v2/client"
 import type {
+  CompanyProjectExecutionState,
+  CompanyProjectSummary,
   CompanyReadyWorkspaceSnapshot,
   CompanyWorkspaceAccess,
   CompanyWorkspaceSnapshot,
@@ -7,7 +9,8 @@ import type {
 } from "./company-model"
 import { createConversationStore, type ConversationStore } from "./company-conversation-data-source"
 
-export type CompanyClient = Pick<ReturnType<typeof createControlPlaneClient>, "company" | "localAuth">
+export type CompanyClient = Pick<ReturnType<typeof createControlPlaneClient>, "company" | "localAuth"> &
+  Partial<Pick<ReturnType<typeof createControlPlaneClient>, "companyProject">>
 
 export type CompanyWorkspaceDataSource = {
   getSnapshot(): CompanyWorkspaceSnapshot
@@ -30,6 +33,22 @@ export type CompanyWorkspaceDataSource = {
   revokeCredential(
     input: Parameters<CompanyClient["localAuth"]["revoke"]>[0],
   ): Promise<Awaited<ReturnType<CompanyClient["localAuth"]["revoke"]>>["data"]>
+  listCompanyProjects(): Promise<CompanyProjectSummary[]>
+  startCompanyProject(input: {
+    goal: string
+    title?: string
+    provider_id?: string
+    model_id?: string
+  }): Promise<CompanyProjectSummary>
+  getCompanyProject(projectID: string): Promise<CompanyProjectExecutionState>
+  cancelCompanyProject(input: { projectID: string; reason?: string }): Promise<void>
+  retryCompanyProject(input: { projectID: string; provider_id?: string; model_id?: string }): Promise<CompanyProjectSummary>
+  resolveCompanyProjectGate(input: {
+    projectID: string
+    gateID: string
+    decision: "approve" | "reject"
+    note?: string
+  }): Promise<void>
   /** M2 conversation store, available when company is ready */
   conversation?: ConversationStore
   /** Forward an SSE event to the data source for M2 invalidation handling */
@@ -141,6 +160,18 @@ export const createDisconnectedCompanyWorkspaceDataSource = (): CompanyWorkspace
     createPairing: async () => undefined,
     listCredentials: async () => undefined,
     revokeCredential: async () => undefined,
+    listCompanyProjects: async () => [],
+    startCompanyProject: async () => {
+      throw new Error("Company Project API is unavailable")
+    },
+    getCompanyProject: async () => {
+      throw new Error("Company Project API is unavailable")
+    },
+    cancelCompanyProject: async () => undefined,
+    retryCompanyProject: async () => {
+      throw new Error("Company Project API is unavailable")
+    },
+    resolveCompanyProjectGate: async () => undefined,
     handleEvent: () => undefined,
   }
 }
@@ -212,6 +243,10 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
   }
 
   const request = async <T, E>(operation: Promise<SdkResult<T, E>>) => unwrap(await operation)
+  const companyProject = () => {
+    if (!client.companyProject) throw new Error("Company Project API is unavailable")
+    return client.companyProject
+  }
 
   return {
     getSnapshot: () => current,
@@ -231,6 +266,26 @@ export function createSdkCompanyWorkspaceDataSource(client: CompanyClient): Comp
     createPairing: (input) => request(client.localAuth.pair(input)),
     listCredentials: () => request(client.localAuth.credentials()),
     revokeCredential: (input) => request(client.localAuth.revoke(input)),
+    async listCompanyProjects() {
+      return (await request(companyProject().list())) as CompanyProjectSummary[]
+    },
+    async startCompanyProject(input) {
+      const result = await request(companyProject().start(input))
+      return result.project as CompanyProjectSummary
+    },
+    async getCompanyProject(projectID) {
+      return (await request(companyProject().get({ projectID }))) as CompanyProjectExecutionState
+    },
+    async cancelCompanyProject(input) {
+      await request(companyProject().cancel(input))
+    },
+    async retryCompanyProject(input) {
+      const result = await request(companyProject().retry(input))
+      return result.project as CompanyProjectSummary
+    },
+    async resolveCompanyProjectGate(input) {
+      await request(companyProject().resolveGate(input))
+    },
     get conversation() { return conversationStore },
     handleEvent(event: Event) {
       if (event.type === "server.connected") {
