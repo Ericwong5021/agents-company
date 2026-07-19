@@ -4,8 +4,10 @@ import { afterEach, describe, expect } from "bun:test"
 import { Deferred, Effect, Layer } from "effect"
 import { and, eq } from "drizzle-orm"
 import { Agent as AgentSvc } from "../../src/agent/agent"
+import { AgentMessage } from "../../src/agent-message"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
+import { CompanyAgent } from "../../src/company-agent"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -57,6 +59,7 @@ import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 import { reply } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
+import { Thread } from "../../src/thread/thread"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -123,9 +126,12 @@ function makeLayer() {
     Session.defaultLayer,
     Snapshot.defaultLayer,
     LLM.defaultLayer,
+    Thread.defaultLayer,
     Env.defaultLayer,
     AgentSvc.defaultLayer,
+    AgentMessage.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,
@@ -847,10 +853,11 @@ describe("Actor.spawn structured output (P3)", () => {
           // §5.2: structured present → finalText dropped (no preamble duplication)
           expect(outcome.finalText).toBeUndefined()
         }
-        const subAgentUser = (yield* session.messages({ sessionID: result.sessionID })).find(
+        const subAgentUser = (yield* session.messages({ sessionID: result.sessionID, agentID: "*" })).find(
           (message) => message.info.role === "user" && message.info.agentID === result.actorID,
         )
-        expect(subAgentUser?.parts.find((part) => part.type === "text")?.text).not.toContain(
+        expect(subAgentUser).toBeDefined()
+        expect(subAgentUser?.parts.find((part) => part.type === "text")?.text ?? "").not.toContain(
           "Return format (required)",
         )
       }),
@@ -1029,7 +1036,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         expect(subAgentUser).toBeDefined()
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
@@ -1066,7 +1073,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
         expect(text).not.toContain("Return format (required)")
@@ -1101,7 +1108,7 @@ describe("Actor.spawn return-format injection (F21)", () => {
 
         yield* Deferred.await(result.outcome)
 
-        const msgs = yield* session.messages({ sessionID: result.sessionID })
+        const msgs = yield* session.messages({ sessionID: result.sessionID, agentID: "*" })
         const subAgentUser = msgs.find((m) => m.info.role === "user" && m.info.agentID === result.actorID)
         const text = subAgentUser?.parts.find((p) => p.type === "text")?.text ?? ""
         expect(text).not.toContain("Return format (required)")
