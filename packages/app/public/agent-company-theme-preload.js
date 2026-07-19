@@ -1,5 +1,5 @@
 ;(function () {
-  var themeId = localStorage.getItem("agent-company.theme-id") || "oc-2"
+  var themeId = localStorage.getItem("agent-company.theme-id") || "agent-company"
   var scheme = localStorage.getItem("agent-company.color-scheme") || "system"
   var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
   var mode = isDark ? "dark" : "light"
@@ -7,7 +7,7 @@
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
 
-  if (themeId === "oc-2") return
+  if (themeId === "agent-company") return
 
   var css = localStorage.getItem("agent-company.theme-css-" + mode)
   if (!css) return

@@ -20,13 +20,13 @@ beforeEach(() => {
 
 describe("theme preload", () => {
   test("ignores prior product theme keys before mount", () => {
-    localStorage.setItem("control-plane-theme-id", "oc-1")
+    localStorage.setItem("control-plane-theme-id", "legacy-default")
     localStorage.setItem("control-plane-theme-css-light", "--background-base:#fff;")
     localStorage.setItem("control-plane-theme-css-dark", "--background-base:#000;")
 
     run()
 
-    expect(document.documentElement.dataset.theme).toBe("oc-2")
+    expect(document.documentElement.dataset.theme).toBe("agent-company")
     expect(document.documentElement.dataset.colorScheme).toBe("light")
     expect(localStorage.getItem("agent-company.theme-id")).toBeNull()
     expect(document.getElementById("agent-company-theme-preload")).toBeNull()

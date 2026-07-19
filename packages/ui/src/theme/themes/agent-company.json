@@ -1,7 +1,7 @@
 {
   "$schema": "https://agentcompany.local/desktop-theme.json",
   "name": "Agent Company",
-  "id": "oc-2",
+  "id": "agent-company",
   "light": {
     "palette": {
       "neutral": "#f7f7f7",
