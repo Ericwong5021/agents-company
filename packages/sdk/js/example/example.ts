@@ -12,20 +12,18 @@ for await (const file of input) {
   const session = await client.session.create()
   tasks.push(
     client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
+      sessionID: session.data.id,
+      parts: [
+        {
+          type: "file",
+          mime: "text/plain",
+          url: pathToFileURL(file).href,
+        },
+        {
+          type: "text",
+          text: `Write tests for every public function in this file.`,
+        },
+      ],
     }),
   )
   console.log("done", file)
@@ -36,20 +34,18 @@ await Promise.all(
     const session = await client.session.create()
     console.log("processing", file)
     await client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
+      sessionID: session.data.id,
+      parts: [
+        {
+          type: "file",
+          mime: "text/plain",
+          url: pathToFileURL(file).href,
+        },
+        {
+          type: "text",
+          text: `Write tests for every public function in this file.`,
+        },
+      ],
     })
     console.log("done", file)
   }),

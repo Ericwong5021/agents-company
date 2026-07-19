@@ -14,14 +14,23 @@ console.log("- Signing secret present:", !!process.env.SLACK_SIGNING_SECRET)
 console.log("- App token present:", !!process.env.SLACK_APP_TOKEN)
 
 console.log("🚀 Starting control-plane server...")
-const control-plane = await createControlPlane({
+const controlPlane = await createControlPlane({
   port: 0,
 })
 console.log("✅ ControlPlane server ready")
 
-const sessions = new Map<string, { client: any; server: any; sessionId: string; channel: string; thread: string }>()
+const sessions = new Map<
+  string,
+  {
+    client: typeof controlPlane.client
+    server: typeof controlPlane.server
+    sessionId: string
+    channel: string
+    thread: string
+  }
+>()
 void (async () => {
-  const events = await control-plane.client.event.subscribe()
+  const events = await controlPlane.client.event.subscribe()
   for await (const event of events.stream) {
     if (event.type === "message.part.updated") {
       const part = event.properties.part
@@ -73,11 +82,9 @@ app.message(async ({ message, say }) => {
 
   if (!session) {
     console.log("🆕 Creating new control-plane session...")
-    const { client, server } = control-plane
+    const { client, server } = controlPlane
 
-    const createResult = await client.session.create({
-      body: { title: `Slack thread ${thread}` },
-    })
+    const createResult = await client.session.create({ title: `Slack thread ${thread}` })
 
     if (createResult.error) {
       console.error("❌ Failed to create session:", createResult.error)
@@ -93,7 +100,7 @@ app.message(async ({ message, say }) => {
     session = { client, server, sessionId: createResult.data.id, channel, thread }
     sessions.set(sessionKey, session)
 
-    const shareResult = await client.session.share({ path: { id: createResult.data.id } })
+    const shareResult = await client.session.share({ sessionID: createResult.data.id })
     if (!shareResult.error && shareResult.data) {
       const sessionUrl = shareResult.data.share?.url
       console.log("🔗 Session shared:", sessionUrl)
@@ -103,8 +110,8 @@ app.message(async ({ message, say }) => {
 
   console.log("📝 Sending to control-plane:", message.text)
   const result = await session.client.session.prompt({
-    path: { id: session.sessionId },
-    body: { parts: [{ type: "text", text: message.text }] },
+    sessionID: session.sessionId,
+    parts: [{ type: "text", text: message.text }],
   })
 
   console.log("📤 ControlPlane response:", JSON.stringify(result, null, 2))
@@ -122,10 +129,9 @@ app.message(async ({ message, say }) => {
 
   // Build response text
   const responseText =
-    response.info?.content ||
     response.parts
-      ?.filter((p: any) => p.type === "text")
-      .map((p: any) => p.text)
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
       .join("\n") ||
     "I received your message but didn't have a response."
 
