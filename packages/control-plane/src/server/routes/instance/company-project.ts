@@ -19,6 +19,12 @@ const ResolveGateSchema = z.object({
   note: z.string().optional(),
 })
 
+const CancelSchema = z.object({ reason: z.string().min(1).optional() })
+const RetrySchema = z.object({
+  provider_id: z.string().min(1).optional(),
+  model_id: z.string().min(1).optional(),
+})
+
 const StartResultSchema = z.object({
   project: z.unknown(),
   run_id: z.string(),
@@ -84,6 +90,47 @@ export const CompanyProjectRoutes = lazy(() =>
             service.listWorktreeRuns(project.id),
           ])
           return { project, charter, plans, work_items, worktree_runs, artifacts, gates }
+        }),
+    )
+    .post(
+      "/:projectID/cancel",
+      describeRoute({
+        summary: "Cancel a running company project",
+        description: "Cancels the active workflow and marks running work items and the project as blocked.",
+        operationId: "companyProject.cancel",
+        responses: { 200: { description: "Cancelled project" } },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      validator("json", CancelSchema),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.cancel", c, function* () {
+          return yield* (yield* CompanyProjectExecution.Service).cancel({
+            project_id: c.req.valid("param").projectID,
+            reason: c.req.valid("json").reason,
+          })
+        }),
+    )
+    .post(
+      "/:projectID/retry",
+      describeRoute({
+        summary: "Resume a blocked company project",
+        description: "Reuses the approved plan, repository and worktree while allowing a model change.",
+        operationId: "companyProject.retry",
+        responses: {
+          200: {
+            description: "Project and resumed workflow run",
+            content: { "application/json": { schema: resolver(StartResultSchema) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      validator("json", RetrySchema),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.retry", c, function* () {
+          return yield* (yield* CompanyProjectExecution.Service).retry({
+            project_id: c.req.valid("param").projectID,
+            ...c.req.valid("json"),
+          })
         }),
     )
     .post(

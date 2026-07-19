@@ -18,7 +18,11 @@ const researchUnit = z.object({
       z.object({
         claim: z.string(),
         evidence: z.string(),
-        source_url: z.string().url(),
+        // Some findings are grounded in local product decisions or repository
+        // files rather than a public webpage. Keep the source field explicit,
+        // but allow an empty value or local path; market evidence is still
+        // required by its work-item acceptance criteria and prompt to use URLs.
+        source_url: z.string(),
       }),
     )
     .min(1),
@@ -96,6 +100,13 @@ const developmentResult = z.object({
   implementation: z.string(),
   attempts: z.number(),
   verification,
+  board_review: z.object({
+    approved: z.boolean(),
+    summary: z.string(),
+    evidence_checked: z.array(z.string()),
+    strengths: z.array(z.string()),
+    concerns: z.array(z.string()),
+  }),
 })
 
 const schema = (value: z.ZodType) => z.toJSONSchema(value, { target: "draft-7" })
@@ -148,17 +159,17 @@ const RESEARCH_TEAM = [
     responsibilities: ["市场研究", "竞品分析", "证据核验"],
   },
   {
-    id: "game-product-strategist",
-    name: "游戏产品策略师",
-    description: "定义用户、核心玩法循环、MVP 边界和产品价值",
-    prompt: "你是小游戏产品策略师。优先发现可验证的核心乐趣，主动压缩范围，拒绝用功能数量代替可玩性。",
-    responsibilities: ["产品机会", "核心玩法", "MVP 范围"],
+    id: "product-strategist",
+    name: "产品策略师",
+    description: "定义用户、核心使用循环、MVP 边界和产品价值",
+    prompt: "你是产品策略师。优先发现可验证的核心价值，主动压缩范围，拒绝用功能数量代替用户结果。",
+    responsibilities: ["产品机会", "核心循环", "MVP 范围"],
   },
   {
     id: "technical-researcher",
     name: "技术研究员",
     description: "研究交付形态、技术栈、实现风险和验证方式",
-    prompt: "你是技术研究员。你的建议必须能在独立仓库里安装、启动、测试和试玩，优先简单可靠的实现。",
+    prompt: "你是技术研究员。你的建议必须能在独立仓库里安装、启动、测试和验证，优先简单可靠的实现。",
     responsibilities: ["技术可行性", "技术选型", "交付风险"],
   },
 ] as const
@@ -174,21 +185,21 @@ const DEVELOPMENT_TEAM = [
   {
     id: "software-architect",
     name: "软件架构师",
-    description: "为极简可试玩 MVP 设计可执行技术方案",
+    description: "为极简可验证 MVP 设计可执行技术方案",
     prompt: "你是务实的软件架构师。选择最少依赖、最短启动路径和清晰测试边界，不做超前架构。",
     responsibilities: ["架构", "仓库结构", "运行与测试方案"],
   },
   {
     id: "qa-engineer",
     name: "QA 工程师",
-    description: "独立验证安装、测试、启动和实际可玩性",
-    prompt: "你是独立 QA。必须亲自运行命令和试玩关键路径；没有命令证据不得判定通过。",
-    responsibilities: ["验收标准", "自动化测试", "启动冒烟", "试玩"],
+    description: "独立验证安装、测试、启动和核心用户路径",
+    prompt: "你是独立 QA。必须亲自运行命令和验证关键用户路径；没有命令证据不得判定通过。",
+    responsibilities: ["验收标准", "自动化测试", "启动冒烟", "用户路径验证"],
   },
   {
     id: "mvp-developer",
     name: "MVP 开发负责人",
-    description: "在独立仓库中完成可启动、可测试、可试玩的产品",
+    description: "在独立仓库中完成可启动、可测试、可验证的产品",
     prompt:
       "你是自主开发负责人。直接操作当前项目仓库，持续运行测试，直到满足 Definition of Done。不得修改 AgentCompany 源仓库。",
     responsibilities: ["实现", "测试", "文档", "本地 Git 交付"],
@@ -209,15 +220,14 @@ function researchScript(goal: string) {
     "company-project-research",
     [
       `const goal = ${json(goal)}`,
-      `phase("并行市场、产品与技术研究")`,
-      `const reports = await parallel([`,
-      `  () => agent("围绕目标开展市场与竞品研究：" + goal + "。联网查证，输出具体来源 URL；判断真实需求、现有产品、机会和风险。", { companyAgentID: "market-researcher", tools: ["websearch", "webfetch"], schema: ${unitSchema}, label: "市场研究", phase: "Research" }),`,
-      `  () => agent("围绕目标开展用户与玩法研究：" + goal + "。定义目标用户、核心乐趣、最小可玩循环和应砍掉的范围；必要时联网核验。", { companyAgentID: "game-product-strategist", tools: ["websearch", "webfetch"], schema: ${unitSchema}, label: "产品机会", phase: "Research" }),`,
-      `  () => agent("围绕目标开展技术可行性研究：" + goal + "。比较浏览器与终端交付，选择可在独立仓库安装、测试、启动、试玩的最简路线，并给出来源。", { companyAgentID: "technical-researcher", tools: ["websearch", "webfetch"], schema: ${unitSchema}, label: "技术研究", phase: "Research" }),`,
-      `])`,
+      `phase("市场、产品与技术研究")`,
+      `const reports = []`,
+      `reports.push(await agent("围绕目标开展市场与竞品研究：" + goal + "。最多调用联网工具 3 次，核验 2-3 个高价值来源 URL；用不超过 600 字判断真实需求、现有产品、机会和风险，然后立即调用 StructuredOutput。", { companyAgentID: "market-researcher", tools: ["webfetch"], schema: ${unitSchema}, label: "市场研究", phase: "Research", timeoutMs: 600000 }))`,
+      `reports.push(await agent("围绕目标开展用户与产品机会研究：" + goal + "。基于已有产品知识定义目标用户、核心使用循环、最小可验证价值和应砍掉的范围；用不超过 600 字完成判断，来源 URL 只引用你确信存在的官方页面，然后立即调用 StructuredOutput。", { companyAgentID: "product-strategist", tools: [], schema: ${unitSchema}, label: "产品机会", phase: "Research", timeoutMs: 600000 }))`,
+      `reports.push(await agent("围绕目标开展技术可行性研究：" + goal + "。最多调用联网工具 3 次，比较浏览器与终端交付，选择可在独立仓库安装、测试、启动、验证的最简路线；用不超过 600 字给出来源和风险，然后立即调用 StructuredOutput。", { companyAgentID: "technical-researcher", tools: ["webfetch"], schema: ${unitSchema}, label: "技术研究", phase: "Research", timeoutMs: 600000 }))`,
       `if (reports.some((report) => !report)) throw new Error("research specialist failed")`,
       `phase("负责人综合立项建议")`,
-      `const proposal = await agent("你是项目负责人。根据以下三份报告独立判断是否应该立项。不要迎合预设；若立项，必须自行选择 browser 或 terminal，并定义极简可试玩 MVP。\\n目标：" + goal + "\\n报告：" + JSON.stringify(reports), { companyAgentID: "project-lead", schema: ${proposalSchema}, label: "立项建议", phase: "Synthesis" })`,
+      `const proposal = await agent("你是项目负责人。根据以下三份报告独立判断是否应该立项。不要迎合预设；若立项，必须自行选择 browser 或 terminal，并定义极简可验证 MVP。\\n目标：" + goal + "\\n报告：" + JSON.stringify(reports), { companyAgentID: "project-lead", tools: [], schema: ${proposalSchema}, label: "立项建议", phase: "Synthesis", timeoutMs: 600000 })`,
       `if (!proposal) throw new Error("proposal synthesis failed")`,
       `return { market: reports[0], product: reports[1], technical: reports[2], proposal }`,
     ].join("\n"),
@@ -231,14 +241,13 @@ function planningScript(goal: string, proposalArtifact: unknown) {
     [
       `const goal = ${json(goal)}`,
       `const approved = ${proposalText}`,
-      `phase("并行产品、架构与验收设计")`,
-      `const plans = await parallel([`,
-      `  () => agent("根据已批准立项制作极简 MVP PRD。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "product-manager", schema: ${json(schema(productBrief))}, label: "PRD", phase: "Plan" }),`,
-      `  () => agent("根据已批准立项制作可直接开发的架构。必须是独立 Git 仓库，可安装、启动、测试和试玩。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "software-architect", schema: ${json(schema(architecture))}, label: "架构", phase: "Plan" }),`,
-      `  () => agent("根据已批准立项定义独立验收计划，覆盖安装、自动化测试、启动冒烟和实际试玩。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "qa-engineer", schema: ${json(schema(qaPlan))}, label: "QA 计划", phase: "Plan" }),`,
-      `])`,
+      `phase("产品、架构与验收设计")`,
+      `const plans = []`,
+      `plans.push(await agent("根据已批准立项制作极简 MVP PRD。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "product-manager", tools: [], schema: ${json(schema(productBrief))}, label: "PRD", phase: "Plan" }))`,
+      `plans.push(await agent("根据已批准立项制作可直接开发的架构。必须是独立 Git 仓库，可安装、启动、测试并验证关键路径。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "software-architect", tools: [], schema: ${json(schema(architecture))}, label: "架构", phase: "Plan" }))`,
+      `plans.push(await agent("根据已批准立项定义独立验收计划，覆盖安装、自动化测试、启动冒烟和关键用户路径。目标：" + goal + "\\n立项：" + JSON.stringify(approved), { companyAgentID: "qa-engineer", tools: [], schema: ${json(schema(qaPlan))}, label: "QA 计划", phase: "Plan" }))`,
       `if (plans.some((plan) => !plan)) throw new Error("planning specialist failed")`,
-      `const brief = await agent("作为项目负责人，综合 PRD、架构和 QA 计划，给出开发顺序和不可妥协的 Definition of Done。\\n" + JSON.stringify(plans), { companyAgentID: "project-lead", schema: ${json(schema(developmentBrief))}, label: "开发计划", phase: "Synthesis" })`,
+      `const brief = await agent("作为项目负责人，综合 PRD、架构和 QA 计划，给出开发顺序和不可妥协的 Definition of Done。\\n" + JSON.stringify(plans), { companyAgentID: "project-lead", tools: [], schema: ${json(schema(developmentBrief))}, label: "开发计划", phase: "Synthesis" })`,
       `if (!brief) throw new Error("development brief failed")`,
       `return { prd: plans[0], architecture: plans[1], qa: plans[2], development_brief: brief }`,
     ].join("\n"),
@@ -247,12 +256,13 @@ function planningScript(goal: string, proposalArtifact: unknown) {
 
 function developmentScript(goal: string, context: unknown) {
   const qaSchema = json(schema(verification))
+  const reviewSchema = json(schema(developmentResult.shape.board_review))
   return workflow(
     "company-project-development",
     [
       `const goal = ${json(goal)}`,
       `const context = ${json(context)}`,
-      `phase("实现可试玩 MVP")`,
+      `phase("实现可验证 MVP")`,
       `const implementation = await agent("在当前独立 Git 仓库中完成 MVP。你拥有开发阶段自主权。严格依据以下上下文实现，但可为完成目标修正细节。必须创建 README、依赖清单、源代码和自动化测试；亲自安装依赖、运行测试、启动冒烟。禁止修改仓库外文件、付费、注册账号、公开部署或发布。\\n目标：" + goal + "\\n上下文：" + JSON.stringify(context), { companyAgentID: "mvp-developer", role: "implementation-engineer", capabilityPacks: ["software-implementation@1"], requiredRuntimeCapabilities: ["toolCalls", "workspaceWrite"], permissionMode: "workspace_write", label: "实现 MVP", phase: "Develop", timeoutMs: 7200000 })`,
       `if (!implementation) throw new Error("implementation agent failed")`,
       `let attempts = 0`,
@@ -268,7 +278,12 @@ function developmentScript(goal: string, context: unknown) {
       `  if (!repair) throw new Error("repair agent failed")`,
       `}`,
       `if (!verification) throw new Error("verification agent failed")`,
-      `return { implementation, attempts, verification }`,
+      `if (!verification.passed) throw new Error("independent QA rejected the delivery")`,
+      `phase("董事会交付评审")`,
+      `const board_review = await agent("你是董事会最终评审人。根据目标、已批准方案、独立 QA 证据和当前仓库做交付评审。必须核对证据，不得因开发者自述而批准；只有达到 Definition of Done 才 approved=true。\\n目标：" + goal + "\\n上下文：" + JSON.stringify(context) + "\\nQA：" + JSON.stringify(verification), { companyAgentID: "board-ceo", role: "board-delivery-reviewer", capabilityPacks: ["verification-testing@1"], requiredRuntimeCapabilities: ["toolCalls", "structuredOutput"], permissionMode: "read_only", schema: ${reviewSchema}, label: "董事会终审", phase: "Board Review", timeoutMs: 1800000 })`,
+      `if (!board_review) throw new Error("board review failed")`,
+      `if (!board_review.approved) throw new Error("board review rejected the delivery: " + board_review.concerns.join("; "))`,
+      `return { implementation, attempts, verification, board_review }`,
     ].join("\n"),
   )
 }
@@ -281,11 +296,17 @@ export interface Interface {
     provider_id?: string
     model_id?: string
   }) => Effect.Effect<{ project: Project; run_id: string }>
+  readonly retry: (input: {
+    project_id: string
+    provider_id?: string
+    model_id?: string
+  }) => Effect.Effect<{ project: Project; run_id: string }>
   readonly resolveGate: (input: {
     gate_id: string
     decision: "approve" | "reject"
     note?: string
   }) => Effect.Effect<{ gate: ApprovalGate; run_id?: string }>
+  readonly cancel: (input: { project_id: string; reason?: string }) => Effect.Effect<Project>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyProjectExecution") {}
@@ -370,8 +391,11 @@ export const layer = Layer.effect(
               return Effect.fail(new Error(outcome.error))
             }),
             Effect.catchCause((cause) => {
-              if (attempt >= 3) return block(input.project.id, String(cause))
               return Effect.gen(function* () {
+                yield* Effect.logWarning(
+                  `Company project stage failed project=${input.project.id} run=${run_id} attempt=${attempt}: ${String(cause)}`,
+                )
+                if (attempt >= 3) return yield* block(input.project.id, String(cause))
                 yield* Effect.sleep(`${attempt} seconds`)
                 const next = yield* startRun()
                 yield* projects.setActiveRun({ id: input.project.id, run_id: next.runID })
@@ -397,7 +421,7 @@ export const layer = Layer.effect(
         project_id: project.id,
         phase: "development",
         summary: "将已批准立项转化为 PRD、架构、验收计划和开发顺序",
-        acceptance_criteria: ["PRD 可验收", "架构可执行", "QA 覆盖安装、测试、启动和试玩"],
+        acceptance_criteria: ["PRD 可验收", "架构可执行", "QA 覆盖安装、测试、启动和关键用户路径"],
       })
       const items = yield* Effect.all([
         projects.createWorkItem({
@@ -422,10 +446,10 @@ export const layer = Layer.effect(
           project_id: project.id,
           plan_id: plan.id,
           title: "QA 计划",
-          description: "定义自动化、冒烟与试玩验收",
+          description: "定义自动化、冒烟与关键用户路径验收",
           kind: "qa_plan",
           owner_agent_id: "qa-engineer",
-          acceptance_criteria: ["包含真实命令", "包含完整试玩路径"],
+          acceptance_criteria: ["包含真实命令", "包含完整用户路径"],
         }),
       ])
       yield* Effect.forEach(items, (item) => projects.startWorkItem(item.id), { discard: true })
@@ -488,7 +512,10 @@ export const layer = Layer.effect(
       })
     })
 
-    const startDevelopment = Effect.fn("CompanyProjectExecution.startDevelopment")(function* (project: Project) {
+    const startDevelopment = Effect.fn("CompanyProjectExecution.startDevelopment")(function* (
+      project: Project,
+      resume = false,
+    ) {
       yield* ensureTeam(DEVELOPMENT_TEAM)
       const artifacts = yield* projects.listArtifacts(project.id)
       const context = Object.fromEntries(
@@ -503,27 +530,41 @@ export const layer = Layer.effect(
       const architecturePlan = architecture.parse(context.architecture)
       const plan = (yield* projects.listPlans(project.id)).at(-1)
       if (!plan) throw new Error("Development plan is missing")
-      const coding = yield* projects.createWorkItem({
-        project_id: project.id,
-        plan_id: plan.id,
-        title: "实现可试玩 MVP",
-        description: "在独立仓库实现、测试、文档化并提交 MVP",
-        kind: "implementation",
-        owner_agent_id: "mvp-developer",
-        acceptance_criteria: ["可安装", "测试通过", "可启动", "可试玩", "README 完整"],
-      })
-      const qa = yield* projects.createWorkItem({
-        project_id: project.id,
-        plan_id: plan.id,
-        title: "独立交付验收",
-        description: "运行自动化、冒烟和实际试玩",
-        kind: "verification",
-        owner_agent_id: "qa-engineer",
-        acceptance_criteria: ["命令证据完整", "完整试玩路径通过"],
-        depends_on: [coding.id],
-      })
-      const worktree = yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: coding.id })
-      yield* projects.startWorktreeRun({ id: worktree.id })
+      const existingItems = resume ? yield* projects.listWorkItems(project.id) : []
+      const coding = resume
+        ? existingItems.find((item) => item.kind === "implementation")
+        : yield* projects.createWorkItem({
+            project_id: project.id,
+            plan_id: plan.id,
+            title: "实现可验证 MVP",
+            description: "在独立仓库实现、测试、文档化并提交 MVP",
+            kind: "implementation",
+            owner_agent_id: "mvp-developer",
+            acceptance_criteria: ["可安装", "测试通过", "可启动", "关键用户路径可验证", "README 完整"],
+          })
+      if (!coding) throw new Error("Blocked implementation work item is missing")
+      const qa = resume
+        ? existingItems.find((item) => item.kind === "verification")
+        : yield* projects.createWorkItem({
+            project_id: project.id,
+            plan_id: plan.id,
+            title: "独立交付验收",
+            description: "运行自动化、冒烟和关键用户路径验证",
+            kind: "verification",
+            owner_agent_id: "qa-engineer",
+            acceptance_criteria: ["命令证据完整", "完整用户路径通过"],
+            depends_on: [coding.id],
+          })
+      if (!qa) throw new Error("Blocked verification work item is missing")
+      const worktree = resume
+        ? (yield* projects.listWorktreeRuns(project.id)).find((item) => item.work_item_id === coding.id)
+        : yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: coding.id })
+      if (!worktree) throw new Error("Blocked implementation worktree is missing")
+      if (!resume) yield* projects.startWorktreeRun({ id: worktree.id })
+      if (resume) {
+        yield* projects.retryWorkItem(coding.id)
+        if (qa.status === "blocked" || qa.status === "failed") yield* projects.retryWorkItem(qa.id)
+      }
       yield* projects.startWorkItem(coding.id)
       return yield* launch({
         project,
@@ -545,7 +586,7 @@ export const layer = Layer.effect(
               project_id: project.id,
               work_item_id: coding.id,
               kind: "repository",
-              title: "可试玩 MVP 代码仓库",
+              title: "可验证 MVP 代码仓库",
               path: "repo",
               evidence: {
                 implementation: result.implementation,
@@ -568,13 +609,22 @@ export const layer = Layer.effect(
               created_by_agent_id: "qa-engineer",
             })
             yield* projects.completeWorkItem(qa.id)
-            yield* projects.transition({ id: project.id, status: "verifying", actor_id: "qa-engineer" })
+            yield* projects.addArtifact({
+              project_id: project.id,
+              kind: "board_review",
+              title: "董事会交付评审",
+              path: "artifacts/verification/board-review.json",
+              content: JSON.stringify(result.board_review, null, 2) + "\n",
+              evidence: { checked: result.board_review.evidence_checked },
+              created_by_agent_id: "board-ceo",
+            })
+            yield* projects.transition({ id: project.id, status: "verifying", actor_id: "board-ceo" })
             yield* projects.requestMergeApproval({
               id: worktree.id,
-              title: "批准合并已验证交付",
-              summary: `分支 ${worktree.branch} 已通过独立 QA 与宿主验证。批准后会合并到 main，并重新执行相同验证命令。`,
-              requested_by_agent_id: "project-lead",
-              review: { agent: result.verification, host: hostVerification.verification },
+              title: "董事会终审通过，批准合并交付",
+              summary: `${result.board_review.summary}\n\n分支 ${worktree.branch} 已通过独立 QA、宿主验证与董事会交付评审。批准后会合并到 main，并重新执行相同验证命令。`,
+              requested_by_agent_id: "board-ceo",
+              review: { board: result.board_review, agent: result.verification, host: hostVerification.verification },
             })
           }),
       })
@@ -614,8 +664,8 @@ export const layer = Layer.effect(
       const plan = yield* projects.createPlan({
         project_id: project.id,
         phase: "research",
-        summary: "并行验证市场机会、核心玩法和技术可行性，再由负责人独立做立项判断",
-        acceptance_criteria: ["结论有来源", "负责人明确 go/no-go", "自行选择交付形态", "定义极简可试玩范围"],
+        summary: "分别验证市场机会、核心价值和技术可行性，再由负责人独立做立项判断",
+        acceptance_criteria: ["结论有来源", "负责人明确 go/no-go", "自行选择交付形态", "定义极简可验证范围"],
       })
       const research = yield* Effect.all([
         projects.createWorkItem({
@@ -630,11 +680,11 @@ export const layer = Layer.effect(
         projects.createWorkItem({
           project_id: project.id,
           plan_id: plan.id,
-          title: "用户与玩法研究",
-          description: "定义用户、核心乐趣和最小循环",
+          title: "用户与产品机会研究",
+          description: "定义用户、核心价值和最小使用循环",
           kind: "research",
-          owner_agent_id: "game-product-strategist",
-          acceptance_criteria: ["核心循环可试玩", "明确非目标"],
+          owner_agent_id: "product-strategist",
+          acceptance_criteria: ["核心循环可验证", "明确非目标"],
         }),
         projects.createWorkItem({
           project_id: project.id,
@@ -676,10 +726,10 @@ export const layer = Layer.effect(
               [
                 research[1],
                 "product_research",
-                "用户与玩法研究",
+                "用户与产品机会研究",
                 "artifacts/research/product.json",
                 result.product,
-                "game-product-strategist",
+                "product-strategist",
               ],
               [
                 research[2],
@@ -733,6 +783,46 @@ export const layer = Layer.effect(
       return { project: current, run_id }
     })
 
+    const cancel = Effect.fn("CompanyProjectExecution.cancel")(function* (input: {
+      project_id: string
+      reason?: string
+    }) {
+      const project = yield* projects.get(input.project_id)
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
+      const reason = input.reason ?? "用户已取消当前执行，可更换模型后重试"
+      yield* block(project.id, reason)
+      if (project.active_run_id) yield* runtime.cancel({ runID: project.active_run_id })
+      yield* projects.setActiveRun({ id: project.id })
+      return (yield* projects.get(project.id))!
+    })
+
+    const retry = Effect.fn("CompanyProjectExecution.retry")(function* (input: {
+      project_id: string
+      provider_id?: string
+      model_id?: string
+    }) {
+      const project = yield* projects.get(input.project_id)
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
+      if (project.status !== "blocked") throw new Error(`Company project ${project.id} cannot retry from ${project.status}`)
+      const gates = yield* projects.listGates(project.id)
+      if (!gates.some((gate) => gate.kind === "development_approval" && gate.status === "approved")) {
+        throw new Error("Only a blocked development stage can resume in place")
+      }
+      const updated = yield* projects.setModel({
+        id: project.id,
+        provider_id: input.provider_id ?? project.provider_id,
+        model_id: input.model_id ?? project.model_id,
+      })
+      const developing = yield* projects.transition({
+        id: updated.id,
+        status: "developing",
+        actor_id: "user",
+        reason: "保留现有仓库与证据，更换模型继续开发",
+      })
+      const run_id = yield* startDevelopment(developing, true)
+      return { project: (yield* projects.get(project.id))!, run_id }
+    })
+
     const resolveGate = Effect.fn("CompanyProjectExecution.resolveGate")(function* (input: {
       gate_id: string
       decision: "approve" | "reject"
@@ -767,7 +857,7 @@ export const layer = Layer.effect(
       return { gate, run_id }
     })
 
-    return Service.of({ start, resolveGate })
+    return Service.of({ start, retry, resolveGate, cancel })
   }),
 )
 

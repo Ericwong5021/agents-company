@@ -6835,6 +6835,143 @@
         ]
       }
     },
+    "/company-project/{projectID}/cancel": {
+      "post": {
+        "operationId": "companyProject.cancel",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "summary": "Cancel a running company project",
+        "description": "Cancels the active workflow and marks running work items and the project as blocked.",
+        "responses": {
+          "200": {
+            "description": "Cancelled project"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.companyProject.cancel({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company-project/{projectID}/retry": {
+      "post": {
+        "operationId": "companyProject.retry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "summary": "Resume a blocked company project",
+        "description": "Reuses the approved plan, repository and worktree while allowing a model change.",
+        "responses": {
+          "200": {
+            "description": "Project and resumed workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {},
+                    "run_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "run_id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "model_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.companyProject.retry({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company-project/{projectID}/gates/{gateID}/resolve": {
       "post": {
         "operationId": "companyProject.resolveGate",

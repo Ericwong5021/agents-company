@@ -6473,6 +6473,54 @@ export type CompanyProjectGetResponses = {
   200: unknown
 }
 
+export type CompanyProjectCancelData = {
+  body?: {
+    reason?: string
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/cancel"
+}
+
+export type CompanyProjectCancelResponses = {
+  /**
+   * Cancelled project
+   */
+  200: unknown
+}
+
+export type CompanyProjectRetryData = {
+  body?: {
+    provider_id?: string
+    model_id?: string
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/retry"
+}
+
+export type CompanyProjectRetryResponses = {
+  /**
+   * Project and resumed workflow run
+   */
+  200: {
+    project: unknown
+    run_id: string
+  }
+}
+
+export type CompanyProjectRetryResponse = CompanyProjectRetryResponses[keyof CompanyProjectRetryResponses]
+
 export type CompanyProjectResolveGateData = {
   body?: {
     decision: "approve" | "reject"

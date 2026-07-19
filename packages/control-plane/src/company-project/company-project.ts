@@ -142,6 +142,7 @@ export interface Interface {
     reason?: string
   }) => Effect.Effect<Project>
   readonly setActiveRun: (input: { id: string; run_id?: string }) => Effect.Effect<Project>
+  readonly setModel: (input: { id: string; provider_id?: string; model_id?: string }) => Effect.Effect<Project>
   readonly createPlan: (input: {
     project_id: string
     phase: PlanPhase
@@ -300,6 +301,32 @@ export const layer = Layer.effect(
       return (yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyProjectTable).orderBy(desc(CompanyProjectTable.updated_at)).all()),
       )).map(projectFromRow)
+    })
+
+    const setModel = Effect.fn("CompanyProject.setModel")(function* (input: {
+      id: string
+      provider_id?: string
+      model_id?: string
+    }) {
+      if (!(yield* get(input.id))) throw new Error(`Company project not found: ${input.id}`)
+      yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyProjectTable)
+            .set({
+              provider_id: input.provider_id ?? null,
+              model_id: input.model_id ?? null,
+              updated_at: Date.now(),
+            })
+            .where(eq(CompanyProjectTable.id, input.id))
+            .run(),
+        ),
+      )
+      yield* event(input.id, "project.model_changed", {
+        provider_id: input.provider_id,
+        model_id: input.model_id,
+      })
+      return (yield* get(input.id))!
     })
 
     const getCharter = Effect.fn("CompanyProject.getCharter")(function* (project_id: string) {
@@ -610,6 +637,7 @@ export const layer = Layer.effect(
             .set({
               status,
               attempt,
+              max_attempts: status === "pending" ? Math.max(row.max_attempts, row.attempt + 1) : row.max_attempts,
               error: error ?? null,
               started_at: status === "running" ? now : row.started_at,
               completed_at: status === "completed" ? now : null,
@@ -1187,6 +1215,7 @@ export const layer = Layer.effect(
       getCharter,
       transition,
       setActiveRun,
+      setModel,
       createPlan,
       listPlans,
       createWorkItem,

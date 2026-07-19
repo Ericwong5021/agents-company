@@ -65,9 +65,11 @@ import type {
   CompanyDeferSetupGoalErrors,
   CompanyDeferSetupGoalResponses,
   CompanyId,
+  CompanyProjectCancelResponses,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
   CompanyProjectResolveGateResponses,
+  CompanyProjectRetryResponses,
   CompanyProjectStartResponses,
   CompanyProviderAuthErrors,
   CompanyProviderAuthResponses,
@@ -2764,6 +2766,86 @@ export class CompanyProject extends HeyApiClient {
       url: "/company-project/{projectID}",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Cancel a running company project
+   *
+   * Cancels the active workflow and marks running work items and the project as blocked.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyProjectCancelResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/cancel",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Resume a blocked company project
+   *
+   * Reuses the approved plan, repository and worktree while allowing a model change.
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      provider_id?: string
+      model_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "provider_id" },
+            { in: "body", key: "model_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyProjectRetryResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/retry",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

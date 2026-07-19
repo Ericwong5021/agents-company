@@ -51,12 +51,41 @@ const queueResearch = (llm: {
 }) =>
   Effect.gen(function* () {
     yield* llm.pushMatch(match("市场与竞品研究"), reply().tool("StructuredOutput", report("market")))
-    yield* llm.pushMatch(match("用户与玩法研究"), reply().tool("StructuredOutput", report("product")))
+    yield* llm.pushMatch(match("用户与产品机会研究"), reply().tool("StructuredOutput", report("product")))
     yield* llm.pushMatch(match("技术可行性研究"), reply().tool("StructuredOutput", report("technical")))
     yield* llm.pushMatch(match("根据以下三份报告"), reply().tool("StructuredOutput", proposal))
   })
 
 describe("CompanyProject autonomous execution", () => {
+  it.live(
+    "cancels a running project and preserves the blocked attempt for retry",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* () {
+          const execution = yield* CompanyProjectExecution.Service
+          const projects = yield* CompanyProject.Service
+          const started = yield* execution.start({
+            goal: "验证取消项目执行",
+            provider_id: "test",
+            model_id: "test-model",
+          })
+
+          const cancelled = yield* execution.cancel({ project_id: started.project.id, reason: "切换模型" })
+
+          expect(cancelled.status).toBe("blocked")
+          expect(cancelled.active_run_id).toBeUndefined()
+          expect((yield* projects.listWorkItems(cancelled.id)).map((item) => item.status)).toEqual([
+            "blocked",
+            "blocked",
+            "blocked",
+            "pending",
+          ])
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
   it.live(
     "runs parallel research, persists artifacts, and stops at the product approval gate",
     () =>
@@ -220,6 +249,16 @@ describe("CompanyProject autonomous execution", () => {
               ],
               failures: [],
               playtest_notes: ["winning path completed"],
+            }),
+          )
+          yield* llm.textMatch(
+            match("你是董事会最终评审人"),
+            JSON.stringify({
+              approved: true,
+              summary: "交付满足已批准范围和 Definition of Done",
+              evidence_checked: ["独立 QA 命令", "宿主测试", "README"],
+              strengths: ["范围小", "测试可复现"],
+              concerns: [],
             }),
           )
 
