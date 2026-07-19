@@ -23,51 +23,19 @@ import {
   Suspense,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import { CommandProvider } from "@/context/command"
 import { AppChrome } from "@/components/app-chrome"
 import { ConnectionError } from "@/components/connection-error"
-import { CommentsProvider } from "@/context/comments"
-import { FileProvider } from "@/context/file"
 import { GlobalSDKProvider } from "@/context/global-sdk"
 import { GlobalSyncProvider } from "@/context/global-sync"
-import { HighlightsProvider } from "@/context/highlights"
 import { LanguageProvider, type Locale, useLanguage } from "@/context/language"
-import { LayoutProvider } from "@/context/layout"
-import { ModelsProvider } from "@/context/models"
-import { NotificationProvider } from "@/context/notification"
-import { PermissionProvider } from "@/context/permission"
-import { PromptProvider } from "@/context/prompt"
 import { ServerConnection, ServerProvider, useServer } from "@/context/server"
 import { SettingsProvider } from "@/context/settings"
-import { TerminalProvider } from "@/context/terminal"
-import DirectoryLayout from "@/pages/directory-layout"
-import Layout from "@/pages/layout"
 import { ErrorPage } from "./pages/error"
 import { useCheckServerHealth } from "./utils/server-health"
 
 const HomeRoute = lazy(() => import("@/pages/home"))
-const loadSession = () => import("@/pages/session")
-const Session = lazy(loadSession)
 
-if (typeof location === "object" && /\/session(?:\/|$)/.test(location.pathname)) {
-  void loadSession()
-}
-
-const SessionRoute = () => (
-  <SessionProviders>
-    <Session />
-  </SessionProviders>
-)
-
-const SessionIndexRoute = () => <Navigate href="session" />
-
-function DirectoryRoute(props: ParentProps) {
-  return (
-    <Layout>
-      <DirectoryLayout>{props.children}</DirectoryLayout>
-    </Layout>
-  )
-}
+const LegacyRoute = () => <Navigate href="/" />
 
 function UiI18nBridge(props: ParentProps) {
   const language = useLanguage()
@@ -90,33 +58,7 @@ function QueryProvider(props: ParentProps) {
 }
 
 function AppShellProviders(props: ParentProps) {
-  return (
-    <SettingsProvider>
-      <PermissionProvider>
-        <LayoutProvider>
-          <NotificationProvider>
-            <ModelsProvider>
-              <CommandProvider>
-                <HighlightsProvider>{props.children}</HighlightsProvider>
-              </CommandProvider>
-            </ModelsProvider>
-          </NotificationProvider>
-        </LayoutProvider>
-      </PermissionProvider>
-    </SettingsProvider>
-  )
-}
-
-function SessionProviders(props: ParentProps) {
-  return (
-    <TerminalProvider>
-      <FileProvider>
-        <PromptProvider>
-          <CommentsProvider>{props.children}</CommentsProvider>
-        </PromptProvider>
-      </FileProvider>
-    </TerminalProvider>
-  )
+  return <SettingsProvider>{props.children}</SettingsProvider>
 }
 
 function RouterRoot(props: ParentProps<{ appChildren?: JSX.Element }>) {
@@ -255,10 +197,7 @@ export function AppInterface(props: {
                   root={(routerProps) => <RouterRoot appChildren={props.children}>{routerProps.children}</RouterRoot>}
                 >
                   <Route path="/" component={HomeRoute} />
-                  <Route path="/:dir" component={DirectoryRoute}>
-                    <Route path="/" component={SessionIndexRoute} />
-                    <Route path="/session/:id?" component={SessionRoute} />
-                  </Route>
+                  <Route path="*all" component={LegacyRoute} />
                 </Dynamic>
               </GlobalSyncProvider>
             </GlobalSDKProvider>

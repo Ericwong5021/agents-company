@@ -12,7 +12,6 @@ import {
   type Platform,
   PlatformProvider,
   ServerConnection,
-  useCommand,
 } from "@agents-company/app"
 import { useTheme } from "@agents-company/ui/theme"
 import type { AsyncStorage } from "@solid-primitives/storage"
@@ -197,8 +196,6 @@ const createPlatform = (): Platform => {
 
 export function mountApp(root: HTMLElement) {
   void initI18n()
-  let menuTrigger: ((id: string) => void) | undefined
-  window.api.onMenuCommand((id) => menuTrigger?.(id))
   listenForDeepLinks()
   window.api.onNotificationClick((href) => handleNotificationClick(href))
 
@@ -241,8 +238,6 @@ export function mountApp(root: HTMLElement) {
     }
 
     function Inner() {
-      const command = useCommand()
-      menuTrigger = (id) => command.trigger(id)
       const theme = useTheme()
       createEffect(() => {
         theme.themeId()

@@ -61,7 +61,6 @@ const names = [
   "magnifying-glass",
   "plus-small",
   "plus",
-  "new-session",
   "pencil-line",
   "mcp",
   "glasses",

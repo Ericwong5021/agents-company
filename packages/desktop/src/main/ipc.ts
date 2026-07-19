@@ -212,10 +212,6 @@ export function registerIpcHandlers(deps: Deps) {
   })
 }
 
-export function sendMenuCommand(win: BrowserWindow, id: string) {
-  win.webContents.send("menu-command", id)
-}
-
 export function sendDeepLinks(win: BrowserWindow, urls: string[]) {
   win.webContents.send("deep-link", urls)
 }

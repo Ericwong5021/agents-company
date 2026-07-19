@@ -42,7 +42,6 @@ export type ElectronAPI = {
   storeLength: (name: string) => Promise<number>
 
   getWindowCount: () => Promise<number>
-  onMenuCommand: (cb: (id: string) => void) => () => void
   onDeepLink: (cb: (urls: string[]) => void) => () => void
 
   openDirectoryPicker: (opts?: {

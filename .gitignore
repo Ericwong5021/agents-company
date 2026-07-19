@@ -48,8 +48,6 @@ tmp
 logs/
 /result
 refs
-/opencode.json
-opencode-dev
 UPCOMING_CHANGELOG.md
 .dev-home/
 
@@ -60,7 +58,6 @@ experiment/last-outcome.json
 
 # Project-specific generated files
 /mimoapi/
-/packages/opencode/src/ext
 
 # AgentCompany run artifacts and test scenarios
 .artifacts/

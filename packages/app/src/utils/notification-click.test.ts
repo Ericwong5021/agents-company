@@ -9,8 +9,8 @@ describe("notification click", () => {
   test("navigates via registered navigate function", () => {
     const calls: string[] = []
     setNavigate((href) => calls.push(href))
-    handleNotificationClick("/abc/session/123")
-    expect(calls).toEqual(["/abc/session/123"])
+    handleNotificationClick("/company")
+    expect(calls).toEqual(["/company"])
   })
 
   test("does not navigate when href is missing", () => {
@@ -21,7 +21,7 @@ describe("notification click", () => {
   })
 
   test("falls back to location.assign without registered navigate", () => {
-    handleNotificationClick("/abc/session/123")
+    handleNotificationClick("/company")
     // falls back to window.location.assign — no error thrown
   })
 })

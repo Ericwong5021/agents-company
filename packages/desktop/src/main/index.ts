@@ -14,7 +14,7 @@ import { PRODUCT_BRAND, COMPANY_HOME_KEY } from "../shared/brand"
 import { checkAppExists, resolveAppPath, wslPath } from "./apps"
 import { launcherState, loadCompanyRuntime, normalizeCompanyHome, type LauncherState } from "./company-home"
 import { CHANNEL, UPDATER_ENABLED } from "./constants"
-import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
+import { registerIpcHandlers, sendDeepLinks } from "./ipc"
 import { initLogging } from "./logging"
 import { parseMarkdown } from "./markdown"
 import { createMenu } from "./menu"
@@ -257,7 +257,6 @@ async function initialize(companyHome: string) {
 function wireMenu() {
   if (!mainWindow) return
   createMenu({
-    trigger: (id) => mainWindow && sendMenuCommand(mainWindow, id),
     checkForUpdates: () => {
       void checkForUpdates(true)
     },

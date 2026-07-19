@@ -32,11 +32,6 @@ const api: ElectronAPI = {
   storeLength: (name) => ipcRenderer.invoke("store-length", name),
 
   getWindowCount: () => ipcRenderer.invoke("get-window-count"),
-  onMenuCommand: (cb) => {
-    const handler = (_: unknown, id: string) => cb(id)
-    ipcRenderer.on("menu-command", handler)
-    return () => ipcRenderer.removeListener("menu-command", handler)
-  },
   onDeepLink: (cb) => {
     const handler = (_: unknown, urls: string[]) => cb(urls)
     ipcRenderer.on("deep-link", handler)
