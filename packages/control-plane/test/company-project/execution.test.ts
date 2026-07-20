@@ -80,6 +80,77 @@ describe("CompanyProject autonomous execution", () => {
             "blocked",
             "pending",
           ])
+          yield* Effect.sleep("300 millis")
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
+  it.live(
+    "uses the configured global default model when start omits an override",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* () {
+          const execution = yield* CompanyProjectExecution.Service
+          const started = yield* execution.start({ goal: "验证全局默认模型" })
+
+          expect(started.project.provider_id).toBe("test")
+          expect(started.project.model_id).toBe("test-model")
+          yield* execution.cancel({ project_id: started.project.id })
+          yield* Effect.sleep("300 millis")
+        }),
+        { git: true, config: (url) => ({ ...providerCfg(url), model: "test/test-model" }) },
+      ),
+    30000,
+  )
+
+  it.live(
+    "resumes blocked research in place without duplicating its plan or work items",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* ({ llm }) {
+          const execution = yield* CompanyProjectExecution.Service
+          const projects = yield* CompanyProject.Service
+          const started = yield* execution.start({
+            goal: "验证研究阶段原地恢复",
+            provider_id: "test",
+            model_id: "test-model",
+          })
+          yield* execution.cancel({ project_id: started.project.id, reason: "模拟模型不可用" })
+          yield* queueResearch(llm)
+
+          const retried = yield* execution.retry({
+            project_id: started.project.id,
+            provider_id: "test",
+            model_id: "test-model",
+          })
+          expect(retried.project.id).toBe(started.project.id)
+          expect(retried.project.status).toBe("researching")
+
+          const completed = yield* Effect.gen(function* () {
+            for (let i = 0; i < 300; i++) {
+              const current = yield* projects.get(started.project.id)
+              if (current?.status === "awaiting_project_approval") return current
+              yield* Effect.sleep("50 millis")
+            }
+            const current = yield* projects.get(started.project.id)
+            const items = yield* projects.listWorkItems(started.project.id)
+            throw new Error(
+              `retried research stage did not reach approval gate: status=${current?.status}, items=${JSON.stringify(items.map((item) => ({ title: item.title, status: item.status, error: item.error })))}, pending=${yield* llm.pending}, misses=${(yield* llm.misses).length}`,
+            )
+          })
+          expect(completed.id).toBe(started.project.id)
+          expect(yield* projects.listPlans(completed.id)).toHaveLength(1)
+          expect(yield* projects.listWorkItems(completed.id)).toHaveLength(4)
+          expect((yield* projects.listWorkItems(completed.id)).map((item) => item.status)).toEqual([
+            "completed",
+            "completed",
+            "completed",
+            "completed",
+          ])
+          // Workflow wait resolves before terminal bus/inbox tails finish.
+          yield* Effect.sleep("300 millis")
         }),
         { git: true, config: providerCfg },
       ),
@@ -102,7 +173,7 @@ describe("CompanyProject autonomous execution", () => {
           })
 
           const completed = yield* Effect.gen(function* () {
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 200; i++) {
               const current = yield* projects.get(started.project.id)
               if (current?.status === "awaiting_project_approval") return current
               yield* Effect.sleep("50 millis")
@@ -125,6 +196,50 @@ describe("CompanyProject autonomous execution", () => {
           const gates = yield* projects.listGates(completed.id, "pending")
           expect(gates).toHaveLength(1)
           expect(gates[0].kind).toBe("project_approval")
+          expect((yield* llm.inputs).every((input) => input.tool_choice === "auto")).toBe(true)
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
+  it.live(
+    "persists the underlying agent error when research exhausts its retries",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* ({ llm }) {
+          const invalidKey = () => httpError(401, { error: { message: "Invalid API Key" } })
+          yield* llm.pushMatch(match("市场与竞品研究"), invalidKey(), invalidKey(), invalidKey())
+          yield* llm.pushMatch(match("用户与产品机会研究"), invalidKey(), invalidKey(), invalidKey())
+          yield* llm.pushMatch(match("技术可行性研究"), invalidKey(), invalidKey(), invalidKey())
+
+          const execution = yield* CompanyProjectExecution.Service
+          const projects = yield* CompanyProject.Service
+          const started = yield* execution.start({
+            goal: "验证认证错误可见",
+            provider_id: "test",
+            model_id: "test-model",
+          })
+          const blocked = yield* Effect.gen(function* () {
+            for (let i = 0; i < 300; i++) {
+              const current = yield* projects.get(started.project.id)
+              if (current?.status === "blocked") return current
+              yield* Effect.sleep("50 millis")
+            }
+            throw new Error("research stage did not block after authentication failures")
+          })
+          expect(blocked.status).toBe("blocked")
+          expect((yield* projects.listWorkItems(blocked.id)).filter((item) => item.kind === "research"))
+            .toHaveLength(3)
+          expect(
+            (yield* projects.listWorkItems(blocked.id))
+              .filter((item) => item.kind === "research")
+              .map((item) => item.error),
+          ).toEqual([
+            expect.stringContaining("Invalid API Key"),
+            expect.stringContaining("Invalid API Key"),
+            expect.stringContaining("Invalid API Key"),
+          ])
         }),
         { git: true, config: providerCfg },
       ),

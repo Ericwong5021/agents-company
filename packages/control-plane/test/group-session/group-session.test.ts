@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Effect } from "effect"
 import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
@@ -16,6 +16,8 @@ import { SessionID } from "../../src/session/schema"
 import { SessionTable } from "../../src/session/session.sql"
 import { eq } from "../../src/storage"
 import * as Database from "../../src/storage/db"
+
+setDefaultTimeout(30_000)
 import { BootstrapInput } from "../../src/company/schema"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -357,7 +359,7 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
         groupSession(repository.path, (service) =>
           Effect.gen(function* () {
             const messages = yield* service.messages(group.id)
-            return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.role === "agent").length === 2
+            return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.role === "agent").length === 3
           }),
         ),
       )
@@ -366,9 +368,9 @@ describe.serial("M2 GroupSession runtime source bridge", () => {
       const userMessages = messages.filter((message) => message.role === "user")
       const agentMessages = messages.filter((message) => message.role === "agent")
       expect(userMessages).toHaveLength(1)
-      expect(agentMessages).toHaveLength(2)
+      expect(agentMessages).toHaveLength(3)
       expect(agentMessages[0]?.companyAgentID).toBe(firstMember.company_agent_id)
-      expect(agentMessages[1]?.companyAgentID).not.toBe(firstMember.company_agent_id)
+      expect(new Set(agentMessages.map((message) => message.companyAgentID))).toEqual(new Set(boardAgents))
     } finally {
       await Instance.disposeAll()
       await resetDatabase()

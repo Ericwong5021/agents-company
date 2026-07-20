@@ -2973,7 +2973,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   messages: [...modelMsgs, ...(isLastStep ? [{ role: "user" as const, content: MAX_STEPS }] : [])],
                   tools,
                   model,
-                  toolChoice: isLastStep ? "none" : format.type === "json_schema" ? "required" : undefined,
+                  // Some OpenAI-compatible gateways reject `required` even though
+                  // they support function tools. The structured-output system
+                  // prompt and retry gate still enforce delivery, so `auto` keeps
+                  // the contract while remaining portable across providers.
+                  toolChoice: isLastStep ? "none" : format.type === "json_schema" ? "auto" : undefined,
                   agentID: lastUser.agentID,
                 })
                 .pipe(
@@ -3127,7 +3131,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               messages: [...modelMsgs, ...(isLastStep ? [{ role: "user" as const, content: MAX_STEPS }] : [])],
               tools,
               model,
-              toolChoice: isLastStep ? ("none" as const) : format.type === "json_schema" ? ("required" as const) : undefined,
+              // Keep structured output portable across OpenAI-compatible
+              // gateways that support tools but reject `tool_choice: required`.
+              toolChoice: isLastStep ? ("none" as const) : format.type === "json_schema" ? ("auto" as const) : undefined,
               agentID: lastUser.agentID,
             }
 

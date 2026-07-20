@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import { Context, Effect, Layer, Scope } from "effect"
 import { CompanyAgent } from "@/company-agent"
 import type { CompanyAgentID } from "@/company-agent/schema"
+import { Provider } from "@/provider"
 import { Session } from "@/session"
 import { SessionID } from "@/session/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
@@ -316,6 +317,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const projects = yield* CompanyProject.Service
     const agents = yield* CompanyAgent.Service
+    const provider = yield* Provider.Service
     const sessions = yield* Session.Service
     const runtime = yield* WorkflowRuntime.Service
     const scope = yield* Scope.Scope
@@ -346,6 +348,19 @@ export const layer = Layer.effect(
         ? { providerID: ProviderID.make(project.provider_id), modelID: ModelID.make(project.model_id) }
         : undefined
 
+    const resolveModel = Effect.fn("CompanyProjectExecution.resolveModel")(function* (input: {
+      provider_id?: string
+      model_id?: string
+    }) {
+      if (Boolean(input.provider_id) !== Boolean(input.model_id)) {
+        throw new Error("provider_id and model_id must be provided together")
+      }
+      if (input.provider_id && input.model_id) {
+        return { providerID: ProviderID.make(input.provider_id), modelID: ModelID.make(input.model_id) }
+      }
+      return yield* provider.defaultModel()
+    })
+
     const block = (project_id: string, error: string) =>
       Effect.gen(function* () {
         const items = yield* projects.listWorkItems(project_id)
@@ -370,6 +385,7 @@ export const layer = Layer.effect(
     }) =>
       Effect.gen(function* () {
         if (!input.project.coordinator_session_id) throw new Error("Project has no coordinator session")
+        const runIDs = new Set<string>()
         const startRun = () =>
           runtime.start({
             script: input.script,
@@ -382,13 +398,34 @@ export const layer = Layer.effect(
             agentTimeoutMs: 60 * 60 * 1000,
             scriptDeadlineMs: 12 * 60 * 60 * 1000,
             notifyOnTerminal: false,
-          })
+          }).pipe(Effect.tap((started) => Effect.sync(() => runIDs.add(started.runID))))
         const watch: (run_id: string, attempt: number) => Effect.Effect<void> = (run_id, attempt) =>
           runtime.wait({ runID: run_id }).pipe(
             Effect.flatMap((outcome) => {
               if (outcome.status === "completed") return input.onSuccess(outcome.result).pipe(Effect.asVoid)
-              if (outcome.status === "cancelled") return block(input.project.id, "Workflow cancelled")
-              return Effect.fail(new Error(outcome.error))
+              if (outcome.status === "cancelled") {
+                return projects.get(input.project.id).pipe(
+                  Effect.flatMap((current) =>
+                    current?.active_run_id === run_id
+                      ? block(input.project.id, "Workflow cancelled")
+                      : Effect.void,
+                  ),
+                )
+              }
+              return runtime.transcript({ runID: run_id }).pipe(
+                Effect.flatMap((transcript) => {
+                  const details = [
+                    ...new Set(
+                      transcript
+                        .filter((entry) => entry.kind === "log" && entry.text.startsWith("workflow.agent_failed: "))
+                        .map((entry) => entry.text.slice("workflow.agent_failed: ".length)),
+                    ),
+                  ]
+                  return Effect.fail(
+                    new Error(details.length ? `${outcome.error}: ${details.join("; ")}` : outcome.error),
+                  )
+                }),
+              )
             }),
             Effect.catchCause((cause) => {
               return Effect.gen(function* () {
@@ -406,24 +443,193 @@ export const layer = Layer.effect(
         const started = yield* startRun()
         yield* projects.setActiveRun({ id: input.project.id, run_id: started.runID })
         yield* watch(started.runID, 1).pipe(
-          Effect.ensuring(projects.setActiveRun({ id: input.project.id }).pipe(Effect.ignoreCause)),
+          Effect.ensuring(
+            Effect.all([
+              projects.get(input.project.id).pipe(
+                Effect.flatMap((current) =>
+                  current?.active_run_id && runIDs.has(current.active_run_id)
+                    ? projects.setActiveRun({ id: input.project.id })
+                    : Effect.void,
+                ),
+                Effect.ignoreCause,
+              ),
+            ]).pipe(Effect.asVoid),
+          ),
           Effect.forkIn(scope),
         )
         return started.runID
       })
 
-    const startPlanning = Effect.fn("CompanyProjectExecution.startPlanning")(function* (project: Project) {
+    const startResearch = Effect.fn("CompanyProjectExecution.startResearch")(function* (
+      project: Project,
+      resume = false,
+    ) {
+      yield* ensureTeam(RESEARCH_TEAM)
+      const plan = resume
+        ? (yield* projects.listPlans(project.id)).find((item) => item.phase === "research")
+        : yield* projects.createPlan({
+            project_id: project.id,
+            phase: "research",
+            summary: "分别验证市场机会、核心价值和技术可行性，再由负责人独立做立项判断",
+            acceptance_criteria: ["结论有来源", "负责人明确 go/no-go", "自行选择交付形态", "定义极简可验证范围"],
+          })
+      if (!plan) throw new Error("Research plan is missing")
+      const existingItems = resume ? yield* projects.listWorkItems(project.id) : []
+      const research = resume
+        ? ["market-researcher", "product-strategist", "technical-researcher"].map((owner) =>
+            existingItems.find((item) => item.kind === "research" && item.owner_agent_id === owner),
+          )
+        : yield* Effect.all([
+            projects.createWorkItem({
+              project_id: project.id,
+              plan_id: plan.id,
+              title: "市场与竞品研究",
+              description: "验证需求、竞品、机会和风险",
+              kind: "research",
+              owner_agent_id: "market-researcher",
+              acceptance_criteria: ["包含来源 URL", "区分事实与推断"],
+            }),
+            projects.createWorkItem({
+              project_id: project.id,
+              plan_id: plan.id,
+              title: "用户与产品机会研究",
+              description: "定义用户、核心价值和最小使用循环",
+              kind: "research",
+              owner_agent_id: "product-strategist",
+              acceptance_criteria: ["核心循环可验证", "明确非目标"],
+            }),
+            projects.createWorkItem({
+              project_id: project.id,
+              plan_id: plan.id,
+              title: "技术可行性研究",
+              description: "比较交付形态并选择最简可靠路线",
+              kind: "research",
+              owner_agent_id: "technical-researcher",
+              acceptance_criteria: ["可安装、测试、启动", "明确技术风险"],
+            }),
+          ])
+      if (research.some((item) => !item)) throw new Error("Blocked research work items are missing")
+      const researchItems = research.filter((item) => !!item)
+      const synthesis = resume
+        ? existingItems.find((item) => item.kind === "synthesis")
+        : yield* projects.createWorkItem({
+            project_id: project.id,
+            plan_id: plan.id,
+            title: "产品立项建议",
+            description: "综合证据并做 go/no-go 决策",
+            kind: "synthesis",
+            owner_agent_id: "project-lead",
+            acceptance_criteria: ["明确建议", "MVP 范围", "成功指标"],
+            depends_on: researchItems.map((item) => item.id),
+          })
+      if (!synthesis) throw new Error("Blocked research synthesis work item is missing")
+      if (resume) {
+        yield* Effect.forEach(
+          researchItems.filter((item) => item.status === "blocked" || item.status === "failed"),
+          (item) => projects.retryWorkItem(item.id),
+          { discard: true },
+        )
+      }
+      yield* Effect.forEach(
+        researchItems.filter((item) => item.status !== "completed"),
+        (item) => projects.startWorkItem(item.id),
+        { discard: true },
+      )
+      return yield* launch({
+        project,
+        script: researchScript(project.goal),
+        onSuccess: (value) =>
+          Effect.gen(function* () {
+            const result = researchResult.parse(value)
+            const reports = [
+              [
+                researchItems[0],
+                "market_report",
+                "市场与竞品研究",
+                "artifacts/research/market.json",
+                result.market,
+                "market-researcher",
+              ],
+              [
+                researchItems[1],
+                "product_research",
+                "用户与产品机会研究",
+                "artifacts/research/product.json",
+                result.product,
+                "product-strategist",
+              ],
+              [
+                researchItems[2],
+                "technical_report",
+                "技术可行性研究",
+                "artifacts/research/technical.json",
+                result.technical,
+                "technical-researcher",
+              ],
+            ] as const
+            yield* Effect.forEach(
+              reports,
+              ([item, kind, title, artifactPath, content, author]) =>
+                Effect.gen(function* () {
+                  yield* projects.addArtifact({
+                    project_id: project.id,
+                    work_item_id: item.id,
+                    kind,
+                    title,
+                    path: artifactPath,
+                    content: JSON.stringify(content, null, 2) + "\n",
+                    evidence: {
+                      sources: content.findings.flatMap((finding) => (finding.source_url ? [finding.source_url] : [])),
+                    },
+                    created_by_agent_id: author,
+                  })
+                  yield* projects.completeWorkItem(item.id)
+                }),
+              { discard: true },
+            )
+            yield* projects.startWorkItem(synthesis.id)
+            yield* projects.addArtifact({
+              project_id: project.id,
+              work_item_id: synthesis.id,
+              kind: "project_proposal",
+              title: "产品立项建议",
+              path: "artifacts/product/proposal.json",
+              content: JSON.stringify(result.proposal, null, 2) + "\n",
+              created_by_agent_id: "project-lead",
+            })
+            yield* projects.completeWorkItem(synthesis.id)
+            yield* projects.requestGate({
+              project_id: project.id,
+              kind: "project_approval",
+              title: "批准产品立项",
+              summary: `${result.proposal.executive_summary}\n\n建议：${result.proposal.recommendation}\n交付形态：${result.proposal.delivery_surface}\nMVP：\n- ${result.proposal.mvp_scope.join("\n- ")}`,
+              requested_by_agent_id: "project-lead",
+            })
+          }),
+      })
+    })
+
+    const startPlanning = Effect.fn("CompanyProjectExecution.startPlanning")(function* (
+      project: Project,
+      resume = false,
+    ) {
       yield* ensureTeam(DEVELOPMENT_TEAM)
       const approved = (yield* projects.listArtifacts(project.id)).find((item) => item.kind === "project_proposal")
       if (!approved?.content) throw new Error("Approved project proposal is missing")
       const approvedProposal = proposal.parse(JSON.parse(approved.content))
-      const plan = yield* projects.createPlan({
-        project_id: project.id,
-        phase: "development",
-        summary: "将已批准立项转化为 PRD、架构、验收计划和开发顺序",
-        acceptance_criteria: ["PRD 可验收", "架构可执行", "QA 覆盖安装、测试、启动和关键用户路径"],
-      })
-      const items = yield* Effect.all([
+      const plan = resume
+        ? (yield* projects.listPlans(project.id)).find((item) => item.phase === "development")
+        : yield* projects.createPlan({
+            project_id: project.id,
+            phase: "development",
+            summary: "将已批准立项转化为 PRD、架构、验收计划和开发顺序",
+            acceptance_criteria: ["PRD 可验收", "架构可执行", "QA 覆盖安装、测试、启动和关键用户路径"],
+          })
+      if (!plan) throw new Error("Development planning plan is missing")
+      const existingItems = resume ? yield* projects.listWorkItems(project.id) : []
+      const items = resume
+        ? ["product", "architecture", "qa_plan"].map((kind) => existingItems.find((item) => item.kind === kind))
+        : yield* Effect.all([
         projects.createWorkItem({
           project_id: project.id,
           plan_id: plan.id,
@@ -451,8 +657,21 @@ export const layer = Layer.effect(
           owner_agent_id: "qa-engineer",
           acceptance_criteria: ["包含真实命令", "包含完整用户路径"],
         }),
-      ])
-      yield* Effect.forEach(items, (item) => projects.startWorkItem(item.id), { discard: true })
+          ])
+      if (items.some((item) => !item)) throw new Error("Blocked development planning work items are missing")
+      const planningItems = items.filter((item) => !!item)
+      if (resume) {
+        yield* Effect.forEach(
+          planningItems.filter((item) => item.status === "blocked" || item.status === "failed"),
+          (item) => projects.retryWorkItem(item.id),
+          { discard: true },
+        )
+      }
+      yield* Effect.forEach(
+        planningItems.filter((item) => item.status !== "completed"),
+        (item) => projects.startWorkItem(item.id),
+        { discard: true },
+      )
       return yield* launch({
         project,
         script: planningScript(project.goal, approvedProposal),
@@ -465,16 +684,16 @@ export const layer = Layer.effect(
               )
             }
             const artifacts = [
-              [items[0], "prd", "MVP PRD", "artifacts/product/prd.json", result.prd, "product-manager"],
+              [planningItems[0], "prd", "MVP PRD", "artifacts/product/prd.json", result.prd, "product-manager"],
               [
-                items[1],
+                planningItems[1],
                 "architecture",
                 "技术架构",
                 "artifacts/engineering/architecture.json",
                 result.architecture,
                 "software-architect",
               ],
-              [items[2], "qa_plan", "QA 计划", "artifacts/verification/qa-plan.json", result.qa, "qa-engineer"],
+              [planningItems[2], "qa_plan", "QA 计划", "artifacts/verification/qa-plan.json", result.qa, "qa-engineer"],
             ] as const
             yield* Effect.forEach(
               artifacts,
@@ -638,6 +857,7 @@ export const layer = Layer.effect(
       model_id?: string
     }) {
       yield* ensureTeam(RESEARCH_TEAM)
+      const selectedModel = yield* resolveModel(input)
       const session = input.session_id
         ? yield* sessions.get(SessionID.make(input.session_id))
         : yield* sessions.create({
@@ -650,8 +870,8 @@ export const layer = Layer.effect(
         title: input.title,
         owner_agent_id: "project-lead",
         coordinator_session_id: session.id,
-        provider_id: input.provider_id,
-        model_id: input.model_id,
+        provider_id: selectedModel.providerID,
+        model_id: selectedModel.modelID,
       })
       yield* projects.createCharter({
         project_id: project.id,
@@ -661,125 +881,8 @@ export const layer = Layer.effect(
         acceptance_criteria: ["代码位于独立 Git 工作树", "验证证据已持久化", "主分支复验通过"],
       })
       yield* projects.transition({ id: project.id, status: "researching", actor_id: "project-lead" })
-      const plan = yield* projects.createPlan({
-        project_id: project.id,
-        phase: "research",
-        summary: "分别验证市场机会、核心价值和技术可行性，再由负责人独立做立项判断",
-        acceptance_criteria: ["结论有来源", "负责人明确 go/no-go", "自行选择交付形态", "定义极简可验证范围"],
-      })
-      const research = yield* Effect.all([
-        projects.createWorkItem({
-          project_id: project.id,
-          plan_id: plan.id,
-          title: "市场与竞品研究",
-          description: "验证需求、竞品、机会和风险",
-          kind: "research",
-          owner_agent_id: "market-researcher",
-          acceptance_criteria: ["包含来源 URL", "区分事实与推断"],
-        }),
-        projects.createWorkItem({
-          project_id: project.id,
-          plan_id: plan.id,
-          title: "用户与产品机会研究",
-          description: "定义用户、核心价值和最小使用循环",
-          kind: "research",
-          owner_agent_id: "product-strategist",
-          acceptance_criteria: ["核心循环可验证", "明确非目标"],
-        }),
-        projects.createWorkItem({
-          project_id: project.id,
-          plan_id: plan.id,
-          title: "技术可行性研究",
-          description: "比较交付形态并选择最简可靠路线",
-          kind: "research",
-          owner_agent_id: "technical-researcher",
-          acceptance_criteria: ["可安装、测试、启动", "明确技术风险"],
-        }),
-      ])
-      const synthesis = yield* projects.createWorkItem({
-        project_id: project.id,
-        plan_id: plan.id,
-        title: "产品立项建议",
-        description: "综合证据并做 go/no-go 决策",
-        kind: "synthesis",
-        owner_agent_id: "project-lead",
-        acceptance_criteria: ["明确建议", "MVP 范围", "成功指标"],
-        depends_on: research.map((item) => item.id),
-      })
-      yield* Effect.forEach(research, (item) => projects.startWorkItem(item.id), { discard: true })
       const current = (yield* projects.get(project.id))!
-      const run_id = yield* launch({
-        project: current,
-        script: researchScript(current.goal),
-        onSuccess: (value) =>
-          Effect.gen(function* () {
-            const result = researchResult.parse(value)
-            const reports = [
-              [
-                research[0],
-                "market_report",
-                "市场与竞品研究",
-                "artifacts/research/market.json",
-                result.market,
-                "market-researcher",
-              ],
-              [
-                research[1],
-                "product_research",
-                "用户与产品机会研究",
-                "artifacts/research/product.json",
-                result.product,
-                "product-strategist",
-              ],
-              [
-                research[2],
-                "technical_report",
-                "技术可行性研究",
-                "artifacts/research/technical.json",
-                result.technical,
-                "technical-researcher",
-              ],
-            ] as const
-            yield* Effect.forEach(
-              reports,
-              ([item, kind, title, artifactPath, content, author]) =>
-                Effect.gen(function* () {
-                  yield* projects.addArtifact({
-                    project_id: project.id,
-                    work_item_id: item.id,
-                    kind,
-                    title,
-                    path: artifactPath,
-                    content: JSON.stringify(content, null, 2) + "\n",
-                    evidence: {
-                      sources: content.findings.flatMap((finding) => (finding.source_url ? [finding.source_url] : [])),
-                    },
-                    created_by_agent_id: author,
-                  })
-                  yield* projects.completeWorkItem(item.id)
-                }),
-              { discard: true },
-            )
-            yield* projects.startWorkItem(synthesis.id)
-            yield* projects.addArtifact({
-              project_id: project.id,
-              work_item_id: synthesis.id,
-              kind: "project_proposal",
-              title: "产品立项建议",
-              path: "artifacts/product/proposal.json",
-              content: JSON.stringify(result.proposal, null, 2) + "\n",
-              created_by_agent_id: "project-lead",
-            })
-            yield* projects.completeWorkItem(synthesis.id)
-            yield* projects.requestGate({
-              project_id: project.id,
-              kind: "project_approval",
-              title: "批准产品立项",
-              summary: `${result.proposal.executive_summary}\n\n建议：${result.proposal.recommendation}\n交付形态：${result.proposal.delivery_surface}\nMVP：\n- ${result.proposal.mvp_scope.join("\n- ")}`,
-              requested_by_agent_id: "project-lead",
-            })
-          }),
-      })
+      const run_id = yield* startResearch(current)
       return { project: current, run_id }
     })
 
@@ -804,22 +907,34 @@ export const layer = Layer.effect(
       const project = yield* projects.get(input.project_id)
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       if (project.status !== "blocked") throw new Error(`Company project ${project.id} cannot retry from ${project.status}`)
+      const selectedModel =
+        input.provider_id || input.model_id
+          ? yield* resolveModel(input)
+          : project.provider_id && project.model_id
+            ? { providerID: ProviderID.make(project.provider_id), modelID: ModelID.make(project.model_id) }
+            : yield* provider.defaultModel()
       const gates = yield* projects.listGates(project.id)
-      if (!gates.some((gate) => gate.kind === "development_approval" && gate.status === "approved")) {
-        throw new Error("Only a blocked development stage can resume in place")
-      }
       const updated = yield* projects.setModel({
         id: project.id,
-        provider_id: input.provider_id ?? project.provider_id,
-        model_id: input.model_id ?? project.model_id,
+        provider_id: selectedModel.providerID,
+        model_id: selectedModel.modelID,
       })
-      const developing = yield* projects.transition({
+      const developmentApproved = gates.some(
+        (gate) => gate.kind === "development_approval" && gate.status === "approved",
+      )
+      const proposalReady = (yield* projects.listArtifacts(project.id)).some((item) => item.kind === "project_proposal")
+      const status = developmentApproved ? "developing" : proposalReady ? "planning" : "researching"
+      const resumed = yield* projects.transition({
         id: updated.id,
-        status: "developing",
+        status,
         actor_id: "user",
-        reason: "保留现有仓库与证据，更换模型继续开发",
+        reason: `保留现有证据，更换模型继续${status === "developing" ? "开发" : status === "planning" ? "规划" : "研究"}`,
       })
-      const run_id = yield* startDevelopment(developing, true)
+      const run_id = developmentApproved
+        ? yield* startDevelopment(resumed, true)
+        : proposalReady
+          ? yield* startPlanning(resumed, true)
+          : yield* startResearch(resumed, true)
       return { project: (yield* projects.get(project.id))!, run_id }
     })
 
@@ -864,6 +979,7 @@ export const layer = Layer.effect(
 export const defaultLayer = layer.pipe(
   Layer.provide(CompanyProject.defaultLayer),
   Layer.provide(CompanyAgent.defaultLayer),
+  Layer.provide(Provider.defaultLayer),
   Layer.provide(Session.defaultLayer),
   Layer.provide(WorkflowRuntime.defaultLayer),
 )

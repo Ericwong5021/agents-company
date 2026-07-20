@@ -23,6 +23,7 @@ import {
 } from "./schema"
 import { Conversation } from "./conversation"
 import { CompanyID } from "@/company/schema"
+import type { MessageV2 } from "@/session/message-v2"
 
 const BOARD_ROLES = ["ceo", "cto", "product_lead"] as const
 
@@ -44,26 +45,6 @@ const SignalSynthesis = z
     }
   })
 
-const SIGNAL_SYNTHESIS_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    publish: { type: "boolean" },
-    signal_type: { type: "string", enum: ["conclusion", "status", "risk", "intervention"] },
-    body: { type: "string", minLength: 1, maxLength: 10_000 },
-    dri: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        kind: { type: "string", enum: ["user", "agent"] },
-        id: { type: "string", minLength: 1 },
-      },
-      required: ["kind", "id"],
-    },
-  },
-  required: ["publish"],
-}
-
 export const ConversationRunNotFound = NamedError.create(
   "ConversationRunNotFound",
   z.object({ run_id: ConversationRunID }).strict(),
@@ -82,6 +63,11 @@ export const ConversationRuntimeProjectMismatch = NamedError.create(
 export const ConversationRuntimeBoardUnavailable = NamedError.create(
   "ConversationRuntimeBoardUnavailable",
   z.object({ run_id: ConversationRunID }).strict(),
+)
+
+const BoardSynthesisRejected = NamedError.create(
+  "BoardSynthesisRejected",
+  z.object({ reason: z.enum(["provider_rejected", "invalid_json"]) }).strict(),
 )
 
 export const Started = z
@@ -113,7 +99,11 @@ function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
       .from(ConversationThreadTable)
       .where(eq(ConversationThreadTable.id, run.conversation_thread_id))
       .get()
-    const message = db.select().from(ChannelMessageTable).where(eq(ChannelMessageTable.id, run.channel_message_id)).get()
+    const message = db
+      .select()
+      .from(ChannelMessageTable)
+      .where(eq(ChannelMessageTable.id, run.channel_message_id))
+      .get()
     if (!thread || !message) return
     const channel = db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
     if (!channel || channel.kind !== "board" || message.channel_id !== channel.id) return
@@ -135,7 +125,8 @@ function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
     const productLeadAgentID = agents.find((agent) => agent.role === "product_lead")?.id
     if (boardAgentIDs.length !== BOARD_ROLES.length || !productLeadAgentID) return
 
-    const persistedRuntimeID = run.runtime_id ??
+    const persistedRuntimeID =
+      run.runtime_id ??
       db
         .select({ runtime_id: ConversationRunTable.runtime_id })
         .from(ConversationRunTable)
@@ -185,17 +176,18 @@ function markRunning(runID: ConversationRunID) {
 
 function bindRuntime(input: { runID: ConversationRunID; groupSessionID: GroupSessionID; roundNum?: number }) {
   const now = Date.now()
-  return Database.use((db) =>
-    db
-      .update(ConversationRunTable)
-      .set(
-        input.roundNum === undefined
-          ? { runtime_id: input.groupSessionID, time_updated: now }
-          : { runtime_id: input.groupSessionID, runtime_round_num: input.roundNum, time_updated: now },
-      )
-      .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
-      .returning({ id: ConversationRunTable.id })
-      .all().length > 0,
+  return Database.use(
+    (db) =>
+      db
+        .update(ConversationRunTable)
+        .set(
+          input.roundNum === undefined
+            ? { runtime_id: input.groupSessionID, time_updated: now }
+            : { runtime_id: input.groupSessionID, runtime_round_num: input.roundNum, time_updated: now },
+        )
+        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
+        .returning({ id: ConversationRunTable.id })
+        .all().length > 0,
   )
 }
 
@@ -204,13 +196,13 @@ function markProjecting(input: { runID: ConversationRunID; sourceWatermark: stri
   return Database.use(
     (db) =>
       db
-      .update(ConversationRunTable)
-      .set({
-        state: "projecting",
-        source_watermark: input.sourceWatermark,
-        retryable: false,
-        time_updated: now,
-      })
+        .update(ConversationRunTable)
+        .set({
+          state: "projecting",
+          source_watermark: input.sourceWatermark,
+          retryable: false,
+          time_updated: now,
+        })
         .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
         .returning({ id: ConversationRunTable.id })
         .all().length > 0,
@@ -219,24 +211,31 @@ function markProjecting(input: { runID: ConversationRunID; sourceWatermark: stri
 
 function markCompletedWithoutSignal(input: { runID: ConversationRunID; sourceWatermark: string }) {
   const now = Date.now()
-  return Database.use((db) =>
-    db
-      .update(ConversationRunTable)
-      .set({
-        state: "completed",
-        source_watermark: input.sourceWatermark,
-        safe_error_summary: null,
-        retryable: false,
-        time_finished: now,
-        time_updated: now,
-      })
-      .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
-      .returning({ id: ConversationRunTable.id })
-      .all().length > 0,
+  return Database.use(
+    (db) =>
+      db
+        .update(ConversationRunTable)
+        .set({
+          state: "completed",
+          source_watermark: input.sourceWatermark,
+          safe_error_summary: null,
+          retryable: false,
+          time_finished: now,
+          time_updated: now,
+        })
+        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
+        .returning({ id: ConversationRunTable.id })
+        .all().length > 0,
   )
 }
 
 function safeErrorSummary(error: unknown) {
+  if (error instanceof BoardSynthesisRejected) {
+    if (error.data.reason === "provider_rejected") {
+      return "The board discussion completed, but the configured provider rejected the Product Lead summary request. Retry or choose a provider that supports ordinary text responses."
+    }
+    return "The board discussion completed, but the Product Lead summary was not valid JSON after a repair attempt. Retry the summary."
+  }
   if (error instanceof SignalProjector.SignalProjectionRejected) {
     return "The board discussion could not be projected safely. Retry after reviewing the thread."
   }
@@ -248,14 +247,14 @@ function markFailed(runID: ConversationRunID, error: unknown) {
   return Database.use(
     (db) =>
       db
-      .update(ConversationRunTable)
-      .set({
-        state: "failed",
-        safe_error_summary: safeErrorSummary(error),
-        retryable: true,
-        time_finished: now,
-        time_updated: now,
-      })
+        .update(ConversationRunTable)
+        .set({
+          state: "failed",
+          safe_error_summary: safeErrorSummary(error),
+          retryable: true,
+          time_finished: now,
+          time_updated: now,
+        })
         .where(
           and(
             eq(ConversationRunTable.id, runID),
@@ -301,8 +300,7 @@ function interruptState(input: { companyID: CompanyID; threadID: ConversationThr
         )
         .all()
       const now = Date.now()
-      db
-        .update(ConversationRunTable)
+      db.update(ConversationRunTable)
         .set({
           state: "interrupted",
           safe_error_summary: null,
@@ -321,8 +319,7 @@ function interruptState(input: { companyID: CompanyID; threadID: ConversationThr
           ),
         )
         .run()
-      db
-        .update(ConversationThreadTable)
+      db.update(ConversationThreadTable)
         .set({ status: "interrupted", time_updated: now })
         .where(eq(ConversationThreadTable.id, thread.id))
         .run()
@@ -341,10 +338,34 @@ function synthesisPrompt(input: { title: string; messages: GroupSession.GroupMes
     "You are the Product Lead for a board discussion.",
     "Return publish=false when the discussion has no user-visible conclusion, status, risk, or intervention.",
     "When publish=true, report only a concise, factual high signal grounded in the transcript. Do not invent approvals, deliveries, plans, decisions, tool output, or private context.",
+    "Return only one JSON object, with no markdown or explanation.",
+    "The JSON object must have publish (boolean), and when publish=true it must also have signal_type (conclusion, status, risk, or intervention), body (string), and optional dri ({ kind: user or agent, id: string }).",
     `<board_thread title=${JSON.stringify(input.title)}>`,
     ...input.messages.map((message) => `${message.role}: ${message.content}`),
     "</board_thread>",
   ].join("\n")
+}
+
+function synthesisRepairPrompt() {
+  return [
+    "Your previous board summary was not valid JSON.",
+    "Return only one corrected JSON object with publish (boolean), and when publish=true signal_type (conclusion, status, risk, or intervention), body (string), and optional dri ({ kind: user or agent, id: string }).",
+    "Do not include markdown or an explanation.",
+  ].join("\n")
+}
+
+function parseSynthesis(response: MessageV2.WithParts) {
+  if (response.info.role !== "assistant" || response.info.error) return
+  const text = response.parts
+    .flatMap((part) => (part.type === "text" && !part.ignored ? [part.text] : []))
+    .join("\n")
+    .trim()
+  const json = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/.exec(text)?.[1] ?? text
+  try {
+    return SignalSynthesis.safeParse(JSON.parse(json))
+  } catch {
+    return
+  }
 }
 
 export interface Interface {
@@ -362,242 +383,281 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ConversationRuntime") {}
 
-export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Service | Conversation.Service> = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const groupSessions = yield* GroupSession.Service
-    const bus = yield* Bus.Service
-    const conversation = yield* Conversation.Service
+export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Service | Conversation.Service> =
+  Layer.effect(
+    Service,
+    Effect.gen(function* () {
+      const groupSessions = yield* GroupSession.Service
+      const bus = yield* Bus.Service
+      const conversation = yield* Conversation.Service
 
-    const publishRunState = Effect.fn("ConversationRuntime.publishRunState")(function* (input: {
-      threadID: RuntimeInput["thread"]["id"]
-      state: "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
-    }) {
-      yield* Effect.all(
-        [
-          bus.publish(ServerEvent.ConversationRunUpdated, { thread_id: input.threadID, state: input.state }).pipe(Effect.ignore),
-          bus.publish(ServerEvent.AgentActivityInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
-        ],
-        { discard: true },
-      )
-    })
-
-    const monitor = Effect.fn("ConversationRuntime.monitor")(function* (input: RuntimeInput & Started) {
-      yield* Effect.sleep("200 millis")
-      while (yield* groupSessions.isBusy(input.groupSessionID)) {
-        yield* Effect.sleep("50 millis")
-      }
-      const current = yield* Effect.sync(() => loadRun(input.runID))
-      if (!current || current.run.state === "completed" || current.run.state === "interrupted") return
-      const messages = yield* groupSessions.messages(input.groupSessionID)
-      const sourceMessages = messages.filter(
-        (message) => message.roundNum === input.roundNum && (message.role === "user" || message.statusSummary === "done"),
-      )
-      const successfulAgentIDs = new Set(
-        sourceMessages
-          .filter((message) => message.role === "agent" && message.content.trim())
-          .map((message) => message.companyAgentID)
-          .filter((agentID): agentID is string => Boolean(agentID)),
-      )
-      if (successfulAgentIDs.size < Math.min(2, input.boardAgentIDs.length)) {
-        return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "missing_source" }))
-      }
-      const watermark = sourceWatermark(
-        input.groupSessionID,
-        input.roundNum,
-        sourceMessages.map((message) => message.id),
-      )
-      if (!(yield* Effect.sync(() => markProjecting({ runID: input.runID, sourceWatermark: watermark })))) return
-      yield* publishRunState({ threadID: input.thread.id, state: "projecting" }).pipe(Effect.forkDetach)
-
-      const response = yield* groupSessions.promptMember({
-        groupSessionID: input.groupSessionID,
-        companyAgentID: input.productLeadAgentID,
-        text: synthesisPrompt({ title: input.thread.title, messages: sourceMessages }),
-        format: { type: "json_schema", schema: SIGNAL_SYNTHESIS_SCHEMA, retryCount: 2 },
+      const publishRunState = Effect.fn("ConversationRuntime.publishRunState")(function* (input: {
+        threadID: RuntimeInput["thread"]["id"]
+        state: "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
+      }) {
+        yield* Effect.all(
+          [
+            bus
+              .publish(ServerEvent.ConversationRunUpdated, { thread_id: input.threadID, state: input.state })
+              .pipe(Effect.ignore),
+            bus.publish(ServerEvent.AgentActivityInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
+          ],
+          { discard: true },
+        )
       })
-      if (response.info.role !== "assistant") {
-        return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "invalid_draft" }))
-      }
-      const synthesis = SignalSynthesis.safeParse(response.info.structured)
-      if (!synthesis.success) return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "invalid_draft" }))
-      if (!synthesis.data.publish) {
-        if (yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))) {
-          yield* publishRunState({ threadID: input.thread.id, state: "completed" }).pipe(Effect.forkDetach)
-        }
-        return
-      }
 
-      const projection = yield* SignalProjector.project({
-        runID: input.runID,
-        draft: {
-          signal_type: synthesis.data.signal_type!,
-          body: synthesis.data.body!,
-          author: { kind: "agent", id: input.productLeadAgentID },
-          dri: synthesis.data.dri,
-        },
-        sources: [
-          ...sourceMessages.map((message) => ({ kind: "group_message" as const, id: message.id })),
-          { kind: "message" as const, id: response.info.id },
-        ],
-        sourceWatermark: watermark,
-      })
-      yield* Effect.all(
-        [
-          bus.publish(ServerEvent.ChannelInvalidated, { channel_id: input.thread.channel_id }).pipe(Effect.ignore),
-          bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.thread.id }).pipe(Effect.ignore),
-          publishRunState({ threadID: input.thread.id, state: "completed" }),
-        ],
-        { discard: true },
-      ).pipe(Effect.forkDetach)
-      return projection
-    })
-
-    const startUnchecked = Effect.fn("ConversationRuntime.startUnchecked")(function* (runID: ConversationRunID) {
-      const input = yield* Effect.sync(() => loadRun(runID))
-      if (!input) return yield* Effect.fail(new ConversationRunNotFound({ run_id: runID }))
-      if (input.run.state !== "queued" && input.run.state !== "running") {
-        return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: input.run.state }))
-      }
-      if (input.run.state === "running" && input.run.runtime_id && input.run.runtime_round_num !== null) {
-        const groupSessionID = GroupSessionID.zod.safeParse(input.run.runtime_id).data
-        if (groupSessionID) {
-          const userGroupMessageID = yield* Effect.sync(() =>
-            Database.use((db) =>
-              db
-                .select({ id: GroupMessageTable.id })
-                .from(GroupMessageTable)
-                .where(
-                  and(
-                    eq(GroupMessageTable.group_session_id, groupSessionID),
-                    eq(GroupMessageTable.external_message_id, input.message.id),
-                  ),
-                )
-                .get(),
-            ),
-          )
-          if (userGroupMessageID) {
-            return Started.parse({
-              runID,
-              groupSessionID,
-              roundNum: input.run.runtime_round_num,
-              userGroupMessageID: userGroupMessageID.id,
-            })
+      const monitor = Effect.fn("ConversationRuntime.monitor")(function* (input: RuntimeInput & Started) {
+        yield* Effect.sleep("200 millis")
+        let visibleAgentMessages = 0
+        while (yield* groupSessions.isBusy(input.groupSessionID)) {
+          const agentMessages = (yield* groupSessions.messages(input.groupSessionID)).filter(
+            (message) => message.roundNum === input.roundNum && message.role === "agent",
+          ).length
+          if (agentMessages > visibleAgentMessages) {
+            visibleAgentMessages = agentMessages
+            yield* bus
+              .publish(ServerEvent.ThreadInvalidated, { thread_id: input.thread.id })
+              .pipe(Effect.ignore)
           }
+          yield* Effect.sleep("50 millis")
         }
-      }
+        const current = yield* Effect.sync(() => loadRun(input.runID))
+        if (!current || current.run.state === "completed" || current.run.state === "interrupted") return
+        const messages = yield* groupSessions.messages(input.groupSessionID)
+        const sourceMessages = messages.filter(
+          (message) =>
+            message.roundNum === input.roundNum && (message.role === "user" || message.statusSummary === "done"),
+        )
+        const successfulAgentIDs = new Set(
+          sourceMessages
+            .filter((message) => message.role === "agent" && message.content.trim())
+            .map((message) => message.companyAgentID)
+            .filter((agentID): agentID is string => Boolean(agentID)),
+        )
+        if (successfulAgentIDs.size < input.boardAgentIDs.length) {
+          return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "missing_source" }))
+        }
+        const watermark = sourceWatermark(
+          input.groupSessionID,
+          input.roundNum,
+          sourceMessages.map((message) => message.id),
+        )
+        if (!(yield* Effect.sync(() => markProjecting({ runID: input.runID, sourceWatermark: watermark })))) return
+        yield* publishRunState({ threadID: input.thread.id, state: "projecting" }).pipe(Effect.forkDetach)
 
-      if (!(yield* Effect.sync(() => markRunning(runID)))) {
-        const current = yield* Effect.sync(() => loadRun(runID))
-        return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }))
-      }
-      const groupSessionID = input.groupSessionID ?? GroupSessionID.ascending()
-      if (!(yield* Effect.sync(() => bindRuntime({ runID, groupSessionID })))) {
-        const current = yield* Effect.sync(() => loadRun(runID))
-        return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }))
-      }
-      const started = yield* RepositoryInstance.provide(input.thread.company_id)(
-        Effect.gen(function* () {
-          if (Instance.project.id !== input.projectID) {
-            return yield* Effect.fail(
-              new ConversationRuntimeProjectMismatch({
-                run_id: runID,
-                expected_project_id: input.projectID,
-                actual_project_id: Instance.project.id,
-              }),
+        const response = yield* groupSessions
+          .promptMember({
+            groupSessionID: input.groupSessionID,
+            companyAgentID: input.productLeadAgentID,
+            text: synthesisPrompt({ title: input.thread.title, messages: sourceMessages }),
+          })
+          .pipe(Effect.catch(() => Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))))
+        if (response.info.role !== "assistant" || response.info.error) {
+          return yield* Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))
+        }
+        const summary = parseSynthesis(response)
+        const repaired = summary?.success
+          ? response
+          : yield* groupSessions
+              .promptMember({
+                groupSessionID: input.groupSessionID,
+                companyAgentID: input.productLeadAgentID,
+                text: synthesisRepairPrompt(),
+              })
+              .pipe(Effect.catch(() => Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))))
+        if (repaired.info.role !== "assistant" || repaired.info.error) {
+          return yield* Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))
+        }
+        const synthesis = summary?.success ? summary : parseSynthesis(repaired)
+        if (!synthesis?.success) return yield* Effect.fail(new BoardSynthesisRejected({ reason: "invalid_json" }))
+        if (!synthesis.data.publish) {
+          if (
+            yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))
+          ) {
+            yield* publishRunState({ threadID: input.thread.id, state: "completed" }).pipe(Effect.forkDetach)
+          }
+          return
+        }
+
+        const projection = yield* SignalProjector.project({
+          runID: input.runID,
+          draft: {
+            signal_type: synthesis.data.signal_type!,
+            body: synthesis.data.body!,
+            author: { kind: "agent", id: input.productLeadAgentID },
+            dri: synthesis.data.dri,
+          },
+          sources: [
+            ...sourceMessages.map((message) => ({ kind: "group_message" as const, id: message.id })),
+            { kind: "message" as const, id: repaired.info.id },
+          ],
+          sourceWatermark: watermark,
+        })
+        yield* Effect.all(
+          [
+            bus.publish(ServerEvent.ChannelInvalidated, { channel_id: input.thread.channel_id }).pipe(Effect.ignore),
+            bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.thread.id }).pipe(Effect.ignore),
+            publishRunState({ threadID: input.thread.id, state: "completed" }),
+          ],
+          { discard: true },
+        ).pipe(Effect.forkDetach)
+        return projection
+      })
+
+      const startUnchecked = Effect.fn("ConversationRuntime.startUnchecked")(function* (runID: ConversationRunID) {
+        const input = yield* Effect.sync(() => loadRun(runID))
+        if (!input) return yield* Effect.fail(new ConversationRunNotFound({ run_id: runID }))
+        if (input.run.state !== "queued" && input.run.state !== "running") {
+          return yield* Effect.fail(new ConversationRunNotRunnable({ run_id: runID, state: input.run.state }))
+        }
+        if (input.run.state === "running" && input.run.runtime_id && input.run.runtime_round_num !== null) {
+          const groupSessionID = GroupSessionID.zod.safeParse(input.run.runtime_id).data
+          if (groupSessionID) {
+            const userGroupMessageID = yield* Effect.sync(() =>
+              Database.use((db) =>
+                db
+                  .select({ id: GroupMessageTable.id })
+                  .from(GroupMessageTable)
+                  .where(
+                    and(
+                      eq(GroupMessageTable.group_session_id, groupSessionID),
+                      eq(GroupMessageTable.external_message_id, input.message.id),
+                    ),
+                  )
+                  .get(),
+              ),
             )
+            if (userGroupMessageID) {
+              return Started.parse({
+                runID,
+                groupSessionID,
+                roundNum: input.run.runtime_round_num,
+                userGroupMessageID: userGroupMessageID.id,
+              })
+            }
           }
-          const group = yield* groupSessions.create({
-            id: groupSessionID,
-            title: input.thread.title,
-            agentIDs: input.boardAgentIDs,
-            contextPolicy: "work_scoped",
-          })
-          const accepted = yield* groupSessions.chat({
-            groupSessionID: group.id,
-            text: input.message.body,
-            externalMessageID: input.message.id,
-          })
-          yield* groupSessions.resume({ groupSessionID: group.id, roundNum: accepted.roundNum })
-          return {
-            runID,
-            groupSessionID: group.id,
-            roundNum: accepted.roundNum,
-            userGroupMessageID: accepted.userGroupMessageID,
-          }
-        }),
-      )
-      const parsed = Started.parse(started)
-      yield* Effect.sync(() => bindRuntime(parsed))
-      yield* publishRunState({ threadID: input.thread.id, state: "running" }).pipe(Effect.forkDetach)
-      yield* RepositoryInstance.provide(input.thread.company_id)(
-        monitor({ ...input, ...parsed }).pipe(
-          Effect.catchCause((cause) =>
+        }
+
+        if (!(yield* Effect.sync(() => markRunning(runID)))) {
+          const current = yield* Effect.sync(() => loadRun(runID))
+          return yield* Effect.fail(
+            new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }),
+          )
+        }
+        const groupSessionID = input.groupSessionID ?? GroupSessionID.ascending()
+        if (!(yield* Effect.sync(() => bindRuntime({ runID, groupSessionID })))) {
+          const current = yield* Effect.sync(() => loadRun(runID))
+          return yield* Effect.fail(
+            new ConversationRunNotRunnable({ run_id: runID, state: current?.run.state ?? "missing" }),
+          )
+        }
+        const started = yield* RepositoryInstance.provide(input.thread.company_id)(
+          Effect.gen(function* () {
+            if (Instance.project.id !== input.projectID) {
+              return yield* Effect.fail(
+                new ConversationRuntimeProjectMismatch({
+                  run_id: runID,
+                  expected_project_id: input.projectID,
+                  actual_project_id: Instance.project.id,
+                }),
+              )
+            }
+            const group = yield* groupSessions.create({
+              id: groupSessionID,
+              title: input.thread.title,
+              agentIDs: input.boardAgentIDs,
+              contextPolicy: "work_scoped",
+            })
+            const accepted = yield* groupSessions.chat({
+              groupSessionID: group.id,
+              text: input.message.body,
+              externalMessageID: input.message.id,
+            })
+            yield* groupSessions.resume({ groupSessionID: group.id, roundNum: accepted.roundNum })
+            return {
+              runID,
+              groupSessionID: group.id,
+              roundNum: accepted.roundNum,
+              userGroupMessageID: accepted.userGroupMessageID,
+            }
+          }),
+        )
+        const parsed = Started.parse(started)
+        yield* Effect.sync(() => bindRuntime(parsed))
+        yield* publishRunState({ threadID: input.thread.id, state: "running" }).pipe(Effect.forkDetach)
+        yield* RepositoryInstance.provide(input.thread.company_id)(
+          monitor({ ...input, ...parsed }).pipe(
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                if (yield* Effect.sync(() => markFailed(runID, Cause.squash(cause)))) {
+                  yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+                }
+              }),
+            ),
+          ),
+        ).pipe(Effect.forkDetach)
+        return parsed
+      })
+
+      const start = Effect.fn("ConversationRuntime.start")(function* (runID: ConversationRunID) {
+        return yield* startUnchecked(runID).pipe(
+          Effect.tapError((error) =>
             Effect.gen(function* () {
-              if (yield* Effect.sync(() => markFailed(runID, Cause.squash(cause)))) {
-                yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+              const input = yield* Effect.sync(() => loadRun(runID))
+              if (yield* Effect.sync(() => markFailed(runID, error))) {
+                if (input)
+                  yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
               }
             }),
           ),
-        ),
-      ).pipe(Effect.forkDetach)
-      return parsed
-    })
-
-    const start = Effect.fn("ConversationRuntime.start")(function* (runID: ConversationRunID) {
-      return yield* startUnchecked(runID).pipe(
-        Effect.tapError((error) =>
-          Effect.gen(function* () {
-            const input = yield* Effect.sync(() => loadRun(runID))
-            if (yield* Effect.sync(() => markFailed(runID, error))) {
-              if (input) yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
-            }
-          }),
-        ),
-      )
-    })
-
-    const interruptThread = Effect.fn("ConversationRuntime.interruptThread")(function* (input: {
-      companyID: CompanyID
-      threadID: ConversationThreadID
-      principal: ConversationPrincipal
-    }) {
-      const visible = yield* conversation.getThread(input)
-      if (visible.status !== "active") {
-        return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
-      }
-      const activeRuns = yield* Effect.sync(() => interruptState(input))
-      if (!activeRuns) return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
-      const groupSessionIDs = activeRuns
-        .map((run) => (run.runtime_id ? GroupSessionID.zod.safeParse(run.runtime_id).data : undefined))
-        .filter((id): id is GroupSessionID => Boolean(id))
-      if (groupSessionIDs.length > 0) {
-        yield* RepositoryInstance.provide(input.companyID)(
-          Effect.forEach(groupSessionIDs, (id) => groupSessions.interrupt(id).pipe(Effect.ignore), { discard: true }),
-        ).pipe(Effect.ignore)
-      }
-      yield* Effect.all(
-        [
-          bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
-          publishRunState({ threadID: input.threadID, state: "interrupted" }),
-        ],
-        { discard: true },
-      ).pipe(Effect.forkDetach)
-      return yield* conversation.getThread({ companyID: input.companyID, threadID: input.threadID, principal: input.principal })
-    })
-
-    const recover = Effect.fn("ConversationRuntime.recover")(function* () {
-      const runIDs = yield* ConversationRecovery.recover()
-      yield* Effect.forEach(runIDs, (runID) => start(runID).pipe(Effect.catch(() => Effect.void)), {
-        concurrency: 1,
-        discard: true,
+        )
       })
-      return runIDs
-    })
 
-    return Service.of({ start, recover, interruptThread })
-  }),
-)
+      const interruptThread = Effect.fn("ConversationRuntime.interruptThread")(function* (input: {
+        companyID: CompanyID
+        threadID: ConversationThreadID
+        principal: ConversationPrincipal
+      }) {
+        const visible = yield* conversation.getThread(input)
+        if (visible.status !== "active") {
+          return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
+        }
+        const activeRuns = yield* Effect.sync(() => interruptState(input))
+        if (!activeRuns) return yield* Effect.fail(new ThreadNotWritable({ thread_id: input.threadID }))
+        const groupSessionIDs = activeRuns
+          .map((run) => (run.runtime_id ? GroupSessionID.zod.safeParse(run.runtime_id).data : undefined))
+          .filter((id): id is GroupSessionID => Boolean(id))
+        if (groupSessionIDs.length > 0) {
+          yield* RepositoryInstance.provide(input.companyID)(
+            Effect.forEach(groupSessionIDs, (id) => groupSessions.interrupt(id).pipe(Effect.ignore), { discard: true }),
+          ).pipe(Effect.ignore)
+        }
+        yield* Effect.all(
+          [
+            bus.publish(ServerEvent.ThreadInvalidated, { thread_id: input.threadID }).pipe(Effect.ignore),
+            publishRunState({ threadID: input.threadID, state: "interrupted" }),
+          ],
+          { discard: true },
+        ).pipe(Effect.forkDetach)
+        return yield* conversation.getThread({
+          companyID: input.companyID,
+          threadID: input.threadID,
+          principal: input.principal,
+        })
+      })
+
+      const recover = Effect.fn("ConversationRuntime.recover")(function* () {
+        const runIDs = yield* ConversationRecovery.recover()
+        yield* Effect.forEach(runIDs, (runID) => start(runID).pipe(Effect.catch(() => Effect.void)), {
+          concurrency: 1,
+          discard: true,
+        })
+        return runIDs
+      })
+
+      return Service.of({ start, recover, interruptThread })
+    }),
+  )
 
 export const defaultLayer = Layer.suspend(() =>
   layer.pipe(Layer.provide(Layer.mergeAll(GroupSession.defaultLayer, Bus.defaultLayer))),

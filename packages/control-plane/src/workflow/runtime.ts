@@ -597,6 +597,11 @@ export const layer = Layer.effect(
         reason: FailReason,
         info: { actorID?: string; errorMessage?: string } = {},
       ) => {
+        const errorMessage = info.errorMessage?.split(/\r?\n/, 1)[0]?.replace(/^Error:\s*/, "")
+        entry.transcript.push({
+          kind: "log",
+          text: `workflow.agent_failed: ${o.label ?? o.companyAgentID ?? o.agentType ?? "general"}: ${errorMessage ?? reason}`,
+        })
         log.warn("workflow agent failed", {
           runID,
           agentType: o.agentType ?? "general",
