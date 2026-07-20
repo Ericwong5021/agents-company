@@ -26,6 +26,8 @@ const FALLBACK_AVATARS = [
   "/assets/company/qa-agent.png",
 ] as const
 
+const BOARD_FEED_NEAR_BOTTOM_PX = 48
+
 const PROJECT_AGENT: Record<string, { name: string; role: string; avatar: string }> = {
   "board-ceo": { name: "CEO", role: "董事会终审", avatar: "/assets/company/product-lead.png" },
   "project-lead": { name: "项目负责人", role: "Project Lead", avatar: "/assets/company/product-lead.png" },
@@ -67,6 +69,16 @@ export function projectChatItems(project: CompanyProjectExecutionState) {
       (gate): ProjectChatItem => ({ type: "gate", id: gate.id, created: gate.requested_at, gate }),
     ),
   ].sort((left, right) => left.created - right.created || left.id.localeCompare(right.id))
+}
+
+export function projectResumeDescription(project: CompanyProjectExecutionState) {
+  if (project.work_items.some((item) => item.kind === "implementation" || item.kind === "verification")) {
+    return "可以保留失败记录、已批准计划和现有仓库，并使用当前可用模型继续开发。"
+  }
+  if (project.work_items.some((item) => ["product", "architecture", "qa_plan"].includes(item.kind))) {
+    return "可以保留失败记录、已批准的立项结论和已有规划工作项，并使用当前可用模型继续规划。"
+  }
+  return "可以保留失败记录和已有研究工作项，并使用当前可用模型继续调研。"
 }
 
 function memberFor(authorID: string, members: BoardMember[]) {
@@ -174,6 +186,16 @@ export function boardMemberStatus(state: { active: boolean; running: boolean; co
   return "待命中"
 }
 
+export function shouldAutoScrollBoardFeed(input: {
+  initialized: boolean
+  contentChanged: boolean
+  wasNearBottom: boolean
+}) {
+  if (!input.contentChanged) return false
+  if (!input.initialized) return true
+  return input.wasNearBottom
+}
+
 export function BoardRoundtable(props: {
   members: Accessor<CompanyReadyWorkspaceSnapshot["company"]["board"]>
   thread: Accessor<ConversationThreadDetail | null>
@@ -208,11 +230,21 @@ export function BoardRoundtable(props: {
     return props.entries().find((entry) => entry.type === "agent_message")?.message.agentID
   })
   let feed: HTMLDivElement | undefined
+  let feedContentKey: string | undefined
+  let feedWasNearBottom = true
 
   createEffect(() => {
-    const latestID = projectTimeline().at(-1)?.id ?? timeline().at(-1)?.id
-    const projectStatus = props.project()?.project.status
-    if (!latestID && !projectStatus) return
+    const latestConversationID = timeline().at(-1)?.id
+    const project = props.project()
+    if (!latestConversationID && !project) return
+    const nextContentKey = `${latestConversationID ?? ""}:${JSON.stringify(project)}`
+    const shouldScroll = shouldAutoScrollBoardFeed({
+      initialized: feedContentKey !== undefined,
+      contentChanged: nextContentKey !== feedContentKey,
+      wasNearBottom: feedWasNearBottom,
+    })
+    feedContentKey = nextContentKey
+    if (!shouldScroll) return
     queueMicrotask(() => {
       if (feed) feed.scrollTop = feed.scrollHeight
     })
@@ -261,7 +293,16 @@ export function BoardRoundtable(props: {
         </div>
       </header>
 
-      <div ref={feed} class="company-board-feed" role="log" aria-live="polite">
+      <div
+        ref={feed}
+        class="company-board-feed"
+        role="log"
+        aria-live="polite"
+        onScroll={() => {
+          if (!feed) return
+          feedWasNearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight <= BOARD_FEED_NEAR_BOTTOM_PX
+        }}
+      >
         <Show
           when={timeline().length > 0}
           fallback={
@@ -494,7 +535,7 @@ export function BoardRoundtable(props: {
                     </header>
                     <div class="company-board-message-card company-project-action-card">
                       <strong>本轮执行已停止</strong>
-                      <p>可以保留失败记录、已批准计划和现有仓库，并使用当前可用模型继续执行。</p>
+                      <p>{projectResumeDescription(project())}</p>
                       <label class="company-project-retry-model">
                         <span>执行模型</span>
                         <select

@@ -172,6 +172,21 @@ describe("ConversationStore", () => {
     expect(store.getState().threadEntries).toHaveLength(1)
   })
 
+  test("concurrent refreshes still restore the latest board thread", async () => {
+    const channelResolvers: Array<(value: ReturnType<typeof mockResult>) => void> = []
+    client.company.channels = () => new Promise((resolve) => channelResolvers.push(resolve))
+
+    const first = store.refresh()
+    const second = store.refresh()
+    channelResolvers[1](mockResult(CHANNEL_RESPONSE))
+    await Promise.resolve()
+    channelResolvers[0](mockResult(CHANNEL_RESPONSE))
+    await Promise.all([first, second])
+
+    expect(store.getOpenThreadID()).toBe("cth_1")
+    expect(store.getState().threadEntries).toHaveLength(1)
+  })
+
   test("handles network error gracefully on refresh", async () => {
     client.company.channels = async () => mockError("UnknownError")
     store = createConversationStore({ client, companyID: COMPANY_ID })
@@ -410,9 +425,14 @@ describe("ConversationStore", () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     let threadCalled = false
+    let entriesCalled = false
     client.company.thread = async () => {
       threadCalled = true
       return mockResult(THREAD_DETAIL)
+    }
+    client.company.threadEntries = async () => {
+      entriesCalled = true
+      return mockResult({ items: THREAD_ENTRIES_PAGE_1, nextCursor: undefined })
     }
 
     const event: EventCompanyThreadInvalidated = {
@@ -423,6 +443,7 @@ describe("ConversationStore", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 400))
     expect(threadCalled).toBe(true)
+    expect(entriesCalled).toBe(true)
   })
 
   test("handleEvent company.conversation_run.updated refreshes the matching open thread", async () => {

@@ -219,13 +219,18 @@ export function createConversationStore(options: {
         if (flags.thread && thread) {
           const threadID = thread.id
           const generation = ++threadGeneration
-          const result = await client.company.thread({
-            threadID,
-            company_id: companyID,
-          })
-          if (result.error) throw result.error
-          if (result.data && generation === threadGeneration && thread?.id === threadID) {
-            thread = result.data
+          const [threadResult, entriesResult] = await Promise.all([
+            client.company.thread({ threadID, company_id: companyID }),
+            client.company.threadEntries({ threadID, company_id: companyID, limit: 50 }),
+          ])
+          if (threadResult.error) throw threadResult.error
+          if (entriesResult.error) throw entriesResult.error
+          if (generation === threadGeneration && thread?.id === threadID) {
+            if (threadResult.data) thread = threadResult.data
+            if (entriesResult.data) {
+              threadEntries = entriesResult.data.items
+              threadEntriesBefore = entriesResult.data.nextCursor ?? null
+            }
           }
         }
       } catch (err: unknown) {
@@ -287,6 +292,10 @@ export function createConversationStore(options: {
               page.nextCursor,
             )
             loadingMessages = false
+            if (!thread && channels.find((channel) => channel.id === channelID)?.kind === "board") {
+              const latestThreadID = messages.find((message) => message.sourceThreadID)?.sourceThreadID
+              if (latestThreadID) await store.openThread(latestThreadID)
+            }
           }
         }
 
@@ -312,7 +321,14 @@ export function createConversationStore(options: {
 
     async setActiveChannel(channelID, options) {
       if (channelID === activeChannelID) {
-        if (options?.restoreLatestThread === false) await store.openThread("")
+        if (options?.restoreLatestThread === false) {
+          await store.openThread("")
+          return
+        }
+        if (!thread) {
+          const latestThreadID = messages.find((message) => message.sourceThreadID)?.sourceThreadID
+          if (latestThreadID) await store.openThread(latestThreadID)
+        }
         return
       }
       const generation = ++messagesGeneration

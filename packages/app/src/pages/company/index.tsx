@@ -1,16 +1,27 @@
 import type { Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
-import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
+import {
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  onCleanup,
+  onMount,
+} from "solid-js"
 import {
   createCompanyWorkspaceDataSource,
   installCompanyRefreshTriggers,
   type CompanyWorkspaceDataSource,
 } from "./company-data-source"
 import { useGlobalSDK } from "@/context/global-sdk"
-import type {
-  CompanyProjectExecutionState,
-  CompanyWorkspaceSnapshot,
-  CompanyReadyWorkspaceSnapshot,
+import {
+  companyProjectExecutionStateEquals,
+  type CompanyProjectExecutionState,
+  type CompanyWorkspaceSnapshot,
+  type CompanyReadyWorkspaceSnapshot,
 } from "./company-model"
 import { CompanyReady } from "./company-ready"
 import { ChannelSidebar, type CompanyWorkspaceView } from "./channel-sidebar"
@@ -50,7 +61,9 @@ function CompanyReadyWorkspace(props: {
   const [interrupting, setInterrupting] = createSignal(false)
   const [view, setView] = createSignal<CompanyWorkspaceView>("conversation")
   const [workPanelOpen, setWorkPanelOpen] = createSignal(false)
-  const [companyProject, setCompanyProject] = createSignal<CompanyProjectExecutionState | null>(null)
+  const [companyProject, setCompanyProject] = createSignal<CompanyProjectExecutionState | null>(null, {
+    equals: companyProjectExecutionStateEquals,
+  })
   const [projectBusy, setProjectBusy] = createSignal(false)
   const [projectError, setProjectError] = createSignal<string | null>(null)
   const [failedProjectProviderIDs, setFailedProjectProviderIDs] = createSignal<string[]>([])
@@ -137,15 +150,14 @@ function CompanyReadyWorkspace(props: {
 
   const startCompanyProject = () => {
     if (!boardGoal() || projectBusy()) return
-    const executionModel = projectExecutionModel(providers())
-    if (!executionModel) {
+    if (!hasConfiguredProvider()) {
       setProjectError("没有已连接且配置了默认模型的供应商")
       return
     }
     setProjectBusy(true)
     setProjectError(null)
     void props.dataSource
-      .startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title, ...executionModel })
+      .startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title })
       .then((project) => props.dataSource.getCompanyProject(project.id))
       .then(setCompanyProject)
       .catch((error: unknown) => setProjectError(String(error)))
@@ -154,9 +166,7 @@ function CompanyReadyWorkspace(props: {
 
   const retryCompanyProject = () => {
     const current = companyProject()
-    const selectedModel = retryModels().find(
-      (model) => `${model.provider_id}:${model.model_id}` === retryModelValue(),
-    )
+    const selectedModel = retryModels().find((model) => `${model.provider_id}:${model.model_id}` === retryModelValue())
     const executionModel =
       selectedModel ??
       projectExecutionModel(providers(), [
@@ -267,11 +277,13 @@ function CompanyReadyWorkspace(props: {
     const current = store()
     if (!current) return
     setView("conversation")
-    void current.sendMessage(body).then((accepted) => {
-      if (!accepted.threadID) return
-      openThread(accepted.threadID)
-      window.setTimeout(() => void current.openThread(accepted.threadID!), 1_200)
-    })
+    void current
+      .sendMessage(body, { referenced_thread_id: current.getOpenThreadID() ?? undefined })
+      .then((accepted) => {
+        if (!accepted.threadID) return
+        openThread(accepted.threadID)
+        window.setTimeout(() => void current.openThread(accepted.threadID!), 1_200)
+      })
   }
 
   return (
@@ -281,7 +293,9 @@ function CompanyReadyWorkspace(props: {
       data-view={view()}
       data-state="ready"
     >
-      <a class="company-skip-link" href="#company-main-content">跳到主要内容</a>
+      <a class="company-skip-link" href="#company-main-content">
+        跳到主要内容
+      </a>
       <button
         type="button"
         class="company-mobile-channels-toggle"
@@ -406,23 +420,23 @@ function CompanyReadyWorkspace(props: {
               </Show>
 
               <Show when={view() !== "new"}>
-              <Show
-                when={boardMessagesEnabled()}
-                fallback={
-                  <div class="company-composer-disabled" data-capability="board-messages-disabled" role="status">
-                    {companyDisabledText()}
-                  </div>
-                }
-              >
-                <CompanyComposer
-                  sending={() => conversation().sending}
-                  error={() => conversation().error}
-                  hasOpenThread={hasOpenThread}
-                  onSend={sendGoal}
-                  onInterrupt={() => void interrupt()}
-                  onRetry={() => void store()?.refresh()}
-                />
-              </Show>
+                <Show
+                  when={boardMessagesEnabled()}
+                  fallback={
+                    <div class="company-composer-disabled" data-capability="board-messages-disabled" role="status">
+                      {companyDisabledText()}
+                    </div>
+                  }
+                >
+                  <CompanyComposer
+                    sending={() => conversation().sending}
+                    error={() => conversation().error}
+                    hasOpenThread={hasOpenThread}
+                    onSend={sendGoal}
+                    onInterrupt={() => void interrupt()}
+                    onRetry={() => void store()?.refresh()}
+                  />
+                </Show>
               </Show>
               <span class="company-ai-disclaimer">以上内容由 AI 生成</span>
             </main>
@@ -537,11 +551,5 @@ export default function CompanyWorkspace(props: { dataSource?: CompanyWorkspaceD
     }
   })
 
-  return (
-    <CompanyLiveWorkspace
-      snapshot={state()}
-      dataSource={source}
-      onRefresh={() => void source.refresh()}
-    />
-  )
+  return <CompanyLiveWorkspace snapshot={state()} dataSource={source} onRefresh={() => void source.refresh()} />
 }

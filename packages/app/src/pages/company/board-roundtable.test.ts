@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { boardChatItems, boardMemberStatus, projectChatItems } from "./board-roundtable"
+import {
+  boardChatItems,
+  boardMemberStatus,
+  projectChatItems,
+  projectResumeDescription,
+  shouldAutoScrollBoardFeed,
+} from "./board-roundtable"
 
 describe("board member status", () => {
   test("prioritizes the active speaker while a round is running", () => {
@@ -98,5 +104,24 @@ describe("board chat timeline", () => {
       ["work_item", "work-1"],
       ["gate", "gate-1"],
     ])
+  })
+})
+
+describe("blocked project recovery copy", () => {
+  test("describes research recovery without claiming that a plan or repository already exists", () => {
+    expect(
+      projectResumeDescription({
+        work_items: [{ kind: "research" }, { kind: "synthesis" }],
+      } as Parameters<typeof projectResumeDescription>[0]),
+    ).toBe("可以保留失败记录和已有研究工作项，并使用当前可用模型继续调研。")
+  })
+})
+
+describe("board feed silent refresh", () => {
+  test("scrolls initially and follows new content only while the reader remains near the bottom", () => {
+    expect(shouldAutoScrollBoardFeed({ initialized: false, contentChanged: true, wasNearBottom: false })).toBe(true)
+    expect(shouldAutoScrollBoardFeed({ initialized: true, contentChanged: false, wasNearBottom: true })).toBe(false)
+    expect(shouldAutoScrollBoardFeed({ initialized: true, contentChanged: true, wasNearBottom: false })).toBe(false)
+    expect(shouldAutoScrollBoardFeed({ initialized: true, contentChanged: true, wasNearBottom: true })).toBe(true)
   })
 })

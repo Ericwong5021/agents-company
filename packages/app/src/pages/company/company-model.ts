@@ -176,6 +176,14 @@ export type CompanyProjectExecutionState = {
   gates: CompanyProjectGate[]
 }
 
+export function companyProjectExecutionStateEquals(
+  left: CompanyProjectExecutionState | null,
+  right: CompanyProjectExecutionState | null,
+) {
+  if (left === right) return true
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
 export type CompanyReadyWorkspaceSnapshot = {
   status: "ready"
   access: CompanyWorkspaceAccess

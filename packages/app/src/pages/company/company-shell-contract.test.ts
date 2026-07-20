@@ -24,7 +24,7 @@ describe("Company shell integration contract", () => {
   })
 
   test("sends messages for real and keeps unsupported attachments disabled", () => {
-    expect(workspace).toContain("current.sendMessage(body)")
+    expect(workspace).toContain("referenced_thread_id: current.getOpenThreadID() ?? undefined")
     expect(composer).toContain("当前 Company 会话暂不支持文件附件")
     expect(composer).toContain("disabled")
   })
@@ -37,5 +37,12 @@ describe("Company shell integration contract", () => {
   test("routes a fresh conversation to the Board without restoring the previous thread", () => {
     expect(workspace).toContain('channel.kind === "board"')
     expect(workspace).toContain("setActiveChannel(board.id, { restoreLatestThread: false })")
+  })
+
+  test("lets the control plane resolve the configured global model for a new project", () => {
+    expect(workspace).toContain(".startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title })")
+    expect(workspace).not.toContain(
+      ".startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title, ...executionModel })",
+    )
   })
 })

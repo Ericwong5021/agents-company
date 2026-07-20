@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createDisconnectedCompanyWorkspaceDataSource } from "./company-data-source"
-import type { CompanyReadyWorkspaceSnapshot } from "./company-model"
+import { companyProjectExecutionStateEquals, type CompanyReadyWorkspaceSnapshot } from "./company-model"
 
 describe("company workspace data source", () => {
   test("keeps production honest when runtime data is not connected", () => {
@@ -75,5 +75,35 @@ describe("CompanyReadySnapshot shape", () => {
     expect(snapshot.status).toBe("ready")
     expect(snapshot.conversation.channels).toEqual([])
     expect(snapshot.capabilities.board_messages).toBe(false)
+  })
+})
+
+describe("company project background refresh", () => {
+  const project = {
+    project: {
+      id: "project-1",
+      goal: "Ship silently refreshed state",
+      title: "Silent refresh",
+      status: "awaiting_project_approval",
+      output_dir: "/tmp/project-1",
+      created_at: 1,
+      updated_at: 2,
+    },
+    work_items: [],
+    artifacts: [],
+    gates: [],
+  } as NonNullable<Parameters<typeof companyProjectExecutionStateEquals>[0]>
+
+  test("treats a freshly parsed but unchanged response as the same signal value", () => {
+    expect(companyProjectExecutionStateEquals(project, structuredClone(project))).toBe(true)
+  })
+
+  test("publishes a meaningful project state change", () => {
+    expect(
+      companyProjectExecutionStateEquals(project, {
+        ...structuredClone(project),
+        project: { ...project.project, status: "planning", updated_at: 3 },
+      }),
+    ).toBe(false)
   })
 })
