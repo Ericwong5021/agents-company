@@ -31,7 +31,7 @@ const BOARD_FEED_NEAR_BOTTOM_PX = 48
 const PROJECT_AGENT: Record<string, { name: string; role: string; avatar: string }> = {
   "board-ceo": { name: "CEO", role: "董事会终审", avatar: "/assets/company/product-lead.png" },
   "project-lead": { name: "项目负责人", role: "Project Lead", avatar: "/assets/company/product-lead.png" },
-  "market-researcher": { name: "市场研究员", role: "Research", avatar: "/assets/company/research-analyst.png" },
+  "market-researcher": { name: "市场研究员", role: "Research", avatar: "/assets/company/ui-implementer.png" },
   "product-strategist": { name: "产品策略师", role: "Product", avatar: "/assets/company/ui-implementer.png" },
   "game-product-strategist": { name: "产品策略师", role: "Product", avatar: "/assets/company/ui-implementer.png" },
   "technical-researcher": { name: "技术研究员", role: "Engineering", avatar: "/assets/company/backend-engineer.png" },
@@ -154,15 +154,6 @@ function projectStatusLabel(status: CompanyProjectExecutionState["project"]["sta
   return "准备中"
 }
 
-function workStatusLabel(status: CompanyProjectWorkItem["status"]) {
-  if (status === "running") return "进行中"
-  if (status === "completed") return "已完成"
-  if (status === "blocked") return "已阻塞"
-  if (status === "failed") return "失败"
-  if (status === "cancelled") return "已取消"
-  return "等待前置任务"
-}
-
 function gateActionLabel(kind: CompanyProjectGate["kind"]) {
   if (kind === "project_approval") return "董事会批准立项"
   if (kind === "development_approval") return "批准团队开始执行"
@@ -212,6 +203,7 @@ export function BoardRoundtable(props: {
   onRetryModelChange: (value: string) => void
   onResolveGate: (gateID: string, decision: "approve" | "reject") => void
   onOpenThread?: (threadID: string) => void
+  onOpenProject: () => void
 }) {
   const members = createMemo(() => props.members().slice(0, 4))
   const timeline = createMemo(() => boardChatItems(props.entries(), props.messages(), members()))
@@ -221,7 +213,6 @@ export function BoardRoundtable(props: {
   )
   const completed = createMemo(() => props.thread()?.status === "completed" || runState() === "completed")
   const failed = createMemo(() => runState() === "failed")
-  const projectTimeline = createMemo(() => (props.project() ? projectChatItems(props.project()!) : []))
   const projectTeamSize = createMemo(
     () => new Set(props.project()?.work_items.map((item) => item.owner_agent_id).filter(Boolean)).size,
   )
@@ -286,9 +277,15 @@ export function BoardRoundtable(props: {
           </For>
           <span class="company-board-participant company-board-owner" title="你 · Owner">你</span>
           <Show when={projectTeamSize() > 0}>
-            <span class="company-board-team-count" title={`${projectTeamSize()} 位项目成员`}>
-              +{projectTeamSize()}
-            </span>
+            <button
+              type="button"
+              class="company-board-team-link"
+              aria-label={`打开项目团队，共 ${projectTeamSize()} 位成员`}
+              onClick={props.onOpenProject}
+            >
+              <Icon name="folder" size="small" />
+              项目团队 {projectTeamSize()}
+            </button>
           </Show>
         </div>
       </header>
@@ -427,6 +424,10 @@ export function BoardRoundtable(props: {
                         {props.projectBusy() ? "正在停止…" : "停止本轮执行"}
                       </button>
                     </Show>
+                    <button type="button" class="company-project-open" onClick={props.onOpenProject}>
+                      <Icon name="folder" size="small" />
+                      打开项目室
+                    </button>
                     <Show when={project().charter}>
                       {(charter) => (
                         <div class="company-project-charter">
@@ -441,14 +442,14 @@ export function BoardRoundtable(props: {
                 </div>
               </article>
 
-              <For each={projectTimeline()}>
-                {(entry) => {
-                  const agent = () => projectAgent(entry.type === "work_item" ? entry.item.owner_agent_id : entry.gate.requested_by_agent_id)
+              <For each={project().gates}>
+                {(gate) => {
+                  const agent = () => projectAgent(gate.requested_by_agent_id)
                   return (
                     <article
                       class="company-board-message company-project-entry"
-                      data-project-entry={entry.type}
-                      data-status={entry.type === "work_item" ? entry.item.status : entry.gate.status}
+                      data-project-entry="gate"
+                      data-status={gate.status}
                     >
                       <div class="company-board-message-avatar" aria-hidden="true">
                         <img src={agent().avatar} alt="" />
@@ -457,65 +458,36 @@ export function BoardRoundtable(props: {
                         <header>
                           <strong>{agent().name}</strong>
                           <span>{agent().role}</span>
-                          <time>{timeLabel(entry.created)}</time>
+                          <time>{timeLabel(gate.requested_at)}</time>
                         </header>
-                        <Show
-                          when={entry.type === "work_item" ? entry.item : undefined}
-                          fallback={
-                            <div class="company-board-message-card company-project-gate-card">
-                              <div class="company-project-entry-title">
-                                <strong>{entry.type === "gate" ? entry.gate.title : "审批"}</strong>
-                                <span data-status={entry.type === "gate" ? entry.gate.status : undefined}>
-                                  {entry.type === "gate" && entry.gate.status === "pending"
-                                    ? "待审批"
-                                    : entry.type === "gate" && entry.gate.status === "approved"
-                                      ? "已批准"
-                                      : "已驳回"}
-                                </span>
-                              </div>
-                              <Show when={entry.type === "gate"}>
-                                <Markdown text={entry.type === "gate" ? entry.gate.summary : ""} cacheKey={entry.id} />
-                              </Show>
-                              <Show when={entry.type === "gate" && entry.gate.status === "pending"}>
-                                <div class="company-project-gate-actions">
-                                  <button
-                                    type="button"
-                                    disabled={props.projectBusy()}
-                                    onClick={() => entry.type === "gate" && props.onResolveGate(entry.gate.id, "approve")}
-                                  >
-                                    {entry.type === "gate" ? gateActionLabel(entry.gate.kind) : "批准"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    class="secondary"
-                                    disabled={props.projectBusy()}
-                                    onClick={() => entry.type === "gate" && props.onResolveGate(entry.gate.id, "reject")}
-                                  >
-                                    驳回
-                                  </button>
-                                </div>
-                              </Show>
+                        <div class="company-board-message-card company-project-gate-card">
+                          <div class="company-project-entry-title">
+                            <strong>{gate.title}</strong>
+                            <span data-status={gate.status}>
+                              {gate.status === "pending" ? "待审批" : gate.status === "approved" ? "已批准" : "已驳回"}
+                            </span>
+                          </div>
+                          <Markdown text={gate.summary} cacheKey={gate.id} />
+                          <Show when={gate.status === "pending"}>
+                            <div class="company-project-gate-actions">
+                              <button
+                                type="button"
+                                disabled={props.projectBusy()}
+                                onClick={() => props.onResolveGate(gate.id, "approve")}
+                              >
+                                {gateActionLabel(gate.kind)}
+                              </button>
+                              <button
+                                type="button"
+                                class="secondary"
+                                disabled={props.projectBusy()}
+                                onClick={() => props.onResolveGate(gate.id, "reject")}
+                              >
+                                驳回
+                              </button>
                             </div>
-                          }
-                        >
-                          {(item) => (
-                            <div class="company-board-message-card company-project-work-card">
-                              <div class="company-project-entry-title">
-                                <strong>{item().title}</strong>
-                                <span data-status={item().status}>{workStatusLabel(item().status)}</span>
-                              </div>
-                              <p>{item().description}</p>
-                              <Show when={item().error}><p class="company-project-error">{item().error}</p></Show>
-                              <Show when={project().artifacts.some((artifact) => artifact.work_item_id === item().id)}>
-                                <div class="company-project-artifacts">
-                                  <For each={project().artifacts.filter((artifact) => artifact.work_item_id === item().id)}>
-                                    {(artifact) => <span><Icon name="folder" size="small" />{artifact.title}</span>}
-                                  </For>
-                                </div>
-                              </Show>
-                            </div>
-                          )}
-                        </Show>
+                          </Show>
+                        </div>
                       </div>
                     </article>
                   )

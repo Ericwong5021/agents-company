@@ -2777,21 +2777,6 @@
   background: #dce8ff;
 }
 
-.company-board-team-count {
-  display: grid;
-  min-width: 28px;
-  height: 28px;
-  place-items: center;
-  margin-left: 4px;
-  padding-inline: 6px;
-  border: 1px solid var(--company-border);
-  border-radius: 999px;
-  color: var(--company-accent);
-  background: var(--company-accent-soft);
-  font-size: 9px;
-  font-weight: 600;
-}
-
 .company-board-feed {
   width: 100%;
   min-height: 0;

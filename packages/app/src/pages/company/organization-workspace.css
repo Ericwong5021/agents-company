@@ -1,0 +1,133 @@
+/* Organization surfaces load after the legacy workspace styles so Board,
+   Project Room and Office share one predictable app-shell geometry. */
+
+.company-workspace[data-view="project"],
+.company-workspace[data-view="office"] {
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+
+.company-workspace[data-view="office"] .company-office {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 40px clamp(24px, 4vw, 64px) 56px;
+  overflow-y: auto;
+  background: var(--company-canvas);
+}
+
+.company-workspace[data-view="office"] .company-office-header {
+  display: flex;
+  max-width: 1120px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin: 0 auto 28px;
+}
+
+.company-workspace[data-view="office"] .company-office-header h1 {
+  margin: 6px 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -.022em;
+  text-wrap: balance;
+}
+
+.company-workspace[data-view="office"] .company-office-header p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--company-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.company-workspace[data-view="office"] .company-office-summary {
+  display: grid;
+  width: auto;
+  min-width: 360px;
+  height: auto;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--company-border);
+  border-radius: var(--company-radius-panel);
+  background: var(--company-border);
+}
+
+.company-workspace[data-view="office"] .company-office-summary > div {
+  display: grid;
+  min-height: 70px;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  padding: 10px;
+  background: var(--company-surface);
+  text-align: center;
+}
+
+.company-workspace[data-view="office"] .company-office-summary strong {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.company-workspace[data-view="office"] .company-office-summary span {
+  color: var(--company-muted);
+  font-size: 9px;
+}
+
+.company-workspace[data-view="office"] .company-employee-grid {
+  display: grid;
+  max-width: 1120px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: auto;
+}
+
+.company-workspace[data-view="office"] .company-project-team {
+  max-width: 1120px;
+  margin: 32px auto 0;
+}
+
+.company-workspace[data-view="office"] .company-ambient-contract {
+  max-width: 1120px;
+  margin: 20px auto 0;
+}
+
+@media (max-width: 1180px) {
+  .company-workspace[data-view="office"] .company-office-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .company-workspace[data-view="office"] .company-office-summary {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .company-workspace[data-view="project"],
+  .company-workspace[data-view="office"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .company-workspace[data-view="office"] .company-employee-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .company-workspace[data-view="office"] .company-office {
+    padding: 68px 16px 40px;
+  }
+
+  .company-workspace[data-view="office"] .company-office-header h1 {
+    font-size: 23px;
+  }
+
+  .company-workspace[data-view="office"] .company-office-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

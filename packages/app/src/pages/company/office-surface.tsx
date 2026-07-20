@@ -1,7 +1,7 @@
 import { For, Show, createMemo, type Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
 import type { AgentActivityProjection } from "@agents-company/sdk/v2/client"
-import type { CompanyReadyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
+import type { CompanyProjectExecutionState, CompanyReadyWorkspaceSnapshot, ConversationSnapshot } from "./company-model"
 
 const ACTIVITY_LABEL: Record<AgentActivityProjection["activity"], string> = {
   idle: "空闲",
@@ -34,12 +34,44 @@ function relativeTime(since: number) {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(since)
 }
 
+const PROJECT_ROLE_LABEL: Record<string, string> = {
+  "project-lead": "项目负责人",
+  "market-researcher": "市场研究员",
+  "product-strategist": "产品策略师",
+  "game-product-strategist": "产品策略师",
+  "technical-researcher": "技术研究员",
+  "product-manager": "产品经理",
+  "software-architect": "软件架构师",
+  "qa-engineer": "QA 工程师",
+  "mvp-developer": "开发负责人",
+  "repair-engineer": "修复工程师",
+}
+
 export function OfficeSurface(props: {
   snapshot: Accessor<CompanyReadyWorkspaceSnapshot>
   conversation: Accessor<ConversationSnapshot>
+  project: Accessor<CompanyProjectExecutionState | null>
+  onOpenProject: () => void
   onOpenThread: (threadID: string) => void
 }) {
   const cards = createMemo(() => props.snapshot().agents ?? [])
+  const projectMembers = createMemo(() =>
+    Object.values(
+      (props.project()?.work_items ?? []).reduce<Record<string, { agentID: string; items: CompanyProjectExecutionState["work_items"] }>>(
+        (members, item) => {
+          if (!item.owner_agent_id) return members
+          return {
+            ...members,
+            [item.owner_agent_id]: {
+              agentID: item.owner_agent_id,
+              items: [...(members[item.owner_agent_id]?.items ?? []), item],
+            },
+          }
+        },
+        {},
+      ),
+    ),
+  )
   const running = createMemo(() => cards().filter((card) => ["working", "waiting", "recovering"].includes(card.activity)).length)
   const needsAttention = createMemo(() => cards().filter((card) => card.attention === "urgent").length)
 
@@ -107,6 +139,49 @@ export function OfficeSurface(props: {
               </article>
             )}
           </For>
+        </section>
+      </Show>
+
+      <Show when={projectMembers().length > 0}>
+        <section class="company-project-team" aria-labelledby="company-project-team-title">
+          <header>
+            <div>
+              <span class="company-eyebrow">项目分工投影</span>
+              <h2 id="company-project-team-title">当前项目团队</h2>
+              <p>这些角色来自真实 Work Item 分配。运行状态仍以 Agent Run Evidence 为准。</p>
+            </div>
+            <button type="button" onClick={props.onOpenProject}>打开项目室 <Icon name="arrow-right" size="small" /></button>
+          </header>
+          <div class="company-project-team-grid">
+            <For each={projectMembers()}>
+              {(member) => {
+                const current = () =>
+                  member.items.find((item) => item.status === "running") ??
+                  member.items.find((item) => ["blocked", "failed"].includes(item.status)) ??
+                  member.items.at(-1)
+                return (
+                  <button type="button" class="company-project-member-card" onClick={props.onOpenProject}>
+                    <span class="company-project-member-mark" aria-hidden="true">
+                      {(PROJECT_ROLE_LABEL[member.agentID] ?? member.agentID).slice(0, 2)}
+                    </span>
+                    <span>
+                      <strong>{PROJECT_ROLE_LABEL[member.agentID] ?? member.agentID}</strong>
+                      <small>{current()?.title ?? "等待任务"}</small>
+                    </span>
+                    <span class="company-project-state" data-status={current()?.status ?? "pending"}>
+                      {current()?.status === "running"
+                        ? "工作中"
+                        : current()?.status === "completed"
+                          ? "已完成"
+                          : current()?.status === "blocked" || current()?.status === "failed"
+                            ? "需关注"
+                            : "等待中"}
+                    </span>
+                  </button>
+                )
+              }}
+            </For>
+          </div>
         </section>
       </Show>
 

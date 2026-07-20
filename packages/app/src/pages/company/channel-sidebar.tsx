@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, type Accessor } from "solid-js"
 import { Icon } from "@agents-company/ui/icon"
 import { useLanguage } from "@/context/language"
-import type { ChannelKind, ConversationChannelItem } from "./company-model"
+import type { ChannelKind, CompanyProjectSummary, ConversationChannelItem } from "./company-model"
 
-export type CompanyWorkspaceView = "conversation" | "new" | "office"
+export type CompanyWorkspaceView = "conversation" | "new" | "office" | "project"
 
 type ChannelGroup = {
   kind: ChannelKind
@@ -14,7 +14,6 @@ type ChannelGroup = {
 const GROUPS: readonly ChannelGroup[] = [
   { kind: "company", labelKey: "company.sidebar.group.company", icon: "bubble-5" },
   { kind: "board", labelKey: "company.sidebar.group.board", icon: "speech-bubble" },
-  { kind: "project", labelKey: "company.sidebar.group.project", icon: "folder" },
 ]
 
 function groupChannels(channels: ConversationChannelItem[]): Record<ChannelKind, ConversationChannelItem[]> {
@@ -33,8 +32,11 @@ export function ChannelSidebar(props: {
   channels: Accessor<ConversationChannelItem[]>
   activeChannelID: Accessor<string | null>
   activeView: Accessor<CompanyWorkspaceView>
+  projects: Accessor<CompanyProjectSummary[]>
+  activeProjectID: Accessor<string | null>
   loading: Accessor<boolean>
   onSelect: (channelID: string) => void
+  onOpenProject: (projectID: string) => void
   onNewConversation: () => void
   onOpenOffice: () => void
   onOpenSettings: () => void
@@ -47,6 +49,13 @@ export function ChannelSidebar(props: {
     if (!normalized) return grouped()[kind]
     return grouped()[kind].filter((channel) => channel.title.toLocaleLowerCase().includes(normalized))
   }
+  const visibleProjects = createMemo(() => {
+    const normalized = query().trim().toLocaleLowerCase()
+    if (!normalized) return props.projects()
+    return props.projects().filter((project) =>
+      `${project.title} ${project.goal}`.toLocaleLowerCase().includes(normalized),
+    )
+  })
 
   return (
     <aside class="company-channels" aria-label={language.t("company.sidebar.label")}>
@@ -124,6 +133,52 @@ export function ChannelSidebar(props: {
             </section>
           )}
         </For>
+
+        <section class="company-channel-section" aria-label="项目">
+          <div class="company-channel-list">
+            <For each={visibleProjects()}>
+              {(project) => (
+                <button
+                  type="button"
+                  class="company-channel company-project-channel"
+                  classList={{ active: props.activeView() === "project" && project.id === props.activeProjectID() }}
+                  aria-current={
+                    props.activeView() === "project" && project.id === props.activeProjectID() ? "page" : undefined
+                  }
+                  onClick={() => props.onOpenProject(project.id)}
+                >
+                  <Icon name="folder" size="small" />
+                  <span class="company-channel-copy">
+                    <span class="company-channel-name">{project.title}</span>
+                    <span class="company-channel-preview">{project.status === "completed" ? "已交付" : "项目室"}</span>
+                  </span>
+                  <span class="company-project-channel-dot" data-status={project.status} aria-hidden="true" />
+                </button>
+              )}
+            </For>
+            <For each={visible("project")}>
+              {(channel) => (
+                <button
+                  type="button"
+                  class="company-channel"
+                  classList={{
+                    active: props.activeView() === "conversation" && channel.id === props.activeChannelID(),
+                  }}
+                  onClick={() => props.onSelect(channel.id)}
+                >
+                  <Icon name="folder" size="small" />
+                  <span class="company-channel-copy">
+                    <span class="company-channel-name">{channel.title}</span>
+                    <span class="company-channel-preview">项目群聊</span>
+                  </span>
+                </button>
+              )}
+            </For>
+            <Show when={visibleProjects().length === 0 && visible("project").length === 0}>
+              <span class="company-channel-empty">暂无项目</span>
+            </Show>
+          </div>
+        </section>
       </div>
 
       <div class="company-sidebar-profile">

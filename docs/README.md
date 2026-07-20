@@ -29,7 +29,7 @@
 
 ## 组件与设计资产
 
-- [Marvis 视觉复刻设计源与验收](design/README.md)：记录 Pencil、Figma 和同视口 QA 证据；它是实现参考，不覆盖产品宪法或 PRD。
+- [Marvis 视觉复刻设计源与验收](design/README.md)：记录 Pencil 设计源和同视口 QA 证据；它是实现参考，不覆盖产品宪法或 PRD。
 - [Autonomous-Bidding PRD](product-design/bidding-prd.md) 与[技术文档](product-design/bidding-technical-document.md)描述群聊内部的发言调度组件。它是 Thread/群聊的实现机制之一，不定义整个产品的信息架构。
 
 ## 维护规则

@@ -31,6 +31,7 @@ import { CompanyComposer } from "./company-composer"
 import { BoardRoundtable } from "./board-roundtable"
 import { OfficeSurface } from "./office-surface"
 import { NewGoalSurface } from "./new-goal-surface"
+import { ProjectRoom } from "./project-room"
 import {
   COMPANY_PROVIDER_CONFIGURED_EVENT,
   projectExecutionModel,
@@ -42,6 +43,7 @@ import { useLanguage } from "@/context/language"
 import { useDialog } from "@agents-company/ui/context/dialog"
 import type { ConversationStore } from "./company-conversation-data-source"
 import "./workspace.css"
+import "./organization-workspace.css"
 
 /**
  * Live IM workspace rendered when the company is ready. Every channel, message,
@@ -241,6 +243,15 @@ function CompanyReadyWorkspace(props: {
     if (board) void store()?.setActiveChannel(board.id)
   }
 
+  const openProject = (projectID: string) => {
+    setMobileChannelsOpen(false)
+    setWorkPanelOpen(false)
+    setView("project")
+    if (companyProject()?.project.id === projectID) return
+    setProjectError(null)
+    void props.dataSource.getCompanyProject(projectID).then(setCompanyProject).catch((error: unknown) => setProjectError(String(error)))
+  }
+
   const selectChannel = (channelID: string) => {
     setMobileChannelsOpen(false)
     setView("conversation")
@@ -289,7 +300,7 @@ function CompanyReadyWorkspace(props: {
   return (
     <div
       class="company-workspace"
-      data-thread-open={workPanelOpen() && view() !== "office" ? "true" : "false"}
+      data-thread-open={workPanelOpen() && view() === "conversation" ? "true" : "false"}
       data-view={view()}
       data-state="ready"
     >
@@ -318,8 +329,11 @@ function CompanyReadyWorkspace(props: {
           channels={() => conversation().channels}
           activeChannelID={activeChannelID}
           activeView={view}
+          projects={() => (companyProject() ? [companyProject()!.project] : [])}
+          activeProjectID={() => companyProject()?.project.id ?? null}
           loading={() => conversation().loadingChannels}
           onSelect={selectChannel}
+          onOpenProject={openProject}
           onNewConversation={() => {
             setMobileChannelsOpen(false)
             setView("new")
@@ -345,13 +359,20 @@ function CompanyReadyWorkspace(props: {
           <>
             <main id="company-main-content" class="company-conversation" tabindex="-1">
               <header class="company-conversation-header">
-                <h1>
-                  {view() === "new"
-                    ? "新建目标"
-                    : boardChannel()
-                      ? "董事会圆桌会议"
-                      : `与 ${props.snapshot().company.name} 的对话`}
-                </h1>
+                <div>
+                  <h1>
+                    {view() === "new"
+                      ? "新建目标"
+                      : view() === "project"
+                        ? "项目室"
+                        : boardChannel()
+                          ? "董事会圆桌会议"
+                          : `与 ${props.snapshot().company.name} 的对话`}
+                  </h1>
+                  <Show when={view() === "project" && companyProject()}>
+                    {(project) => <span>董事会 / {project().project.title}</span>}
+                  </Show>
+                </div>
                 <Show when={conversation().loadingMessages}>
                   <span class="company-sidebar-loading" aria-live="polite">
                     …
@@ -371,7 +392,16 @@ function CompanyReadyWorkspace(props: {
                     onRetry={() => void store()?.refresh()}
                   />
                 </Match>
-                <Match when={boardChannel()}>
+                <Match when={view() === "project"}>
+                  <ProjectRoom
+                    project={companyProject}
+                    busy={projectBusy}
+                    error={projectError}
+                    onOpenBoard={openBoard}
+                    onCancel={cancelCompanyProject}
+                  />
+                </Match>
+                <Match when={view() === "conversation" && boardChannel()}>
                   <BoardRoundtable
                     members={() => props.snapshot().company.board}
                     thread={() => conversation().thread}
@@ -388,6 +418,7 @@ function CompanyReadyWorkspace(props: {
                     onRetryModelChange={setRetryModelValue}
                     onResolveGate={resolveCompanyProjectGate}
                     onOpenThread={openThread}
+                    onOpenProject={() => companyProject() && openProject(companyProject()!.project.id)}
                   />
                 </Match>
                 <Match when={true}>
@@ -402,7 +433,7 @@ function CompanyReadyWorkspace(props: {
                 </Match>
               </Switch>
 
-              <Show when={shouldShowProviderSetupCard(props.snapshot().company.setup_goal, providers())}>
+              <Show when={view() !== "project" && shouldShowProviderSetupCard(props.snapshot().company.setup_goal, providers())}>
                 {(goal) => (
                   <section class="company-provider-setup-card" aria-live="polite">
                     <span class="company-provider-setup-icon">
@@ -419,7 +450,7 @@ function CompanyReadyWorkspace(props: {
                 )}
               </Show>
 
-              <Show when={view() !== "new"}>
+              <Show when={view() === "conversation"}>
                 <Show
                   when={boardMessagesEnabled()}
                   fallback={
@@ -438,10 +469,10 @@ function CompanyReadyWorkspace(props: {
                   />
                 </Show>
               </Show>
-              <span class="company-ai-disclaimer">以上内容由 AI 生成</span>
+              <Show when={view() !== "project"}><span class="company-ai-disclaimer">以上内容由 AI 生成</span></Show>
             </main>
 
-            <Show when={workPanelOpen()}>
+            <Show when={workPanelOpen() && view() === "conversation"}>
               <ThreadPanel
                 thread={() => conversation().thread}
                 entries={() => conversation().threadEntries}
@@ -456,7 +487,7 @@ function CompanyReadyWorkspace(props: {
                 onLoadSource={(sourceID) => void store()?.loadThreadSource(sourceID)}
               />
             </Show>
-            <Show when={!workPanelOpen()}>
+            <Show when={!workPanelOpen() && view() === "conversation"}>
               <button
                 type="button"
                 class="company-panel-reopen"
@@ -469,7 +500,13 @@ function CompanyReadyWorkspace(props: {
           </>
         }
       >
-        <OfficeSurface snapshot={props.snapshot} conversation={conversation} onOpenThread={openThread} />
+        <OfficeSurface
+          snapshot={props.snapshot}
+          conversation={conversation}
+          project={companyProject}
+          onOpenProject={() => companyProject() && openProject(companyProject()!.project.id)}
+          onOpenThread={openThread}
+        />
       </Show>
     </div>
   )

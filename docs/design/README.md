@@ -1,7 +1,7 @@
 # Agent Company × Marvis Pencil 设计稿
 
 - 主设计文件：`agent-company-marvis-pencil.pen`
-- 本轮设计权威：Pencil，不同步 Figma
+- 本轮设计权威：Pencil
 - 标准视口：1421 × 768
 - 视觉基准：Marvis macOS 客户端实机界面
 - 办公室画板现状：已替换为真实员工活动卡片目标稿

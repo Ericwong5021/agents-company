@@ -147,6 +147,9 @@ export type CompanyProjectArtifact = {
   work_item_id?: string
   kind: string
   title: string
+  path?: string
+  content?: string
+  evidence: Record<string, unknown>
   created_by_agent_id?: string
   created_at: number
 }

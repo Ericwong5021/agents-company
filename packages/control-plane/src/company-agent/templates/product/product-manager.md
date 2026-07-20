@@ -103,7 +103,7 @@ Core user stories with acceptance criteria:
 ## 5. Solution Overview
 [Narrative description of the proposed solution — 2–4 paragraphs]
 [Include key UX flows, major interactions, and the core value being delivered]
-[Link to design mocks / Figma when available]
+[Link to design mocks when available]
 
 **Key Design Decisions:**
 - [Decision 1]: We chose [approach A] over [approach B] because [reason]. Trade-off: [what we give up].
@@ -141,7 +141,7 @@ Core user stories with acceptance criteria:
 ## 8. Appendix
 - [User research session recordings / notes]
 - [Competitive analysis doc]
-- [Design mocks (Figma link)]
+- [Design mocks]
 - [Analytics dashboard link]
 - [Relevant support tickets]
 ```
