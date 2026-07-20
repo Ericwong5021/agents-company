@@ -7,6 +7,7 @@
   "packageManager": "bun@1.3.11",
   "scripts": {
     "dev": "bun run --cwd packages/control-plane script/dev.ts serve",
+    "dev:all": "bun ./script/dev-all.ts",
     "dev:desktop": "bun --cwd packages/desktop dev",
     "dev:web": "bun --cwd packages/app dev",
     "dev:storybook": "bun --cwd packages/storybook storybook",
