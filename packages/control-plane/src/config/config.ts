@@ -488,6 +488,41 @@ export type Info = z.output<typeof Info> & {
   mcp_origins?: Record<string, ConfigMCP.Origin>
 }
 
+type ProviderSettings = Pick<
+  Info,
+  "disabled_providers" | "enabled_providers" | "model" | "model_groups" | "provider" | "small_model" | "voice"
+>
+
+const providerSettingsFile = () => path.join(Global.Path.config, "provider-settings.json")
+
+function pickProviderSettings(info: Info): ProviderSettings {
+  return {
+    ...(info.disabled_providers ? { disabled_providers: info.disabled_providers } : {}),
+    ...(info.enabled_providers ? { enabled_providers: info.enabled_providers } : {}),
+    ...(info.model ? { model: info.model } : {}),
+    ...(info.model_groups ? { model_groups: info.model_groups } : {}),
+    ...(info.provider ? { provider: info.provider } : {}),
+    ...(info.small_model ? { small_model: info.small_model } : {}),
+    ...(info.voice ? { voice: info.voice } : {}),
+  }
+}
+
+function hasProviderSettings(info: Info) {
+  return Object.keys(pickProviderSettings(info)).length > 0
+}
+
+function withoutProviderSettings(info: Info): Info {
+  const next = { ...info }
+  delete next.disabled_providers
+  delete next.enabled_providers
+  delete next.model
+  delete next.model_groups
+  delete next.provider
+  delete next.small_model
+  delete next.voice
+  return next
+}
+
 type State = {
   config: Info
   directories: string[]
@@ -622,7 +657,19 @@ export const layer = Layer.effect(
         )
       }
 
-      return result
+      const providerFile = providerSettingsFile()
+      const storedProviderSettings = pickProviderSettings(yield* loadFile(providerFile))
+      const providerSettings = hasProviderSettings(storedProviderSettings)
+        ? storedProviderSettings
+        : pickProviderSettings(result)
+
+      if (!hasProviderSettings(storedProviderSettings) && hasProviderSettings(providerSettings)) {
+        yield* fs
+          .writeFileString(providerFile, JSON.stringify(providerSettings, null, 2))
+          .pipe(Effect.catch(() => Effect.void))
+      }
+
+      return mergeDeep(withoutProviderSettings(result), providerSettings)
     })
 
     const [cachedGlobal, invalidateGlobal] = yield* Effect.cachedInvalidateWithTTL(
@@ -702,10 +749,11 @@ export const layer = Layer.effect(
           }
         }
 
-        const merge = (source: string, next: Info, kind?: ConfigPlugin.Scope) => {
-          result = mergeConfigConcatArrays(result, next)
-          mergeMcpOrigins(source, next, "control-plane")
-          return mergePluginOrigins(source, next.plugin, kind)
+        const merge = (source: string, next: Info, kind?: ConfigPlugin.Scope, includeProviderSettings = false) => {
+          const value = includeProviderSettings ? next : withoutProviderSettings(next)
+          result = mergeConfigConcatArrays(result, value)
+          mergeMcpOrigins(source, value, "control-plane")
+          return mergePluginOrigins(source, value.plugin, kind)
         }
 
         const readClaudeConfig = Effect.fnUntraced(function* (source: string) {
@@ -776,7 +824,7 @@ export const layer = Layer.effect(
         }
 
         const global = yield* getGlobal()
-        yield* merge(Global.Path.config, global, "global")
+        yield* merge(Global.Path.config, global, "global", true)
 
         if (Flag.AGENTCOMPANY_CONFIG) {
           yield* merge(Flag.AGENTCOMPANY_CONFIG, yield* loadFile(Flag.AGENTCOMPANY_CONFIG))
@@ -1038,17 +1086,24 @@ export const layer = Layer.effect(
     const updateGlobal = Effect.fn("Config.updateGlobal")(function* (config: Info) {
       const file = globalConfigFile()
       const before = (yield* readConfigFile(file)) ?? "{}"
+      const providerFile = providerSettingsFile()
+      const existingProviderSettings = pickProviderSettings(yield* loadFile(providerFile))
+      const nextProviderSettings = mergeDeep(existingProviderSettings, pickProviderSettings(config))
 
       let next: Info
       if (!file.endsWith(".jsonc")) {
         const existing = ConfigParse.schema(Info, ConfigParse.jsonc(before, file), file)
-        const merged = mergeDeep(writable(existing), writable(config))
+        const merged = mergeDeep(writable(withoutProviderSettings(existing)), writable(withoutProviderSettings(config)))
         yield* fs.writeFileString(file, JSON.stringify(merged, null, 2)).pipe(Effect.orDie)
-        next = merged
+        next = mergeDeep(merged, nextProviderSettings)
       } else {
-        const updated = patchJsonc(before, writable(config))
-        next = ConfigParse.schema(Info, ConfigParse.jsonc(updated, file), file)
+        const updated = patchJsonc(before, writable(withoutProviderSettings(config)))
+        next = mergeDeep(ConfigParse.schema(Info, ConfigParse.jsonc(updated, file), file), nextProviderSettings)
         yield* fs.writeFileString(file, updated).pipe(Effect.orDie)
+      }
+
+      if (hasProviderSettings(nextProviderSettings)) {
+        yield* fs.writeFileString(providerFile, JSON.stringify(nextProviderSettings, null, 2)).pipe(Effect.orDie)
       }
 
       yield* invalidate()

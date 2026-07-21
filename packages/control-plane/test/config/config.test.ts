@@ -55,6 +55,8 @@ const it = testEffect(layer)
 const load = () => Effect.runPromise(Config.Service.use((svc) => svc.get()).pipe(Effect.scoped, Effect.provide(layer)))
 const save = (config: Config.Info) =>
   Effect.runPromise(Config.Service.use((svc) => svc.update(config)).pipe(Effect.scoped, Effect.provide(layer)))
+const saveGlobal = (config: Config.Info) =>
+  Effect.runPromise(Config.Service.use((svc) => svc.updateGlobal(config)).pipe(Effect.scoped, Effect.provide(layer)))
 const clear = (wait = false) =>
   Effect.runPromise(Config.Service.use((svc) => svc.invalidate(wait)).pipe(Effect.scoped, Effect.provide(layer)))
 const listDirs = () =>
@@ -127,7 +129,7 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
-test("loads JSON config file", async () => {
+test("loads non-provider settings from JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
@@ -141,10 +143,74 @@ test("loads JSON config file", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await load()
-      expect(config.model).toBe("test/model")
+      expect(config.model).toBeUndefined()
       expect(config.username).toBe("testuser")
     },
   })
+})
+
+test("loads provider settings only from the global Settings source", async () => {
+  await using globalTmp = await tmpdir()
+  await using projectTmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://control-plane.ai/config.json",
+        disabled_providers: ["project"],
+        model: "project/model",
+        provider: {
+          project: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { baseURL: "https://project.example.com/v1" },
+          },
+        },
+      })
+    },
+  })
+  const previous = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  await clear(true)
+
+  try {
+    await writeConfig(globalTmp.path, {
+      $schema: "https://control-plane.ai/config.json",
+      disabled_providers: ["legacy"],
+      model: "legacy/model",
+      provider: {
+        legacy: {
+          npm: "@ai-sdk/openai-compatible",
+          options: { baseURL: "https://legacy.example.com/v1" },
+        },
+      },
+    })
+    await writeManagedSettings({
+      disabled_providers: ["managed"],
+      model: "managed/model",
+    })
+
+    await Instance.provide({
+      directory: projectTmp.path,
+      fn: async () => {
+        const config = await load()
+        expect(config.model).toBe("legacy/model")
+        expect(config.disabled_providers).toEqual(["legacy"])
+        expect(config.provider?.legacy?.options?.baseURL).toBe("https://legacy.example.com/v1")
+        expect(config.provider?.project).toBeUndefined()
+      },
+    })
+    expect(await Bun.file(path.join(globalTmp.path, "provider-settings.json")).json()).toMatchObject({
+      model: "legacy/model",
+      disabled_providers: ["legacy"],
+    })
+
+    await saveGlobal({ model: "settings/model" })
+    await Instance.provide({
+      directory: projectTmp.path,
+      fn: async () => expect((await load()).model).toBe("settings/model"),
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = previous
+    await clear(true)
+  }
 })
 
 test("loads Claude Code MCP servers from home and project config", async () => {
@@ -311,7 +377,7 @@ test("loads project config from Cygwin paths on Windows", async () => {
   })
 })
 
-test("loads JSONC config file", async () => {
+test("loads non-provider settings from JSONC config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
@@ -329,13 +395,13 @@ test("loads JSONC config file", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await load()
-      expect(config.model).toBe("test/model")
+      expect(config.model).toBeUndefined()
       expect(config.username).toBe("testuser")
     },
   })
 })
 
-test("jsonc overrides json in the same directory", async () => {
+test("jsonc overrides json for non-provider settings in the same directory", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(
@@ -357,7 +423,7 @@ test("jsonc overrides json in the same directory", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await load()
-      expect(config.model).toBe("base")
+      expect(config.model).toBeUndefined()
       expect(config.username).toBe("base")
     },
   })
@@ -458,12 +524,7 @@ test("resolves env templates in account config with account token", async () => 
           },
         }),
       ),
-    config: () =>
-      Effect.succeed(
-        Option.some({
-          provider: { "control-plane": { options: { apiKey: "{env:AGENTCOMPANY_CONSOLE_TOKEN}" } } },
-        }),
-      ),
+    config: () => Effect.succeed(Option.some({ username: "{env:AGENTCOMPANY_CONSOLE_TOKEN}" })),
     token: () => Effect.succeed(Option.some(AccessToken.make("st_test_token"))),
   })
 
@@ -481,7 +542,7 @@ test("resolves env templates in account config with account token", async () => 
       Config.Service.use((svc) =>
         Effect.gen(function* () {
           const config = yield* svc.get()
-          expect(config.provider?.["control-plane"]?.options?.apiKey).toBe("st_test_token")
+          expect(config.username).toBe("st_test_token")
         }),
       ),
     ).pipe(Effect.scoped, Effect.provide(layer), Effect.provide(Npm.defaultLayer), Effect.runPromise)
@@ -1464,7 +1525,7 @@ test("migrates legacy write tool to edit permission", async () => {
 // Managed settings tests
 // Note: preload.ts sets AGENTCOMPANY_TEST_MANAGED_CONFIG which Global.Path.managedConfig uses
 
-test("managed settings override user settings", async () => {
+test("managed settings cannot override provider settings", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
@@ -1486,14 +1547,14 @@ test("managed settings override user settings", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await load()
-      expect(config.model).toBe("managed/model")
+      expect(config.model).toBeUndefined()
       expect(config.share).toBe("disabled")
       expect(config.username).toBe("testuser")
     },
   })
 })
 
-test("managed settings override project settings", async () => {
+test("managed settings cannot override provider availability", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
@@ -1515,7 +1576,7 @@ test("managed settings override project settings", async () => {
     fn: async () => {
       const config = await load()
       expect(config.autoupdate).toBe(false)
-      expect(config.disabled_providers).toEqual(["openai"])
+      expect(config.disabled_providers).toBeUndefined()
     },
   })
 })
@@ -1534,7 +1595,7 @@ test("missing managed settings file is not an error", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await load()
-      expect(config.model).toBe("user/model")
+      expect(config.model).toBeUndefined()
     },
   })
 })
@@ -2167,7 +2228,6 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
             path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://control-plane.ai/config.json",
-              model: "project/model",
               username: "project-user",
             }),
           )
@@ -2177,7 +2237,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         directory: tmp.path,
         fn: async () => {
           const config = await load()
-          // Project config should NOT be loaded - model should be default, not "project/model"
+          // Project configuration should not be loaded when the flag is set.
           expect(config.model).not.toBe("project/model")
           expect(config.username).not.toBe("project-user")
         },
@@ -2308,7 +2368,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
             path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://control-plane.ai/config.json",
-              model: "configdir/model",
+              username: "configdir-user",
             }),
           )
         },
@@ -2321,7 +2381,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
             path.join(dir, "agent-company.json"),
             JSON.stringify({
               $schema: "https://control-plane.ai/config.json",
-              model: "project/model",
+              username: "project-user",
             }),
           )
         },
@@ -2335,7 +2395,7 @@ describe("AGENTCOMPANY_DISABLE_PROJECT_CONFIG", () => {
         fn: async () => {
           const config = await load()
           // Should load from AGENTCOMPANY_CONFIG_DIR, not project
-          expect(config.model).toBe("configdir/model")
+          expect(config.username).toBe("configdir-user")
         },
       })
     } finally {
