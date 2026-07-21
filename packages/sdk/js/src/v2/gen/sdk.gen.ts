@@ -2697,7 +2697,7 @@ export class CompanyProject extends HeyApiClient {
   /**
    * Start an autonomous company project
    *
-   * Creates a persistent project and starts research. Execution stops at the product approval gate.
+   * Creates a persistent project, forms a dynamic task tree and starts autonomous execution.
    */
   public start<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -2811,7 +2811,7 @@ export class CompanyProject extends HeyApiClient {
   /**
    * Resume a blocked company project
    *
-   * Reuses the approved plan, repository and worktree while allowing a model change.
+   * Preserves the task tree and failed attempts, then resumes retryable work with an optional model override.
    */
   public retry<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2852,7 +2852,7 @@ export class CompanyProject extends HeyApiClient {
   /**
    * Resolve a company project human gate
    *
-   * Approval starts the next stage; rejection stops the project.
+   * Resolves an exceptional risk or merge gate and resumes eligible work when approved.
    */
   public resolveGate<ThrowOnError extends boolean = false>(
     parameters: {
