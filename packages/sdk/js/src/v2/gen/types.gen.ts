@@ -4736,6 +4736,14 @@ export type CompanyThreadEntriesResponses = {
             skills?: Array<string>
             tools?: Array<string>
             model?: string
+            usage?: {
+              source: "runtime" | "unavailable"
+              inputTokens?: number
+              outputTokens?: number
+              reasoningTokens?: number
+              cacheReadTokens?: number
+              cacheWriteTokens?: number
+            }
             body: string
             status?: string
             time: {

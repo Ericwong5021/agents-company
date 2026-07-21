@@ -57,6 +57,19 @@ export const AgentRunEventTable = sqliteTable(
   ],
 )
 
+export const AgentRunUsageTable = sqliteTable("agent_run_usage", {
+  agent_run_id: text()
+    .primaryKey()
+    .references(() => AgentRunTable.id, { onDelete: "cascade" }),
+  source: text().notNull(),
+  input_tokens: integer(),
+  output_tokens: integer(),
+  reasoning_tokens: integer(),
+  cache_read_tokens: integer(),
+  cache_write_tokens: integer(),
+  time_updated: integer().notNull(),
+})
+
 export const InternalExecutionMessageTable = sqliteTable(
   "internal_execution_message",
   {

@@ -843,7 +843,7 @@ export const layer: Layer.Layer<
                   cwd: Instance.worktree,
                   prompt: turn.prompt,
                   capabilityPacks: [],
-                  requiredRuntimeCapabilities: [],
+                  requiredRuntimeCapabilities: ["dynamicSkills", "governanceSignals", "usageAccounting"],
                   allowSignalPublishing: true,
                   systemPrompt: turn.systemPrompt,
                   groupSessionID: params.groupSessionID,

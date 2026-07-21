@@ -36,6 +36,9 @@ export class PiRuntimeAdapter implements AgentRuntimePort {
       approvals: true,
       reasoningEffort: true,
       subagents: false,
+      usageAccounting: true,
+      dynamicSkills: true,
+      governanceSignals: true,
     }
   }
   private readonly active = new Map<string, PiRuntimeEngine>()

@@ -8,6 +8,7 @@ import { BusEvent } from "@/bus/bus-event"
 import {
   AgentRunEventTable,
   AgentRunTable,
+  AgentRunUsageTable,
   InternalExecutionMessageTable,
   RuntimeHomeTable,
   SkillSnapshotTable,
@@ -70,6 +71,18 @@ export const EventInfo = z.object({
   timeCreated: z.number(),
 })
 export type EventInfo = z.infer<typeof EventInfo>
+
+export const Usage = z.object({
+  runID: z.string(),
+  source: z.enum(["runtime", "unavailable"]),
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  reasoningTokens: z.number().int().nonnegative().optional(),
+  cacheReadTokens: z.number().int().nonnegative().optional(),
+  cacheWriteTokens: z.number().int().nonnegative().optional(),
+  timeUpdated: z.number().int(),
+})
+export type Usage = z.infer<typeof Usage>
 
 export const CreateInput = z.object({
   id: z.string().optional(),
@@ -159,6 +172,19 @@ function eventFromRow(row: typeof AgentRunEventTable.$inferSelect): EventInfo {
   })
 }
 
+function usageFromRow(row: typeof AgentRunUsageTable.$inferSelect): Usage {
+  return Usage.parse({
+    runID: row.agent_run_id,
+    source: row.source,
+    inputTokens: row.input_tokens ?? undefined,
+    outputTokens: row.output_tokens ?? undefined,
+    reasoningTokens: row.reasoning_tokens ?? undefined,
+    cacheReadTokens: row.cache_read_tokens ?? undefined,
+    cacheWriteTokens: row.cache_write_tokens ?? undefined,
+    timeUpdated: row.time_updated,
+  })
+}
+
 export const Event = {
   Created: BusEvent.define("agent_run.created", Info),
   Updated: BusEvent.define("agent_run.updated", Info),
@@ -170,9 +196,11 @@ export interface Interface {
   readonly get: (id: string) => Effect.Effect<Info | undefined>
   readonly list: (input?: { agentID?: string; workflowRunID?: string; groupSessionID?: string; companyProjectID?: string; limit?: number }) => Effect.Effect<Info[]>
   readonly events: (runID: string) => Effect.Effect<EventInfo[]>
+  readonly usage: (runID: string) => Effect.Effect<Usage | undefined>
   readonly listRecoverable: () => Effect.Effect<Info[]>
   readonly transition: (input: TransitionInput) => Effect.Effect<Info | undefined>
   readonly recordEvent: (input: { runID: string; type: string; payload: Record<string, unknown> }) => Effect.Effect<EventInfo>
+  readonly recordUsage: (input: Omit<Usage, "timeUpdated">) => Effect.Effect<Usage>
   readonly enqueue: (input: EnqueueInput) => Effect.Effect<string>
   readonly claim: (input: { agentID: string; limit?: number }) => Effect.Effect<Array<{ id: string; priority: z.infer<typeof InternalMessagePriority>; body: string }>>
   readonly recordRuntimeHome: (input: { runID: string; path: string; credentialMode: "keychain" | "ephemeral"; state: "active" | "orphaned" | "destroyed" }) => Effect.Effect<void>
@@ -278,6 +306,13 @@ export const layer = Layer.effect(
       return rows.map(eventFromRow)
     })
 
+    const usage = Effect.fn("AgentRun.usage")(function* (runID: string) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) => db.select().from(AgentRunUsageTable).where(eq(AgentRunUsageTable.agent_run_id, runID)).get()),
+      )
+      return row ? usageFromRow(row) : undefined
+    })
+
     const listRecoverable = Effect.fn("AgentRun.listRecoverable")(function* () {
       const rows = yield* Effect.sync(() =>
         Database.use((db) =>
@@ -351,6 +386,29 @@ export const layer = Layer.effect(
         GlobalBus.emit("event", { directory: "global", payload: { type: Event.RuntimeEvent.type, properties: info } }),
       )
       return info
+    })
+
+    const recordUsage = Effect.fn("AgentRun.recordUsage")(function* (input: Omit<Usage, "timeUpdated">) {
+      const row = yield* Effect.sync(() =>
+        Database.transaction((db) => {
+          const existing = db.select().from(AgentRunUsageTable).where(eq(AgentRunUsageTable.agent_run_id, input.runID)).get()
+          const next = {
+            source: input.source === "runtime" ? "runtime" : existing?.source ?? "unavailable",
+            input_tokens: input.inputTokens ?? existing?.input_tokens ?? null,
+            output_tokens: input.outputTokens ?? existing?.output_tokens ?? null,
+            reasoning_tokens: input.reasoningTokens ?? existing?.reasoning_tokens ?? null,
+            cache_read_tokens: input.cacheReadTokens ?? existing?.cache_read_tokens ?? null,
+            cache_write_tokens: input.cacheWriteTokens ?? existing?.cache_write_tokens ?? null,
+            time_updated: Date.now(),
+          }
+          if (existing) {
+            return db.update(AgentRunUsageTable).set(next).where(eq(AgentRunUsageTable.agent_run_id, input.runID)).returning().get()
+          }
+          return db.insert(AgentRunUsageTable).values({ agent_run_id: input.runID, ...next }).returning().get()
+        }, { behavior: "immediate" }),
+      )
+      if (!row) return yield* Effect.die(new Error(`AgentRun.recordUsage: write failed for run="${input.runID}"`))
+      return usageFromRow(row)
     })
 
     const enqueue = Effect.fn("AgentRun.enqueue")(function* (input: EnqueueInput) {
@@ -454,7 +512,7 @@ export const layer = Layer.effect(
       )
     })
 
-    return { create, get, list, events, listRecoverable, transition, recordEvent, enqueue, claim, recordRuntimeHome, recordSkillSnapshot }
+    return { create, get, list, events, usage, listRecoverable, transition, recordEvent, recordUsage, enqueue, claim, recordRuntimeHome, recordSkillSnapshot }
   }),
 )
 

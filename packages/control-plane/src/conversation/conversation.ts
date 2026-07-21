@@ -7,7 +7,7 @@ import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/sto
 import * as Database from "@/storage/db"
 import { GroupMessageTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
 import { GroupSessionID } from "@/group-session/schema"
-import { AgentRunEventTable, AgentRunTable } from "@/agent-run/agent-run.sql"
+import { AgentRunEventTable, AgentRunTable, AgentRunUsageTable } from "@/agent-run/agent-run.sql"
 import { MessageTable, PartTable } from "@/session/session.sql"
 import { MessageID, PartID } from "@/session/schema"
 import {
@@ -149,6 +149,14 @@ export const ThreadAgentMessage = z
     skills: z.array(z.string()).optional(),
     tools: z.array(z.string()).optional(),
     model: z.string().optional(),
+    usage: z.object({
+      source: z.enum(["runtime", "unavailable"]),
+      inputTokens: z.number().int().nonnegative().optional(),
+      outputTokens: z.number().int().nonnegative().optional(),
+      reasoningTokens: z.number().int().nonnegative().optional(),
+      cacheReadTokens: z.number().int().nonnegative().optional(),
+      cacheWriteTokens: z.number().int().nonnegative().optional(),
+    }).optional(),
     body: z.string(),
     status: z.string().optional(),
     time: z.object({ created: z.number().int(), updated: z.number().int() }),
@@ -640,6 +648,18 @@ function readThreadEntries(input: {
               skills: [...new Set(skills)],
               tools: [...new Set(tools)],
               model: db.select({ model: AgentRunTable.model }).from(AgentRunTable).where(eq(AgentRunTable.id, runID)).get()?.model ?? undefined,
+              usage: (() => {
+                const usage = db.select().from(AgentRunUsageTable).where(eq(AgentRunUsageTable.agent_run_id, runID)).get()
+                if (!usage) return
+                return {
+                  source: usage.source as "runtime" | "unavailable",
+                  inputTokens: usage.input_tokens ?? undefined,
+                  outputTokens: usage.output_tokens ?? undefined,
+                  reasoningTokens: usage.reasoning_tokens ?? undefined,
+                  cacheReadTokens: usage.cache_read_tokens ?? undefined,
+                  cacheWriteTokens: usage.cache_write_tokens ?? undefined,
+                }
+              })(),
             }
           })(),
         ] as const),
@@ -668,6 +688,7 @@ function readThreadEntries(input: {
             skills: row.agent_run_id ? evidenceByRun.get(row.agent_run_id)?.skills : undefined,
             tools: row.agent_run_id ? evidenceByRun.get(row.agent_run_id)?.tools : undefined,
             model: row.agent_run_id ? evidenceByRun.get(row.agent_run_id)?.model : undefined,
+            usage: row.agent_run_id ? evidenceByRun.get(row.agent_run_id)?.usage : undefined,
             body: row.content,
             status: row.status_summary ?? undefined,
             time: { created: row.time_created, updated: row.time_updated },

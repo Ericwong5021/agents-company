@@ -26,6 +26,9 @@ const capabilities: Record<CliRuntimeID, RuntimeCapabilities> = {
     approvals: true,
     reasoningEffort: false,
     subagents: true,
+    usageAccounting: true,
+    dynamicSkills: false,
+    governanceSignals: false,
   },
   codex: {
     resume: true,
@@ -39,6 +42,9 @@ const capabilities: Record<CliRuntimeID, RuntimeCapabilities> = {
     approvals: true,
     reasoningEffort: true,
     subagents: true,
+    usageAccounting: true,
+    dynamicSkills: false,
+    governanceSignals: false,
   },
 }
 
@@ -54,7 +60,20 @@ function text(value: unknown): string | undefined {
   return [item.text, item.result, item.message, item.content, item.output_text].map(text).find((item): item is string => Boolean(item))
 }
 
-function command(input: AgentRunSpec): { binary: string; args: string[] } {
+export function codexPrompt(input: Pick<AgentRunSpec, "prompt" | "systemPrompt">) {
+  if (!input.systemPrompt.trim()) return input.prompt
+  return [
+    "<agent_company_context>",
+    input.systemPrompt.trim(),
+    "</agent_company_context>",
+    "",
+    "<agent_company_task>",
+    input.prompt,
+    "</agent_company_task>",
+  ].join("\n")
+}
+
+export function cliCommand(input: AgentRunSpec): { binary: string; args: string[] } {
   if (input.runtime === "codex") {
     const sandbox = input.permissionMode === "read_only" ? "read-only" : input.permissionMode === "full_access" ? "danger-full-access" : "workspace-write"
     const args = input.resumeSessionID
@@ -63,7 +82,7 @@ function command(input: AgentRunSpec): { binary: string; args: string[] } {
     if (input.model) args.push("--model", input.model)
     if (input.reasoningEffort) args.push("-c", `model_reasoning_effort=\"${input.reasoningEffort}\"`)
     if (input.resumeSessionID) args.push(input.resumeSessionID)
-    args.push(input.prompt)
+    args.push(codexPrompt(input))
     return { binary: "codex", args }
   }
 
@@ -92,7 +111,7 @@ function environment(input: AgentRunSpec): NodeJS.ProcessEnv {
 
 function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): AgentRunHandle {
   const startedAt = Date.now()
-  const processCommand = command(input)
+  const processCommand = cliCommand(input)
   const child = spawn(processCommand.binary, processCommand.args, {
     cwd: input.cwd,
     env: environment(input),

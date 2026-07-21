@@ -13,6 +13,13 @@ function sourceBody(source: ConversationThreadSource) {
   return source.detail.body
 }
 
+function usageLabel(usage: { source: "runtime" | "unavailable"; inputTokens?: number; outputTokens?: number; reasoningTokens?: number }) {
+  if (usage.source === "unavailable") return "用量 · Runtime 未提供"
+  const total = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
+  const reasoning = usage.reasoningTokens ? `，推理 ${usage.reasoningTokens.toLocaleString()}` : ""
+  return `Token · ${total.toLocaleString()}${reasoning}`
+}
+
 type ThreadTab = "worklog" | "outputs" | "preview"
 const threadPanelMemory = new Map<string, { tab: ThreadTab; selectedSourceID?: string }>()
 
@@ -224,6 +231,9 @@ export function ThreadPanel(props: {
                           </Show>
                           <Show when={entry.type === "agent_message" ? entry.message.model : undefined}>
                             {(model) => <span class="company-thread-agent-status">模型 · {model()}</span>}
+                          </Show>
+                          <Show when={entry.type === "agent_message" ? entry.message.usage : undefined}>
+                            {(usage) => <span class="company-thread-agent-status">{usageLabel(usage())}</span>}
                           </Show>
                           <Show when={entry.type === "message" ? entry : undefined}>
                             {(messageEntry) => (

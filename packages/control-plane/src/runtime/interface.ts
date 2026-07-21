@@ -25,6 +25,9 @@ export const RuntimeCapabilities = z.object({
   approvals: z.boolean(),
   reasoningEffort: z.boolean(),
   subagents: z.boolean(),
+  usageAccounting: z.boolean(),
+  dynamicSkills: z.boolean(),
+  governanceSignals: z.boolean(),
 })
 export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilities>
 

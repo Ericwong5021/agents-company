@@ -14,6 +14,7 @@ import {
   createPiRuntimeEngineFactory,
   createPiTools,
   createRuntimeHome,
+  extractRuntimeUsage,
   piProviderCredential,
   piProviderModel,
 } from "@/runtime"
@@ -209,6 +210,8 @@ export const layer = Layer.effect(
       const persist = (event: Parameters<typeof supervisor.start>[1] extends (event: infer Event) => void ? Event : never) => {
         writes = writes.then(async () => {
           await Effect.runPromise(runs.recordEvent({ runID: event.runID, type: `runtime.${event.type}`, payload: event.payload }))
+          const usage = extractRuntimeUsage(event.payload)
+          if (usage) await Effect.runPromise(runs.recordUsage({ runID: event.runID, source: "runtime", ...usage }))
           if (event.type === "started" || event.type === "session") {
             await Effect.runPromise(runs.transition({ id: event.runID, state: "running", sessionID: typeof event.payload.sessionID === "string" ? event.payload.sessionID : undefined }))
           }
@@ -234,6 +237,7 @@ export const layer = Layer.effect(
       }, persist)
       void handle.completion.then(async (result) => {
         await writes
+        await Effect.runPromise(runs.recordUsage({ runID: result.runID, source: "unavailable" }))
         const state = interrupted.delete(result.runID) ? "stopped" : result.exitCode === 0 ? "completed" : "failed"
         await Effect.runPromise(
           runs.transition({

@@ -214,6 +214,9 @@ function safeErrorSummary(error: unknown) {
   if (error instanceof SignalProjector.SignalProjectionRejected) {
     return "The board discussion could not be projected safely. Retry after reviewing the thread."
   }
+  if (error instanceof Error && error.message.includes("does not support required capabilities")) {
+    return "The selected runtime cannot join this board conversation because it lacks dynamic Skills or governed signal publishing. Choose Pi or configure an equivalent runtime adapter."
+  }
   return "The board discussion could not complete. Check the configured provider and retry."
 }
 

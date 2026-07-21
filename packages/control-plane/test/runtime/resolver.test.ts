@@ -18,6 +18,9 @@ const capabilities = (overrides: Partial<RuntimeCapabilities> = {}): RuntimeCapa
   approvals: true,
   reasoningEffort: true,
   subagents: false,
+  usageAccounting: true,
+  dynamicSkills: true,
+  governanceSignals: true,
   ...overrides,
 })
 
@@ -79,6 +82,16 @@ describe("RuntimeResolver", () => {
 
     await expect(resolver.resolve({ requiredCapabilities: ["workspaceWrite"] })).rejects.toThrow(
       "Runtime pi does not support required capabilities: workspaceWrite",
+    )
+  })
+
+  test("rejects a runtime without dynamic skills instead of silently degrading", async () => {
+    const resolver = new RuntimeResolver(
+      new RuntimeRegistry([adapter("codex", { capabilities: { dynamicSkills: false, governanceSignals: false } })]),
+    )
+
+    await expect(resolver.resolve({ explicitRuntime: "codex", requiredCapabilities: ["dynamicSkills", "governanceSignals"] })).rejects.toThrow(
+      "Runtime codex does not support required capabilities: dynamicSkills, governanceSignals",
     )
   })
 })
