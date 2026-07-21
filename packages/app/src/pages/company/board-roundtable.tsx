@@ -28,20 +28,6 @@ const FALLBACK_AVATARS = [
 
 const BOARD_FEED_NEAR_BOTTOM_PX = 48
 
-const PROJECT_AGENT: Record<string, { name: string; role: string; avatar: string }> = {
-  "board-ceo": { name: "CEO", role: "董事会终审", avatar: "/assets/company/product-lead.png" },
-  "project-lead": { name: "项目负责人", role: "Project Lead", avatar: "/assets/company/product-lead.png" },
-  "market-researcher": { name: "市场研究员", role: "Research", avatar: "/assets/company/ui-implementer.png" },
-  "product-strategist": { name: "产品策略师", role: "Product", avatar: "/assets/company/ui-implementer.png" },
-  "game-product-strategist": { name: "产品策略师", role: "Product", avatar: "/assets/company/ui-implementer.png" },
-  "technical-researcher": { name: "技术研究员", role: "Engineering", avatar: "/assets/company/backend-engineer.png" },
-  "product-manager": { name: "产品经理", role: "PM", avatar: "/assets/company/product-lead.png" },
-  "software-architect": { name: "软件架构师", role: "Architecture", avatar: "/assets/company/backend-engineer.png" },
-  "qa-engineer": { name: "QA 工程师", role: "Quality", avatar: "/assets/company/qa-agent.png" },
-  "mvp-developer": { name: "开发负责人", role: "Engineering", avatar: "/assets/company/backend-engineer.png" },
-  "repair-engineer": { name: "修复工程师", role: "Engineering", avatar: "/assets/company/backend-engineer.png" },
-}
-
 type BoardMember = CompanyReadyWorkspaceSnapshot["company"]["board"][number]
 
 export type BoardChatItem = {
@@ -72,13 +58,11 @@ export function projectChatItems(project: CompanyProjectExecutionState) {
 }
 
 export function projectResumeDescription(project: CompanyProjectExecutionState) {
-  if (project.work_items.some((item) => item.kind === "implementation" || item.kind === "verification")) {
-    return "可以保留失败记录、已批准计划和现有仓库，并使用当前可用模型继续开发。"
-  }
-  if (project.work_items.some((item) => ["product", "architecture", "qa_plan"].includes(item.kind))) {
-    return "可以保留失败记录、已批准的立项结论和已有规划工作项，并使用当前可用模型继续规划。"
-  }
-  return "可以保留失败记录和已有研究工作项，并使用当前可用模型继续调研。"
+  if (project.work_items.some((item) => item.work_type === "coding"))
+    return "可以保留任务树、失败 Attempt、现有工作树与验证证据，并使用当前可用模型继续执行。"
+  if (project.work_items.some((item) => item.kind === "worker" || item.kind === "reviewer"))
+    return "可以保留任务树、失败 Attempt 和已接受产出，并从阻塞节点继续执行。"
+  return "可以保留 Charter 和规划失败记录，重新生成动态任务树。"
 }
 
 function memberFor(authorID: string, members: BoardMember[]) {
@@ -142,12 +126,10 @@ function sameDay(left: number, right: number) {
 }
 
 function projectStatusLabel(status: CompanyProjectExecutionState["project"]["status"]) {
-  if (status === "researching") return "立项调研中"
-  if (status === "awaiting_project_approval") return "等待董事会批准立项"
-  if (status === "planning") return "组建团队与拆解任务"
-  if (status === "awaiting_development_approval") return "等待批准开始执行"
-  if (status === "developing") return "任务执行中"
-  if (status === "verifying") return "董事会终审中"
+  if (status === "planning") return "形成 Charter 与动态任务树"
+  if (status === "executing") return "任务执行中"
+  if (status === "reviewing") return "独立复核中"
+  if (status === "awaiting_approval") return "等待高风险或合并审批"
   if (status === "completed") return "评审通过，已交付"
   if (status === "blocked") return "执行受阻"
   if (status === "rejected") return "项目已驳回"
@@ -155,16 +137,15 @@ function projectStatusLabel(status: CompanyProjectExecutionState["project"]["sta
 }
 
 function gateActionLabel(kind: CompanyProjectGate["kind"]) {
-  if (kind === "project_approval") return "董事会批准立项"
-  if (kind === "development_approval") return "批准团队开始执行"
+  if (kind === "risk_approval") return "批准高风险操作"
   return "批准交付并合并"
 }
 
 function projectAgent(agentID?: string) {
   if (!agentID) return { name: "Agent Company", role: "System", avatar: "/assets/company/product-lead.png" }
-  return PROJECT_AGENT[agentID] ?? {
+  return {
     name: agentID,
-    role: "Agent",
+    role: "Dynamic role",
     avatar: "/assets/company/product-lead.png",
   }
 }

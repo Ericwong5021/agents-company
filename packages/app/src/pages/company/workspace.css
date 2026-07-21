@@ -3070,10 +3070,9 @@
   font-weight: 600;
 }
 
-.company-project-state[data-status="researching"],
 .company-project-state[data-status="planning"],
-.company-project-state[data-status="developing"],
-.company-project-state[data-status="verifying"],
+.company-project-state[data-status="executing"],
+.company-project-state[data-status="reviewing"],
 .company-project-entry-title > span[data-status="running"],
 .company-project-entry-title > span[data-status="pending"] {
   color: var(--company-accent) !important;

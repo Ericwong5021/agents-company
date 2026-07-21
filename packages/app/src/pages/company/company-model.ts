@@ -103,12 +103,10 @@ export type ConversationSnapshot = {
 
 export type CompanyProjectStatus =
   | "intake"
-  | "researching"
-  | "awaiting_project_approval"
   | "planning"
-  | "awaiting_development_approval"
-  | "developing"
-  | "verifying"
+  | "executing"
+  | "reviewing"
+  | "awaiting_approval"
   | "completed"
   | "rejected"
   | "blocked"
@@ -130,11 +128,26 @@ export type CompanyProjectSummary = {
 
 export type CompanyProjectWorkItem = {
   id: string
+  project_id: string
+  plan_id: string
+  parent_id?: string
   title: string
   description: string
-  kind: string
+  kind: "planner" | "worker" | "reviewer"
+  work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+  role: string
+  capability_packs: string[]
+  decision_scope: string[]
+  resource_scope: string[]
+  model_group: "ultra" | "standard" | "lite"
+  risk_level: "low" | "medium" | "high"
+  review_status: "pending" | "running" | "accepted" | "rejected" | "not_required"
   status: "pending" | "running" | "blocked" | "failed" | "completed" | "cancelled"
   owner_agent_id?: string
+  workflow_run_id?: string
+  acceptance_criteria: string[]
+  attempt: number
+  max_attempts: number
   error?: string
   started_at?: number
   completed_at?: number
@@ -156,7 +169,7 @@ export type CompanyProjectArtifact = {
 
 export type CompanyProjectGate = {
   id: string
-  kind: "project_approval" | "development_approval" | "merge_approval"
+  kind: "risk_approval" | "merge_approval"
   status: "pending" | "approved" | "rejected"
   title: string
   summary: string
@@ -164,6 +177,36 @@ export type CompanyProjectGate = {
   decision_note?: string
   requested_at: number
   decided_at?: number
+}
+
+export type CompanyProjectAgentRun = {
+  id: string
+  agentID: string
+  state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
+  workItemID?: string
+  model?: string
+}
+
+export type CompanyProjectTokenBreakdown = {
+  total: number
+  input: number
+  output: number
+  reasoning: number
+  cacheRead: number
+  cacheWrite: number
+  cost: number
+}
+
+export type CompanyProjectUsage = {
+  companyProjectID: string
+  runCount: number
+  observedTokens: CompanyProjectTokenBreakdown
+  workItems: Array<{
+    workItemID: string
+    runIDs: string[]
+    models: string[]
+    observedTokens: CompanyProjectTokenBreakdown
+  }>
 }
 
 export type CompanyProjectExecutionState = {
@@ -177,6 +220,8 @@ export type CompanyProjectExecutionState = {
   work_items: CompanyProjectWorkItem[]
   artifacts: CompanyProjectArtifact[]
   gates: CompanyProjectGate[]
+  agent_runs: CompanyProjectAgentRun[]
+  usage: CompanyProjectUsage
 }
 
 export function companyProjectExecutionStateEquals(

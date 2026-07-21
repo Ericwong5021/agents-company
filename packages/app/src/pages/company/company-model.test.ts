@@ -84,7 +84,7 @@ describe("company project background refresh", () => {
       id: "project-1",
       goal: "Ship silently refreshed state",
       title: "Silent refresh",
-      status: "awaiting_project_approval",
+      status: "awaiting_approval",
       output_dir: "/tmp/project-1",
       created_at: 1,
       updated_at: 2,
@@ -92,6 +92,13 @@ describe("company project background refresh", () => {
     work_items: [],
     artifacts: [],
     gates: [],
+    agent_runs: [],
+    usage: {
+      companyProjectID: "project-1",
+      runCount: 0,
+      observedTokens: { total: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+      workItems: [],
+    },
   } as NonNullable<Parameters<typeof companyProjectExecutionStateEquals>[0]>
 
   test("treats a freshly parsed but unchanged response as the same signal value", () => {

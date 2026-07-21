@@ -71,7 +71,7 @@ describe("board chat timeline", () => {
         id: "project-1",
         goal: "Ship a local product",
         title: "Local product",
-        status: "awaiting_project_approval",
+        status: "awaiting_approval",
         output_dir: "/tmp/project-1",
         created_at: 1,
         updated_at: 30,
@@ -81,7 +81,8 @@ describe("board chat timeline", () => {
           id: "work-1",
           title: "Research",
           description: "Collect evidence",
-          kind: "research",
+          kind: "worker",
+          work_type: "research",
           status: "completed",
           created_at: 10,
           updated_at: 20,
@@ -91,14 +92,21 @@ describe("board chat timeline", () => {
       gates: [
         {
           id: "gate-1",
-          kind: "project_approval",
+          kind: "risk_approval",
           status: "pending",
           title: "Approve",
           summary: "Evidence complete",
           requested_at: 30,
         },
       ],
-    } as Parameters<typeof projectChatItems>[0]
+      agent_runs: [],
+      usage: {
+        companyProjectID: "project-1",
+        runCount: 0,
+        observedTokens: { total: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+        workItems: [],
+      },
+    } as unknown as Parameters<typeof projectChatItems>[0]
 
     expect(projectChatItems(project).map((item) => [item.type, item.id])).toEqual([
       ["work_item", "work-1"],
@@ -111,9 +119,9 @@ describe("blocked project recovery copy", () => {
   test("describes research recovery without claiming that a plan or repository already exists", () => {
     expect(
       projectResumeDescription({
-        work_items: [{ kind: "research" }, { kind: "synthesis" }],
-      } as Parameters<typeof projectResumeDescription>[0]),
-    ).toBe("可以保留失败记录和已有研究工作项，并使用当前可用模型继续调研。")
+        work_items: [{ kind: "planner", work_type: "decision" }],
+      } as unknown as Parameters<typeof projectResumeDescription>[0]),
+    ).toBe("可以保留 Charter 和规划失败记录，重新生成动态任务树。")
   })
 })
 

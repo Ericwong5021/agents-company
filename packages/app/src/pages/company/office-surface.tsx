@@ -34,19 +34,6 @@ function relativeTime(since: number) {
   return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(since)
 }
 
-const PROJECT_ROLE_LABEL: Record<string, string> = {
-  "project-lead": "项目负责人",
-  "market-researcher": "市场研究员",
-  "product-strategist": "产品策略师",
-  "game-product-strategist": "产品策略师",
-  "technical-researcher": "技术研究员",
-  "product-manager": "产品经理",
-  "software-architect": "软件架构师",
-  "qa-engineer": "QA 工程师",
-  "mvp-developer": "开发负责人",
-  "repair-engineer": "修复工程师",
-}
-
 export function OfficeSurface(props: {
   snapshot: Accessor<CompanyReadyWorkspaceSnapshot>
   conversation: Accessor<ConversationSnapshot>
@@ -159,13 +146,14 @@ export function OfficeSurface(props: {
                   member.items.find((item) => item.status === "running") ??
                   member.items.find((item) => ["blocked", "failed"].includes(item.status)) ??
                   member.items.at(-1)
+                const role = () => current()?.role ?? member.items.at(-1)?.role ?? member.agentID
                 return (
                   <button type="button" class="company-project-member-card" onClick={props.onOpenProject}>
                     <span class="company-project-member-mark" aria-hidden="true">
-                      {(PROJECT_ROLE_LABEL[member.agentID] ?? member.agentID).slice(0, 2)}
+                      {role().slice(0, 2)}
                     </span>
                     <span>
-                      <strong>{PROJECT_ROLE_LABEL[member.agentID] ?? member.agentID}</strong>
+                      <strong>{role()}</strong>
                       <small>{current()?.title ?? "等待任务"}</small>
                     </span>
                     <span class="company-project-state" data-status={current()?.status ?? "pending"}>
