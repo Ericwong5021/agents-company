@@ -1,7 +1,7 @@
 # Implementation Plan：Pre-Public 纵向交付
 
-> 状态：M0、M1、M2 已完成；当前进入 M3 Charter、自治治理与领域中立交付闭环
-> 事实基线更新：2026-07-18
+> 状态：M0、M1、M2 已完成；当前优先完成 M3A-1 自然 Agent Turn 与显式 Skill，再进入 M3B Charter、自治治理与领域中立交付闭环
+> 事实基线更新：2026-07-21
 > 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -204,7 +204,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：建立以 Pi 为内置默认、Codex 与 Claude Code 为可选平级实现的统一 Agent Runtime；Workflow Engine 负责公司流程，不建设第二套 CLI、数据库或产品消息系统。
 
-状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通；Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。
+状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通；当前最高优先级是 M3A-1，以统一 Agent Turn 修复机械式董事会发言并接通 Pi 显式 Skill；Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。
 
 主要工作：
 
@@ -227,6 +227,196 @@ M3A 退出标准：
 - 不支持的 runtime/lifecycle/permission 组合在启动前失败，并返回可供 UI 和审计使用的明确原因；
 - 运行事实可以重建 Session、Thread 和高信号投影，SSE 断线不影响权威状态；
 - 没有新增平行数据库、wanman API 或产品消息模型。
+
+#### M3A-1 — 自然 Agent Turn 与显式 Skill（当前开发计划）
+
+目标：所有员工使用 Pi Agent 作为默认心智运行时；角色只定义身份、职责、关注范围和决策权限，不规定固定回答模式；普通话题以自然语言交流，专业话题由 Agent 在运行中显式调用获准 Skill。董事会、项目群、Direct 和后续 Ambient 共用同一个 Agent Turn 内核，不再各自拼装人格和工作流 Prompt。
+
+该工作预计涉及 `packages/control-plane` 与 `packages/app` 中 12–16 个实现和测试文件，属于跨越 GroupSession、AgentRun、Pi Runtime、Skill、Conversation Projection 和 WebUI 的纵向改造。四批必须按顺序实施，但每一批都能独立合并、独立验收；任何后续批次停止时，已合并系统仍保持可用。
+
+##### 范围与非范围
+
+本工作包含：
+
+- 建立统一 `AgentTurn` Module，作为所有员工发言的唯一业务 Interface；
+- 复用 CompanyAgent、SOUL、INSTRUCT、Relationship、Memory 与 `ContextResolver`，统一旧 Session 和 AgentRun 的身份上下文语义；
+- 让 Pi 在运行时显式调用 `skill(name)`，实际调用时才读取完整 Skill、校验权限并写入不可变快照；
+- 修正 GroupSession 的发言选择、当前轮上下文、沉默语义和固定能力包；
+- 将自然聊天与 decision、risk、action、approval、artifact 等治理信号分开投影；
+- 在 Thread 工作记录展示真实 Skill、工具、成本、复核和失败事件，不污染主聊天文本。
+
+本工作不包含：
+
+- 新增“闲聊模式”“会议模式”等决定回答格式的状态机；
+- 为 CEO、CTO、Product Lead 或其他岗位预装固定专家回答模板；
+- 允许 Skill 绕过 Agent、Thread、Work Item、工作区或外部副作用权限；
+- 在本阶段实现模型微调、语音、数字人、复杂 2D/3D 办公室或多用户云协作；
+- 保留旧 AgentCompany 的 Prompt、配置、数据库或产品接口兼容层。
+
+##### 目标 Module 与 Seam
+
+```text
+ChannelMessage / ConversationThread
+                │
+                ▼
+        GroupSession + Bidding
+        只选择是否以及由谁发言
+                │
+                ▼
+          AgentTurn Module
+    ┌───────────┼────────────┐
+    ▼           ▼            ▼
+Identity     Context      Skill Manifest
+Assembler    Resolver     名称与描述
+    └───────────┼────────────┘
+                ▼
+          AgentRun Supervisor
+                ▼
+         AgentRuntimePort Seam
+                ▼
+          PiRuntimeAdapter
+                │
+       ┌────────┴────────┐
+       ▼                 ▼
+  自然语言回答      显式 skill(name)
+                           │
+                           ▼
+          Skill Resolver + Permission
+                           │
+              ┌────────────┴───────────┐
+              ▼                        ▼
+      SkillSnapshot / Event     本轮授权工具集合
+```
+
+依赖方向必须保持单向：产品会话调用 `AgentTurn`，`AgentTurn` 调用 AgentRun 和 Context/Skill Interface，AgentRun 通过 `AgentRuntimePort` 调用 Pi Adapter。Pi、Skill 或投影层不得反向依赖 GroupSession，避免形成循环。
+
+`AgentTurn` Interface 只接收 Agent、Thread、当前消息、同轮 transcript、发言原因和已授权工作范围，返回自然语言结果、运行引用和结构化事件引用。身份组装、模型选择、Runtime Home、Skill manifest、权限检查、快照、成本和失败审计都隐藏在其 Implementation 内。
+
+##### 第一批 — 恢复自然董事会聊天
+
+交付结果：当前董事会立即从固定流程执行器变为正常群聊；即使后三批暂缓，用户也能获得自然、连贯、不会伪造空输出的对话。
+
+实施目标：
+
+1. 修改 `src/group-session/group-session.ts`，普通发言不再强制绑定 `board-strategy@1` 或软件仓库 Prompt；
+2. Bidding 只产生 `must / want / could / pass` 意愿并选择必要发言者，取消 work-scoped 会话默认全员发言；
+3. 每位发言者获得原始用户消息、完整 Thread 历史和当前轮已产生的有效 transcript，禁止只串联上一位 Agent 的输出；
+4. 将无文本结果视为沉默或 pass，不写入用户可见消息，不再生成 `(no output)`；
+5. 修改 `src/conversation/runtime.ts`，取消每轮固定由 Product Lead 生成结构化综合；保留已有明确工作目标的治理投影能力；
+6. 为问候、自由讨论、单人回应、多人自然接话、全员 pass、模型空输出和同轮上下文新增回归测试。
+
+第一批退出标准：
+
+- 用户发送“大家好”时，不调用任何 Capability Pack 或 Skill，不要求所有董事发言；
+- 回复为自然对话文本，不出现战略动作清单、验收矩阵或 `(no output)`；
+- 后发言 Agent 能引用原始消息和本轮前序有效发言；
+- 全员 pass 时保留用户消息并正常结束运行，不制造 Agent 消息或失败状态；
+- 现有工作型董事会消息仍能产生可追溯 Thread 和运行事件。
+
+##### 第二批 — 统一 AgentTurn 与身份上下文
+
+交付结果：董事会和项目群首先接入统一 Agent 心智入口；即使显式 Skill 尚未上线，Agent 也已经基于持续身份、关系和可见上下文自然交流。
+
+实施目标：
+
+1. 新建 `src/agent-turn` Module，收敛一次发言的输入、上下文组装、Runtime/Model 解析、AgentRun 启动和结果记录；
+2. 将旧 `session/llm.ts` 已有的 SOUL、INSTRUCT、Relationship 和 CompanyAgent 读取逻辑提取为共享 Identity Context Implementation；
+3. 身份上下文按 Identity、Responsibility、Relationship/Memory、Situation 四层组装；职责描述参与关注和判断，不包含固定输出格式；
+4. 所有资料继续通过 `ContextResolver` 先做硬权限过滤，AgentTurn 不直接扫描其他 Agent 的 private 空间；
+5. GroupSession 改为只负责 Bidding 和轮次推进，每次实际发言统一调用 AgentTurn；
+6. AgentTurn 继续通过现有 `AgentRuntimePort` 选择 Pi、Codex 或 Claude Code，Pi 保持默认，不在 GroupSession 中加入 Runtime 专属分支；
+7. 为身份注入、私域拒绝、关系可见性、模型解析、Runtime 失败和 Thread 连续性新增测试。
+
+第二批退出标准：
+
+- 同一 Agent 在不同 Thread 中保持一致人格和职责，但不重复固定话术；
+- 不同 Agent 对同一消息表现出不同关注点，差异可以追溯到身份、职责或关系事实；
+- 无权限 Agent 无法通过群聊、Prompt 注入或上下文组装读取 private 内容；
+- GroupSession 不再直接拼装角色专属系统 Prompt 或 Runtime 工具；
+- Pi 不可用时返回结构化运行失败，已持久消息与 Thread 不丢失。
+
+##### 第三批 — Pi 运行时显式 Skill
+
+交付结果：Agent 可以在正常对话中自主识别专业任务并显式加载 Skill；普通聊天不承担 Skill Token 和回答模式污染。
+
+实施目标：
+
+1. 在 AgentTurn 系统上下文中只注入当前 Agent 可见 Skill 的名称、描述和调用规则，不预加载 `SKILL.md` 正文；
+2. 为 Pi 工具桥增加运行时 `skill(name)` Adapter，复用现有 Skill discovery、owner visibility 和 permission 规则；
+3. 首次实际调用时读取完整 Skill 及获准资源，写入 `runs/<run-id>/skills` 不可变快照，并记录版本、校验和、来源、调用 Agent 与 `activation_reason=agent`；
+4. 将“Skill 可见”“Skill 已加载”“工具已授权”建模为不同事实；加载 Skill 不能自动扩大硬权限；
+5. Pi 构造时注册稳定工具桥，所有工具调用继续经过 `beforeToolCall` 和本轮授权范围。Skill 只能激活预授权工具；缺失权限时返回可审计阻塞，不能静默提权；
+6. 同一运行重复调用同一版本 Skill 时复用快照；版本变化只影响新运行，不改写历史快照；
+7. AgentRun 事件记录 Skill 请求、加载、拒绝、工具调用、成本和失败，Conversation 投影只引用这些事实；
+8. 为无需 Skill 的聊天、正确 Skill 调用、未知 Skill、private Skill 越权、工具越权、重复调用、版本快照和运行恢复新增测试。
+
+第三批退出标准：
+
+- 普通问候的 AgentRun 中 Skill 调用数为零；
+- “评估这个版本能否发布”等专业任务会由相关 Agent 显式调用匹配 Skill，并在调用后继续回答；
+- 运行结束后可以从 SkillSnapshot 精确重建当时真正使用的 Skill 内容；
+- 角色拥有某项 Skill 不等于拥有写文件、联网、消息、审批或外部副作用权限；
+- private Skill 只对所属 Agent 可见，名称枚举和错误信息也不泄漏其存在；
+- Skill 或工具失败保留在工作记录中，但不会伪造成用户可见结论。
+
+##### 第四批 — 治理信号与 WebUI 工作记录分层
+
+交付结果：Agent 可以像真人一样说话，同时让公司系统可靠获得决策、风险、行动项和专业能力证据；主聊天保持可读，Thread 保持可审计。
+
+实施目标：
+
+1. Conversation Runtime 不再从每次自然发言强制提炼总结；只有 Agent 显式发布信号、治理规则命中或已有工作状态发生变化时才创建高信号投影；
+2. 自然语言保存在 ChannelMessage，decision、risk、action、approval、artifact 和 intervention 使用独立结构化事实并引用来源消息/运行；
+3. Thread 工作记录展示使用过的 Skill、工具、模型、Token/成本、权限阻塞、复核链和失败尝试；
+4. 主聊天默认只展示自然语言与真正高信号结果，不展示底层 Skill 正文、工具参数、空输出或内部错误堆栈；
+5. WebUI 员工卡片和 Thread 复用真实 AgentRun/Activity 投影，不创建装饰性“正在思考/正在研究”状态；
+6. 增加自然讨论无信号、显式决策、专业 Skill 证据、失败可见、刷新/SSE 重连和进程重启后的投影一致性测试。
+
+第四批退出标准：
+
+- 一段自然聊天不会自动生成虚假计划、风险或验收结论；
+- Agent 表达明确决策或行动时，主聊天与结构化治理事实互相引用且内容一致；
+- 用户能在 Thread 中看到“谁使用了什么 Skill、为什么调用、消耗多少、是否失败、由谁复核”；
+- 刷新、SSE 断线和 Control Plane 重启后，聊天、SkillSnapshot 和治理投影均能从权威事实重建；
+- WebUI 不再把 Work Item、Skill、成本和复核链压扁成无法追溯的单层消息。
+
+##### 验证命令与人工验收
+
+自动验证从 `packages/control-plane` 执行，不从仓库根目录运行测试：
+
+```text
+bun test test/group-session/group-session.test.ts test/group-session/scheduler/BiddingScheduler.test.ts
+bun test test/runtime/pi-tools.test.ts test/runtime/pi-engine.test.ts test/runtime/pi-adapter.test.ts
+bun test test/skill/skill.test.ts test/skill/discovery.test.ts test/tool/skill.test.ts
+bun test test/conversation/runtime.test.ts test/conversation/signal-projector.test.ts test/conversation/restart.test.ts
+bun typecheck
+```
+
+涉及共享 WebUI 后，从 `packages/app` 执行该包现有类型检查、单元测试、生产构建和真实本地 Server Playwright。若产品 Interface 或 Zod response 发生变化，运行 `./packages/sdk/js/script/build.ts` 重新生成 JavaScript SDK，再验证 Desktop/Browser 共用契约。
+
+人工验收固定使用同一组场景：
+
+1. 在董事会发送“大家好”，确认自然回应、非全员强制发言、零 Skill 调用和无 `(no output)`；
+2. 连续追问一条前序消息，确认后发言者理解当前轮和 Thread 上下文；
+3. 发送“评估当前版本是否可以发布”，确认相关 Agent 显式调用验收 Skill，其他成员可以 pass；
+4. 让只读 Agent 尝试通过 Skill 修改文件，确认被权限层阻止并留下审计事件；
+5. 刷新页面并重启 Control Plane，确认聊天、Skill 证据、成本和治理信号仍一致；
+6. 打开 Thread 工作记录，确认失败尝试可见但主聊天没有内部噪音。
+
+##### 数据、依赖、风险与回滚
+
+- 本计划不要求兼容旧本地数据库；开发期可以清空旧数据库后以当前 schema 重建，但正式实现仍不得用 UI fixture 或内存状态代替权威持久化；
+- 不引入新语言、独立服务、外部数据库或新第三方账号；继续使用现有 Bun、Effect、Drizzle、Pi Agent Core、Provider 配置和 Local Control Plane；
+- 最脆弱假设是 Pi 工具集合在 Agent 创建后无法安全动态替换。本计划通过“稳定注册工具桥 + 每次调用权限检查 + Skill 只激活预授权工具”承受该限制；如果未来 Pi 支持安全的动态工具更新，只替换 Pi Adapter Implementation，不改变 AgentTurn 或权限 Seam；
+- 首版对话连续性允许每次 AgentTurn 从持久 Thread、身份和记忆重建上下文，不依赖 Pi 跨进程 resume。若延迟或 Token 成本未达到 PRD 门槛，再在 AgentTurn 内增加 `idle_cached` 生命周期，不改变上层 Interface；
+- 第一、二批可以通过恢复旧 GroupSession 路由回滚且不触碰数据；第三、四批写入的 SkillSnapshot 和事件是追加事实，回滚时停止新投影并保留历史记录，不删除或改写已产生审计事实；
+- 任一批次若导致自然聊天回归，可以单独关闭该批 Runtime capability，但不得回退到固定专家团队、固定阶段工作流或生产 fixture。
+
+##### 明确拒绝的替代方案
+
+拒绝直接把所有 AgentTurn 切回旧 Session 工具体系。旧 Session 已有身份和 Skill 能力，短期改动更少，但会形成与 AgentRun、Runtime Home、SkillSnapshot、恢复和成本治理平行的第二套执行内核。正确做法是提取并复用其 Identity/Skill Implementation，让 AgentRun 成为统一运行事实源。
+
+最小热修只包含第一批，可以立刻消除问候场景的机械感；它不构成 M3A-1 完成，因为没有实现统一 AgentTurn、显式 Skill 和审计闭环。
 
 #### M3B：Charter、动态组织与领域交付
 
@@ -525,4 +715,4 @@ M0 App Shell 修复
 - M3 必须证明现有 Workflow/Admission 能在三类代表性任务中复用同一治理契约，并在导入仓库和严格 Worktree 状态机下完成软件交付；
 - 如果任一验证失败，只重写对应产品 application service / adaptor，不重写共享 WebUI 或整个 Agent Runtime。
 
-M0、M1、M2 已完成并通过各自退出标准。当前下一步是 M3：建立 `Goal → Charter → Project → Work Item` 正式领域链路、动态责任、领域验证与软件深度适配器；M4 并行建立常驻体验、通知恢复和可供员工卡片复用的 AgentActivityProjection。
+M0、M1、M2 已完成并通过各自退出标准。当前下一步固定为 M3A-1，按“自然董事会聊天 → 统一 AgentTurn 与身份上下文 → Pi 显式 Skill → 治理信号与 WebUI 工作记录分层”四批交付；M3A-1 退出后再推进 M3B 的 `Goal → Charter → Project → Work Item` 正式领域链路。M4 可以并行建立常驻体验、通知恢复和可供员工卡片复用的 AgentActivityProjection，但不得绕过 AgentTurn 或另建行为状态来源。
