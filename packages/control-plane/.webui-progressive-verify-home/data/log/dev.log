@@ -1897,3 +1897,18 @@ INFO  2026-07-17T10:25:13 +524ms service=vcs branch=main initialized
 INFO  2026-07-17T10:25:13 +0ms service=bus type=file.watcher.updated subscribing
 INFO  2026-07-17T10:25:13 +1ms service=server status=completed duration=1128 method=GET path=/vcs request
 INFO  2026-07-17T10:25:22 +8885ms service=server buffered=0 global event disconnected
+DEBUG 2026-07-17T10:25:45 +22679ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:45 +12ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:46 +1035ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:49 +2723ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:49 +49ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:49 +313ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:52 +3021ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T10:25:52 +237ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T13:04:02 +9489211ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T13:04:02 +27ms service=bus type=file.watcher.updated publishing
+INFO  2026-07-17T13:05:03 +61451ms service=server method=GET path=/company request
+INFO  2026-07-17T13:05:03 +0ms service=server status=started method=GET path=/company request
+INFO  2026-07-17T13:05:03 +18ms service=server status=completed duration=17 method=GET path=/company request
+DEBUG 2026-07-17T13:05:03 +0ms service=bus type=file.watcher.updated publishing
+DEBUG 2026-07-17T13:05:03 +23ms service=bus type=file.watcher.updated publishing
