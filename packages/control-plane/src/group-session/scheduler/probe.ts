@@ -86,7 +86,7 @@ export interface ProbeCtx {
   agentSvc: Agent.Interface
   provider: Provider.Interface
   llm: LLM.Interface
-  probeAgent: Agent.Info
+  probeAgent?: Agent.Info
   model?: { providerID: ProviderID; modelID: ModelID }
 }
 
@@ -100,6 +100,8 @@ export function probeOne(
   input: ProbeInput,
 ): Effect.Effect<Bid> {
   return Effect.gen(function* () {
+    const probeAgent = ctx.probeAgent
+    if (!probeAgent) return fallbackPass("probe agent unavailable")
     const model = ctx.model
       ? yield* ctx.provider.getModel(ctx.model.providerID, ctx.model.modelID)
       : yield* Effect.gen(function* () {
@@ -126,7 +128,7 @@ export function probeOne(
 
     const text = yield* ctx.llm
       .stream({
-        agent: ctx.probeAgent,
+        agent: probeAgent,
         user,
         system: [],
         prebuiltSystem: [probePrompt],

@@ -165,15 +165,6 @@ describe.serial("M2 signal projector", () => {
     await expect(
       project({
         draft: {
-          signal_type: "plan",
-          body: "Create a delivery plan.",
-          author: { kind: "agent", id: "board-product-lead" },
-        },
-      }),
-    ).rejects.toMatchObject({ name: "ConversationSignalProjectionRejected", data: { reason: "unsupported_signal" } })
-    await expect(
-      project({
-        draft: {
           signal_type: "decision",
           body: "Approve the direction.",
           author: { kind: "agent", id: "board-product-lead" },
@@ -208,6 +199,25 @@ describe.serial("M2 signal projector", () => {
         },
       }),
     ).rejects.toMatchObject({ name: "ConversationSignalProjectionRejected", data: { reason: "delivery_requires_fact" } })
+  })
+
+  test.serial("projects an explicit plan as a discussion proposal", async () => {
+    const result = await project({
+      draft: {
+        signal_type: "plan",
+        body: "Validate the core user path before expanding scope.",
+        author: { kind: "agent", id: "board-product-lead" },
+      },
+    })
+
+    expect(
+      Database.use((db) => db.select().from(ChannelMessageTable).where(eq(ChannelMessageTable.id, result.channelMessageID)).get()),
+    ).toMatchObject({
+      author_kind: "agent",
+      author_id: "board-product-lead",
+      signal_type: "plan",
+      body: "Validate the core user path before expanding scope.",
+    })
   })
 
   test.serial("writes the channel message, projection, and ordered sources atomically after a committed response is lost", async () => {

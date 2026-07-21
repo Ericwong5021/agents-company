@@ -229,7 +229,7 @@ export const layer = Layer.effect(
           Skill.fmt(availableSkills, { verbose: false }),
           "Use the skill tool only when the current task genuinely needs a listed professional procedure. Do not load skills for ordinary conversation.",
           input.allowSignalPublishing
-            ? "Use publish_signal only after you have reached a concrete decision, status, risk, or intervention worth showing outside this worklog."
+            ? "Use publish_signal only after you have reached a concrete conclusion, plan, status, risk, or intervention worth showing outside this worklog. Publish a plan only when the team has a concrete direction that the owner may choose to turn into a project; ordinary discussion remains ordinary discussion."
             : "",
         ]
           .filter(Boolean)

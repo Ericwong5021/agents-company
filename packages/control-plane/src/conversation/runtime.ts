@@ -29,7 +29,7 @@ const BOARD_ROLES = ["ceo", "cto", "product_lead"] as const
 
 const PublishedSignal = z
   .object({
-    signal_type: z.enum(["conclusion", "status", "risk", "intervention"]),
+    signal_type: z.enum(["conclusion", "plan", "status", "risk", "intervention"]),
     body: z.string().trim().min(1).max(10_000),
   })
   .strict()

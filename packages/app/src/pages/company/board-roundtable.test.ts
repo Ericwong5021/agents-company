@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   boardChatItems,
   boardMemberStatus,
+  latestExecutionProposal,
   projectChatItems,
   projectResumeDescription,
   shouldAutoScrollBoardFeed,
@@ -63,6 +64,43 @@ describe("board chat timeline", () => {
       ["user-first", "你"],
       ["agent-later", "CTO"],
     ])
+  })
+
+  test("only exposes an explicit agent plan as an execution proposal", () => {
+    const proposal = latestExecutionProposal([
+      {
+        id: "user-plan",
+        authorKind: "user",
+        authorID: "usr_local",
+        authorName: "你",
+        role: "Owner",
+        body: "请直接执行",
+        created: 1,
+        signalType: "plan",
+      },
+      {
+        id: "agent-conclusion",
+        authorKind: "agent",
+        authorID: "board-ceo",
+        authorName: "CEO",
+        role: "ceo",
+        body: "我们还需要继续讨论。",
+        created: 2,
+        signalType: "conclusion",
+      },
+      {
+        id: "agent-plan",
+        authorKind: "agent",
+        authorID: "board-product-lead",
+        authorName: "产品负责人",
+        role: "product_lead",
+        body: "先验证核心用户路径，再决定是否扩展。",
+        created: 3,
+        signalType: "plan",
+      },
+    ])
+
+    expect(proposal?.id).toBe("agent-plan")
   })
 
   test("keeps persisted work items and approval gates in one chronological flow", () => {

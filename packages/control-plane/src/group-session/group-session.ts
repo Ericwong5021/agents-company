@@ -708,7 +708,6 @@ export const layer: Layer.Layer<
 
       // Resolve probe dependencies (from closure)
       const probeAgent = yield* agentSvc.get("probe").pipe(Effect.orElseSucceed(() => undefined))
-      if (!probeAgent) return
 
       const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent, model: companyModel }
 
@@ -755,6 +754,7 @@ export const layer: Layer.Layer<
       if (yield* isInterrupted()) return
 
       let selection = scheduler.decide(bids)
+      if (selection.type === "idle") selection = scheduler.decideFallback()
 
       // Emit BiddingCompleted with full scored-bid data
       {
@@ -763,7 +763,7 @@ export const layer: Layer.Layer<
           yield* bus.publish(Event.BiddingCompleted, {
             groupSessionID: params.groupSessionID,
             roundNum: scheduler.state.round,
-            winnerId: arb.winnerId,
+            winnerId: selection.type === "winner" || selection.type === "human_fallback" ? selection.agentId : arb.winnerId,
             bids: arb.scored.map((s) => ({
               agentId: s.agentId,
               level: s.bid.level,
@@ -806,7 +806,7 @@ export const layer: Layer.Layer<
           return
         }
 
-        if (selection.type === "winner") {
+        if (selection.type === "winner" || selection.type === "human_fallback") {
           const speakerId = selection.agentId
 
           const member = params.info.members.find((m) => m.companyAgentID === speakerId)

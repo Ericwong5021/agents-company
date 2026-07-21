@@ -233,10 +233,11 @@ export function createPiTools(
             name: "publish_signal",
             label: "Publish governance signal",
             description:
-              "Publish a concise decision, risk, status, or intervention when you have actually reached one. Do not use this for ordinary discussion.",
+              "Publish a concise conclusion, plan, risk, status, or intervention when you have actually reached one. A plan means the team has a concrete direction that the owner may choose to turn into a project; do not use it merely to end a conversation.",
             parameters: Type.Object({
               signal_type: Type.Union([
                 Type.Literal("conclusion"),
+                Type.Literal("plan"),
                 Type.Literal("status"),
                 Type.Literal("risk"),
                 Type.Literal("intervention"),

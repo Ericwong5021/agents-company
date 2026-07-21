@@ -25,7 +25,7 @@ import {
 } from "./schema"
 
 const PROJECTOR_VERSION = 1
-const M2_SIGNAL_TYPES = new Set(["conclusion", "status", "risk", "intervention"])
+const M2_SIGNAL_TYPES = new Set(["conclusion", "plan", "status", "risk", "intervention"])
 
 export const SignalProjectionRejected = NamedError.create(
   "ConversationSignalProjectionRejected",

@@ -36,7 +36,7 @@ export const prepare = Effect.fn("AgentTurn.prepare")(function* (input: PrepareI
     section("agent_instructions", agent.instruct),
     section("agent_relationships", agent.relationships),
     section("agent_workspace_context", workspace?.standingSummary),
-    "Speak naturally as this person. Your responsibilities guide what you notice and decide; they do not require a fixed response format.",
+    "Speak naturally as this person. Your responsibilities guide what you notice and decide; they do not require a fixed response format. A brief greeting, acknowledgement, or follow-up question is useful when the user opens a casual conversation.",
   ]
     .filter(Boolean)
     .join("\n\n")

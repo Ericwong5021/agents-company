@@ -101,25 +101,27 @@ function CompanyReadyWorkspace(props: {
     ),
   )
   const companyDisabledText = createMemo(() => language.t("company.workspace.board_messages_disabled"))
-  const boardGoal = createMemo(() => {
-    const entry = conversation().threadEntries.find(
-      (item) => item.type === "message" && item.message.author.kind === "user",
-    )
+  const projectGoal = createMemo(() => {
+    const entry = conversation().threadEntries
+      .filter((item) => item.type === "message" && item.message.author.kind === "agent" && item.message.signalType === "plan")
+      .at(-1)
     if (entry?.type === "message") return entry.message.body
-    return conversation().messages.find((message) => message.author.kind === "user")?.body ?? ""
+    return conversation().messages
+      .filter((message) => message.author.kind === "agent" && message.signalType === "plan")
+      .at(-1)?.body ?? ""
   })
 
   createEffect(() => {
-    const key = `${conversation().thread?.id ?? ""}:${boardGoal()}`
+    const key = `${conversation().thread?.id ?? ""}:${projectGoal()}`
     if (key === projectThreadKey) return
     projectThreadKey = key
     setCompanyProject(null)
     setProjectError(null)
-    if (!conversation().thread?.id || !boardGoal()) return
+    if (!conversation().thread?.id || !projectGoal()) return
     void props.dataSource
       .listCompanyProjects()
       .then((projects) => {
-        const matching = projects.filter((project) => project.goal === boardGoal())
+        const matching = projects.filter((project) => project.goal === projectGoal())
         setFailedProjectProviderIDs(
           matching.flatMap((project) =>
             project.status === "blocked" && project.provider_id ? [project.provider_id] : [],
@@ -129,7 +131,7 @@ function CompanyReadyWorkspace(props: {
       })
       .then((project) => (project ? props.dataSource.getCompanyProject(project.id) : null))
       .then((project) => {
-        if (`${conversation().thread?.id ?? ""}:${boardGoal()}` === key) setCompanyProject(project)
+        if (`${conversation().thread?.id ?? ""}:${projectGoal()}` === key) setCompanyProject(project)
       })
       .catch((error: unknown) => setProjectError(String(error)))
   })
@@ -151,7 +153,7 @@ function CompanyReadyWorkspace(props: {
   })
 
   const startCompanyProject = () => {
-    if (!boardGoal() || projectBusy()) return
+    if (!projectGoal() || projectBusy()) return
     if (!hasConfiguredProvider()) {
       setProjectError("没有已连接且配置了默认模型的供应商")
       return
@@ -159,7 +161,7 @@ function CompanyReadyWorkspace(props: {
     setProjectBusy(true)
     setProjectError(null)
     void props.dataSource
-      .startCompanyProject({ goal: boardGoal(), title: conversation().thread?.title })
+      .startCompanyProject({ goal: projectGoal(), title: conversation().thread?.title })
       .then((project) => props.dataSource.getCompanyProject(project.id))
       .then(setCompanyProject)
       .catch((error: unknown) => setProjectError(String(error)))

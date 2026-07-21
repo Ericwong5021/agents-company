@@ -67,7 +67,7 @@ describe("Pi governed tools", () => {
     await expect(
       signal.execute(
         "call-signal",
-        { signal_type: "risk", body: "Payment verification remains incomplete." },
+        { signal_type: "plan", body: "Validate the core user path before expanding scope." },
         new AbortController().signal,
       ),
     ).resolves.toBeDefined()

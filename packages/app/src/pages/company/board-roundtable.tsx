@@ -111,6 +111,10 @@ export function boardChatItems(
   )
 }
 
+export function latestExecutionProposal(items: BoardChatItem[]) {
+  return items.findLast((item) => item.authorKind === "agent" && item.signalType === "plan")
+}
+
 function timeLabel(created: number) {
   return new Date(created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
@@ -188,11 +192,13 @@ export function BoardRoundtable(props: {
 }) {
   const members = createMemo(() => props.members().slice(0, 4))
   const timeline = createMemo(() => boardChatItems(props.entries(), props.messages(), members()))
+  const executionProposal = createMemo(() => latestExecutionProposal(timeline()))
   const runState = createMemo(() => props.thread()?.run?.state)
   const running = createMemo(
     () => props.thread()?.status === "active" && ["queued", "running", "projecting"].includes(runState() ?? ""),
   )
-  const completed = createMemo(() => props.thread()?.status === "completed" || runState() === "completed")
+  const completed = createMemo(() => props.thread()?.status === "completed")
+  const awaitingNextMessage = createMemo(() => props.thread()?.status === "active" && runState() === "completed")
   const failed = createMemo(() => runState() === "failed")
   const projectTeamSize = createMemo(
     () => new Set(props.project()?.work_items.map((item) => item.owner_agent_id).filter(Boolean)).size,
@@ -230,7 +236,7 @@ export function BoardRoundtable(props: {
             <strong>{props.thread()?.title ?? "董事会群聊"}</strong>
             <span class="company-board-status" data-running={running() ? "true" : "false"}>
               <span aria-hidden="true" />
-              {running() ? "讨论中" : completed() ? "已完成" : failed() ? "已失败" : "待开始"}
+              {running() ? "讨论中" : failed() ? "已失败" : awaitingNextMessage() ? "可继续对话" : completed() ? "已完成" : "待开始"}
             </span>
           </div>
           <p>
@@ -346,27 +352,33 @@ export function BoardRoundtable(props: {
           </div>
         </Show>
 
-        <Show when={completed() && !props.project()}>
-          <article class="company-board-message company-project-action-message">
-            <div class="company-board-message-avatar" aria-hidden="true">
-              <img src="/assets/company/product-lead.png" alt="" />
-            </div>
-            <div class="company-board-message-main">
-              <header>
-                <strong>项目负责人</strong>
-                <span>Project Lead</span>
-                <time>{timeLabel(Date.now())}</time>
-              </header>
-              <div class="company-board-message-card company-project-action-card">
-                <strong>董事会结论已经具备执行条件</strong>
-                <p>进入执行后会创建项目章程、组建临时团队、拆分可验收任务，并在关键节点回到群里申请批准。</p>
-                <button type="button" disabled={props.projectBusy()} onClick={props.onStartProject}>
-                  <Icon name="arrow-right" size="small" />
-                  {props.projectBusy() ? "正在创建项目…" : "进入执行并组建团队"}
-                </button>
-              </div>
-            </div>
-          </article>
+        <Show when={executionProposal()} keyed>
+          {(proposal) => (
+            <Show when={!props.project()}>
+              <article class="company-board-message company-project-action-message">
+                <div class="company-board-message-avatar" aria-hidden="true">
+                  <Show when={proposal.avatar} fallback={<span>{proposal.authorName.slice(0, 1)}</span>}>
+                    {(avatar) => <img src={avatar()} alt="" />}
+                  </Show>
+                </div>
+                <div class="company-board-message-main">
+                  <header>
+                    <strong>{proposal.authorName}</strong>
+                    <span>{proposal.role}</span>
+                    <time>{timeLabel(proposal.created)}</time>
+                  </header>
+                  <div class="company-board-message-card company-project-action-card">
+                    <strong>董事会提出了执行提案</strong>
+                    <p>这是可选提案，不会自动启动项目；你可以继续讨论，或基于此提案创建项目。</p>
+                    <button type="button" disabled={props.projectBusy()} onClick={props.onStartProject}>
+                      <Icon name="arrow-right" size="small" />
+                      {props.projectBusy() ? "正在创建项目…" : "基于此提案创建项目"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </Show>
+          )}
         </Show>
 
         <Show when={props.project()}>
