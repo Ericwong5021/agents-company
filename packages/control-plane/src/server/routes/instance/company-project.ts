@@ -3,6 +3,8 @@ import { Hono } from "hono"
 import { Effect } from "effect"
 import z from "zod"
 import { CompanyProject, CompanyProjectExecution } from "@/company-project"
+import { AgentRun } from "@/agent-run/agent-run"
+import { TokenGovernance } from "@/token-governance/token-governance"
 import { lazy } from "@/util/lazy"
 import { jsonRequest } from "./trace"
 
@@ -53,7 +55,7 @@ export const CompanyProjectRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Start an autonomous company project",
-        description: "Creates a persistent project and starts research. Execution stops at the product approval gate.",
+        description: "Creates a persistent project, forms a dynamic task tree and starts autonomous execution.",
         operationId: "companyProject.start",
         responses: {
           200: {
@@ -81,15 +83,17 @@ export const CompanyProjectRoutes = lazy(() =>
           const service = yield* CompanyProject.Service
           const project = yield* service.get(c.req.valid("param").projectID)
           if (!project) return yield* Effect.fail(new Error("Company project not found"))
-          const [plans, work_items, artifacts, gates, charter, worktree_runs] = yield* Effect.all([
+          const [plans, work_items, artifacts, gates, charter, worktree_runs, agent_runs, usage] = yield* Effect.all([
             service.listPlans(project.id),
             service.listWorkItems(project.id),
             service.listArtifacts(project.id),
             service.listGates(project.id),
             service.getCharter(project.id),
             service.listWorktreeRuns(project.id),
+            (yield* AgentRun.Service).list({ companyProjectID: project.id, limit: 500 }),
+            (yield* TokenGovernance.Service).companyProject(project.id),
           ])
-          return { project, charter, plans, work_items, worktree_runs, artifacts, gates }
+          return { project, charter, plans, work_items, worktree_runs, artifacts, gates, agent_runs, usage }
         }),
     )
     .post(
@@ -114,7 +118,7 @@ export const CompanyProjectRoutes = lazy(() =>
       "/:projectID/retry",
       describeRoute({
         summary: "Resume a blocked company project",
-        description: "Reuses the approved plan, repository and worktree while allowing a model change.",
+        description: "Preserves the task tree and failed attempts, then resumes retryable work with an optional model override.",
         operationId: "companyProject.retry",
         responses: {
           200: {
@@ -137,7 +141,7 @@ export const CompanyProjectRoutes = lazy(() =>
       "/:projectID/gates/:gateID/resolve",
       describeRoute({
         summary: "Resolve a company project human gate",
-        description: "Approval starts the next stage; rejection stops the project.",
+        description: "Resolves an exceptional risk or merge gate and resumes eligible work when approved.",
         operationId: "companyProject.resolveGate",
         responses: {
           200: {

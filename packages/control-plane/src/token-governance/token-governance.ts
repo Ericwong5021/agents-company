@@ -2,6 +2,7 @@ import z from "zod"
 import { Context, Effect, Layer } from "effect"
 import { and, eq, inArray } from "drizzle-orm"
 import { AgentMessageTable } from "@/agent-message/agent-message.sql"
+import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { SessionTable, MessageTable } from "@/session/session.sql"
 import { ThreadTable } from "@/thread/thread.sql"
 import { Database } from "@/storage"
@@ -58,12 +59,30 @@ const ProjectTokenReport = z.object({
 })
 export type ProjectTokenReport = z.infer<typeof ProjectTokenReport>
 
+const CompanyProjectWorkItemTokenStats = z.object({
+  workItemID: z.string(),
+  runIDs: z.array(z.string()),
+  models: z.array(z.string()),
+  observedTokens: TokenBreakdown,
+})
+export type CompanyProjectWorkItemTokenStats = z.infer<typeof CompanyProjectWorkItemTokenStats>
+
+const CompanyProjectTokenReport = z.object({
+  companyProjectID: z.string(),
+  runCount: z.number(),
+  observedTokens: TokenBreakdown,
+  workItems: z.array(CompanyProjectWorkItemTokenStats),
+})
+export type CompanyProjectTokenReport = z.infer<typeof CompanyProjectTokenReport>
+
 export const Info = {
   TokenBreakdown,
   ThreadTokenStats,
   LevelTokenStats,
   RootNeedTokenReport,
   ProjectTokenReport,
+  CompanyProjectWorkItemTokenStats,
+  CompanyProjectTokenReport,
 }
 
 const emptyTokens = (): TokenBreakdown => ({
@@ -167,6 +186,7 @@ function buildThreadStats(input: {
 export interface Interface {
   readonly rootNeed: (rootNeedID: string) => Effect.Effect<RootNeedTokenReport>
   readonly project: (projectID: string) => Effect.Effect<ProjectTokenReport>
+  readonly companyProject: (companyProjectID: string) => Effect.Effect<CompanyProjectTokenReport>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/TokenGovernance") {}
@@ -286,7 +306,42 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       }
     })
 
-    return { rootNeed, project }
+    const companyProject = Effect.fn("TokenGovernance.companyProject")(function* (companyProjectID: string) {
+      const runs = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({
+              id: AgentRunTable.id,
+              workItemID: AgentRunTable.work_item_id,
+              sessionID: AgentRunTable.session_id,
+              model: AgentRunTable.model,
+            })
+            .from(AgentRunTable)
+            .where(eq(AgentRunTable.company_project_id, companyProjectID))
+            .all(),
+        ),
+      )
+      const tokens = sessionTokens(unique(runs.map((run) => run.sessionID)))
+      const workItems = unique(runs.map((run) => run.workItemID)).map((workItemID) => {
+        const itemRuns = runs.filter((run) => run.workItemID === workItemID)
+        return {
+          workItemID,
+          runIDs: itemRuns.map((run) => run.id),
+          models: unique(itemRuns.map((run) => run.model)),
+          observedTokens: itemRuns
+            .map((run) => (run.sessionID ? tokens.get(run.sessionID) ?? emptyTokens() : emptyTokens()))
+            .reduce(addTokens, emptyTokens()),
+        }
+      })
+      return {
+        companyProjectID,
+        runCount: runs.length,
+        observedTokens: workItems.map((item) => item.observedTokens).reduce(addTokens, emptyTokens()),
+        workItems,
+      }
+    })
+
+    return { rootNeed, project, companyProject }
   }),
 )
 

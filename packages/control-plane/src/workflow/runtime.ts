@@ -103,6 +103,8 @@ interface StartInput {
   parentActorID: string
   args?: unknown
   model?: { providerID: ProviderID; modelID: ModelID }
+  companyProjectID?: string
+  workItemID?: string
   maxConcurrentAgents?: number
   // Hard ceiling on total agents this run may spawn (lifecycle cap). Defaults to
   // MAX_LIFECYCLE_AGENTS (1000). Over-cap agent() calls return null (graceful
@@ -707,6 +709,8 @@ export const layer = Layer.effect(
               outputSchema: o.schema,
               workflowVersion: parsed.ok ? parsed.meta.version ?? "1" : "1",
               workflowRunID: runID,
+              companyProjectID: input.companyProjectID,
+              workItemID: input.workItemID,
             }),
           )
           agentRunID = started.runID
@@ -1214,6 +1218,8 @@ export const layer = Layer.effect(
                 parentActorID: input.parentActorID,
                 args: childArgs,
                 model: input.model,
+                companyProjectID: input.companyProjectID,
+                workItemID: input.workItemID,
                 // A child may narrow its workspace to a subdir but never widen it
                 // beyond the parent's root — resolveInWorkspace throws on escape
                 // (a script-logic error → fail loud), same posture as the jail itself.

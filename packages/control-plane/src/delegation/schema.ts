@@ -6,9 +6,19 @@ import type { AgentMessageID } from "@/agent-message/schema"
 // ---------------------------------------------------------------------------
 
 export const SubTask = z.object({
+  key: z.string().min(1).optional(),
+  parentKey: z.string().min(1).optional(),
   summary: z.string().min(1),
   acceptanceCriteria: z.string().min(1),
   suggestedAgent: z.string().optional(),
+  workType: z.enum(["coding", "decision", "research", "writing", "design", "analysis"]).optional(),
+  role: z.string().min(1).optional(),
+  capabilityPacks: z.array(z.string()).optional(),
+  decisionScope: z.array(z.string()).optional(),
+  resourceScope: z.array(z.string()).optional(),
+  modelGroup: z.enum(["standard", "lite"]).optional(),
+  riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  dependsOn: z.array(z.string()).optional(),
 })
 export type SubTask = z.infer<typeof SubTask>
 

@@ -41,7 +41,7 @@ const ApprovalSchema = z.object({
   id: z.string(),
   source: z.enum(["message", "project_gate"]),
   project_id: z.string().optional(),
-  gate_kind: z.enum(["project_approval", "development_approval"]).optional(),
+  gate_kind: z.enum(["risk_approval", "merge_approval"]).optional(),
   from_agent_id: z.string(),
   to_agent_id: z.string(),
   root_need_id: z.string().optional(),

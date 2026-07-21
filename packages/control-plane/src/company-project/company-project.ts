@@ -57,6 +57,10 @@ const workItemFromRow = (row: typeof CompanyWorkItemTable.$inferSelect) =>
     ...row,
     parent_id: row.parent_id ?? undefined,
     owner_agent_id: row.owner_agent_id ?? undefined,
+    workflow_run_id: row.workflow_run_id ?? undefined,
+    capability_packs: parseList(row.capability_packs_json),
+    decision_scope: parseList(row.decision_scope_json),
+    resource_scope: parseList(row.resource_scope_json),
     acceptance_criteria: parseList(row.acceptance_criteria_json),
     error: row.error ?? undefined,
     started_at: row.started_at ?? undefined,
@@ -103,16 +107,14 @@ const worktreeRunFromRow = (row: typeof CompanyWorktreeRunTable.$inferSelect) =>
   })
 
 const PROJECT_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
-  intake: ["researching", "blocked"],
-  researching: ["awaiting_project_approval", "blocked"],
-  awaiting_project_approval: ["planning", "rejected", "researching"],
-  planning: ["awaiting_development_approval", "blocked"],
-  awaiting_development_approval: ["developing", "rejected", "planning"],
-  developing: ["verifying", "blocked"],
-  verifying: ["developing", "completed", "blocked"],
+  intake: ["planning", "blocked"],
+  planning: ["executing", "reviewing", "awaiting_approval", "completed", "blocked"],
+  executing: ["executing", "reviewing", "awaiting_approval", "completed", "blocked"],
+  reviewing: ["executing", "reviewing", "awaiting_approval", "completed", "blocked"],
+  awaiting_approval: ["executing", "reviewing", "completed", "rejected", "blocked"],
   completed: [],
-  rejected: ["researching", "planning"],
-  blocked: ["researching", "planning", "developing", "verifying", "rejected"],
+  rejected: ["planning"],
+  blocked: ["planning", "executing", "reviewing", "rejected"],
 }
 
 export interface Interface {
@@ -158,7 +160,15 @@ export interface Interface {
     parent_id?: string
     title: string
     description: string
-    kind: string
+    kind: "planner" | "worker" | "reviewer"
+    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+    role: string
+    capability_packs?: string[]
+    decision_scope?: string[]
+    resource_scope?: string[]
+    model_group: "ultra" | "standard" | "lite"
+    risk_level?: "low" | "medium" | "high"
+    review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
     owner_agent_id?: string
     acceptance_criteria: string[]
     max_attempts?: number
@@ -167,6 +177,12 @@ export interface Interface {
   readonly listWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly readyWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly startWorkItem: (id: string) => Effect.Effect<WorkItem>
+  readonly assignWorkItem: (input: { id: string; owner_agent_id: string }) => Effect.Effect<WorkItem>
+  readonly setWorkItemRun: (input: { id: string; workflow_run_id?: string }) => Effect.Effect<WorkItem>
+  readonly setWorkItemReview: (input: {
+    id: string
+    review_status: "pending" | "running" | "accepted" | "rejected" | "not_required"
+  }) => Effect.Effect<WorkItem>
   readonly blockWorkItem: (input: { id: string; error: string }) => Effect.Effect<WorkItem>
   readonly retryWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly completeWorkItem: (id: string) => Effect.Effect<WorkItem>
@@ -215,6 +231,12 @@ export interface Interface {
     project_id?: string,
     status?: "pending" | "approved" | "rejected",
   ) => Effect.Effect<ApprovalGate[]>
+  readonly recordEvent: (input: {
+    project_id: string
+    type: string
+    data?: Record<string, unknown>
+    actor_id?: string
+  }) => Effect.Effect<void>
   readonly initRepository: (project_id: string) => Effect.Effect<string>
 }
 
@@ -351,7 +373,8 @@ export const layer = Layer.effect(
       const policy = DeliveryPolicy.parse(
         input.policy ?? {
           source_approval_preset: "balanced",
-          allow_workspace_write_after_development_approval: true,
+          allow_workspace_write: true,
+          require_high_risk_approval: true,
           require_human_merge: true,
           require_clean_worktree: true,
           require_main_branch_verification: true,
@@ -505,7 +528,15 @@ export const layer = Layer.effect(
       parent_id?: string
       title: string
       description: string
-      kind: string
+      kind: "planner" | "worker" | "reviewer"
+      work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+      role: string
+      capability_packs?: string[]
+      decision_scope?: string[]
+      resource_scope?: string[]
+      model_group: "ultra" | "standard" | "lite"
+      risk_level?: "low" | "medium" | "high"
+      review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
       owner_agent_id?: string
       acceptance_criteria: string[]
       max_attempts?: number
@@ -524,8 +555,17 @@ export const layer = Layer.effect(
               title: input.title,
               description: input.description,
               kind: input.kind,
+              work_type: input.work_type,
+              role: input.role,
+              capability_packs_json: JSON.stringify(input.capability_packs ?? []),
+              decision_scope_json: JSON.stringify(input.decision_scope ?? []),
+              resource_scope_json: JSON.stringify(input.resource_scope ?? []),
+              model_group: input.model_group,
+              risk_level: input.risk_level ?? "medium",
+              review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
               status: "pending",
               owner_agent_id: input.owner_agent_id ?? null,
+              workflow_run_id: null,
               acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
               max_attempts: input.max_attempts ?? 3,
               created_at: now,
@@ -541,7 +581,17 @@ export const layer = Layer.effect(
       yield* event(
         input.project_id,
         "work_item.created",
-        { work_item_id: id, title: input.title, depends_on: input.depends_on ?? [] },
+        {
+          work_item_id: id,
+          title: input.title,
+          kind: input.kind,
+          work_type: input.work_type,
+          role: input.role,
+          model_group: input.model_group,
+          decision_scope: input.decision_scope ?? [],
+          resource_scope: input.resource_scope ?? [],
+          depends_on: input.depends_on ?? [],
+        },
         input.owner_agent_id,
       )
       return workItemFromRow(
@@ -653,6 +703,35 @@ export const layer = Layer.effect(
       )
     })
 
+    const updateWorkItemFields = Effect.fn("CompanyProject.updateWorkItemFields")(function* (input: {
+      id: string
+      owner_agent_id?: string
+      workflow_run_id?: string | null
+      review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
+    }) {
+      const current = yield* Effect.sync(() =>
+        Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()),
+      )
+      if (!current) throw new Error(`Company work item not found: ${input.id}`)
+      yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyWorkItemTable)
+            .set({
+              ...(input.owner_agent_id !== undefined ? { owner_agent_id: input.owner_agent_id } : {}),
+              ...(input.workflow_run_id !== undefined ? { workflow_run_id: input.workflow_run_id } : {}),
+              ...(input.review_status !== undefined ? { review_status: input.review_status } : {}),
+              updated_at: Date.now(),
+            })
+            .where(eq(CompanyWorkItemTable.id, input.id))
+            .run(),
+        ),
+      )
+      return workItemFromRow(
+        Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get())!,
+      )
+    })
+
     const addArtifact = Effect.fn("CompanyProject.addArtifact")(function* (input: {
       project_id: string
       work_item_id?: string
@@ -719,8 +798,7 @@ export const layer = Layer.effect(
     }) {
       const current = yield* get(input.project_id)
       if (!current) throw new Error(`Company project not found: ${input.project_id}`)
-      const expected = input.kind === "project_approval" ? "researching" : input.kind === "development_approval" ? "planning" : undefined
-      if (expected && current.status !== expected)
+      if (["completed", "rejected", "blocked"].includes(current.status))
         throw new Error(`${input.kind} cannot be requested while project is ${current.status}`)
       if (input.kind === "merge_approval" && !input.worktree_run_id)
         throw new Error("Merge approval must belong to a worktree run")
@@ -755,10 +833,10 @@ export const layer = Layer.effect(
         decided_at: null,
       }
       yield* Effect.sync(() => Database.use((db) => db.insert(CompanyApprovalGateTable).values(row).run()))
-      if (input.kind === "project_approval" || input.kind === "development_approval")
+      if (current.status !== "awaiting_approval")
         yield* transition({
           id: input.project_id,
-          status: input.kind === "project_approval" ? "awaiting_project_approval" : "awaiting_development_approval",
+          status: "awaiting_approval",
           actor_id: input.requested_by_agent_id,
         })
       yield* event(input.project_id, "gate.requested", { gate_id: id, kind: input.kind }, input.requested_by_agent_id)
@@ -811,10 +889,10 @@ export const layer = Layer.effect(
               .run(),
           ),
         )
-      if (gate.kind === "project_approval" || gate.kind === "development_approval")
+      if (gate.kind === "risk_approval")
         yield* transition({
           id: gate.project_id,
-          status: input.decision === "reject" ? "rejected" : gate.kind === "project_approval" ? "planning" : "developing",
+          status: input.decision === "reject" ? "rejected" : "executing",
           actor_id: "user",
           reason: input.note,
         })
@@ -850,22 +928,9 @@ export const layer = Layer.effect(
     const initRepository = Effect.fn("CompanyProject.initRepository")(function* (project_id: string) {
       const project = yield* get(project_id)
       if (!project) throw new Error(`Company project not found: ${project_id}`)
-      const gate = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .select()
-            .from(CompanyApprovalGateTable)
-            .where(
-              and(
-                eq(CompanyApprovalGateTable.project_id, project_id),
-                eq(CompanyApprovalGateTable.kind, "development_approval"),
-                eq(CompanyApprovalGateTable.status, "approved"),
-              ),
-            )
-            .get(),
-        ),
-      )
-      if (!gate) throw new Error("Development approval is required before repository creation")
+      const charter = yield* getCharter(project_id)
+      if (!charter?.policy.allow_workspace_write)
+        throw new Error("Project Charter does not allow repository creation")
       const repo = path.join(project.output_dir, "repo")
       yield* Effect.promise(() => fs.mkdir(repo, { recursive: true }))
       if (!(yield* Effect.promise(() => Bun.file(path.join(repo, ".git", "HEAD")).exists()))) {
@@ -974,23 +1039,8 @@ export const layer = Layer.effect(
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       const charter = yield* getCharter(input.project_id)
       if (!charter) throw new Error("Project Charter is required before creating a worktree run")
-      const approved = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .select({ id: CompanyApprovalGateTable.id })
-            .from(CompanyApprovalGateTable)
-            .where(
-              and(
-                eq(CompanyApprovalGateTable.project_id, input.project_id),
-                eq(CompanyApprovalGateTable.kind, "development_approval"),
-                eq(CompanyApprovalGateTable.status, "approved"),
-              ),
-            )
-            .get(),
-        ),
-      )
-      if (!approved || !charter.policy.allow_workspace_write_after_development_approval)
-        throw new Error("Development approval is required before a writable worktree can be created")
+      if (!charter.policy.allow_workspace_write)
+        throw new Error("Project Charter does not allow a writable worktree")
       const repository_path = yield* initRepository(input.project_id)
       const initial = yield* git(repository_path, ["rev-parse", "HEAD"])
       if (initial.code !== 0) {
@@ -1222,6 +1272,11 @@ export const layer = Layer.effect(
       listWorkItems,
       readyWorkItems,
       startWorkItem: (id) => updateWorkItem(id, "running"),
+      assignWorkItem: (input) => updateWorkItemFields({ id: input.id, owner_agent_id: input.owner_agent_id }),
+      setWorkItemRun: (input) =>
+        updateWorkItemFields({ id: input.id, workflow_run_id: input.workflow_run_id ?? null }),
+      setWorkItemReview: (input) =>
+        updateWorkItemFields({ id: input.id, review_status: input.review_status }),
       blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error),
       retryWorkItem: (id) => updateWorkItem(id, "pending"),
       completeWorkItem: (id) => updateWorkItem(id, "completed"),
@@ -1237,6 +1292,7 @@ export const layer = Layer.effect(
       requestGate,
       resolveGate,
       listGates,
+      recordEvent: (input) => event(input.project_id, input.type, input.data ?? {}, input.actor_id),
       initRepository,
     })
   }),

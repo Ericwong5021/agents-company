@@ -1,447 +1,223 @@
 import { afterEach, describe, expect } from "bun:test"
+import fs from "fs/promises"
+import path from "path"
 import { Effect, Layer } from "effect"
+import { AgentRun } from "../../src/agent-run/agent-run"
+import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
+import { CompanyAgent } from "../../src/company-agent"
 import { CompanyProject, CompanyProjectExecution } from "../../src/company-project"
+import { Delegation } from "../../src/delegation/delegation"
+import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
+import * as Reputation from "../../src/reputation/reputation"
+import * as WorkType from "../../src/work-type/work-type"
 import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
-import { httpError, reply, type Item, type Reply } from "../lib/llm-server"
+import { reply, type Item, type Reply } from "../lib/llm-server"
 import { makeLayer, providerCfg } from "../workflow/lib"
-import { Bus } from "../../src/bus"
-import { WorkflowAgentFailed } from "../../src/workflow/events"
-import { Session } from "../../src/session"
-import { SessionID } from "../../src/session/schema"
-import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
 
 afterEach(async () => {
   await Instance.disposeAll()
 })
 
-const base = Layer.mergeAll(makeLayer(AgentRunSupervisor.defaultLayer), CompanyProject.defaultLayer)
-const it = testEffect(Layer.mergeAll(base, CompanyProjectExecution.layer.pipe(Layer.provide(base))))
-
-const report = (title: string) => ({
-  title,
-  summary: `${title} summary`,
-  findings: [{ claim: `${title} claim`, evidence: "verified", source_url: "https://example.com/source" }],
-  risks: ["scope"],
-  recommendation: "Build a minimal browser text game",
-})
-
-const proposal = {
-  title: "AI 文字冒险 MVP",
-  executive_summary: "有明确的低成本验证机会，建议立项",
-  recommendation: "go",
-  target_user: "喜欢短局文字冒险的玩家",
-  product_concept: "由 AI 驱动事件变化的五分钟文字冒险",
-  delivery_surface: "terminal",
-  mvp_scope: ["一条完整可通关路径", "选择改变状态", "失败与胜利结局"],
-  non_goals: ["账号", "联网多人", "付费"],
-  risks: ["内容重复"],
-  success_metrics: ["可安装启动", "完整试玩通过"],
-  evidence_summary: ["同类产品验证文字互动需求"],
-}
+const dependencies = Layer.mergeAll(
+  makeLayer(AgentRunSupervisor.defaultLayer),
+  CompanyProject.defaultLayer,
+  Delegation.defaultLayer,
+  Reputation.defaultLayer,
+  AgentRun.defaultLayer,
+  WorkType.defaultLayer,
+)
+const it = testEffect(Layer.mergeAll(dependencies, CompanyProjectExecution.layer.pipe(Layer.provide(dependencies))))
 
 const match = (needle: string) => (hit: { body: Record<string, unknown> }) => JSON.stringify(hit.body).includes(needle)
 
-const queueResearch = (llm: {
+const provideGlobalTestProvider = <A, E, R>(
+  dir: string,
+  url: string,
+  effect: Effect.Effect<A, E, R>,
+) =>
+  Effect.acquireUseRelease(
+    Effect.promise(async () => {
+      const previous = Global.Path.config
+      const config = path.join(dir, "global-config")
+      await fs.mkdir(config, { recursive: true })
+      await Bun.write(
+        path.join(config, "provider-settings.json"),
+        JSON.stringify({
+          ...providerCfg(url),
+          model: "test/test-model",
+          model_groups: {
+            ultra: "test/test-model",
+            standard: "test/test-model",
+            lite: "test/test-model",
+          },
+        }),
+      )
+      ;(Global.Path as { config: string }).config = config
+      return previous
+    }),
+    () => effect,
+    (previous) => Effect.sync(() => void ((Global.Path as { config: string }).config = previous)),
+  )
+
+const queueAdaptiveAnalysis = (llm: {
   pushMatch: (
     match: (hit: { url: URL; body: Record<string, unknown> }) => boolean,
     ...input: (Item | Reply)[]
   ) => Effect.Effect<void>
 }) =>
   Effect.gen(function* () {
-    yield* llm.pushMatch(match("市场与竞品研究"), reply().tool("StructuredOutput", report("market")))
-    yield* llm.pushMatch(match("用户与产品机会研究"), reply().tool("StructuredOutput", report("product")))
-    yield* llm.pushMatch(match("技术可行性研究"), reply().tool("StructuredOutput", report("technical")))
-    yield* llm.pushMatch(match("根据以下三份报告"), reply().tool("StructuredOutput", proposal))
+    yield* llm.pushMatch(
+      match("临时项目规划者"),
+      reply().text(JSON.stringify({
+        summary: "分析本地证据并形成可复核结论",
+        scope: ["分析给定证据"],
+        success_criteria: ["结论可由证据复核"],
+        constraints: ["不创建软件产品"],
+        acceptance_criteria: ["方法、发现、结论与限制完整"],
+        assumptions: [],
+      })).stop(),
+    )
+    yield* llm.pushMatch(
+      match("task decomposition specialist"),
+      reply().tool("StructuredOutput", {
+        subtasks: [
+          {
+            key: "evidence-analysis",
+            summary: "分析现有证据并形成结论",
+            acceptanceCriteria: "列出数据源、方法、发现、结论和限制",
+            workType: "analysis",
+            role: "evidence analyst",
+            capabilityPacks: ["research-analysis@1"],
+            decisionScope: ["证据含义"],
+            resourceScope: ["artifacts/evidence-analysis"],
+            modelGroup: "lite",
+            riskLevel: "low",
+            dependsOn: [],
+          },
+        ],
+      }),
+    )
+    yield* llm.pushMatch(
+      match("只执行这一个叶子任务"),
+      reply().text(JSON.stringify({
+        summary: "证据分析完成",
+        submission: {
+          question: "证据说明了什么",
+          dataSources: ["Project Charter", "本地输入"],
+          methodology: "对输入进行结构化归类，并将每个结论映射回对应证据。",
+          findings: ["现有证据支持继续完成限定范围内的分析交付。"],
+          conclusions: ["交付满足领域中立的分析目标。"],
+          limitations: ["没有外部数据集"],
+        },
+      })).stop(),
+    )
+    yield* llm.pushMatch(
+      match("你没有参与原任务"),
+      reply().text(JSON.stringify({
+        accepted: true,
+        summary: "交付物满足验收条件",
+        findings: [],
+        evidence_checked: ["方法", "发现", "结论", "限制"],
+      })).stop(),
+    )
   })
 
-describe("CompanyProject autonomous execution", () => {
-  it.live(
-    "cancels a running project and preserves the blocked attempt for retry",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* () {
-          const execution = yield* CompanyProjectExecution.Service
-          const projects = yield* CompanyProject.Service
-          const started = yield* execution.start({
-            goal: "验证取消项目执行",
-            provider_id: "test",
-            model_id: "test-model",
-          })
-
-          const cancelled = yield* execution.cancel({ project_id: started.project.id, reason: "切换模型" })
-
-          expect(cancelled.status).toBe("blocked")
-          expect(cancelled.active_run_id).toBeUndefined()
-          expect((yield* projects.listWorkItems(cancelled.id)).map((item) => item.status)).toEqual([
-            "blocked",
-            "blocked",
-            "blocked",
-            "pending",
-          ])
-          yield* Effect.sleep("300 millis")
-        }),
-        { git: true, config: providerCfg },
-      ),
-    30000,
-  )
-
-  it.live(
-    "uses the configured global default model when start omits an override",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* () {
-          const execution = yield* CompanyProjectExecution.Service
-          const started = yield* execution.start({ goal: "验证全局默认模型" })
-
-          expect(started.project.provider_id).toBe("test")
-          expect(started.project.model_id).toBe("test-model")
-          yield* execution.cancel({ project_id: started.project.id })
-          yield* Effect.sleep("300 millis")
-        }),
-        { git: true, config: (url) => ({ ...providerCfg(url), model: "test/test-model" }) },
-      ),
-    30000,
-  )
-
-  it.live(
-    "resumes blocked research in place without duplicating its plan or work items",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* ({ llm }) {
-          const execution = yield* CompanyProjectExecution.Service
-          const projects = yield* CompanyProject.Service
-          const started = yield* execution.start({
-            goal: "验证研究阶段原地恢复",
-            provider_id: "test",
-            model_id: "test-model",
-          })
-          yield* execution.cancel({ project_id: started.project.id, reason: "模拟模型不可用" })
-          yield* queueResearch(llm)
-
-          const retried = yield* execution.retry({
-            project_id: started.project.id,
-            provider_id: "test",
-            model_id: "test-model",
-          })
-          expect(retried.project.id).toBe(started.project.id)
-          expect(retried.project.status).toBe("researching")
-
-          const completed = yield* Effect.gen(function* () {
-            for (let i = 0; i < 300; i++) {
-              const current = yield* projects.get(started.project.id)
-              if (current?.status === "awaiting_project_approval") return current
-              yield* Effect.sleep("50 millis")
-            }
-            const current = yield* projects.get(started.project.id)
-            const items = yield* projects.listWorkItems(started.project.id)
-            throw new Error(
-              `retried research stage did not reach approval gate: status=${current?.status}, items=${JSON.stringify(items.map((item) => ({ title: item.title, status: item.status, error: item.error })))}, pending=${yield* llm.pending}, misses=${(yield* llm.misses).length}`,
-            )
-          })
-          expect(completed.id).toBe(started.project.id)
-          expect(yield* projects.listPlans(completed.id)).toHaveLength(1)
-          expect(yield* projects.listWorkItems(completed.id)).toHaveLength(4)
-          expect((yield* projects.listWorkItems(completed.id)).map((item) => item.status)).toEqual([
-            "completed",
-            "completed",
-            "completed",
-            "completed",
-          ])
-          // Workflow wait resolves before terminal bus/inbox tails finish.
-          yield* Effect.sleep("300 millis")
-        }),
-        { git: true, config: providerCfg },
-      ),
-    30000,
-  )
-
-  it.live(
-    "runs parallel research, persists artifacts, and stops at the product approval gate",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* ({ llm }) {
-          yield* queueResearch(llm)
-
-          const execution = yield* CompanyProjectExecution.Service
-          const projects = yield* CompanyProject.Service
-          const started = yield* execution.start({
-            goal: "调查 AI 小游戏并制作极简可试玩文字游戏 MVP",
-            provider_id: "test",
-            model_id: "test-model",
-          })
-
-          const completed = yield* Effect.gen(function* () {
-            for (let i = 0; i < 200; i++) {
-              const current = yield* projects.get(started.project.id)
-              if (current?.status === "awaiting_project_approval") return current
-              yield* Effect.sleep("50 millis")
-            }
-            throw new Error("research stage did not reach approval gate")
-          })
-          expect(completed.active_run_id).toBeUndefined()
-          expect((yield* projects.listWorkItems(completed.id)).map((item) => item.status)).toEqual([
-            "completed",
-            "completed",
-            "completed",
-            "completed",
-          ])
-          expect((yield* projects.listArtifacts(completed.id)).map((item) => item.kind)).toEqual([
-            "market_report",
-            "product_research",
-            "technical_report",
-            "project_proposal",
-          ])
-          const gates = yield* projects.listGates(completed.id, "pending")
-          expect(gates).toHaveLength(1)
-          expect(gates[0].kind).toBe("project_approval")
-          expect((yield* llm.inputs).every((input) => input.tool_choice === "auto")).toBe(true)
-        }),
-        { git: true, config: providerCfg },
-      ),
-    30000,
-  )
-
-  it.live(
-    "persists the underlying agent error when research exhausts its retries",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* ({ llm }) {
-          const invalidKey = () => httpError(401, { error: { message: "Invalid API Key" } })
-          yield* llm.pushMatch(match("市场与竞品研究"), invalidKey(), invalidKey(), invalidKey())
-          yield* llm.pushMatch(match("用户与产品机会研究"), invalidKey(), invalidKey(), invalidKey())
-          yield* llm.pushMatch(match("技术可行性研究"), invalidKey(), invalidKey(), invalidKey())
-
-          const execution = yield* CompanyProjectExecution.Service
-          const projects = yield* CompanyProject.Service
-          const started = yield* execution.start({
-            goal: "验证认证错误可见",
-            provider_id: "test",
-            model_id: "test-model",
-          })
-          const blocked = yield* Effect.gen(function* () {
-            for (let i = 0; i < 300; i++) {
-              const current = yield* projects.get(started.project.id)
-              if (current?.status === "blocked") return current
-              yield* Effect.sleep("50 millis")
-            }
-            throw new Error("research stage did not block after authentication failures")
-          })
-          expect(blocked.status).toBe("blocked")
-          expect((yield* projects.listWorkItems(blocked.id)).filter((item) => item.kind === "research"))
-            .toHaveLength(3)
-          expect(
-            (yield* projects.listWorkItems(blocked.id))
-              .filter((item) => item.kind === "research")
-              .map((item) => item.error),
-          ).toEqual([
-            expect.stringContaining("Invalid API Key"),
-            expect.stringContaining("Invalid API Key"),
-            expect.stringContaining("Invalid API Key"),
-          ])
-        }),
-        { git: true, config: providerCfg },
-      ),
-    30000,
-  )
-
-  it.live(
-    "crosses both gates and delivers a tested playable repository",
-    () =>
-      provideTmpdirServer(
-        Effect.fnUntraced(function* ({ llm }) {
-          yield* queueResearch(llm)
-          yield* llm.pushMatch(
-            match("制作极简 MVP PRD"),
-            reply().tool("StructuredOutput", {
-              product_name: "微光地牢",
-              problem: "短时间内体验有状态变化的文字冒险",
-              target_user: "轻量冒险玩家",
-              core_loop: ["阅读事件", "选择行动", "状态变化", "抵达结局"],
-              user_stories: ["玩家可以完成一局冒险"],
-              functional_requirements: ["至少三个选择节点", "胜利与失败结局"],
-              non_functional_requirements: ["本地启动", "自动化测试"],
-              non_goals: ["账号", "支付", "部署"],
-            }),
-          )
-          yield* llm.pushMatch(
-            match("制作可直接开发的架构"),
-            reply().tool("StructuredOutput", {
-              delivery_surface: "terminal",
-              stack: ["Bun", "TypeScript"],
-              modules: [{ name: "game", responsibility: "deterministic text adventure" }],
-              repository_layout: ["game.ts", "game.test.ts", "README.md"],
-              run_commands: ["bun run start", "bun test"],
-              test_strategy: ["state transition tests", "smoke playthrough"],
-              risks: ["content depth"],
-            }),
-          )
-          yield* llm.pushMatch(
-            match("定义独立验收计划"),
-            reply().tool("StructuredOutput", {
-              acceptance_criteria: ["installable", "tests pass", "playable"],
-              automated_tests: ["winning path", "invalid choice"],
-              smoke_tests: ["bun run start --smoke"],
-              playtest_scenarios: ["complete one winning run"],
-              release_gate: ["all commands exit 0"],
-            }),
-          )
-          yield* llm.pushMatch(
-            match("综合 PRD、架构和 QA 计划"),
-            reply().tool("StructuredOutput", {
-              summary: "实现一个无外部依赖的终端文字冒险",
-              implementation_order: ["game state", "CLI", "tests", "README"],
-              definition_of_done: ["bun test passes", "bun run start exits successfully", "playable path exists"],
-            }),
-          )
-
-          const developer = match("在当前独立 Git 仓库中完成 MVP")
-          // A transient stage-level model failure must trigger a fresh workflow
-          // attempt without human intervention or duplicating project records.
-          yield* llm.pushMatch(developer, httpError(400, { error: { message: "transient developer failure" } }))
-          yield* llm.pushMatch(
-            developer,
-            reply().tool("write", {
-              path: "package.json",
-              content:
-                JSON.stringify(
-                  {
-                    name: "glimmer-dungeon",
-                    type: "module",
-                    scripts: { start: "bun game.ts --smoke", test: "bun test game.test.ts" },
-                  },
-                  null,
-                  2,
-                ) + "\n",
-            }),
-          )
-          yield* llm.pushMatch(
-            developer,
-            reply().tool("write", {
-              path: "game.ts",
-              content:
-                "export function play(choices: string[]) { return choices.join(',') === 'torch,left' ? 'WIN' : 'LOSE' }\nif (import.meta.main) console.log(play(['torch','left']))\n",
-            }),
-          )
-          yield* llm.pushMatch(
-            developer,
-            reply().tool("write", {
-              path: "game.test.ts",
-              content:
-                "import { expect, test } from 'bun:test'\nimport { play } from './game'\ntest('winning path', () => expect(play(['torch','left'])).toBe('WIN'))\ntest('losing path', () => expect(play(['right'])).toBe('LOSE'))\n",
-            }),
-          )
-          yield* llm.pushMatch(
-            developer,
-            reply().tool("write", {
-              path: "README.md",
-              content: "# 微光地牢\n\n运行 `bun run start`，测试 `bun test`。选择火把并向左即可获胜。\n",
-            }),
-          )
-          yield* llm.pushMatch(
-            developer,
-            reply().tool("bash", {
-              command: "bun",
-              args: ["test"],
-            }),
-          )
-          yield* llm.textMatch(developer, "MVP implemented and committed")
-
-          const qa = match("你是独立 QA。检查当前仓库")
-          yield* llm.toolMatch(qa, "bash", {
-            command: "bun",
-            args: ["run", "test"],
-          })
-          yield* llm.textMatch(
-            qa,
-            JSON.stringify({
-              passed: true,
-              summary: "tests and smoke playthrough passed",
-              commands: [
-                { command: "bun run test", result: "2 pass, 0 fail" },
-                { command: "bun run start", result: "WIN" },
-              ],
-              failures: [],
-              playtest_notes: ["winning path completed"],
-            }),
-          )
-          yield* llm.textMatch(
-            match("你是董事会最终评审人"),
-            JSON.stringify({
-              approved: true,
-              summary: "交付满足已批准范围和 Definition of Done",
-              evidence_checked: ["独立 QA 命令", "宿主测试", "README"],
-              strengths: ["范围小", "测试可复现"],
-              concerns: [],
-            }),
-          )
-
-          const execution = yield* CompanyProjectExecution.Service
-          const projects = yield* CompanyProject.Service
-          const failures: unknown[] = []
-          let failedActorID: string | undefined
-          const bus = yield* Bus.Service
-          yield* bus.subscribeCallback(WorkflowAgentFailed, (event) => {
-            failures.push(event.properties)
-            failedActorID = event.properties.actorID
-          })
-          yield* bus.subscribeAllCallback((event) => {
-            if (event.type === "session.error") failures.push(event)
-          })
-          const started = yield* execution.start({
-            goal: "构建可试玩 AI 文字小游戏 MVP",
-            provider_id: "test",
-            model_id: "test-model",
-          })
-          const waitFor = (status: string) =>
-            Effect.gen(function* () {
-              for (let i = 0; i < 200; i++) {
+describe("CompanyProject adaptive execution", () => {
+  it.live("creates a dynamic planner-worker-reviewer tree and completes without fixed approval stages", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ dir, llm }) {
+        return yield* provideGlobalTestProvider(
+          dir,
+          llm.url,
+          Effect.gen(function* () {
+            yield* queueAdaptiveAnalysis(llm)
+            const execution = yield* CompanyProjectExecution.Service
+            const projects = yield* CompanyProject.Service
+            const started = yield* execution.start({
+              goal: "分析本地证据并产出一份可复核结论",
+              provider_id: "test",
+              model_id: "test-model",
+            })
+            const completed = yield* Effect.gen(function* () {
+              for (let attempt = 0; attempt < 300; attempt++) {
                 const current = yield* projects.get(started.project.id)
-                if (current?.status === status) return current
+                if (current?.status === "completed") return current
+                if (current?.status === "blocked") {
+                  const items = yield* projects.listWorkItems(current.id)
+                  throw new Error(`adaptive project blocked: ${JSON.stringify(items.map((item) => ({ title: item.title, error: item.error })))}`)
+                }
                 yield* Effect.sleep("50 millis")
               }
               const current = yield* projects.get(started.project.id)
               const items = yield* projects.listWorkItems(started.project.id)
-              const misses = yield* llm.misses
-              const pending = yield* llm.pending
-              const calls = yield* llm.calls
-              const messages = failedActorID
-                ? yield* (yield* Session.Service).messages({
-                    sessionID: SessionID.make(failedActorID),
-                    agentID: failedActorID,
-                  })
-                : []
+              const runService = yield* AgentRun.Service
+              const runs = yield* runService.list({ companyProjectID: started.project.id })
               throw new Error(
-                `project did not reach ${status}: current=${current?.status}, items=${JSON.stringify(items.map((item) => ({ title: item.title, status: item.status, error: item.error })))}, calls=${calls}, pending=${pending}, misses=${misses.length}, failures=${JSON.stringify(failures)}, messages=${JSON.stringify(messages)}`,
+                `adaptive project did not complete: ${JSON.stringify({
+                  project: current?.status,
+                  items: items.map((item) => ({
+                    title: item.title,
+                    kind: item.kind,
+                    status: item.status,
+                    review: item.review_status,
+                    run: item.workflow_run_id,
+                    error: item.error,
+                  })),
+                  pending: yield* llm.pending,
+                  misses: (yield* llm.misses).map((hit) => JSON.stringify(hit.body).slice(0, 240)),
+                  runs: yield* Effect.forEach(runs, (run) =>
+                    Effect.map(runService.events(run.id), (events) => ({
+                      id: run.id,
+                      state: run.state,
+                      error: run.safeErrorSummary,
+                      events: events.map((event) => ({ type: event.type, payload: event.payloadJSON })),
+                    })),
+                  ),
+                })}`,
               )
             })
+            const items = yield* projects.listWorkItems(completed.id)
+            expect(items.map((item) => item.kind)).toEqual(["planner", "worker", "reviewer"])
+            expect(items.find((item) => item.kind === "worker")).toMatchObject({
+              role: "evidence analyst",
+              work_type: "analysis",
+              model_group: "lite",
+              review_status: "accepted",
+            })
+            expect(yield* projects.listGates(completed.id)).toEqual([])
+            expect((yield* (yield* AgentRun.Service).list({ companyProjectID: completed.id })).map((run) => run.workItemID)).toEqual(
+              expect.arrayContaining(items.map((item) => item.id)),
+            )
+            const companyAgents = yield* CompanyAgent.Service
+            expect((yield* companyAgents.list()).map((agent) => agent.id)).not.toEqual(
+              expect.arrayContaining(["market-researcher", "product-strategist", "mvp-developer", "qa-engineer"]),
+            )
+          }),
+        )
+      }),
+      { git: true, config: providerCfg },
+    ),
+    30000,
+  )
 
-          yield* waitFor("awaiting_project_approval")
-          const productGate = (yield* projects.listGates(started.project.id, "pending"))[0]
-          yield* execution.resolveGate({ gate_id: productGate.id, decision: "approve" })
-          yield* waitFor("awaiting_development_approval")
-          const developmentGate = (yield* projects.listGates(started.project.id, "pending"))[0]
-          yield* execution.resolveGate({ gate_id: developmentGate.id, decision: "approve" })
-          yield* waitFor("verifying")
-          const mergeGate = (yield* projects.listGates(started.project.id, "pending"))[0]
-          expect(mergeGate.kind).toBe("merge_approval")
-          yield* execution.resolveGate({ gate_id: mergeGate.id, decision: "approve" })
-          const completed = yield* waitFor("completed")
-          const repo = `${completed.output_dir}/repo`
-          expect(yield* Effect.promise(() => Bun.file(`${repo}/.git/HEAD`).exists())).toBe(true)
-          expect(yield* Effect.promise(() => Bun.file(`${repo}/game.ts`).exists())).toBe(true)
-          expect(yield* Effect.promise(() => Bun.file(`${repo}/README.md`).exists())).toBe(true)
-          const test = Bun.spawn(["bun", "run", "test"], { cwd: repo, stdout: "pipe", stderr: "pipe" })
-          expect(yield* Effect.promise(() => test.exited)).toBe(0)
-          const verification = (yield* projects.listArtifacts(completed.id)).find(
-            (item) => item.kind === "verification_report",
-          )
-          expect(verification).toBeDefined()
-          expect(JSON.parse(verification!.content!).host).toMatchObject({ passed: true, worktree: [{ code: 0 }] })
-        }),
-        { git: true, config: providerCfg },
-      ),
+  it.live("cancels all running adaptive nodes and preserves the failed attempt", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* () {
+        const execution = yield* CompanyProjectExecution.Service
+        const projects = yield* CompanyProject.Service
+        const started = yield* execution.start({
+          goal: "验证动态项目取消",
+          provider_id: "test",
+          model_id: "test-model",
+        })
+        const cancelled = yield* execution.cancel({ project_id: started.project.id, reason: "用户停止" })
+        expect(cancelled.status).toBe("blocked")
+        expect((yield* projects.listWorkItems(cancelled.id))[0]).toMatchObject({ kind: "planner", status: "blocked" })
+      }),
+      { git: true, config: providerCfg },
+    ),
     30000,
   )
 })

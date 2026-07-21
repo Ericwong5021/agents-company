@@ -1,3 +1,26 @@
+CREATE TABLE `reputation` (
+  `id` text PRIMARY KEY NOT NULL,
+  `agentID` text NOT NULL,
+  `score` integer NOT NULL DEFAULT 0,
+  `time_created` integer NOT NULL,
+  `time_updated` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `reputation_agent_idx` ON `reputation` (`agentID`);
+--> statement-breakpoint
+CREATE TABLE `reputation_history` (
+  `id` text PRIMARY KEY NOT NULL,
+  `reputationID` text NOT NULL REFERENCES `reputation`(`id`),
+  `scoreChange` integer NOT NULL,
+  `reason` text NOT NULL,
+  `taskID` text,
+  `metadata` text,
+  `time_created` integer NOT NULL,
+  `time_updated` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `reputation_history_reputation_idx` ON `reputation_history` (`reputationID`);
+--> statement-breakpoint
 CREATE TABLE `company_project` (
   `id` text PRIMARY KEY NOT NULL,
   `goal` text NOT NULL,
@@ -44,8 +67,17 @@ CREATE TABLE `company_work_item` (
   `title` text NOT NULL,
   `description` text NOT NULL,
   `kind` text NOT NULL,
+  `work_type` text NOT NULL,
+  `role` text NOT NULL,
+  `capability_packs_json` text NOT NULL,
+  `decision_scope_json` text NOT NULL,
+  `resource_scope_json` text NOT NULL,
+  `model_group` text NOT NULL,
+  `risk_level` text NOT NULL,
+  `review_status` text NOT NULL,
   `status` text NOT NULL,
   `owner_agent_id` text,
+  `workflow_run_id` text,
   `acceptance_criteria_json` text NOT NULL,
   `attempt` integer NOT NULL DEFAULT 0,
   `max_attempts` integer NOT NULL DEFAULT 3,

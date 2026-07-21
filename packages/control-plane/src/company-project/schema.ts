@@ -2,12 +2,10 @@ import z from "zod"
 
 export const ProjectStatus = z.enum([
   "intake",
-  "researching",
-  "awaiting_project_approval",
   "planning",
-  "awaiting_development_approval",
-  "developing",
-  "verifying",
+  "executing",
+  "reviewing",
+  "awaiting_approval",
   "completed",
   "rejected",
   "blocked",
@@ -20,7 +18,8 @@ export type WorkItemStatus = z.infer<typeof WorkItemStatus>
 export const DeliveryPolicy = z
   .object({
     source_approval_preset: z.string().min(1),
-    allow_workspace_write_after_development_approval: z.boolean(),
+    allow_workspace_write: z.boolean(),
+    require_high_risk_approval: z.boolean(),
     require_human_merge: z.boolean(),
     require_clean_worktree: z.boolean(),
     require_main_branch_verification: z.boolean(),
@@ -28,13 +27,13 @@ export const DeliveryPolicy = z
   .strict()
 export type DeliveryPolicy = z.infer<typeof DeliveryPolicy>
 
-export const GateKind = z.enum(["project_approval", "development_approval", "merge_approval"])
+export const GateKind = z.enum(["risk_approval", "merge_approval"])
 export type GateKind = z.infer<typeof GateKind>
 
 export const GateStatus = z.enum(["pending", "approved", "rejected"])
 export type GateStatus = z.infer<typeof GateStatus>
 
-export const PlanPhase = z.enum(["research", "development", "replan"])
+export const PlanPhase = z.enum(["planning", "execution", "replan"])
 export type PlanPhase = z.infer<typeof PlanPhase>
 
 export const Project = z.object({
@@ -88,9 +87,18 @@ export const WorkItem = z.object({
   parent_id: z.string().optional(),
   title: z.string(),
   description: z.string(),
-  kind: z.string(),
+  kind: z.enum(["planner", "worker", "reviewer"]),
+  work_type: z.enum(["coding", "decision", "research", "writing", "design", "analysis"]),
+  role: z.string(),
+  capability_packs: z.array(z.string()),
+  decision_scope: z.array(z.string()),
+  resource_scope: z.array(z.string()),
+  model_group: z.enum(["ultra", "standard", "lite"]),
+  risk_level: z.enum(["low", "medium", "high"]),
+  review_status: z.enum(["pending", "running", "accepted", "rejected", "not_required"]),
   status: WorkItemStatus,
   owner_agent_id: z.string().optional(),
+  workflow_run_id: z.string().optional(),
   acceptance_criteria: z.array(z.string()),
   attempt: z.number().int(),
   max_attempts: z.number().int(),

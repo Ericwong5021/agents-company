@@ -41,9 +41,19 @@ const DECOMPOSE_SCHEMA = {
       items: {
         type: "object",
         properties: {
+          key: { type: "string" },
+          parentKey: { type: "string" },
           summary: { type: "string" },
           acceptanceCriteria: { type: "string" },
           suggestedAgent: { type: "string" },
+          workType: { type: "string", enum: ["coding", "decision", "research", "writing", "design", "analysis"] },
+          role: { type: "string" },
+          capabilityPacks: { type: "array", items: { type: "string" } },
+          decisionScope: { type: "array", items: { type: "string" } },
+          resourceScope: { type: "array", items: { type: "string" } },
+          modelGroup: { type: "string", enum: ["standard", "lite"] },
+          riskLevel: { type: "string", enum: ["low", "medium", "high"] },
+          dependsOn: { type: "array", items: { type: "string" } },
         },
         required: ["summary", "acceptanceCriteria"],
       },
@@ -89,6 +99,8 @@ export interface DecomposeInput {
   readonly sessionID: string
   /** The agent performing the decomposition. */
   readonly delegatorAgentID: string
+  /** Session Agent template used to execute the decomposition actor. */
+  readonly actorAgentType?: string
 }
 
 export interface DelegateSubtasksInput {
@@ -337,11 +349,21 @@ function buildDecomposePrompt(goal: string, context?: string): string {
     "",
     "## Output Requirements",
     "For each sub-task, provide:",
+    "- key: A unique lowercase identifier; parents and dependencies must appear earlier in the array",
+    "- parentKey: (optional) The parent task key for the visible execution tree",
     "- summary: A clear, actionable description (1-2 sentences)",
     "- acceptanceCriteria: A specific, testable criterion for completion",
     "- suggestedAgent: (optional) The best agent ID or name for this task",
+    "- workType: One of coding, decision, research, writing, design, analysis",
+    "- role: The temporary execution role required for this task; never use a permanent fixed team title",
+    "- capabilityPacks: Immutable capability references required by the role",
+    "- decisionScope: Decisions this task exclusively owns",
+    "- resourceScope: Files, datasets, systems, or artifact areas this task may write",
+    "- modelGroup: standard for judgment-heavy work or lite for bounded deterministic work",
+    "- riskLevel: low, medium, or high",
+    "- dependsOn: Keys that must be independently accepted before this task starts",
     "",
-    "Produce 2-5 sub-tasks ordered by dependency (independent tasks first).",
+    "Produce 2-6 domain-neutral sub-tasks ordered by dependency. Use at most one coding task. Do not force software delivery when the goal only needs research, analysis, design, a decision, or a document.",
   )
   return parts.join("\n")
 }
@@ -1042,7 +1064,7 @@ export const layer = Layer.effect(
       const spawned = yield* actor.spawn({
         mode: "subagent",
         sessionID: input.sessionID as any,
-        agentType: input.delegatorAgentID,
+        agentType: input.actorAgentType ?? "general",
         task: prompt,
         context: "none",
         tools: "INHERIT",
