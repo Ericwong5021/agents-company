@@ -444,7 +444,7 @@ function CompanyReadyWorkspace(props: {
                     <strong>连接模型后继续董事会讨论</strong>
                     <p>
                       {props.snapshot().company.setup_goal?.body
-                        ? `已暂存：${props.snapshot().company.setup_goal.body}`
+                        ? `已暂存：${props.snapshot().company.setup_goal?.body}`
                         : "当前没有可用模型。配置 Provider 和 API Key 后即可开始讨论。"}
                     </p>
                   </div>
