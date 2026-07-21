@@ -4734,6 +4734,8 @@ export type CompanyThreadEntriesResponses = {
             sessionID?: string
             runtimeMessageID?: string
             skills?: Array<string>
+            tools?: Array<string>
+            model?: string
             body: string
             status?: string
             time: {
