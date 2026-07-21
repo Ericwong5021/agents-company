@@ -436,24 +436,22 @@ function CompanyReadyWorkspace(props: {
               </Switch>
 
               <Show when={view() !== "project" && needsProviderSetup()}>
-                {() => (
-                  <section class="company-provider-setup-card" aria-live="polite">
-                    <span class="company-provider-setup-icon">
-                      <Icon name="providers" size="small" />
-                    </span>
-                    <div>
-                      <strong>连接模型后继续董事会讨论</strong>
-                      <p>
-                        {props.snapshot().company.setup_goal
-                          ? `已暂存：${props.snapshot().company.setup_goal.body}`
-                          : "当前没有可用模型。配置 Provider 和 API Key 后即可开始讨论。"}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => openSettings("providers")}>
-                      配置 Provider
-                    </button>
-                  </section>
-                )}
+                <section class="company-provider-setup-card" aria-live="polite">
+                  <span class="company-provider-setup-icon">
+                    <Icon name="providers" size="small" />
+                  </span>
+                  <div>
+                    <strong>连接模型后继续董事会讨论</strong>
+                    <p>
+                      {props.snapshot().company.setup_goal?.body
+                        ? `已暂存：${props.snapshot().company.setup_goal.body}`
+                        : "当前没有可用模型。配置 Provider 和 API Key 后即可开始讨论。"}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => openSettings("providers")}>
+                    配置 Provider
+                  </button>
+                </section>
               </Show>
 
               <Show when={view() === "conversation"}>
