@@ -217,7 +217,10 @@ function safeErrorSummary(error: unknown) {
   if (error instanceof Error && error.message.includes("does not support required capabilities")) {
     return "The selected runtime cannot join this board conversation because it lacks dynamic Skills or governed signal publishing. Choose Pi or configure an equivalent runtime adapter."
   }
-  return "The board discussion could not complete. Check the configured provider and retry."
+  if (error instanceof Error && error.message.includes("董事会成员未能完成本轮响应")) {
+    return "模型提供方不可用或未配置 API Key。请在设置中重新连接 Provider、配置 API Key，或切换到可用模型后重试。"
+  }
+  return "董事会讨论未完成。请检查模型提供方配置后重试。"
 }
 
 function markFailed(runID: ConversationRunID, error: unknown) {
@@ -390,6 +393,24 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
         const current = yield* Effect.sync(() => loadRun(input.runID))
         if (!current || current.run.state === "completed" || current.run.state === "interrupted") return
         const messages = yield* groupSessions.messages(input.groupSessionID)
+        if (
+          messages.some(
+            (message) =>
+              message.roundNum === input.roundNum && message.role === "agent" && message.statusSummary === "error",
+          )
+        ) {
+          if (
+            yield* Effect.sync(() =>
+              markFailed(
+                input.runID,
+                new Error("董事会成员未能完成本轮响应。请检查模型提供方与 API Key 配置后重试。"),
+              ),
+            )
+          ) {
+            yield* publishRunState({ threadID: input.thread.id, state: "failed" }).pipe(Effect.forkDetach)
+          }
+          return
+        }
         const sourceMessages = messages.filter(
           (message) =>
             message.roundNum === input.roundNum && (message.role === "user" || message.statusSummary === "done"),

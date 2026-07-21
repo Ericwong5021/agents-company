@@ -36,7 +36,6 @@ import {
   COMPANY_PROVIDER_CONFIGURED_EVENT,
   projectExecutionModel,
   providerConfigured,
-  shouldShowProviderSetupCard,
 } from "./provider-availability"
 import { useServer } from "@/context/server"
 import { useLanguage } from "@/context/language"
@@ -87,6 +86,7 @@ function CompanyReadyWorkspace(props: {
   // entry; it never falls back to fixtures or a second conversation path.
   const boardMessagesEnabled = createMemo(() => props.snapshot().capabilities.board_messages === true)
   const hasConfiguredProvider = createMemo(() => providerConfigured(providers()))
+  const needsProviderSetup = createMemo(() => Boolean(providers()) && !hasConfiguredProvider())
   const retryModels = createMemo(() =>
     (providers()?.providers ?? []).flatMap((provider) =>
       provider.connected
@@ -435,15 +435,19 @@ function CompanyReadyWorkspace(props: {
                 </Match>
               </Switch>
 
-              <Show when={view() !== "project" && shouldShowProviderSetupCard(props.snapshot().company.setup_goal, providers())}>
-                {(goal) => (
+              <Show when={view() !== "project" && needsProviderSetup()}>
+                {() => (
                   <section class="company-provider-setup-card" aria-live="polite">
                     <span class="company-provider-setup-icon">
                       <Icon name="providers" size="small" />
                     </span>
                     <div>
                       <strong>连接模型后继续董事会讨论</strong>
-                      <p>已暂存：{goal().body}</p>
+                      <p>
+                        {props.snapshot().company.setup_goal
+                          ? `已暂存：${props.snapshot().company.setup_goal.body}`
+                          : "当前没有可用模型。配置 Provider 和 API Key 后即可开始讨论。"}
+                      </p>
                     </div>
                     <button type="button" onClick={() => openSettings("providers")}>
                       配置 Provider

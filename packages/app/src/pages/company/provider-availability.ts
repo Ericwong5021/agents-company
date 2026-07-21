@@ -3,7 +3,7 @@ import type { CompanyProviderList, CompanySetupGoal } from "@agents-company/sdk/
 export const COMPANY_PROVIDER_CONFIGURED_EVENT = "agent-company:provider-configured"
 
 export function providerConfigured(providers: CompanyProviderList | undefined) {
-  return providers?.providers.some((provider) => provider.connected) === true
+  return providers?.providers.some((provider) => provider.connected && provider.models.some((model) => model.status === "active")) === true
 }
 
 export function projectExecutionModel(providers: CompanyProviderList | undefined, excludedProviderIDs: string[] = []) {

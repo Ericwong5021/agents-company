@@ -51,7 +51,9 @@ export function arbitrate(
       if (scoreDiff !== 0) return scoreDiff
       const aIdle = entries.find((e) => e.agentId === a.agentId)?.rights.idleRounds ?? 0
       const bIdle = entries.find((e) => e.agentId === b.agentId)?.rights.idleRounds ?? 0
-      return bIdle - aIdle
+      const idleDiff = bIdle - aIdle
+      if (idleDiff !== 0) return idleDiff
+      return a.agentId.localeCompare(b.agentId)
     })
 
   const eligible = scored.filter((s) => s.eligible)

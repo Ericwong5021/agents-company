@@ -130,6 +130,11 @@ export class BiddingScheduler {
     this.state.phase = "bidding"
   }
 
+  /** Restore fairness rights from an earlier user turn without consuming this turn's K budget. */
+  restoreRightsAfterSpeaker(speakerId: string): void {
+    this.state.rights = settleAfterSpeak(this.state.rights, speakerId, this.config)
+  }
+
   /** Reset the consecutive agent turns counter (e.g. after a user messages or task completion) */
   resetConsecutiveTurns(): void {
     this.state.consecutiveAgentTurns = 0

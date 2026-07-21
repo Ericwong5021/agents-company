@@ -106,9 +106,9 @@ export function boardChatItems(
       })
     : messages.map((message) => fromMessage(message, members))
 
-  return [...new Map(items.map((item) => [item.id, item])).values()].sort(
-    (a, b) => a.created - b.created || a.id.localeCompare(b.id),
-  )
+  return [...new Map(items.map((item) => [item.id, item])).values()]
+    .filter((item) => item.authorKind !== "agent" || item.body.trim().length > 0)
+    .sort((a, b) => a.created - b.created || a.id.localeCompare(b.id))
 }
 
 export function latestExecutionProposal(items: BoardChatItem[]) {
@@ -121,6 +121,12 @@ function timeLabel(created: number) {
 
 function dateLabel(created: number) {
   return new Date(created).toLocaleDateString([], { month: "numeric", day: "numeric" })
+}
+
+function failureSummary(summary?: string) {
+  if (summary === "The board discussion could not complete. Check the configured provider and retry.")
+    return "模型提供方不可用或未配置 API Key。请在设置中重新连接 Provider、配置 API Key，或切换到可用模型后重试。"
+  return summary
 }
 
 function sameDay(left: number, right: number) {
@@ -244,6 +250,9 @@ export function BoardRoundtable(props: {
               .map((member) => `${member.name} · ${member.responsibilities.at(0) ?? member.role}`)
               .join("  /  ")}
           </p>
+          <Show when={failed() && failureSummary(props.thread()?.run?.safeErrorSummary)}>
+            <p class="company-board-error">{failureSummary(props.thread()?.run?.safeErrorSummary)}</p>
+          </Show>
         </div>
         <div class="company-board-participants" aria-label={`${members().length + 1} 位参与者`}>
           <For each={members()}>

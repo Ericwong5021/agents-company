@@ -13,6 +13,12 @@ function sourceBody(source: ConversationThreadSource) {
   return source.detail.body
 }
 
+function failureSummary(summary?: string) {
+  if (summary === "The board discussion could not complete. Check the configured provider and retry.")
+    return "模型提供方不可用或未配置 API Key。请在设置中重新连接 Provider、配置 API Key，或切换到可用模型后重试。"
+  return summary
+}
+
 function usageLabel(usage: { source: "runtime" | "unavailable"; inputTokens?: number; outputTokens?: number; reasoningTokens?: number }) {
   if (usage.source === "unavailable") return "用量 · Runtime 未提供"
   const total = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
@@ -149,7 +155,7 @@ export function ThreadPanel(props: {
                       {(run) => (
                         <div class="company-thread-run" data-run-state={run().state}>
                           <span>{language.t(`company.thread.run.${run().state}`)}</span>
-                          <Show when={run().safeErrorSummary}>{(summary) => <p role="alert">{summary()}</p>}</Show>
+                          <Show when={failureSummary(run().safeErrorSummary)}>{(summary) => <p role="alert">{summary()}</p>}</Show>
                         </div>
                       )}
                     </Show>
@@ -162,7 +168,7 @@ export function ThreadPanel(props: {
                       <span>Attempt {Math.max(1, th().run!.attempt)}</span>
                       <strong>{th().run!.state === "failed" ? "执行失败" : "执行被中断"}</strong>
                     </header>
-                    <p>{th().run!.safeErrorSummary ?? "现场已保留，可从当前 Thread 继续分析或恢复。"}</p>
+                    <p>{failureSummary(th().run!.safeErrorSummary) ?? "现场已保留，可从当前 Thread 继续分析或恢复。"}</p>
                     <footer>
                       <span>影响：当前目标尚未形成可验证交付</span>
                       <span>{th().run!.retryable ? "可重试" : "需要人工介入"}</span>
@@ -180,22 +186,17 @@ export function ThreadPanel(props: {
                       )}
                     </For>
                   </span>
-                  <button
-                    type="button"
-                    class="company-thread-interrupt"
-                    disabled={
-                      props.interrupting() ||
-                      th().status === "interrupted" ||
-                      th().status === "completed" ||
-                      th().run?.state === "completed" ||
-                      th().run?.state === "failed" ||
-                      th().run?.state === "interrupted"
-                    }
-                    aria-busy={props.interrupting() ? "true" : "false"}
-                    onClick={props.onInterrupt}
-                  >
-                    <Icon name="stop" size="small" /> {language.t("company.thread.interrupt")}
-                  </button>
+                  <Show when={["queued", "running", "projecting"].includes(runState() ?? "")}>
+                    <button
+                      type="button"
+                      class="company-thread-interrupt"
+                      disabled={props.interrupting()}
+                      aria-busy={props.interrupting() ? "true" : "false"}
+                      onClick={props.onInterrupt}
+                    >
+                      <Icon name="stop" size="small" /> {language.t("company.thread.interrupt")}
+                    </button>
+                  </Show>
                 </div>
 
                 <div class="company-thread-scroll" aria-busy={props.loading() ? "true" : "false"}>

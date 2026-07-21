@@ -91,6 +91,16 @@ describe("BiddingScheduler — decide", () => {
     expect(s.lastArbitration).not.toBeNull()
     expect(s.lastArbitration!.winnerId).toBe("a")
   })
+
+  test("uses agent ID as the final stable tie-breaker", () => {
+    const s = new BiddingScheduler("room-1", ["board-cto", "board-ceo"])
+    const result = s.decide([
+      { agentId: "board-cto", bid: wantBid },
+      { agentId: "board-ceo", bid: wantBid },
+    ])
+
+    expect(result).toEqual({ type: "winner", agentId: "board-ceo" })
+  })
 })
 
 describe("BiddingScheduler — afterSpeak", () => {
@@ -176,5 +186,16 @@ describe("BiddingScheduler — multi-round scenario", () => {
     const r3 = s.decide([{ agentId: "a", bid: mustBid }, { agentId: "b", bid: mustBid }])
     expect(r3.type).toBe("yielded")
     expect(s.isActive).toBe(false)
+  })
+
+  test("restores fairness across user turns without consuming the new turn budget", () => {
+    const s = new BiddingScheduler("room-1", ["board-ceo", "board-cto", "board-product-lead"])
+    s.restoreRightsAfterSpeaker("board-ceo")
+
+    expect(s.state.consecutiveAgentTurns).toBe(0)
+    expect(s.decideFallback()).toEqual({ type: "human_fallback", agentId: "board-cto" })
+
+    s.restoreRightsAfterSpeaker("board-cto")
+    expect(s.decideFallback()).toEqual({ type: "human_fallback", agentId: "board-product-lead" })
   })
 })

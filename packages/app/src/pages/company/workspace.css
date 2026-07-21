@@ -1131,8 +1131,8 @@
 }
 
 .company-composer:focus-within {
-  border-color: #aaa7dd;
-  box-shadow: 0 0 0 3px rgb(109 102 223 / 8%);
+  border-color: color-mix(in srgb, var(--company-text-muted) 40%, var(--company-border));
+  box-shadow: 0 0 0 3px rgb(49 56 68 / 6%);
 }
 
 .company-composer input {
@@ -1142,6 +1142,20 @@
   outline: 0;
   color: var(--company-text);
   background: transparent;
+}
+
+.company-composer textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  resize: none;
+  color: var(--company-text);
+  background: transparent;
+}
+
+.company-composer textarea:focus {
+  outline: 0;
+  box-shadow: none;
 }
 
 .company-composer input::placeholder {
@@ -2521,9 +2535,9 @@
 }
 
 .company-composer:focus-within {
-  border-color: #aaa7dd;
+  border-color: color-mix(in srgb, var(--company-text-muted) 40%, var(--company-border));
   box-shadow:
-    0 0 0 3px rgb(109 102 223 / 8%),
+    0 0 0 3px rgb(49 56 68 / 6%),
     0 4px 18px rgb(16 24 40 / 8%);
 }
 
@@ -2709,6 +2723,11 @@
   line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.company-board-topic .company-board-error {
+  color: var(--company-danger);
+  font-weight: 600;
 }
 
 .company-board-status {

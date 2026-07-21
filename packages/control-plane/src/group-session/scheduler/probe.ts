@@ -35,7 +35,9 @@ export function buildProbePrompt(input: ProbeInput): string {
     input.transcript,
     `</recent_transcript>`,
     ``,
-    `Based on the above, is this agent interested in speaking now?`,
+    `Decide whether this agent has a distinct, useful contribution now. Do not speak merely because of seniority or to acknowledge prior speakers.`,
+    `Use must for a blocker, correction, direct responsibility, or material objection; want for a new answer or high-value addition; could for a non-essential addition; pass when there is no new value or the role is not relevant.`,
+    `Use addressedAs=direct only when the user explicitly addresses this agent, mention for a role or @ mention, otherwise none.`,
     `Output ONLY a JSON object with fields: level, type, addressedAs, reason.`,
   ]
   return lines.join("\n")

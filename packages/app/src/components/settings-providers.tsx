@@ -22,13 +22,13 @@ export const SettingsProviders: Component = () => {
 
   const configured = createMemo(() =>
     Object.entries(globalSync.data.config.provider ?? {}).flatMap(([id, provider]) => {
+      if ((globalSync.data.config.disabled_providers ?? []).includes(id)) return []
       if (provider.npm !== OPENAI_COMPATIBLE || !provider.models || Object.keys(provider.models).length === 0) return []
       return [{
         id,
         name: provider.name ?? id,
         endpoint: provider.options?.baseURL?.replace(/^https?:\/\//, "").replace(/\/.*$/, "") ?? id,
         models: Object.keys(provider.models).length,
-        enabled: !(globalSync.data.config.disabled_providers ?? []).includes(id),
       }]
     }),
   )
@@ -145,9 +145,6 @@ export const SettingsProviders: Component = () => {
                       <div class="flex flex-wrap items-center gap-2">
                         <span class="text-14-medium text-text-strong truncate">{item.name}</span>
                         <Tag>{language.t("provider.custom.field.format.openai")}</Tag>
-                        <Show when={!item.enabled}>
-                          <Tag>{language.t("common.disabled")}</Tag>
-                        </Show>
                       </div>
                       <span class="text-12-regular text-text-weak truncate">
                         {item.endpoint} · {item.models} {language.t("provider.custom.models.label")}

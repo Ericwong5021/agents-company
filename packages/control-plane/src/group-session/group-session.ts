@@ -675,6 +675,14 @@ export const layer: Layer.Layer<
       })
     })
 
+    function needsHumanFallback(text: string) {
+      return (
+        /[?？@]/.test(text) ||
+        /\b(what|why|how|who|when|where|can|could|would|please|help)\b/i.test(text) ||
+        /(?:请|帮我|告诉我|解释|分析|评估|给我|需要|能否|是否|为什么|怎么|如何|谁|什么|哪个)/.test(text)
+      )
+    }
+
     /**
      * The core bidding loop:
      * 1. Parallel probe all members
@@ -711,10 +719,22 @@ export const layer: Layer.Layer<
 
       const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent, model: companyModel }
 
+      // Fairness survives user turns for the lifetime of a Group Session. Historical
+      // speakers restore cooldown and staleness without consuming the new turn's K
+      // budget; a resumed in-flight round still restores its full turn state.
+      const historicalSpeakerIDs = (yield* messages(params.groupSessionID))
+        .filter(
+          (message) =>
+            message.role === "agent" && message.roundNum < params.roundNum && message.statusSummary === "done",
+        )
+        .map((message) => message.companyAgentID)
+        .filter((companyAgentID): companyAgentID is string => Boolean(companyAgentID))
+      historicalSpeakerIDs.forEach((companyAgentID) => scheduler.restoreRightsAfterSpeaker(companyAgentID))
+
       // A resumed process has only persisted group messages, not scheduler state.
-      // Replaying completed speakers restores the deterministic rights ordering and
+      // Replaying completed speakers restores the current round's K budget and
       // prevents the first finished agent from being prompted a second time.
-      const priorAgentMessages = params.priorAgentMessages ?? []
+      const priorAgentMessages = (params.priorAgentMessages ?? []).filter((message) => message.statusSummary === "done")
       const priorSpeakerIDs = priorAgentMessages
         .map((message) => message.companyAgentID)
         .filter((companyAgentID): companyAgentID is string => Boolean(companyAgentID))
@@ -754,7 +774,7 @@ export const layer: Layer.Layer<
       if (yield* isInterrupted()) return
 
       let selection = scheduler.decide(bids)
-      if (selection.type === "idle") selection = scheduler.decideFallback()
+      if (selection.type === "idle" && needsHumanFallback(params.userText)) selection = scheduler.decideFallback()
 
       // Emit BiddingCompleted with full scored-bid data
       {
@@ -914,21 +934,19 @@ export const layer: Layer.Layer<
                   }),
                 )
 
-          if (result.content.trim()) {
-            yield* Effect.sync(() =>
-              insertGroupMessage({
-                groupSessionID: params.groupSessionID,
-                roundNum: params.roundNum,
-                role: "agent",
-                companyAgentID: speakerId as CompanyAgentID,
-                sessionID: member.sessionID as SessionID,
-                content: result.content,
-                statusSummary: result.statusSummary,
-                runtimeMessageID: result.runtimeMessageID,
-                agentRunID: result.agentRunID,
-              }),
-            )
-          }
+          yield* Effect.sync(() =>
+            insertGroupMessage({
+              groupSessionID: params.groupSessionID,
+              roundNum: params.roundNum,
+              role: "agent",
+              companyAgentID: speakerId as CompanyAgentID,
+              sessionID: member.sessionID as SessionID,
+              content: result.content,
+              statusSummary: result.statusSummary,
+              runtimeMessageID: result.runtimeMessageID,
+              agentRunID: result.agentRunID,
+            }),
+          )
 
           yield* bus.publish(Event.AgentCompleted, {
             groupSessionID: params.groupSessionID,
@@ -939,8 +957,10 @@ export const layer: Layer.Layer<
           })
 
           if (yield* isInterrupted()) return
-          scheduler.afterSpeak(speakerId)
-          speakersThisTurn.add(speakerId)
+          if (result.statusSummary === "done") {
+            scheduler.afterSpeak(speakerId)
+            speakersThisTurn.add(speakerId)
+          }
 
           yield* bus.publish(Event.BiddingStarted, {
             groupSessionID: params.groupSessionID,
