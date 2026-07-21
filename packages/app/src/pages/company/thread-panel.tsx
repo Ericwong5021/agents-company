@@ -212,6 +212,13 @@ export function ThreadPanel(props: {
                           <Show when={entry.type === "agent_message" ? entry.message.status : undefined}>
                             {(status) => <span class="company-thread-agent-status">{status()}</span>}
                           </Show>
+                          <Show when={entry.type === "agent_message" ? entry.message.skills : undefined}>
+                            {(skills) => (
+                              <span class="company-thread-agent-status" data-skill="true">
+                                使用 Skill · {skills().join("、")}
+                              </span>
+                            )}
+                          </Show>
                           <Show when={entry.type === "message" ? entry : undefined}>
                             {(messageEntry) => (
                               <>

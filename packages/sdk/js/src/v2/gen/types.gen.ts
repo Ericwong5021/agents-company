@@ -4733,6 +4733,7 @@ export type CompanyThreadEntriesResponses = {
             agentID: string
             sessionID?: string
             runtimeMessageID?: string
+            skills?: Array<string>
             body: string
             status?: string
             time: {

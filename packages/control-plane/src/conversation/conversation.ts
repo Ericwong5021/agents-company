@@ -7,6 +7,7 @@ import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/sto
 import * as Database from "@/storage/db"
 import { GroupMessageTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
 import { GroupSessionID } from "@/group-session/schema"
+import { AgentRunEventTable } from "@/agent-run/agent-run.sql"
 import { MessageTable, PartTable } from "@/session/session.sql"
 import { MessageID, PartID } from "@/session/schema"
 import {
@@ -145,6 +146,7 @@ export const ThreadAgentMessage = z
     agentID: z.string().min(1),
     sessionID: z.string().optional(),
     runtimeMessageID: z.string().optional(),
+    skills: z.array(z.string()).optional(),
     body: z.string(),
     status: z.string().optional(),
     time: z.object({ created: z.number().int(), updated: z.number().int() }),
@@ -605,6 +607,24 @@ function readThreadEntries(input: {
           .where(and(inArray(GroupMessageTable.group_session_id, runtimeIDs), eq(GroupMessageTable.role, "agent")))
           .all()
       : []
+    const skillsByRun = new Map(
+      agentMessages
+        .flatMap((message) => (message.agent_run_id ? [message.agent_run_id] : []))
+        .map((runID) => [
+          runID,
+          db
+            .select({ payload_json: AgentRunEventTable.payload_json })
+            .from(AgentRunEventTable)
+            .where(and(eq(AgentRunEventTable.agent_run_id, runID), eq(AgentRunEventTable.type, "agent_run.skill_loaded")))
+            .all()
+            .flatMap((event) => {
+              const payload = z
+                .object({ skillID: z.string() })
+                .safeParse(z.json().safeParse(event.payload_json).success ? JSON.parse(event.payload_json) : undefined)
+              return payload.success ? [payload.data.skillID] : []
+            }),
+        ] as const),
+    )
     return [
       ...channelMessages.map((row) => ({
         id: `message:${row.id}`,
@@ -626,6 +646,7 @@ function readThreadEntries(input: {
             agentID: row.company_agent_id ?? "unknown-agent",
             sessionID: row.session_id ?? undefined,
             runtimeMessageID: row.runtime_message_id ?? undefined,
+            skills: row.agent_run_id ? skillsByRun.get(row.agent_run_id) : undefined,
             body: row.content,
             status: row.status_summary ?? undefined,
             time: { created: row.time_created, updated: row.time_updated },

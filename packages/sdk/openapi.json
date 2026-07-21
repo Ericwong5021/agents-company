@@ -2170,6 +2170,12 @@
                                   "runtimeMessageID": {
                                     "type": "string"
                                   },
+                                  "skills": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
                                   "body": {
                                     "type": "string"
                                   },
