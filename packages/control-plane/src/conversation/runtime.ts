@@ -8,6 +8,7 @@ import { RepositoryInstance } from "@/company/repository-instance"
 import { GroupSession } from "@/group-session"
 import { GroupSessionID } from "@/group-session/schema"
 import { GroupMessageTable } from "@/group-session/group-session.sql"
+import { AgentRunEventTable } from "@/agent-run/agent-run.sql"
 import { Instance } from "@/project/instance"
 import { Event as ServerEvent } from "@/server/event"
 import { Database, and, eq, or } from "@/storage"
@@ -23,27 +24,15 @@ import {
 } from "./schema"
 import { Conversation } from "./conversation"
 import { CompanyID } from "@/company/schema"
-import type { MessageV2 } from "@/session/message-v2"
 
 const BOARD_ROLES = ["ceo", "cto", "product_lead"] as const
 
-const SignalSynthesis = z
+const PublishedSignal = z
   .object({
-    publish: z.boolean(),
-    signal_type: z.enum(["conclusion", "status", "risk", "intervention"]).optional(),
-    body: z.string().trim().min(1).max(10_000).optional(),
-    dri: ConversationPrincipal.optional(),
+    signal_type: z.enum(["conclusion", "status", "risk", "intervention"]),
+    body: z.string().trim().min(1).max(10_000),
   })
   .strict()
-  .superRefine((value, context) => {
-    if (!value.publish) return
-    if (!value.signal_type) {
-      context.addIssue({ code: "custom", message: "A published signal needs a signal type.", path: ["signal_type"] })
-    }
-    if (!value.body) {
-      context.addIssue({ code: "custom", message: "A published signal needs a body.", path: ["body"] })
-    }
-  })
 
 export const ConversationRunNotFound = NamedError.create(
   "ConversationRunNotFound",
@@ -65,11 +54,6 @@ export const ConversationRuntimeBoardUnavailable = NamedError.create(
   z.object({ run_id: ConversationRunID }).strict(),
 )
 
-const BoardSynthesisRejected = NamedError.create(
-  "BoardSynthesisRejected",
-  z.object({ reason: z.enum(["provider_rejected", "invalid_json"]) }).strict(),
-)
-
 export const Started = z
   .object({
     runID: ConversationRunID,
@@ -87,7 +71,6 @@ type RuntimeInput = {
   projectID: string
   groupSessionID?: GroupSessionID
   boardAgentIDs: string[]
-  productLeadAgentID: string
 }
 
 function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
@@ -122,8 +105,7 @@ function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
     const boardAgentIDs = BOARD_ROLES.map((role) => agents.find((agent) => agent.role === role)?.id).filter(
       (id): id is string => Boolean(id),
     )
-    const productLeadAgentID = agents.find((agent) => agent.role === "product_lead")?.id
-    if (boardAgentIDs.length !== BOARD_ROLES.length || !productLeadAgentID) return
+    if (boardAgentIDs.length !== BOARD_ROLES.length) return
 
     const persistedRuntimeID =
       run.runtime_id ??
@@ -142,7 +124,6 @@ function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
       projectID: binding.project_id,
       groupSessionID: persistedRuntimeID ? GroupSessionID.zod.safeParse(persistedRuntimeID).data : undefined,
       boardAgentIDs,
-      productLeadAgentID,
     }
   })
 }
@@ -223,19 +204,13 @@ function markCompletedWithoutSignal(input: { runID: ConversationRunID; sourceWat
           time_finished: now,
           time_updated: now,
         })
-        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "projecting")))
+        .where(and(eq(ConversationRunTable.id, input.runID), eq(ConversationRunTable.state, "running")))
         .returning({ id: ConversationRunTable.id })
         .all().length > 0,
   )
 }
 
 function safeErrorSummary(error: unknown) {
-  if (error instanceof BoardSynthesisRejected) {
-    if (error.data.reason === "provider_rejected") {
-      return "The board discussion completed, but the configured provider rejected the Product Lead summary request. Retry or choose a provider that supports ordinary text responses."
-    }
-    return "The board discussion completed, but the Product Lead summary was not valid JSON after a repair attempt. Retry the summary."
-  }
   if (error instanceof SignalProjector.SignalProjectionRejected) {
     return "The board discussion could not be projected safely. Retry after reviewing the thread."
   }
@@ -333,39 +308,27 @@ function sourceWatermark(groupSessionID: GroupSessionID, roundNum: number, sourc
   return `${groupSessionID}:${roundNum}:${sourceIDs.join("|")}`
 }
 
-function synthesisPrompt(input: { title: string; messages: GroupSession.GroupMessage[] }) {
-  return [
-    "You are the Product Lead for a board discussion.",
-    "Return publish=false when the discussion has no user-visible conclusion, status, risk, or intervention.",
-    "When publish=true, report only a concise, factual high signal grounded in the transcript. Do not invent approvals, deliveries, plans, decisions, tool output, or private context.",
-    "Return only one JSON object, with no markdown or explanation.",
-    "The JSON object must have publish (boolean), and when publish=true it must also have signal_type (conclusion, status, risk, or intervention), body (string), and optional dri ({ kind: user or agent, id: string }).",
-    `<board_thread title=${JSON.stringify(input.title)}>`,
-    ...input.messages.map((message) => `${message.role}: ${message.content}`),
-    "</board_thread>",
-  ].join("\n")
-}
-
-function synthesisRepairPrompt() {
-  return [
-    "Your previous board summary was not valid JSON.",
-    "Return only one corrected JSON object with publish (boolean), and when publish=true signal_type (conclusion, status, risk, or intervention), body (string), and optional dri ({ kind: user or agent, id: string }).",
-    "Do not include markdown or an explanation.",
-  ].join("\n")
-}
-
-function parseSynthesis(response: MessageV2.WithParts) {
-  if (response.info.role !== "assistant" || response.info.error) return
-  const text = response.parts
-    .flatMap((part) => (part.type === "text" && !part.ignored ? [part.text] : []))
-    .join("\n")
-    .trim()
-  const json = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/.exec(text)?.[1] ?? text
-  try {
-    return SignalSynthesis.safeParse(JSON.parse(json))
-  } catch {
-    return
-  }
+function publishedSignal(messages: GroupSession.GroupMessage[]) {
+  return messages
+    .flatMap((message) =>
+      message.role === "agent" && message.agentRunID && message.companyAgentID
+        ? Database.use((db) =>
+            db
+              .select({ payload_json: AgentRunEventTable.payload_json })
+              .from(AgentRunEventTable)
+              .where(eq(AgentRunEventTable.agent_run_id, message.agentRunID!))
+              .orderBy(AgentRunEventTable.sequence)
+              .all(),
+          ).flatMap((event) => {
+            const payload = z
+              .object({ piEvent: z.literal("tool"), toolName: z.literal("publish_signal"), args: z.unknown() })
+              .safeParse(z.json().safeParse(event.payload_json).success ? JSON.parse(event.payload_json) : undefined)
+            const signal = payload.success ? PublishedSignal.safeParse(payload.data.args) : undefined
+            return signal?.success ? [{ agentID: message.companyAgentID!, signal: signal.data }] : []
+          })
+        : [],
+    )
+    .at(-1)
 }
 
 export interface Interface {
@@ -428,68 +391,30 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
           (message) =>
             message.roundNum === input.roundNum && (message.role === "user" || message.statusSummary === "done"),
         )
-        const successfulAgentIDs = new Set(
-          sourceMessages
-            .filter((message) => message.role === "agent" && message.content.trim())
-            .map((message) => message.companyAgentID)
-            .filter((agentID): agentID is string => Boolean(agentID)),
-        )
-        if (successfulAgentIDs.size < input.boardAgentIDs.length) {
-          return yield* Effect.fail(new SignalProjector.SignalProjectionRejected({ reason: "missing_source" }))
-        }
+        const signal = yield* Effect.sync(() => publishedSignal(sourceMessages))
         const watermark = sourceWatermark(
           input.groupSessionID,
           input.roundNum,
-          sourceMessages.map((message) => message.id),
+          [...sourceMessages.map((message) => message.id), ...(signal ? [`signal:${signal.agentID}`] : [])],
         )
-        if (!(yield* Effect.sync(() => markProjecting({ runID: input.runID, sourceWatermark: watermark })))) return
-        yield* publishRunState({ threadID: input.thread.id, state: "projecting" }).pipe(Effect.forkDetach)
-
-        const response = yield* groupSessions
-          .promptMember({
-            groupSessionID: input.groupSessionID,
-            companyAgentID: input.productLeadAgentID,
-            text: synthesisPrompt({ title: input.thread.title, messages: sourceMessages }),
-          })
-          .pipe(Effect.catch(() => Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))))
-        if (response.info.role !== "assistant" || response.info.error) {
-          return yield* Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))
-        }
-        const summary = parseSynthesis(response)
-        const repaired = summary?.success
-          ? response
-          : yield* groupSessions
-              .promptMember({
-                groupSessionID: input.groupSessionID,
-                companyAgentID: input.productLeadAgentID,
-                text: synthesisRepairPrompt(),
-              })
-              .pipe(Effect.catch(() => Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))))
-        if (repaired.info.role !== "assistant" || repaired.info.error) {
-          return yield* Effect.fail(new BoardSynthesisRejected({ reason: "provider_rejected" }))
-        }
-        const synthesis = summary?.success ? summary : parseSynthesis(repaired)
-        if (!synthesis?.success) return yield* Effect.fail(new BoardSynthesisRejected({ reason: "invalid_json" }))
-        if (!synthesis.data.publish) {
-          if (
-            yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))
-          ) {
+        if (!signal) {
+          if (yield* Effect.sync(() => markCompletedWithoutSignal({ runID: input.runID, sourceWatermark: watermark }))) {
             yield* publishRunState({ threadID: input.thread.id, state: "completed" }).pipe(Effect.forkDetach)
           }
           return
         }
+        if (!(yield* Effect.sync(() => markProjecting({ runID: input.runID, sourceWatermark: watermark })))) return
+        yield* publishRunState({ threadID: input.thread.id, state: "projecting" }).pipe(Effect.forkDetach)
 
         const projection = yield* SignalProjector.project({
           runID: input.runID,
           draft: {
-            signal_type: synthesis.data.signal_type!,
-            body: synthesis.data.body!,
-            author: { kind: "agent", id: input.productLeadAgentID },
-            dri: synthesis.data.dri,
+            signal_type: signal.signal.signal_type,
+            body: signal.signal.body,
+            author: { kind: "agent", id: signal.agentID },
           },
           sources: [
             ...sourceMessages.map((message) => ({ kind: "group_message" as const, id: message.id })),
-            { kind: "message" as const, id: repaired.info.id },
           ],
           sourceWatermark: watermark,
         })

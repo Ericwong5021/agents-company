@@ -48,6 +48,31 @@ describe("Pi governed tools", () => {
     expect(createPiTools(input.spec, ["read", "write", "edit"]).map((tool) => tool.name)).toEqual(["read"])
   })
 
+  test("loads a skill only through an explicit tool call", async () => {
+    const input = await workspace("read_only")
+    const tools = createPiTools(input.spec, [], { loadSkill: async (name) => `loaded:${name}` })
+    const skill = tools.find((tool) => tool.name === "skill")!
+
+    expect(tools.map((tool) => tool.name)).toEqual(["skill"])
+    await expect(skill.execute("call-skill", { name: "release-review" }, new AbortController().signal)).resolves.toMatchObject({
+      content: [{ text: "loaded:release-review" }],
+    })
+  })
+
+  test("exposes governance publishing only for an opted-in conversation run", async () => {
+    const input = await workspace("read_only")
+
+    expect(createPiTools(input.spec, []).map((tool) => tool.name)).not.toContain("publish_signal")
+    const signal = createPiTools(input.spec, [], { publishSignal: true }).find((tool) => tool.name === "publish_signal")!
+    await expect(
+      signal.execute(
+        "call-signal",
+        { signal_type: "risk", body: "Payment verification remains incomplete." },
+        new AbortController().signal,
+      ),
+    ).resolves.toBeDefined()
+  })
+
   test("writes inside the authorized workspace", async () => {
     const input = await workspace("workspace_write")
     const write = createPiTools(input.spec, ["write"]).find((tool) => tool.name === "write")!

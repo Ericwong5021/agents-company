@@ -22,6 +22,7 @@ import { Auth } from "@/auth"
 import { Provider } from "@/provider"
 import { ProviderID } from "@/provider/schema"
 import { CapabilityCatalog } from "@/capability"
+import { Skill } from "@/skill"
 import { AgentRun } from "./agent-run"
 
 export const StartInput = AgentRunSpec.omit({ runID: true, runtimeHome: true }).extend({
@@ -52,6 +53,49 @@ export const layer = Layer.effect(
     const runs = yield* AgentRun.Service
     const auth = yield* Auth.Service
     const provider = yield* Provider.Service
+    const skills = yield* Skill.Service
+    const loadedSkillSnapshots = new Map<string, Set<string>>()
+
+    const loadSkill = async (spec: AgentRunSpec, name: string) => {
+      const available = await Effect.runPromise(skills.available(undefined, spec.agentID))
+      const info = available.find((skill) => skill.name === name)
+      if (!info) throw new Error(`Skill \"${name}\" is not available to this agent`)
+      const checksum = createHash("sha256").update(info.content).digest("hex")
+      const version = `sha256-${checksum.slice(0, 12)}`
+      const key = `${info.name}@${checksum}`
+      const loaded = loadedSkillSnapshots.get(spec.runID) ?? new Set<string>()
+      if (!loaded.has(key)) {
+        const snapshotPath = path.join(spec.runtimeHome, "skills", `${info.name.replace(/[^a-zA-Z0-9._-]/g, "_")}@${version}.md`)
+        await Bun.write(snapshotPath, info.content)
+        await Effect.runPromise(
+          runs.recordSkillSnapshot({
+            runID: spec.runID,
+            skillID: info.name,
+            version,
+            checksum,
+            sourcePath: info.location,
+            snapshotPath,
+            activationReason: "agent",
+          }),
+        )
+        await Effect.runPromise(
+          runs.recordEvent({
+            runID: spec.runID,
+            type: "agent_run.skill_loaded",
+            payload: { skillID: info.name, version, checksum, sourcePath: info.location },
+          }),
+        )
+        loaded.add(key)
+        loadedSkillSnapshots.set(spec.runID, loaded)
+      }
+      return [
+        `<skill_content name=${JSON.stringify(info.name)}>`,
+        info.content.trim(),
+        "This skill grants instructions only. Every tool call remains subject to the current run permissions.",
+        "</skill_content>",
+      ].join("\n")
+    }
+
     const pi = new PiRuntimeAdapter(
       createPiRuntimeEngineFactory({
         resolveModel: async (spec) => {
@@ -78,6 +122,7 @@ export const layer = Layer.effect(
           createPiTools(
             spec,
             spec.capabilityPacks.flatMap((reference) => CapabilityCatalog.resolve(reference).tools),
+            { loadSkill: (name) => loadSkill(spec, name), publishSignal: spec.allowSignalPublishing },
           ),
       }),
     )
@@ -97,6 +142,7 @@ export const layer = Layer.effect(
       }
 
       const packs = input.capabilityPacks.map((reference) => CapabilityCatalog.resolve(reference))
+      const availableSkills = yield* skills.available(undefined, input.agentID)
       const requiredCapabilities = [...new Set([
         ...input.requiredRuntimeCapabilities,
         ...packs.flatMap((pack) => pack.requiredRuntimeCapabilities),
@@ -174,7 +220,15 @@ export const layer = Layer.effect(
         runID: run.id,
         runtimeHome: home.home,
         requiredRuntimeCapabilities: requiredCapabilities,
-        systemPrompt: [input.systemPrompt, ...packs.map((pack) => `# ${pack.role}\n${pack.instructions}`)]
+        systemPrompt: [
+          input.systemPrompt,
+          ...packs.map((pack) => `# ${pack.role}\n${pack.instructions}`),
+          Skill.fmt(availableSkills, { verbose: false }),
+          "Use the skill tool only when the current task genuinely needs a listed professional procedure. Do not load skills for ordinary conversation.",
+          input.allowSignalPublishing
+            ? "Use publish_signal only after you have reached a concrete decision, status, risk, or intervention worth showing outside this worklog."
+            : "",
+        ]
           .filter(Boolean)
           .join("\n\n"),
       }, persist)
@@ -190,6 +244,7 @@ export const layer = Layer.effect(
             safeErrorSummary: state === "failed" ? "The local coding runtime exited before completing the assigned work." : undefined,
           }),
         )
+        loadedSkillSnapshots.delete(result.runID)
       })
       return { runID: run.id, completion: handle.completion }
     })
@@ -288,4 +343,5 @@ export const defaultLayer = layer.pipe(
   Layer.provide(AgentRun.defaultLayer),
   Layer.provide(Provider.defaultLayer),
   Layer.provide(Auth.defaultLayer),
+  Layer.provide(Skill.defaultLayer),
 )

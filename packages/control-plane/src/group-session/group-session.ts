@@ -21,7 +21,6 @@ import { BiddingScheduler } from "./scheduler/BiddingScheduler"
 import { probeOne } from "./scheduler/probe"
 import type { ProbeInput } from "./scheduler/probe"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
-import { Memory } from "@/memory"
 import { Agent, BOARD_DISCUSSION_AGENT_ID } from "@/agent/agent"
 import { Provider } from "@/provider"
 import type { ModelID, ProviderID } from "@/provider/schema"
@@ -29,6 +28,9 @@ import { LLM } from "@/session/llm"
 import { AgentRun } from "@/agent-run/agent-run"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { CompanyTable, RepositoryBindingTable } from "@/company/company.sql"
+import { AgentTurn } from "@/agent-turn"
+import { CompanyAgent } from "@/company-agent"
+import { Config } from "@/config"
 
 const MEMBER_CONCURRENCY = 3
 
@@ -277,11 +279,10 @@ function loadCompanyModel(projectID: string, fallback?: { providerID: ProviderID
   return company
 }
 
-// Build the group context block injected into each member's prompt.
-// Contains all previous rounds' visible messages.
-function buildGroupContext(groupID: GroupSessionID, currentRound: number): string {
-  if (currentRound === 0) return ""
-
+// Build the shared transcript injected into each member's prompt. The current
+// round is deliberately included so a later speaker can respond to the actual
+// conversation, not merely to the immediately preceding completion.
+function buildGroupContext(groupID: GroupSessionID): string {
   const rows = Database.use((db) =>
     db
       .select()
@@ -376,12 +377,10 @@ function insertGroupMessage(input: {
 }
 
 function extractMessageText(msg: MessageV2.WithParts): string {
-  return (
-    msg.parts
-      .filter((part): part is Extract<MessageV2.Part, { type: "text" }> => part.type === "text" && !!part.text)
-      .map((p) => p.text)
-      .join("") || "(no output)"
-  )
+  return msg.parts
+    .filter((part): part is Extract<MessageV2.Part, { type: "text" }> => part.type === "text" && !!part.text)
+    .map((p) => p.text)
+    .join("")
 }
 
 function findExternalMessage(input: {
@@ -450,11 +449,12 @@ export const layer: Layer.Layer<
   | SessionStatus.Service
   | SessionRunState.Service
   | Bus.Service
-  | Memory.Service
   | Agent.Service
   | Provider.Service
   | LLM.Service
   | AgentRunSupervisor.Service
+  | CompanyAgent.Service
+  | Config.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -463,11 +463,12 @@ export const layer: Layer.Layer<
     const statusSvc = yield* SessionStatus.Service
     const runState = yield* SessionRunState.Service
     const bus = yield* Bus.Service
-    const memorySvc = yield* Memory.Service
     const agentSvc = yield* Agent.Service
     const provider = yield* Provider.Service
     const llmSvc = yield* LLM.Service
     const agentRunSupervisor = yield* AgentRunSupervisor.Service
+    const companyAgentSvc = yield* CompanyAgent.Service
+    const config = yield* Config.Service
     const activeSchedulers = yield* Ref.make(new Set<string>())
     const interruptedSchedulers = yield* Ref.make(new Set<string>())
     const activeAgentRuns = yield* Ref.make(new Map<string, Set<string>>())
@@ -598,67 +599,6 @@ export const layer: Layer.Layer<
 
     // --- probe helpers ---
 
-    const searchPrivateMemory = Effect.fn("GroupSession.searchPrivateMemory")(function* (
-      agentID: string,
-      query: string,
-    ) {
-      const results = yield* memorySvc
-        .search({
-          query,
-          scope: "agents",
-          scope_id: agentID,
-        })
-        .pipe(Effect.orElseSucceed(() => []))
-      return results
-        .slice(0, 5)
-        .map((r) => r.snippet)
-        .join("\n\n")
-    })
-
-    /**
-     * Build the prompt text for a specific speaker.
-     * Work-scoped sessions may use only shared conversation and public role facts.
-     */
-    const buildSpeakerPrompt = Effect.fn("GroupSession.buildSpeakerPrompt")(function* (params: {
-      groupID: GroupSessionID
-      speakerID: CompanyAgentID
-      speakerName: string
-      speakerRole: string
-      speakerDescription: string
-      speakerResponsibilities: string[]
-      contextPolicy?: GroupContextPolicy
-      currentMessage: string
-      roundNum: number
-    }) {
-      const groupContext = yield* Effect.sync(() => buildGroupContext(params.groupID, params.roundNum))
-      const privateMemories =
-        params.contextPolicy === "work_scoped"
-          ? ""
-          : yield* searchPrivateMemory(params.speakerID, params.currentMessage)
-
-      const parts: string[] = []
-      if (groupContext) parts.push(groupContext)
-      parts.push(`<current_message>\n${params.currentMessage}\n</current_message>`)
-      if (privateMemories) {
-        parts.push(`<your_private_context>\n${privateMemories}\n</your_private_context>`)
-      }
-      parts.push(
-        `<persona>\n` +
-          `Name: ${params.speakerName}\n` +
-          `Role: ${params.speakerRole}\n` +
-          `Description: ${params.speakerDescription}\n` +
-          `Responsibilities: ${params.speakerResponsibilities.join("; ")}\n` +
-          `</persona>\n\n` +
-          `[INSTRUCTION]\n` +
-          `You are ${params.speakerName} (${params.speakerRole}) in a group discussion.\n` +
-          `Use the shared context above to understand what has been said.\n` +
-          `Do not repeat points others have already made.\n` +
-          `Speak naturally in your own voice based on your persona and role.\n` +
-          `[/INSTRUCTION]`,
-      )
-      return parts.join("\n\n")
-    })
-
     // --- chat ---
 
     const chat = Effect.fn("GroupSession.chat")(function* (input: ChatInput) {
@@ -782,15 +722,7 @@ export const layer: Layer.Layer<
       priorSpeakerIDs.forEach((companyAgentID) => scheduler.afterSpeak(companyAgentID))
 
       // Round 1: triggered by user message
-      let lastMessage = priorAgentMessages.at(-1)?.content ?? params.userText
       const speakersThisTurn = new Set(priorSpeakerIDs)
-      const minSpeakers =
-        params.info.contextPolicy === "work_scoped" ? params.info.members.length : Math.min(2, params.info.members.length)
-
-      const nextRequiredSpeaker = () =>
-        params.info.contextPolicy === "work_scoped"
-          ? memberIds.find((companyAgentID) => !speakersThisTurn.has(companyAgentID))
-          : undefined
 
       yield* bus.publish(Event.BiddingStarted, {
         groupSessionID: params.groupSessionID,
@@ -802,7 +734,7 @@ export const layer: Layer.Layer<
         (member) =>
           Effect.gen(function* () {
             const agent = agentInfos[member.companyAgentID]
-            const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID, params.roundNum))
+            const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
             const probeInput: ProbeInput = {
               persona: {
                 name: agent?.name ?? member.companyAgentID,
@@ -862,31 +794,20 @@ export const layer: Layer.Layer<
         }
 
         if (selection.type === "idle") {
-          // Ensure enough agents get a chance to speak per user turn
-          if (speakersThisTurn.size < minSpeakers || lastMessage === params.userText) {
-            selection = {
-              type: "human_fallback",
-              agentId: nextRequiredSpeaker() ?? scheduler.decideFallback().agentId,
-            }
-          } else {
-            yield* bus.publish(Event.TurnYielded, {
-              groupSessionID: params.groupSessionID,
-              consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
-              reason: selection.reason === "none_over_threshold" ? "no_bid_over_threshold" : "all_pass",
-            })
-            yield* bus.publish(Event.RoundComplete, {
-              groupSessionID: params.groupSessionID,
-              roundNum: params.roundNum,
-            })
-            return
-          }
+          yield* bus.publish(Event.TurnYielded, {
+            groupSessionID: params.groupSessionID,
+            consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
+            reason: selection.reason === "none_over_threshold" ? "no_bid_over_threshold" : "all_pass",
+          })
+          yield* bus.publish(Event.RoundComplete, {
+            groupSessionID: params.groupSessionID,
+            roundNum: params.roundNum,
+          })
+          return
         }
 
-        if (selection.type === "winner" || selection.type === "human_fallback") {
-          const speakerId =
-            speakersThisTurn.has(selection.agentId) && nextRequiredSpeaker()
-              ? nextRequiredSpeaker()!
-              : selection.agentId
+        if (selection.type === "winner") {
+          const speakerId = selection.agentId
 
           const member = params.info.members.find((m) => m.companyAgentID === speakerId)
           if (!member) break
@@ -901,43 +822,30 @@ export const layer: Layer.Layer<
             companyAgentID: speakerId,
           })
 
-          const speakerPrompt = yield* buildSpeakerPrompt({
-            groupID: params.groupSessionID,
-            speakerID: speakerId as CompanyAgentID,
-            speakerName,
-            speakerRole: agentInfo?.role ?? speakerId,
-            speakerDescription: agentInfo?.description ?? "",
-            speakerResponsibilities: agentInfo?.responsibilities ?? [],
-            contextPolicy: params.info.contextPolicy,
-            currentMessage: lastMessage,
-            roundNum: params.roundNum,
+          const turn = yield* AgentTurn.prepare({
+            agentID: speakerId as CompanyAgentID,
+            transcript: yield* Effect.sync(() => buildGroupContext(params.groupSessionID)),
+            message: params.userText,
+            companyAgents: companyAgentSvc,
+            config,
           })
 
           const result = yield* agentInfo
             ? Effect.gen(function* () {
                 const started = yield* agentRunSupervisor.start({
                   agentID: speakerId,
-                  runtime: agentInfo.runtime,
+                  runtime: turn.runtime,
                   lifecycle: "on_demand",
                   permissionMode: "read_only",
                   model:
-                    agentInfo.model ??
+                    turn.model ??
                     (companyModel ? `${companyModel.providerID}/${companyModel.modelID}` : undefined),
                   cwd: Instance.worktree,
-                  prompt: speakerPrompt,
-                  capabilityPacks: ["board-strategy@1"],
-                  requiredRuntimeCapabilities: ["structuredOutput", "workspaceRead"],
-                  systemPrompt: [
-                    `You are ${speakerName}.`,
-                    `Role: ${agentInfo.role}.`,
-                    agentInfo.description,
-                    agentInfo.responsibilities.length
-                      ? `Responsibilities: ${agentInfo.responsibilities.join("; ")}.`
-                      : "",
-                    "Work only inside the assigned repository and follow its local instructions.",
-                  ]
-                    .filter(Boolean)
-                    .join("\n"),
+                  prompt: turn.prompt,
+                  capabilityPacks: [],
+                  requiredRuntimeCapabilities: [],
+                  allowSignalPublishing: true,
+                  systemPrompt: turn.systemPrompt,
                   groupSessionID: params.groupSessionID,
                 })
                 yield* Ref.update(activeAgentRuns, (runs) => {
@@ -949,7 +857,7 @@ export const layer: Layer.Layer<
                 })
                 return yield* Effect.promise(() => started.completion).pipe(
                   Effect.map((run) => ({
-                    content: run.content || "(no output)",
+                    content: run.content.trim(),
                     runtimeMessageID: undefined,
                     agentRunID: started.runID,
                     statusSummary: run.exitCode === 0 ? ("done" as const) : ("error" as const),
@@ -980,7 +888,7 @@ export const layer: Layer.Layer<
                   agentID: params.info.contextPolicy === "work_scoped" ? BOARD_DISCUSSION_AGENT_ID : "main",
                   source: "user",
                   ...(companyModel ? { model: companyModel } : {}),
-                  parts: [{ type: "text", text: speakerPrompt }],
+                  parts: [{ type: "text", text: turn.prompt }],
                 })
                 .pipe(
                   Effect.matchEffect({
@@ -1006,19 +914,21 @@ export const layer: Layer.Layer<
                   }),
                 )
 
-          yield* Effect.sync(() =>
-            insertGroupMessage({
-              groupSessionID: params.groupSessionID,
-              roundNum: params.roundNum,
-              role: "agent",
-              companyAgentID: speakerId as CompanyAgentID,
-              sessionID: member.sessionID as SessionID,
-              content: result.content,
-              statusSummary: result.statusSummary,
-              runtimeMessageID: result.runtimeMessageID,
-              agentRunID: result.agentRunID,
-            }),
-          )
+          if (result.content.trim()) {
+            yield* Effect.sync(() =>
+              insertGroupMessage({
+                groupSessionID: params.groupSessionID,
+                roundNum: params.roundNum,
+                role: "agent",
+                companyAgentID: speakerId as CompanyAgentID,
+                sessionID: member.sessionID as SessionID,
+                content: result.content,
+                statusSummary: result.statusSummary,
+                runtimeMessageID: result.runtimeMessageID,
+                agentRunID: result.agentRunID,
+              }),
+            )
+          }
 
           yield* bus.publish(Event.AgentCompleted, {
             groupSessionID: params.groupSessionID,
@@ -1032,8 +942,6 @@ export const layer: Layer.Layer<
           scheduler.afterSpeak(speakerId)
           speakersThisTurn.add(speakerId)
 
-          lastMessage = result.content
-
           yield* bus.publish(Event.BiddingStarted, {
             groupSessionID: params.groupSessionID,
             roundNum: scheduler.state.round + 1,
@@ -1044,14 +952,14 @@ export const layer: Layer.Layer<
             (member) =>
               Effect.gen(function* () {
                 const agent = agentInfos[member.companyAgentID]
-                const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID, params.roundNum))
+                const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
                 const probeInput: ProbeInput = {
                   persona: {
                     name: agent?.name ?? member.companyAgentID,
                     role: member.companyAgentID,
                     description: agent?.description ?? "",
                   },
-                  lastEvent: `Agent ${speakerName} just spoke: ${lastMessage.slice(0, 200)}`,
+                  lastEvent: `Agent ${speakerName} just spoke in the shared discussion.`,
                   transcript,
                   members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
                   groupSessionID: params.groupSessionID,
@@ -1240,11 +1148,12 @@ export const defaultLayer = Layer.suspend(() =>
     Layer.provide(SessionStatus.defaultLayer),
     Layer.provide(SessionRunState.defaultLayer),
     Layer.provide(Bus.layer),
-    Layer.provide(Memory.defaultLayer),
     Layer.provide(Agent.defaultLayer),
     Layer.provide(Provider.defaultLayer),
     Layer.provide(LLM.defaultLayer),
     Layer.provide(AgentRunSupervisor.defaultLayer),
+    Layer.provide(CompanyAgent.defaultLayer),
+    Layer.provide(Config.defaultLayer),
   ),
 )
 

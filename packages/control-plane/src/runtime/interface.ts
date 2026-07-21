@@ -54,6 +54,7 @@ export const AgentRunSpec = z.object({
   role: z.string().optional(),
   capabilityPacks: z.array(z.string()).default([]),
   requiredRuntimeCapabilities: z.array(z.keyof(RuntimeCapabilities)).default([]),
+  allowSignalPublishing: z.boolean().optional(),
   outputSchema: z.record(z.string(), z.unknown()).optional(),
   workflowVersion: z.string().optional(),
 })

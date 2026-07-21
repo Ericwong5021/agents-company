@@ -80,7 +80,13 @@ function safeEnvironment() {
   return Object.fromEntries(Object.entries(process.env).filter(([name, value]) => allowed.has(name.toUpperCase()) && value !== undefined))
 }
 
-export function createPiTools(spec: AgentRunSpec, allowedToolIDs: readonly string[]): AgentTool[] {
+export type PiSkillLoader = (name: string) => Promise<string>
+
+export function createPiTools(
+  spec: AgentRunSpec,
+  allowedToolIDs: readonly string[],
+  options: { loadSkill?: PiSkillLoader; publishSignal?: boolean } = {},
+): AgentTool[] {
   const resolve = guard(spec.cwd)
   const tools: AgentTool[] = [
     {
@@ -206,7 +212,49 @@ export function createPiTools(spec: AgentRunSpec, allowedToolIDs: readonly strin
         return text([stdout, stderr, `exit code: ${exitCode}`].filter(Boolean).join("\n"))
       },
     },
+    ...(options.loadSkill
+      ? [
+          {
+            name: "skill",
+            label: "Load skill",
+            description:
+              "Load one available professional skill when it is relevant to the current task. Loading a skill does not grant additional permissions.",
+            parameters: Type.Object({ name: Type.String({ description: "The skill name from Available Skills" }) }),
+            execute: async (_callID: string, raw: unknown) => {
+              const input = raw as { name: string }
+              return text(await options.loadSkill!(input.name))
+            },
+          } satisfies AgentTool,
+        ]
+      : []),
+    ...(options.publishSignal
+      ? [
+          {
+            name: "publish_signal",
+            label: "Publish governance signal",
+            description:
+              "Publish a concise decision, risk, status, or intervention when you have actually reached one. Do not use this for ordinary discussion.",
+            parameters: Type.Object({
+              signal_type: Type.Union([
+                Type.Literal("conclusion"),
+                Type.Literal("status"),
+                Type.Literal("risk"),
+                Type.Literal("intervention"),
+              ]),
+              body: Type.String({ minLength: 1 }),
+            }),
+            execute: async (_callID: string, raw: unknown) => {
+              const input = raw as { signal_type: string; body: string }
+              return text(`Recorded ${input.signal_type} signal: ${input.body}`)
+            },
+          } satisfies AgentTool,
+        ]
+      : []),
   ]
-  const allowed = new Set(allowedToolIDs)
+  const allowed = new Set([
+    ...allowedToolIDs,
+    ...(options.loadSkill ? ["skill"] : []),
+    ...(options.publishSignal ? ["publish_signal"] : []),
+  ])
   return tools.filter((tool) => allowed.has(tool.name) && (spec.permissionMode !== "read_only" || !writeTools.has(tool.name)))
 }
