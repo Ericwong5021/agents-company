@@ -1,26 +1,16 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "composite": true,
-    "target": "ESNext",
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
+    "allowJs": false,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "strict": true,
-    "noEmit": false,
-    "emitDeclarationOnly": true,
-    "outDir": "node_modules/.ts-dist",
     "isolatedModules": true,
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ESNext"
   },
-  "include": ["src", "package.json"],
-  "exclude": ["dist", "ts-dist"]
+  "include": ["app", "agent", "modules", "server", "shared"]
 }

@@ -1,28 +1,13 @@
-# @agents-company/app
+# Agent Company WebUI
 
-The shared SolidJS + Vite WebUI used by both the browser development surface and `packages/desktop`.
+Agent Company's sole WebUI is a Nuxt 4 application using Eve. It connects to the local Control Plane and exposes the Company, board, employees and Company settings surfaces.
 
-## Commands
+## Development
 
-Run from this package directory:
-
-```bash
-bun dev
-bun typecheck
-bun run test:unit
-bun run test:e2e:local
-bun run build
+```sh
+bun run dev:web
 ```
 
-The standalone development server defaults to `http://localhost:3000` and expects a local Agent Company backend at `http://localhost:4096` unless overridden with:
+This starts the Eve worker and Nuxt application on `http://127.0.0.1:3210`. Start the Control Plane separately, or use `bun run dev:all` to start both.
 
-- `PLAYWRIGHT_SERVER_HOST`
-- `PLAYWRIGHT_SERVER_PORT`
-- `PLAYWRIGHT_PORT`
-- `PLAYWRIGHT_BASE_URL`
-
-## Product role
-
-This package is the primary product UI. Electron embeds it rather than maintaining a separate desktop frontend. The non-interactive CLI and other clients share Control Plane semantics with this app, while product information architecture remains here.
-
-Current product direction and target behavior are defined in [`docs/product-design/PRODUCT-CONSTITUTION.md`](../../docs/product-design/PRODUCT-CONSTITUTION.md) and the [implementation plan](../../docs/product-design/implementation-plan.md).
+The application derives from the Eve Personal Agent Template; see [`UPSTREAM.md`](UPSTREAM.md) and [`LICENSE`](LICENSE) for provenance and licensing.
