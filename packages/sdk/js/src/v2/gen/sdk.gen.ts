@@ -20,6 +20,7 @@ import type {
   AppAgentsResponses,
   AppLogErrors,
   AppLogResponses,
+  ApprovalPolicyUpdateInput,
   AppSkillsResponses,
   Auth as Auth3,
   AuthRemoveErrors,
@@ -52,6 +53,8 @@ import type {
   CompanyAgentTemplatesSearchResponses,
   CompanyAgentUpdateErrors,
   CompanyAgentUpdateResponses,
+  CompanyApprovalPolicyUpdateErrors,
+  CompanyApprovalPolicyUpdateResponses,
   CompanyBootstrapErrors,
   CompanyBootstrapResponses,
   CompanyChannelMessagesErrors,
@@ -87,6 +90,9 @@ import type {
   CompanyProvidersResponses,
   CompanyRepositoryInspectErrors,
   CompanyRepositoryInspectResponses,
+  CompanyResetErrors,
+  CompanyResetInput,
+  CompanyResetResponses,
   CompanySetupGoalInput,
   CompanyThreadActionErrors,
   CompanyThreadActionResponses,
@@ -137,6 +143,7 @@ import type {
   GlobalImportRunErrors,
   GlobalImportRunResponses,
   GlobalImportScanResponses,
+  GlobalLogResponses,
   GlobalReadinessResponses,
   GlobalRuntimeListResponses,
   GlobalUpgradeErrors,
@@ -499,6 +506,36 @@ export class Global extends HeyApiClient {
   }
 
   /**
+   * Read Control Plane logs
+   *
+   * Read the active Control Plane log incrementally from a byte cursor.
+   */
+  public log<ThrowOnError extends boolean = false>(
+    parameters?: {
+      cursor?: number
+      source?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "cursor" },
+            { in: "query", key: "source" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GlobalLogResponses, unknown, ThrowOnError>({
+      url: "/global/log",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get local release readiness
    *
    * Report local database, migration, durable-directory, and backup readiness without changing state.
@@ -711,6 +748,32 @@ export class Company extends HeyApiClient {
   }
 
   /**
+   * Update the company default approval policy
+   */
+  public approvalPolicyUpdate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      approvalPolicyUpdateInput?: ApprovalPolicyUpdateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "approvalPolicyUpdateInput", map: "body" }] }])
+    return (options?.client ?? this.client).put<
+      CompanyApprovalPolicyUpdateResponses,
+      CompanyApprovalPolicyUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/company/approval-policy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Persist a board goal until a model provider is configured
    */
   public deferSetupGoal<ThrowOnError extends boolean = false>(
@@ -726,6 +789,28 @@ export class Company extends HeyApiClient {
       ThrowOnError
     >({
       url: "/company/setup-goal",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Clear all local company data, optionally including provider configuration
+   */
+  public reset<ThrowOnError extends boolean = false>(
+    parameters?: {
+      companyResetInput?: CompanyResetInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "companyResetInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<CompanyResetResponses, CompanyResetErrors, ThrowOnError>({
+      url: "/company/reset",
       ...options,
       ...params,
       headers: {

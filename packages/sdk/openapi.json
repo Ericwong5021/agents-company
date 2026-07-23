@@ -263,6 +263,102 @@
         ]
       }
     },
+    "/company/approval-policy": {
+      "put": {
+        "operationId": "company.approvalPolicyUpdate",
+        "summary": "Update the company default approval policy",
+        "responses": {
+          "200": {
+            "description": "Company state with the updated approval policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyReadyState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid company bootstrap request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyRepositoryNotGit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyProviderUnsupported"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyProviderNotConnected"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyModelNotAvailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProviderAuthValidationFailed"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CustomProviderModelsFailed"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalAuthUnauthorized"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to complete company operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CompanyCorruptState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnknownError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalPolicyUpdateInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.approvalPolicyUpdate({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company/setup-goal": {
       "put": {
         "operationId": "company.deferSetupGoal",
@@ -355,6 +451,102 @@
           {
             "lang": "js",
             "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.deferSetupGoal({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company/reset": {
+      "post": {
+        "operationId": "company.reset",
+        "summary": "Clear all local company data, optionally including provider configuration",
+        "responses": {
+          "200": {
+            "description": "Fresh local company state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyReadyState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid company bootstrap request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyRepositoryNotGit"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyProviderUnsupported"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyProviderNotConnected"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CompanyModelNotAvailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProviderAuthValidationFailed"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CustomProviderModelsFailed"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalAuthUnauthorized"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to complete company operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CompanyCorruptState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnknownError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyResetInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.reset({\n  ...\n})"
           }
         ]
       }
@@ -2266,6 +2458,132 @@
                               "message"
                             ],
                             "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "bidding"
+                              },
+                              "bidding": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "roundNum": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "state": {
+                                    "default": "decided",
+                                    "type": "string",
+                                    "enum": [
+                                      "bidding",
+                                      "decided"
+                                    ]
+                                  },
+                                  "winnerAgentID": {
+                                    "type": "string"
+                                  },
+                                  "bids": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "agentId": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "state": {
+                                          "default": "completed",
+                                          "type": "string",
+                                          "enum": [
+                                            "queued",
+                                            "analyzing",
+                                            "completed"
+                                          ]
+                                        },
+                                        "level": {
+                                          "type": "string",
+                                          "enum": [
+                                            "must",
+                                            "want",
+                                            "could",
+                                            "pass"
+                                          ]
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "objection",
+                                            "answer",
+                                            "question",
+                                            "claim",
+                                            "info",
+                                            "support"
+                                          ]
+                                        },
+                                        "addressedAs": {
+                                          "type": "string",
+                                          "enum": [
+                                            "direct",
+                                            "mention",
+                                            "none"
+                                          ]
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "score": {
+                                          "type": "number"
+                                        },
+                                        "eligible": {
+                                          "type": "boolean"
+                                        }
+                                      },
+                                      "required": [
+                                        "agentId"
+                                      ]
+                                    }
+                                  },
+                                  "time": {
+                                    "type": "object",
+                                    "properties": {
+                                      "created": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "updated": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "created",
+                                      "updated"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "roundNum",
+                                  "bids",
+                                  "time"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "bidding"
+                            ],
+                            "additionalProperties": false
                           }
                         ]
                       }
@@ -2988,6 +3306,75 @@
           {
             "lang": "js",
             "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.threadAction({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/global/log": {
+      "get": {
+        "operationId": "global.log",
+        "summary": "Read Control Plane logs",
+        "description": "Read the active Control Plane log incrementally from a byte cursor.",
+        "responses": {
+          "200": {
+            "description": "Active runtime log chunk",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "cursor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "reset": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "available",
+                    "content",
+                    "cursor",
+                    "reset",
+                    "source"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.global.log({\n  ...\n})"
           }
         ]
       }
@@ -18355,6 +18742,18 @@
         ],
         "additionalProperties": false
       },
+      "ApprovalPolicyUpdateInput": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "$ref": "#/components/schemas/ApprovalPreset"
+          }
+        },
+        "required": [
+          "preset"
+        ],
+        "additionalProperties": false
+      },
       "CompanySetupGoalInput": {
         "type": "object",
         "properties": {
@@ -18366,6 +18765,23 @@
         },
         "required": [
           "body"
+        ],
+        "additionalProperties": false
+      },
+      "CompanyResetInput": {
+        "type": "object",
+        "properties": {
+          "confirmation": {
+            "type": "string",
+            "const": "RESET"
+          },
+          "clear_provider_config": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirmation"
         ],
         "additionalProperties": false
       },

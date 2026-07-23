@@ -208,8 +208,17 @@ export type CompanyReadyState = {
   }
 }
 
+export type ApprovalPolicyUpdateInput = {
+  preset: ApprovalPreset
+}
+
 export type CompanySetupGoalInput = {
   body: string
+}
+
+export type CompanyResetInput = {
+  confirmation: "RESET"
+  clear_provider_config?: boolean
 }
 
 export type CompanyModelOption = {
@@ -3985,6 +3994,48 @@ export type CompanyAgentsResponses = {
 
 export type CompanyAgentsResponse = CompanyAgentsResponses[keyof CompanyAgentsResponses]
 
+export type CompanyApprovalPolicyUpdateData = {
+  body?: ApprovalPolicyUpdateInput
+  path?: never
+  query?: never
+  url: "/company/approval-policy"
+}
+
+export type CompanyApprovalPolicyUpdateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyApprovalPolicyUpdateError =
+  CompanyApprovalPolicyUpdateErrors[keyof CompanyApprovalPolicyUpdateErrors]
+
+export type CompanyApprovalPolicyUpdateResponses = {
+  /**
+   * Company state with the updated approval policy
+   */
+  200: CompanyReadyState
+}
+
+export type CompanyApprovalPolicyUpdateResponse =
+  CompanyApprovalPolicyUpdateResponses[keyof CompanyApprovalPolicyUpdateResponses]
+
 export type CompanyDeferSetupGoalData = {
   body?: CompanySetupGoalInput
   path?: never
@@ -4024,6 +4075,46 @@ export type CompanyDeferSetupGoalResponses = {
 }
 
 export type CompanyDeferSetupGoalResponse = CompanyDeferSetupGoalResponses[keyof CompanyDeferSetupGoalResponses]
+
+export type CompanyResetData = {
+  body?: CompanyResetInput
+  path?: never
+  query?: never
+  url: "/company/reset"
+}
+
+export type CompanyResetErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyResetError = CompanyResetErrors[keyof CompanyResetErrors]
+
+export type CompanyResetResponses = {
+  /**
+   * Fresh local company state
+   */
+  200: CompanyReadyState
+}
+
+export type CompanyResetResponse = CompanyResetResponses[keyof CompanyResetResponses]
 
 export type CompanyProvidersData = {
   body?: never
@@ -4752,6 +4843,29 @@ export type CompanyThreadEntriesResponses = {
             }
           }
         }
+      | {
+          type: "bidding"
+          bidding: {
+            id: string
+            roundNum: number
+            state?: "bidding" | "decided"
+            winnerAgentID?: string
+            bids: Array<{
+              agentId: string
+              state?: "queued" | "analyzing" | "completed"
+              level?: "must" | "want" | "could" | "pass"
+              type?: "objection" | "answer" | "question" | "claim" | "info" | "support"
+              addressedAs?: "direct" | "mention" | "none"
+              reason?: string
+              score?: number
+              eligible?: boolean
+            }>
+            time: {
+              created: number
+              updated: number
+            }
+          }
+        }
     >
     nextCursor?: string
   }
@@ -4926,6 +5040,31 @@ export type CompanyThreadActionResponses = {
 }
 
 export type CompanyThreadActionResponse = CompanyThreadActionResponses[keyof CompanyThreadActionResponses]
+
+export type GlobalLogData = {
+  body?: never
+  path?: never
+  query?: {
+    cursor?: number
+    source?: string
+  }
+  url: "/global/log"
+}
+
+export type GlobalLogResponses = {
+  /**
+   * Active runtime log chunk
+   */
+  200: {
+    available: boolean
+    content: string
+    cursor: number
+    reset: boolean
+    source: string
+  }
+}
+
+export type GlobalLogResponse = GlobalLogResponses[keyof GlobalLogResponses]
 
 export type GlobalRuntimeListData = {
   body?: never

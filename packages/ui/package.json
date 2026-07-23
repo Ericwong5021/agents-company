@@ -26,7 +26,8 @@
   "scripts": {
     "typecheck": "tsgo --noEmit",
     "dev": "vite",
-    "generate:tailwind": "bun run script/tailwind.ts"
+    "generate:tailwind": "bun run script/tailwind.ts",
+    "generate:icons": "bun run script/generate-phosphor-icons.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",
@@ -41,9 +42,10 @@
     "vite-plugin-solid": "catalog:"
   },
   "dependencies": {
-    "@kobalte/core": "catalog:",
     "@agents-company/sdk": "workspace:*",
     "@agents-company/shared": "workspace:*",
+    "@kobalte/core": "catalog:",
+    "@phosphor-icons/core": "2.1.1",
     "@pierre/diffs": "catalog:",
     "@solid-primitives/bounds": "0.1.3",
     "@solid-primitives/event-listener": "2.4.5",

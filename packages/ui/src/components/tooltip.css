@@ -18,10 +18,12 @@
 [data-component="tooltip"] {
   z-index: 1000;
   max-width: 320px;
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-float-base);
+  border-radius: var(--radius-md);
+  background-color: color-mix(in oklch, var(--surface-float-base) 92%, transparent);
   color: var(--text-invert-strong);
-  background: var(--surface-float-base);
+  background: color-mix(in oklch, var(--surface-float-base) 92%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
   padding: 2px 8px;
   border: 1px solid var(--border-weak-base, rgba(0, 0, 0, 0.07));
 
