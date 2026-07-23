@@ -29,7 +29,7 @@ export const AgentActivityProjection = z
         name: z.string(),
         role: z.string().optional(),
         description: z.string().optional(),
-        lifecycle: z.enum(["candidate", "employee"]),
+        lifecycle: z.literal("employee"),
         department: z.string().optional(),
         responsibilities: z.array(z.string()),
       })
@@ -60,16 +60,32 @@ function state(state: string) {
     return { activity: "waiting" as const, attention: "focused" as const, interruptibility: "interruptible" as const }
   }
   if (state === "running") {
-    return { activity: "working" as const, attention: "focused" as const, interruptibility: "coordinate_first" as const }
+    return {
+      activity: "working" as const,
+      attention: "focused" as const,
+      interruptibility: "coordinate_first" as const,
+    }
   }
   if (state === "interrupting" || state === "awaiting_recovery") {
-    return { activity: "recovering" as const, attention: "urgent" as const, interruptibility: "needs_intervention" as const }
+    return {
+      activity: "recovering" as const,
+      attention: "urgent" as const,
+      interruptibility: "needs_intervention" as const,
+    }
   }
   if (state === "failed") {
-    return { activity: "failed" as const, attention: "urgent" as const, interruptibility: "needs_intervention" as const }
+    return {
+      activity: "failed" as const,
+      attention: "urgent" as const,
+      interruptibility: "needs_intervention" as const,
+    }
   }
   if (state === "stopped") {
-    return { activity: "interrupted" as const, attention: "available" as const, interruptibility: "interruptible" as const }
+    return {
+      activity: "interrupted" as const,
+      attention: "available" as const,
+      interruptibility: "interruptible" as const,
+    }
   }
   return { activity: "completed" as const, attention: "available" as const, interruptibility: "interruptible" as const }
 }

@@ -1,9 +1,13 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { Effect } from "effect"
+import { and, eq } from "drizzle-orm"
 import z from "zod"
 import { Auth } from "@/auth"
 import { Company, CompanyReset, CompanySetupInstance } from "@/company"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { CompanyProject } from "@/company-project"
+import { CompanyTeamSelectionTable } from "@/company-recruitment/company-recruitment.sql"
 import * as CompanyActivity from "@/company/activity"
 import {
   ApprovalPolicyUpdateInput,
@@ -11,6 +15,8 @@ import {
   CompanyAlreadyInitialized,
   CompanyCorruptState,
   CompanyID,
+  CompanyProviderConfigureInput,
+  type CompanyProviderConfigureInput as CompanyProviderConfigureInputType,
   CustomProviderModels,
   CustomProviderModelsFailed,
   CustomProviderModelsInput,
@@ -30,6 +36,7 @@ import { Config } from "@/config"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Provider, ProviderAuth, ModelsDev } from "@/provider"
 import { ProviderID } from "@/provider/schema"
+import { Database } from "@/storage"
 import { lazy } from "@/util/lazy"
 import {
   localAuthUnauthorizedResponse,
@@ -46,6 +53,34 @@ const RepositoryInspectInput = z
   .strict()
   .meta({ ref: "RepositoryInspectInput" })
 const CompanyAgentsQuery = z.object({ company_id: CompanyID }).strict()
+const ReassignWorkItemInput = z
+  .object({
+    owner_agent_id: z.string().trim().min(1),
+    reason: z.string().trim().min(1).max(4_000),
+  })
+  .strict()
+const ReassignWorkItemConflict = z
+  .object({
+    name: z.literal("CompanyProjectWorkItemReassignmentConflict"),
+    data: z
+      .object({
+        project_id: z.string(),
+        work_item_id: z.string(),
+        reason: z.enum([
+          "project_not_found",
+          "project_not_blocked",
+          "worker_not_rejected",
+          "reviewer_not_blocked",
+          "owner_unchanged",
+          "owner_not_company_member",
+          "owner_is_reviewer",
+          "owner_not_selected",
+        ]),
+        message: z.string(),
+      })
+      .strict(),
+  })
+  .strict()
 
 function isUnsupported(providerID: string) {
   return unsupportedProviders.has(providerID)
@@ -57,11 +92,13 @@ function ensureSupported(providerID: ProviderID) {
 }
 
 async function customProviderModels(input: CustomProviderModelsInput) {
-  const base = new URL(input.base_url)
-  const url = new URL("models", base.pathname.endsWith("/") ? base : new URL(`${base.pathname}/`, base))
+  const url = new URL(`${input.base_url.replace(/\/+$/, "")}/models`)
   const headers = new Headers(input.headers)
   if (input.api_key && !headers.has("authorization")) headers.set("authorization", `Bearer ${input.api_key}`)
-  if (input.format === "anthropic" && !headers.has("anthropic-version")) headers.set("anthropic-version", "2023-06-01")
+  if (input.format === "anthropic") {
+    if (input.api_key && !headers.has("x-api-key")) headers.set("x-api-key", input.api_key)
+    if (!headers.has("anthropic-version")) headers.set("anthropic-version", "2023-06-01")
+  }
 
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) }).catch(() => undefined)
   if (!response) throw new CustomProviderModelsFailed({ message: "无法连接到提供商端点" })
@@ -83,6 +120,66 @@ async function customProviderModels(input: CustomProviderModelsInput) {
     result.data.data
       .map((model) => ({ model_id: model.id, name: model.display_name ?? model.name ?? model.id }))
       .toSorted((left, right) => left.name.localeCompare(right.name)),
+  )
+}
+
+async function configureProvider(input: CompanyProviderConfigureInputType) {
+  ensureSupported(input.provider_id)
+  const models = await customProviderModels(input)
+  if (!models.some((model) => model.model_id === input.model_id))
+    throw new CompanyModelNotAvailable({ provider_id: input.provider_id, model_id: input.model_id })
+
+  const baseURL = input.base_url.replace(/\/+$/, "")
+  const selectedModel = `${input.provider_id}/${input.model_id}`
+  await AppRuntime.runPromise(
+    Effect.gen(function* () {
+      const config = yield* Config.Service
+      const current = yield* config.getGlobal()
+      yield* config.updateGlobal({
+        model: selectedModel,
+        small_model: selectedModel,
+        model_groups: {
+          ...current.model_groups,
+          ultra: selectedModel,
+          standard: selectedModel,
+          lite: selectedModel,
+        },
+        ...(current.enabled_providers
+          ? { enabled_providers: [...new Set([...current.enabled_providers, input.provider_id])] }
+          : {}),
+        ...(current.disabled_providers
+          ? { disabled_providers: current.disabled_providers.filter((providerID) => providerID !== input.provider_id) }
+          : {}),
+        provider: {
+          [input.provider_id]: {
+            name: input.provider_id,
+            npm: input.format === "anthropic" ? "@ai-sdk/anthropic" : "@ai-sdk/openai-compatible",
+            api: baseURL,
+            options: {
+              baseURL,
+              ...(Object.keys(input.headers).length > 0 ? { headers: input.headers } : {}),
+            },
+            models: Object.fromEntries(
+              models.map((model) => [
+                model.model_id,
+                {
+                  name: model.name,
+                  tool_call: true,
+                },
+              ]),
+            ),
+          },
+        },
+      })
+      const auth = yield* Auth.Service
+      yield* auth.set(input.provider_id, { type: "api", key: input.api_key })
+    }),
+  )
+  await AppRuntime.runPromise(CompanySetupInstance.dispose)
+  return AppRuntime.runPromise(
+    Company.Service.use((service) =>
+      service.bindProvider({ provider_id: input.provider_id, model_id: input.model_id }),
+    ),
   )
 }
 
@@ -192,6 +289,9 @@ const badRequest = namedErrorResponse("Invalid company bootstrap request", [
 
 const conflict = namedErrorResponse("Company bootstrap already initialized", [
   CompanyAlreadyInitialized.Schema,
+] as const)
+const reassignmentConflict = namedErrorResponse("Work item cannot be reassigned", [
+  ReassignWorkItemConflict,
 ] as const)
 const internalError = namedErrorResponse("Unable to complete company operation", [
   CompanyCorruptState.Schema,
@@ -312,6 +412,24 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       async (c) => c.json(await listProviders()),
+    )
+    .put(
+      "/provider",
+      describeRoute({
+        operationId: "company.providerConfigure",
+        summary: "Configure a custom provider and bind it to the local company",
+        responses: {
+          200: {
+            description: "Company state bound to the configured provider",
+            content: { "application/json": { schema: resolver(CompanyReadyState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", CompanyProviderConfigureInput, productValidationHook),
+      async (c) => c.json(await configureProvider(c.req.valid("json"))),
     )
     .get(
       "/providers/auth",
@@ -517,6 +635,138 @@ export const CompanyRoutes = lazy(() =>
       validator("json", BootstrapInput, productValidationHook),
       async (c) =>
         c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.bootstrap(c.req.valid("json"))))),
+    )
+    .post(
+      "/projects/:projectID/work-items/:workItemID/reassign",
+      describeRoute({
+        operationId: "company.project.workItem.reassign",
+        summary: "Reassign a rejected worker before explicitly retrying a blocked project",
+        responses: {
+          200: { description: "Reassigned work item" },
+          400: badRequest,
+          409: reassignmentConflict,
+        },
+      }),
+      validator(
+        "param",
+        z.object({ projectID: z.string().min(1), workItemID: z.string().min(1) }).strict(),
+        productValidationHook,
+      ),
+      validator("json", ReassignWorkItemInput, productValidationHook),
+      async (c) => {
+        const param = c.req.valid("param")
+        const input = c.req.valid("json")
+        const result = await AppRuntime.runPromise(
+          Effect.gen(function* () {
+            const service = yield* CompanyProject.Service
+            const project = yield* service.get(param.projectID)
+            if (!project)
+              return {
+                error: {
+                  reason: "project_not_found" as const,
+                  message: `Company project not found: ${param.projectID}`,
+                },
+              }
+            if (project.status !== "blocked")
+              return {
+                error: {
+                  reason: "project_not_blocked" as const,
+                  message: `Company project ${project.id} is not blocked`,
+                },
+              }
+            const items = yield* service.listWorkItems(project.id)
+            const worker = items.find((item) => item.id === param.workItemID)
+            if (
+              !worker ||
+              worker.kind !== "worker" ||
+              worker.status !== "completed" ||
+              worker.review_status !== "rejected"
+            )
+              return {
+                error: {
+                  reason: "worker_not_rejected" as const,
+                  message: `Work item ${param.workItemID} is not a completed worker with a rejected review`,
+                },
+              }
+            const reviewer = items.find((item) => item.kind === "reviewer" && item.parent_id === worker.id)
+            if (!reviewer || !["blocked", "failed"].includes(reviewer.status))
+              return {
+                error: {
+                  reason: "reviewer_not_blocked" as const,
+                  message: `Worker ${worker.id} does not have a blocked or failed reviewer`,
+                },
+              }
+            if (worker.owner_agent_id === input.owner_agent_id)
+              return {
+                error: {
+                  reason: "owner_unchanged" as const,
+                  message: `Work item ${worker.id} is already assigned to ${input.owner_agent_id}`,
+                },
+              }
+            const agent = yield* Effect.sync(() =>
+              Database.use((db) =>
+                db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, input.owner_agent_id)).get(),
+              ),
+            )
+            if (!project.company_id || agent?.company_id !== project.company_id)
+              return {
+                error: {
+                  reason: "owner_not_company_member" as const,
+                  message: `Agent ${input.owner_agent_id} does not belong to project company ${project.company_id ?? ""}`,
+                },
+              }
+            if (reviewer.owner_agent_id === input.owner_agent_id)
+              return {
+                error: {
+                  reason: "owner_is_reviewer" as const,
+                  message: `Agent ${input.owner_agent_id} is the reviewer for work item ${worker.id}`,
+                },
+              }
+            const selected = yield* Effect.sync(() =>
+              Database.use((db) =>
+                db
+                  .select({ id: CompanyTeamSelectionTable.id })
+                  .from(CompanyTeamSelectionTable)
+                  .where(
+                    and(
+                      eq(CompanyTeamSelectionTable.project_id, project.id),
+                      eq(CompanyTeamSelectionTable.agent_id, input.owner_agent_id),
+                      eq(CompanyTeamSelectionTable.decision, "selected"),
+                    ),
+                  )
+                  .get(),
+              ),
+            )
+            if (!selected)
+              return {
+                error: {
+                  reason: "owner_not_selected" as const,
+                  message: `Agent ${input.owner_agent_id} has no selected recruitment decision for project ${project.id}`,
+                },
+              }
+            return {
+              work_item: yield* service.assignWorkItem({
+                id: worker.id,
+                owner_agent_id: input.owner_agent_id,
+                reason: input.reason,
+              }),
+            }
+          }),
+        )
+        if ("error" in result)
+          return c.json(
+            {
+              name: "CompanyProjectWorkItemReassignmentConflict" as const,
+              data: {
+                project_id: param.projectID,
+                work_item_id: param.workItemID,
+                ...result.error,
+              },
+            },
+            409,
+          )
+        return c.json(result.work_item)
+      },
     )
     .route("/channels", CompanyChannelRoutes())
     .route("/threads", CompanyThreadRoutes()),

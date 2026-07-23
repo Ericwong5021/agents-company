@@ -3,6 +3,8 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { CompanyProviderList } from "../../src/company/schema"
+import { Config } from "../../src/config"
+import { AppRuntime } from "../../src/effect/app-runtime"
 import { Server } from "../../src/server/server"
 import { resetDatabase } from "../fixture/db"
 
@@ -168,29 +170,161 @@ describe.serial("/company", () => {
         "x-client": "company-test",
       })
     } finally {
-      endpoint.stop(true)
+      await endpoint.stop(true)
+    }
+  })
+
+  test.serial("atomically configures a custom provider and binds it to the company without returning secrets", async () => {
+    const requests: { url: string; headers: Record<string, string> }[] = []
+    const endpoint = Bun.serve({
+      port: 0,
+      fetch(request) {
+        requests.push({ url: request.url, headers: Object.fromEntries(request.headers) })
+        return Response.json({
+          data: [
+            { id: "model-secondary", name: "Secondary" },
+            { id: "model-primary", name: "Primary" },
+          ],
+        })
+      },
+    })
+    const app = Server.Default().app
+    try {
+      const response = await app.request("/company/provider", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          format: "openai",
+          base_url: endpoint.url,
+          api_key: "atomic-provider-secret",
+          headers: { "x-company-route": "configured" },
+          provider_id: "route-custom-provider",
+          model_id: "model-primary",
+        }),
+      })
+      expect(response.status).toBe(200)
+      const body = await response.json()
+      expect(body).toMatchObject({
+        state: "ready",
+        company: {
+          provider: {
+            provider_id: "route-custom-provider",
+            model_id: "model-primary",
+          },
+        },
+      })
+      expect(JSON.stringify(body)).not.toContain("atomic-provider-secret")
+      expect(requests).toHaveLength(1)
+      expect(requests[0]).toMatchObject({
+        url: `${endpoint.url}models`,
+        headers: {
+          authorization: "Bearer atomic-provider-secret",
+          "x-company-route": "configured",
+        },
+      })
+
+      const providers = CompanyProviderList.parse(await (await app.request("/company/providers")).json())
+      expect(
+        providers.providers.find((provider) => provider.provider_id === "route-custom-provider"),
+      ).toMatchObject({
+        connected: true,
+        models: expect.arrayContaining([
+          expect.objectContaining({ model_id: "model-primary", name: "Primary" }),
+          expect.objectContaining({ model_id: "model-secondary", name: "Secondary" }),
+        ]),
+      })
+      expect(await AppRuntime.runPromise(Config.Service.use((config) => config.getGlobal()))).toMatchObject({
+        model: "route-custom-provider/model-primary",
+        small_model: "route-custom-provider/model-primary",
+        model_groups: {
+          ultra: "route-custom-provider/model-primary",
+          standard: "route-custom-provider/model-primary",
+          lite: "route-custom-provider/model-primary",
+        },
+      })
+    } finally {
+      await endpoint.stop(true)
+      await app.request("/company/providers/route-custom-provider/credentials", { method: "DELETE" })
+      await AppRuntime.runPromise(Config.Service.use((config) => config.resetProviderSettings()))
+    }
+  })
+
+  test.serial("rejects invalid custom provider configuration before contacting the endpoint", async () => {
+    let requests = 0
+    const endpoint = Bun.serve({
+      port: 0,
+      fetch() {
+        requests++
+        return Response.json({ data: [{ id: "model-primary" }] })
+      },
+    })
+    try {
+      const response = await Server.Default().app.request("/company/provider", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          format: "openai",
+          base_url: endpoint.url,
+          api_key: "provider-secret",
+          headers: {},
+          provider_id: "Invalid Provider ID",
+          model_id: "model-primary",
+          unexpected: true,
+        }),
+      })
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ name: "ProductValidationError" })
+      expect(requests).toBe(0)
+    } finally {
+      await endpoint.stop(true)
     }
   })
 
   test.serial("declares non-empty schemas for every M1 company operation", async () => {
     const spec = await Server.openapi()
     const operations = [
-      { method: "get", path: "/company", statuses: ["200", "500"] },
-      { method: "put", path: "/company/approval-policy", statuses: ["200", "400", "500"] },
-      { method: "post", path: "/company/reset", statuses: ["200", "400", "500"] },
-      { method: "get", path: "/company/providers", statuses: ["200", "500"] },
-      { method: "get", path: "/company/providers/auth", statuses: ["200", "500"] },
-      { method: "post", path: "/company/providers/models", statuses: ["200", "400"] },
-      { method: "put", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
-      { method: "delete", path: "/company/providers/{providerID}/credentials", statuses: ["200", "400", "500"] },
-      { method: "post", path: "/company/providers/{providerID}/oauth/authorize", statuses: ["200", "400", "500"] },
-      { method: "post", path: "/company/providers/{providerID}/oauth/callback", statuses: ["200", "400", "500"] },
-      { method: "post", path: "/company/repository/inspect", statuses: ["200", "400", "500"] },
-      { method: "post", path: "/company/bootstrap", statuses: ["200", "400", "409", "500"] },
+      { method: "get", path: "/company", request: false, statuses: ["200", "401", "500"] },
+      { method: "put", path: "/company/approval-policy", request: true, statuses: ["200", "400", "401", "500"] },
+      { method: "post", path: "/company/reset", request: true, statuses: ["200", "400", "401", "500"] },
+      { method: "get", path: "/company/providers", request: false, statuses: ["200", "401", "500"] },
+      { method: "put", path: "/company/provider", request: true, statuses: ["200", "400", "401", "500"] },
+      { method: "get", path: "/company/providers/auth", request: false, statuses: ["200", "401", "500"] },
+      { method: "post", path: "/company/providers/models", request: true, statuses: ["200", "400", "401"] },
+      {
+        method: "put",
+        path: "/company/providers/{providerID}/credentials",
+        request: true,
+        statuses: ["200", "400", "401", "500"],
+      },
+      {
+        method: "delete",
+        path: "/company/providers/{providerID}/credentials",
+        request: false,
+        statuses: ["200", "400", "401", "500"],
+      },
+      {
+        method: "post",
+        path: "/company/providers/{providerID}/oauth/authorize",
+        request: true,
+        statuses: ["200", "400", "401", "500"],
+      },
+      {
+        method: "post",
+        path: "/company/providers/{providerID}/oauth/callback",
+        request: true,
+        statuses: ["200", "400", "401", "500"],
+      },
+      { method: "post", path: "/company/repository/inspect", request: true, statuses: ["200", "400", "401", "500"] },
+      { method: "post", path: "/company/bootstrap", request: true, statuses: ["200", "400", "401", "409", "500"] },
     ] as const
     for (const item of operations) {
       const operation = spec.paths?.[item.path]?.[item.method]
       expect(operation).toBeDefined()
+      if (item.request) {
+        if (!operation?.requestBody || !("content" in operation.requestBody))
+          throw new Error(`Missing JSON request schema for ${item.method} ${item.path}`)
+        expect(operation.requestBody.content?.["application/json"]?.schema).toBeDefined()
+      }
       item.statuses.map((status) => {
         const response = operation?.responses?.[status]
         expect(response).toBeDefined()

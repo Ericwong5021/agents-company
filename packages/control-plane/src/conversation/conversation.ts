@@ -17,6 +17,7 @@ import {
   ConversationRunTable,
   ConversationThreadMemberTable,
   ConversationThreadTable,
+  RootNeedTable,
   SignalProjectionSourceTable,
   SignalProjectionTable,
   ensureCompanyChannels as ensureCompanyChannelRows,
@@ -36,6 +37,7 @@ import {
   InvalidCursor,
   MessageAuthor,
   MessageVisibility,
+  RequestConflict,
   RootNeedID,
   SignalProjectionID,
   SignalProjectionSourceKind,
@@ -341,6 +343,19 @@ export const EnsureProjectChannelInput = z
   })
   .strict()
 export type EnsureProjectChannelInput = z.infer<typeof EnsureProjectChannelInput>
+
+export const RecordBoardDecisionInput = z
+  .object({
+    companyID: CompanyID,
+    threadID: ConversationThreadID,
+    principal: ConversationPrincipal,
+    requestID: z.string().uuid(),
+    projectScopeID: z.string().min(1),
+    driAgentID: z.string().min(1),
+    body: z.string().trim().min(1).max(20_000),
+  })
+  .strict()
+export type RecordBoardDecisionInput = z.infer<typeof RecordBoardDecisionInput>
 
 type ChannelAccess = Pick<PageMessagesInput, "companyID" | "channelID" | "principal">
 type ThreadAccess = Pick<GetThreadInput, "companyID" | "threadID" | "principal">
@@ -855,6 +870,9 @@ export interface Interface {
   readonly sendMessage: (input: Intake.SendMessageInput) => Effect.Effect<Intake.MessageAccepted, Intake.SendMessageError>
   readonly ensureCompanyChannels: (input: EnsureCompanyChannelsInput) => Effect.Effect<void>
   readonly ensureProjectChannel: (input: EnsureProjectChannelInput) => Effect.Effect<ChannelSummary, InstanceType<typeof CompanyNotFound>>
+  readonly recordBoardDecision: (
+    input: RecordBoardDecisionInput,
+  ) => Effect.Effect<ChannelMessage, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof RequestConflict>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/Conversation") {}
@@ -1086,6 +1104,128 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return channelFromRow(channel)
     })
 
+    const recordBoardDecision = Effect.fn("Conversation.recordBoardDecision")(function* (
+      input: RecordBoardDecisionInput,
+    ) {
+      const visible = yield* Effect.sync(() => findVisibleThread(input))
+      if (!visible) {
+        return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
+      }
+      const result = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const thread = db
+              .select()
+              .from(ConversationThreadTable)
+              .where(
+                and(
+                  eq(ConversationThreadTable.company_id, input.companyID),
+                  eq(ConversationThreadTable.id, input.threadID),
+                ),
+              )
+              .get()
+            if (!thread?.root_need_id) return { type: "not_found" as const }
+            const channel = db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
+            if (!channel || channel.kind !== "board") return { type: "not_found" as const }
+            const existing = db
+              .select()
+              .from(ChannelMessageTable)
+              .where(
+                and(
+                  eq(ChannelMessageTable.channel_id, channel.id),
+                  eq(ChannelMessageTable.request_id, input.requestID),
+                ),
+              )
+              .get()
+            if (existing) {
+              const same =
+                existing.source_thread_id === thread.id &&
+                existing.root_need_id === thread.root_need_id &&
+                existing.author_kind === "agent" &&
+                existing.author_id === input.driAgentID &&
+                existing.dri_principal_kind === "agent" &&
+                existing.dri_principal_id === input.driAgentID &&
+                existing.signal_type === "decision" &&
+                existing.body === input.body &&
+                thread.project_scope_id === input.projectScopeID
+              return same ? { type: "accepted" as const, message: existing } : { type: "conflict" as const }
+            }
+
+            const now = Date.now()
+            const messageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
+            const projectionID = SignalProjectionID.parse(Identifier.ascending("signalProjection"))
+            const run = db
+              .select({ id: ConversationRunTable.id })
+              .from(ConversationRunTable)
+              .where(eq(ConversationRunTable.conversation_thread_id, thread.id))
+              .orderBy(desc(ConversationRunTable.time_created), desc(ConversationRunTable.id))
+              .get()
+            const message = {
+              id: messageID,
+              channel_id: channel.id,
+              root_need_id: thread.root_need_id,
+              source_thread_id: thread.id,
+              reply_to_id: null,
+              request_id: input.requestID,
+              author_kind: "agent" as const,
+              author_id: input.driAgentID,
+              body: input.body,
+              signal_type: "decision" as const,
+              dri_principal_kind: "agent" as const,
+              dri_principal_id: input.driAgentID,
+              visibility: "company" as const,
+              mentions: [],
+              time_created: now,
+              time_updated: now,
+            }
+            db.update(ConversationThreadTable)
+              .set({
+                project_scope_id: input.projectScopeID,
+                status: "completed",
+                time_updated: now,
+              })
+              .where(eq(ConversationThreadTable.id, thread.id))
+              .run()
+            db.update(RootNeedTable)
+              .set({ status: "in_progress", time_updated: now })
+              .where(eq(RootNeedTable.id, thread.root_need_id))
+              .run()
+            db.insert(ChannelMessageTable).values(message).run()
+            db.insert(SignalProjectionTable)
+              .values({
+                id: projectionID,
+                channel_message_id: messageID,
+                conversation_thread_id: thread.id,
+                conversation_run_id: run?.id ?? null,
+                projector_version: 2,
+                source_watermark: `decision:${input.projectScopeID}:${input.requestID}`,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            db.insert(SignalProjectionSourceTable)
+              .values({
+                signal_projection_id: projectionID,
+                ordinal: 0,
+                source_kind: "decision",
+                source_id: input.projectScopeID,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            db.update(ChannelTable).set({ time_updated: now }).where(eq(ChannelTable.id, channel.id)).run()
+            return { type: "accepted" as const, message }
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      if (result.type === "accepted") return messageFromRow(result.message)
+      if (result.type === "conflict") {
+        return yield* Effect.fail(new RequestConflict({ channel_id: visible.channel_id, request_id: input.requestID }))
+      }
+      return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
+    })
+
     const sendMessage = Intake.sendMessage
 
     return Service.of({
@@ -1097,6 +1237,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       sendMessage,
       ensureCompanyChannels,
       ensureProjectChannel,
+      recordBoardDecision,
     })
   }),
 )

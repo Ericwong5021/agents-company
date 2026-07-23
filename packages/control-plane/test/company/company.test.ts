@@ -4,41 +4,42 @@ import os from "node:os"
 import path from "node:path"
 import { Company } from "../../src/company"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
-import { BootstrapInput } from "../../src/company/schema"
+import { CompanyAgentID } from "../../src/company-agent/schema"
+import { BootstrapInput, CompanyID } from "../../src/company/schema"
 import { ApprovalPolicyTable, CompanyTable, RepositoryBindingTable } from "../../src/company/company.sql"
+import { Config } from "../../src/config"
 import { AppRuntime } from "../../src/effect/app-runtime"
+import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import * as Database from "../../src/storage/db"
+import { companyProviderConfig } from "../fixture/company-provider"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
+const initialGlobalConfig = Global.Path.config
+let testGlobalConfig: string | undefined
+
 async function reset() {
   await Instance.disposeAll()
+  if (testGlobalConfig) {
+    ;(Global.Path as { config: string }).config = initialGlobalConfig
+    await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
+    await fs.rm(testGlobalConfig, { recursive: true, force: true })
+    testGlobalConfig = undefined
+  }
   await resetDatabase()
 }
 
-beforeEach(reset)
-afterEach(async () => {
+async function setup() {
   await reset()
-})
-
-const providerConfig = {
-  provider: {
-    "m1-test": {
-      name: "M1 Test",
-      npm: "@ai-sdk/openai-compatible",
-      env: [],
-      models: {
-        "test-model": {
-          name: "Test Model",
-          tool_call: true,
-          limit: { context: 8_000, output: 2_000 },
-        },
-      },
-      options: { apiKey: "test-key" },
-    },
-  },
+  testGlobalConfig = await fs.mkdtemp(path.join(os.tmpdir(), "agentcompany-m1-provider-"))
+  await Bun.write(path.join(testGlobalConfig, "provider-settings.json"), JSON.stringify(companyProviderConfig))
+  ;(Global.Path as { config: string }).config = testGlobalConfig
+  await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
 }
+
+beforeEach(setup)
+afterEach(reset)
 
 function input(path: string, override: Record<string, unknown> = {}) {
   return BootstrapInput.parse({
@@ -70,7 +71,7 @@ async function nonGitDirectory() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "agentcompany-m1-nongit-"))
   await fs.writeFile(
     path.join(directory, "agent-company.json"),
-    JSON.stringify({ $schema: "https://control-plane.ai/config.json", ...providerConfig }),
+    JSON.stringify({ $schema: "https://control-plane.ai/config.json" }),
   )
   return {
     path: await fs.realpath(directory),
@@ -84,7 +85,6 @@ describe.serial("Company bootstrap", () => {
     async () => {
       await using repo = await tmpdir({
         git: true,
-        config: providerConfig,
       })
       const result = await bootstrap(repo.path)
       expect(result.state).toBe("ready")
@@ -100,7 +100,7 @@ describe.serial("Company bootstrap", () => {
   )
 
   test.serial("updates and persists the company approval preset", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     await Instance.provide({
       directory: repo.path,
       fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
@@ -124,8 +124,40 @@ describe.serial("Company bootstrap", () => {
     expect(current.company.approval_policy.preset).toBe("strict")
   })
 
+  test.serial("keeps the company ready when non-board agents join", async () => {
+    await using repo = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: repo.path,
+      fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
+    })
+    const now = Date.now()
+    Database.use((db) =>
+      db
+        .insert(CompanyAgentTable)
+        .values({
+          id: CompanyAgentID.make("delivery-candidate"),
+          company_id: CompanyID.parse("cmp_local"),
+          lifecycle: "candidate",
+          name: "Delivery Candidate",
+          org_layer: "execution",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+
+    const current = await Instance.provide({
+      directory: repo.path,
+      fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
+    })
+
+    expect(current.state).toBe("ready")
+    if (current.state !== "ready") throw new Error("Expected ready state")
+    expect(current.company.board.map((member) => member.id)).toEqual(["board-ceo", "board-cto", "board-product-lead"])
+  })
+
   test.serial("repairs orphan company rows into the default empty workspace", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     Database.use((db) => db.insert(CompanyAgentTable).values({ id: "board-ceo", name: "Orphaned agent" }).run())
 
     const state = await Instance.provide({
@@ -148,7 +180,6 @@ describe.serial("Company bootstrap", () => {
   test.serial("same request is idempotent and changed request conflicts", async () => {
     await using repo = await tmpdir({
       git: true,
-      config: providerConfig,
     })
     const first = await bootstrap(repo.path)
     const second = await bootstrap(repo.path)
@@ -171,9 +202,10 @@ describe.serial("Company bootstrap", () => {
   })
 
   test.serial("retries the same request without current provider or repository access", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     const first = await bootstrap(repo.path)
-    git(repo.path, "add", "agent-company.json")
+    await Bun.write(path.join(repo.path, "advance-bootstrap-head"), "changed")
+    git(repo.path, "add", "advance-bootstrap-head")
     git(repo.path, "commit", "-m", "advance-bootstrap-head")
     await Bun.write(path.join(repo.path, "dirty-after-bootstrap"), "changed")
 
@@ -188,7 +220,7 @@ describe.serial("Company bootstrap", () => {
   })
 
   test.serial("accepts a new request through an alias to the canonical repository root", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     const first = await bootstrap(repo.path)
     const alias = path.join(path.dirname(repo.path), path.basename(repo.path) + "-alias")
     await fs.symlink(repo.path, alias)
@@ -204,7 +236,7 @@ describe.serial("Company bootstrap", () => {
   })
 
   test.serial("concurrent bootstrap calls produce one singleton", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     const [first, second] = await Promise.all([bootstrap(repo.path), bootstrap(repo.path)])
     expect(second).toEqual(first)
     expect(Database.use((db) => db.select().from(CompanyTable).all())).toHaveLength(1)
@@ -214,7 +246,7 @@ describe.serial("Company bootstrap", () => {
   })
 
   test.serial("rolls back the company when board creation fails", async () => {
-    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await using repo = await tmpdir({ git: true })
     Database.use((db) => db.insert(CompanyAgentTable).values({ id: "board-ceo", name: "Taken" }).run())
     await expect(bootstrap(repo.path)).rejects.toThrow()
     const state = await Instance.provide({

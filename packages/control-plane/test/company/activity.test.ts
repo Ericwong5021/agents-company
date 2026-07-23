@@ -48,6 +48,22 @@ describe("Company activity projection", () => {
             time_created: 1,
             time_updated: 1,
           },
+          {
+            id: "agent_assigned",
+            company_id: companyID,
+            name: "Assigned Candidate",
+            lifecycle: "assigned",
+            time_created: 1,
+            time_updated: 1,
+          },
+          {
+            id: "agent_archived",
+            company_id: companyID,
+            name: "Archived Employee",
+            lifecycle: "archived",
+            time_created: 1,
+            time_updated: 1,
+          },
         ])
         .run()
       db.insert(AgentRunTable)

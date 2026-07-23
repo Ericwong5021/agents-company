@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Effect } from "effect"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { AgentRunEventTable, AgentRunTable } from "../../src/agent-run/agent-run.sql"
 import { Company } from "../../src/company"
 import { RepositoryBindingTable } from "../../src/company/company.sql"
 import { BootstrapInput, CompanyID } from "../../src/company/schema"
+import { Config } from "../../src/config"
 import { Conversation } from "../../src/conversation"
 import {
   ChannelMessageTable,
@@ -14,6 +17,7 @@ import {
 import { ConversationRuntime } from "../../src/conversation/runtime"
 import { BOARD_CHANNEL_ID } from "../../src/conversation/conversation.sql"
 import { AppRuntime } from "../../src/effect/app-runtime"
+import { Global } from "../../src/global"
 import { GroupSession } from "../../src/group-session"
 import {
   GroupMessageTable,
@@ -24,9 +28,10 @@ import { GroupSessionID } from "../../src/group-session/schema"
 import { Instance } from "../../src/project/instance"
 import { eq } from "../../src/storage"
 import * as Database from "../../src/storage/db"
+import { companyProviderConfig } from "../fixture/company-provider"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { startScriptedLLMServer, textStopResponse } from "../lib/scripted-llm-server"
+import { startScriptedLLMServer, textStopResponse, toolCallResponse } from "../lib/scripted-llm-server"
 
 const companyID = CompanyID.parse("cmp_local")
 
@@ -36,31 +41,64 @@ function providerConfig(baseURL: string) {
   return {
     model: "m2-test/test-model",
     small_model: "m2-test/test-model",
-    checkpoint: { memory_reconcile_on_search: false },
     provider: {
+      ...companyProviderConfig.provider,
       "m2-test": {
-        name: "M2 Test",
-        npm: "@ai-sdk/openai-compatible",
-        env: [],
-        models: {
-          "test-model": {
-            name: "Test Model",
-            tool_call: true,
-            limit: { context: 8_000, output: 2_000 },
-          },
-        },
-        options: { apiKey: "test-key", baseURL },
+        ...companyProviderConfig.provider["m2-test"],
+        options: { ...companyProviderConfig.provider["m2-test"].options, baseURL },
       },
     },
   }
 }
 
+const passBid = '{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'
+const mustBid = '{"level":"must","type":"info","addressedAs":"none","reason":"board input requires a response"}'
+
+function boardTurnResponses(...turn: Array<{ lines: string[]; status?: number }>) {
+  return [
+    { lines: textStopResponse(mustBid) },
+    { lines: textStopResponse(passBid) },
+    { lines: textStopResponse(passBid) },
+    ...turn,
+    { lines: textStopResponse(passBid) },
+    { lines: textStopResponse(passBid) },
+    { lines: textStopResponse(passBid) },
+  ]
+}
+
+function boardFailureResponses(secret: string, ...beforeFailure: Array<{ lines: string[]; status?: number }>) {
+  return [
+    { lines: textStopResponse(mustBid) },
+    { lines: textStopResponse(passBid) },
+    { lines: textStopResponse(passBid) },
+    ...beforeFailure,
+    ...Array.from({ length: 16 }, () => ({
+      lines: textStopResponse(secret),
+      status: 400,
+    })),
+  ]
+}
+
+const initialGlobalConfig = Global.Path.config
+let testGlobalConfig: string | undefined
+
 async function reset() {
   await Instance.disposeAll()
+  if (testGlobalConfig) {
+    ;(Global.Path as { config: string }).config = initialGlobalConfig
+    await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
+    await fs.rm(testGlobalConfig, { recursive: true, force: true })
+    testGlobalConfig = undefined
+  }
   await resetDatabase()
 }
 
-async function bootstrap(directory: string) {
+async function bootstrap(directory: string, baseURL: string) {
+  testGlobalConfig = path.join(directory, ".test-global-config")
+  await fs.mkdir(testGlobalConfig, { recursive: true })
+  await Bun.write(path.join(testGlobalConfig, "provider-settings.json"), JSON.stringify(providerConfig(baseURL)))
+  ;(Global.Path as { config: string }).config = testGlobalConfig
+  await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
   return Instance.provide({
     directory,
     fn: () =>
@@ -116,14 +154,15 @@ describe.serial("M2 conversation runtime", () => {
     "uses the repository-bound Instance and preserves an exact GroupSession to AgentRun source chain",
     async () => {
       const server = startScriptedLLMServer(
-        Array.from({ length: 32 }, () => ({
-          lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
-        })),
+        boardTurnResponses({ lines: textStopResponse("The selected board member completed the requested review.") }),
       )
-      const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+      const repository = await tmpdir({
+        git: true,
+        config: { checkpoint: { memory_reconcile_on_search: false } },
+      })
 
       try {
-        await bootstrap(repository.path)
+        await bootstrap(repository.path, `${server.origin}/v1`)
         const accepted = await Effect.runPromise(
           Conversation.Service.use((conversation) =>
             conversation.sendMessage({
@@ -231,10 +270,13 @@ describe.serial("M2 conversation runtime", () => {
         lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
       })),
     )
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
+    })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -313,24 +355,29 @@ describe.serial("M2 conversation runtime", () => {
     }
   })
 
-  test.serial("synthesizes one grounded Product Lead high signal after the board round completes", async () => {
-    const server = Bun.serve({
-      port: 0,
-      fetch() {
-        const lines = textStopResponse(
-          JSON.stringify({
-            publish: true,
-            signal_type: "risk",
-            body: "The board identified a provider smoke-test risk before release.",
+  test.serial("projects one grounded high signal after the selected board member publishes it", async () => {
+    const server = startScriptedLLMServer(
+      boardTurnResponses(
+        {
+          lines: toolCallResponse({
+            id: "publish-board-risk",
+            name: "publish_signal",
+            args: JSON.stringify({
+              signal_type: "risk",
+              body: "The board identified a provider smoke-test risk before release.",
+            }),
           }),
-        )
-        return new Response(lines.join(""), { headers: { "Content-Type": "text/event-stream" } })
-      },
+        },
+        { lines: textStopResponse("The provider smoke-test risk is now recorded.") },
+      ),
+    )
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
     })
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -376,9 +423,10 @@ describe.serial("M2 conversation runtime", () => {
       expect(highSignal).toMatchObject({
         signal_type: "risk",
         author_kind: "agent",
-        author_id: "board-product-lead",
         source_thread_id: accepted.threadID,
       })
+      if (!highSignal) throw new Error("Expected a projected governance signal")
+      expect(["board-ceo", "board-cto", "board-product-lead"]).toContain(highSignal.author_id)
       expect(
         projection
           ? Database.use((db) =>
@@ -401,23 +449,28 @@ describe.serial("M2 conversation runtime", () => {
   })
 
   test.serial("recovers a queued committed board input after a process exit", async () => {
-    const server = Bun.serve({
-      port: 0,
-      fetch() {
-        const lines = textStopResponse(
-          JSON.stringify({
-            publish: true,
-            signal_type: "status",
-            body: "The recovered board run completed its provider review.",
+    const server = startScriptedLLMServer(
+      boardTurnResponses(
+        {
+          lines: toolCallResponse({
+            id: "publish-recovered-status",
+            name: "publish_signal",
+            args: JSON.stringify({
+              signal_type: "status",
+              body: "The recovered board run completed its provider review.",
+            }),
           }),
-        )
-        return new Response(lines.join(""), { headers: { "Content-Type": "text/event-stream" } })
-      },
+        },
+        { lines: textStopResponse("The recovered status is now recorded.") },
+      ),
+    )
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
     })
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -465,10 +518,13 @@ describe.serial("M2 conversation runtime", () => {
           lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
         })),
       )
-      const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+      const repository = await tmpdir({
+        git: true,
+        config: { checkpoint: { memory_reconcile_on_search: false } },
+      })
 
       try {
-        await bootstrap(repository.path)
+        await bootstrap(repository.path, `${server.origin}/v1`)
         const accepted = await Effect.runPromise(
           Conversation.Service.use((conversation) =>
             conversation.sendMessage({
@@ -519,23 +575,16 @@ describe.serial("M2 conversation runtime", () => {
   test.serial(
     "recovers a board round after its first agent response without duplicating persisted sources",
     async () => {
-      const server = Bun.serve({
-        port: 0,
-        fetch() {
-          const lines = textStopResponse(
-            JSON.stringify({
-              publish: true,
-              signal_type: "conclusion",
-              body: "The recovered board round retained its first response and reached a conclusion.",
-            }),
-          )
-          return new Response(lines.join(""), { headers: { "Content-Type": "text/event-stream" } })
-        },
+      const server = startScriptedLLMServer(
+        boardTurnResponses({ lines: textStopResponse("A remaining board member completed the resumed discussion.") }),
+      )
+      const repository = await tmpdir({
+        git: true,
+        config: { checkpoint: { memory_reconcile_on_search: false } },
       })
-      const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
       try {
-        await bootstrap(repository.path)
+        await bootstrap(repository.path, `${server.origin}/v1`)
         const accepted = await Effect.runPromise(
           Conversation.Service.use((conversation) =>
             conversation.sendMessage({
@@ -623,13 +672,11 @@ describe.serial("M2 conversation runtime", () => {
             .all(),
         )
         expect(messages.filter((message) => message.role === "user")).toHaveLength(1)
-        expect(messages.filter((message) => message.role === "agent")).toHaveLength(3)
+        expect(messages.filter((message) => message.role === "agent")).toHaveLength(2)
         expect(messages.filter((message) => message.role === "agent")[0]?.company_agent_id).toBe(
           firstMember.company_agent_id,
         )
-        expect(new Set(messages.flatMap((message) => (message.company_agent_id ? [String(message.company_agent_id)] : [])))).toEqual(
-          new Set(["board-ceo", "board-cto", "board-product-lead"]),
-        )
+        expect(messages.filter((message) => message.company_agent_id === firstMember.company_agent_id)).toHaveLength(1)
       } finally {
         await Instance.disposeAll()
         await resetDatabase()
@@ -642,15 +689,14 @@ describe.serial("M2 conversation runtime", () => {
 
   test.serial("persists a safe retryable failure without provider or prompt leakage", async () => {
     const secret = "M2_PROVIDER_SECRET_DO_NOT_PERSIST"
-    const server = startScriptedLLMServer(
-      Array.from({ length: 32 }, () => ({
-        lines: textStopResponse(`{"level":"pass","type":"info","addressedAs":"none","reason":"${secret}"}`),
-      })),
-    )
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.origin}/v1`) })
+    const server = startScriptedLLMServer(boardFailureResponses(secret))
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
+    })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -677,7 +723,7 @@ describe.serial("M2 conversation runtime", () => {
       )
       expect(run).toMatchObject({ state: "failed", attempt: 1, retryable: true })
       expect(run?.safe_error_summary).toBe(
-        "The board discussion could not complete. Check the configured provider and retry.",
+        "模型提供方不可用或未配置 API Key。请在设置中重新连接 Provider、配置 API Key，或切换到可用模型后重试。",
       )
       expect(run?.safe_error_summary).not.toContain(secret)
       expect(run?.safe_error_summary).not.toContain("StructuredOutput")
@@ -690,20 +736,21 @@ describe.serial("M2 conversation runtime", () => {
     }
   })
 
-  test.serial("accepts a markdown-fenced text summary before projecting it", async () => {
-    const server = Bun.serve({
-      port: 0,
-      fetch() {
-        const lines = textStopResponse(
+  test.serial("does not project signal-shaped markdown without an explicit governance event", async () => {
+    const server = startScriptedLLMServer(
+      boardTurnResponses({
+        lines: textStopResponse(
           '```json\n{"publish":true,"signal_type":"conclusion","body":"The board agreed to validate the provider before release."}\n```',
-        )
-        return new Response(lines.join(""), { headers: { "Content-Type": "text/event-stream" } })
-      },
+        ),
+      }),
+    )
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
     })
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -733,7 +780,7 @@ describe.serial("M2 conversation runtime", () => {
             .where(eq(SignalProjectionTable.conversation_run_id, accepted.runID!))
             .get(),
         ),
-      ).toBeDefined()
+      ).toBeUndefined()
     } finally {
       await Instance.disposeAll()
       await resetDatabase()
@@ -743,31 +790,27 @@ describe.serial("M2 conversation runtime", () => {
     }
   })
 
-  test.serial("presents a safe retryable provider error when the text summary is rejected", async () => {
+  test.serial("does not project a signal from a board turn that fails after publishing", async () => {
     const secret = "M2_TEXT_SUMMARY_PROVIDER_SECRET_DO_NOT_PERSIST"
-    let boardResponses = 0
-    const server = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        const requestText = await request.text()
-        if (requestText.includes("You are the Product Lead for a board discussion.")) {
-          return new Response(JSON.stringify({ error: { message: secret } }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          })
-        }
-        const text = requestText.includes("Based on the above, is this agent interested in speaking now?")
-          ? '{"level":"must","type":"info","addressedAs":"none","reason":"provider validation is relevant"}'
-          : `The board member recommends provider validation step ${boardResponses++} before release.`
-        return new Response(textStopResponse(text).join(""), {
-          headers: { "Content-Type": "text/event-stream" },
-        })
-      },
+    const server = startScriptedLLMServer(
+      boardFailureResponses(secret, {
+        lines: toolCallResponse({
+          id: "publish-before-failure",
+          name: "publish_signal",
+          args: JSON.stringify({
+            signal_type: "risk",
+            body: "This signal must not be projected from a failed turn.",
+          }),
+        }),
+      }),
+    )
+    const repository = await tmpdir({
+      git: true,
+      config: { checkpoint: { memory_reconcile_on_search: false } },
     })
-    const repository = await tmpdir({ git: true, config: providerConfig(`${server.url.origin}/v1`) })
 
     try {
-      await bootstrap(repository.path)
+      await bootstrap(repository.path, `${server.origin}/v1`)
       const accepted = await Effect.runPromise(
         Conversation.Service.use((conversation) =>
           conversation.sendMessage({
@@ -794,9 +837,18 @@ describe.serial("M2 conversation runtime", () => {
       )
       expect(run).toMatchObject({ state: "failed", attempt: 1, retryable: true })
       expect(run?.safe_error_summary).toBe(
-        "The board discussion completed, but the configured provider rejected the Product Lead summary request. Retry or choose a provider that supports ordinary text responses.",
+        "模型提供方不可用或未配置 API Key。请在设置中重新连接 Provider、配置 API Key，或切换到可用模型后重试。",
       )
       expect(run?.safe_error_summary).not.toContain(secret)
+      expect(
+        Database.use((db) =>
+          db
+            .select()
+            .from(SignalProjectionTable)
+            .where(eq(SignalProjectionTable.conversation_run_id, accepted.runID!))
+            .get(),
+        ),
+      ).toBeUndefined()
     } finally {
       await Instance.disposeAll()
       await resetDatabase()

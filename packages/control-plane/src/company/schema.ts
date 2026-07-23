@@ -89,13 +89,53 @@ export type ProviderConnection = z.infer<typeof ProviderConnection>
 export const CustomProviderModelsInput = z
   .object({
     format: z.enum(["openai", "anthropic"]),
-    base_url: z.string().url(),
-    api_key: z.string().optional(),
-    headers: z.record(z.string(), z.string()).default({}),
+    base_url: z
+      .string()
+      .url()
+      .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Only HTTP(S) URLs are supported")
+      .refine((value) => !new URL(value).username && !new URL(value).password, "URL credentials are not supported")
+      .refine((value) => !new URL(value).search && !new URL(value).hash, "URL query and fragment are not supported"),
+    api_key: z.string().trim().min(1).max(8_192).optional(),
+    headers: z
+      .record(
+        z.string().regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/),
+        z.string().max(8_192),
+      )
+      .default({}),
   })
   .strict()
   .meta({ ref: "CustomProviderModelsInput" })
 export type CustomProviderModelsInput = z.infer<typeof CustomProviderModelsInput>
+
+export const CompanyProviderBindingInput = z
+  .object({
+    provider_id: ProviderID.zod,
+    model_id: ModelID.zod,
+  })
+  .strict()
+  .meta({ ref: "CompanyProviderBindingInput" })
+export type CompanyProviderBindingInput = z.infer<typeof CompanyProviderBindingInput>
+
+export const CompanyProviderConfigureInput = CustomProviderModelsInput.extend({
+  api_key: z.string().trim().min(1).max(8_192),
+  provider_id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/)
+    .pipe(ProviderID.zod),
+  model_id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .refine((value) => !/[\u0000-\u001f\u007f\s]/.test(value), "Model ID cannot contain whitespace or control characters")
+    .pipe(ModelID.zod),
+})
+  .strict()
+  .meta({ ref: "CompanyProviderConfigureInput" })
+export type CompanyProviderConfigureInput = z.infer<typeof CompanyProviderConfigureInput>
 
 export const CustomProviderModels = z
   .array(z.object({ model_id: ModelID.zod, name: z.string() }).strict())

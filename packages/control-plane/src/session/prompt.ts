@@ -2861,6 +2861,13 @@ NOTE: At any point in time through this workflow you should feel free to ask the
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
             const format = lastUser.format ?? { type: "text" as const }
+            const structuredToolChoice = isLastStep
+              ? ("none" as const)
+              : format.type !== "json_schema"
+                ? undefined
+                : structuredRetries > 0
+                  ? ({ type: "tool" as const, toolName: "StructuredOutput" })
+                  : ("auto" as const)
 
             // Determine if this iteration is for a fork agent (contextMode === "full").
             // Fork agents use the frozen ForkContext snapshot captured at spawn time
@@ -2973,11 +2980,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
                   messages: [...modelMsgs, ...(isLastStep ? [{ role: "user" as const, content: MAX_STEPS }] : [])],
                   tools,
                   model,
-                  // Some OpenAI-compatible gateways reject `required` even though
-                  // they support function tools. The structured-output system
-                  // prompt and retry gate still enforce delivery, so `auto` keeps
-                  // the contract while remaining portable across providers.
-                  toolChoice: isLastStep ? "none" : format.type === "json_schema" ? "auto" : undefined,
+                  toolChoice: structuredToolChoice,
                   agentID: lastUser.agentID,
                 })
                 .pipe(
@@ -3131,9 +3134,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               messages: [...modelMsgs, ...(isLastStep ? [{ role: "user" as const, content: MAX_STEPS }] : [])],
               tools,
               model,
-              // Keep structured output portable across OpenAI-compatible
-              // gateways that support tools but reject `tool_choice: required`.
-              toolChoice: isLastStep ? ("none" as const) : format.type === "json_schema" ? ("auto" as const) : undefined,
+              toolChoice: structuredToolChoice,
               agentID: lastUser.agentID,
             }
 

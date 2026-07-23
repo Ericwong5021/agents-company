@@ -1067,7 +1067,7 @@ export const layer = Layer.effect(
         agentType: input.actorAgentType ?? "general",
         task: prompt,
         context: "none",
-        tools: "INHERIT",
+        tools: [],
         background: true,
         format: { type: "json_schema", schema: DECOMPOSE_SCHEMA, retryCount: 2 },
       })
@@ -1213,7 +1213,7 @@ export const layer = Layer.effect(
         agentType: input.delegationMessage.toAgentID,
         task: prompt,
         context: "none",
-        tools: "INHERIT",
+        tools: [],
         background: true,
         format: { type: "json_schema", schema: ADMIT_SCHEMA, retryCount: 2 },
       })
@@ -1540,7 +1540,7 @@ export const layer = Layer.effect(
           agentType: superior.id,
           task: boardPrompt,
           context: "none",
-          tools: "INHERIT",
+          tools: [],
           background: true,
           format: { type: "json_schema", schema: BOARD_DECISION_SCHEMA, retryCount: 2 },
         })

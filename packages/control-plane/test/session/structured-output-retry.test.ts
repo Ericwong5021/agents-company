@@ -9,8 +9,10 @@
  */
 
 import path from "path"
+import { mkdir } from "node:fs/promises"
 import { afterEach, describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
+import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -30,18 +32,29 @@ function run<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Servi
   )
 }
 
-function writeConfig(dir: string, origin: string) {
-  return Bun.write(
-    path.join(dir, "agent-company.json"),
-    JSON.stringify({
+async function writeConfig(dir: string, origin: string) {
+  await mkdir(Global.Path.config, { recursive: true })
+  await Promise.all([
+    Bun.write(
+      path.join(Global.Path.config, "provider-settings.json"),
+      JSON.stringify({
+        enabled_providers: ["alibaba"],
+        model: "alibaba/qwen-plus",
+        provider: {
+          alibaba: {
+            name: "alibaba",
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "test-key", baseURL: `${origin}/v1` },
+            models: { "qwen-plus": { name: "qwen-plus" } },
+          },
+        },
+      }),
+    ),
+    Bun.write(path.join(dir, "agent-company.json"), JSON.stringify({
       $schema: "https://control-plane.ai/config.json",
-      enabled_providers: ["alibaba"],
-      provider: {
-        alibaba: { options: { apiKey: "test-key", baseURL: `${origin}/v1` } },
-      },
       agent: { build: { model: "alibaba/qwen-plus" } },
-    }),
-  )
+    })),
+  ])
 }
 
 const schema = {
@@ -75,6 +88,11 @@ describe("structured-output retry — integration", () => {
               })
               // First plain text => repair nudge + continue; second call => structured tool call.
               expect(stub.captures.length).toBe(2)
+              expect(stub.captures[0]?.toolChoice).toBe("auto")
+              expect(stub.captures[1]?.toolChoice).toEqual({
+                type: "function",
+                function: { name: "StructuredOutput" },
+              })
               expect(result.info.role).toBe("assistant")
               if (result.info.role === "assistant") {
                 expect(result.info.error).toBeUndefined()

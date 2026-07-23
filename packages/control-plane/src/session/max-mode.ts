@@ -1,6 +1,6 @@
 import { Cause, Effect } from "effect"
 import * as Stream from "effect/Stream"
-import type { ModelMessage, Tool as AITool } from "ai"
+import type { ModelMessage, Tool as AITool, ToolChoice } from "ai"
 import { LLM } from "./llm"
 import { SessionProcessor } from "./processor"
 import * as Session from "./session"
@@ -63,7 +63,7 @@ export type MaxStepInput = {
    * can be spread in) but unused: candidates always run propose-only and the
    * json_schema path never takes the max-mode branch.
    */
-  toolChoice?: "auto" | "required" | "none"
+  toolChoice?: ToolChoice<Record<string, AITool>>
   /** Number of parallel candidates (default 5). */
   candidates?: number
   /**

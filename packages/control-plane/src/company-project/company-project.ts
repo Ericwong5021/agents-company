@@ -26,6 +26,7 @@ import {
   Plan,
   Project,
   ProjectCharter,
+  ProjectEvent,
   type PlanPhase,
   type ProjectStatus,
   WorkItem,
@@ -38,6 +39,10 @@ const parseRecord = (value: string) => JSON.parse(value) as Record<string, unkno
 const projectFromRow = (row: typeof CompanyProjectTable.$inferSelect) =>
   Project.parse({
     ...row,
+    company_id: row.company_id ?? undefined,
+    root_need_id: row.root_need_id ?? undefined,
+    source_thread_id: row.source_thread_id ?? undefined,
+    decision_request_id: row.decision_request_id ?? undefined,
     owner_agent_id: row.owner_agent_id ?? undefined,
     coordinator_session_id: row.coordinator_session_id ?? undefined,
     provider_id: row.provider_id ?? undefined,
@@ -53,20 +58,50 @@ const planFromRow = (row: typeof CompanyPlanTable.$inferSelect) =>
     acceptance_criteria: parseList(row.acceptance_criteria_json),
     change_reason: row.change_reason ?? undefined,
   })
-const workItemFromRow = (row: typeof CompanyWorkItemTable.$inferSelect) =>
+const workItemFromRow = (row: typeof CompanyWorkItemTable.$inferSelect, depends_on: string[] = []) =>
   WorkItem.parse({
     ...row,
+    source_task_key: row.source_task_key ?? undefined,
     parent_id: row.parent_id ?? undefined,
     owner_agent_id: row.owner_agent_id ?? undefined,
     workflow_run_id: row.workflow_run_id ?? undefined,
     capability_packs: parseList(row.capability_packs_json),
     decision_scope: parseList(row.decision_scope_json),
     resource_scope: parseList(row.resource_scope_json),
+    inputs: parseList(row.inputs_json),
+    expected_outputs: parseList(row.expected_outputs_json),
+    validators: parseList(row.validators_json),
+    depends_on,
     acceptance_criteria: parseList(row.acceptance_criteria_json),
     error: row.error ?? undefined,
     started_at: row.started_at ?? undefined,
     completed_at: row.completed_at ?? undefined,
   })
+const hydrateWorkItems = (rows: (typeof CompanyWorkItemTable.$inferSelect)[]) => {
+  const dependencies = rows.length
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(CompanyWorkItemDependencyTable)
+          .where(
+            inArray(
+              CompanyWorkItemDependencyTable.work_item_id,
+              rows.map((row) => row.id),
+            ),
+          )
+          .orderBy(CompanyWorkItemDependencyTable.work_item_id, CompanyWorkItemDependencyTable.depends_on_id)
+          .all(),
+      )
+    : []
+  return rows.map((row) =>
+    workItemFromRow(
+      row,
+      dependencies
+        .filter((dependency) => dependency.work_item_id === row.id)
+        .map((dependency) => dependency.depends_on_id),
+    ),
+  )
+}
 const artifactFromRow = (row: typeof CompanyArtifactTable.$inferSelect) =>
   Artifact.parse({
     ...row,
@@ -75,6 +110,15 @@ const artifactFromRow = (row: typeof CompanyArtifactTable.$inferSelect) =>
     content: row.content ?? undefined,
     evidence: parseRecord(row.evidence_json),
     created_by_agent_id: row.created_by_agent_id ?? undefined,
+  })
+const eventFromRow = (row: typeof CompanyProjectEventTable.$inferSelect) =>
+  ProjectEvent.parse({
+    id: row.id,
+    project_id: row.project_id,
+    type: row.type,
+    actor_id: row.actor_id ?? undefined,
+    data: parseRecord(row.data_json),
+    created_at: row.created_at,
   })
 const gateFromRow = (row: typeof CompanyApprovalGateTable.$inferSelect) =>
   ApprovalGate.parse({
@@ -86,12 +130,23 @@ const gateFromRow = (row: typeof CompanyApprovalGateTable.$inferSelect) =>
   })
 const charterFromRow = (row: typeof CompanyProjectCharterTable.$inferSelect) =>
   ProjectCharter.parse({
-    ...row,
+    project_id: row.project_id,
+    title: row.title,
+    value: row.value,
+    deliverables: parseList(row.deliverables_json),
     scope: parseList(row.scope_json),
+    non_goals: parseList(row.non_goals_json),
     success_criteria: parseList(row.success_criteria_json),
     constraints: parseList(row.constraints_json),
+    resources: JSON.parse(row.resources_json),
+    risks: JSON.parse(row.risks_json),
+    dri_agent_id: row.dri_agent_id,
+    milestones: parseList(row.milestones_json),
+    open_decisions: parseList(row.open_decisions_json),
     acceptance_criteria: parseList(row.acceptance_criteria_json),
     policy: parseRecord(row.policy_json),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   })
 const worktreeRunFromRow = (row: typeof CompanyWorktreeRunTable.$inferSelect) =>
   WorktreeRun.parse({
@@ -120,6 +175,10 @@ const PROJECT_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
 
 export interface Interface {
   readonly create: (input: {
+    company_id?: string
+    root_need_id?: string
+    source_thread_id?: string
+    decision_request_id?: string
     goal: string
     title?: string
     owner_agent_id?: string
@@ -128,12 +187,26 @@ export interface Interface {
     model_id?: string
   }) => Effect.Effect<Project>
   readonly get: (id: string) => Effect.Effect<Project | undefined>
+  readonly findBySourceThread: (source_thread_id: string) => Effect.Effect<Project | undefined>
   readonly list: () => Effect.Effect<Project[]>
   readonly createCharter: (input: {
     project_id: string
+    title?: string
+    value?: string
+    deliverables?: string[]
     scope: string[]
+    non_goals?: string[]
     success_criteria: string[]
     constraints?: string[]
+    resources?: {
+      kind: "file" | "application" | "web" | "data" | "repository" | "other"
+      scope: string
+      disposition: string
+    }[]
+    risks?: { description: string; mitigation: string }[]
+    dri_agent_id?: string
+    milestones?: string[]
+    open_decisions?: string[]
     acceptance_criteria: string[]
     policy?: DeliveryPolicy
   }) => Effect.Effect<ProjectCharter>
@@ -158,6 +231,7 @@ export interface Interface {
   readonly createWorkItem: (input: {
     project_id: string
     plan_id: string
+    source_task_key?: string
     parent_id?: string
     title: string
     description: string
@@ -167,6 +241,10 @@ export interface Interface {
     capability_packs?: string[]
     decision_scope?: string[]
     resource_scope?: string[]
+    inputs?: string[]
+    expected_outputs?: string[]
+    validators?: string[]
+    disposition?: string
     model_group: "ultra" | "standard" | "lite"
     risk_level?: "low" | "medium" | "high"
     review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
@@ -175,10 +253,19 @@ export interface Interface {
     max_attempts?: number
     depends_on?: string[]
   }) => Effect.Effect<WorkItem>
+  readonly setWorkItemSourceTaskKey: (input: { id: string; source_task_key: string }) => Effect.Effect<WorkItem>
+  readonly reworkRejectedReview: (input: {
+    worker_id: string
+    reviewer_id: string
+  }) => Effect.Effect<{ worker: WorkItem; reviewer: WorkItem }>
   readonly listWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly readyWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly startWorkItem: (id: string) => Effect.Effect<WorkItem>
-  readonly assignWorkItem: (input: { id: string; owner_agent_id: string }) => Effect.Effect<WorkItem>
+  readonly assignWorkItem: (input: {
+    id: string
+    owner_agent_id: string
+    reason: string
+  }) => Effect.Effect<WorkItem>
   readonly setWorkItemRun: (input: { id: string; workflow_run_id?: string }) => Effect.Effect<WorkItem>
   readonly setWorkItemReview: (input: {
     id: string
@@ -215,6 +302,7 @@ export interface Interface {
     created_by_agent_id?: string
   }) => Effect.Effect<Artifact>
   readonly listArtifacts: (project_id: string) => Effect.Effect<Artifact[]>
+  readonly listEvents: (project_id: string) => Effect.Effect<ProjectEvent[]>
   readonly requestGate: (input: {
     project_id: string
     kind: GateKind
@@ -271,7 +359,20 @@ export const layer = Layer.effect(
       return row ? projectFromRow(row) : undefined
     })
 
+    const findBySourceThread = Effect.fn("CompanyProject.findBySourceThread")(function* (source_thread_id: string) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.source_thread_id, source_thread_id)).get(),
+        ),
+      )
+      return row ? projectFromRow(row) : undefined
+    })
+
     const create = Effect.fn("CompanyProject.create")(function* (input: {
+      company_id?: string
+      root_need_id?: string
+      source_thread_id?: string
+      decision_request_id?: string
       goal: string
       title?: string
       owner_agent_id?: string
@@ -279,6 +380,10 @@ export const layer = Layer.effect(
       provider_id?: string
       model_id?: string
     }) {
+      if (input.source_thread_id) {
+        const existing = yield* findBySourceThread(input.source_thread_id)
+        if (existing) return existing
+      }
       const id = Identifier.ascending("companyProject")
       const now = Date.now()
       const output_dir = path.join(Global.Path.data, "workspace", "projects", id)
@@ -296,6 +401,10 @@ export const layer = Layer.effect(
             .insert(CompanyProjectTable)
             .values({
               id,
+              company_id: input.company_id ?? null,
+              root_need_id: input.root_need_id ?? null,
+              source_thread_id: input.source_thread_id ?? null,
+              decision_request_id: input.decision_request_id ?? null,
               goal: input.goal,
               title: input.title ?? input.goal.slice(0, 80),
               status: "intake",
@@ -356,7 +465,11 @@ export const layer = Layer.effect(
     const getCharter = Effect.fn("CompanyProject.getCharter")(function* (project_id: string) {
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
-          db.select().from(CompanyProjectCharterTable).where(eq(CompanyProjectCharterTable.project_id, project_id)).get(),
+          db
+            .select()
+            .from(CompanyProjectCharterTable)
+            .where(eq(CompanyProjectCharterTable.project_id, project_id))
+            .get(),
         ),
       )
       return row ? charterFromRow(row) : undefined
@@ -364,13 +477,27 @@ export const layer = Layer.effect(
 
     const createCharter = Effect.fn("CompanyProject.createCharter")(function* (input: {
       project_id: string
+      title?: string
+      value?: string
+      deliverables?: string[]
       scope: string[]
+      non_goals?: string[]
       success_criteria: string[]
       constraints?: string[]
+      resources?: {
+        kind: "file" | "application" | "web" | "data" | "repository" | "other"
+        scope: string
+        disposition: string
+      }[]
+      risks?: { description: string; mitigation: string }[]
+      dri_agent_id?: string
+      milestones?: string[]
+      open_decisions?: string[]
       acceptance_criteria: string[]
       policy?: DeliveryPolicy
     }) {
-      if (!(yield* get(input.project_id))) throw new Error(`Company project not found: ${input.project_id}`)
+      const project = yield* get(input.project_id)
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       const now = Date.now()
       const companyState = yield* company.current().pipe(Effect.orDie)
       if (companyState.state !== "ready") throw new Error("Company approval policy is unavailable")
@@ -387,10 +514,47 @@ export const layer = Layer.effect(
       )
       const row = {
         project_id: input.project_id,
-        scope_json: JSON.stringify(input.scope),
+        title: input.title ?? project.title,
+        value: input.value ?? project.goal,
+        deliverables_json: JSON.stringify(
+          input.deliverables?.length
+            ? input.deliverables
+            : input.success_criteria.length
+              ? input.success_criteria
+              : [project.goal],
+        ),
+        scope_json: JSON.stringify(input.scope.length ? input.scope : [project.goal]),
+        non_goals_json: JSON.stringify(
+          input.non_goals?.length ? input.non_goals : ["不执行当前 Project Charter 范围外工作"],
+        ),
         success_criteria_json: JSON.stringify(input.success_criteria),
-        constraints_json: JSON.stringify(input.constraints ?? []),
-        acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
+        constraints_json: JSON.stringify(
+          input.constraints?.length ? input.constraints : ["遵守当前公司权限与审批策略"],
+        ),
+        resources_json: JSON.stringify(
+          input.resources?.length
+            ? input.resources
+            : [{ kind: "other", scope: project.output_dir, disposition: "retain" }],
+        ),
+        risks_json: JSON.stringify(input.risks ?? []),
+        dri_agent_id: input.dri_agent_id ?? project.owner_agent_id ?? "project-owner-unassigned",
+        milestones_json: JSON.stringify(
+          input.milestones?.length
+            ? input.milestones
+            : input.deliverables?.length
+              ? input.deliverables
+              : input.success_criteria.length
+                ? input.success_criteria
+                : [project.goal],
+        ),
+        open_decisions_json: JSON.stringify(input.open_decisions ?? []),
+        acceptance_criteria_json: JSON.stringify(
+          input.acceptance_criteria.length
+            ? input.acceptance_criteria
+            : input.success_criteria.length
+              ? input.success_criteria
+              : [project.goal],
+        ),
         policy_json: JSON.stringify(policy),
         created_at: now,
         updated_at: now,
@@ -403,9 +567,18 @@ export const layer = Layer.effect(
             .onConflictDoUpdate({
               target: CompanyProjectCharterTable.project_id,
               set: {
+                title: row.title,
+                value: row.value,
+                deliverables_json: row.deliverables_json,
                 scope_json: row.scope_json,
+                non_goals_json: row.non_goals_json,
                 success_criteria_json: row.success_criteria_json,
                 constraints_json: row.constraints_json,
+                resources_json: row.resources_json,
+                risks_json: row.risks_json,
+                dri_agent_id: row.dri_agent_id,
+                milestones_json: row.milestones_json,
+                open_decisions_json: row.open_decisions_json,
                 acceptance_criteria_json: row.acceptance_criteria_json,
                 policy_json: row.policy_json,
                 updated_at: row.updated_at,
@@ -527,62 +700,130 @@ export const layer = Layer.effect(
       )
     })
 
-    const createWorkItem = Effect.fn("CompanyProject.createWorkItem")(function* (input: {
-      project_id: string
-      plan_id: string
-      parent_id?: string
-      title: string
-      description: string
-      kind: "planner" | "worker" | "reviewer"
-      work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
-      role: string
-      capability_packs?: string[]
-      decision_scope?: string[]
-      resource_scope?: string[]
-      model_group: "ultra" | "standard" | "lite"
-      risk_level?: "low" | "medium" | "high"
-      review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
-      owner_agent_id?: string
-      acceptance_criteria: string[]
-      max_attempts?: number
-      depends_on?: string[]
-    }) {
+    const createWorkItem = Effect.fn("CompanyProject.createWorkItem")(function* (
+      input: Parameters<Interface["createWorkItem"]>[0],
+    ) {
+      if (
+        input.source_task_key !== undefined &&
+        (!input.source_task_key.trim() || input.source_task_key.trim() !== input.source_task_key)
+      )
+        throw new Error("Work item source task key must be a non-empty trimmed string")
+      const depends_on = [...new Set(input.depends_on ?? [])].sort()
+      const facts = {
+        parent_id: input.parent_id,
+        title: input.title,
+        description: input.description,
+        kind: input.kind,
+        work_type: input.work_type,
+        role: input.role,
+        capability_packs: input.capability_packs ?? [],
+        decision_scope: input.decision_scope ?? [],
+        resource_scope: input.resource_scope ?? [],
+        inputs: input.inputs ?? [],
+        expected_outputs: input.expected_outputs ?? [],
+        validators: input.validators ?? input.acceptance_criteria,
+        disposition: input.disposition ?? "retain",
+        model_group: input.model_group,
+        risk_level: input.risk_level ?? "medium",
+        review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
+        owner_agent_id: input.owner_agent_id,
+        acceptance_criteria: input.acceptance_criteria,
+        max_attempts: input.max_attempts ?? 3,
+        depends_on,
+      }
+      const reconcile = (row: typeof CompanyWorkItemTable.$inferSelect) => {
+        const existing = hydrateWorkItems([row])[0]!
+        const existingFacts = {
+          parent_id: existing.parent_id,
+          title: existing.title,
+          description: existing.description,
+          kind: existing.kind,
+          work_type: existing.work_type,
+          role: existing.role,
+          capability_packs: existing.capability_packs,
+          decision_scope: existing.decision_scope,
+          resource_scope: existing.resource_scope,
+          inputs: existing.inputs,
+          expected_outputs: existing.expected_outputs,
+          validators: existing.validators,
+          disposition: existing.disposition,
+          model_group: existing.model_group,
+          risk_level: existing.risk_level,
+          review_status: existing.review_status,
+          owner_agent_id: existing.owner_agent_id,
+          acceptance_criteria: existing.acceptance_criteria,
+          max_attempts: existing.max_attempts,
+          depends_on: [...new Set(existing.depends_on)].sort(),
+        }
+        if (JSON.stringify(existingFacts) !== JSON.stringify(facts))
+          throw new Error(
+            `Work item source task key conflict for ${input.source_task_key} (${input.kind}): existing facts or dependencies differ`,
+          )
+        return existing
+      }
       const id = Identifier.ascending("companyWorkItem")
       const now = Date.now()
-      yield* Effect.sync(() =>
-        Database.transaction((db) => {
-          db.insert(CompanyWorkItemTable)
-            .values({
-              id,
-              project_id: input.project_id,
-              plan_id: input.plan_id,
-              parent_id: input.parent_id ?? null,
-              title: input.title,
-              description: input.description,
-              kind: input.kind,
-              work_type: input.work_type,
-              role: input.role,
-              capability_packs_json: JSON.stringify(input.capability_packs ?? []),
-              decision_scope_json: JSON.stringify(input.decision_scope ?? []),
-              resource_scope_json: JSON.stringify(input.resource_scope ?? []),
-              model_group: input.model_group,
-              risk_level: input.risk_level ?? "medium",
-              review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
-              status: "pending",
-              owner_agent_id: input.owner_agent_id ?? null,
-              workflow_run_id: null,
-              acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
-              max_attempts: input.max_attempts ?? 3,
-              created_at: now,
-              updated_at: now,
-            })
-            .run()
-          if (input.depends_on?.length)
-            db.insert(CompanyWorkItemDependencyTable)
-              .values(input.depends_on.map((depends_on_id) => ({ work_item_id: id, depends_on_id })))
+      const existingRow = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const existing =
+              input.source_task_key === undefined
+                ? undefined
+                : db
+                    .select()
+                    .from(CompanyWorkItemTable)
+                    .where(
+                      and(
+                        eq(CompanyWorkItemTable.project_id, input.project_id),
+                        eq(CompanyWorkItemTable.plan_id, input.plan_id),
+                        eq(CompanyWorkItemTable.source_task_key, input.source_task_key),
+                        eq(CompanyWorkItemTable.kind, input.kind),
+                      ),
+                    )
+                    .get()
+            if (existing) return existing
+            db.insert(CompanyWorkItemTable)
+              .values({
+                id,
+                project_id: input.project_id,
+                plan_id: input.plan_id,
+                source_task_key: input.source_task_key ?? null,
+                parent_id: input.parent_id ?? null,
+                title: input.title,
+                description: input.description,
+                kind: input.kind,
+                work_type: input.work_type,
+                role: input.role,
+                capability_packs_json: JSON.stringify(input.capability_packs ?? []),
+                decision_scope_json: JSON.stringify(input.decision_scope ?? []),
+                resource_scope_json: JSON.stringify(input.resource_scope ?? []),
+                inputs_json: JSON.stringify(input.inputs ?? []),
+                expected_outputs_json: JSON.stringify(input.expected_outputs ?? []),
+                validators_json: JSON.stringify(input.validators ?? input.acceptance_criteria),
+                disposition: input.disposition ?? "retain",
+                model_group: input.model_group,
+                risk_level: input.risk_level ?? "medium",
+                review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
+                status: "pending",
+                owner_agent_id: input.owner_agent_id ?? null,
+                workflow_run_id: null,
+                acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
+                max_attempts: input.max_attempts ?? 3,
+                created_at: now,
+                updated_at: now,
+              })
               .run()
-        }),
+            if (depends_on.length)
+              db.insert(CompanyWorkItemDependencyTable)
+                .values(depends_on.map((depends_on_id) => ({ work_item_id: id, depends_on_id })))
+                .onConflictDoNothing()
+                .run()
+            return undefined
+          },
+          { behavior: "immediate" },
+        ),
       )
+      if (existingRow) return reconcile(existingRow)
       yield* event(
         input.project_id,
         "work_item.created",
@@ -593,28 +834,198 @@ export const layer = Layer.effect(
           work_type: input.work_type,
           role: input.role,
           model_group: input.model_group,
+          source_task_key: input.source_task_key,
           decision_scope: input.decision_scope ?? [],
           resource_scope: input.resource_scope ?? [],
-          depends_on: input.depends_on ?? [],
+          inputs: input.inputs ?? [],
+          expected_outputs: input.expected_outputs ?? [],
+          validators: input.validators ?? input.acceptance_criteria,
+          disposition: input.disposition ?? "retain",
+          depends_on,
         },
         input.owner_agent_id,
       )
-      return workItemFromRow(
+      return hydrateWorkItems([
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get())!,
+      ])[0]!
+    })
+
+    const setWorkItemSourceTaskKey = Effect.fn("CompanyProject.setWorkItemSourceTaskKey")(function* (input: {
+      id: string
+      source_task_key: string
+    }) {
+      if (!input.source_task_key.trim() || input.source_task_key.trim() !== input.source_task_key)
+        throw new Error("Work item source task key must be a non-empty trimmed string")
+      const changed = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const current = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()
+            if (!current) throw new Error(`Company work item not found: ${input.id}`)
+            if (current.source_task_key === input.source_task_key) return false
+            if (current.source_task_key)
+              throw new Error(`Work item ${input.id} already has source task key ${current.source_task_key}`)
+            const conflict = db
+              .select({ id: CompanyWorkItemTable.id })
+              .from(CompanyWorkItemTable)
+              .where(
+                and(
+                  eq(CompanyWorkItemTable.project_id, current.project_id),
+                  eq(CompanyWorkItemTable.plan_id, current.plan_id),
+                  eq(CompanyWorkItemTable.source_task_key, input.source_task_key),
+                  eq(CompanyWorkItemTable.kind, current.kind),
+                ),
+              )
+              .get()
+            if (conflict)
+              throw new Error(
+                `Work item source task key conflict for ${input.source_task_key} (${current.kind}): already assigned to ${conflict.id}`,
+              )
+            db.update(CompanyWorkItemTable)
+              .set({ source_task_key: input.source_task_key, updated_at: Date.now() })
+              .where(eq(CompanyWorkItemTable.id, input.id))
+              .run()
+            return true
+          },
+          { behavior: "immediate" },
+        ),
       )
+      const row = Database.use((db) =>
+        db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get(),
+      )!
+      if (changed)
+        yield* event(row.project_id, "work_item.source_task_key_set", {
+          work_item_id: input.id,
+          source_task_key: input.source_task_key,
+        })
+      return hydrateWorkItems([row])[0]!
+    })
+
+    const reworkRejectedReview = Effect.fn("CompanyProject.reworkRejectedReview")(function* (input: {
+      worker_id: string
+      reviewer_id: string
+    }) {
+      const projectID = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const worker = db
+              .select()
+              .from(CompanyWorkItemTable)
+              .where(eq(CompanyWorkItemTable.id, input.worker_id))
+              .get()
+            const reviewer = db
+              .select()
+              .from(CompanyWorkItemTable)
+              .where(eq(CompanyWorkItemTable.id, input.reviewer_id))
+              .get()
+            if (!worker || worker.kind !== "worker") throw new Error(`Worker not found: ${input.worker_id}`)
+            if (!reviewer || reviewer.kind !== "reviewer" || reviewer.parent_id !== worker.id)
+              throw new Error(`Reviewer ${input.reviewer_id} does not review worker ${input.worker_id}`)
+            if (worker.status !== "completed" || worker.review_status !== "rejected")
+              throw new Error(`Worker ${worker.id} is not awaiting rejected-review rework`)
+            if (!["blocked", "failed"].includes(reviewer.status))
+              throw new Error(`Reviewer ${reviewer.id} cannot request rework from ${reviewer.status}`)
+            const now = Date.now()
+            db.update(CompanyWorkItemTable)
+              .set({
+                status: "pending",
+                review_status: "pending",
+                workflow_run_id: null,
+                error: null,
+                completed_at: null,
+                max_attempts: Math.max(worker.max_attempts, worker.attempt + 1),
+                updated_at: now,
+              })
+              .where(eq(CompanyWorkItemTable.id, worker.id))
+              .run()
+            db.update(CompanyWorkItemTable)
+              .set({
+                status: "pending",
+                workflow_run_id: null,
+                error: null,
+                completed_at: null,
+                max_attempts: Math.max(reviewer.max_attempts, reviewer.attempt + 1),
+                updated_at: now,
+              })
+              .where(eq(CompanyWorkItemTable.id, reviewer.id))
+              .run()
+            return worker.project_id
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      yield* event(projectID, "work_item.rework_requested", {
+        worker_id: input.worker_id,
+        reviewer_id: input.reviewer_id,
+      })
+      const items = yield* listWorkItems(projectID)
+      return {
+        worker: items.find((item) => item.id === input.worker_id)!,
+        reviewer: items.find((item) => item.id === input.reviewer_id)!,
+      }
+    })
+
+    const assignWorkItem = Effect.fn("CompanyProject.assignWorkItem")(function* (input: {
+      id: string
+      owner_agent_id: string
+      reason: string
+    }) {
+      const reason = input.reason.trim()
+      if (!reason) throw new Error("Work item assignment reason must be non-empty")
+      if (!input.owner_agent_id.trim() || input.owner_agent_id.trim() !== input.owner_agent_id)
+        throw new Error("Work item owner agent ID must be a non-empty trimmed string")
+      yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const current = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()
+            if (!current) throw new Error(`Company work item not found: ${input.id}`)
+            if (!["pending", "blocked", "failed", "completed"].includes(current.status))
+              throw new Error(`Work item ${input.id} cannot be reassigned from ${current.status}`)
+            if (current.owner_agent_id === input.owner_agent_id)
+              throw new Error(`Work item ${input.id} is already assigned to ${input.owner_agent_id}`)
+            const now = Date.now()
+            db.update(CompanyWorkItemTable)
+              .set({ owner_agent_id: input.owner_agent_id, updated_at: now })
+              .where(eq(CompanyWorkItemTable.id, input.id))
+              .run()
+            db.insert(CompanyProjectEventTable)
+              .values({
+                id: Identifier.ascending("event"),
+                project_id: current.project_id,
+                type: "work_item.reassigned",
+                actor_id: null,
+                data_json: JSON.stringify({
+                  work_item_id: current.id,
+                  from_agent_id: current.owner_agent_id,
+                  to_agent_id: input.owner_agent_id,
+                  reason,
+                }),
+                created_at: now,
+              })
+              .run()
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      return hydrateWorkItems([
+        Database.use((db) =>
+          db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get(),
+        )!,
+      ])[0]!
     })
 
     const listWorkItems = Effect.fn("CompanyProject.listWorkItems")(function* (project_id: string) {
-      return (yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .select()
-            .from(CompanyWorkItemTable)
-            .where(eq(CompanyWorkItemTable.project_id, project_id))
-            .orderBy(asc(CompanyWorkItemTable.created_at))
-            .all(),
+      return hydrateWorkItems(
+        yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select()
+              .from(CompanyWorkItemTable)
+              .where(eq(CompanyWorkItemTable.project_id, project_id))
+              .orderBy(asc(CompanyWorkItemTable.created_at))
+              .all(),
+          ),
         ),
-      )).map(workItemFromRow)
+      )
     })
 
     const readyWorkItems = Effect.fn("CompanyProject.readyWorkItems")(function* (project_id: string) {
@@ -639,6 +1050,7 @@ export const layer = Layer.effect(
                 pending.map((item) => item.id),
               ),
             )
+            .orderBy(CompanyWorkItemDependencyTable.work_item_id, CompanyWorkItemDependencyTable.depends_on_id)
             .all(),
         ),
       )
@@ -658,7 +1070,16 @@ export const layer = Layer.effect(
           .filter((dependency) => incomplete.has(dependency.depends_on_id))
           .map((dependency) => dependency.work_item_id),
       )
-      return pending.filter((item) => !blocked.has(item.id)).map(workItemFromRow)
+      return pending
+        .filter((item) => !blocked.has(item.id))
+        .map((item) =>
+          workItemFromRow(
+            item,
+            dependencies
+              .filter((dependency) => dependency.work_item_id === item.id)
+              .map((dependency) => dependency.depends_on_id),
+          ),
+        )
     })
 
     const updateWorkItem = Effect.fn("CompanyProject.updateWorkItem")(function* (
@@ -672,6 +1093,8 @@ export const layer = Layer.effect(
       if (!row) throw new Error(`Company work item not found: ${id}`)
       const now = Date.now()
       if (status === "running" && row.status !== "pending") throw new Error(`Work item ${id} is not pending`)
+      if (status === "blocked" && row.status !== "running")
+        throw new Error(`Work item ${id} cannot block from ${row.status}`)
       if (status === "completed" && row.status !== "running") throw new Error(`Work item ${id} is not running`)
       if (status === "pending" && !["blocked", "failed"].includes(row.status))
         throw new Error(`Work item ${id} cannot retry from ${row.status}`)
@@ -703,9 +1126,9 @@ export const layer = Layer.effect(
         ),
       )
       yield* event(row.project_id, `work_item.${status}`, { work_item_id: id, error }, row.owner_agent_id ?? undefined)
-      return workItemFromRow(
+      return hydrateWorkItems([
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get())!,
-      )
+      ])[0]!
     })
 
     const updateWorkItemFields = Effect.fn("CompanyProject.updateWorkItemFields")(function* (input: {
@@ -732,9 +1155,11 @@ export const layer = Layer.effect(
             .run(),
         ),
       )
-      return workItemFromRow(
-        Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get())!,
-      )
+      return hydrateWorkItems([
+        Database.use((db) =>
+          db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get(),
+        )!,
+      ])[0]!
     })
 
     const addArtifact = Effect.fn("CompanyProject.addArtifact")(function* (input: {
@@ -787,10 +1212,23 @@ export const layer = Layer.effect(
             .select()
             .from(CompanyArtifactTable)
             .where(eq(CompanyArtifactTable.project_id, project_id))
-            .orderBy(asc(CompanyArtifactTable.created_at))
+            .orderBy(asc(CompanyArtifactTable.created_at), asc(CompanyArtifactTable.id))
             .all(),
         ),
       )).map(artifactFromRow)
+    })
+
+    const listEvents = Effect.fn("CompanyProject.listEvents")(function* (project_id: string) {
+      return (yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyProjectEventTable)
+            .where(eq(CompanyProjectEventTable.project_id, project_id))
+            .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+            .all(),
+        ),
+      )).map(eventFromRow)
     })
 
     const requestGate = Effect.fn("CompanyProject.requestGate")(function* (input: {
@@ -934,8 +1372,7 @@ export const layer = Layer.effect(
       const project = yield* get(project_id)
       if (!project) throw new Error(`Company project not found: ${project_id}`)
       const charter = yield* getCharter(project_id)
-      if (!charter?.policy.allow_workspace_write)
-        throw new Error("Project Charter does not allow repository creation")
+      if (!charter?.policy.allow_workspace_write) throw new Error("Project Charter does not allow repository creation")
       const repo = path.join(project.output_dir, "repo")
       yield* Effect.promise(() => fs.mkdir(repo, { recursive: true }))
       if (!(yield* Effect.promise(() => Bun.file(path.join(repo, ".git", "HEAD")).exists()))) {
@@ -968,7 +1405,7 @@ export const layer = Layer.effect(
             .select()
             .from(CompanyWorktreeRunTable)
             .where(eq(CompanyWorktreeRunTable.project_id, project_id))
-            .orderBy(asc(CompanyWorktreeRunTable.created_at))
+            .orderBy(asc(CompanyWorktreeRunTable.created_at), asc(CompanyWorktreeRunTable.id))
             .all(),
         ),
       )).map(worktreeRunFromRow)
@@ -1044,8 +1481,7 @@ export const layer = Layer.effect(
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       const charter = yield* getCharter(input.project_id)
       if (!charter) throw new Error("Project Charter is required before creating a worktree run")
-      if (!charter.policy.allow_workspace_write)
-        throw new Error("Project Charter does not allow a writable worktree")
+      if (!charter.policy.allow_workspace_write) throw new Error("Project Charter does not allow a writable worktree")
       const repository_path = yield* initRepository(input.project_id)
       const initial = yield* git(repository_path, ["rev-parse", "HEAD"])
       if (initial.code !== 0) {
@@ -1140,17 +1576,18 @@ export const layer = Layer.effect(
         }
         if (dirty.output) {
           const staged = yield* git(current.directory, ["add", "--all"])
-          const committed = staged.code === 0
-            ? yield* git(current.directory, [
-                "-c",
-                "user.name=AgentCompany",
-                "-c",
-                "user.email=agentcompany@local",
-                "commit",
-                "-m",
-                `AgentCompany delivery ${current.work_item_id}`,
-              ])
-            : staged
+          const committed =
+            staged.code === 0
+              ? yield* git(current.directory, [
+                  "-c",
+                  "user.name=AgentCompany",
+                  "-c",
+                  "user.email=agentcompany@local",
+                  "commit",
+                  "-m",
+                  `AgentCompany delivery ${current.work_item_id}`,
+                ])
+              : staged
           if (committed.code !== 0) {
             const failedRun = yield* updateWorktreeRun({
               id: input.id,
@@ -1265,6 +1702,7 @@ export const layer = Layer.effect(
     return Service.of({
       create,
       get,
+      findBySourceThread,
       list,
       createCharter,
       getCharter,
@@ -1274,14 +1712,14 @@ export const layer = Layer.effect(
       createPlan,
       listPlans,
       createWorkItem,
+      setWorkItemSourceTaskKey,
+      reworkRejectedReview,
       listWorkItems,
       readyWorkItems,
       startWorkItem: (id) => updateWorkItem(id, "running"),
-      assignWorkItem: (input) => updateWorkItemFields({ id: input.id, owner_agent_id: input.owner_agent_id }),
-      setWorkItemRun: (input) =>
-        updateWorkItemFields({ id: input.id, workflow_run_id: input.workflow_run_id ?? null }),
-      setWorkItemReview: (input) =>
-        updateWorkItemFields({ id: input.id, review_status: input.review_status }),
+      assignWorkItem,
+      setWorkItemRun: (input) => updateWorkItemFields({ id: input.id, workflow_run_id: input.workflow_run_id ?? null }),
+      setWorkItemReview: (input) => updateWorkItemFields({ id: input.id, review_status: input.review_status }),
       blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error),
       retryWorkItem: (id) => updateWorkItem(id, "pending"),
       completeWorkItem: (id) => updateWorkItem(id, "completed"),
@@ -1294,6 +1732,7 @@ export const layer = Layer.effect(
       mergeWorktreeRun,
       addArtifact,
       listArtifacts,
+      listEvents,
       requestGate,
       resolveGate,
       listGates,

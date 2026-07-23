@@ -5,6 +5,19 @@ import z from "zod"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Conversation, ConversationRuntime } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
+import { RootNeedTable } from "@/conversation/conversation.sql"
+import { Company } from "@/company"
+import { RepositoryInstance } from "@/company/repository-instance"
+import { CompanyProjectExecution } from "@/company-project"
+import {
+  BoardProjectCharter,
+  BoardProjectDecisionConflict,
+  BoardProjectDecisionNotReady,
+  Plan,
+  Project,
+  ProjectCharter,
+  WorkItem,
+} from "@/company-project/schema"
 import {
   BoardMessagesDisabled,
   ChannelID,
@@ -24,6 +37,8 @@ import {
 } from "@/conversation/schema"
 import { LOCAL_USER_ID } from "@/conversation/conversation.sql"
 import { CompanyID } from "@/company/schema"
+import { eq } from "@/storage"
+import * as Database from "@/storage/db"
 import { lazy } from "@/util/lazy"
 import {
   localAuthUnauthorizedResponse,
@@ -34,13 +49,37 @@ import {
 } from "../error"
 import type { ServerEnv } from "../middleware"
 
-// M2 only allows the interrupt action. delegate/decide/approve are M3.
 const ThreadActionInput = z
+  .discriminatedUnion("kind", [
+    z.object({ kind: z.literal("interrupt") }).strict(),
+    z
+      .object({
+        kind: z.literal("decide"),
+        request_id: z.string().uuid(),
+        charter: BoardProjectCharter,
+      })
+      .strict(),
+  ])
+  .meta({ ref: "ThreadActionInput" })
+
+const BoardDecisionResult = z
   .object({
-    kind: z.literal("interrupt"),
+    kind: z.literal("decide"),
+    project: Project,
+    charter: ProjectCharter,
+    plan: Plan,
+    work_item: WorkItem,
+    project_channel: Conversation.ChannelSummary,
+    decision_message: Conversation.ChannelMessage,
+    run_id: z.string().optional(),
+    replayed: z.boolean(),
   })
   .strict()
-  .meta({ ref: "ThreadActionInput" })
+  .meta({ ref: "BoardDecisionResult" })
+
+const ThreadActionResult = z
+  .union([Conversation.ConversationThreadDetail, BoardDecisionResult])
+  .meta({ ref: "ThreadActionResult" })
 
 const ChannelSendInput = z
   .object({
@@ -82,11 +121,15 @@ const forbidden = namedErrorResponse("Conversation resource not visible or writa
   ReplyNotVisible.Schema,
   MentionNotVisible.Schema,
 ] as const)
-const conflict = namedErrorResponse("Conversation request conflict", [RequestConflict.Schema] as const)
+const conflict = namedErrorResponse("Conversation request conflict", [
+  RequestConflict.Schema,
+  BoardProjectDecisionConflict.Schema,
+] as const)
 const badRequest = namedErrorResponse("Invalid conversation request", [
   ProductValidationError,
   MessageInvalidInput.Schema,
   InvalidCursor.Schema,
+  BoardProjectDecisionNotReady.Schema,
 ] as const)
 const internalError = namedErrorResponse("Unable to complete conversation operation", [UnknownErrorResponse] as const)
 
@@ -285,15 +328,16 @@ export const CompanyThreadRoutes = lazy(() =>
       "/:threadID/actions",
       describeRoute({
         operationId: "company.threadAction",
-        summary: "Apply a structured thread action (M2: interrupt only)",
+        summary: "Interrupt a thread or formally approve its Board Project Charter",
         responses: {
           200: {
-            description: "Updated thread detail",
-            content: { "application/json": { schema: resolver(Conversation.ConversationThreadDetail) } },
+            description: "Updated thread detail or persisted Board project decision",
+            content: { "application/json": { schema: resolver(ThreadActionResult) } },
           },
           400: badRequest,
           401: localAuthUnauthorizedResponse,
           403: forbidden,
+          409: conflict,
           500: internalError,
         },
       }),
@@ -303,12 +347,106 @@ export const CompanyThreadRoutes = lazy(() =>
       async (c) => {
         const { threadID } = c.req.valid("param")
         const { company_id } = c.req.valid("query")
-        const thread = await AppRuntime.runPromise(
-          ConversationRuntime.Service.use((service) =>
-            service.interruptThread({ companyID: company_id, threadID, principal: localPrincipal() }),
-          ),
+        const input = c.req.valid("json")
+        if (input.kind === "interrupt") {
+          const thread = await AppRuntime.runPromise(
+            ConversationRuntime.Service.use((service) =>
+              service.interruptThread({ companyID: company_id, threadID, principal: localPrincipal() }),
+            ),
+          )
+          return c.json(thread)
+        }
+        const result = await AppRuntime.runPromise(
+          Effect.gen(function* () {
+            const conversation = yield* Conversation.Service
+            const thread = yield* conversation.getThread({
+              companyID: company_id,
+              threadID,
+              principal: localPrincipal(),
+            })
+            const channel = (yield* conversation.listChannels({
+              companyID: company_id,
+              principal: localPrincipal(),
+            })).find((candidate) => candidate.id === thread.channelID)
+            if (channel?.kind !== "board") {
+              return yield* Effect.fail(
+                new BoardProjectDecisionNotReady({ thread_id: threadID, reason: "not_board_thread" }),
+              )
+            }
+            if (thread.run?.state !== "completed") {
+              return yield* Effect.fail(
+                new BoardProjectDecisionNotReady({ thread_id: threadID, reason: "run_not_completed" }),
+              )
+            }
+            const companyService = yield* Company.Service
+            const company = yield* companyService.current()
+            if (!company.company.board.some((member) => member.id === input.charter.dri_agent_id)) {
+              return yield* Effect.fail(
+                new BoardProjectDecisionNotReady({ thread_id: threadID, reason: "dri_not_board_member" }),
+              )
+            }
+            const rootNeedID = thread.rootNeedID
+            if (!rootNeedID) {
+              return yield* Effect.fail(
+                new BoardProjectDecisionNotReady({ thread_id: threadID, reason: "not_board_thread" }),
+              )
+            }
+            const rootNeed = yield* Effect.sync(() =>
+              Database.use((db) =>
+                db
+                  .select()
+                  .from(RootNeedTable)
+                  .where(eq(RootNeedTable.id, rootNeedID))
+                  .get(),
+              ),
+            )
+            if (!rootNeed) {
+              return yield* Effect.fail(
+                new BoardProjectDecisionNotReady({ thread_id: threadID, reason: "not_board_thread" }),
+              )
+            }
+            const execution = yield* CompanyProjectExecution.Service
+            const started = yield* RepositoryInstance.provide(CompanyID.parse(company_id))(
+              execution.startFromCharter({
+                company_id,
+                root_need_id: rootNeed.id,
+                source_thread_id: threadID,
+                request_id: input.request_id,
+                goal: rootNeed.body,
+                charter: input.charter,
+                provider_id: company.company.provider?.provider_id,
+                model_id: company.company.provider?.model_id,
+              }),
+            )
+            const projectChannel = yield* conversation.ensureProjectChannel({
+              companyID: company_id,
+              projectScopeID: started.project.id,
+              title: started.project.title,
+              members: [localPrincipal(), { kind: "agent", id: input.charter.dri_agent_id }],
+            })
+            const decisionMessage = yield* conversation.recordBoardDecision({
+              companyID: company_id,
+              threadID,
+              principal: localPrincipal(),
+              requestID: input.request_id,
+              projectScopeID: started.project.id,
+              driAgentID: input.charter.dri_agent_id,
+              body: [
+                `正式立项：${input.charter.title}`,
+                `价值：${input.charter.value}`,
+                `DRI：${input.charter.dri_agent_id}`,
+                `验收：${input.charter.acceptance_criteria.join("；")}`,
+              ].join("\n"),
+            })
+            return {
+              kind: "decide" as const,
+              ...started,
+              project_channel: projectChannel,
+              decision_message: decisionMessage,
+            }
+          }),
         )
-        return c.json(thread)
+        return c.json(result)
       },
     ),
 )

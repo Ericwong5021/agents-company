@@ -4,6 +4,10 @@ export const CompanyProjectTable = sqliteTable(
   "company_project",
   {
     id: text().primaryKey(),
+    company_id: text(),
+    root_need_id: text(),
+    source_thread_id: text(),
+    decision_request_id: text(),
     goal: text().notNull(),
     title: text().notNull(),
     status: text().notNull(),
@@ -21,24 +25,31 @@ export const CompanyProjectTable = sqliteTable(
   (table) => [
     index("company_project_status_idx").on(table.status),
     index("company_project_owner_idx").on(table.owner_agent_id),
+    uniqueIndex("company_project_source_thread_idx").on(table.source_thread_id),
   ],
 )
 
-export const CompanyProjectCharterTable = sqliteTable(
-  "company_project_charter",
-  {
-    project_id: text()
-      .primaryKey()
-      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
-    scope_json: text().notNull(),
-    success_criteria_json: text().notNull(),
-    constraints_json: text().notNull(),
-    acceptance_criteria_json: text().notNull(),
-    policy_json: text().notNull(),
-    created_at: integer().notNull(),
-    updated_at: integer().notNull(),
-  },
-)
+export const CompanyProjectCharterTable = sqliteTable("company_project_charter", {
+  project_id: text()
+    .primaryKey()
+    .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+  title: text().notNull(),
+  value: text().notNull(),
+  deliverables_json: text().notNull(),
+  scope_json: text().notNull(),
+  non_goals_json: text().notNull(),
+  success_criteria_json: text().notNull(),
+  constraints_json: text().notNull(),
+  resources_json: text().notNull(),
+  risks_json: text().notNull(),
+  dri_agent_id: text().notNull(),
+  milestones_json: text().notNull(),
+  open_decisions_json: text().notNull(),
+  acceptance_criteria_json: text().notNull(),
+  policy_json: text().notNull(),
+  created_at: integer().notNull(),
+  updated_at: integer().notNull(),
+})
 
 export const CompanyPlanTable = sqliteTable(
   "company_plan",
@@ -72,6 +83,7 @@ export const CompanyWorkItemTable = sqliteTable(
     plan_id: text()
       .notNull()
       .references(() => CompanyPlanTable.id, { onDelete: "cascade" }),
+    source_task_key: text(),
     parent_id: text(),
     title: text().notNull(),
     description: text().notNull(),
@@ -81,6 +93,10 @@ export const CompanyWorkItemTable = sqliteTable(
     capability_packs_json: text().notNull(),
     decision_scope_json: text().notNull(),
     resource_scope_json: text().notNull(),
+    inputs_json: text().notNull(),
+    expected_outputs_json: text().notNull(),
+    validators_json: text().notNull(),
+    disposition: text().notNull(),
     model_group: text().notNull(),
     risk_level: text().notNull(),
     review_status: text().notNull(),
@@ -97,6 +113,12 @@ export const CompanyWorkItemTable = sqliteTable(
     updated_at: integer().notNull(),
   },
   (table) => [
+    uniqueIndex("company_work_item_source_task_key_idx").on(
+      table.project_id,
+      table.plan_id,
+      table.source_task_key,
+      table.kind,
+    ),
     index("company_work_item_project_status_idx").on(table.project_id, table.status),
     index("company_work_item_owner_idx").on(table.owner_agent_id, table.status),
   ],

@@ -1,6 +1,13 @@
 export { AccountTable, AccountStateTable, ControlAccountTable } from "../account/account.sql"
 export { ProjectTable } from "../project/project.sql"
 export { CompanyAgentTable } from "../company-agent/company-agent.sql"
+export {
+  CompanyCapabilityNeedTable,
+  CompanyTeamSelectionTable,
+  CompanyAgentPerformanceTable,
+  CompanyEmploymentReviewTable,
+  CompanyDepartmentTable,
+} from "../company-recruitment/company-recruitment.sql"
 export { CompanyTable, ApprovalPolicyTable, RepositoryBindingTable } from "../company/company.sql"
 export { LocalClientCredentialTable } from "../local-auth/local-auth.sql"
 export { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"

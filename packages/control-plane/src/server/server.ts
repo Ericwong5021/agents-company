@@ -17,6 +17,7 @@ import { ControlPlaneRoutes } from "./routes/control"
 import { UIRoutes } from "./routes/ui"
 import { GlobalHealthRoutes, GlobalRoutes } from "./routes/global"
 import { CompanyRoutes } from "./routes/company"
+import { CompanyRecruitmentRoutes } from "./routes/company-recruitment"
 import { LocalAuthPublicRoutes, LocalAuthRoutes } from "./routes/local-auth"
 import { WorkspaceRouterMiddleware } from "./workspace"
 import { InstanceMiddleware } from "./routes/instance/middleware"
@@ -73,6 +74,7 @@ export function create(opts: CreateOptions = {}) {
   const runtime = adapter.create(app as never)
   const protectedApp = new Hono<ServerEnv>()
     .use(AuthMiddleware(auth))
+    .route("/company/recruitment", CompanyRecruitmentRoutes())
     .route("/company", CompanyRoutes())
     .route("/global", GlobalRoutes())
     .route("/local-auth", LocalAuthRoutes())

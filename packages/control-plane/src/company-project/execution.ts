@@ -1,10 +1,15 @@
 import z from "zod"
 import { Context, Effect, Layer, Scope } from "effect"
 import { AgentRun } from "@/agent-run/agent-run"
+import { CapabilityCatalog } from "@/capability/catalog"
 import { CompanyAgent } from "@/company-agent"
-import type { CompanyAgentID } from "@/company-agent/schema"
+import { CompanyAgentID } from "@/company-agent/schema"
+import { CompanyRecruitment, stableCandidateAgentID, stableLogicalKey } from "@/company-recruitment"
+import { CompanyID } from "@/company/schema"
+import { Conversation } from "@/conversation"
+import { ConversationThreadID } from "@/conversation/schema"
 import { Delegation } from "@/delegation/delegation"
-import type { SubTask } from "@/delegation/schema"
+import { SubTask } from "@/delegation/schema"
 import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import * as Reputation from "@/reputation/reputation"
@@ -14,7 +19,17 @@ import * as WorkType from "@/work-type/work-type"
 import type { WorkTypeID } from "@/work-type/schema"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import { CompanyProject } from "./company-project"
-import type { ApprovalGate, DeliveryPolicy, Project, WorkItem } from "./schema"
+import {
+  BoardProjectCharter,
+  BoardProjectDecisionConflict,
+  type ApprovalGate,
+  type Artifact,
+  type DeliveryPolicy,
+  type Plan,
+  type Project,
+  type ProjectCharter,
+  type WorkItem,
+} from "./schema"
 
 const workTypes = ["coding", "decision", "research", "writing", "design", "analysis"] as const
 const modelGroups = ["standard", "lite"] as const
@@ -26,6 +41,24 @@ const charterResult = z.object({
   constraints: z.array(z.string()),
   acceptance_criteria: z.array(z.string()).min(1),
   assumptions: z.array(z.string()),
+})
+
+const optionalString = <T extends z.ZodType>(value: T) =>
+  z.preprocess((input) => (input === "" ? undefined : input), value.optional())
+
+const projectionTask = SubTask.extend({
+  key: optionalString(z.string().min(1)),
+  parentKey: optionalString(z.string().min(1)),
+  suggestedAgent: optionalString(z.string()),
+  workType: optionalString(z.enum(workTypes)),
+  role: optionalString(z.string().min(1)),
+  modelGroup: optionalString(z.enum(modelGroups)),
+  riskLevel: optionalString(z.enum(["low", "medium", "high"])),
+})
+
+const plannerProjection = z.object({
+  charter: BoardProjectCharter,
+  tasks: z.array(projectionTask).min(1).max(6),
 })
 
 const submissions = {
@@ -102,6 +135,89 @@ const slug = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 32) || "agent"
 
+const stableBoardCloseoutRequestID = (projectID: string, workItemID: string, artifactID: string) => {
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(["board-closeout-v1", projectID, workItemID, artifactID].join("\0"))
+    .digest("hex")
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `5${hash.slice(13, 16)}`,
+    `${((Number.parseInt(hash[16]!, 16) & 3) | 8).toString(16)}${hash.slice(17, 20)}`,
+    hash.slice(20, 32),
+  ].join("-")
+}
+
+const projectionFactsMatch = (
+  item: WorkItem,
+  input: {
+    parent_id?: string
+    title: string
+    description: string
+    kind: "worker" | "reviewer"
+    work_type: (typeof workTypes)[number]
+    role: string
+    capability_packs: string[]
+    decision_scope: string[]
+    resource_scope: string[]
+    inputs: string[]
+    expected_outputs: string[]
+    validators: string[]
+    disposition: string
+    model_group: "ultra" | "standard" | "lite"
+    risk_level: "low" | "medium" | "high"
+    review_status: "pending" | "not_required"
+    owner_agent_id: string
+    acceptance_criteria: string[]
+    max_attempts: number
+    depends_on: string[]
+  },
+) =>
+  JSON.stringify({
+    parent_id: item.parent_id,
+    title: item.title,
+    description: item.description,
+    kind: item.kind,
+    work_type: item.work_type,
+    role: item.role,
+    capability_packs: item.capability_packs,
+    decision_scope: item.decision_scope,
+    resource_scope: item.resource_scope,
+    inputs: item.inputs,
+    expected_outputs: item.expected_outputs,
+    validators: item.validators,
+    disposition: item.disposition,
+    model_group: item.model_group,
+    risk_level: item.risk_level,
+    review_status: item.review_status,
+    owner_agent_id: item.owner_agent_id,
+    acceptance_criteria: item.acceptance_criteria,
+    max_attempts: item.max_attempts,
+    depends_on: [...new Set(item.depends_on)].sort(),
+  }) ===
+  JSON.stringify({
+    parent_id: input.parent_id,
+    title: input.title,
+    description: input.description,
+    kind: input.kind,
+    work_type: input.work_type,
+    role: input.role,
+    capability_packs: input.capability_packs,
+    decision_scope: input.decision_scope,
+    resource_scope: input.resource_scope,
+    inputs: input.inputs,
+    expected_outputs: input.expected_outputs,
+    validators: input.validators,
+    disposition: input.disposition,
+    model_group: input.model_group,
+    risk_level: input.risk_level,
+    review_status: input.review_status,
+    owner_agent_id: input.owner_agent_id,
+    acceptance_criteria: input.acceptance_criteria,
+    max_attempts: input.max_attempts,
+    depends_on: [...new Set(input.depends_on)].sort(),
+  })
+
 const terms = (value: string) =>
   new Set(
     value
@@ -128,6 +244,17 @@ const capabilityPacks = (workType: (typeof workTypes)[number]) => {
   if (workType === "writing") return ["document-authoring@1"]
   if (workType === "design") return ["design-production@1"]
   return ["research-analysis@1"]
+}
+
+const executableCapabilityPacks = (
+  values: string[],
+  workType: (typeof workTypes)[number],
+) => {
+  const available = new Set(CapabilityCatalog.list().map((pack) => `${pack.id}@${pack.version}`))
+  const valid = values.filter((value) => available.has(value))
+  return valid.length === values.length && valid.length
+    ? valid
+    : [...new Set([...valid, ...capabilityPacks(workType)])]
 }
 
 const plannerScript = (goal: string, agentID: string, modelRef: string) =>
@@ -159,6 +286,28 @@ const plannerScript = (goal: string, agentID: string, modelRef: string) =>
     ].join("\n"),
   )
 
+const approvedCharterScript = (charter: BoardProjectCharter) =>
+  workflow(
+    "company-project-approved-charter",
+    [`phase("接收董事会已批准 Project Charter")`, `return ${json({ accepted: true, charter })}`].join("\n"),
+  )
+
+const approvedCharterFromProject = (charter: ProjectCharter) =>
+  BoardProjectCharter.parse({
+    title: charter.title,
+    value: charter.value,
+    deliverables: charter.deliverables,
+    acceptance_criteria: charter.acceptance_criteria,
+    scope: charter.scope,
+    non_goals: charter.non_goals,
+    constraints: charter.constraints,
+    resources: charter.resources,
+    risks: charter.risks,
+    dri_agent_id: charter.dri_agent_id,
+    milestones: charter.milestones,
+    open_decisions: charter.open_decisions,
+  })
+
 const workerPermission = (item: WorkItem, policy: DeliveryPolicy, writeApproved: boolean) => {
   if (item.work_type !== "coding") return "read_only" as const
   if (policy.source_approval_preset === "autonomous") return "full_access" as const
@@ -166,12 +315,46 @@ const workerPermission = (item: WorkItem, policy: DeliveryPolicy, writeApproved:
   return "workspace_write" as const
 }
 
+const boardBiddingEvidenceRule = (item: WorkItem) =>
+  /bidding|董事会/i.test(`${item.source_task_key ?? ""} ${item.title} ${item.description}`)
+    ? "产品语义：Bidding 是已有 Group Session/Thread 内选择下一位发言者的机制，不是筛选 Thread 成员。董事会 Thread 可以包含全部固定董事；验收应检查实际产生高信号消息的 winner、选择或 pass 理由，以及全员 pass/预算结束，而不能把候选成员存在误判成其已经发言。"
+    : undefined
+
+const boardCloseoutWritebackRule = (item: WorkItem) =>
+  item.source_task_key === "board_closeout_and_organization_decision"
+    ? [
+        `Control Plane 宿主写回协议事实：${JSON.stringify({
+          source_task_key: item.source_task_key,
+          stage: "before_board_closeout_writeback",
+          current_response: "dri_signed_decision_payload",
+          prewrite_board_record: "expected_absent",
+          host_sequence: [
+            "persist_current_response_as_artifact",
+            "validate_artifact_and_dri_owner",
+            "write_full_artifact_to_original_board_thread",
+            "start_independent_reviewer",
+          ],
+          decision_basis: "completed_upstream_delivery_and_review_evidence",
+          failed_attempt_policy: "preserve_as_audit_and_supersede_explicitly",
+        })}`,
+        "最终收口签署规则：当前回答就是项目 DRI 交给宿主持久化的正式决策正文，必须以“批准收口”或“继续执行”等可执行决定作答。快照处于写回之前；其中尚无最终 Board 消息、board_closeout.recorded 事件、当前 Worker completed、当前 Reviewer Artifact 或 accepted 都是预期状态，不得据此建议 hold、拒绝签署或判定最终收口未满足。只以上游交付及其独立复核证据判断是否可收口，不要把本轮回答之后才由宿主完成的状态当作本轮回答的先决条件，也不要谎称这些写回已经发生。若存在之前失败或被拒绝的收口记录，必须逐条回应 findings，并明确当前决定取代对应失败决定；旧记录由宿主保留作审计。",
+      ].join("\n")
+    : undefined
+
+const workItemRuntimeEvidenceRule =
+  "运行时语义：Control Plane 事实是在当前 WorkItem 启动前生成的快照，所以当前节点可能仍显示 pending、attempt 少 1，当前 Reviewer 也可能显示尚未启动。宿主随后负责把节点置为 running、持久化本次回答为 Artifact，并完成或阻塞节点；Agent 不应也不需要修改自己的状态。非 coding Worker 由宿主以 read_only 权限运行。不得仅因这种预运行快照、缺少自状态写入工具或没有另附未要求的系统级命令/网络审计而判定执行未发生。"
+
+const reviewerRuntimeEvidenceRule =
+  "当前回答本身就是本轮独立复核。不得要求当前 Reviewer 在启动前快照中已经 completed、已经有本轮 Artifact，或先由另一个 Reviewer 复核这次交付；accepted 后这些状态由宿主持久化。只验收 parent 叶子任务及其上游依赖，不得把尚未获准运行的下游 WorkItem 处于 pending 当作 parent 的缺陷，除非 parent 的 depends_on 明确包含它。"
+
 const workerScript = (
   goal: string,
   item: WorkItem,
   modelRef: string,
   policy: DeliveryPolicy,
   writeApproved: boolean,
+  evidence: unknown,
+  reviewFeedback?: { artifact_id: string; summary: string; findings: string[]; evidence_checked: string[] },
 ) =>
   workflow(
     `company-project-worker-${item.work_type}`,
@@ -183,9 +366,17 @@ const workerScript = (
           `你的临时角色：${item.role}`,
           `任务：${item.description}`,
           `验收条件：\n- ${item.acceptance_criteria.join("\n- ")}`,
+          `Control Plane 当前可验证事实：${JSON.stringify(evidence)}`,
+          reviewFeedback
+            ? `上一轮独立复核要求返工：${JSON.stringify(reviewFeedback)}。必须逐条回应 findings，并提交修正后的实际证据。`
+            : undefined,
+          boardBiddingEvidenceRule(item),
+          boardCloseoutWritebackRule(item),
+          workItemRuntimeEvidenceRule,
           `你独占的决策范围：${item.decision_scope.join("；") || "无"}`,
           `允许使用或修改的资源范围：${item.resource_scope.join("；") || "仅返回结构化交付物"}`,
           "只执行这一个叶子任务，不重新规划整个项目，不替其他子树做决定。",
+          "如果当前事实包含上一次独立复核的 findings，本次必须针对 findings 返工，并用已经发生的 Control Plane 实体、状态和内容交付证据；不得把计划中的后续动作写成已完成。",
           item.work_type === "coding"
             ? "在授权工作树内完成实现，并亲自运行测试、检查与构建；verificationCommands 必须填写可由宿主再次执行的真实命令。"
             : "返回符合当前 Work Type 结构的 submission，所有结论必须能被验收条件直接检查。",
@@ -193,7 +384,7 @@ const workerScript = (
       )}, ${json({
         companyAgentID: item.owner_agent_id,
         role: item.role,
-        capabilityPacks: item.capability_packs,
+        capabilityPacks: executableCapabilityPacks(item.capability_packs, item.work_type),
         requiredRuntimeCapabilities: [
           "toolCalls",
           "structuredOutput",
@@ -212,7 +403,14 @@ const workerScript = (
     ].join("\n"),
   )
 
-const reviewerScript = (goal: string, item: WorkItem, parent: WorkItem, artifact: unknown, modelRef: string) =>
+const reviewerScript = (
+  goal: string,
+  item: WorkItem,
+  parent: WorkItem,
+  artifact: unknown,
+  modelRef: string,
+  evidence: unknown,
+) =>
   workflow(
     `company-project-review-${parent.work_type}`,
     [
@@ -223,6 +421,10 @@ const reviewerScript = (goal: string, item: WorkItem, parent: WorkItem, artifact
           `被复核任务：${parent.title}`,
           `原验收条件：\n- ${parent.acceptance_criteria.join("\n- ")}`,
           `交付物：${JSON.stringify(artifact)}`,
+          `Control Plane 当前可验证事实：${JSON.stringify(evidence)}`,
+          boardBiddingEvidenceRule(parent),
+          workItemRuntimeEvidenceRule,
+          reviewerRuntimeEvidenceRule,
           "你没有参与原任务。只根据交付物、证据和验收条件判断，不因执行者自述而放宽标准。",
         ].join("\n"),
       )}, ${json({
@@ -250,6 +452,26 @@ export interface Interface {
     provider_id?: string
     model_id?: string
   }) => Effect.Effect<{ project: Project; run_id: string }>
+  readonly startFromCharter: (input: {
+    company_id: string
+    root_need_id: string
+    source_thread_id: string
+    request_id: string
+    goal: string
+    charter: BoardProjectCharter
+    provider_id?: string
+    model_id?: string
+  }) => Effect.Effect<
+    {
+      project: Project
+      charter: ProjectCharter
+      plan: Plan
+      work_item: WorkItem
+      run_id?: string
+      replayed: boolean
+    },
+    InstanceType<typeof BoardProjectDecisionConflict>
+  >
   readonly retry: (input: {
     project_id: string
     provider_id?: string
@@ -270,6 +492,8 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const projects = yield* CompanyProject.Service
     const agents = yield* CompanyAgent.Service
+    const recruitment = yield* CompanyRecruitment.Service
+    const conversation = yield* Conversation.Service
     const delegation = yield* Delegation.Service
     const reputation = yield* Reputation.Service
     const runs = yield* AgentRun.Service
@@ -297,6 +521,259 @@ export const layer = Layer.effect(
     const agentModelRef = (project: Project, group: "ultra" | "standard" | "lite") =>
       project.provider_id && project.model_id ? `${project.provider_id}/${project.model_id}` : group
 
+    const evidenceSnapshot = Effect.fn("CompanyProjectExecution.evidenceSnapshot")(function* (project: Project) {
+      const [items, artifacts, gates, charter, events] = yield* Effect.all([
+        projects.listWorkItems(project.id),
+        projects.listArtifacts(project.id),
+        projects.listGates(project.id),
+        projects.getCharter(project.id),
+        projects.listEvents(project.id),
+      ])
+      const organization = project.company_id
+        ? yield* recruitment.snapshot({
+            company_id: CompanyID.parse(project.company_id),
+          })
+        : undefined
+      const currentNeeds = organization?.needs.filter((need) => need.project_id === project.id) ?? []
+      const currentNeedIDs = new Set(currentNeeds.map((need) => need.id))
+      const teamSelections =
+        organization?.selections.filter(
+          (selection) =>
+            selection.project_id === project.id && currentNeedIDs.has(selection.capability_need_id),
+        ) ?? []
+      const selectedAgentIDs = new Set(
+        teamSelections.filter((selection) => selection.decision === "selected").map((selection) => selection.agent_id),
+      )
+      const selectedAgentHistory =
+        organization?.selections.filter(
+          (selection) =>
+            selection.project_id !== project.id &&
+            selection.decision === "selected" &&
+            selectedAgentIDs.has(selection.agent_id),
+        ) ?? []
+      const historyNeedIDs = new Set(selectedAgentHistory.map((selection) => selection.capability_need_id))
+      const relatedSelectionIDs = new Set(
+        [...teamSelections, ...selectedAgentHistory]
+          .filter((selection) => selection.decision === "selected")
+          .map((selection) => selection.id),
+      )
+      const selectedAgents = yield* Effect.forEach([...selectedAgentIDs], (id) =>
+        agents.get(CompanyAgentID.make(id)),
+      )
+      const board =
+        project.company_id && project.source_thread_id
+          ? yield* Effect.gen(function* () {
+              const companyID = CompanyID.parse(project.company_id!)
+              const threadID = ConversationThreadID.parse(project.source_thread_id!)
+              const principal = { kind: "agent" as const, id: project.owner_agent_id ?? "board-ceo" }
+              return {
+                thread: yield* conversation.getThread({ companyID, threadID, principal }),
+                entries: (yield* conversation.pageEntries({ companyID, threadID, principal, limit: 100 })).items.map(
+                  (entry) => {
+                    if (entry.type === "message")
+                      return {
+                        type: entry.type,
+                        id: entry.message.id,
+                        author: entry.message.author,
+                        body: entry.message.body.slice(0, 2_000),
+                        signal_type: entry.message.signalType,
+                      }
+                    if (entry.type === "agent_message")
+                      return {
+                        type: entry.type,
+                        id: entry.message.id,
+                        round_num: entry.message.roundNum,
+                        agent_id: entry.message.agentID,
+                        status: entry.message.status,
+                        body: entry.message.body.slice(0, 2_000),
+                      }
+                    return {
+                      type: entry.type,
+                      round_num: entry.bidding.roundNum,
+                      state: entry.bidding.state,
+                      winner_agent_id: entry.bidding.winnerAgentID,
+                      bids: entry.bidding.bids,
+                    }
+                  },
+                ),
+              }
+            }).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+          : undefined
+      return {
+        project: {
+          id: project.id,
+          status: project.status,
+          root_need_id: project.root_need_id,
+          source_thread_id: project.source_thread_id,
+          decision_request_id: project.decision_request_id,
+          dri_agent_id: project.owner_agent_id,
+        },
+        charter,
+        board,
+        work_items: items.map((item) => ({
+          id: item.id,
+          source_task_key: item.source_task_key,
+          parent_id: item.parent_id,
+          kind: item.kind,
+          status: item.status,
+          owner_agent_id: item.owner_agent_id,
+          workflow_run_id: item.workflow_run_id,
+          depends_on: item.depends_on,
+          attempt: item.attempt,
+          review_status: item.review_status,
+          error: item.error,
+          started_at: item.started_at,
+          completed_at: item.completed_at,
+          updated_at: item.updated_at,
+        })),
+        artifacts: artifacts.map((artifact) => ({
+          id: artifact.id,
+          work_item_id: artifact.work_item_id,
+          kind: artifact.kind,
+          title: artifact.title,
+          content: artifact.content?.slice(0, artifact.kind === "attempt_failure" ? 2_000 : 8_000),
+          evidence: artifact.evidence,
+          created_at: artifact.created_at,
+        })),
+        gates: gates.map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status, title: gate.title })),
+        work_item_reassignments: events
+          .filter((event) => event.type === "work_item.reassigned")
+          .map((event) => ({
+            id: event.id,
+            type: event.type,
+            actor_id: event.actor_id ?? null,
+            data: event.data,
+            created_at: event.created_at,
+          })),
+        current_needs: currentNeeds.map((need) => ({
+          id: need.id,
+          project_id: need.project_id,
+          need_key: need.need_key,
+          role: need.role,
+          work_type: need.work_type,
+          capability_packs: need.capability_packs,
+          risk_level: need.risk_level,
+          demand_horizon: need.demand_horizon,
+          department_key: need.department_key,
+        })),
+        team_selections: teamSelections.map((selection) => ({
+          project_id: selection.project_id,
+          capability_need_id: selection.capability_need_id,
+          agent_id: selection.agent_id,
+          decision: selection.decision,
+          source: selection.source,
+          lifecycle_at_selection: selection.lifecycle_at_selection,
+          reason: selection.reason,
+          released: Boolean(selection.time_released),
+        })),
+        selected_agents: selectedAgents.flatMap((agent) =>
+          agent
+            ? [
+                {
+                  id: agent.id,
+                  name: agent.name,
+                  lifecycle: agent.lifecycle,
+                  role_key: agent.role_key,
+                  description: agent.description,
+                  department: agent.department,
+                  responsibilities: agent.responsibilities,
+                },
+              ]
+            : [],
+        ),
+        selected_agent_history: selectedAgentHistory.map((selection) => ({
+          id: selection.id,
+          project_id: selection.project_id,
+          capability_need_id: selection.capability_need_id,
+          agent_id: selection.agent_id,
+          source: selection.source,
+          lifecycle_at_selection: selection.lifecycle_at_selection,
+          reason: selection.reason,
+          released: Boolean(selection.time_released),
+          time_created: selection.time_created,
+        })),
+        history_needs:
+          organization?.needs
+            .filter((need) => historyNeedIDs.has(need.id))
+            .map((need) => ({
+              id: need.id,
+              project_id: need.project_id,
+              need_key: need.need_key,
+              role: need.role,
+              work_type: need.work_type,
+              capability_packs: need.capability_packs,
+              risk_level: need.risk_level,
+              demand_horizon: need.demand_horizon,
+              department_key: need.department_key,
+            })) ?? [],
+        related_performances:
+          organization?.performances
+            .filter(
+              (performance) =>
+                selectedAgentIDs.has(performance.agent_id) && relatedSelectionIDs.has(performance.selection_id),
+            )
+            .map((performance) => ({
+              id: performance.id,
+              project_id: performance.project_id,
+              selection_id: performance.selection_id,
+              agent_id: performance.agent_id,
+              outcome: performance.outcome,
+              quality_score: performance.quality_score,
+              reliability_score: performance.reliability_score,
+              cost_score: performance.cost_score,
+              speed_score: performance.speed_score,
+              review_summary: performance.review_summary,
+            })) ?? [],
+      }
+    })
+
+    const recordBoardCloseout = Effect.fn("CompanyProjectExecution.recordBoardCloseout")(function* (input: {
+      project: Project
+      item: WorkItem
+      artifact: Artifact
+      summary: string
+    }) {
+      const body = [
+        "项目最终收口决策",
+        `Project ID：${input.project.id}`,
+        `Work Item ID：${input.item.id}`,
+        `Artifact ID：${input.artifact.id}`,
+        `Summary：${input.summary}`,
+        "受控决策内容（完整 Artifact）：",
+        input.artifact.content!,
+      ].join("\n")
+      if (body.length > 20_000)
+        throw new Error(
+          `Board closeout record for artifact ${input.artifact.id} exceeds the 20000 character limit`,
+        )
+      const requestID = stableBoardCloseoutRequestID(input.project.id, input.item.id, input.artifact.id)
+      const existing = (yield* projects.listEvents(input.project.id)).find(
+        (event) => event.type === "board_closeout.recorded" && event.data.artifact_id === input.artifact.id,
+      )
+      if (existing) return
+      const message = yield* conversation.recordBoardDecision({
+        companyID: CompanyID.parse(input.project.company_id!),
+        threadID: ConversationThreadID.parse(input.project.source_thread_id!),
+        principal: { kind: "agent", id: input.project.owner_agent_id! },
+        requestID,
+        projectScopeID: input.project.id,
+        driAgentID: input.project.owner_agent_id!,
+        body,
+      })
+      yield* projects.recordEvent({
+        project_id: input.project.id,
+        type: "board_closeout.recorded",
+        actor_id: input.project.owner_agent_id,
+        data: {
+          work_item_id: input.item.id,
+          artifact_id: input.artifact.id,
+          channel_message_id: message.id,
+          source_thread_id: input.project.source_thread_id,
+          request_id: requestID,
+        },
+      })
+    })
+
     const createPlanner = Effect.fn("CompanyProjectExecution.createPlanner")(function* (project: Project) {
       const id = `project-${slug(project.id.slice(-12))}-planner`
       const existing = yield* agents.get(id as CompanyAgentID)
@@ -318,11 +795,46 @@ export const layer = Layer.effect(
     const selectAgent = Effect.fn("CompanyProjectExecution.selectAgent")(function* (input: {
       project: Project
       key: string
+      need_key: string
       role: string
       work_type: (typeof workTypes)[number]
+      capability_packs: string[]
+      risk_level: "low" | "medium" | "high"
       model_group: "ultra" | "standard" | "lite"
       exclude?: string[]
     }) {
+      if (input.project.company_id) {
+        const need = yield* recruitment.createNeed({
+          company_id: CompanyID.parse(input.project.company_id),
+          project_id: input.project.id,
+          need_key: input.need_key,
+          role: input.role,
+          work_type: input.work_type,
+          capability_packs: input.capability_packs,
+          risk_level: input.risk_level,
+          demand_horizon: "project",
+        })
+        const result = yield* recruitment.selectForNeed({
+          capability_need_id: need.id,
+          exclude_agent_ids: input.exclude ?? [],
+        })
+        const selected = result.selections.find((selection) => selection.decision === "selected")
+        yield* projects.recordEvent({
+          project_id: input.project.id,
+          type: "work_item.agent_selected",
+          actor_id: result.agent.id,
+          data: {
+            key: input.key,
+            role: input.role,
+            score: selected?.score.total ?? 0,
+            source: selected?.source ?? "company_pool",
+            capability_need_id: need.id,
+            selection_id: selected?.id,
+            rejected_count: result.selections.filter((selection) => selection.decision === "rejected").length,
+          },
+        })
+        return result.agent
+      }
       const wanted = terms(`${input.role} ${input.work_type}`)
       const active = yield* runs.list({ companyProjectID: input.project.id, limit: 500 })
       const candidates = (yield* agents.list()).filter((agent) => !(input.exclude ?? []).includes(agent.id))
@@ -348,7 +860,12 @@ export const layer = Layer.effect(
         })
         return selected.agent
       }
-      const id = `project-${slug(input.project.id.slice(-10))}-${slug(input.key)}-${slug(input.role)}`.slice(0, 72)
+      const id = stableCandidateAgentID({
+        company_id: input.project.company_id ?? "standalone",
+        project_id: input.project.id,
+        need_key: input.need_key,
+        role: input.role,
+      })
       const existing = yield* agents.get(id as CompanyAgentID)
       if (existing) return existing
       const created = yield* agents.create({
@@ -406,14 +923,31 @@ export const layer = Layer.effect(
       return started.runID
     })
 
-    const failure = Effect.fn("CompanyProjectExecution.failure")(function* (item: WorkItem, error: string) {
+    const failure = Effect.fn("CompanyProjectExecution.failure")(function* (
+      item: WorkItem,
+      error: string,
+      scheduleRetry = true,
+    ) {
+      const attempt = item.attempt + 1
+      const retryable = attempt < item.max_attempts
       yield* projects.addArtifact({
         project_id: item.project_id,
         work_item_id: item.id,
         kind: "attempt_failure",
-        title: `${item.title} · Attempt ${item.attempt + 1} 失败`,
-        content: JSON.stringify({ error, attempt: item.attempt + 1 }, null, 2) + "\n",
-        evidence: { error },
+        title: `${item.title} · Attempt ${attempt} 失败`,
+        content:
+          JSON.stringify(
+            {
+              attempt,
+              error,
+              impact: "当前 Work Item 未通过执行或验证，正式交付状态未推进。",
+              retryable,
+              next_adjustment: retryable ? "保留本次证据并按剩余重试预算调整下一次执行。" : "升级到项目 DRI。",
+            },
+            null,
+            2,
+          ) + "\n",
+        evidence: { error, attempt, retryable },
         created_by_agent_id: item.owner_agent_id,
       })
       const current = yield* projects.blockWorkItem({ id: item.id, error })
@@ -423,7 +957,7 @@ export const layer = Layer.effect(
         [{ severity: "blocker" }],
         "project",
       )
-      if (current.attempt < current.max_attempts) {
+      if (scheduleRetry && current.attempt < current.max_attempts) {
         yield* projects.retryWorkItem(current.id)
         yield* projects.recordEvent({
           project_id: item.project_id,
@@ -432,6 +966,7 @@ export const layer = Layer.effect(
           data: { work_item_id: item.id, attempt: current.attempt + 1, reason: error },
         })
       }
+      return current
     })
 
     const outcome = Effect.fn("CompanyProjectExecution.outcome")(function* (runID: string) {
@@ -453,7 +988,8 @@ export const layer = Layer.effect(
       if (new Set(keys).size !== keys.length) throw new Error("Delegation task keys must be unique")
       tasks.forEach((task, index) => {
         const known = new Set(keys.slice(0, index))
-        if (task.parentKey && !known.has(task.parentKey)) throw new Error(`Unknown or forward parentKey: ${task.parentKey}`)
+        if (task.parentKey && !known.has(task.parentKey))
+          throw new Error(`Unknown or forward parentKey: ${task.parentKey}`)
         for (const dependency of task.dependsOn ?? [])
           if (!known.has(dependency)) throw new Error(`Unknown or forward dependency: ${dependency}`)
       })
@@ -472,13 +1008,24 @@ export const layer = Layer.effect(
           yield* blockProject(project_id, "Project has exhausted a work-item retry budget")
           return
         }
-        if (items.every((item) => item.status === "completed" || item.status === "cancelled"))
-          yield* projects.transition({ id: project_id, status: "completed", actor_id: project.owner_agent_id ?? "system" })
+        if (items.every((item) => item.status === "completed" || item.status === "cancelled")) {
+          if (project.company_id)
+            yield* recruitment.releaseProject({
+              company_id: CompanyID.parse(project.company_id),
+              project_id: project.id,
+            })
+          yield* projects.transition({
+            id: project_id,
+            status: "completed",
+            actor_id: project.owner_agent_id ?? "system",
+          })
+        }
         return
       }
       const charter = yield* projects.getCharter(project.id)
       if (!charter) throw new Error("Project Charter is missing")
       const gates = yield* projects.listGates(project.id)
+      const evidence = yield* evidenceSnapshot(project)
       const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
       if (
         charter.policy.source_approval_preset === "strict" &&
@@ -490,7 +1037,8 @@ export const layer = Layer.effect(
             project_id: project.id,
             kind: "risk_approval",
             title: "批准 Agent 写入项目工作区",
-            summary: "当前公司使用“全部请求批准”。Agent 已完成只读规划，继续执行将允许其在隔离工作树中写入和运行验证命令。",
+            summary:
+              "当前公司使用“全部请求批准”。Agent 已完成只读规划，继续执行将允许其在隔离工作树中写入和运行验证命令。",
             requested_by_agent_id: project.owner_agent_id,
           })
         return
@@ -504,16 +1052,21 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             if (item.kind === "reviewer") {
               if (!item.parent_id) throw new Error(`Reviewer ${item.id} has no parent work item`)
-              const parent = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.parent_id)
+              const parent = (yield* projects.listWorkItems(project.id)).find(
+                (candidate) => candidate.id === item.parent_id,
+              )
               if (!parent) throw new Error(`Reviewer parent not found: ${item.parent_id}`)
-              const artifact = (yield* projects.listArtifacts(project.id)).find(
+              const artifact = (yield* projects.listArtifacts(project.id)).findLast(
                 (candidate) => candidate.work_item_id === parent.id && candidate.kind !== "attempt_failure",
               )
               if (!artifact) throw new Error(`Reviewer has no artifact for ${parent.id}`)
               yield* projects.setWorkItemReview({ id: parent.id, review_status: "running" })
-              const worktree = parent.work_type === "coding"
-                ? (yield* projects.listWorktreeRuns(project.id)).find((candidate) => candidate.work_item_id === parent.id)
-                : undefined
+              const worktree =
+                parent.work_type === "coding"
+                  ? (yield* projects.listWorktreeRuns(project.id)).findLast(
+                      (candidate) => candidate.work_item_id === parent.id,
+                    )
+                  : undefined
               return {
                 item,
                 runID: yield* startRuntime({
@@ -525,15 +1078,34 @@ export const layer = Layer.effect(
                     parent,
                     artifact.content ? JSON.parse(artifact.content) : artifact.evidence,
                     agentModelRef(project, parent.risk_level === "high" ? "ultra" : "standard"),
+                    evidence,
                   ),
                   workspace: worktree?.directory,
                 }),
                 worktree,
               }
             }
-            const worktree = item.work_type === "coding"
-              ? yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: item.id })
+            const reviewer = (yield* projects.listWorkItems(project.id)).find(
+              (candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id,
+            )
+            const reviewArtifact = reviewer
+              ? (yield* projects.listArtifacts(project.id)).findLast(
+                  (candidate) =>
+                    candidate.work_item_id === reviewer.id &&
+                    candidate.kind === "independent_review" &&
+                    Boolean(candidate.content),
+                )
               : undefined
+            const reviewFeedback = reviewArtifact?.content
+              ? {
+                  artifact_id: reviewArtifact.id,
+                  ...reviewResult.parse(JSON.parse(reviewArtifact.content)),
+                }
+              : undefined
+            const worktree =
+              item.work_type === "coding"
+                ? yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: item.id })
+                : undefined
             if (worktree) yield* projects.startWorktreeRun({ id: worktree.id })
             return {
               item,
@@ -546,6 +1118,8 @@ export const layer = Layer.effect(
                   agentModelRef(project, item.model_group),
                   charter.policy,
                   writeApproved,
+                  evidence,
+                  reviewFeedback,
                 ),
                 workspace: worktree?.directory,
               }),
@@ -559,89 +1133,145 @@ export const layer = Layer.effect(
           started,
           ({ item, runID, worktree }) =>
             Effect.gen(function* () {
-            const value = yield* outcome(runID)
-            if (item.kind === "worker") {
-              const parsed = z.object({ summary: z.string(), submission: submissions[item.work_type] }).parse(value)
-              const verification = yield* workType.verify(item.work_type as WorkTypeID, {
-                submission: parsed.submission,
-                orgLayer: "project",
-              })
-              yield* projects.addArtifact({
+              const value = yield* outcome(runID)
+              if (item.kind === "worker") {
+                const parsed = z.object({ summary: z.string(), submission: submissions[item.work_type] }).parse(value)
+                const verification = yield* workType.verify(item.work_type as WorkTypeID, {
+                  submission: parsed.submission,
+                  orgLayer: "project",
+                })
+                const artifact = yield* projects.addArtifact({
+                  project_id: project.id,
+                  work_item_id: item.id,
+                  kind: item.work_type,
+                  title: item.title,
+                  path: `artifacts/${item.id}.json`,
+                  content: JSON.stringify(parsed, null, 2) + "\n",
+                  evidence: { work_type_verification: verification },
+                  created_by_agent_id: item.owner_agent_id,
+                })
+                if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
+                if (item.work_type === "coding" && worktree) {
+                  const commands = submissions.coding.parse(parsed.submission).verificationCommands
+                  const verified = yield* projects.verifyWorktreeRun({ id: worktree.id, commands })
+                  if (verified.status !== "awaiting_merge_approval")
+                    return yield* failure(item, verified.error ?? "Host worktree verification failed")
+                }
+                if (item.source_task_key === "board_closeout_and_organization_decision") {
+                  if (!project.owner_agent_id || item.owner_agent_id !== project.owner_agent_id)
+                    return yield* failure(
+                      item,
+                      `Board closeout work item ${item.id} must be owned by project DRI ${project.owner_agent_id ?? "missing"}, not ${item.owner_agent_id ?? "unassigned"}; reassign the blocked work item to the DRI before retrying`,
+                      false,
+                    )
+                  if (!project.company_id || !project.source_thread_id)
+                    return yield* failure(
+                      item,
+                      `Board closeout work item ${item.id} requires project company_id and source_thread_id before the DRI can sign`,
+                      false,
+                    )
+                  yield* recordBoardCloseout({ project, item, artifact, summary: parsed.summary })
+                }
+                yield* projects.completeWorkItem(item.id)
+                yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+                return
+              }
+              const parsed = reviewResult.parse(value)
+              if (!item.parent_id) throw new Error(`Reviewer ${item.id} has no parent work item`)
+              const parent = (yield* projects.listWorkItems(project.id)).find(
+                (candidate) => candidate.id === item.parent_id,
+              )
+              if (!parent) throw new Error(`Reviewer parent not found: ${item.parent_id}`)
+              const reviewArtifact = yield* projects.addArtifact({
                 project_id: project.id,
                 work_item_id: item.id,
-                kind: item.work_type,
+                kind: "independent_review",
                 title: item.title,
                 path: `artifacts/${item.id}.json`,
                 content: JSON.stringify(parsed, null, 2) + "\n",
-                evidence: { work_type_verification: verification },
+                evidence: { evidence_checked: parsed.evidence_checked },
                 created_by_agent_id: item.owner_agent_id,
               })
-              if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
-              if (item.work_type === "coding" && worktree) {
-                const commands = submissions.coding.parse(parsed.submission).verificationCommands
-                const verified = yield* projects.verifyWorktreeRun({ id: worktree.id, commands })
-                if (verified.status !== "awaiting_merge_approval")
-                  return yield* failure(item, verified.error ?? "Host worktree verification failed")
+              yield* projects.setWorkItemReview({
+                id: parent.id,
+                review_status: parsed.accepted ? "accepted" : "rejected",
+              })
+              if (!parsed.accepted) {
+                const error = parsed.findings.join("; ") || parsed.summary
+                yield* projects.blockWorkItem({ id: item.id, error })
+                yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+                yield* reputation.updateFromAdmission(
+                  parent.owner_agent_id ?? parent.role,
+                  false,
+                  [{ severity: "blocker" }],
+                  "project",
+                )
+                if (parent.attempt < parent.max_attempts) {
+                  yield* projects.reworkRejectedReview({ worker_id: parent.id, reviewer_id: item.id })
+                  yield* projects.recordEvent({
+                    project_id: project.id,
+                    type: "work_item.rework_scheduled",
+                    actor_id: item.owner_agent_id,
+                    data: {
+                      worker_id: parent.id,
+                      reviewer_id: item.id,
+                      review_artifact_id: reviewArtifact.id,
+                      findings: parsed.findings,
+                      summary: parsed.summary,
+                    },
+                  })
+                }
+                return
               }
               yield* projects.completeWorkItem(item.id)
               yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
-              return
-            }
-            const parsed = reviewResult.parse(value)
-            if (!item.parent_id) throw new Error(`Reviewer ${item.id} has no parent work item`)
-            const parent = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.parent_id)
-            if (!parent) throw new Error(`Reviewer parent not found: ${item.parent_id}`)
-            yield* projects.addArtifact({
-              project_id: project.id,
-              work_item_id: item.id,
-              kind: "independent_review",
-              title: item.title,
-              path: `artifacts/${item.id}.json`,
-              content: JSON.stringify(parsed, null, 2) + "\n",
-              evidence: { evidence_checked: parsed.evidence_checked },
-              created_by_agent_id: item.owner_agent_id,
-            })
-            yield* projects.setWorkItemReview({
-              id: parent.id,
-              review_status: parsed.accepted ? "accepted" : "rejected",
-            })
-            if (!parsed.accepted) return yield* failure(item, parsed.findings.join("; ") || parsed.summary)
-            yield* projects.completeWorkItem(item.id)
-            yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
-            if (parent.work_type !== "coding") return
-            const parentWorktree = worktree ?? (yield* projects.listWorktreeRuns(project.id)).find(
-              (candidate) => candidate.work_item_id === parent.id,
-            )
-            if (!parentWorktree) throw new Error(`Coding reviewer has no worktree for ${parent.id}`)
-            const gate = yield* projects.requestMergeApproval({
-              id: parentWorktree.id,
-              title: `批准合并：${parent.title}`,
-              summary: `${parsed.summary}\n\n分支 ${parentWorktree.branch} 已通过 Work Type 验证、宿主命令与独立复核。`,
-              requested_by_agent_id: item.owner_agent_id,
-              review: parsed,
-            })
-            const charter = yield* projects.getCharter(project.id)
-            if (!charter || charter.policy.require_human_merge) return
-            yield* projects.resolveGate({ id: gate.id, decision: "approve", note: "公司自主权限策略自动批准" })
-            const merged = yield* projects.mergeWorktreeRun(parentWorktree.id)
-            yield* projects.addArtifact({
-              project_id: project.id,
-              work_item_id: merged.work_item_id,
-              kind: "merge_report",
-              title: "主分支自动合并与复验报告",
-              path: `artifacts/${merged.id}-merge.json`,
-              content: JSON.stringify(merged, null, 2) + "\n",
-              evidence: merged.verification,
-              created_by_agent_id: item.owner_agent_id,
-            })
-            yield* projects.transition({
-              id: project.id,
-              status: "reviewing",
-              actor_id: item.owner_agent_id ?? "system",
-              reason: "公司自主权限策略已完成自动合并",
-            })
+              if (parent.work_type !== "coding") return
+              const parentWorktree =
+                worktree ??
+                (yield* projects.listWorktreeRuns(project.id)).findLast(
+                  (candidate) => candidate.work_item_id === parent.id,
+                )
+              if (!parentWorktree) throw new Error(`Coding reviewer has no worktree for ${parent.id}`)
+              const gate = yield* projects.requestMergeApproval({
+                id: parentWorktree.id,
+                title: `批准合并：${parent.title}`,
+                summary: `${parsed.summary}\n\n分支 ${parentWorktree.branch} 已通过 Work Type 验证、宿主命令与独立复核。`,
+                requested_by_agent_id: item.owner_agent_id,
+                review: parsed,
+              })
+              const charter = yield* projects.getCharter(project.id)
+              if (!charter || charter.policy.require_human_merge) return
+              yield* projects.resolveGate({ id: gate.id, decision: "approve", note: "公司自主权限策略自动批准" })
+              const merged = yield* projects.mergeWorktreeRun(parentWorktree.id)
+              yield* projects.addArtifact({
+                project_id: project.id,
+                work_item_id: merged.work_item_id,
+                kind: "merge_report",
+                title: "主分支自动合并与复验报告",
+                path: `artifacts/${merged.id}-merge.json`,
+                content: JSON.stringify(merged, null, 2) + "\n",
+                evidence: merged.verification,
+                created_by_agent_id: item.owner_agent_id,
+              })
+              yield* projects.transition({
+                id: project.id,
+                status: "reviewing",
+                actor_id: item.owner_agent_id ?? "system",
+                reason: "公司自主权限策略已完成自动合并",
+              })
             }).pipe(
-              Effect.catchCause((cause) => failure(item, String(cause))),
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  const current = (yield* projects.listWorkItems(project.id)).find(
+                    (candidate) => candidate.id === item.id,
+                  )
+                  if (current?.status === "running") {
+                    yield* failure(item, String(cause))
+                    return
+                  }
+                  yield* blockProject(project.id, String(cause))
+                }),
+              ),
             ),
           { concurrency: "unbounded", discard: true },
         )
@@ -659,106 +1289,252 @@ export const layer = Layer.effect(
       project: Project
       item: WorkItem
       runID: string
+      approvedCharter?: BoardProjectCharter
     }) {
-      const parsed = charterResult.parse(yield* outcome(input.runID))
+      const result = yield* outcome(input.runID)
+      const generatedCharter = input.approvedCharter
+        ? input.approvedCharter
+        : (() => {
+            const draft = charterResult.parse(result)
+            return BoardProjectCharter.parse({
+              title: input.project.title,
+              value: draft.summary,
+              deliverables: draft.success_criteria,
+              acceptance_criteria: draft.acceptance_criteria,
+              scope: draft.scope,
+              non_goals: ["不执行 Charter 范围外工作"],
+              constraints: draft.constraints.length ? draft.constraints : ["遵守当前公司权限与审批策略"],
+              resources: [{ kind: "other", scope: input.project.output_dir, disposition: "retain" }],
+              risks: [],
+              dri_agent_id: input.project.owner_agent_id ?? input.item.owner_agent_id,
+              milestones: draft.success_criteria,
+              open_decisions: [],
+            })
+          })()
+      const artifacts = yield* projects.listArtifacts(input.project.id)
+      const projectionArtifact = artifacts.findLast(
+        (artifact) =>
+          artifact.work_item_id === input.item.id && artifact.kind === "project_charter" && Boolean(artifact.content),
+      )
+      const savedProjection = projectionArtifact?.content
+        ? plannerProjection.parse(JSON.parse(projectionArtifact.content))
+        : undefined
+      if (
+        savedProjection &&
+        input.approvedCharter &&
+        JSON.stringify(savedProjection.charter) !== JSON.stringify(input.approvedCharter)
+      )
+        throw new Error("Saved planner projection conflicts with the approved Project Charter")
+      const parsed = savedProjection?.charter ?? generatedCharter
       yield* projects.createCharter({
         project_id: input.project.id,
+        title: parsed.title,
+        value: parsed.value,
+        deliverables: parsed.deliverables,
         scope: parsed.scope,
-        success_criteria: parsed.success_criteria,
+        non_goals: parsed.non_goals,
+        success_criteria: parsed.deliverables,
         constraints: parsed.constraints,
+        resources: parsed.resources,
+        risks: parsed.risks,
+        dri_agent_id: parsed.dri_agent_id,
+        milestones: parsed.milestones,
+        open_decisions: parsed.open_decisions,
         acceptance_criteria: parsed.acceptance_criteria,
       })
-      const tasks = yield* delegation.decompose({
-        goal: input.project.goal,
-        context: [
-          `Project Charter: ${JSON.stringify(parsed)}`,
-          "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
-          "The planner never implements and workers never redesign sibling tasks.",
-        ].join("\n"),
-        sessionID: input.project.coordinator_session_id!,
-        delegatorAgentID: input.item.owner_agent_id!,
-        actorAgentType: "general",
-      })
+      const tasks =
+        savedProjection?.tasks ??
+        (yield* delegation.decompose({
+          goal: input.project.goal,
+          context: [
+            `Project Charter: ${JSON.stringify(parsed)}`,
+            "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
+            "The planner never implements and workers never redesign sibling tasks.",
+          ].join("\n"),
+          sessionID: input.project.coordinator_session_id!,
+          delegatorAgentID: input.item.owner_agent_id!,
+          actorAgentType: "general",
+        }))
       const keys = validateTasks(tasks)
-      yield* projects.addArtifact({
-        project_id: input.project.id,
-        work_item_id: input.item.id,
-        kind: "project_charter",
-        title: "Project Charter 与动态任务计划",
-        path: "artifacts/project-charter.json",
-        content: JSON.stringify({ charter: parsed, tasks }, null, 2) + "\n",
-        evidence: { task_count: tasks.length },
-        created_by_agent_id: input.item.owner_agent_id,
-      })
-      yield* projects.completeWorkItem(input.item.id)
+      const sourceKeys = keys.map(stableLogicalKey)
+      if (new Set(sourceKeys).size !== sourceKeys.length)
+        throw new Error("Delegation task keys collapse to the same stable source key")
+      const needKeys = sourceKeys.map((key) => ({
+        worker: stableLogicalKey(`worker-${key}`),
+        reviewer: stableLogicalKey(`reviewer-${key}`),
+      }))
+      if (new Set(needKeys.flatMap((key) => [key.worker, key.reviewer])).size !== needKeys.length * 2)
+        throw new Error("Delegation capability need keys must be unique")
+      if (!savedProjection)
+        yield* projects.addArtifact({
+          project_id: input.project.id,
+          work_item_id: input.item.id,
+          kind: "project_charter",
+          title: "Project Charter 与动态任务计划",
+          path: "artifacts/project-charter.json",
+          content: JSON.stringify({ charter: parsed, tasks }, null, 2) + "\n",
+          evidence: { task_count: tasks.length },
+          created_by_agent_id: input.item.owner_agent_id,
+        })
       const plan = (yield* projects.listPlans(input.project.id)).at(-1)
       if (!plan) throw new Error("Project plan is missing")
+      const existingItems = yield* projects.listWorkItems(input.project.id)
       const created = new Map<string, { worker: WorkItem; reviewer: WorkItem }>()
       for (const [index, task] of tasks.entries()) {
         const key = keys[index]!
+        const sourceKey = sourceKeys[index]!
         const type = inferWorkType(task)
         const role = task.role ?? `${type} specialist`
         const group = modelGroups.includes(task.modelGroup ?? "standard") ? (task.modelGroup ?? "standard") : "standard"
-        const owner = yield* selectAgent({ project: input.project, key, role, work_type: type, model_group: group })
+        const packs = executableCapabilityPacks(task.capabilityPacks ?? [], type)
+        const risk = task.riskLevel ?? (type === "coding" ? "high" : "medium")
         const dependencies = [
           ...(task.dependsOn ?? []).map((dependency) => created.get(dependency)!.reviewer.id),
           ...(task.parentKey ? [created.get(task.parentKey)!.reviewer.id] : []),
         ].filter((value, position, values) => values.indexOf(value) === position)
-        const worker = yield* projects.createWorkItem({
+        const parentID = task.parentKey ? created.get(task.parentKey)!.worker.id : input.item.id
+        const keyedWorker = existingItems.find(
+          (item) =>
+            item.plan_id === plan.id && item.kind === "worker" && item.source_task_key === sourceKey,
+        )
+        const legacyWorkers = keyedWorker
+          ? []
+          : existingItems.filter(
+              (item) =>
+                item.plan_id === plan.id &&
+                item.kind === "worker" &&
+                !item.source_task_key &&
+                item.parent_id === parentID &&
+                item.description === task.summary &&
+                item.role === role,
+            )
+        if (legacyWorkers.length > 1) throw new Error(`Ambiguous legacy worker projection for ${key}`)
+        const existingWorker = keyedWorker ?? legacyWorkers[0]
+        const ownerID =
+          existingWorker?.owner_agent_id ??
+          (
+            yield* selectAgent({
+              project: input.project,
+              key,
+              need_key: needKeys[index]!.worker,
+              role,
+              work_type: type,
+              capability_packs: packs,
+              risk_level: risk,
+              model_group: group,
+            })
+          ).id
+        const workerInput = {
           project_id: input.project.id,
           plan_id: plan.id,
-          parent_id: task.parentKey ? created.get(task.parentKey)!.worker.id : input.item.id,
+          source_task_key: sourceKey,
+          parent_id: parentID,
           title: task.summary.slice(0, 100),
           description: task.summary,
-          kind: "worker",
+          kind: "worker" as const,
           work_type: type,
           role,
-          capability_packs: task.capabilityPacks?.length ? task.capabilityPacks : capabilityPacks(type),
+          capability_packs: packs,
           decision_scope: task.decisionScope?.length ? task.decisionScope : [task.summary],
           resource_scope: task.resourceScope?.length ? task.resourceScope : [`artifacts/${key}`],
+          inputs: [`Project Charter ${input.project.id}`, task.summary],
+          expected_outputs: [task.acceptanceCriteria],
+          validators: [task.acceptanceCriteria],
+          disposition: "retain",
           model_group: group,
-          risk_level: task.riskLevel ?? (type === "coding" ? "high" : "medium"),
-          review_status: "pending",
-          owner_agent_id: owner.id,
+          risk_level: risk,
+          review_status: "pending" as const,
+          owner_agent_id: ownerID,
           acceptance_criteria: [task.acceptanceCriteria],
           max_attempts: 2,
           depends_on: dependencies,
-        })
+        }
+        if (legacyWorkers[0]) {
+          if (
+            legacyWorkers[0].status !== "pending" ||
+            legacyWorkers[0].attempt !== 0 ||
+            legacyWorkers[0].workflow_run_id ||
+            !projectionFactsMatch(legacyWorkers[0], workerInput)
+          )
+            throw new Error(`Legacy worker projection differs from saved task ${key}`)
+          yield* projects.setWorkItemSourceTaskKey({ id: legacyWorkers[0].id, source_task_key: sourceKey })
+        }
+        const worker = yield* projects.createWorkItem(workerInput)
         const reviewerRole = `${role} independent reviewer`
-        const reviewer = yield* selectAgent({
-          project: input.project,
-          key: `${key}-review`,
-          role: reviewerRole,
+        const reviewerGroup = task.riskLevel === "high" ? "ultra" : "standard"
+        const keyedReviewer = existingItems.find(
+          (item) =>
+            item.plan_id === plan.id && item.kind === "reviewer" && item.source_task_key === sourceKey,
+        )
+        const legacyReviewers = keyedReviewer
+          ? []
+          : existingItems.filter(
+              (item) =>
+                item.plan_id === plan.id &&
+                item.kind === "reviewer" &&
+                !item.source_task_key &&
+                item.parent_id === worker.id &&
+                item.role === reviewerRole,
+            )
+        if (legacyReviewers.length > 1) throw new Error(`Ambiguous legacy reviewer projection for ${key}`)
+        const existingReviewer = keyedReviewer ?? legacyReviewers[0]
+        const reviewerID =
+          existingReviewer?.owner_agent_id ??
+          (
+            yield* selectAgent({
+              project: input.project,
+              key: `${key}-review`,
+              need_key: needKeys[index]!.reviewer,
+              role: reviewerRole,
+              work_type: type,
+              capability_packs: ["independent-review@1"],
+              risk_level: risk,
+              model_group: reviewerGroup,
+              exclude: [ownerID],
+            })
+          ).id
+        const reviewerInput = {
+          project_id: input.project.id,
+          plan_id: plan.id,
+          source_task_key: sourceKey,
+          parent_id: worker.id,
+          title: `独立复核：${worker.title}`,
+          description: `独立检查“${worker.title}”的交付物、证据和验收条件。`,
+          kind: "reviewer" as const,
           work_type: type,
-          model_group: task.riskLevel === "high" ? "ultra" : "standard",
-          exclude: [owner.id],
-        })
+          role: reviewerRole,
+          capability_packs: ["independent-review@1"],
+          decision_scope: [],
+          resource_scope: worker.resource_scope,
+          inputs: [`Work Item ${worker.id} 的交付物与验证证据`],
+          expected_outputs: ["独立复核结论与可操作 findings"],
+          validators: worker.acceptance_criteria,
+          disposition: "retain",
+          model_group: reviewerGroup as "ultra" | "standard",
+          risk_level: risk,
+          review_status: "not_required" as const,
+          owner_agent_id: reviewerID,
+          acceptance_criteria: worker.acceptance_criteria,
+          max_attempts: 2,
+          depends_on: [worker.id],
+        }
+        if (legacyReviewers[0]) {
+          if (
+            legacyReviewers[0].status !== "pending" ||
+            legacyReviewers[0].attempt !== 0 ||
+            legacyReviewers[0].workflow_run_id ||
+            !projectionFactsMatch(legacyReviewers[0], reviewerInput)
+          )
+            throw new Error(`Legacy reviewer projection differs from saved task ${key}`)
+          yield* projects.setWorkItemSourceTaskKey({ id: legacyReviewers[0].id, source_task_key: sourceKey })
+        }
         created.set(key, {
           worker,
-          reviewer: yield* projects.createWorkItem({
-            project_id: input.project.id,
-            plan_id: plan.id,
-            parent_id: worker.id,
-            title: `独立复核：${worker.title}`,
-            description: `独立检查“${worker.title}”的交付物、证据和验收条件。`,
-            kind: "reviewer",
-            work_type: type,
-            role: reviewerRole,
-            capability_packs: ["independent-review@1"],
-            decision_scope: [],
-            resource_scope: worker.resource_scope,
-            model_group: task.riskLevel === "high" ? "ultra" : "standard",
-            risk_level: task.riskLevel ?? "medium",
-            review_status: "not_required",
-            owner_agent_id: reviewer.id,
-            acceptance_criteria: worker.acceptance_criteria,
-            max_attempts: 2,
-            depends_on: [worker.id],
-          }),
+          reviewer: yield* projects.createWorkItem(reviewerInput),
         })
       }
+      yield* projects.completeWorkItem(input.item.id)
       yield* projects.setActiveRun({ id: input.project.id })
-      yield* startReadyWave(input.project.id)
     })
 
     const launchPlanner: (project: Project, item: WorkItem) => Effect.Effect<string> = Effect.fn(
@@ -769,22 +1545,211 @@ export const layer = Layer.effect(
         item,
         script: plannerScript(project.goal, item.owner_agent_id!, agentModelRef(project, "ultra")),
       })
-      yield* continuePlanner({ project, item: { ...item, attempt: item.attempt + 1 }, runID }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.gen(function* () {
-            yield* failure(item, String(cause))
-            const current = yield* projects.listWorkItems(project.id)
-            const pending = current.find((candidate) => candidate.id === item.id)
-            if (pending?.status === "pending") {
-              yield* launchPlanner(project, pending)
-              return
-            }
-            yield* blockProject(project.id, String(cause))
-          }),
-        ),
+      yield* Effect.gen(function* () {
+        yield* continuePlanner({ project, item: { ...item, attempt: item.attempt + 1 }, runID }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.gen(function* () {
+              yield* failure(item, String(cause))
+              const current = yield* projects.listWorkItems(project.id)
+              const pending = current.find((candidate) => candidate.id === item.id)
+              if (pending?.status === "pending") {
+                yield* launchPlanner(project, pending)
+                return
+              }
+              yield* blockProject(project.id, String(cause))
+            }),
+          ),
+        )
+        const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
+        if (current?.status === "completed")
+          yield* startReadyWave(project.id).pipe(
+            Effect.catchCause((cause) => blockProject(project.id, String(cause))),
+          )
+      }).pipe(
         Effect.forkIn(scope),
       )
       return runID
+    })
+
+    const launchApprovedCharter: (
+      project: Project,
+      item: WorkItem,
+      charter: BoardProjectCharter,
+    ) => Effect.Effect<string> = Effect.fn("CompanyProjectExecution.launchApprovedCharter")(function* (
+      project: Project,
+      item: WorkItem,
+      charter: BoardProjectCharter,
+    ) {
+      const runID = yield* startRuntime({
+        project,
+        item,
+        script: approvedCharterScript(charter),
+      })
+      yield* Effect.gen(function* () {
+        yield* continuePlanner({
+          project,
+          item: { ...item, attempt: item.attempt + 1 },
+          runID,
+          approvedCharter: charter,
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.gen(function* () {
+              yield* failure(item, String(cause))
+              const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
+              if (current?.status === "pending") {
+                yield* launchApprovedCharter(project, current, charter)
+                return
+              }
+              yield* blockProject(project.id, String(cause))
+            }),
+          ),
+        )
+        const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
+        if (current?.status === "completed")
+          yield* startReadyWave(project.id).pipe(
+            Effect.catchCause((cause) => blockProject(project.id, String(cause))),
+          )
+      }).pipe(
+        Effect.forkIn(scope),
+      )
+      return runID
+    })
+
+    const startFromCharter = Effect.fn("CompanyProjectExecution.startFromCharter")(function* (input: {
+      company_id: string
+      root_need_id: string
+      source_thread_id: string
+      request_id: string
+      goal: string
+      charter: BoardProjectCharter
+      provider_id?: string
+      model_id?: string
+    }) {
+      const charterInput = BoardProjectCharter.parse(input.charter)
+      const existing = yield* projects.findBySourceThread(input.source_thread_id)
+      if (existing && existing.decision_request_id !== input.request_id) {
+        return yield* Effect.fail(
+          new BoardProjectDecisionConflict({ thread_id: input.source_thread_id, request_id: input.request_id }),
+        )
+      }
+      const existingCharter = existing ? yield* projects.getCharter(existing.id) : undefined
+      if (existingCharter) {
+        if (JSON.stringify(approvedCharterFromProject(existingCharter)) !== JSON.stringify(charterInput)) {
+          return yield* Effect.fail(
+            new BoardProjectDecisionConflict({ thread_id: input.source_thread_id, request_id: input.request_id }),
+          )
+        }
+      }
+
+      const selectedModel = existing ? undefined : yield* resolveModel(input)
+      const session = existing
+        ? yield* sessions.get(SessionID.make(existing.coordinator_session_id!))
+        : yield* sessions.create({
+            title: `项目：${charterInput.title}`,
+            permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          })
+      if (!session) throw new Error("Board project coordinator session is unavailable")
+      const project =
+        existing ??
+        (yield* projects.create({
+          company_id: input.company_id,
+          root_need_id: input.root_need_id,
+          source_thread_id: input.source_thread_id,
+          decision_request_id: input.request_id,
+          goal: input.goal,
+          title: charterInput.title,
+          owner_agent_id: charterInput.dri_agent_id,
+          coordinator_session_id: session.id,
+          provider_id: selectedModel?.providerID,
+          model_id: selectedModel?.modelID,
+        }))
+      const charter =
+        existingCharter ??
+        (yield* projects.createCharter({
+          project_id: project.id,
+          title: charterInput.title,
+          value: charterInput.value,
+          deliverables: charterInput.deliverables,
+          acceptance_criteria: charterInput.acceptance_criteria,
+          scope: charterInput.scope,
+          non_goals: charterInput.non_goals,
+          constraints: charterInput.constraints,
+          resources: charterInput.resources,
+          risks: charterInput.risks,
+          dri_agent_id: charterInput.dri_agent_id,
+          milestones: charterInput.milestones,
+          open_decisions: charterInput.open_decisions,
+          success_criteria: charterInput.deliverables,
+        }))
+      const plan =
+        (yield* projects.listPlans(project.id))[0] ??
+        (yield* projects.createPlan({
+          project_id: project.id,
+          phase: "planning",
+          summary: "依据董事会已批准 Charter 拆解可执行 Work Items。",
+          acceptance_criteria: [
+            "每个 Work Item 有唯一负责人",
+            "输入、产出、资源、验证器与处置方式完整",
+            "执行者与独立 Reviewer 分离",
+          ],
+        }))
+      const existingWorkItem = (yield* projects.listWorkItems(project.id)).find((item) => item.kind === "planner")
+      const planner = existingWorkItem
+        ? undefined
+        : yield* selectAgent({
+            project,
+            key: "project-planner",
+            need_key: stableLogicalKey("project-planner"),
+            role: "project-planner",
+            work_type: "decision",
+            capability_packs: ["product-charter@1"],
+            risk_level: "medium",
+            model_group: "ultra",
+          })
+      const workItem =
+        existingWorkItem ??
+        (yield* projects.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "拆解已批准 Charter",
+          description: "保持董事会批准的范围与验收不变，将 Charter 拆成依赖有序的执行与独立复核任务。",
+          kind: "planner",
+          work_type: "decision",
+          role: "project-planner",
+          capability_packs: ["product-charter@1"],
+          decision_scope: ["Work Item 边界", "初始依赖关系", "临时责任"],
+          resource_scope: charterInput.resources.map((resource) => resource.scope),
+          inputs: [
+            `Root Need ${input.root_need_id}`,
+            `Board Thread ${input.source_thread_id}`,
+            "已批准 Project Charter",
+          ],
+          expected_outputs: ["依赖有序的 worker/reviewer Work Items"],
+          validators: ["每个叶子任务可独立验收", "每个正式责任只有一个 owner", "独立复核者与执行者不同"],
+          disposition: "retain",
+          model_group: "ultra",
+          risk_level: "medium",
+          review_status: "not_required",
+          owner_agent_id: planner!.id,
+          acceptance_criteria: ["任务树有界且所有叶子任务满足 Execution Ready"],
+          max_attempts: 2,
+        }))
+      const planning =
+        project.status === "intake"
+          ? yield* projects.transition({ id: project.id, status: "planning", actor_id: charterInput.dri_agent_id })
+          : project
+      const runID =
+        workItem.status === "pending"
+          ? yield* launchApprovedCharter(planning, workItem, charterInput)
+          : planning.active_run_id
+      return {
+        project: (yield* projects.get(project.id))!,
+        charter,
+        plan,
+        work_item: workItem,
+        run_id: runID,
+        replayed: Boolean(existing),
+      }
     })
 
     const start = Effect.fn("CompanyProjectExecution.start")(function* (input: {
@@ -827,6 +1792,10 @@ export const layer = Layer.effect(
         capability_packs: ["product-charter@1"],
         decision_scope: ["Project Charter", "任务边界", "初始依赖关系"],
         resource_scope: ["artifacts/project-charter.json"],
+        inputs: [input.goal],
+        expected_outputs: ["Project Charter", "依赖有序的 Work Items"],
+        validators: ["Charter Definition of Ready", "每个 Work Item 可独立验收"],
+        disposition: "retain",
         model_group: "ultra",
         risk_level: "medium",
         review_status: "not_required",
@@ -866,18 +1835,38 @@ export const layer = Layer.effect(
     }) {
       const project = yield* projects.get(input.project_id)
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
-      if (project.status !== "blocked") throw new Error(`Company project ${project.id} cannot retry from ${project.status}`)
+      if (project.status !== "blocked")
+        throw new Error(`Company project ${project.id} cannot retry from ${project.status}`)
       const selectedModel = input.provider_id || input.model_id ? yield* resolveModel(input) : model(project)
       const updated = yield* projects.setModel({
         id: project.id,
         provider_id: selectedModel?.providerID,
         model_id: selectedModel?.modelID,
       })
-      const blocked = (yield* projects.listWorkItems(project.id)).filter(
+      const items = yield* projects.listWorkItems(project.id)
+      const blocked = items.filter(
         (item) => item.status === "blocked" || item.status === "failed",
       )
       if (!blocked.length) throw new Error(`Company project ${project.id} has no retryable work items`)
-      yield* Effect.forEach(blocked, (item) => projects.retryWorkItem(item.id), { discard: true })
+      const rejectedReviewers = blocked.flatMap((reviewer) => {
+        if (reviewer.kind !== "reviewer" || !reviewer.parent_id) return []
+        const worker = items.find((item) => item.id === reviewer.parent_id)
+        return worker?.status === "completed" && worker.review_status === "rejected"
+          ? [{ worker, reviewer }]
+          : []
+      })
+      yield* Effect.forEach(
+        rejectedReviewers,
+        ({ worker, reviewer }) =>
+          projects.reworkRejectedReview({ worker_id: worker.id, reviewer_id: reviewer.id }),
+        { discard: true },
+      )
+      const reworkedReviewers = new Set(rejectedReviewers.map(({ reviewer }) => reviewer.id))
+      yield* Effect.forEach(
+        blocked.filter((item) => !reworkedReviewers.has(item.id)),
+        (item) => projects.retryWorkItem(item.id),
+        { discard: true },
+      )
       const planner = blocked.find((item) => item.kind === "planner")
       const resumed = yield* projects.transition({
         id: project.id,
@@ -886,7 +1875,13 @@ export const layer = Layer.effect(
         reason: "保留任务树和失败 Attempt，使用新一次执行继续项目",
       })
       const run_id = planner
-        ? yield* launchPlanner(resumed, { ...planner, status: "pending" })
+        ? project.source_thread_id
+          ? yield* launchApprovedCharter(
+              resumed,
+              { ...planner, status: "pending" },
+              approvedCharterFromProject((yield* projects.getCharter(project.id))!),
+            )
+          : yield* launchPlanner(resumed, { ...planner, status: "pending" })
         : yield* startReadyWave(resumed.id)
       if (!run_id) throw new Error(`Company project ${project.id} has no ready work item after retry`)
       return { project: (yield* projects.get(updated.id))!, run_id }
@@ -926,13 +1921,15 @@ export const layer = Layer.effect(
       return run_id ? { gate, run_id } : { gate }
     })
 
-    return Service.of({ start, retry, resolveGate, cancel })
+    return Service.of({ start, startFromCharter, retry, resolveGate, cancel })
   }),
 )
 
 export const defaultLayer = layer.pipe(
   Layer.provide(CompanyProject.defaultLayer),
   Layer.provide(CompanyAgent.defaultLayer),
+  Layer.provide(CompanyRecruitment.defaultLayer),
+  Layer.provide(Conversation.defaultLayer),
   Layer.provide(Delegation.defaultLayer),
   Layer.provide(Provider.defaultLayer),
   Layer.provide(Reputation.defaultLayer),

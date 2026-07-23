@@ -35,6 +35,11 @@ const prefixes = {
   executionMessage: "exmsg",
   runtimeHome: "rhome",
   skillSnapshot: "ssnap",
+  capabilityNeed: "cneed",
+  teamSelection: "tsel",
+  agentPerformance: "aperf",
+  employmentReview: "erev",
+  department: "dept",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {

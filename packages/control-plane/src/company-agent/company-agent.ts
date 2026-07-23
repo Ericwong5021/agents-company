@@ -5,6 +5,7 @@ import { Context, Effect, Layer, Schema, Types } from "effect"
 import { Database } from "../storage"
 import { CompanyAgentTable } from "./company-agent.sql"
 import { CompanyAgentID } from "./schema"
+import { CompanyID } from "@/company/schema"
 import {
   agentDir,
   agentPrivateDir,
@@ -34,7 +35,9 @@ import { parseFrontMatter, stringifyFrontMatter, type FrontMatter } from "@/work
 
 export const Info = Schema.Struct({
   id: CompanyAgentID,
-  lifecycle: Schema.Literals(["candidate", "employee"]),
+  company_id: Schema.optional(Schema.String),
+  role_key: Schema.optional(Schema.String),
+  lifecycle: Schema.Literals(["candidate", "assigned", "employee", "archived"]),
   name: Schema.String,
   description: Schema.optional(Schema.String),
   public_profile: Schema.optional(Schema.String),
@@ -63,7 +66,9 @@ export type Info = Types.DeepMutable<Schema.Schema.Type<typeof Info>>
 
 export const PublicInfo = z.object({
   id: CompanyAgentID.zod,
-  lifecycle: z.enum(["candidate", "employee"]),
+  company_id: CompanyID.optional(),
+  role_key: z.string().optional(),
+  lifecycle: z.enum(["candidate", "assigned", "employee", "archived"]),
   name: z.string(),
   description: z.string().optional(),
   public_profile: z.string().optional(),
@@ -83,6 +88,8 @@ export type PublicInfo = z.infer<typeof PublicInfo>
 export function toPublicInfo(info: Info): PublicInfo {
   return PublicInfo.parse({
     id: info.id,
+    company_id: info.company_id,
+    role_key: info.role_key,
     lifecycle: info.lifecycle,
     name: info.name,
     description: info.description,
@@ -110,7 +117,9 @@ export const CreateInput = z.object({
     .min(1)
     .regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with dashes"),
   name: z.string().min(1),
-  lifecycle: z.enum(["candidate", "employee"]).optional(),
+  company_id: CompanyID.optional(),
+  role_key: z.string().min(1).optional(),
+  lifecycle: z.enum(["candidate", "assigned", "employee", "archived"]).optional(),
   description: z.string().optional(),
   system_prompt: z.string().optional(),
   instruct: z.string().optional(),
@@ -242,7 +251,7 @@ async function ensureAgentDocumentFrontMatter(
 type Row = typeof CompanyAgentTable.$inferSelect
 
 function orgContextFromRow(row: Row): OrgContext | undefined {
-  if (!row.org_layer) return undefined
+  if (!row.org_layer && !row.department && !row.reports_to && !row.responsibilities) return undefined
   return {
     org_layer: row.org_layer ?? undefined,
     department: row.department ?? undefined,
@@ -254,7 +263,9 @@ function orgContextFromRow(row: Row): OrgContext | undefined {
 function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
   return {
     id: row.id as CompanyAgentID,
-    lifecycle: row.lifecycle === "candidate" ? "candidate" : "employee",
+    company_id: row.company_id ?? undefined,
+    role_key: row.role_key ?? undefined,
+    lifecycle: z.enum(["candidate", "assigned", "employee", "archived"]).parse(row.lifecycle),
     name: row.name,
     description: row.description ?? undefined,
     preferred_runtime: row.preferred_runtime,
@@ -290,10 +301,32 @@ async function readFileIfExists(filePath: string): Promise<string | undefined> {
   return readMarkdownBody(filePath)
 }
 
-async function ensurePublicProfile(id: CompanyAgentID, name: string, description?: string, org?: OrgContext): Promise<void> {
+async function ensurePublicProfile(
+  id: CompanyAgentID,
+  name: string,
+  description?: string,
+  org?: OrgContext,
+): Promise<void> {
   const profile = Bun.file(agentPublicProfilePath(id))
-  if (await profile.exists()) return
+  const publicRole = [
+    "## Public Role",
+    "",
+    `- Organization layer: ${org?.org_layer ?? "execution"}`,
+    `- Department: ${org?.department ?? "Unassigned"}`,
+    `- Responsibilities: ${org?.responsibilities?.join("; ") ?? "To be assigned"}`,
+  ].join("\n")
   await fs.mkdir(agentPublicDir(id), { recursive: true })
+  if (await profile.exists()) {
+    const content = await profile.text()
+    const start = content.indexOf("\n## Public Role\n")
+    const next = start === -1 ? -1 : content.indexOf("\n## ", start + 2)
+    const updated =
+      start === -1
+        ? `${content.trimEnd()}\n\n${publicRole}\n`
+        : `${content.slice(0, start + 1)}${publicRole}${next === -1 ? "\n" : content.slice(next)}`
+    if (updated !== content) await Bun.write(agentPublicProfilePath(id), updated)
+    return
+  }
   await Bun.write(
     agentPublicProfilePath(id),
     [
@@ -301,11 +334,7 @@ async function ensurePublicProfile(id: CompanyAgentID, name: string, description
       "",
       description ?? "Agent Company professional agent.",
       "",
-      "## Public Role",
-      "",
-      `- Organization layer: ${org?.org_layer ?? "execution"}`,
-      `- Department: ${org?.department ?? "Unassigned"}`,
-      `- Responsibilities: ${org?.responsibilities?.join("; ") ?? "To be assigned"}`,
+      publicRole,
     ].join("\n") + "\n",
   )
 }
@@ -692,9 +721,15 @@ async function writeAgentFiles(
 export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: CompanyAgentID) => Effect.Effect<Info | undefined>
-  readonly list: () => Effect.Effect<Info[]>
+  readonly list: (input?: {
+    company_id?: string
+    lifecycle?: "candidate" | "assigned" | "employee" | "archived"
+  }) => Effect.Effect<Info[]>
   readonly update: (input: UpdateInput) => Effect.Effect<Info>
+  readonly assign: (id: CompanyAgentID) => Effect.Effect<Info>
+  readonly release: (id: CompanyAgentID) => Effect.Effect<Info>
   readonly promote: (id: CompanyAgentID) => Effect.Effect<Info>
+  readonly archive: (id: CompanyAgentID) => Effect.Effect<Info>
   readonly remove: (id: CompanyAgentID) => Effect.Effect<void>
 }
 
@@ -715,6 +750,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             .insert(CompanyAgentTable)
             .values({
               id: input.id,
+              company_id: input.company_id ?? null,
+              role_key: input.role_key ?? null,
               lifecycle: input.lifecycle ?? "candidate",
               name: input.name,
               description: input.description ?? null,
@@ -777,9 +814,19 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return yield* Effect.promise(() => fromRowWithFiles(row))
     })
 
-    const list = Effect.fn("CompanyAgent.list")(function* () {
+    const list = Effect.fn("CompanyAgent.list")(function* (input?: {
+      company_id?: string
+      lifecycle?: "candidate" | "assigned" | "employee" | "archived"
+    }) {
       const rows = yield* Effect.sync(() => Database.use((db) => db.select().from(CompanyAgentTable).all()))
-      const infos = yield* Effect.promise(() => Promise.all(rows.map((row) => fromRowWithFiles(row))))
+      const infos = yield* Effect.promise(() =>
+        Promise.all(
+          rows
+            .filter((row) => !input?.company_id || row.company_id === input.company_id)
+            .filter((row) => !input?.lifecycle || row.lifecycle === input.lifecycle)
+            .map((row) => fromRowWithFiles(row)),
+        ),
+      )
       return infos
     })
 
@@ -835,34 +882,68 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return info
     })
 
+    const setLifecycle = Effect.fn("CompanyAgent.setLifecycle")(function* (
+      id: CompanyAgentID,
+      lifecycle: "candidate" | "assigned" | "employee" | "archived",
+    ) {
+      const updated = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyAgentTable)
+            .set({ lifecycle, time_updated: Date.now() })
+            .where(eq(CompanyAgentTable.id, id))
+            .returning()
+            .get(),
+        ),
+      )
+      if (!updated) throw new Error(`Company agent lifecycle update failed: ${id}`)
+      const info = yield* Effect.promise(() => fromRowWithFiles(updated))
+      yield* Effect.sync(() =>
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: { type: Event.Updated.type, properties: toPublicInfo(info) },
+        }),
+      )
+      return info
+    })
+
+    const assign = Effect.fn("CompanyAgent.assign")(function* (id: CompanyAgentID) {
+      const agent = yield* get(id)
+      if (!agent) throw new Error(`Company agent not found: ${id}`)
+      if (agent.lifecycle === "archived") throw new Error(`Archived company agent cannot be assigned: ${id}`)
+      if (agent.lifecycle !== "candidate") return agent
+      return yield* setLifecycle(id, "assigned")
+    })
+
+    const release = Effect.fn("CompanyAgent.release")(function* (id: CompanyAgentID) {
+      const agent = yield* get(id)
+      if (!agent) throw new Error(`Company agent not found: ${id}`)
+      if (agent.lifecycle === "archived")
+        throw new Error(`Archived company agent cannot return to the candidate pool: ${id}`)
+      if (agent.lifecycle !== "assigned") return agent
+      return yield* setLifecycle(id, "candidate")
+    })
+
     const promote = Effect.fn("CompanyAgent.promote")(function* (id: CompanyAgentID) {
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, id)).get()),
       )
       if (!row) throw new Error(`Company agent not found: ${id}`)
       if (row.lifecycle === "employee") return yield* Effect.promise(() => fromRowWithFiles(row))
+      if (row.lifecycle === "archived") throw new Error(`Archived company agent cannot be promoted: ${id}`)
       const info = yield* Effect.promise(() => fromRowWithFiles(row))
       if (!info.public_profile || !info.instruct || !info.system_prompt)
         throw new Error("Candidate needs a public profile, private SOUL, and instruction document before promotion")
-      const updated = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
-            .update(CompanyAgentTable)
-            .set({ lifecycle: "employee", time_updated: Date.now() })
-            .where(eq(CompanyAgentTable.id, id))
-            .returning()
-            .get(),
-        ),
-      )
-      if (!updated) throw new Error(`Company agent promotion failed: ${id}`)
-      const promoted = yield* Effect.promise(() => fromRowWithFiles(updated))
-      yield* Effect.sync(() =>
-        GlobalBus.emit("event", {
-          directory: "global",
-          payload: { type: Event.Updated.type, properties: toPublicInfo(promoted) },
-        }),
-      )
-      return promoted
+      return yield* setLifecycle(id, "employee")
+    })
+
+    const archive = Effect.fn("CompanyAgent.archive")(function* (id: CompanyAgentID) {
+      const agent = yield* get(id)
+      if (!agent) throw new Error(`Company agent not found: ${id}`)
+      if (agent.lifecycle === "assigned")
+        throw new Error(`Assigned company agent must be released before archival: ${id}`)
+      if (agent.lifecycle === "archived") return agent
+      return yield* setLifecycle(id, "archived")
     })
 
     const remove = Effect.fn("CompanyAgent.remove")(function* (id: CompanyAgentID) {
@@ -879,7 +960,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       )
     })
 
-    return { create, get, list, update, promote, remove }
+    return { create, get, list, update, assign, release, promote, archive, remove }
   }),
 )
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { authorization, Server } from "../../src/server/server"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import { CompanyAgentID } from "../../src/company-agent/schema"
-import { CompanyTable } from "../../src/company/company.sql"
+import { ApprovalPolicyTable, CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import {
@@ -60,17 +60,46 @@ function seed() {
       .run()
     db.insert(CompanyAgentTable)
       .values([
-        { id: "board-ceo", company_id: companyID, role_key: "ceo", name: "CEO", time_created: 1, time_updated: 1 },
-        { id: "board-cto", company_id: companyID, role_key: "cto", name: "CTO", time_created: 1, time_updated: 1 },
+        {
+          id: "board-ceo",
+          company_id: companyID,
+          role_key: "ceo",
+          lifecycle: "employee",
+          name: "CEO",
+          org_layer: "board",
+          reports_to: null,
+          responsibilities: JSON.stringify(["公司目标与最终取舍"]),
+          time_created: 1,
+          time_updated: 1,
+        },
+        {
+          id: "board-cto",
+          company_id: companyID,
+          role_key: "cto",
+          lifecycle: "employee",
+          name: "CTO",
+          org_layer: "board",
+          reports_to: "board-ceo",
+          responsibilities: JSON.stringify(["技术方向与工程质量"]),
+          time_created: 1,
+          time_updated: 1,
+        },
         {
           id: "board-product-lead",
           company_id: companyID,
           role_key: "product_lead",
+          lifecycle: "employee",
           name: "Product Lead",
+          org_layer: "board",
+          reports_to: "board-ceo",
+          responsibilities: JSON.stringify(["用户价值与验收"]),
           time_created: 1,
           time_updated: 1,
         },
       ])
+      .run()
+    db.insert(ApprovalPolicyTable)
+      .values({ company_id: companyID, preset: "balanced", time_created: 1, time_updated: 1 })
       .run()
   })
   ensureCompanyChannels({ companyID, boardAgentIDs: ["board-ceo", "board-cto", "board-product-lead"], now: 1 })
@@ -422,6 +451,65 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
       Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
         ?.state,
     ).toBe("interrupted")
+  })
+
+  test.serial("formally decides a completed Board thread through the global HTTP route", async () => {
+    const accepted = await send(BOARD_CHANNEL_ID, "Create a verifiable delivery project.", requestID())
+    const { runID, threadID, rootNeedID } = await accepted.json()
+    Database.use((db) =>
+      db
+        .update(ConversationRunTable)
+        .set({
+          state: "completed",
+          retryable: false,
+          time_finished: Date.now(),
+          time_updated: Date.now(),
+        })
+        .where(eq(ConversationRunTable.id, runID))
+        .run(),
+    )
+
+    const response = await Server.Default().app.request(
+      `/company/threads/${threadID}/actions?company_id=${companyID}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "decide",
+          request_id: requestID(),
+          charter: {
+            title: "Verifiable delivery project",
+            value: "Prove the Board decision reaches executable project state.",
+            deliverables: ["A persisted project plan"],
+            acceptance_criteria: ["The HTTP response contains the project and planning work item"],
+            scope: ["Formal Board task issuance"],
+            non_goals: ["No unrelated product work"],
+            constraints: ["Use the company-bound repository"],
+            resources: [{ kind: "repository", scope: "company repository", disposition: "retain" }],
+            risks: [{ description: "Runtime context may be absent", mitigation: "Enter the bound repository instance" }],
+            dri_agent_id: "board-cto",
+            milestones: ["Project planning starts"],
+            open_decisions: [],
+          },
+        }),
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      kind: "decide",
+      project: {
+        company_id: companyID,
+        root_need_id: rootNeedID,
+        source_thread_id: threadID,
+        owner_agent_id: "board-cto",
+      },
+      charter: { title: "Verifiable delivery project", dri_agent_id: "board-cto" },
+      plan: { phase: "planning" },
+      work_item: { kind: "planner", status: "pending" },
+      project_channel: { kind: "project" },
+      replayed: false,
+    })
   })
 
   test.serial("includes company-visible Board signals in the company feed", async () => {

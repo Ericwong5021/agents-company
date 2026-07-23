@@ -8,6 +8,7 @@ import {
   agentInstructPath,
   agentKanbanPath,
   agentMemoryDir,
+  agentPublicProfilePath,
   agentRelationshipsPath,
   agentSettingsPath,
   agentSkillsDir,
@@ -111,6 +112,51 @@ describe("company agent file bundle", () => {
         expect(await exists(agentSkillsDir(created.id))).toBe(true)
         expect(await exists(agentMemoryDir(created.id))).toBe(true)
         expect(await exists(agentDir(created.id))).toBe(true)
+      },
+    })
+  })
+
+  test("refreshes public organization facts without overwriting the agent profile", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const created = await run((svc) =>
+          svc.create({
+            id: "promotion-candidate",
+            name: "Promotion Candidate",
+            description: "Evidence-backed delivery specialist.",
+            system_prompt: "# Private Soul",
+            instruct: "# Private Instructions",
+          }),
+        )
+        await Bun.write(
+          agentPublicProfilePath(created.id),
+          [
+            "# Promotion Candidate",
+            "",
+            "Agent-authored public summary.",
+            "",
+            "## Public Role",
+            "",
+            "- Organization layer: execution",
+            "- Department: Unassigned",
+            "- Responsibilities: To be assigned",
+            "",
+            "## Highlights",
+            "",
+            "- Preserved across organization updates.",
+            "",
+          ].join("\n"),
+        )
+
+        expect((await run((svc) => svc.promote(created.id))).lifecycle).toBe("employee")
+        const updated = await run((svc) => svc.update({ id: created.id, department: "delivery-assurance" }))
+
+        expect(updated.public_profile).toContain("Agent-authored public summary.")
+        expect(updated.public_profile).toContain("## Highlights")
+        expect(updated.public_profile).toContain("- Department: delivery-assurance")
+        expect(updated.public_profile).not.toContain("- Department: Unassigned")
       },
     })
   })

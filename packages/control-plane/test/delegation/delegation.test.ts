@@ -35,7 +35,10 @@ function makeMockCompanyAgentService(agents: CompanyAgent.Info[]) {
     get: (id: CompanyAgentID) => Effect.succeed(agents.find((a) => a.id === id)),
     list: () => Effect.succeed(agents),
     update: () => Effect.die("unexpected update"),
+    assign: () => Effect.die("unexpected assign"),
+    release: () => Effect.die("unexpected release"),
     promote: () => Effect.die("unexpected promote"),
+    archive: () => Effect.die("unexpected archive"),
     remove: () => Effect.die("unexpected remove"),
   })
 }
@@ -1250,10 +1253,7 @@ describe("escalation after failed approaches", () => {
         const auditEvents = yield* auditSvc.listByRootNeed("need-1")
         expect(auditEvents.some((event) => event.kind === "escalation" && event.action === "escalated")).toBe(true)
         return result
-      }).pipe(
-        Effect.provide(provideDelegation(agentSvc, msgSvc)),
-        Effect.provide(AuditEvent.defaultLayer),
-      ),
+      }).pipe(Effect.provide(provideDelegation(agentSvc, msgSvc)), Effect.provide(AuditEvent.defaultLayer)),
     )
 
     expect(result.action).toBe("escalate")

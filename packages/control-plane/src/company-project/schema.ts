@@ -1,4 +1,5 @@
 import z from "zod"
+import { NamedError } from "@agents-company/shared/util/error"
 
 export const ProjectStatus = z.enum([
   "intake",
@@ -38,6 +39,10 @@ export type PlanPhase = z.infer<typeof PlanPhase>
 
 export const Project = z.object({
   id: z.string(),
+  company_id: z.string().optional(),
+  root_need_id: z.string().optional(),
+  source_thread_id: z.string().optional(),
+  decision_request_id: z.string().uuid().optional(),
   goal: z.string(),
   title: z.string(),
   status: ProjectStatus,
@@ -54,12 +59,59 @@ export const Project = z.object({
 })
 export type Project = z.infer<typeof Project>
 
-export const ProjectCharter = z.object({
+export const CharterRisk = z
+  .object({
+    description: z.string().trim().min(1),
+    mitigation: z.string().trim().min(1),
+  })
+  .strict()
+export type CharterRisk = z.infer<typeof CharterRisk>
+
+export const CharterResource = z
+  .object({
+    kind: z.enum(["file", "application", "web", "data", "repository", "other"]),
+    scope: z.string().trim().min(1),
+    disposition: z.string().trim().min(1),
+  })
+  .strict()
+export type CharterResource = z.infer<typeof CharterResource>
+
+export const BoardProjectCharter = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    value: z.string().trim().min(1),
+    deliverables: z.array(z.string().trim().min(1)).min(1),
+    acceptance_criteria: z.array(z.string().trim().min(1)).min(1),
+    scope: z.array(z.string().trim().min(1)).min(1),
+    non_goals: z.array(z.string().trim().min(1)).min(1),
+    constraints: z.array(z.string().trim().min(1)).min(1),
+    resources: z.array(CharterResource).min(1),
+    risks: z.array(CharterRisk),
+    dri_agent_id: z.string().trim().min(1),
+    milestones: z.array(z.string().trim().min(1)).min(1),
+    open_decisions: z.array(z.string().trim().min(1)).max(0),
+  })
+  .strict()
+export type BoardProjectCharter = z.infer<typeof BoardProjectCharter>
+
+export const BoardProjectDecisionNotReady = NamedError.create(
+  "BoardProjectDecisionNotReady",
+  z
+    .object({
+      thread_id: z.string().min(1),
+      reason: z.enum(["not_board_thread", "run_not_completed", "dri_not_board_member", "open_decisions"]),
+    })
+    .strict(),
+)
+
+export const BoardProjectDecisionConflict = NamedError.create(
+  "BoardProjectDecisionConflict",
+  z.object({ thread_id: z.string().min(1), request_id: z.string().uuid() }).strict(),
+)
+
+export const ProjectCharter = BoardProjectCharter.extend({
   project_id: z.string(),
-  scope: z.array(z.string()),
   success_criteria: z.array(z.string()),
-  constraints: z.array(z.string()),
-  acceptance_criteria: z.array(z.string()),
   policy: DeliveryPolicy,
   created_at: z.number(),
   updated_at: z.number(),
@@ -84,6 +136,7 @@ export const WorkItem = z.object({
   id: z.string(),
   project_id: z.string(),
   plan_id: z.string(),
+  source_task_key: z.string().optional(),
   parent_id: z.string().optional(),
   title: z.string(),
   description: z.string(),
@@ -93,6 +146,11 @@ export const WorkItem = z.object({
   capability_packs: z.array(z.string()),
   decision_scope: z.array(z.string()),
   resource_scope: z.array(z.string()),
+  inputs: z.array(z.string()),
+  expected_outputs: z.array(z.string()),
+  validators: z.array(z.string()),
+  disposition: z.string(),
+  depends_on: z.array(z.string()),
   model_group: z.enum(["ultra", "standard", "lite"]),
   risk_level: z.enum(["low", "medium", "high"]),
   review_status: z.enum(["pending", "running", "accepted", "rejected", "not_required"]),
@@ -160,6 +218,16 @@ export const Artifact = z.object({
   created_at: z.number(),
 })
 export type Artifact = z.infer<typeof Artifact>
+
+export const ProjectEvent = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  type: z.string(),
+  actor_id: z.string().optional(),
+  data: z.record(z.string(), z.unknown()),
+  created_at: z.number(),
+})
+export type ProjectEvent = z.infer<typeof ProjectEvent>
 
 export const ApprovalGate = z.object({
   id: z.string(),

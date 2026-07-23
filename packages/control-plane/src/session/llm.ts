@@ -3,7 +3,7 @@ import { Provider } from "@/provider"
 import { Log } from "@/util"
 import { Context, Duration, Effect, Layer, Record, Schedule, Ref } from "effect"
 import * as Stream from "effect/Stream"
-import { streamText, wrapLanguageModel, type ModelMessage, type Tool, tool, jsonSchema } from "ai"
+import { streamText, wrapLanguageModel, type ModelMessage, type Tool, type ToolChoice, tool, jsonSchema } from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
 import { ProviderTransform } from "@/provider"
@@ -197,7 +197,7 @@ export type StreamInput = {
   small?: boolean
   tools: Record<string, Tool>
   retries?: number
-  toolChoice?: "auto" | "required" | "none"
+  toolChoice?: ToolChoice<Record<string, Tool>>
   agentID?: string
 }
 

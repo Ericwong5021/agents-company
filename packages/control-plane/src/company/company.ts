@@ -19,6 +19,8 @@ import {
   ApprovalPolicyUpdateInput,
   BootstrapInput,
   type BootstrapInput as BootstrapInputType,
+  CompanyProviderBindingInput,
+  type CompanyProviderBindingInput as CompanyProviderBindingInputType,
   type CompanyState,
   CompanyAlreadyInitialized,
   CompanyCorruptState,
@@ -145,7 +147,8 @@ function current(db: TxOrDb): CompanyState {
     .where(eq(RepositoryBindingTable.company_id, company.id))
     .all()
   const members = db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.company_id, company.id)).all()
-  if (policies.length !== 1 || bindings.length > 1 || members.length !== BOARD.length) return corrupt()
+  const boardMembers = members.filter((member) => member.org_layer === "board")
+  if (policies.length !== 1 || bindings.length > 1 || boardMembers.length !== BOARD.length) return corrupt()
 
   const policy = policies[0]
   const binding = bindings[0]
@@ -153,7 +156,7 @@ function current(db: TxOrDb): CompanyState {
   const setupGoal = db.select().from(CompanySetupGoalTable).where(eq(CompanySetupGoalTable.company_id, company.id)).get()
 
   const board = BOARD.map((member) => {
-    const row = members.find((item) => item.id === member.id)
+    const row = boardMembers.find((item) => item.id === member.id)
     const values = row ? responsibilities(row.responsibilities) : undefined
     if (
       !row ||
@@ -175,7 +178,7 @@ function current(db: TxOrDb): CompanyState {
       responsibilities: values,
     }
   })
-  if (members.some((row) => !BOARD.some((member) => member.id === row.id))) return corrupt()
+  if (boardMembers.some((row) => !BOARD.some((member) => member.id === row.id))) return corrupt()
 
   const parsed = CompanyReadyState.safeParse({
     state: "ready",
@@ -260,6 +263,7 @@ function database<A>(fn: () => A) {
 
 export interface Interface {
   readonly current: () => Effect.Effect<CompanyState, unknown>
+  readonly bindProvider: (input: CompanyProviderBindingInputType) => Effect.Effect<CompanyReadyState, unknown>
   readonly updateApprovalPolicy: (input: ApprovalPolicyUpdateInput) => Effect.Effect<CompanyReadyState, unknown>
   readonly inspectRepository: (path: string) => Effect.Effect<RepositoryCandidate, unknown, Git.Service | Project.Service>
   readonly ensureManagedRepository: () => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
@@ -298,7 +302,7 @@ export const layer = Layer.effect(
       } satisfies Candidate
     })
 
-    const validateProvider = Effect.fn("Company.validateProvider")(function* (input: BootstrapInputType) {
+    const validateProvider = Effect.fn("Company.validateProvider")(function* (input: CompanyProviderBindingInputType) {
       if (unsupportedProviders.has(input.provider_id))
         return yield* Effect.fail(new CompanyProviderUnsupported({ provider_id: input.provider_id }))
       yield* CompanySetupInstance.provide(
@@ -369,6 +373,28 @@ export const layer = Layer.effect(
             .where(eq(ApprovalPolicyTable.company_id, COMPANY_ID))
             .run()
           tx.update(CompanyTable).set({ time_updated: now }).where(eq(CompanyTable.id, COMPANY_ID)).run()
+          const state = current(tx)
+          if (state.state !== "ready") return corrupt()
+          return state
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const bindProvider = Effect.fn("Company.bindProvider")(function* (raw: CompanyProviderBindingInputType) {
+      const input = CompanyProviderBindingInput.parse(raw)
+      yield* validateProvider(input)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          ensureDefaultCompany(tx as Database.Transaction)
+          const now = Date.now()
+          tx.update(CompanyTable)
+            .set({
+              default_provider_id: input.provider_id,
+              default_model_id: input.model_id,
+              time_updated: now,
+            })
+            .where(eq(CompanyTable.id, COMPANY_ID))
+            .run()
           const state = current(tx)
           if (state.state !== "ready") return corrupt()
           return state
@@ -484,6 +510,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       current: getCurrent,
+      bindProvider,
       updateApprovalPolicy,
       inspectRepository,
       ensureManagedRepository,
