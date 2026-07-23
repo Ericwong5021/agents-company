@@ -13,5 +13,6 @@ if (!existsSync(bridge)) {
   process.exit(0)
 }
 
+if (lstatSync(bridge).isDirectory()) process.exit(0)
 if (lstatSync(bridge).isSymbolicLink() && realpathSync(bridge) === realpathSync(target)) process.exit(0)
 throw new Error(`Expected ${bridge} to be the generated link to ${target}.`)

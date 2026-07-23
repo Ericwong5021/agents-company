@@ -63,7 +63,12 @@ const { data: snapshot, pending, refresh } = useCompanySnapshot()
               <NuxtLink to="/company/board" class="company-text-link">Open board</NuxtLink>
             </div>
             <div class="company-list">
-              <article v-for="project in snapshot.projects" :key="project.id" class="company-project">
+              <NuxtLink
+                v-for="project in snapshot.projects"
+                :key="project.id"
+                :to="`/company/projects/${encodeURIComponent(project.id)}`"
+                class="company-project"
+              >
                 <div>
                   <strong>{{ project.title }}</strong>
                   <span>{{ project.status }}</span>
@@ -71,7 +76,7 @@ const { data: snapshot, pending, refresh } = useCompanySnapshot()
                 <div class="company-progress" :aria-label="`${project.progress}% complete`">
                   <span :style="{ width: `${project.progress}%` }" />
                 </div>
-              </article>
+              </NuxtLink>
               <p v-if="!snapshot.projects.length" class="company-empty">No active projects.</p>
             </div>
           </section>

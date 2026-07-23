@@ -8,6 +8,7 @@ const loadingSnapshot: CompanySnapshot = {
     id: "loading",
     name: "Agent Company",
     provider: "Loading",
+    providerConfigured: false,
     approvalPolicy: "Loading",
   },
   stats: {

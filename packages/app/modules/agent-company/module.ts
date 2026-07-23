@@ -51,6 +51,36 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       method: "get",
       handler: resolver.resolve("./runtime/server/api/snapshot.get"),
     })
+    addServerHandler({
+      route: "/api/agent-company/board",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/board.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/board",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/board.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/board/decide",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/board-decide.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/provider",
+      method: "put",
+      handler: resolver.resolve("./runtime/server/api/provider.put"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/project.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID/retry",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/project-retry.post"),
+    })
 
     extendPages((pages) => {
       const loginPage = pages.find((page) => page.path === "/login")
@@ -74,6 +104,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
           name: "agent-company-employees",
           path: "/company/employees",
           file: resolver.resolve("./runtime/app/pages/company/employees.vue"),
+        },
+        {
+          name: "agent-company-project",
+          path: "/company/projects/:projectID",
+          file: resolver.resolve("./runtime/app/pages/company/projects/[projectID].vue"),
         },
         {
           name: "agent-company-settings",

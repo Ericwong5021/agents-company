@@ -14,6 +14,7 @@ const fixture: CompanySnapshot = {
     id: "local-agent-company",
     name: "Agent Company",
     provider: "Local Control Plane",
+    providerConfigured: false,
     approvalPolicy: "Balanced",
   },
   stats: {
@@ -146,6 +147,7 @@ function normalizeMessages(value: unknown, agents: CompanyAgent[]): CompanyMessa
       author: author?.name ?? (entry.author.kind === "user" ? "You" : "System"),
       role: author?.role ?? text(entry.author.kind, "system"),
       body: text(entry.body),
+      threadID: text(entry.sourceThreadID) || undefined,
       time: created
         ? new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(created))
         : "",
@@ -196,7 +198,9 @@ export default defineEventHandler(async (event): Promise<CompanySnapshot> => {
       id: companyID,
       name: text(state.company.name, "Agent Company"),
       provider,
+      providerConfigured: isRecord(state.company.provider),
       approvalPolicy,
+      setupGoal: isRecord(state.company.setup_goal) ? text(state.company.setup_goal.body) || undefined : undefined,
     },
     stats: {
       online: agents.filter((agent) => agent.presence === "online").length,
