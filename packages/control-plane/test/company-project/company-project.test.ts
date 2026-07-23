@@ -6,14 +6,38 @@ import { Instance } from "../../src/project/instance"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
+import { Company } from "../../src/company"
 
 afterEach(async () => {
   await Instance.disposeAll()
 })
 
-const it = testEffect(Layer.mergeAll(CompanyProject.defaultLayer, CrossSpawnSpawner.defaultLayer))
+const it = testEffect(Layer.mergeAll(CompanyProject.defaultLayer, Company.defaultLayer, CrossSpawnSpawner.defaultLayer))
 
 describe("CompanyProject adaptive execution state", () => {
+  it.live("inherits the current company approval preset in a new Project Charter", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const company = yield* Company.Service
+        const service = yield* CompanyProject.Service
+        yield* company.updateApprovalPolicy({ preset: "autonomous" })
+        const project = yield* service.create({ goal: "Deliver within the company approval policy" })
+        const charter = yield* service.createCharter({
+          project_id: project.id,
+          scope: [project.goal],
+          success_criteria: ["Delivered"],
+          acceptance_criteria: ["Policy inherited"],
+        })
+
+        expect(charter.policy).toMatchObject({
+          source_approval_preset: "autonomous",
+          require_high_risk_approval: false,
+          require_human_merge: false,
+        })
+      }),
+    ),
+  )
+
   it.live("persists a dependency tree, role contract, review state, and writable worktree from the Charter", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {

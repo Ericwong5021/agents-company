@@ -60,6 +60,40 @@ let logpath = ""
 export function file() {
   return logpath
 }
+
+export type ReadResult = {
+  available: boolean
+  content: string
+  cursor: number
+  reset: boolean
+  source: string
+}
+
+export async function read(input: { cursor?: number; source?: string } = {}): Promise<ReadResult> {
+  if (!logpath) return { available: false, content: "", cursor: 0, reset: true, source: "" }
+
+  const handle = await fs.open(logpath, "r").catch(() => undefined)
+  if (!handle) return { available: false, content: "", cursor: 0, reset: true, source: "" }
+
+  using _ = { [Symbol.dispose]: () => void handle.close() }
+  const stat = await handle.stat()
+  const source = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`
+  const reset = input.source !== undefined ? input.source !== source : (input.cursor ?? 0) > stat.size
+  const cursor = reset ? 0 : Math.min(input.cursor ?? 0, stat.size)
+  const buffer = Buffer.alloc(stat.size - cursor)
+  const result = await handle.read(buffer, 0, buffer.length, cursor)
+  const complete = buffer.subarray(0, result.bytesRead)
+  const newline = complete.lastIndexOf(10)
+
+  if (newline === -1) return { available: true, content: "", cursor, reset, source }
+  return {
+    available: true,
+    content: complete.subarray(0, newline + 1).toString("utf8"),
+    cursor: cursor + newline + 1,
+    reset,
+    source,
+  }
+}
 let stream: ReturnType<typeof createWriteStream> | undefined
 let written = 0
 let rotation = true

@@ -378,12 +378,17 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
       const monitor = Effect.fn("ConversationRuntime.monitor")(function* (input: RuntimeInput & Started) {
         yield* Effect.sleep("200 millis")
         let visibleAgentMessages = 0
+        let biddingWatermark = ""
         while (yield* groupSessions.isBusy(input.groupSessionID)) {
           const agentMessages = (yield* groupSessions.messages(input.groupSessionID)).filter(
             (message) => message.roundNum === input.roundNum && message.role === "agent",
           ).length
-          if (agentMessages > visibleAgentMessages) {
+          const biddingState = (yield* groupSessions.biddings(input.groupSessionID))
+            .map((bidding) => `${bidding.id}:${bidding.time.updated}`)
+            .join("|")
+          if (agentMessages > visibleAgentMessages || biddingState !== biddingWatermark) {
             visibleAgentMessages = agentMessages
+            biddingWatermark = biddingState
             yield* bus
               .publish(ServerEvent.ThreadInvalidated, { thread_id: input.thread.id })
               .pipe(Effect.ignore)

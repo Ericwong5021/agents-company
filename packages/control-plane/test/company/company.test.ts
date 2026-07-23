@@ -99,6 +99,31 @@ describe.serial("Company bootstrap", () => {
     { timeout: 30_000 },
   )
 
+  test.serial("updates and persists the company approval preset", async () => {
+    await using repo = await tmpdir({ git: true, config: providerConfig })
+    await Instance.provide({
+      directory: repo.path,
+      fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
+    })
+
+    const updated = await Instance.provide({
+      directory: repo.path,
+      fn: () =>
+        AppRuntime.runPromise(
+          Company.Service.use((company) => company.updateApprovalPolicy({ preset: "strict" })),
+        ),
+    })
+    expect(updated.company.approval_policy.preset).toBe("strict")
+
+    const current = await Instance.provide({
+      directory: repo.path,
+      fn: () => AppRuntime.runPromise(Company.Service.use((company) => company.current())),
+    })
+    expect(current.state).toBe("ready")
+    if (current.state !== "ready") throw new Error("Expected ready state")
+    expect(current.company.approval_policy.preset).toBe("strict")
+  })
+
   test.serial("repairs orphan company rows into the default empty workspace", async () => {
     await using repo = await tmpdir({ git: true, config: providerConfig })
     Database.use((db) => db.insert(CompanyAgentTable).values({ id: "board-ceo", name: "Orphaned agent" }).run())

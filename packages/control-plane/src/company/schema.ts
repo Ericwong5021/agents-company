@@ -8,6 +8,12 @@ export type CompanyID = z.infer<typeof CompanyID>
 export const ApprovalPreset = z.enum(["autonomous", "balanced", "strict"]).meta({ ref: "ApprovalPreset" })
 export type ApprovalPreset = z.infer<typeof ApprovalPreset>
 
+export const ApprovalPolicyUpdateInput = z
+  .object({ preset: ApprovalPreset })
+  .strict()
+  .meta({ ref: "ApprovalPolicyUpdateInput" })
+export type ApprovalPolicyUpdateInput = z.infer<typeof ApprovalPolicyUpdateInput>
+
 export const AgentLifecycle = z.enum(["candidate", "assigned", "employee", "archived"])
 export type AgentLifecycle = z.infer<typeof AgentLifecycle>
 
@@ -137,6 +143,15 @@ export const CompanySetupGoalInput = z
   .strict()
   .meta({ ref: "CompanySetupGoalInput" })
 export type CompanySetupGoalInput = z.infer<typeof CompanySetupGoalInput>
+
+export const CompanyResetInput = z
+  .object({
+    confirmation: z.literal("RESET"),
+    clear_provider_config: z.boolean().default(false),
+  })
+  .strict()
+  .meta({ ref: "CompanyResetInput" })
+export type CompanyResetInput = z.infer<typeof CompanyResetInput>
 
 export const CompanyReadyState = z
   .object({

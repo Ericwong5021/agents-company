@@ -47,6 +47,7 @@ const configLayer = Layer.succeed(
     getConsoleState: () => Effect.succeed(emptyConsoleState),
     update: () => Effect.void,
     updateGlobal: (config) => Effect.succeed(config),
+    resetProviderSettings: () => Effect.void,
     invalidate: () => Effect.void,
     directories: () => Effect.succeed([]),
     waitForDependencies: () => Effect.void,

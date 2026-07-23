@@ -3,15 +3,13 @@
 import path from "node:path"
 import fs from "node:fs/promises"
 import { Script } from "@agents-company/script"
-import { createEmbeddedWebUIBundle, createExtensionManifest, loadMigrations } from "./build-support"
+import { createExtensionManifest, loadMigrations } from "./build-support"
 
 const root = path.resolve(import.meta.dir, "..")
 process.chdir(root)
 await import("./generate.ts")
 
-const embedded = process.argv.includes("--skip-embed-web-ui")
-  ? "export default {};"
-  : await createEmbeddedWebUIBundle(root)
+const embedded = "export default {};"
 const cleanExtensions = createExtensionManifest(root)
 await fs.rm(path.join(root, "dist", "node"), { recursive: true, force: true })
 const result = await Bun.build({

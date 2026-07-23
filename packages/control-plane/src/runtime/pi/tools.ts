@@ -47,6 +47,7 @@ function allowedCommand(command: string, args: string[], permissionMode: AgentRu
   if (args.some((arg) => /(^|--)(pre|hostname-bin|ext-diff|textconv|script-shell|preload|eval|require)(=|$)/i.test(arg))) {
     return false
   }
+  if (permissionMode === "full_access") return true
   if (command === "rg") return true
   if (command === "git") return ["diff", "status", "show", "log", "ls-files", "rev-parse"].includes(args[0] ?? "")
   if (command === "bun") {
@@ -81,11 +82,20 @@ function safeEnvironment() {
 }
 
 export type PiSkillLoader = (name: string) => Promise<string>
+export type PiDocReader = (path: string) => Promise<{ content: string; classification?: string }>
+export type PiCompanyProjectLister = () => Promise<
+  Array<{ id: string; title: string; goal: string; status: string; updated_at: number }>
+>
 
 export function createPiTools(
   spec: AgentRunSpec,
   allowedToolIDs: readonly string[],
-  options: { loadSkill?: PiSkillLoader; publishSignal?: boolean } = {},
+  options: {
+    loadSkill?: PiSkillLoader
+    readDoc?: PiDocReader
+    listCompanyProjects?: PiCompanyProjectLister
+    publishSignal?: boolean
+  } = {},
 ): AgentTool[] {
   const resolve = guard(spec.cwd)
   const tools: AgentTool[] = [
@@ -212,6 +222,44 @@ export function createPiTools(
         return text([stdout, stderr, `exit code: ${exitCode}`].filter(Boolean).join("\n"))
       },
     },
+    ...(options.readDoc
+      ? [
+          {
+            name: "read_doc",
+            label: "Read company document",
+            description:
+              "Read a company workspace document after the Control Plane checks its classification and this agent's ACL.",
+            parameters: Type.Object({
+              path: Type.String({ description: "Company workspace path, for example public/board/projects.md" }),
+            }),
+            execute: async (_callID: string, raw: unknown) => {
+              const input = raw as { path: string }
+              return text((await options.readDoc!(input.path)).content)
+            },
+          } satisfies AgentTool,
+        ]
+      : []),
+    ...(options.listCompanyProjects
+      ? [
+          {
+            name: "list_company_projects",
+            label: "List company projects",
+            description:
+              "Read the live company project registry. Use this instead of a Markdown board when answering current project counts or statuses.",
+            parameters: Type.Object({}),
+            execute: async () => {
+              const projects = await options.listCompanyProjects!()
+              const byStatus = Object.fromEntries(
+                [...new Set(projects.map((project) => project.status))].map((status) => [
+                  status,
+                  projects.filter((project) => project.status === status).length,
+                ]),
+              )
+              return text(JSON.stringify({ total: projects.length, by_status: byStatus, projects }, undefined, 2))
+            },
+          } satisfies AgentTool,
+        ]
+      : []),
     ...(options.loadSkill
       ? [
           {
@@ -253,7 +301,12 @@ export function createPiTools(
       : []),
   ]
   const allowed = new Set([
+    "read",
+    "glob",
+    "grep",
     ...allowedToolIDs,
+    ...(options.readDoc ? ["read_doc"] : []),
+    ...(options.listCompanyProjects ? ["list_company_projects"] : []),
     ...(options.loadSkill ? ["skill"] : []),
     ...(options.publishSignal ? ["publish_signal"] : []),
   ])

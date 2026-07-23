@@ -33,6 +33,42 @@ afterEach(async () => {
 })
 
 describe("Pi governed tools", () => {
+  test("always exposes the minimum read-only workspace tools", async () => {
+    const input = await workspace("read_only")
+
+    expect(createPiTools(input.spec, []).map((tool) => tool.name)).toEqual(["read", "glob", "grep"])
+  })
+
+  test("reads an ACL-authorized company document outside the repository cwd", async () => {
+    const input = await workspace("read_only")
+    const readDoc = createPiTools(input.spec, [], {
+      readDoc: async (docPath) => ({ content: `content:${docPath}`, classification: "public" }),
+    }).find((tool) => tool.name === "read_doc")!
+
+    await expect(
+      readDoc.execute("call-doc", { path: "public/board/projects.md" }, new AbortController().signal),
+    ).resolves.toMatchObject({ content: [{ text: "content:public/board/projects.md" }] })
+  })
+
+  test("reads live company project counts instead of relying on the Markdown board", async () => {
+    const input = await workspace("read_only")
+    const projects = createPiTools(input.spec, [], {
+      listCompanyProjects: async () => [
+        { id: "project-1", title: "One", goal: "Ship one", status: "executing", updated_at: 1 },
+        { id: "project-2", title: "Two", goal: "Ship two", status: "executing", updated_at: 2 },
+        { id: "project-3", title: "Three", goal: "Ship three", status: "planning", updated_at: 3 },
+      ],
+    }).find((tool) => tool.name === "list_company_projects")!
+
+    await expect(projects.execute("call-projects", {}, new AbortController().signal)).resolves.toMatchObject({
+      content: [
+        {
+          text: expect.stringContaining('"executing": 2'),
+        },
+      ],
+    })
+  })
+
   test("rejects path escape before reading", async () => {
     const input = await workspace("read_only")
     const read = createPiTools(input.spec, ["read"]).find((tool) => tool.name === "read")!
@@ -45,7 +81,11 @@ describe("Pi governed tools", () => {
   test("does not expose write tools in read-only mode", async () => {
     const input = await workspace("read_only")
 
-    expect(createPiTools(input.spec, ["read", "write", "edit"]).map((tool) => tool.name)).toEqual(["read"])
+    expect(createPiTools(input.spec, ["read", "write", "edit"]).map((tool) => tool.name)).toEqual([
+      "read",
+      "glob",
+      "grep",
+    ])
   })
 
   test("loads a skill only through an explicit tool call", async () => {
@@ -53,7 +93,7 @@ describe("Pi governed tools", () => {
     const tools = createPiTools(input.spec, [], { loadSkill: async (name) => `loaded:${name}` })
     const skill = tools.find((tool) => tool.name === "skill")!
 
-    expect(tools.map((tool) => tool.name)).toEqual(["skill"])
+    expect(tools.map((tool) => tool.name)).toEqual(["read", "glob", "grep", "skill"])
     await expect(skill.execute("call-skill", { name: "release-review" }, new AbortController().signal)).resolves.toMatchObject({
       content: [{ text: "loaded:release-review" }],
     })
@@ -114,6 +154,28 @@ describe("Pi governed tools", () => {
     await expect(
       writableBash.execute("call-6", { command: "bun install", args: [] }, new AbortController().signal),
     ).resolves.toBeDefined()
+  })
+
+  test("allows unrestricted non-shell commands only in full-access mode", async () => {
+    const balanced = await workspace("workspace_write")
+    const balancedBash = createPiTools(balanced.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    await expect(
+      balancedBash.execute(
+        "call-balanced-command",
+        { command: "bun", args: ["-e", "process.stdout.write('blocked')"] },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("not allowed")
+
+    const autonomous = await workspace("full_access")
+    const autonomousBash = createPiTools(autonomous.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    await expect(
+      autonomousBash.execute(
+        "call-autonomous-command",
+        { command: "bun", args: ["-e", "process.stdout.write('allowed')"] },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({ content: [{ text: "allowed\nexit code: 0" }] })
   })
 
   test("terminates a timed-out command together with descendants holding output pipes", async () => {

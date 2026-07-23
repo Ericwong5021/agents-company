@@ -3,9 +3,10 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Effect } from "effect"
 import z from "zod"
 import { Auth } from "@/auth"
-import { Company, CompanySetupInstance } from "@/company"
+import { Company, CompanyReset, CompanySetupInstance } from "@/company"
 import * as CompanyActivity from "@/company/activity"
 import {
+  ApprovalPolicyUpdateInput,
   BootstrapInput,
   CompanyAlreadyInitialized,
   CompanyCorruptState,
@@ -18,6 +19,7 @@ import {
   CompanyProviderNotConnected,
   CompanyProviderUnsupported,
   CompanyReadyState,
+  CompanyResetInput,
   CompanyRepositoryNotGit,
   CompanySetupGoalInput,
   CompanyState,
@@ -233,6 +235,29 @@ export const CompanyRoutes = lazy(() =>
       async (c) => c.json(CompanyActivity.list(c.req.valid("query").company_id)),
     )
     .put(
+      "/approval-policy",
+      describeRoute({
+        operationId: "company.approvalPolicyUpdate",
+        summary: "Update the company default approval policy",
+        responses: {
+          200: {
+            description: "Company state with the updated approval policy",
+            content: { "application/json": { schema: resolver(CompanyReadyState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", ApprovalPolicyUpdateInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            Company.Service.use((service) => service.updateApprovalPolicy(c.req.valid("json"))),
+          ),
+        ),
+    )
+    .put(
       "/setup-goal",
       describeRoute({
         operationId: "company.deferSetupGoal",
@@ -250,6 +275,27 @@ export const CompanyRoutes = lazy(() =>
       validator("json", CompanySetupGoalInput, productValidationHook),
       async (c) =>
         c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.deferSetupGoal(c.req.valid("json"))))),
+    )
+    .post(
+      "/reset",
+      describeRoute({
+        operationId: "company.reset",
+        summary: "Clear all local company data, optionally including provider configuration",
+        responses: {
+          200: {
+            description: "Fresh local company state",
+            content: { "application/json": { schema: resolver(CompanyReadyState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", CompanyResetInput, productValidationHook),
+      async (c) => {
+        await AppRuntime.runPromise(CompanyReset.reset(c.req.valid("json")))
+        return c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.current())))
+      },
     )
     .get(
       "/providers",

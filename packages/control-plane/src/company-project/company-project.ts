@@ -6,6 +6,7 @@ import { Database } from "@/storage"
 import { Global } from "@/global"
 import { Identifier } from "@/id/id"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
+import { Company } from "@/company"
 import {
   CompanyApprovalGateTable,
   CompanyArtifactTable,
@@ -245,6 +246,7 @@ export class Service extends Context.Service<Service, Interface>()("@control-pla
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
+    const company = yield* Company.Service
     const event = (project_id: string, type: string, data: Record<string, unknown>, actor_id?: string) =>
       Effect.sync(() => {
         Database.use((db) =>
@@ -370,12 +372,15 @@ export const layer = Layer.effect(
     }) {
       if (!(yield* get(input.project_id))) throw new Error(`Company project not found: ${input.project_id}`)
       const now = Date.now()
+      const companyState = yield* company.current().pipe(Effect.orDie)
+      if (companyState.state !== "ready") throw new Error("Company approval policy is unavailable")
+      const preset = companyState.company.approval_policy.preset
       const policy = DeliveryPolicy.parse(
         input.policy ?? {
-          source_approval_preset: "balanced",
-          allow_workspace_write: true,
-          require_high_risk_approval: true,
-          require_human_merge: true,
+          source_approval_preset: preset,
+          allow_workspace_write: preset !== "strict",
+          require_high_risk_approval: preset !== "autonomous",
+          require_human_merge: preset !== "autonomous",
           require_clean_worktree: true,
           require_main_branch_verification: true,
         },
@@ -1298,6 +1303,6 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer
+export const defaultLayer = layer.pipe(Layer.provide(Company.defaultLayer))
 
 export * as CompanyProject from "./company-project"

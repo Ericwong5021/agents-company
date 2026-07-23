@@ -22,6 +22,7 @@ describe("network authentication", () => {
     expect((await built.app.request("/")).status).not.toBe(401)
     expect((await built.app.request("/company")).status).toBe(401)
     expect((await built.app.request("/global/event")).status).toBe(401)
+    expect((await built.app.request("/global/log")).status).toBe(401)
     expect((await built.app.request("/company?auth_token=" + btoa("agentcompany:secret"))).status).toBe(401)
 
     const response = await built.app.request("/company", {

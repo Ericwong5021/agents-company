@@ -1,5 +1,5 @@
 import type { Bid, BidLevel, BidType, AddressedAs } from "./bidding.types"
-import { Stream, Effect } from "effect"
+import { Stream, Effect, Ref } from "effect"
 import { LLM } from "@/session/llm"
 import { Provider } from "@/provider"
 import { Agent } from "@/agent/agent"
@@ -13,6 +13,7 @@ export interface ProbeInput {
   transcript: string
   members: Array<{ name: string; role: string }>
   groupSessionID: string
+  onPublicRationale?: (reason: string) => Effect.Effect<void>
 }
 
 export function buildProbePrompt(input: ProbeInput): string {
@@ -39,6 +40,7 @@ export function buildProbePrompt(input: ProbeInput): string {
     `Use must for a blocker, correction, direct responsibility, or material objection; want for a new answer or high-value addition; could for a non-essential addition; pass when there is no new value or the role is not relevant.`,
     `Use addressedAs=direct only when the user explicitly addresses this agent, mention for a role or @ mention, otherwise none.`,
     `Output ONLY a JSON object with fields: level, type, addressedAs, reason.`,
+    `reason must be a complete public decision note in the language of the last event: explain relevance, distinct value or why passing, material risk or opportunity, and the proposed next action. Do not reveal private hidden reasoning.`,
   ]
   return lines.join("\n")
 }
@@ -64,7 +66,7 @@ export function parseBid(raw: string): Bid {
       level,
       type,
       addressedAs,
-      reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 200) : "",
+      reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 1200) : "",
     }
   } catch {
     return fallbackPass("invalid JSON")
@@ -128,7 +130,8 @@ export function probeOne(
       time: { created: Date.now() },
     }
 
-    const text = yield* ctx.llm
+    const text = yield* Ref.make("")
+    yield* ctx.llm
       .stream({
         agent: probeAgent,
         user,
@@ -143,11 +146,29 @@ export function probeOne(
       })
       .pipe(
         Stream.filter((e) => "type" in e && e.type === "text-delta"),
-        Stream.map((e: any) => e.text),
-        Stream.mkString,
-        Effect.orElseSucceed(() => ""),
+        Stream.runForEach((event) =>
+          Effect.gen(function* () {
+            const raw = (yield* Ref.get(text)) + event.text
+            yield* Ref.set(text, raw)
+            const reason = partialPublicRationale(raw)
+            if (reason && input.onPublicRationale) yield* input.onPublicRationale(reason)
+          }),
+        ),
+        Effect.orElseSucceed(() => undefined),
       )
 
-    return parseBid(text)
+    return parseBid(yield* Ref.get(text))
   }).pipe(Effect.catchCause(() => Effect.succeed(fallbackPass("probe call failed"))))
+}
+
+function partialPublicRationale(raw: string) {
+  const start = raw.match(/"reason"\s*:\s*"([\s\S]*)$/)?.[1]
+  if (!start) return undefined
+  const content = start.match(/^((?:\\.|[^"\\])*)/)?.[1] ?? start
+  const reason = content
+    .replaceAll("\\n", "\n")
+    .replaceAll('\\"', '"')
+    .replaceAll("\\\\", "\\")
+    .trim()
+  return reason.length ? reason.slice(0, 1200) : undefined
 }

@@ -24,7 +24,7 @@ import {
   SignalProjectionID,
 } from "../../src/conversation/schema"
 import { Conversation } from "../../src/conversation"
-import { GroupMessageTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
+import { GroupMessageTable, GroupSessionBiddingTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
 import { GroupSessionID } from "../../src/group-session/schema"
 import { ProjectTable } from "../../src/project/project.sql"
 import type { ProjectID } from "../../src/project/schema"
@@ -356,6 +356,29 @@ describe.serial("M2 conversation read model", () => {
           time_updated: 11,
         })
         .run()
+      db.insert(GroupSessionBiddingTable)
+        .values({
+          id: "bidding:ses_board-need:1",
+          group_session_id: groupSessionID,
+          round_num: 1,
+          state: "decided",
+          winner_agent_id: "board-cto",
+          bids_json: [
+            {
+              agentId: "board-cto",
+              state: "completed",
+              level: "want",
+              type: "answer",
+              addressedAs: "none",
+              reason: "技术评估能补充当前讨论。",
+              score: 6.5,
+              eligible: true,
+            },
+          ],
+          time_created: 12,
+          time_updated: 12,
+        })
+        .run()
       db.insert(ConversationRunTable)
         .values({
           id: ConversationRunID.parse("crun_board-need"),
@@ -403,11 +426,14 @@ describe.serial("M2 conversation read model", () => {
         }),
       ),
     ).rejects.toMatchObject({ name: "ConversationThreadNotVisible" })
-    expect(
-      (await run((conversation) => conversation.pageEntries({ companyID, threadID, principal: user }))).items.map(
-        (entry) => entry.type,
-      ),
-    ).toEqual(["agent_message", "message"])
+    const entries = await run((conversation) => conversation.pageEntries({ companyID, threadID, principal: user }))
+    expect(entries.items.map((entry) => entry.type)).toEqual(["bidding", "agent_message", "message"])
+    expect(entries.items.find((entry) => entry.type === "bidding")).toMatchObject({
+      bidding: {
+        state: "decided",
+        bids: [{ agentId: "board-cto", state: "completed", reason: "技术评估能补充当前讨论。" }],
+      },
+    })
     expect(
       await run((conversation) =>
         conversation.getSource({

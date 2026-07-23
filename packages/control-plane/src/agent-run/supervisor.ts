@@ -24,6 +24,8 @@ import { Provider } from "@/provider"
 import { ProviderID } from "@/provider/schema"
 import { CapabilityCatalog } from "@/capability"
 import { Skill } from "@/skill"
+import { listCompanyProjectSummaries } from "@/company-project/read-model"
+import { readDoc } from "@/workspace/read-doc"
 import { AgentRun } from "./agent-run"
 
 export const StartInput = AgentRunSpec.omit({ runID: true, runtimeHome: true }).extend({
@@ -123,7 +125,16 @@ export const layer = Layer.effect(
           createPiTools(
             spec,
             spec.capabilityPacks.flatMap((reference) => CapabilityCatalog.resolve(reference).tools),
-            { loadSkill: (name) => loadSkill(spec, name), publishSignal: spec.allowSignalPublishing },
+            {
+              loadSkill: (name) => loadSkill(spec, name),
+              readDoc: (docPath) =>
+                Effect.runPromise(readDoc({ agentId: spec.agentID, docPath })).then((result) => ({
+                  content: result.content,
+                  classification: result.frontMatter.classification,
+                })),
+              listCompanyProjects: listCompanyProjectSummaries,
+              publishSignal: spec.allowSignalPublishing,
+            },
           ),
       }),
     )
@@ -138,10 +149,6 @@ export const layer = Layer.effect(
     })
 
     const start = Effect.fn("AgentRunSupervisor.start")(function* (input: StartInput) {
-      if (input.permissionMode === "full_access") {
-        return yield* Effect.die(new Error("full_access requires an approval gate before an Agent Run can start"))
-      }
-
       const packs = input.capabilityPacks.map((reference) => CapabilityCatalog.resolve(reference))
       const availableSkills = yield* skills.available(undefined, input.agentID)
       const requiredCapabilities = [...new Set([

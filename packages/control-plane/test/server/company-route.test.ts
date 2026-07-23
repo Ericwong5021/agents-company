@@ -49,6 +49,55 @@ describe.serial("/company", () => {
     expect(await response.json()).toMatchObject({ capabilities: { board_messages: false } })
   })
 
+  test.serial("updates the company approval preset", async () => {
+    const app = Server.Default().app
+    const response = await app.request("/company/approval-policy", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ preset: "autonomous" }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      state: "ready",
+      company: { approval_policy: { preset: "autonomous" } },
+    })
+    expect(await (await app.request("/company")).json()).toMatchObject({
+      company: { approval_policy: { preset: "autonomous" } },
+    })
+  })
+
+  test.serial("resets local company data only after explicit confirmation", async () => {
+    const app = Server.Default().app
+    await app.request("/company/setup-goal", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "为新产品准备发布计划" }),
+    })
+
+    const rejected = await app.request("/company/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clear_provider_config: false }),
+    })
+    expect(rejected.status).toBe(400)
+
+    const response = await app.request("/company/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirmation: "RESET", clear_provider_config: false }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      state: "ready",
+      company: {
+        provider: null,
+        repository: null,
+        setup_goal: null,
+      },
+    })
+  })
+
   test.serial("rejects non-git repository inspection with a product error", async () => {
     await using directory = await nonGitDirectory()
     const response = await Server.Default().app.request("/company/repository/inspect", {
@@ -127,6 +176,8 @@ describe.serial("/company", () => {
     const spec = await Server.openapi()
     const operations = [
       { method: "get", path: "/company", statuses: ["200", "500"] },
+      { method: "put", path: "/company/approval-policy", statuses: ["200", "400", "500"] },
+      { method: "post", path: "/company/reset", statuses: ["200", "400", "500"] },
       { method: "get", path: "/company/providers", statuses: ["200", "500"] },
       { method: "get", path: "/company/providers/auth", statuses: ["200", "500"] },
       { method: "post", path: "/company/providers/models", statuses: ["200", "400"] },

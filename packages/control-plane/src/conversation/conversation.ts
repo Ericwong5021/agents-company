@@ -5,7 +5,7 @@ import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
-import { GroupMessageTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
+import { GroupMessageTable, GroupSessionBiddingTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
 import { GroupSessionID } from "@/group-session/schema"
 import { AgentRunEventTable, AgentRunTable, AgentRunUsageTable } from "@/agent-run/agent-run.sql"
 import { MessageTable, PartTable } from "@/session/session.sql"
@@ -163,6 +163,28 @@ export const ThreadAgentMessage = z
   })
   .strict()
 
+export const ThreadBidding = z
+  .object({
+    id: z.string().min(1),
+    roundNum: z.number().int().nonnegative(),
+    state: z.enum(["bidding", "decided"]).default("decided"),
+    winnerAgentID: z.string().optional(),
+    bids: z.array(
+      z.object({
+        agentId: z.string().min(1),
+        state: z.enum(["queued", "analyzing", "completed"]).default("completed"),
+        level: z.enum(["must", "want", "could", "pass"]).optional(),
+        type: z.enum(["objection", "answer", "question", "claim", "info", "support"]).optional(),
+        addressedAs: z.enum(["direct", "mention", "none"]).optional(),
+        reason: z.string().optional(),
+        score: z.number().optional(),
+        eligible: z.boolean().optional(),
+      }),
+    ),
+    time: z.object({ created: z.number().int(), updated: z.number().int() }),
+  })
+  .strict()
+
 export const ThreadEntry = z.discriminatedUnion("type", [
   z
     .object({
@@ -175,6 +197,12 @@ export const ThreadEntry = z.discriminatedUnion("type", [
     .object({
       type: z.literal("agent_message"),
       message: ThreadAgentMessage,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("bidding"),
+      bidding: ThreadBidding,
     })
     .strict(),
 ])
@@ -617,6 +645,13 @@ function readThreadEntries(input: {
           .where(and(inArray(GroupMessageTable.group_session_id, runtimeIDs), eq(GroupMessageTable.role, "agent")))
           .all()
       : []
+    const biddings = runtimeIDs.length
+      ? db
+          .select()
+          .from(GroupSessionBiddingTable)
+          .where(inArray(GroupSessionBiddingTable.group_session_id, runtimeIDs))
+          .all()
+      : []
     const evidenceByRun = new Map(
       agentMessages
         .flatMap((message) => (message.agent_run_id ? [message.agent_run_id] : []))
@@ -695,6 +730,25 @@ function readThreadEntries(input: {
           },
         },
       })),
+      ...biddings.flatMap((row) => {
+        const bids = ThreadBidding.shape.bids.safeParse(row.bids_json)
+        if (!bids.success) return []
+        return [{
+          id: `bidding:${row.id}`,
+          time_created: row.time_created,
+          entry: {
+            type: "bidding" as const,
+            bidding: {
+              id: row.id,
+              roundNum: row.round_num,
+              state: row.state,
+              winnerAgentID: row.winner_agent_id ?? undefined,
+              bids: bids.data,
+              time: { created: row.time_created, updated: row.time_updated },
+            },
+          },
+        }]
+      }),
     ]
       .filter(
         (row) =>

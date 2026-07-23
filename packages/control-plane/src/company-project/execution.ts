@@ -14,7 +14,7 @@ import * as WorkType from "@/work-type/work-type"
 import type { WorkTypeID } from "@/work-type/schema"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import { CompanyProject } from "./company-project"
-import type { ApprovalGate, Project, WorkItem } from "./schema"
+import type { ApprovalGate, DeliveryPolicy, Project, WorkItem } from "./schema"
 
 const workTypes = ["coding", "decision", "research", "writing", "design", "analysis"] as const
 const modelGroups = ["standard", "lite"] as const
@@ -159,7 +159,20 @@ const plannerScript = (goal: string, agentID: string, modelRef: string) =>
     ].join("\n"),
   )
 
-const workerScript = (goal: string, item: WorkItem, modelRef: string) =>
+const workerPermission = (item: WorkItem, policy: DeliveryPolicy, writeApproved: boolean) => {
+  if (item.work_type !== "coding") return "read_only" as const
+  if (policy.source_approval_preset === "autonomous") return "full_access" as const
+  if (policy.source_approval_preset === "strict" && !writeApproved) return "read_only" as const
+  return "workspace_write" as const
+}
+
+const workerScript = (
+  goal: string,
+  item: WorkItem,
+  modelRef: string,
+  policy: DeliveryPolicy,
+  writeApproved: boolean,
+) =>
   workflow(
     `company-project-worker-${item.work_type}`,
     [
@@ -187,7 +200,7 @@ const workerScript = (goal: string, item: WorkItem, modelRef: string) =>
           "workspaceRead",
           ...(item.work_type === "coding" ? ["workspaceWrite"] : []),
         ],
-        permissionMode: item.work_type === "coding" ? "workspace_write" : "read_only",
+        permissionMode: workerPermission(item, policy, writeApproved),
         model: modelRef,
         schema: schema(z.object({ summary: z.string(), submission: submissions[item.work_type] })),
         label: item.title,
@@ -463,6 +476,25 @@ export const layer = Layer.effect(
           yield* projects.transition({ id: project_id, status: "completed", actor_id: project.owner_agent_id ?? "system" })
         return
       }
+      const charter = yield* projects.getCharter(project.id)
+      if (!charter) throw new Error("Project Charter is missing")
+      const gates = yield* projects.listGates(project.id)
+      const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
+      if (
+        charter.policy.source_approval_preset === "strict" &&
+        ready.some((item) => item.kind === "worker" && item.work_type === "coding") &&
+        !writeApproved
+      ) {
+        if (!gates.some((gate) => gate.kind === "risk_approval" && gate.status === "pending"))
+          yield* projects.requestGate({
+            project_id: project.id,
+            kind: "risk_approval",
+            title: "批准 Agent 写入项目工作区",
+            summary: "当前公司使用“全部请求批准”。Agent 已完成只读规划，继续执行将允许其在隔离工作树中写入和运行验证命令。",
+            requested_by_agent_id: project.owner_agent_id,
+          })
+        return
+      }
       const nextStatus = ready.every((item) => item.kind === "reviewer") ? "reviewing" : "executing"
       if (project.status !== nextStatus)
         yield* projects.transition({ id: project.id, status: nextStatus, actor_id: project.owner_agent_id ?? "system" })
@@ -508,7 +540,13 @@ export const layer = Layer.effect(
               runID: yield* startRuntime({
                 project,
                 item,
-                script: workerScript(project.goal, item, agentModelRef(project, item.model_group)),
+                script: workerScript(
+                  project.goal,
+                  item,
+                  agentModelRef(project, item.model_group),
+                  charter.policy,
+                  writeApproved,
+                ),
                 workspace: worktree?.directory,
               }),
               worktree,
@@ -575,12 +613,32 @@ export const layer = Layer.effect(
               (candidate) => candidate.work_item_id === parent.id,
             )
             if (!parentWorktree) throw new Error(`Coding reviewer has no worktree for ${parent.id}`)
-            yield* projects.requestMergeApproval({
+            const gate = yield* projects.requestMergeApproval({
               id: parentWorktree.id,
               title: `批准合并：${parent.title}`,
               summary: `${parsed.summary}\n\n分支 ${parentWorktree.branch} 已通过 Work Type 验证、宿主命令与独立复核。`,
               requested_by_agent_id: item.owner_agent_id,
               review: parsed,
+            })
+            const charter = yield* projects.getCharter(project.id)
+            if (!charter || charter.policy.require_human_merge) return
+            yield* projects.resolveGate({ id: gate.id, decision: "approve", note: "公司自主权限策略自动批准" })
+            const merged = yield* projects.mergeWorktreeRun(parentWorktree.id)
+            yield* projects.addArtifact({
+              project_id: project.id,
+              work_item_id: merged.work_item_id,
+              kind: "merge_report",
+              title: "主分支自动合并与复验报告",
+              path: `artifacts/${merged.id}-merge.json`,
+              content: JSON.stringify(merged, null, 2) + "\n",
+              evidence: merged.verification,
+              created_by_agent_id: item.owner_agent_id,
+            })
+            yield* projects.transition({
+              id: project.id,
+              status: "reviewing",
+              actor_id: item.owner_agent_id ?? "system",
+              reason: "公司自主权限策略已完成自动合并",
             })
             }).pipe(
               Effect.catchCause((cause) => failure(item, String(cause))),

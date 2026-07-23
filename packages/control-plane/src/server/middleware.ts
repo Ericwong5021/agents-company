@@ -131,20 +131,22 @@ export function AuthMiddleware(auth: AuthMode): MiddlewareHandler<ServerEnv> {
   }
 }
 
+export function shouldLogServerRequest(path: string) {
+  return path !== "/log" && path !== "/global/log"
+}
+
 export const LoggerMiddleware: MiddlewareHandler = async (c, next) => {
-  const skip = c.req.path === "/log"
-  if (!skip) {
-    log.info("request", {
-      method: c.req.method,
-      path: c.req.path,
-    })
-  }
+  if (!shouldLogServerRequest(c.req.path)) return next()
+  log.info("request", {
+    method: c.req.method,
+    path: c.req.path,
+  })
   const timer = log.time("request", {
     method: c.req.method,
     path: c.req.path,
   })
   await next()
-  if (!skip) timer.stop()
+  timer.stop()
 }
 
 export function CorsMiddleware(opts?: { cors?: string[] }): MiddlewareHandler {

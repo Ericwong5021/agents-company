@@ -134,17 +134,19 @@ describe("workspace org context", () => {
           const visible = resolved.visibleDocs.map((doc) => slash(doc.path))
 
           expect(visible).toContain("public/org/structure.md")
-          expect(visible).toContain(`agents/${agentID}/SOUL.md`)
-          expect(visible).not.toContain(`agents/${otherID}/SOUL.md`)
+          expect(visible).toContain(`agents/${agentID}/private/SOUL.md`)
+          expect(visible).not.toContain(`agents/${otherID}/private/SOUL.md`)
           expect(visible).not.toContain("groups/p2-workspace-test/brief.md")
           expect(visible).not.toContain("public/board/strategy.md")
           expect(visible).not.toContain("public/policy/invalid-classification-p2.md")
+          expect(resolved.standingSummary).toContain("`public/org/structure.md`")
+          expect(resolved.standingSummary).not.toContain("- `org/structure.md`")
 
           expect(
             await Effect.runPromise(
               ReadDoc.readDoc({
                 agentId: agentID,
-                docPath: `agents/${agentID}/SOUL.md`,
+                docPath: `agents/${agentID}/private/SOUL.md`,
               }),
             ),
           ).toMatchObject({ granted: true })
@@ -152,7 +154,7 @@ describe("workspace org context", () => {
           const denied = await Effect.runPromise(
             ReadDoc.readDoc({
               agentId: agentID,
-              docPath: `agents/${otherID}/SOUL.md`,
+              docPath: `agents/${otherID}/private/SOUL.md`,
             }).pipe(Effect.exit),
           )
           expect(denied._tag).toBe("Failure")

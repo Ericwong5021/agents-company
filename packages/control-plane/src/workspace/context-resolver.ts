@@ -216,8 +216,7 @@ function buildStandingSummary(agentId: string, docs: VisibleDoc[], org?: OrgStru
   for (const [dir, dirDocs] of byDir) {
     parts.push(`### ${dir}/`)
     for (const doc of dirDocs) {
-      const relPath = doc.path.split(path.sep).slice(1).join("/")
-      parts.push(`- \`${relPath}\` [${doc.classification}] — ${doc.summary}`)
+      parts.push(`- \`${doc.path.replaceAll(path.sep, "/")}\` [${doc.classification}] — ${doc.summary}`)
     }
     parts.push("")
   }

@@ -28,28 +28,6 @@ export async function loadMigrations(root: string): Promise<Migration[]> {
   )
 }
 
-export async function createEmbeddedWebUIBundle(root: string) {
-  const app = path.join(root, "../app")
-  const build = Bun.spawn({
-    cmd: ["bun", "run", "build"],
-    cwd: app,
-    stdout: "inherit",
-    stderr: "inherit",
-  })
-  if ((await build.exited) !== 0) throw new Error("WebUI build failed")
-
-  const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: path.join(app, "dist") }))).sort()
-  const imports = files.map((file, index) => {
-    const spec = path.relative(root, path.join(app, "dist", file)).replaceAll("\\", "/")
-    return `import file_${index} from ${JSON.stringify(spec.startsWith(".") ? spec : "./" + spec)} with { type: "file" };`
-  })
-  return [
-    ...imports,
-    "export default {",
-    ...files.map((file, index) => "  " + JSON.stringify(file.replaceAll("\\", "/")) + ": file_" + index + ","),
-    "};",
-  ].join("\n")
-}
 
 export function createExtensionManifest(root: string) {
   const ext = path.join(root, "src", "ext")

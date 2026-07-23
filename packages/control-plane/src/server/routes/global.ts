@@ -108,25 +108,57 @@ export const GlobalHealthRoutes = lazy(() =>
 export const GlobalRoutes = lazy(() =>
   new Hono()
     .get(
+      "/log",
+      describeRoute({
+        summary: "Read Control Plane logs",
+        description: "Read the active Control Plane log incrementally from a byte cursor.",
+        operationId: "global.log",
+        responses: {
+          200: {
+            description: "Active runtime log chunk",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    available: z.boolean(),
+                    content: z.string(),
+                    cursor: z.number().int().nonnegative(),
+                    reset: z.boolean(),
+                    source: z.string(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          cursor: z.coerce.number().int().nonnegative().optional(),
+          source: z.string().optional(),
+        }),
+      ),
+      async (c) => c.json(await Log.read(c.req.valid("query"))),
+    )
+    .get(
       "/runtime",
       describeRoute({
         summary: "Discover Agent runtimes",
-        description: "Report installation, version, authentication and normalized capabilities for Pi, Codex and Claude Code.",
+        description:
+          "Report installation, version, authentication and normalized capabilities for Pi, Codex and Claude Code.",
         operationId: "global.runtime.list",
         responses: { 200: { description: "Available Agent runtimes" } },
       }),
       async (c) =>
-        c.json(
-          await AppRuntime.runPromise(
-            AgentRunSupervisor.Service.use((supervisor) => supervisor.discover()),
-          ),
-        ),
+        c.json(await AppRuntime.runPromise(AgentRunSupervisor.Service.use((supervisor) => supervisor.discover()))),
     )
     .get(
       "/readiness",
       describeRoute({
         summary: "Get local release readiness",
-        description: "Report local database, migration, durable-directory, and backup readiness without changing state.",
+        description:
+          "Report local database, migration, durable-directory, and backup readiness without changing state.",
         operationId: "global.readiness",
         responses: { 200: { description: "Local release readiness" } },
       }),
@@ -136,7 +168,8 @@ export const GlobalRoutes = lazy(() =>
       "/backup",
       describeRoute({
         summary: "Create a local release backup",
-        description: "Create a consistent SQLite snapshot and copy durable local state. Restore must be performed offline.",
+        description:
+          "Create a consistent SQLite snapshot and copy durable local state. Restore must be performed offline.",
         operationId: "global.backup",
         responses: { 200: { description: "Created local backup" } },
       }),

@@ -13,6 +13,15 @@ describe("group-session probe", () => {
         groupSessionID: "ses_test",
       }),
     ).toContain("Do not speak merely because of seniority")
+    expect(
+      buildProbePrompt({
+        persona: { name: "CEO", role: "ceo", description: "" },
+        lastEvent: "User: hi",
+        transcript: "",
+        members: [],
+        groupSessionID: "ses_test",
+      }),
+    ).toContain("complete public decision note")
   })
 
   test("passes safely when the optional probe agent is unavailable", async () => {

@@ -67,3 +67,39 @@ test("init cleanup prunes rotated dev.log archives", async () => {
   expect(archives).not.toContain(list[0]!)
   expect(archives).toContain(list.at(-1)!)
 })
+
+test("reads the active log incrementally with a stable source cursor", async () => {
+  await using tmp = await tmpdir()
+  Global.Path.log = tmp.path
+  await Log.init({ print: false, dev: false, level: "DEBUG" })
+
+  Log.create({ service: "log-reader-test" }).info("第一条日志", { status: "started" })
+
+  const first = await (async () => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const result = await Log.read()
+      if (result.content.includes("第一条日志")) return result
+      await Bun.sleep(10)
+    }
+    return Log.read()
+  })()
+
+  expect(first.available).toBe(true)
+  expect(first.content).toContain("INFO")
+  expect(first.content).toContain("status=started")
+  expect(first.cursor).toBeGreaterThan(0)
+
+  Log.create({ service: "log-reader-test" }).warn("第二条日志")
+  const second = await (async () => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const result = await Log.read({ cursor: first.cursor, source: first.source })
+      if (result.content.includes("第二条日志")) return result
+      await Bun.sleep(10)
+    }
+    return Log.read({ cursor: first.cursor, source: first.source })
+  })()
+
+  expect(second.reset).toBe(false)
+  expect(second.content).not.toContain("第一条日志")
+  expect(second.content).toContain("WARN")
+})

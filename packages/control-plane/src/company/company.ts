@@ -16,6 +16,7 @@ import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanySetupGoalTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
 import {
+  ApprovalPolicyUpdateInput,
   BootstrapInput,
   type BootstrapInput as BootstrapInputType,
   type CompanyState,
@@ -259,6 +260,7 @@ function database<A>(fn: () => A) {
 
 export interface Interface {
   readonly current: () => Effect.Effect<CompanyState, unknown>
+  readonly updateApprovalPolicy: (input: ApprovalPolicyUpdateInput) => Effect.Effect<CompanyReadyState, unknown>
   readonly inspectRepository: (path: string) => Effect.Effect<RepositoryCandidate, unknown, Git.Service | Project.Service>
   readonly ensureManagedRepository: () => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
   readonly bootstrap: (input: BootstrapInputType) => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
@@ -352,6 +354,24 @@ export const layer = Layer.effect(
           const result = current(tx)
           if (result.state !== "ready") return corrupt()
           return result
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const updateApprovalPolicy = Effect.fn("Company.updateApprovalPolicy")(function* (raw: ApprovalPolicyUpdateInput) {
+      const input = ApprovalPolicyUpdateInput.parse(raw)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          ensureDefaultCompany(tx as Database.Transaction)
+          const now = Date.now()
+          tx.update(ApprovalPolicyTable)
+            .set({ preset: input.preset, time_updated: now })
+            .where(eq(ApprovalPolicyTable.company_id, COMPANY_ID))
+            .run()
+          tx.update(CompanyTable).set({ time_updated: now }).where(eq(CompanyTable.id, COMPANY_ID)).run()
+          const state = current(tx)
+          if (state.state !== "ready") return corrupt()
+          return state
         }, { behavior: "immediate" }),
       )
     })
@@ -464,6 +484,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       current: getCurrent,
+      updateApprovalPolicy,
       inspectRepository,
       ensureManagedRepository,
       bootstrap,

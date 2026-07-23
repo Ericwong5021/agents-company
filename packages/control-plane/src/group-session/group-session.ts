@@ -1,7 +1,7 @@
 import z from "zod"
 import { Context, Effect, Layer, Ref, Stream } from "effect"
 import { Database, eq, and, desc } from "../storage"
-import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "./group-session.sql"
+import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable, GroupSessionBiddingTable } from "./group-session.sql"
 import { GroupContextPolicy, GroupSessionID } from "./schema"
 import { ChannelMessageID } from "@/conversation/schema"
 import { MessageID } from "../session/schema"
@@ -74,6 +74,28 @@ export const GroupMessage = z.object({
   time: z.object({ created: z.number(), updated: z.number() }),
 })
 export type GroupMessage = z.infer<typeof GroupMessage>
+
+export const GroupBidding = z.object({
+  id: z.string(),
+  groupSessionID: GroupSessionID.zod,
+  roundNum: z.number(),
+  state: z.enum(["bidding", "decided"]).default("decided"),
+  winnerAgentID: z.string().optional(),
+  bids: z.array(
+    z.object({
+      agentId: z.string(),
+      state: z.enum(["queued", "analyzing", "completed"]).default("completed"),
+      level: z.enum(["must", "want", "could", "pass"]).optional(),
+      type: z.enum(["objection", "answer", "question", "claim", "info", "support"]).optional(),
+      addressedAs: z.enum(["direct", "mention", "none"]).optional(),
+      reason: z.string().optional(),
+      score: z.number().optional(),
+      eligible: z.boolean().optional(),
+    }),
+  ),
+  time: z.object({ created: z.number(), updated: z.number() }),
+})
+export type GroupBidding = z.infer<typeof GroupBidding>
 
 // ---------------------------------------------------------------------------
 // Input schemas
@@ -220,6 +242,7 @@ export interface Interface {
   readonly interrupt: (id: GroupSessionID) => Effect.Effect<void>
   readonly isBusy: (id: GroupSessionID) => Effect.Effect<boolean>
   readonly messages: (id: GroupSessionID) => Effect.Effect<GroupMessage[]>
+  readonly biddings: (id: GroupSessionID) => Effect.Effect<GroupBidding[]>
   readonly remove: (id: GroupSessionID) => Effect.Effect<void>
 }
 
@@ -374,6 +397,34 @@ function insertGroupMessage(input: {
       .run(),
   )
   return id
+}
+
+function persistBidding(input: Omit<GroupBidding, "id" | "time">) {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(GroupSessionBiddingTable)
+      .values({
+        id: `bidding:${input.groupSessionID}:${input.roundNum}`,
+        group_session_id: input.groupSessionID,
+        round_num: input.roundNum,
+        state: input.state,
+        winner_agent_id: input.winnerAgentID ?? null,
+        bids_json: input.bids,
+        time_created: now,
+        time_updated: now,
+      })
+      .onConflictDoUpdate({
+        target: [GroupSessionBiddingTable.group_session_id, GroupSessionBiddingTable.round_num],
+        set: {
+          state: input.state,
+          winner_agent_id: input.winnerAgentID ?? null,
+          bids_json: input.bids,
+          time_updated: now,
+        },
+      })
+      .run(),
+  )
 }
 
 function extractMessageText(msg: MessageV2.WithParts): string {
@@ -743,33 +794,53 @@ export const layer: Layer.Layer<
       // Round 1: triggered by user message
       const speakersThisTurn = new Set(priorSpeakerIDs)
 
-      yield* bus.publish(Event.BiddingStarted, {
-        groupSessionID: params.groupSessionID,
-        roundNum: scheduler.state.round + 1,
-      })
+      const probeRound = (lastEvent: string) =>
+        Effect.gen(function* () {
+          const roundNum = scheduler.state.round + 1
+          const record = yield* Ref.make<Omit<GroupBidding, "id" | "time">>({
+            groupSessionID: params.groupSessionID,
+            roundNum,
+            state: "bidding",
+            bids: params.info.members.map((member) => ({ agentId: member.companyAgentID, state: "queued" })),
+          })
+          const persist = Effect.flatMap(Ref.get(record), (bidding) => Effect.sync(() => persistBidding(bidding)))
+          const update = (agentID: string, bid: Partial<GroupBidding["bids"][number]>) =>
+            Effect.gen(function* () {
+              yield* Ref.update(record, (bidding) => ({
+                ...bidding,
+                bids: bidding.bids.map((current) => current.agentId === agentID ? { ...current, ...bid } : current),
+              }))
+              yield* persist
+            })
+          yield* persist
+          yield* bus.publish(Event.BiddingStarted, { groupSessionID: params.groupSessionID, roundNum })
+          return yield* Effect.forEach(
+            params.info.members,
+            (member) =>
+              Effect.gen(function* () {
+                yield* update(member.companyAgentID, { state: "analyzing" })
+                const agent = agentInfos[member.companyAgentID]
+                const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
+                const bid = yield* probeOne(probeCtx, {
+                  persona: {
+                    name: agent?.name ?? member.companyAgentID,
+                    role: member.companyAgentID,
+                    description: agent?.description ?? "",
+                  },
+                  lastEvent,
+                  transcript,
+                  members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
+                  groupSessionID: params.groupSessionID,
+                  onPublicRationale: (reason) => update(member.companyAgentID, { state: "analyzing", reason }),
+                })
+                yield* update(member.companyAgentID, { ...bid, state: "completed" })
+                return { agentId: member.companyAgentID, bid }
+              }),
+            { concurrency: MEMBER_CONCURRENCY },
+          )
+        })
 
-      let bids = yield* Effect.forEach(
-        params.info.members,
-        (member) =>
-          Effect.gen(function* () {
-            const agent = agentInfos[member.companyAgentID]
-            const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
-            const probeInput: ProbeInput = {
-              persona: {
-                name: agent?.name ?? member.companyAgentID,
-                role: member.companyAgentID,
-                description: agent?.description ?? "",
-              },
-              lastEvent: `User sent a new message: ${params.userText}`,
-              transcript,
-              members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
-              groupSessionID: params.groupSessionID,
-            }
-            const bid = yield* probeOne(probeCtx, probeInput)
-            return { agentId: member.companyAgentID, bid }
-          }),
-        { concurrency: MEMBER_CONCURRENCY },
-      )
+      let bids = yield* probeRound(`User sent a new message: ${params.userText}`)
 
       if (yield* isInterrupted()) return
 
@@ -780,12 +851,15 @@ export const layer: Layer.Layer<
       {
         const arb = scheduler.lastArbitration
         if (arb) {
-          yield* bus.publish(Event.BiddingCompleted, {
+          const bidding = {
             groupSessionID: params.groupSessionID,
             roundNum: scheduler.state.round,
-            winnerId: selection.type === "winner" || selection.type === "human_fallback" ? selection.agentId : arb.winnerId,
+            state: "decided" as const,
+            winnerAgentID:
+              selection.type === "winner" || selection.type === "human_fallback" ? selection.agentId : arb.winnerId ?? undefined,
             bids: arb.scored.map((s) => ({
               agentId: s.agentId,
+              state: "completed" as const,
               level: s.bid.level,
               type: s.bid.type,
               addressedAs: s.bid.addressedAs,
@@ -793,6 +867,13 @@ export const layer: Layer.Layer<
               score: s.score,
               eligible: s.eligible,
             })),
+          }
+          yield* Effect.sync(() => persistBidding(bidding))
+          yield* bus.publish(Event.BiddingCompleted, {
+            groupSessionID: bidding.groupSessionID,
+            roundNum: bidding.roundNum,
+            winnerId: bidding.winnerAgentID ?? null,
+            bids: bidding.bids,
           })
         }
       }
@@ -962,33 +1043,7 @@ export const layer: Layer.Layer<
             speakersThisTurn.add(speakerId)
           }
 
-          yield* bus.publish(Event.BiddingStarted, {
-            groupSessionID: params.groupSessionID,
-            roundNum: scheduler.state.round + 1,
-          })
-
-          bids = yield* Effect.forEach(
-            params.info.members,
-            (member) =>
-              Effect.gen(function* () {
-                const agent = agentInfos[member.companyAgentID]
-                const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
-                const probeInput: ProbeInput = {
-                  persona: {
-                    name: agent?.name ?? member.companyAgentID,
-                    role: member.companyAgentID,
-                    description: agent?.description ?? "",
-                  },
-                  lastEvent: `Agent ${speakerName} just spoke in the shared discussion.`,
-                  transcript,
-                  members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
-                  groupSessionID: params.groupSessionID,
-                }
-                const bid = yield* probeOne(probeCtx, probeInput)
-                return { agentId: member.companyAgentID, bid }
-              }),
-            { concurrency: MEMBER_CONCURRENCY },
-          )
+          bids = yield* probeRound(`Agent ${speakerName} just spoke in the shared discussion.`)
           if (yield* isInterrupted()) return
           selection = scheduler.decide(bids)
 
@@ -996,12 +1051,14 @@ export const layer: Layer.Layer<
           {
             const arb = scheduler.lastArbitration
             if (arb) {
-              yield* bus.publish(Event.BiddingCompleted, {
+              const bidding = {
                 groupSessionID: params.groupSessionID,
                 roundNum: scheduler.state.round,
-                winnerId: arb.winnerId,
+                state: "decided" as const,
+                winnerAgentID: arb.winnerId ?? undefined,
                 bids: arb.scored.map((s) => ({
                   agentId: s.agentId,
+                  state: "completed" as const,
                   level: s.bid.level,
                   type: s.bid.type,
                   addressedAs: s.bid.addressedAs,
@@ -1009,6 +1066,13 @@ export const layer: Layer.Layer<
                   score: s.score,
                   eligible: s.eligible,
                 })),
+              }
+              yield* Effect.sync(() => persistBidding(bidding))
+              yield* bus.publish(Event.BiddingCompleted, {
+                groupSessionID: bidding.groupSessionID,
+                roundNum: bidding.roundNum,
+                winnerId: bidding.winnerAgentID ?? null,
+                bids: bidding.bids,
               })
             }
           }
@@ -1141,6 +1205,32 @@ export const layer: Layer.Layer<
       )
     })
 
+    const biddings = Effect.fn("GroupSession.biddings")(function* (id: GroupSessionID) {
+      const rows = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(GroupSessionBiddingTable)
+            .where(eq(GroupSessionBiddingTable.group_session_id, id))
+            .orderBy(GroupSessionBiddingTable.round_num, GroupSessionBiddingTable.time_created)
+            .all(),
+        ),
+      )
+      return rows.flatMap((row) => {
+        const bids = GroupBidding.shape.bids.safeParse(row.bids_json)
+        if (!bids.success) return []
+        return [{
+          id: row.id,
+          groupSessionID: row.group_session_id,
+          roundNum: row.round_num,
+          state: row.state,
+          winnerAgentID: row.winner_agent_id ?? undefined,
+          bids: bids.data,
+          time: { created: row.time_created, updated: row.time_updated },
+        }]
+      })
+    })
+
     // --- remove ---
 
     const remove = Effect.fn("GroupSession.remove")(function* (id: GroupSessionID) {
@@ -1157,7 +1247,7 @@ export const layer: Layer.Layer<
       yield* bus.publish(Event.Deleted, { id })
     })
 
-    return Service.of({ create, get, list, chat, resume, promptMember, interrupt, isBusy, messages, remove })
+    return Service.of({ create, get, list, chat, resume, promptMember, interrupt, isBusy, messages, biddings, remove })
   }),
 )
 

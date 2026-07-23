@@ -536,6 +536,7 @@ export interface Interface {
   readonly getConsoleState: () => Effect.Effect<ConsoleState>
   readonly update: (config: Info) => Effect.Effect<void>
   readonly updateGlobal: (config: Info) => Effect.Effect<Info>
+  readonly resetProviderSettings: () => Effect.Effect<void>
   readonly invalidate: (wait?: boolean) => Effect.Effect<void>
   readonly directories: () => Effect.Effect<string[]>
   readonly waitForDependencies: () => Effect.Effect<void>
@@ -1110,12 +1111,22 @@ export const layer = Layer.effect(
       return next
     })
 
+    const resetProviderSettings = Effect.fn("Config.resetProviderSettings")(function* () {
+      const file = globalConfigFile()
+      const before = (yield* readConfigFile(file)) ?? "{}"
+      const existing = ConfigParse.schema(Info, ConfigParse.jsonc(before, file), file)
+      yield* fs.writeFileString(file, JSON.stringify(withoutProviderSettings(existing), null, 2)).pipe(Effect.orDie)
+      yield* fs.writeFileString(providerSettingsFile(), "{}").pipe(Effect.orDie)
+      yield* invalidate(true)
+    })
+
     return Service.of({
       get,
       getGlobal,
       getConsoleState,
       update,
       updateGlobal,
+      resetProviderSettings,
       invalidate,
       directories,
       waitForDependencies,

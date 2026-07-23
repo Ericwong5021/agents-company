@@ -4,7 +4,7 @@ import { $ } from "bun"
 import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
-import { createEmbeddedWebUIBundle, createExtensionManifest, loadMigrations } from "./build-support"
+import { createExtensionManifest, loadMigrations } from "./build-support"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -25,8 +25,7 @@ console.log(`Loaded ${migrations.length} migrations`)
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
-const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
-const embeddedFileMap = skipEmbedWebUi ? null : await createEmbeddedWebUIBundle(dir)
+const embeddedFileMap = null
 
 const allTargets: {
   os: string

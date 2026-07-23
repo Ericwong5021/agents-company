@@ -90,3 +90,26 @@ export const GroupMessageTable = sqliteTable(
     uniqueIndex("group_message_agent_run_idx").on(table.agent_run_id),
   ],
 )
+
+// Stores the auditable outcome of each speaking round. The brief bid reason is
+// intentionally separate from private model reasoning, so it can be shown in
+// the conversation as a transparent coordination record.
+export const GroupSessionBiddingTable = sqliteTable(
+  "group_session_bidding",
+  {
+    id: text().primaryKey(),
+    group_session_id: text()
+      .$type<GroupSessionID>()
+      .notNull()
+      .references(() => GroupSessionTable.id, { onDelete: "cascade" }),
+    round_num: integer().notNull(),
+    state: text().$type<"bidding" | "decided">().notNull().default("bidding"),
+    winner_agent_id: text(),
+    bids_json: text({ mode: "json" }).$type<unknown>().notNull(),
+    ...Timestamps,
+  },
+  (table) => [
+    uniqueIndex("group_session_bidding_group_round_idx").on(table.group_session_id, table.round_num),
+    index("group_session_bidding_group_created_idx").on(table.group_session_id, table.time_created),
+  ],
+)
