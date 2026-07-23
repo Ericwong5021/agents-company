@@ -1,5 +1,4 @@
 import { defineConfig } from "electron-vite"
-import appPlugin from "@agents-company/app/vite"
 import * as fs from "node:fs/promises"
 import path from "node:path"
 
@@ -63,8 +62,6 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [appPlugin],
-    publicDir: "../../../app/public",
     root: "src/renderer",
     define: {
       "import.meta.env.VITE_AGENTCOMPANY_CHANNEL": JSON.stringify(channel),

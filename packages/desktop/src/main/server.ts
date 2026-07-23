@@ -45,7 +45,7 @@ export async function spawnLocalServer(
   report("environment_prepared")
   const { Log, Server } = await import("virtual:control-plane-server")
   report("module_loaded")
-  await Log.init({ level: "WARN", print: false })
+  await Log.init({ level: "INFO", print: false })
   report("logging_ready")
   const listener = await Server.listen({
     port,
