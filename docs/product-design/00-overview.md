@@ -120,7 +120,7 @@ Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不�
 
 现有技术基础继续复用：
 
-- `packages/app`：SolidJS + Vite 的共享 WebUI；
+- `packages/app`：基于 Eve 的 Nuxt 共享 WebUI；
 - `packages/desktop`：Electron 桌面壳；
 - `packages/control-plane`：Bun、Effect、Hono、SQLite、工作流与 Agent Runtime。
 

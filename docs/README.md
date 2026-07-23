@@ -26,6 +26,7 @@
 | [06-governance.md](product-design/06-governance.md) | Charter、审批、Gate、审计 | 当前 |
 | [07-work-types.md](product-design/07-work-types.md) | 领域中立工作契约、动态能力组合与软件深度适配器 | 当前 |
 | [implementation-plan.md](product-design/implementation-plan.md) | 实现基础、缺口和工作流 | 当前 |
+| [CODEX-DESIGN-LANGUAGE.md](product-design/CODEX-DESIGN-LANGUAGE.md) | WebUI 视觉语言：色板、字号、圆角、Phosphor、设置 IA | 当前 |
 
 ## 组件与设计资产
 

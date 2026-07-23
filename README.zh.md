@@ -54,7 +54,7 @@ Local Control Plane
 
 | Package | 职责 |
 |---|---|
-| `packages/app` | SolidJS + Vite 共享 WebUI |
+| `packages/app` | Eve/Nuxt 共享 WebUI |
 | `packages/desktop` | Electron 桌面壳、本地 Server 宿主与打包 |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane、Runtime、SQLite、Git、Workflow 与内部 CLI 工具 |
 | `packages/sdk` | 生成与手写的客户端 SDK |

@@ -54,7 +54,7 @@ Local Control Plane
 
 | Package | Role |
 |---|---|
-| `packages/app` | Shared SolidJS + Vite WebUI |
+| `packages/app` | Shared Eve/Nuxt WebUI |
 | `packages/desktop` | Electron shell, local server host, and packaging |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane, runtime, SQLite, Git, workflows, and internal CLI tooling |
 | `packages/sdk` | Generated and hand-written client SDKs |

@@ -387,7 +387,7 @@ Local Control Plane
 
 ### 第三十一条：延续现有技术基础
 
-产品继续以现有 `packages/app`、`packages/desktop` 和 `packages/control-plane` 为基础演进。不得为了模仿其他产品而整体重写为另一套前后端技术栈。
+产品继续以 `packages/app`、`packages/desktop` 和 `packages/control-plane` 为基础演进。共享 WebUI 的既定技术基础是 Eve/Nuxt；不得维护平行的正式 WebUI 或为了模仿其他产品再次整体重写技术栈。
 
 ## 第十一章：首次公开版本
 

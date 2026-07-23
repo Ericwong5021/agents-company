@@ -1,16 +1,51 @@
 #!/usr/bin/env bun
 
 const root = import.meta.dir + "/.."
+const controlPlanePort = process.env.AGENT_COMPANY_DEV_CONTROL_PLANE_PORT ?? "4097"
+const controlPlaneUrl = `http://127.0.0.1:${controlPlanePort}`
+const localAuthSecret = `${crypto.randomUUID()}${crypto.randomUUID()}`
+const localInternalSecret = `${crypto.randomUUID()}${crypto.randomUUID()}`
+
 const services = [
-  { name: "control-plane", command: [process.execPath, "run", "dev"] },
-  { name: "web", command: [process.execPath, "run", "dev:web"] },
+  // Shared backend for the canonical Nuxt/Eve WebUI. dev:all owns port 4097 by default.
+  {
+    name: "control-plane",
+    command: [
+      process.execPath,
+      "run",
+      "--cwd",
+      "packages/control-plane",
+      "script/dev.ts",
+      "serve",
+      "--port",
+      controlPlanePort,
+    ],
+    env: {},
+  },
+  // Canonical frontend: Agent Company's Eve/Nuxt application on http://127.0.0.1:3210.
+  {
+    name: "web",
+    command: [process.execPath, "run", "dev:web"],
+    env: {
+      AGENT_COMPANY_CONTROL_PLANE_URL: controlPlaneUrl,
+      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? localAuthSecret,
+      BETTER_AUTH_URL: "http://127.0.0.1:3210",
+      INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET ?? localInternalSecret,
+    },
+  },
 ]
+
+if (process.argv.includes("--describe")) {
+  console.log(JSON.stringify(services.map((service) => ({ name: service.name, command: service.command }))))
+  process.exit(0)
+}
 
 const processes = services.map((service) => ({
   ...service,
   process: Bun.spawn({
     cmd: service.command,
     cwd: root,
+    env: { ...process.env, ...service.env },
     stdin: "inherit",
     stdout: "pipe",
     stderr: "pipe",

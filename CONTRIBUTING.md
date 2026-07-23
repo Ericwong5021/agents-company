@@ -44,7 +44,7 @@ The standalone WebUI expects a local backend, normally on port 4096. The Electro
 
 | Path | Responsibility |
 |---|---|
-| `packages/app` | Shared SolidJS + Vite WebUI for browser and Electron |
+| `packages/app` | Shared Eve/Nuxt WebUI for browser; Electron integration is migrated separately |
 | `packages/desktop` | Electron main/preload/renderer shell and packaging |
 | `packages/control-plane` | Bun/Effect runtime, server, SQLite, Git, workflows, internal CLI tooling, and Control Plane services |
 | `packages/ui` | Shared UI primitives |
@@ -66,7 +66,7 @@ bun test
 ```bash
 cd packages/app
 bun typecheck
-bun run test:unit
+bun test
 ```
 
 ```bash

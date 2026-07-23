@@ -62,3 +62,7 @@ experiment/last-outcome.json
 # AgentCompany run artifacts and test scenarios
 .artifacts/
 .agentcompany-cli-scenarios/
+packages/control-plane/.webui-progressive-verify-home/
+
+packages/eve-company-web/.data
+packages/app/.data

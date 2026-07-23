@@ -2,7 +2,7 @@
 
 > 状态：M0、M1、M2 已完成；当前优先完成 M3A-1 自然 Agent Turn 与显式 Skill，再进入 M3B Charter、自治治理与领域中立交付闭环
 > 事实基线更新：2026-07-21
-> 视觉决策：Company Workspace 方案 2 已通过验证，作为后续共享 WebUI 的视觉基线
+> 视觉决策：Company Workspace 的产品信息架构保留；其 Solid/Vite 实现已由 Eve/Nuxt WebUI 迁移取代
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
 
@@ -11,6 +11,8 @@
 Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉方向；当前不再需要继续制作静态页面方案。下一阶段必须从“模块和界面分别存在”切换为“每个里程碑都交付一段真实、可恢复、可验证的用户旅程”。
 
 本计划用 M0–M6 纵向里程碑替代原来按 W1–W8 子系统铺开的实施顺序，但不改变宪法和 PRD 的首次公开版本范围。
+
+> WebUI 迁移说明：本文 M0–M2 中关于 Solid App Chrome、`packages/app/src` 和其 Electron renderer 的实现证据均为历史记录，不再构成当前实现路径。正式 WebUI 已收敛为 `packages/app` 的 Eve/Nuxt 应用；Desktop 需加载该应用，不再维护 Solid renderer。
 
 核心决定：
 
@@ -702,7 +704,7 @@ M0 App Shell 修复
 - 先实现 Dreaming 再补私域：会把硬权限问题带入最敏感的数据；
 - 让 Desktop 托盘展示 fixture 状态：状态栏只能报告 Control Plane 的真实事件；
 - 为员工卡片、托盘和办公室分别维护状态：所有界面必须消费同一 AgentActivityProjection；
-- 为产品方向重写 SolidJS/Electron/Bun/Effect 技术栈：现有基础足够支撑目标；
+- 为产品方向再次整体重写 Eve/Nuxt、Electron、Bun/Effect 技术栈，或维护平行的正式 WebUI；
 - 为旧 API 保留长期双轨消息或项目模型：新产品不承担默认兼容义务。
 
 ## 11. 关键假设与当前下一步
