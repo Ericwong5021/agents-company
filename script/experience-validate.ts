@@ -1085,12 +1085,72 @@ check(
     ),
   "Automatic evidence commands omit config, type, SDK, Desktop, candidate provenance, or SHELL-03 acceptance gates.",
 )
+const automaticEvidenceDefinitions = isRecord(automaticEvidencePackage.$defs) ? automaticEvidencePackage.$defs : {}
+const automaticEvidenceProperties = isRecord(automaticEvidencePackage.properties)
+  ? automaticEvidencePackage.properties
+  : {}
+const automaticHR01StimuliSchema = isRecord(automaticEvidenceDefinitions.releaseCandidateHR01Stimuli)
+  ? automaticEvidenceDefinitions.releaseCandidateHR01Stimuli
+  : {}
+const automaticHR01StimulusSchema = isRecord(automaticEvidenceDefinitions.releaseCandidateHR01Stimulus)
+  ? automaticEvidenceDefinitions.releaseCandidateHR01Stimulus
+  : {}
+const automaticHR01StimuliProperties = isRecord(automaticHR01StimuliSchema.properties)
+  ? automaticHR01StimuliSchema.properties
+  : {}
+const automaticHR01StimulusProperties = isRecord(automaticHR01StimulusSchema.properties)
+  ? automaticHR01StimulusSchema.properties
+  : {}
 check(
   automaticEvidencePackage.schemaVersion === 1 &&
-    automaticEvidencePackage.packageVersion === "1.1.0" &&
+    automaticEvidencePackage.packageVersion === "1.2.0" &&
     automaticEvidencePackage.additionalProperties === false &&
     Array.isArray(automaticEvidencePackage.required) &&
     automaticEvidencePackage.required.includes("releaseCandidateScreenshots") &&
+    automaticEvidencePackage.required.includes("releaseCandidateHR01Stimuli") &&
+    sameStructure(automaticEvidenceProperties.releaseCandidateHR01Stimuli, {
+      anyOf: [{ type: "null" }, { $ref: "#/$defs/releaseCandidateHR01Stimuli" }],
+    }) &&
+    automaticHR01StimuliSchema.additionalProperties === false &&
+    Array.isArray(automaticHR01StimuliSchema.required) &&
+    sameValues(automaticHR01StimuliSchema.required, ["generatorCommandId", "buildSha", "manifest", "stimuli"]) &&
+    sameStructure(automaticHR01StimuliProperties.generatorCommandId, { const: "app-r0-candidates" }) &&
+    isRecord(automaticHR01StimuliProperties.stimuli) &&
+    automaticHR01StimuliProperties.stimuli.minItems === 12 &&
+    automaticHR01StimuliProperties.stimuli.maxItems === 12 &&
+    sameStructure(automaticHR01StimuliProperties.stimuli.items, {
+      $ref: "#/$defs/releaseCandidateHR01Stimulus",
+    }) &&
+    automaticHR01StimulusSchema.additionalProperties === false &&
+    Array.isArray(automaticHR01StimulusSchema.required) &&
+    sameValues(automaticHR01StimulusSchema.required, ["promptId", "stateId", "sourceRelativePath", "file"]) &&
+    isRecord(automaticHR01StimulusProperties.promptId) &&
+    sameValues(
+      Array.isArray(automaticHR01StimulusProperties.promptId.enum)
+        ? automaticHR01StimulusProperties.promptId.enum.filter((value): value is string => typeof value === "string")
+        : [],
+      Array.from({ length: 12 }, (_, index) => `HR01-P${String(index + 1).padStart(2, "0")}`),
+    ) &&
+    isRecord(automaticHR01StimulusProperties.stateId) &&
+    sameValues(
+      Array.isArray(automaticHR01StimulusProperties.stateId.enum)
+        ? automaticHR01StimulusProperties.stateId.enum.filter((value): value is string => typeof value === "string")
+        : [],
+      [
+        "needs_input",
+        "ready",
+        "running",
+        "paused",
+        "blocked",
+        "needs_approval",
+        "reviewing",
+        "revision",
+        "delivered",
+        "accepted",
+        "failed",
+        "cancelled",
+      ],
+    ) &&
     schemaPatternsAreStringTyped(automaticEvidencePackage),
   "Automatic evidence package schema is not strict or permits non-string pattern bypasses.",
 )

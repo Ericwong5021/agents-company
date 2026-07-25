@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
   "title": "Agent Company R0 exact-build automatic evidence package",
   "schemaVersion": 1,
-  "packageVersion": "1.1.0",
+  "packageVersion": "1.2.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,6 +21,7 @@
     "commands",
     "coverage",
     "releaseCandidateScreenshots",
+    "releaseCandidateHR01Stimuli",
     "overallStatus"
   ],
   "properties": {
@@ -28,7 +29,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "packageId": {
       "type": "string",
@@ -137,6 +138,16 @@
         }
       ]
     },
+    "releaseCandidateHR01Stimuli": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/releaseCandidateHR01Stimuli"
+        }
+      ]
+    },
     "overallStatus": {
       "enum": ["pass", "fail"]
     }
@@ -197,6 +208,89 @@
         },
         "summary": {
           "type": "object"
+        }
+      }
+    },
+    "releaseCandidateHR01Stimulus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["promptId", "stateId", "sourceRelativePath", "file"],
+      "properties": {
+        "promptId": {
+          "enum": [
+            "HR01-P01",
+            "HR01-P02",
+            "HR01-P03",
+            "HR01-P04",
+            "HR01-P05",
+            "HR01-P06",
+            "HR01-P07",
+            "HR01-P08",
+            "HR01-P09",
+            "HR01-P10",
+            "HR01-P11",
+            "HR01-P12"
+          ]
+        },
+        "stateId": {
+          "enum": [
+            "needs_input",
+            "ready",
+            "running",
+            "paused",
+            "blocked",
+            "needs_approval",
+            "reviewing",
+            "revision",
+            "delivered",
+            "accepted",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "sourceRelativePath": {
+          "enum": [
+            "human-review/hr01-state-cards/HR01-P01.png",
+            "human-review/hr01-state-cards/HR01-P02.png",
+            "human-review/hr01-state-cards/HR01-P03.png",
+            "human-review/hr01-state-cards/HR01-P04.png",
+            "human-review/hr01-state-cards/HR01-P05.png",
+            "human-review/hr01-state-cards/HR01-P06.png",
+            "human-review/hr01-state-cards/HR01-P07.png",
+            "human-review/hr01-state-cards/HR01-P08.png",
+            "human-review/hr01-state-cards/HR01-P09.png",
+            "human-review/hr01-state-cards/HR01-P10.png",
+            "human-review/hr01-state-cards/HR01-P11.png",
+            "human-review/hr01-state-cards/HR01-P12.png"
+          ]
+        },
+        "file": {
+          "$ref": "#/$defs/fileEvidence"
+        }
+      }
+    },
+    "releaseCandidateHR01Stimuli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatorCommandId", "buildSha", "manifest", "stimuli"],
+      "properties": {
+        "generatorCommandId": {
+          "const": "app-r0-candidates"
+        },
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifest": {
+          "$ref": "#/$defs/fileEvidence"
+        },
+        "stimuli": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/releaseCandidateHR01Stimulus"
+          }
         }
       }
     },

@@ -59,6 +59,27 @@ const releaseCandidateManifestSourceRelativePath = "human-review/screenshots-man
 const releaseCandidateArchiveDirectory = "files/app-r0-candidates/release-candidate-screenshots"
 const releaseCandidateSurfaces = ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"]
 const releaseCandidateScreenshotMinimum = { width: 1280, height: 720 }
+const releaseCandidateHR01ManifestSourceRelativePath = "human-review/hr01-state-cards/stimuli-manifest.json"
+const releaseCandidateHR01ArchiveDirectory = "files/app-r0-candidates/release-candidate-hr01-stimuli"
+const releaseCandidateHR01States = [
+  ["HR01-P01", "needs_input"],
+  ["HR01-P02", "ready"],
+  ["HR01-P03", "running"],
+  ["HR01-P04", "paused"],
+  ["HR01-P05", "blocked"],
+  ["HR01-P06", "needs_approval"],
+  ["HR01-P07", "reviewing"],
+  ["HR01-P08", "revision"],
+  ["HR01-P09", "delivered"],
+  ["HR01-P10", "accepted"],
+  ["HR01-P11", "failed"],
+  ["HR01-P12", "cancelled"],
+] as const
+const releaseCandidateHR01StimulusMinimum = { width: 600, height: 140 }
+const releaseCandidateHR01Presentation =
+  "Show the release-candidate state card with its state label hidden. Do not explain the state before the response."
+const releaseCandidateHR01ExactPrompt = "请用自己的话回答三个问题：现在发生了什么？为什么这件事重要？你下一步会怎么做？"
+const humanResearchProtocolRelativePath = "docs/product-design/experience-refactor/human-research-protocol.v1.json"
 const packageKeys = [
   "schemaVersion",
   "packageVersion",
@@ -74,6 +95,7 @@ const packageKeys = [
   "commands",
   "coverage",
   "releaseCandidateScreenshots",
+  "releaseCandidateHR01Stimuli",
   "overallStatus",
 ]
 const commandKeys = [
@@ -177,6 +199,20 @@ type ReleaseCandidateScreenshotsEvidence = {
   screenshots: ReleaseCandidateScreenshotEvidence[]
 }
 
+type ReleaseCandidateHR01StimulusEvidence = {
+  promptId: string
+  stateId: string
+  sourceRelativePath: string
+  file: FileEvidence
+}
+
+type ReleaseCandidateHR01StimuliEvidence = {
+  generatorCommandId: string
+  buildSha: string
+  manifest: FileEvidence
+  stimuli: ReleaseCandidateHR01StimulusEvidence[]
+}
+
 export type TrustedReleaseCandidateScreenshots = {
   buildSha: string
   manifestSha256: string
@@ -186,6 +222,21 @@ export type TrustedReleaseCandidateScreenshots = {
   }
   screenshots: Array<{
     surface: string
+    relativePath: string
+    sha256: string
+  }>
+}
+
+export type TrustedReleaseCandidateHR01Stimuli = {
+  buildSha: string
+  manifestSha256: string
+  viewport: {
+    width: number
+    height: number
+  }
+  stimuli: Array<{
+    promptId: string
+    stateId: string
     relativePath: string
     sha256: string
   }>
@@ -231,6 +282,7 @@ type AutomaticEvidencePackage = {
     }>
   }>
   releaseCandidateScreenshots: ReleaseCandidateScreenshotsEvidence | null
+  releaseCandidateHR01Stimuli: ReleaseCandidateHR01StimuliEvidence | null
   overallStatus: "pass" | "fail"
 }
 
@@ -248,6 +300,7 @@ export type AutomaticEvidenceGovernance = {
   requirementsSha256: string
   schemaSource: string
   schemaSha256: string
+  humanResearchProtocolSha256: string
   buildTreeSha: string
 }
 
@@ -260,6 +313,7 @@ export type AutomaticEvidenceValidation = {
   coveredTaskIds: string[]
   coveredCriterionIds: string[]
   trustedReleaseCandidateScreenshots: TrustedReleaseCandidateScreenshots | null
+  trustedReleaseCandidateHR01Stimuli: TrustedReleaseCandidateHR01Stimuli | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -417,9 +471,10 @@ function validateRequirements(value: unknown) {
 }
 
 async function currentGovernance(buildTreeSha: string) {
-  const [requirementsSource, schemaSource] = await Promise.all([
+  const [requirementsSource, schemaSource, humanResearchProtocolSource] = await Promise.all([
     Bun.file(path.join(root, automaticEvidenceRequirementsRelativePath)).text(),
     Bun.file(path.join(root, automaticEvidenceSchemaRelativePath)).text(),
+    Bun.file(path.join(root, humanResearchProtocolRelativePath)).text(),
   ])
   return {
     requirements: validateRequirements(JSON.parse(requirementsSource)),
@@ -427,6 +482,7 @@ async function currentGovernance(buildTreeSha: string) {
     requirementsSha256: sha256(requirementsSource),
     schemaSource,
     schemaSha256: sha256(schemaSource),
+    humanResearchProtocolSha256: sha256(humanResearchProtocolSource),
     buildTreeSha,
   }
 }
@@ -435,8 +491,13 @@ export async function loadAutomaticEvidenceGovernance(buildSha: string) {
   verifyExactCommit(buildSha)
   const requirementsSource = runGit(["show", `${buildSha}:${automaticEvidenceRequirementsRelativePath}`])
   const schemaSource = runGit(["show", `${buildSha}:${automaticEvidenceSchemaRelativePath}`])
+  const humanResearchProtocolSource = runGit(["show", `${buildSha}:${humanResearchProtocolRelativePath}`])
   const current = await currentGovernance(runGit(["show", "-s", "--format=%T", buildSha]).trim())
-  if (sha256(requirementsSource) !== current.requirementsSha256 || sha256(schemaSource) !== current.schemaSha256) {
+  if (
+    sha256(requirementsSource) !== current.requirementsSha256 ||
+    sha256(schemaSource) !== current.schemaSha256 ||
+    sha256(humanResearchProtocolSource) !== current.humanResearchProtocolSha256
+  ) {
     throw new Error("Gate governance files differ from the exact build commit.")
   }
   return {
@@ -446,6 +507,7 @@ export async function loadAutomaticEvidenceGovernance(buildSha: string) {
     requirementsSha256: sha256(requirementsSource),
     schemaSource,
     schemaSha256: sha256(schemaSource),
+    humanResearchProtocolSha256: sha256(humanResearchProtocolSource),
   }
 }
 
@@ -602,8 +664,7 @@ async function parseReleaseCandidateManifest(source: string, buildSha: string) {
       !isRecord(screenshot) ||
       !exactKeys(screenshot, ["surface", "relativePath", "sha256"]) ||
       screenshot.surface !== surface ||
-      screenshot.relativePath !==
-        `human-review/screenshots/${surface.toLowerCase().replaceAll(" ", "-")}.png` ||
+      screenshot.relativePath !== `human-review/screenshots/${surface.toLowerCase().replaceAll(" ", "-")}.png` ||
       typeof screenshot.sha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(screenshot.sha256)
     ) {
@@ -642,7 +703,9 @@ async function collectReleaseCandidateScreenshots(worktree: string, outputDirect
       const sourcePath = await resolveConfinedFile(sourceBase, screenshot.relativePath)
       const sourceStat = await fs.lstat(path.resolve(sourceBase, screenshot.relativePath)).catch(() => null)
       if (!sourcePath || !sourceStat?.isFile() || sourceStat.isSymbolicLink()) {
-        throw new Error(`${screenshot.surface} release-candidate screenshot is missing, escaped, or not a regular file.`)
+        throw new Error(
+          `${screenshot.surface} release-candidate screenshot is missing, escaped, or not a regular file.`,
+        )
       }
       const bytes = new Uint8Array(await Bun.file(sourcePath).arrayBuffer())
       if (sha256(bytes) !== screenshot.sha256) {
@@ -656,7 +719,9 @@ async function collectReleaseCandidateScreenshots(worktree: string, outputDirect
       }
     }),
   )
-  if (new Set(screenshots.map((screenshot) => screenshot.sourceRelativePath)).size !== releaseCandidateSurfaces.length) {
+  if (
+    new Set(screenshots.map((screenshot) => screenshot.sourceRelativePath)).size !== releaseCandidateSurfaces.length
+  ) {
     throw new Error("Release-candidate screenshot source paths must be unique.")
   }
   if (new Set(screenshots.map((screenshot) => sha256(screenshot.bytes))).size !== releaseCandidateSurfaces.length) {
@@ -722,7 +787,9 @@ async function validateReleaseCandidateScreenshotsEvidence(
   ) {
     errors.push("automatic evidence release-candidate screenshots: unexpected manifest archive path")
   }
-  const manifest = manifestFile ? await parseReleaseCandidateManifest(manifestFile.source, buildSha).catch(() => null) : null
+  const manifest = manifestFile
+    ? await parseReleaseCandidateManifest(manifestFile.source, buildSha).catch(() => null)
+    : null
   if (!manifest) errors.push("automatic evidence release-candidate screenshots: invalid manifest content")
   const screenshots: TrustedReleaseCandidateScreenshots["screenshots"] = []
   for (const [index, evidence] of value.screenshots.entries()) {
@@ -757,7 +824,10 @@ async function validateReleaseCandidateScreenshotsEvidence(
       errors.push(`automatic evidence ${expectedSurface}: screenshot archive path or manifest digest mismatch`)
     }
     if (file) {
-      const validImage = await inspectReleaseCandidatePng(file.bytes, `${expectedSurface} release-candidate screenshot`).then(
+      const validImage = await inspectReleaseCandidatePng(
+        file.bytes,
+        `${expectedSurface} release-candidate screenshot`,
+      ).then(
         () => true,
         () => false,
       )
@@ -809,6 +879,300 @@ async function validateReleaseCandidateScreenshotsEvidence(
   } satisfies TrustedReleaseCandidateScreenshots
 }
 
+type ReleaseCandidateHR01Manifest = {
+  schemaVersion: number
+  buildSha: string
+  protocol: {
+    id: string
+    version: string
+    sha256: string
+    studyId: string
+    moderatorScriptVersion: string
+  }
+  presentation: string
+  exactPrompt: string
+  stateLabelHidden: boolean
+  relativePathBase: string
+  viewport: {
+    width: number
+    height: number
+  }
+  stimuli: Array<{
+    promptId: string
+    stateId: string
+    relativePath: string
+    sha256: string
+  }>
+}
+
+async function parseReleaseCandidateHR01Manifest(source: string, buildSha: string, protocolSha256: string) {
+  const value = await Promise.resolve()
+    .then(() => JSON.parse(source) as unknown)
+    .catch(() => null)
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      "schemaVersion",
+      "buildSha",
+      "protocol",
+      "presentation",
+      "exactPrompt",
+      "stateLabelHidden",
+      "relativePathBase",
+      "viewport",
+      "stimuli",
+    ]) ||
+    value.schemaVersion !== 1 ||
+    value.buildSha !== buildSha ||
+    !isRecord(value.protocol) ||
+    !exactKeys(value.protocol, ["id", "version", "sha256", "studyId", "moderatorScriptVersion"]) ||
+    value.protocol.id !== "agent-company-r0-human-research" ||
+    value.protocol.version !== "1.0.0" ||
+    value.protocol.sha256 !== protocolSha256 ||
+    value.protocol.studyId !== "HR-01" ||
+    value.protocol.moderatorScriptVersion !== "HR01-v1" ||
+    value.presentation !== releaseCandidateHR01Presentation ||
+    value.exactPrompt !== releaseCandidateHR01ExactPrompt ||
+    value.stateLabelHidden !== true ||
+    value.relativePathBase !== "build-artifact-root" ||
+    !isRecord(value.viewport) ||
+    !exactKeys(value.viewport, ["width", "height"]) ||
+    value.viewport.width !== 1440 ||
+    value.viewport.height !== 1600 ||
+    !Array.isArray(value.stimuli) ||
+    value.stimuli.length !== releaseCandidateHR01States.length
+  ) {
+    throw new Error("Release-candidate HR-01 stimulus manifest is structurally invalid.")
+  }
+  value.stimuli.forEach((stimulus, index) => {
+    const [promptId, stateId] = releaseCandidateHR01States[index]!
+    if (
+      !isRecord(stimulus) ||
+      !exactKeys(stimulus, ["promptId", "stateId", "relativePath", "sha256"]) ||
+      stimulus.promptId !== promptId ||
+      stimulus.stateId !== stateId ||
+      stimulus.relativePath !== `human-review/hr01-state-cards/${promptId}.png` ||
+      typeof stimulus.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(stimulus.sha256)
+    ) {
+      throw new Error(`Release-candidate HR-01 stimulus manifest entry ${index + 1} is invalid.`)
+    }
+  })
+  return value as unknown as ReleaseCandidateHR01Manifest
+}
+
+async function inspectReleaseCandidateHR01Png(bytes: Uint8Array, label: string) {
+  const image = await sharp(bytes, { failOn: "error", limitInputPixels: 16_777_216 })
+    .toBuffer({ resolveWithObject: true })
+    .catch(() => null)
+  if (
+    image?.info.format !== "png" ||
+    image.info.width < releaseCandidateHR01StimulusMinimum.width ||
+    image.info.height < releaseCandidateHR01StimulusMinimum.height
+  ) {
+    throw new Error(`${label} is not a valid release-candidate HR-01 PNG.`)
+  }
+}
+
+async function collectReleaseCandidateHR01Stimuli(
+  worktree: string,
+  outputDirectory: string,
+  buildSha: string,
+  protocolSha256: string,
+) {
+  const sourceBase = path.join(worktree, ".artifacts/experience-refactor", buildSha)
+  const manifestPath = await resolveConfinedFile(sourceBase, releaseCandidateHR01ManifestSourceRelativePath)
+  const manifestStat = await fs
+    .lstat(path.resolve(sourceBase, releaseCandidateHR01ManifestSourceRelativePath))
+    .catch(() => null)
+  if (!manifestPath || !manifestStat?.isFile() || manifestStat.isSymbolicLink()) {
+    throw new Error("Release-candidate HR-01 stimulus manifest is missing, escaped, or not a regular file.")
+  }
+  const manifestBytes = new Uint8Array(await Bun.file(manifestPath).arrayBuffer())
+  const manifest = await parseReleaseCandidateHR01Manifest(
+    new TextDecoder().decode(manifestBytes),
+    buildSha,
+    protocolSha256,
+  )
+  const stimuli = await Promise.all(
+    manifest.stimuli.map(async (stimulus) => {
+      const sourcePath = await resolveConfinedFile(sourceBase, stimulus.relativePath)
+      const sourceStat = await fs.lstat(path.resolve(sourceBase, stimulus.relativePath)).catch(() => null)
+      if (!sourcePath || !sourceStat?.isFile() || sourceStat.isSymbolicLink()) {
+        throw new Error(
+          `${stimulus.promptId} release-candidate HR-01 stimulus is missing, escaped, or not a regular file.`,
+        )
+      }
+      const bytes = new Uint8Array(await Bun.file(sourcePath).arrayBuffer())
+      if (sha256(bytes) !== stimulus.sha256) {
+        throw new Error(`${stimulus.promptId} release-candidate HR-01 stimulus digest does not match its manifest.`)
+      }
+      await inspectReleaseCandidateHR01Png(bytes, `${stimulus.promptId} release-candidate HR-01 stimulus`)
+      return {
+        promptId: stimulus.promptId,
+        stateId: stimulus.stateId,
+        sourceRelativePath: stimulus.relativePath,
+        bytes,
+      }
+    }),
+  )
+  if (new Set(stimuli.map((stimulus) => stimulus.sourceRelativePath)).size !== releaseCandidateHR01States.length) {
+    throw new Error("Release-candidate HR-01 stimulus source paths must be unique.")
+  }
+  if (new Set(stimuli.map((stimulus) => sha256(stimulus.bytes))).size !== releaseCandidateHR01States.length) {
+    throw new Error("Release-candidate HR-01 stimulus contents must be unique.")
+  }
+  return {
+    generatorCommandId: releaseCandidateGeneratorCommandId,
+    buildSha,
+    manifest: await writeEvidenceFile(
+      outputDirectory,
+      path.posix.join(releaseCandidateHR01ArchiveDirectory, "stimuli-manifest.json"),
+      manifestBytes,
+      "application/json",
+    ),
+    stimuli: await Promise.all(
+      stimuli.map(async (stimulus) => ({
+        promptId: stimulus.promptId,
+        stateId: stimulus.stateId,
+        sourceRelativePath: stimulus.sourceRelativePath,
+        file: await writeEvidenceFile(
+          outputDirectory,
+          path.posix.join(
+            releaseCandidateHR01ArchiveDirectory,
+            "hr01-state-cards",
+            path.posix.basename(stimulus.sourceRelativePath),
+          ),
+          stimulus.bytes,
+          "image/png",
+        ),
+      })),
+    ),
+  } satisfies ReleaseCandidateHR01StimuliEvidence
+}
+
+async function validateReleaseCandidateHR01StimuliEvidence(
+  base: string,
+  value: unknown,
+  buildSha: string,
+  protocolSha256: string,
+  errors: string[],
+) {
+  const errorCount = errors.length
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, ["generatorCommandId", "buildSha", "manifest", "stimuli"]) ||
+    value.generatorCommandId !== releaseCandidateGeneratorCommandId ||
+    value.buildSha !== buildSha ||
+    !Array.isArray(value.stimuli) ||
+    value.stimuli.length !== releaseCandidateHR01States.length
+  ) {
+    errors.push("automatic evidence release-candidate HR-01 stimuli: invalid top-level binding")
+    return null
+  }
+  const manifestFile = await validateFileEvidence(
+    base,
+    value.manifest,
+    "application/json",
+    "release-candidate HR-01 stimulus manifest",
+    errors,
+  )
+  if (
+    !isRecord(value.manifest) ||
+    value.manifest.relativePath !== path.posix.join(releaseCandidateHR01ArchiveDirectory, "stimuli-manifest.json")
+  ) {
+    errors.push("automatic evidence release-candidate HR-01 stimuli: unexpected manifest archive path")
+  }
+  const manifest = manifestFile
+    ? await parseReleaseCandidateHR01Manifest(manifestFile.source, buildSha, protocolSha256).catch(() => null)
+    : null
+  if (!manifest) errors.push("automatic evidence release-candidate HR-01 stimuli: invalid manifest content")
+  const stimuli: TrustedReleaseCandidateHR01Stimuli["stimuli"] = []
+  for (const [index, evidence] of value.stimuli.entries()) {
+    const manifestStimulus = manifest?.stimuli[index]
+    const [expectedPromptId, expectedStateId] = releaseCandidateHR01States[index]!
+    if (
+      !isRecord(evidence) ||
+      !exactKeys(evidence, ["promptId", "stateId", "sourceRelativePath", "file"]) ||
+      evidence.promptId !== expectedPromptId ||
+      evidence.stateId !== expectedStateId ||
+      evidence.sourceRelativePath !== manifestStimulus?.relativePath
+    ) {
+      errors.push(`automatic evidence release-candidate HR-01 stimulus ${index + 1}: invalid identity or source path`)
+      continue
+    }
+    const file = await validateFileEvidence(
+      base,
+      evidence.file,
+      "image/png",
+      `${expectedPromptId} release-candidate HR-01 stimulus`,
+      errors,
+    )
+    if (
+      !isRecord(evidence.file) ||
+      evidence.file.relativePath !==
+        path.posix.join(releaseCandidateHR01ArchiveDirectory, "hr01-state-cards", `${expectedPromptId}.png`) ||
+      evidence.file.sha256 !== manifestStimulus?.sha256
+    ) {
+      errors.push(`automatic evidence ${expectedPromptId}: HR-01 archive path or manifest digest mismatch`)
+    }
+    if (file) {
+      const validImage = await inspectReleaseCandidateHR01Png(
+        file.bytes,
+        `${expectedPromptId} release-candidate HR-01 stimulus`,
+      ).then(
+        () => true,
+        () => false,
+      )
+      if (!validImage) errors.push(`automatic evidence ${expectedPromptId}: invalid release-candidate HR-01 PNG`)
+    }
+    stimuli.push({
+      promptId: expectedPromptId,
+      stateId: expectedStateId,
+      relativePath: String(evidence.sourceRelativePath),
+      sha256: isRecord(evidence.file) ? String(evidence.file.sha256) : "",
+    })
+  }
+  if (
+    new Set(
+      value.stimuli.flatMap((evidence) =>
+        isRecord(evidence) && typeof evidence.sourceRelativePath === "string" ? [evidence.sourceRelativePath] : [],
+      ),
+    ).size !== releaseCandidateHR01States.length
+  ) {
+    errors.push("automatic evidence release-candidate HR-01 stimulus source paths must be unique")
+  }
+  if (
+    new Set(
+      value.stimuli.flatMap((evidence) =>
+        isRecord(evidence) && isRecord(evidence.file) && typeof evidence.file.relativePath === "string"
+          ? [evidence.file.relativePath]
+          : [],
+      ),
+    ).size !== releaseCandidateHR01States.length
+  ) {
+    errors.push("automatic evidence release-candidate HR-01 stimulus archive paths must be unique")
+  }
+  if (
+    new Set(
+      value.stimuli.flatMap((evidence) =>
+        isRecord(evidence) && isRecord(evidence.file) && typeof evidence.file.sha256 === "string"
+          ? [evidence.file.sha256]
+          : [],
+      ),
+    ).size !== releaseCandidateHR01States.length
+  ) {
+    errors.push("automatic evidence release-candidate HR-01 stimulus contents must be unique")
+  }
+  if (errors.length !== errorCount || !manifest || !manifestFile) return null
+  return {
+    buildSha,
+    manifestSha256: isRecord(value.manifest) ? String(value.manifest.sha256) : "",
+    viewport: manifest.viewport,
+    stimuli,
+  } satisfies TrustedReleaseCandidateHR01Stimuli
+}
+
 function expectedCoverage(requirements: AutomaticEvidenceRequirements) {
   return requirements.tasks.map((task) => ({
     taskId: task.id,
@@ -842,6 +1206,7 @@ export async function validateAutomaticEvidencePackage(options: {
       coveredTaskIds: [],
       coveredCriterionIds: [],
       trustedReleaseCandidateScreenshots: null,
+      trustedReleaseCandidateHR01Stimuli: null,
     }
   }
   const parsed = await Promise.resolve()
@@ -857,12 +1222,13 @@ export async function validateAutomaticEvidencePackage(options: {
       coveredTaskIds: [],
       coveredCriterionIds: [],
       trustedReleaseCandidateScreenshots: null,
+      trustedReleaseCandidateHR01Stimuli: null,
     }
   }
   const governance = options.governance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
   if (
     parsed.schemaVersion !== 1 ||
-    parsed.packageVersion !== "1.1.0" ||
+    parsed.packageVersion !== "1.2.0" ||
     typeof parsed.packageId !== "string" ||
     !/^R0-AUTO-[a-f0-9]{12,40}$/.test(parsed.packageId) ||
     parsed.gate !== "R0" ||
@@ -925,6 +1291,16 @@ export async function validateAutomaticEvidencePackage(options: {
           path.dirname(file),
           parsed.releaseCandidateScreenshots,
           options.buildSha,
+          errors,
+        )
+  const trustedReleaseCandidateHR01Stimuli =
+    parsed.releaseCandidateHR01Stimuli === null
+      ? null
+      : await validateReleaseCandidateHR01StimuliEvidence(
+          path.dirname(file),
+          parsed.releaseCandidateHR01Stimuli,
+          options.buildSha,
+          governance.humanResearchProtocolSha256,
           errors,
         )
   const commands = Array.isArray(parsed.commands) ? parsed.commands : []
@@ -1029,7 +1405,8 @@ export async function validateAutomaticEvidencePackage(options: {
       Boolean(stderr) &&
       stdoutResult.valid &&
       reportsPass &&
-      (requirement.id !== releaseCandidateGeneratorCommandId || Boolean(trustedReleaseCandidateScreenshots))
+      (requirement.id !== releaseCandidateGeneratorCommandId ||
+        (Boolean(trustedReleaseCandidateScreenshots) && Boolean(trustedReleaseCandidateHR01Stimuli)))
     const status = pass ? "pass" : "fail"
     recomputedStatuses.set(requirement.id, status)
     if (value.status !== status) errors.push(`automatic evidence ${requirement.id}: forged command status`)
@@ -1044,6 +1421,9 @@ export async function validateAutomaticEvidencePackage(options: {
   const releaseCandidateGeneratorStatus = recomputedStatuses.get(releaseCandidateGeneratorCommandId)
   if (parsed.releaseCandidateScreenshots !== null && releaseCandidateGeneratorStatus !== "pass") {
     errors.push("automatic evidence release-candidate screenshots: generator command did not pass")
+  }
+  if (parsed.releaseCandidateHR01Stimuli !== null && releaseCandidateGeneratorStatus !== "pass") {
+    errors.push("automatic evidence release-candidate HR-01 stimuli: generator command did not pass")
   }
   const coverage = Array.isArray(parsed.coverage) ? parsed.coverage : []
   const taskIDs = coverage.flatMap((task) => (isRecord(task) && typeof task.taskId === "string" ? [task.taskId] : []))
@@ -1098,6 +1478,7 @@ export async function validateAutomaticEvidencePackage(options: {
     coveredTaskIds: taskIDs.sort(),
     coveredCriterionIds: coveredCriterionIDs.sort(),
     trustedReleaseCandidateScreenshots,
+    trustedReleaseCandidateHR01Stimuli,
   }
 }
 
@@ -1198,6 +1579,7 @@ async function runCommand(
   requirement: RequirementCommand,
   playwrightBrowsersPath: string,
   buildSha: string,
+  humanResearchProtocolSha256: string,
 ) {
   const commandIsolation = path.join(isolationRoot, requirement.id)
   const directories = commandIsolationDirectories(commandIsolation)
@@ -1255,19 +1637,26 @@ async function runCommand(
   ])
   clearTimeout(timer)
   if (forceTimer) clearTimeout(forceTimer)
-  const releaseCandidateResult: {
-    value: ReleaseCandidateScreenshotsEvidence | null
-    error: string | null
-  } =
+  const releaseCandidateResult =
     requirement.id === releaseCandidateGeneratorCommandId && exitCode === 0 && !timedOut
-      ? await collectReleaseCandidateScreenshots(worktree, outputDirectory, buildSha).then(
-          (value) => ({ value, error: null }),
-          (error) => ({
-            value: null,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        )
-      : { value: null, error: null }
+      ? await Promise.allSettled([
+          collectReleaseCandidateScreenshots(worktree, outputDirectory, buildSha),
+          collectReleaseCandidateHR01Stimuli(worktree, outputDirectory, buildSha, humanResearchProtocolSha256),
+        ]).then(([screenshots, hr01Stimuli]) => {
+          const error = [screenshots, hr01Stimuli]
+            .flatMap((result) =>
+              result.status === "rejected"
+                ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]
+                : [],
+            )
+            .join("; ")
+          return {
+            screenshots: screenshots.status === "fulfilled" && !error ? screenshots.value : null,
+            hr01Stimuli: hr01Stimuli.status === "fulfilled" && !error ? hr01Stimuli.value : null,
+            error: error || null,
+          }
+        })
+      : { screenshots: null, hr01Stimuli: null, error: null }
   const collectionFailureBytes = releaseCandidateResult.error
     ? new TextEncoder().encode(
         `${stderrBytes.byteLength && !new TextDecoder().decode(stderrBytes).endsWith("\n") ? "\n" : ""}Automatic evidence collector: ${releaseCandidateResult.error}\n`,
@@ -1322,7 +1711,8 @@ async function runCommand(
     stdoutResult.valid &&
     reports.length === requirement.reports.length &&
     reportsPass &&
-    (requirement.id !== releaseCandidateGeneratorCommandId || Boolean(releaseCandidateResult.value))
+    (requirement.id !== releaseCandidateGeneratorCommandId ||
+      (Boolean(releaseCandidateResult.screenshots) && Boolean(releaseCandidateResult.hr01Stimuli)))
       ? "pass"
       : "fail"
   await cleanIgnoredRuntimePaths(worktree)
@@ -1343,7 +1733,8 @@ async function runCommand(
       stdoutSummary: stdoutResult.summary,
       reports,
     } satisfies CommandEvidence,
-    releaseCandidateScreenshots: releaseCandidateResult.value,
+    releaseCandidateScreenshots: releaseCandidateResult.screenshots,
+    releaseCandidateHR01Stimuli: releaseCandidateResult.hr01Stimuli,
   }
 }
 
@@ -1814,9 +2205,7 @@ export async function generateAutomaticEvidence(options: {
   if (!isRecord(runner) || runner.buildSha !== buildSha) {
     throw new Error("Automatic evidence runner binding does not match the exact build SHA.")
   }
-  const temporaryRoot = await fs.mkdtemp(
-    path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "ac-r0-"),
-  )
+  const temporaryRoot = await fs.mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "ac-r0-"))
   const worktree = path.join(temporaryRoot, "worktree")
   const isolationRoot = path.join(temporaryRoot, "isolation")
   runGit(["worktree", "add", "--detach", worktree, buildSha])
@@ -1827,20 +2216,31 @@ export async function generateAutomaticEvidence(options: {
     const commandResults: Awaited<ReturnType<typeof runCommand>>[] = []
     for (const command of governance.requirements.commands) {
       commandResults.push(
-        await runCommand(worktree, outputDirectory, isolationRoot, command, playwright.directory, buildSha),
+        await runCommand(
+          worktree,
+          outputDirectory,
+          isolationRoot,
+          command,
+          playwright.directory,
+          buildSha,
+          governance.humanResearchProtocolSha256,
+        ),
       )
     }
     const commands = commandResults.map((result) => result.command)
     const releaseCandidateScreenshots =
       commandResults.find((result) => result.command.id === releaseCandidateGeneratorCommandId)
         ?.releaseCandidateScreenshots ?? null
+    const releaseCandidateHR01Stimuli =
+      commandResults.find((result) => result.command.id === releaseCandidateGeneratorCommandId)
+        ?.releaseCandidateHR01Stimuli ?? null
     await assertPlaywrightBrowsersUnchanged(playwright)
     await cleanIgnoredRuntimePaths(worktree)
     const worktreeStatus = runGit(["status", "--porcelain", "--untracked-files=all"], worktree).trim()
     if (worktreeStatus) throw new Error(`Automatic evidence exact-commit worktree became dirty:\n${worktreeStatus}`)
     const packageValue: AutomaticEvidencePackage = {
       schemaVersion: 1,
-      packageVersion: "1.1.0",
+      packageVersion: "1.2.0",
       packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
       gate: "R0",
       buildSha,
@@ -1872,6 +2272,7 @@ export async function generateAutomaticEvidence(options: {
       commands,
       coverage: expectedCoverage(governance.requirements),
       releaseCandidateScreenshots,
+      releaseCandidateHR01Stimuli,
       overallStatus: commands.every((command) => command.status === "pass") ? "pass" : "fail",
     }
     const packagePath = path.join(outputDirectory, "automatic-evidence-package.json")
@@ -1965,11 +2366,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
         sourceRelativePath,
         file: await writeEvidenceFile(
           directory,
-          path.posix.join(
-            releaseCandidateArchiveDirectory,
-            "screenshots",
-            path.posix.basename(sourceRelativePath),
-          ),
+          path.posix.join(releaseCandidateArchiveDirectory, "screenshots", path.posix.basename(sourceRelativePath)),
           await sharp({
             create: {
               width: 1440,
@@ -2015,9 +2412,79 @@ export async function writeStructuralAutomaticEvidenceFixture(
     ),
     screenshots: releaseCandidateScreenshotFiles,
   }
+  const releaseCandidateHR01StimulusFiles = await Promise.all(
+    releaseCandidateHR01States.map(async ([promptId, stateId], index) => {
+      const sourceRelativePath = `human-review/hr01-state-cards/${promptId}.png`
+      return {
+        promptId,
+        stateId,
+        sourceRelativePath,
+        file: await writeEvidenceFile(
+          directory,
+          path.posix.join(
+            releaseCandidateHR01ArchiveDirectory,
+            "hr01-state-cards",
+            path.posix.basename(sourceRelativePath),
+          ),
+          await sharp({
+            create: {
+              width: 605,
+              height: 180,
+              channels: 4,
+              background: {
+                r: 32 + index * 11,
+                g: 44 + index * 9,
+                b: 56 + index * 7,
+                alpha: 1,
+              },
+            },
+          })
+            .png()
+            .toBuffer(),
+          "image/png",
+        ),
+      }
+    }),
+  )
+  const releaseCandidateHR01Stimuli: ReleaseCandidateHR01StimuliEvidence = {
+    generatorCommandId: releaseCandidateGeneratorCommandId,
+    buildSha,
+    manifest: await writeEvidenceFile(
+      directory,
+      path.posix.join(releaseCandidateHR01ArchiveDirectory, "stimuli-manifest.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          buildSha,
+          protocol: {
+            id: "agent-company-r0-human-research",
+            version: "1.0.0",
+            sha256: governance.humanResearchProtocolSha256,
+            studyId: "HR-01",
+            moderatorScriptVersion: "HR01-v1",
+          },
+          presentation: releaseCandidateHR01Presentation,
+          exactPrompt: releaseCandidateHR01ExactPrompt,
+          stateLabelHidden: true,
+          relativePathBase: "build-artifact-root",
+          viewport: { width: 1440, height: 1600 },
+          stimuli: releaseCandidateHR01StimulusFiles.map((stimulus) => ({
+            promptId: stimulus.promptId,
+            stateId: stimulus.stateId,
+            relativePath: stimulus.sourceRelativePath,
+            sha256: stimulus.file.sha256,
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+      "application/json",
+    ),
+    stimuli: releaseCandidateHR01StimulusFiles,
+  }
   const packageValue: AutomaticEvidencePackage = {
     schemaVersion: 1,
-    packageVersion: "1.1.0",
+    packageVersion: "1.2.0",
     packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
     gate: "R0",
     buildSha,
@@ -2049,6 +2516,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
     commands,
     coverage: expectedCoverage(governance.requirements),
     releaseCandidateScreenshots,
+    releaseCandidateHR01Stimuli,
     overallStatus: "pass",
   }
   const packagePath = path.join(directory, "automatic-evidence-package.json")
@@ -2382,6 +2850,7 @@ export async function runAutomaticEvidenceSelfTest() {
       command.exitCode = 1
       command.status = "fail"
       value.releaseCandidateScreenshots = null
+      value.releaseCandidateHR01Stimuli = null
       value.overallStatus = "fail"
     },
   )
@@ -2412,6 +2881,14 @@ export async function runAutomaticEvidenceSelfTest() {
   await Bun.write(tamperedCandidatePath, "tampered candidate PNG\n")
   const tamperedCandidate = await validate(fixture.packagePath)
   await Bun.write(tamperedCandidatePath, originalCandidate)
+  const tamperedHR01StimulusPath = path.join(
+    directory,
+    fixture.packageValue.releaseCandidateHR01Stimuli!.stimuli[0]!.file.relativePath,
+  )
+  const originalHR01Stimulus = new Uint8Array(await Bun.file(tamperedHR01StimulusPath).arrayBuffer())
+  await Bun.write(tamperedHR01StimulusPath, "tampered HR-01 stimulus PNG\n")
+  const tamperedHR01Stimulus = await validate(fixture.packagePath)
+  await Bun.write(tamperedHR01StimulusPath, originalHR01Stimulus)
   const dependencyIsolation = await dependencyIsolationSelfTest(directory)
   const playwrightIsolation = await playwrightIsolationSelfTest(directory)
   const assertions = [
@@ -2420,7 +2897,9 @@ export async function runAutomaticEvidenceSelfTest() {
       passed:
         valid.status === "pass" &&
         valid.trustedReleaseCandidateScreenshots?.buildSha === buildSha &&
-        valid.trustedReleaseCandidateScreenshots.screenshots.length === releaseCandidateSurfaces.length,
+        valid.trustedReleaseCandidateScreenshots.screenshots.length === releaseCandidateSurfaces.length &&
+        valid.trustedReleaseCandidateHR01Stimuli?.buildSha === buildSha &&
+        valid.trustedReleaseCandidateHR01Stimuli.stimuli.length === releaseCandidateHR01States.length,
     },
     {
       name: "git_command_is_not_rewritten_as_bun",
@@ -2438,6 +2917,10 @@ export async function runAutomaticEvidenceSelfTest() {
     { name: "wrong_build_is_invalid", passed: (await validate(wrongBuild)).status === "invalid" },
     { name: "tampered_log_is_invalid", passed: tamperedLog.status === "invalid" },
     { name: "tampered_release_candidate_png_is_invalid", passed: tamperedCandidate.status === "invalid" },
+    {
+      name: "tampered_release_candidate_hr01_png_is_invalid",
+      passed: tamperedHR01Stimulus.status === "invalid",
+    },
     {
       name: "invalid_playwright_browser_binding_is_rejected",
       passed: (await validate(invalidBrowserBinding)).status === "invalid",
