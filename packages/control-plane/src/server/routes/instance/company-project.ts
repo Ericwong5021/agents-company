@@ -9,8 +9,8 @@ import { lazy } from "@/util/lazy"
 import { jsonRequest } from "./trace"
 
 const StartSchema = z.object({
-  goal: z.string().min(1),
-  title: z.string().min(1).optional(),
+  goal: z.string().trim().min(1).max(8_000),
+  title: z.string().trim().min(1).max(240).optional(),
   session_id: z.string().min(1).optional(),
   provider_id: z.string().min(1).optional(),
   model_id: z.string().min(1).optional(),

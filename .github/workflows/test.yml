@@ -43,27 +43,51 @@ jobs:
         run: |
           cd packages/control-plane
           mkdir -p .artifacts/unit
+          bun run script/check-migrations.ts
           bun test --timeout 30000 \
             test/config/config.test.ts \
+            test/company/activity.test.ts \
+            test/company-agent/file-bundle.test.ts \
+            test/company-project/work-projection.test.ts \
+            test/goal-brief/experience-contract.test.ts \
+            test/goal-brief/goal-brief.test.ts \
+            test/goal-brief/migration.test.ts \
+            test/goal-brief/model-adapter.test.ts \
+            test/goal-brief/schema.test.ts \
             test/permission-task.test.ts \
             test/plugin/install.test.ts \
             test/plugin/install-concurrency.test.ts \
+            test/server/company-route.test.ts \
+            test/server/experience-route.test.ts \
+            test/session/auto-dream-default.test.ts \
+            test/storage/db-cold-start.test.ts \
             test/util/filesystem.test.ts \
             --reporter=junit \
             --reporter-outfile=.artifacts/unit/junit.xml
+          bun run test:r0-branches
+
+      - name: Run shared unit tests
+        working-directory: packages/shared
+        run: bun test
+
+      - name: Run JavaScript SDK unit tests
+        working-directory: packages/sdk/js
+        run: bun test
 
       - name: Upload JUnit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-junit-report
-          path: packages/*/.artifacts/unit/junit.xml
+          path: |
+            packages/*/.artifacts/unit/junit.xml
+            packages/control-plane/.artifacts/r0-branch-coverage/report.json
           if-no-files-found: warn
 
   m2-e2e:
     needs: unit
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,6 +104,10 @@ jobs:
         working-directory: packages/app
         run: bunx playwright install --with-deps chromium
 
+      - name: Run WebUI unit gate
+        working-directory: packages/app
+        run: bun run test:unit
+
       - name: Run M2 browser gate
         working-directory: packages/app
         env:
@@ -88,15 +116,48 @@ jobs:
           mkdir -p .artifacts/e2e
           bun run test:e2e
 
+      - name: Run production browser gate
+        working-directory: packages/app
+        run: |
+          mkdir -p .artifacts/e2e-production
+          bun run test:production
+
+      - name: Run committed R0 benchmark twice
+        run: |
+          bun script/experience-benchmark.ts \
+            --ref "$GITHUB_SHA" \
+            --gate R0 \
+            --all \
+            --out "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA" \
+            --repeat 2
+
+      - name: Record incomplete R0 gate decision without human evidence
+        env:
+          R0_GATE_DECISION: ${{ github.workspace }}/.artifacts/experience-refactor/${{ github.sha }}/r0-gate-decision.json
+        run: |
+          bun script/experience-gate.ts \
+            --ref "$GITHUB_SHA" \
+            --gate R0 \
+            --runner-artifact "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA/reproducibility-record.json" \
+            --out "$R0_GATE_DECISION"
+          bun -e 'const decision = await Bun.file(process.env.R0_GATE_DECISION).json(); if (decision.status !== "incomplete" || decision.automaticEvidenceStatus !== "pass" || decision.humanEvidenceStatus !== "incomplete") throw new Error("Unsigned CI gate decision must remain incomplete.")'
+
       - name: Upload M2 browser artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m2-browser-gate
           path: |
-            packages/app/.artifacts/e2e/junit.xml
-            packages/app/e2e/playwright-report
-            packages/app/e2e/test-results
+            packages/app/.artifacts/e2e
+            packages/app/.artifacts/e2e-production
+          if-no-files-found: warn
+
+      - name: Upload R0 benchmark records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r0-experience-benchmark
+          path: .artifacts/experience-refactor
           if-no-files-found: warn
 
   m2-desktop:

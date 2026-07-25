@@ -14,5 +14,5 @@ const server = Bun.spawn(["node", "./.output/server/index.mjs"], {
   stderr: "inherit",
 })
 
-console.log(`Eve preview: ${baseURL}`)
+console.log(`Agent Company preview: ${baseURL}`)
 process.exit(await server.exited)

@@ -1,0 +1,541 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-core-task-benchmark",
+  "version": "1.0.0",
+  "dataIsolation": {
+    "namespace": "experience-refactor-v1",
+    "productionDemoDataAllowed": false,
+    "externalProviderRequired": false,
+    "runDirectoryPattern": ".artifacts/experience-refactor/<build-sha>/<scenario-id>/<run-id>",
+    "resetPolicy": "Create a fresh temporary Control Plane data directory and workspace for every run; never reuse the user's production database."
+  },
+  "executionRecordRequiredFields": [
+    "scenarioId",
+    "scenarioVersion",
+    "scenarioDigest",
+    "buildSha",
+    "runId",
+    "seed",
+    "startedAt",
+    "finishedAt",
+    "stateTrace",
+    "artifacts",
+    "criterionResults",
+    "finalDecision",
+    "failureReason"
+  ],
+  "scenarios": [
+    {
+      "id": "S01",
+      "title": "Market research report",
+      "category": "research_delivery",
+      "riskLevel": "medium",
+      "runMode": "hybrid",
+      "seed": 101,
+      "input": {
+        "goal": "Compare three local-first AI agent products and deliver a sourced recommendation.",
+        "materials": ["fixed web-source fixture set"],
+        "constraints": ["cite every factual comparison", "produce Markdown and PDF"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["structured Goal Brief", "source-backed Markdown report", "PDF report", "criterion evidence"],
+      "allowedQuestions": [
+        "Ask only if the target market or decision criterion would materially change the recommendation."
+      ],
+      "acceptanceCriteria": [
+        {
+          "id": "S01-C1",
+          "statement": "Every factual product comparison references a supplied source.",
+          "evidence": "citation-to-source manifest"
+        },
+        {
+          "id": "S01-C2",
+          "statement": "Markdown and PDF outputs open successfully.",
+          "evidence": "artifact open checks"
+        },
+        {
+          "id": "S01-C3",
+          "statement": "The recommendation states trade-offs and known limitations.",
+          "evidence": "human rubric review"
+        }
+      ],
+      "failureConditions": [
+        "missing source for a factual claim",
+        "unopenable artifact",
+        "delivered state without criterion evidence"
+      ],
+      "observedMetrics": [
+        "brief_time_to_first_value_ms",
+        "delivery_consumability_rate",
+        "acceptance_determinability_rate",
+        "core_task_completion_rate"
+      ],
+      "humanEvidenceRequired": ["recommendation quality rubric"]
+    },
+    {
+      "id": "S02",
+      "title": "Small code change",
+      "category": "software_delivery",
+      "riskLevel": "medium",
+      "runMode": "automated",
+      "seed": 102,
+      "input": {
+        "goal": "Add input validation to a small local fixture repository and deliver the tested patch.",
+        "materials": ["seeded git repository with one failing acceptance test"],
+        "constraints": ["preserve unrelated files", "run the repository verification command"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["structured Goal Brief", "git diff", "passing verification evidence", "delivery summary"],
+      "allowedQuestions": ["Ask only if write permission or the acceptance behavior is ambiguous."],
+      "acceptanceCriteria": [
+        {
+          "id": "S02-C1",
+          "statement": "Only the intended fixture source and test are changed.",
+          "evidence": "git diff allowlist"
+        },
+        {
+          "id": "S02-C2",
+          "statement": "The fixture verification command exits zero.",
+          "evidence": "captured command, exit code, and output"
+        },
+        {
+          "id": "S02-C3",
+          "statement": "The delivered patch opens and matches the verified commit.",
+          "evidence": "artifact digest"
+        }
+      ],
+      "failureConditions": [
+        "unrelated file modification",
+        "missing verification output",
+        "patch differs from verified state"
+      ],
+      "observedMetrics": [
+        "goal_to_start_actions",
+        "delivery_consumability_rate",
+        "acceptance_determinability_rate",
+        "core_task_completion_rate"
+      ],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S03",
+      "title": "Simple copy rewrite",
+      "category": "writing_delivery",
+      "riskLevel": "low",
+      "runMode": "hybrid",
+      "seed": 103,
+      "input": {
+        "goal": "Rewrite a fixed 120-word product paragraph for clarity while preserving every factual claim.",
+        "materials": ["versioned source paragraph and fact checklist"],
+        "constraints": ["maximum 100 words", "do not add facts"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["rewritten copy", "fact-preservation checklist"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S03-C1",
+          "statement": "The rewrite is no longer than 100 words.",
+          "evidence": "deterministic word count"
+        },
+        {
+          "id": "S03-C2",
+          "statement": "Every source fact is preserved and no new fact is added.",
+          "evidence": "fact checklist and human spot-check"
+        },
+        {
+          "id": "S03-C3",
+          "statement": "No reviewer is required by default for this low-risk reversible task.",
+          "evidence": "execution trace"
+        }
+      ],
+      "failureConditions": [
+        "unnecessary approval interruption",
+        "invented fact",
+        "forced reviewer without a recorded risk reason"
+      ],
+      "observedMetrics": ["goal_to_start_actions", "unnecessary_interruption_rate", "core_task_completion_rate"],
+      "humanEvidenceRequired": ["clarity rubric"]
+    },
+    {
+      "id": "S04",
+      "title": "Highly ambiguous product request",
+      "category": "goal_clarification",
+      "riskLevel": "medium",
+      "runMode": "hybrid",
+      "seed": 104,
+      "input": {
+        "goal": "Make onboarding better.",
+        "materials": ["two conflicting target-audience briefs"],
+        "constraints": ["do not begin formal work before resolving the audience conflict"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["Needs input projection", "one material question", "versioned Goal Brief after response"],
+      "allowedQuestions": ["Which of the two supplied target audiences is primary?"],
+      "acceptanceCriteria": [
+        {
+          "id": "S04-C1",
+          "statement": "The system asks only the audience question that materially changes the result.",
+          "evidence": "question trace"
+        },
+        {
+          "id": "S04-C2",
+          "statement": "No formal project exists before the answer is recorded.",
+          "evidence": "database and event trace"
+        },
+        {
+          "id": "S04-C3",
+          "statement": "The answer creates a new Goal Brief version with source attribution.",
+          "evidence": "brief version comparison"
+        }
+      ],
+      "failureConditions": [
+        "ordinary message silently creates work",
+        "more than one non-material question",
+        "answer not reflected in a new brief version"
+      ],
+      "observedMetrics": ["goal_to_start_actions", "unnecessary_interruption_rate", "brief_time_to_first_value_ms"],
+      "humanEvidenceRequired": ["materiality judgment"]
+    },
+    {
+      "id": "S05",
+      "title": "Control Plane disconnected",
+      "category": "runtime_reliability",
+      "riskLevel": "medium",
+      "runMode": "automated",
+      "seed": 105,
+      "input": {
+        "goal": "Load an existing work context while the Control Plane port is unreachable.",
+        "materials": ["fresh WebUI session", "unreachable loopback port"],
+        "constraints": ["do not use fixture or Demo data"],
+        "providerMode": "not_applicable"
+      },
+      "expectedOutputs": ["disconnected state", "impact explanation", "retry and diagnostics actions"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S05-C1",
+          "statement": "No employee, project, message, progress, or success data is displayed.",
+          "evidence": "DOM assertion and API payload"
+        },
+        {
+          "id": "S05-C2",
+          "statement": "The screen explains that real company data was not read.",
+          "evidence": "accessible text assertion"
+        },
+        {
+          "id": "S05-C3",
+          "statement": "Retry and redacted diagnostics are available on the same screen.",
+          "evidence": "interaction assertion"
+        }
+      ],
+      "failureConditions": ["fixture fallback", "zero values presented as real statistics", "missing recovery action"],
+      "observedMetrics": ["false_success_or_data_count", "recovery_success_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S06",
+      "title": "Provider configuration error",
+      "category": "provider_recovery",
+      "riskLevel": "medium",
+      "runMode": "automated",
+      "seed": 106,
+      "input": {
+        "goal": "Submit a fixed goal using an invalid test-provider credential.",
+        "materials": ["deterministic provider returning authentication, rate-limit, and model-incompatible errors"],
+        "constraints": ["retain the goal draft", "do not create false progress"],
+        "providerMode": "deterministic_error_provider"
+      },
+      "expectedOutputs": ["specific provider error", "settings action", "retry after correction"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S06-C1",
+          "statement": "Authentication, rate-limit, and incompatible-model errors remain distinguishable.",
+          "evidence": "error contract assertions"
+        },
+        {
+          "id": "S06-C2",
+          "statement": "The goal draft survives correction and retry.",
+          "evidence": "draft digest before and after"
+        },
+        {
+          "id": "S06-C3",
+          "statement": "No Running or Delivered projection appears before a successful provider response.",
+          "evidence": "state trace"
+        }
+      ],
+      "failureConditions": ["generic success state", "lost draft", "duplicate project after retry"],
+      "observedMetrics": ["activation_success_rate", "false_success_or_data_count", "recovery_success_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S07",
+      "title": "High-risk external action",
+      "category": "approval_governance",
+      "riskLevel": "critical",
+      "runMode": "automated",
+      "seed": 107,
+      "input": {
+        "goal": "Publish a fixed release fixture to a simulated external destination.",
+        "materials": ["simulated publish endpoint and deterministic artifact"],
+        "constraints": ["require independent review and explicit user approval"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["review evidence", "Needs approval item", "one idempotent simulated publish"],
+      "allowedQuestions": ["Ask for approval only after the exact artifact, destination, and effect are shown."],
+      "acceptanceCriteria": [
+        {
+          "id": "S07-C1",
+          "statement": "No external write occurs before explicit approval.",
+          "evidence": "simulated endpoint request log"
+        },
+        {
+          "id": "S07-C2",
+          "statement": "The approval names the artifact, destination, effect, and reviewer result.",
+          "evidence": "approval payload"
+        },
+        {
+          "id": "S07-C3",
+          "statement": "Repeated approval submission produces one side effect.",
+          "evidence": "idempotency assertion"
+        }
+      ],
+      "failureConditions": ["external write before approval", "approval lacks impact", "duplicate side effect"],
+      "observedMetrics": [
+        "acceptance_determinability_rate",
+        "unnecessary_interruption_rate",
+        "false_success_or_data_count"
+      ],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S08",
+      "title": "Reviewer requests revision",
+      "category": "review_revision",
+      "riskLevel": "medium",
+      "runMode": "automated",
+      "seed": 108,
+      "input": {
+        "goal": "Produce a report where the deterministic first version fails one acceptance criterion.",
+        "materials": ["review fixture rejecting criterion C2 on version 1 and accepting version 2"],
+        "constraints": ["preserve version 1 and its findings"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["Reviewing state", "Revision state", "version 2", "updated evidence"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S08-C1",
+          "statement": "The failed criterion and reviewer finding are visible.",
+          "evidence": "review result"
+        },
+        {
+          "id": "S08-C2",
+          "statement": "Revision targets the failed criterion without erasing version 1.",
+          "evidence": "version and event history"
+        },
+        {
+          "id": "S08-C3",
+          "statement": "Version 2 is independently re-reviewed before delivery.",
+          "evidence": "review trace"
+        }
+      ],
+      "failureConditions": ["version 1 overwritten", "revision lacks a target criterion", "delivery skips re-review"],
+      "observedMetrics": ["acceptance_determinability_rate", "core_task_completion_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S09",
+      "title": "User requests a targeted change",
+      "category": "delivery_revision",
+      "riskLevel": "medium",
+      "runMode": "automated",
+      "seed": 109,
+      "input": {
+        "goal": "Change one named section of an already delivered fixture artifact.",
+        "materials": ["accepted source version", "specific criterion-linked feedback"],
+        "constraints": ["retain the prior version", "show a focused diff"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["revision request", "new artifact version", "focused diff", "new criterion evidence"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S09-C1",
+          "statement": "The prior delivery remains openable.",
+          "evidence": "prior artifact digest and open check"
+        },
+        {
+          "id": "S09-C2",
+          "statement": "Only the requested section changes.",
+          "evidence": "structured diff"
+        },
+        {
+          "id": "S09-C3",
+          "statement": "Acceptance applies to the new version without rewriting old evidence.",
+          "evidence": "versioned acceptance records"
+        }
+      ],
+      "failureConditions": ["prior version missing", "unrelated section changed", "old evidence mutated"],
+      "observedMetrics": [
+        "delivery_consumability_rate",
+        "acceptance_determinability_rate",
+        "core_task_completion_rate"
+      ],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S10",
+      "title": "Control Plane restart recovery",
+      "category": "restart_recovery",
+      "riskLevel": "high",
+      "runMode": "automated",
+      "seed": 110,
+      "input": {
+        "goal": "Complete a deterministic multi-step task while restarting the Control Plane after the first persisted side effect.",
+        "materials": ["restartable local runtime", "idempotent side-effect ledger"],
+        "constraints": ["preserve draft and route", "do not duplicate completed work"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": [
+        "disconnected and recovering states",
+        "event replay",
+        "continued execution",
+        "one final delivery"
+      ],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S10-C1",
+          "statement": "The original route, draft, and work identity survive restart.",
+          "evidence": "before and after identity digests"
+        },
+        {
+          "id": "S10-C2",
+          "statement": "Event replay yields the same projection as uninterrupted execution.",
+          "evidence": "projection digest comparison"
+        },
+        {
+          "id": "S10-C3",
+          "statement": "No completed side effect, approval, milestone, or delivery is duplicated.",
+          "evidence": "idempotency ledger"
+        }
+      ],
+      "failureConditions": ["full-page context loss", "projection mismatch", "duplicate side effect"],
+      "observedMetrics": ["recovery_success_rate", "false_success_or_data_count", "core_task_completion_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S11",
+      "title": "Long session and large project",
+      "category": "scale_reliability",
+      "riskLevel": "high",
+      "runMode": "automated",
+      "seed": 111,
+      "input": {
+        "goal": "Load and continue a generated project with 1000 messages, 10000 events, and 100 artifacts.",
+        "materials": ["seeded large-project fixture"],
+        "constraints": ["incremental loading", "high-signal main conversation", "diagnostics remain traceable"],
+        "providerMode": "deterministic_test_provider"
+      },
+      "expectedOutputs": ["incremental Work view", "stable projection", "searchable diagnostics", "openable artifacts"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S11-C1",
+          "statement": "The initial view does not require loading all raw events into the main conversation.",
+          "evidence": "network request and DOM counts"
+        },
+        {
+          "id": "S11-C2",
+          "statement": "Replaying all events produces the same projection digest.",
+          "evidence": "projection digest comparison"
+        },
+        {
+          "id": "S11-C3",
+          "statement": "Every artifact remains addressable and diagnostics remain searchable.",
+          "evidence": "artifact and diagnostic index checks"
+        }
+      ],
+      "failureConditions": ["unbounded initial payload", "projection mismatch", "unaddressable artifact"],
+      "observedMetrics": ["delivery_consumability_rate", "recovery_success_rate", "core_task_completion_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S12",
+      "title": "Empty workspace",
+      "category": "first_run",
+      "riskLevel": "low",
+      "runMode": "hybrid",
+      "seed": 112,
+      "input": {
+        "goal": "Open a fresh installation with no Provider, project, employee, or Demo workspace.",
+        "materials": ["fresh isolated database"],
+        "constraints": ["show one truthful next step", "do not display sample statistics"],
+        "providerMode": "not_configured"
+      },
+      "expectedOutputs": ["truthful empty state", "Provider setup action", "first Goal path after configuration"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S12-C1",
+          "statement": "No fictional employee, project, message, progress, or Demo object is shown.",
+          "evidence": "DOM assertion and API payload"
+        },
+        {
+          "id": "S12-C2",
+          "statement": "One primary next step leads to Provider setup.",
+          "evidence": "keyboard-accessible interaction"
+        },
+        {
+          "id": "S12-C3",
+          "statement": "After setup the next primary action is to enter the first Goal.",
+          "evidence": "route and focus assertion"
+        }
+      ],
+      "failureConditions": [
+        "sample statistics presented as real",
+        "multiple competing primary actions",
+        "empty shell is inaccessible without data"
+      ],
+      "observedMetrics": ["activation_success_rate", "goal_to_start_actions", "false_success_or_data_count"],
+      "humanEvidenceRequired": ["10-second product comprehension prompt"]
+    }
+  ],
+  "humanResearchItems": [
+    {
+      "id": "HR-01",
+      "title": "Three-person terminology comprehension",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "blocksReleaseGate": "R0",
+      "minimumParticipants": 3,
+      "target": "At least 90% correct explanation across the twelve sampled state prompts.",
+      "cannotBeInferredFrom": ["source review", "automated string checks", "agent judgment"]
+    },
+    {
+      "id": "HR-02",
+      "title": "Five-person brand cognition",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "blocksReleaseGate": "R0",
+      "minimumParticipants": 5,
+      "target": "At least four participants accurately state what the product is, what it does, and the next step.",
+      "cannotBeInferredFrom": ["screenshots alone", "copy presence", "agent judgment"]
+    },
+    {
+      "id": "HR-03",
+      "title": "Manual screenshot approval",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "blocksReleaseGate": "R0",
+      "requiredSurfaces": ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"],
+      "target": "A named human approver accepts every required release-candidate screenshot and records the decision.",
+      "cannotBeInferredFrom": ["visual diff pass", "screenshot existence", "automated DOM assertions", "agent judgment"]
+    }
+  ]
+}

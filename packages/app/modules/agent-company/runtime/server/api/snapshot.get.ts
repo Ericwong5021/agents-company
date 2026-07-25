@@ -1,214 +1,410 @@
-import { defineEventHandler } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
-import { ofetch } from "ofetch"
-import type {
-  CompanyAgent,
-  CompanyMessage,
-  CompanyProject,
-  CompanySnapshot,
-} from "../../shared/company-contract"
+import type { CompanyConnectionIssue, CompanySnapshot, CompanySnapshotResource } from "../../shared/company-contract"
+import {
+  parseAgents,
+  parseBoardChannel,
+  parseCompany,
+  parseHealth,
+  parseMessages,
+  parseReadiness,
+  parseWorkProjections,
+} from "../../shared/snapshot-contract"
+import {
+  controlPlaneURL,
+  publicControlPlaneEndpoint,
+  requestControlPlane,
+  type ControlPlaneFailure,
+} from "../utils/control-plane-client"
+import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 
-const fixture: CompanySnapshot = {
-  connection: "demo",
-  company: {
-    id: "local-agent-company",
-    name: "Agent Company",
-    provider: "Local Control Plane",
-    providerConfigured: false,
-    approvalPolicy: "Balanced",
+function issue(
+  input: Omit<CompanyConnectionIssue, "diagnostic"> & {
+    checkedAt: string
+    endpoint: string
+    statusCode?: number
+    controlPlaneVersion?: string
+    readiness?: "ready" | "blocked" | "unknown"
   },
-  stats: {
-    online: 3,
-    activeProjects: 2,
-    boardMessages: 18,
+): CompanyConnectionIssue {
+  return {
+    kind: input.kind,
+    title: input.title,
+    detail: input.detail,
+    impact: input.impact,
+    nextAction: input.nextAction,
+    retryable: input.retryable,
+    unavailable: input.unavailable,
+    diagnostic: {
+      checkedAt: input.checkedAt,
+      endpoint: input.endpoint,
+      issue: input.kind,
+      statusCode: input.statusCode,
+      controlPlaneVersion: input.controlPlaneVersion,
+      readiness: input.readiness,
+      unavailable: input.unavailable,
+    },
+  }
+}
+
+function unavailableSnapshot(connectionIssue: CompanyConnectionIssue): CompanySnapshot {
+  return {
+    connection: "disconnected",
+    issue: connectionIssue,
+    company: {
+      id: "",
+      name: "Agent Company",
+      provider: "未读取",
+      approvalPolicy: "未读取",
+    },
+    stats: {},
+    agents: [],
+    messages: [],
+    work: [],
+    projects: [],
+  }
+}
+
+function failureIssue(
+  failure: ControlPlaneFailure,
+  input: {
+    checkedAt: string
+    endpoint: string
+    unavailable: CompanySnapshotResource[]
+    controlPlaneVersion?: string
+    phase: "health" | "readiness" | "company"
   },
-  agents: [
-    {
-      id: "ceo",
-      name: "CEO",
-      role: "Company direction",
-      department: "Board",
-      activity: "working",
-      subject: "Reviewing the launch brief",
-      presence: "online",
-    },
-    {
-      id: "cto",
-      name: "CTO",
-      role: "Technical strategy",
-      department: "Engineering",
-      activity: "working",
-      subject: "Validating the Control Plane adapter",
-      presence: "online",
-    },
-    {
-      id: "product-lead",
-      name: "Product Lead",
-      role: "User value",
-      department: "Product",
-      activity: "waiting",
-      subject: "Preparing the next board decision",
-      presence: "online",
-    },
-  ],
-  messages: [
-    {
-      id: "message-1",
-      author: "You",
-      role: "Founder",
-      body: "Move the Agent Company experience onto the Eve shell without weakening the group collaboration model.",
-      time: "09:42",
-      kind: "user",
-    },
-    {
-      id: "message-2",
-      author: "CEO",
-      role: "Board",
-      body: "The upstream shell remains intact. Company navigation and data access now enter through one isolated Nuxt module.",
-      time: "09:44",
-      kind: "agent",
-    },
-    {
-      id: "message-3",
-      author: "CTO",
-      role: "Engineering",
-      body: "The adapter reads the real local Control Plane when available and exposes an explicit demo state when it is offline.",
-      time: "09:45",
-      kind: "agent",
-    },
-  ],
-  projects: [
-    {
-      id: "project-eve-shell",
-      title: "Eve shell integration",
-      status: "In progress",
-      progress: 72,
-    },
-    {
-      id: "project-control-plane",
-      title: "Control Plane projection",
-      status: "Validation",
-      progress: 48,
-    },
-  ],
-  notice: "Control Plane is offline. Showing deterministic module data.",
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
-
-function text(value: unknown, fallback = "") {
-  return typeof value === "string" && value.trim() ? value : fallback
-}
-
-function number(value: unknown, fallback = 0) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback
-}
-
-function normalizeAgents(value: unknown): CompanyAgent[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((entry) => {
-    if (!isRecord(entry) || !isRecord(entry.agent)) return []
-    return [{
-      id: text(entry.agent.id, crypto.randomUUID()),
-      name: text(entry.agent.name, "Agent"),
-      role: text(entry.agent.role, "Company employee"),
-      department: text(entry.agent.department, "Company"),
-      activity: text(entry.activity, "idle"),
-      subject: text(entry.subject, "Available for work"),
-      presence: entry.presence === "offline" ? "offline" as const : "online" as const,
-    }]
+) {
+  if (failure.kind === "invalid_configuration") {
+    return issue({
+      kind: "invalid_configuration",
+      title: "Control Plane 地址无效",
+      detail: "当前本地服务地址不是受信任的回环 HTTP(S) 地址。",
+      impact: "尚未读取任何真实公司数据。",
+      nextAction: "修正 AGENT_COMPANY_CONTROL_PLANE_URL 后重新启动 WebUI。",
+      retryable: false,
+      unavailable: input.unavailable,
+      checkedAt: input.checkedAt,
+      endpoint: input.endpoint,
+      controlPlaneVersion: input.controlPlaneVersion,
+      readiness: input.phase === "readiness" ? "unknown" : undefined,
+    })
+  }
+  if (failure.kind === "authorization_required") {
+    return issue({
+      kind: "authorization_required",
+      title: "Control Plane 需要重新授权",
+      detail: "本次连接未获得读取本地公司状态的权限。",
+      impact: "尚未读取真实公司数据。",
+      nextAction: "更新本地连接凭据后重新连接。",
+      retryable: true,
+      unavailable: input.unavailable,
+      checkedAt: input.checkedAt,
+      endpoint: input.endpoint,
+      statusCode: failure.statusCode,
+      controlPlaneVersion: input.controlPlaneVersion,
+      readiness: input.phase === "readiness" ? "unknown" : undefined,
+    })
+  }
+  if (failure.kind === "service_error" && failure.statusCode === 404 && input.phase !== "company") {
+    return issue({
+      kind: "version_mismatch",
+      title: "Control Plane 版本与 WebUI 不匹配",
+      detail: "本地服务缺少当前 WebUI 需要的健康或诊断接口。",
+      impact: "为避免误读旧接口，工作区没有加载公司数据。",
+      nextAction: "更新并重启 Control Plane 后重新连接。",
+      retryable: true,
+      unavailable: input.unavailable,
+      checkedAt: input.checkedAt,
+      endpoint: input.endpoint,
+      statusCode: failure.statusCode,
+      controlPlaneVersion: input.controlPlaneVersion,
+      readiness: input.phase === "readiness" ? "unknown" : undefined,
+    })
+  }
+  if (failure.kind === "service_error") {
+    return issue({
+      kind: "service_error",
+      title: "Control Plane 返回服务错误",
+      detail: "本地服务已响应，但没有完成真实公司状态读取。",
+      impact: "当前页面不会展示可能过期或不完整的数据。",
+      nextAction: "查看本地服务日志，修复错误后重新连接。",
+      retryable: true,
+      unavailable: input.unavailable,
+      checkedAt: input.checkedAt,
+      endpoint: input.endpoint,
+      statusCode: failure.statusCode,
+      controlPlaneVersion: input.controlPlaneVersion,
+      readiness: input.phase === "readiness" ? "unknown" : undefined,
+    })
+  }
+  return issue({
+    kind: "service_unreachable",
+    title: "无法连接本地 Control Plane",
+    detail: "WebUI 没有收到本地服务响应。",
+    impact: "尚未读取任何真实公司数据。",
+    nextAction: "在仓库根目录运行 bun run dev，然后重新连接。",
+    retryable: true,
+    unavailable: input.unavailable,
+    checkedAt: input.checkedAt,
+    endpoint: input.endpoint,
+    controlPlaneVersion: input.controlPlaneVersion,
+    readiness: input.phase === "readiness" ? "unknown" : undefined,
   })
 }
 
-function normalizeProjects(value: unknown): CompanyProject[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((entry) => {
-    if (!isRecord(entry)) return []
-    return [{
-      id: text(entry.id, crypto.randomUUID()),
-      title: text(entry.title, text(entry.goal, "Untitled project")),
-      status: text(entry.status, "Active"),
-      progress: Math.max(0, Math.min(100, number(entry.progress, 0))),
-    }]
-  })
-}
-
-function normalizeMessages(value: unknown, agents: CompanyAgent[]): CompanyMessage[] {
-  if (!isRecord(value) || !Array.isArray(value.items)) return []
-  return value.items.flatMap((entry) => {
-    if (!isRecord(entry) || !isRecord(entry.author)) return []
-    const authorID = text(entry.author.id, "system")
-    const author = agents.find((agent) => agent.id === authorID)
-    const created = isRecord(entry.time) ? number(entry.time.created) : 0
-    return [{
-      id: text(entry.id, crypto.randomUUID()),
-      author: author?.name ?? (entry.author.kind === "user" ? "You" : "System"),
-      role: author?.role ?? text(entry.author.kind, "system"),
-      body: text(entry.body),
-      threadID: text(entry.sourceThreadID) || undefined,
-      time: created
-        ? new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(created))
-        : "",
-      kind: entry.author.kind === "agent"
-        ? "agent" as const
-        : entry.author.kind === "user"
-          ? "user" as const
-          : "system" as const,
-    }]
-  })
-}
-
-export default defineEventHandler(async (event): Promise<CompanySnapshot> => {
+export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot> => {
   const config = useRuntimeConfig(event)
-  const baseURL = new URL(config.agentCompanyControlPlaneUrl)
-  const headers = config.agentCompanyControlPlaneAuthorization
-    ? { authorization: config.agentCompanyControlPlaneAuthorization }
-    : undefined
-  const request = (path: string) => ofetch<unknown>(new URL(path, baseURL).toString(), { headers })
+  const checkedAt = new Date().toISOString()
+  const baseURL = controlPlaneURL(config.agentCompanyControlPlaneUrl)
+  if (!baseURL) {
+    return unavailableSnapshot(
+      issue({
+        kind: "invalid_configuration",
+        title: "Control Plane 地址无效",
+        detail: "当前本地服务地址不是可用的 HTTP(S) 地址。",
+        impact: "尚未读取任何真实公司数据。",
+        nextAction: "修正 AGENT_COMPANY_CONTROL_PLANE_URL 后重新启动 WebUI。",
+        retryable: false,
+        unavailable: ["company", "agents", "work", "channels", "messages"],
+        checkedAt,
+        endpoint: "invalid",
+      }),
+    )
+  }
 
-  const state = await request("/company").catch(() => undefined)
-  if (!isRecord(state) || state.state !== "ready" || !isRecord(state.company)) return fixture
+  const endpoint = publicControlPlaneEndpoint(baseURL)
+  const authorization = config.agentCompanyControlPlaneAuthorization || undefined
+  const allResources: CompanySnapshotResource[] = ["company", "agents", "work", "channels", "messages"]
+  const healthResult = await requestControlPlane<unknown>(
+    config.agentCompanyControlPlaneUrl,
+    "/global/health",
+    authorization,
+  )
+  if (!healthResult.ok) {
+    return unavailableSnapshot(
+      failureIssue(healthResult.failure, {
+        checkedAt,
+        endpoint,
+        unavailable: allResources,
+        phase: "health",
+      }),
+    )
+  }
+  const health = parseHealth(healthResult.value)
+  if (!health.ok) {
+    return unavailableSnapshot(
+      issue({
+        kind: "invalid_response",
+        title: "Control Plane 健康响应无法识别",
+        detail: "本地服务返回了不符合当前契约的健康状态。",
+        impact: "为避免误读服务版本，工作区没有加载公司数据。",
+        nextAction: "更新并重启 Control Plane 后重新连接。",
+        retryable: true,
+        unavailable: allResources,
+        checkedAt,
+        endpoint,
+      }),
+    )
+  }
 
-  const companyID = text(state.company.id)
-  const [agentsRaw, projectsRaw, channelsRaw] = await Promise.all([
-    request(`/company/agents?company_id=${encodeURIComponent(companyID)}`).catch(() => []),
-    request("/company-project").catch(() => []),
-    request(`/company/channels?company_id=${encodeURIComponent(companyID)}`).catch(() => []),
+  const readinessResult = await requestControlPlane<unknown>(
+    config.agentCompanyControlPlaneUrl,
+    "/global/readiness",
+    authorization,
+  )
+  if (!readinessResult.ok) {
+    return unavailableSnapshot(
+      failureIssue(readinessResult.failure, {
+        checkedAt,
+        endpoint,
+        unavailable: allResources,
+        controlPlaneVersion: health.value,
+        phase: "readiness",
+      }),
+    )
+  }
+  const readiness = parseReadiness(readinessResult.value)
+  if (!readiness.ok) {
+    return unavailableSnapshot(
+      issue({
+        kind: "invalid_response",
+        title: "Control Plane 诊断响应无法识别",
+        detail: "本地服务返回了不符合当前契约的就绪状态。",
+        impact: "数据库与迁移状态尚未确认，工作区没有加载公司数据。",
+        nextAction: "更新并重启 Control Plane 后重新连接。",
+        retryable: true,
+        unavailable: allResources,
+        checkedAt,
+        endpoint,
+        controlPlaneVersion: health.value,
+        readiness: "unknown",
+      }),
+    )
+  }
+  if (!readiness.value.ready || readiness.value.checks.some((entry) => entry.status === "fail")) {
+    return unavailableSnapshot(
+      issue({
+        kind: "migration_required",
+        title: "Control Plane 数据库尚未就绪",
+        detail: "本地服务报告数据库或迁移检查失败。",
+        impact: "为保护现有数据，工作区没有继续读取公司状态。",
+        nextAction: "查看 Control Plane 启动日志并完成迁移后重新连接。",
+        retryable: true,
+        unavailable: allResources,
+        checkedAt,
+        endpoint,
+        controlPlaneVersion: health.value,
+        readiness: "blocked",
+      }),
+    )
+  }
+
+  const companyResult = await requestControlPlane<unknown>(
+    config.agentCompanyControlPlaneUrl,
+    "/company",
+    authorization,
+  )
+  if (!companyResult.ok) {
+    return unavailableSnapshot(
+      failureIssue(companyResult.failure, {
+        checkedAt,
+        endpoint,
+        unavailable: allResources,
+        controlPlaneVersion: health.value,
+        phase: "company",
+      }),
+    )
+  }
+  const company = parseCompany(companyResult.value)
+  if (!company.ok) {
+    return unavailableSnapshot(
+      issue({
+        kind: "invalid_response",
+        title: "Control Plane 公司状态无法识别",
+        detail: "本地服务返回了不符合当前契约的公司数据。",
+        impact: "页面不会用默认值伪造员工、项目或进度。",
+        nextAction: "检查 Control Plane 版本和数据诊断后重新连接。",
+        retryable: true,
+        unavailable: allResources,
+        checkedAt,
+        endpoint,
+        controlPlaneVersion: health.value,
+        readiness: "ready",
+      }),
+    )
+  }
+
+  const [agentsResult, workResult, channelsResult] = await Promise.all([
+    requestControlPlane<unknown>(
+      config.agentCompanyControlPlaneUrl,
+      `/company/agents?company_id=${encodeURIComponent(company.value.id)}`,
+      authorization,
+    ),
+    requestControlPlane<unknown>(config.agentCompanyControlPlaneUrl, "/experience/work", authorization),
+    requestControlPlane<unknown>(
+      config.agentCompanyControlPlaneUrl,
+      `/company/channels?company_id=${encodeURIComponent(company.value.id)}`,
+      authorization,
+    ),
   ])
-  const agents = normalizeAgents(agentsRaw)
-  const channels = Array.isArray(channelsRaw) ? channelsRaw : []
-  const board = channels.find((entry) => isRecord(entry) && entry.kind === "board")
-  const messagesRaw = isRecord(board)
-    ? await request(`/company/channels/${encodeURIComponent(text(board.id))}/messages?company_id=${encodeURIComponent(companyID)}&limit=30`).catch(() => ({ items: [] }))
-    : { items: [] }
-  const messages = normalizeMessages(messagesRaw, agents)
-  const projects = normalizeProjects(projectsRaw)
-  const provider = isRecord(state.company.provider)
-    ? `${text(state.company.provider.provider_id, "provider")} / ${text(state.company.provider.model_id, "model")}`
-    : "Not configured"
-  const approvalPolicy = isRecord(state.company.approval_policy)
-    ? text(state.company.approval_policy.preset, "Balanced")
-    : "Balanced"
+  const agents = agentsResult.ok ? parseAgents(agentsResult.value) : { ok: false as const }
+  const work = workResult.ok ? parseWorkProjections(workResult.value) : { ok: false as const }
+  const board = channelsResult.ok ? parseBoardChannel(channelsResult.value) : { ok: false as const }
+  const messagesResult =
+    board.ok && board.value
+      ? await requestControlPlane<unknown>(
+          config.agentCompanyControlPlaneUrl,
+          `/company/channels/${encodeURIComponent(board.value)}/messages?company_id=${encodeURIComponent(company.value.id)}&limit=30`,
+          authorization,
+        )
+      : board.ok
+        ? { ok: true as const, value: { items: [] } }
+        : { ok: false as const }
+  const messages =
+    messagesResult.ok && agents.ok ? parseMessages(messagesResult.value, agents.value) : { ok: false as const }
+  const unavailable = [
+    !agents.ok ? ("agents" as const) : undefined,
+    !work.ok ? ("work" as const) : undefined,
+    !board.ok ? ("channels" as const) : undefined,
+    !messages.ok ? ("messages" as const) : undefined,
+  ].filter((resource): resource is Exclude<CompanySnapshotResource, "company"> => resource !== undefined)
+  const providerRequired = company.value.provider === null
+  const connectionIssue = unavailable.length
+    ? issue({
+        kind: "partial_data",
+        title: "部分真实数据暂时不可用",
+        detail: "页面只显示已通过契约验证的数据，未加载区域不会被当成空数据。",
+        impact: "员工、工作或消息中的部分区域可能暂时隐藏。",
+        nextAction: "重新连接；若问题持续，请复制诊断并查看 Control Plane 日志。",
+        retryable: true,
+        unavailable,
+        checkedAt,
+        endpoint,
+        controlPlaneVersion: health.value,
+        readiness: "ready",
+      })
+    : providerRequired
+      ? issue({
+          kind: "provider_required",
+          title: "还未连接模型 Provider",
+          detail: "Control Plane 与公司数据已就绪，但团队暂时不能开始新目标。",
+          impact: "可以查看真实历史数据，新的 Agent 执行会保持停用。",
+          nextAction: "在设置中连接 Provider 并选择模型。",
+          retryable: false,
+          unavailable: [],
+          checkedAt,
+          endpoint,
+          controlPlaneVersion: health.value,
+          readiness: "ready",
+        })
+      : undefined
+  const availableAgents = agents.ok ? agents.value : []
+  const availableWork = work.ok ? work.value : []
+  const projectedWork = availableWork.filter((item) => item.availability === "available")
+  const fullyProjectedWork = work.ok && projectedWork.length === availableWork.length
+  const availableMessages = messages.ok ? messages.value : []
 
   return {
-    connection: "live",
+    connection: connectionIssue ? "degraded" : "ready",
+    issue: connectionIssue,
     company: {
-      id: companyID,
-      name: text(state.company.name, "Agent Company"),
-      provider,
-      providerConfigured: isRecord(state.company.provider),
-      approvalPolicy,
-      setupGoal: isRecord(state.company.setup_goal) ? text(state.company.setup_goal.body) || undefined : undefined,
+      id: company.value.id,
+      name: company.value.name,
+      provider: company.value.provider
+        ? `${company.value.provider.providerID} / ${company.value.provider.modelID}`
+        : "未配置",
+      providerConfigured: !providerRequired,
+      approvalPolicy: company.value.policy,
+      setupGoal: company.value.setupGoal,
     },
     stats: {
-      online: agents.filter((agent) => agent.presence === "online").length,
-      activeProjects: projects.filter((project) => !["completed", "cancelled", "failed"].includes(project.status.toLowerCase())).length,
-      boardMessages: messages.length,
+      ...(agents.ok ? { online: availableAgents.filter((agent) => agent.presence === "online").length } : {}),
+      ...(fullyProjectedWork
+        ? {
+            activeProjects: projectedWork.filter(
+              (item) => !["accepted", "failed", "cancelled"].includes(item.summary.userStatus),
+            ).length,
+          }
+        : {}),
+      ...(messages.ok ? { boardMessages: availableMessages.length } : {}),
     },
-    agents,
-    messages,
-    projects,
+    agents: availableAgents,
+    messages: availableMessages,
+    work: availableWork,
+    projects: availableWork.map((item) =>
+      item.availability === "available"
+        ? {
+            id: item.summary.workId,
+            title: item.summary.title,
+            status: item.summary.userStatus,
+            progress: item.progress.percent,
+          }
+        : {
+            id: item.workId,
+            title: item.title,
+            status: "状态不可用",
+          },
+    ),
+    notice: connectionIssue?.detail,
   }
 })

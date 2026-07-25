@@ -74,8 +74,13 @@ import type {
   CompanyProjectResolveGateResponses,
   CompanyProjectRetryResponses,
   CompanyProjectStartResponses,
+  CompanyProjectWorkItemReassignErrors,
+  CompanyProjectWorkItemReassignResponses,
   CompanyProviderAuthErrors,
   CompanyProviderAuthResponses,
+  CompanyProviderConfigureErrors,
+  CompanyProviderConfigureInput,
+  CompanyProviderConfigureResponses,
   CompanyProviderModelsErrors,
   CompanyProviderModelsResponses,
   CompanyProviderOauthAuthorizeErrors,
@@ -88,6 +93,15 @@ import type {
   CompanyProviderSetErrors,
   CompanyProviderSetResponses,
   CompanyProvidersResponses,
+  CompanyRecruitmentDepartmentEnsureErrors,
+  CompanyRecruitmentDepartmentEnsureResponses,
+  CompanyRecruitmentEmploymentReviewResponses,
+  CompanyRecruitmentNeedCreateResponses,
+  CompanyRecruitmentNeedSelectResponses,
+  CompanyRecruitmentPerformanceRecordErrors,
+  CompanyRecruitmentPerformanceRecordResponses,
+  CompanyRecruitmentProjectReleaseResponses,
+  CompanyRecruitmentSnapshotResponses,
   CompanyRepositoryInspectErrors,
   CompanyRepositoryInspectResponses,
   CompanyResetErrors,
@@ -110,6 +124,22 @@ import type {
   ConversationThreadId,
   CustomProviderModelsInput,
   EventSubscribeResponses,
+  ExperienceArtifactGetErrors,
+  ExperienceArtifactGetResponses,
+  ExperienceGoalBriefAppendErrors,
+  ExperienceGoalBriefAppendResponses,
+  ExperienceGoalBriefCreateResponses,
+  ExperienceGoalBriefGenerateErrors,
+  ExperienceGoalBriefGenerateResponses,
+  ExperienceGoalBriefGetErrors,
+  ExperienceGoalBriefGetResponses,
+  ExperienceGoalBriefHistoryErrors,
+  ExperienceGoalBriefHistoryResponses,
+  ExperienceGoalBriefProjectErrors,
+  ExperienceGoalBriefProjectResponses,
+  ExperienceWorkGetErrors,
+  ExperienceWorkGetResponses,
+  ExperienceWorkListResponses,
   ExperimentalConsoleGetResponses,
   ExperimentalConsoleListOrgsResponses,
   ExperimentalConsoleSwitchOrgResponses,
@@ -719,6 +749,352 @@ export class LocalAuth extends HeyApiClient {
   }
 }
 
+export class Need extends HeyApiClient {
+  /**
+   * Persist a project capability need
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      company_id?: CompanyId
+      project_id?: string
+      need_key?: string
+      role?: string
+      work_type?: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+      capability_packs?: Array<string>
+      risk_level?: "low" | "medium" | "high"
+      demand_horizon?: "project" | "recurring"
+      department_key?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_id" },
+            { in: "body", key: "need_key" },
+            { in: "body", key: "role" },
+            { in: "body", key: "work_type" },
+            { in: "body", key: "capability_packs" },
+            { in: "body", key: "risk_level" },
+            { in: "body", key: "demand_horizon" },
+            { in: "body", key: "department_key" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyRecruitmentNeedCreateResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/needs",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Select the smallest available team member and preserve rejection reasons
+   */
+  public select<ThrowOnError extends boolean = false>(
+    parameters: {
+      needID: string
+      exclude_agent_ids?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "needID" },
+            { in: "body", key: "exclude_agent_ids" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyRecruitmentNeedSelectResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/needs/{needID}/select",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Project extends HeyApiClient {
+  /**
+   * Return assigned candidates to the reusable candidate pool
+   */
+  public release<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      company_id?: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "body", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyRecruitmentProjectReleaseResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/projects/{projectID}/release",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Performance extends HeyApiClient {
+  /**
+   * Record delivery quality, reliability, cost and speed for a selected candidate
+   */
+  public record<ThrowOnError extends boolean = false>(
+    parameters: {
+      selectionID: string
+      outcome?: "success" | "failure"
+      quality_score?: number
+      reliability_score?: number
+      cost_score?: number
+      speed_score?: number
+      review_summary?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "selectionID" },
+            { in: "body", key: "outcome" },
+            { in: "body", key: "quality_score" },
+            { in: "body", key: "reliability_score" },
+            { in: "body", key: "cost_score" },
+            { in: "body", key: "speed_score" },
+            { in: "body", key: "review_summary" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyRecruitmentPerformanceRecordResponses,
+      CompanyRecruitmentPerformanceRecordErrors,
+      ThrowOnError
+    >({
+      url: "/company/recruitment/selections/{selectionID}/performance",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Department extends HeyApiClient {
+  /**
+   * Create a department only after recurring need is proven across projects
+   */
+  public ensure<ThrowOnError extends boolean = false>(
+    parameters?: {
+      company_id?: CompanyId
+      department_key?: string
+      name?: string
+      purpose?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "company_id" },
+            { in: "body", key: "department_key" },
+            { in: "body", key: "name" },
+            { in: "body", key: "purpose" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyRecruitmentDepartmentEnsureResponses,
+      CompanyRecruitmentDepartmentEnsureErrors,
+      ThrowOnError
+    >({
+      url: "/company/recruitment/departments",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Recruitment extends HeyApiClient {
+  /**
+   * List capability needs, team decisions, candidate lifecycle, employment reviews and departments
+   */
+  public snapshot<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      project_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyRecruitmentSnapshotResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Evaluate and govern promotion from reusable candidate to formal employee
+   */
+  public employmentReview<ThrowOnError extends boolean = false>(
+    parameters: {
+      agentID: string
+      company_id?: CompanyId
+      decision?: "propose" | "approve" | "reject"
+      decision_note?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "agentID" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "decision" },
+            { in: "body", key: "decision_note" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyRecruitmentEmploymentReviewResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/agents/{agentID}/employment-review",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  private _need?: Need
+  get need(): Need {
+    return (this._need ??= new Need({ client: this.client }))
+  }
+
+  private _project?: Project
+  get project(): Project {
+    return (this._project ??= new Project({ client: this.client }))
+  }
+
+  private _performance?: Performance
+  get performance(): Performance {
+    return (this._performance ??= new Performance({ client: this.client }))
+  }
+
+  private _department?: Department
+  get department(): Department {
+    return (this._department ??= new Department({ client: this.client }))
+  }
+}
+
+export class WorkItem extends HeyApiClient {
+  /**
+   * Reassign a rejected worker before explicitly retrying a blocked project
+   */
+  public reassign<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      workItemID: string
+      owner_agent_id?: string
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "workItemID" },
+            { in: "body", key: "owner_agent_id" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyProjectWorkItemReassignResponses,
+      CompanyProjectWorkItemReassignErrors,
+      ThrowOnError
+    >({
+      url: "/company/projects/{projectID}/work-items/{workItemID}/reassign",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Project2 extends HeyApiClient {
+  private _workItem?: WorkItem
+  get workItem(): WorkItem {
+    return (this._workItem ??= new WorkItem({ client: this.client }))
+  }
+}
+
 export class Company extends HeyApiClient {
   /**
    * Get the local company bootstrap state
@@ -828,6 +1204,32 @@ export class Company extends HeyApiClient {
     return (options?.client ?? this.client).get<CompanyProvidersResponses, CompanyProvidersErrors, ThrowOnError>({
       url: "/company/providers",
       ...options,
+    })
+  }
+
+  /**
+   * Configure a custom provider and bind it to the local company
+   */
+  public providerConfigure<ThrowOnError extends boolean = false>(
+    parameters?: {
+      companyProviderConfigureInput?: CompanyProviderConfigureInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "companyProviderConfigureInput", map: "body" }] }])
+    return (options?.client ?? this.client).put<
+      CompanyProviderConfigureResponses,
+      CompanyProviderConfigureErrors,
+      ThrowOnError
+    >({
+      url: "/company/provider",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -1232,7 +1634,7 @@ export class Company extends HeyApiClient {
   }
 
   /**
-   * Apply a structured thread action (M2: interrupt only)
+   * Interrupt a thread or formally approve its Board Project Charter
    */
   public threadAction<ThrowOnError extends boolean = false>(
     parameters: {
@@ -1266,6 +1668,16 @@ export class Company extends HeyApiClient {
         },
       },
     )
+  }
+
+  private _recruitment?: Recruitment
+  get recruitment(): Recruitment {
+    return (this._recruitment ??= new Recruitment({ client: this.client }))
+  }
+
+  private _project?: Project2
+  get project(): Project2 {
+    return (this._project ??= new Project2({ client: this.client }))
   }
 }
 
@@ -1856,7 +2268,7 @@ export class Experimental extends HeyApiClient {
   }
 }
 
-export class Project extends HeyApiClient {
+export class Project3 extends HeyApiClient {
   /**
    * List all projects
    *
@@ -2328,7 +2740,9 @@ export class CompanyAgent extends HeyApiClient {
       workspace?: string
       id?: string
       name?: string
-      lifecycle?: "candidate" | "employee"
+      company_id?: CompanyId
+      role_key?: string
+      lifecycle?: "candidate" | "assigned" | "employee" | "archived"
       description?: string
       system_prompt?: string
       instruct?: string
@@ -2352,6 +2766,8 @@ export class CompanyAgent extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "id" },
             { in: "body", key: "name" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "role_key" },
             { in: "body", key: "lifecycle" },
             { in: "body", key: "description" },
             { in: "body", key: "system_prompt" },
@@ -2975,6 +3391,462 @@ export class CompanyProject extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+}
+
+export class GoalBrief extends HeyApiClient {
+  /**
+   * Create a validated Goal Brief
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      projectId?: string
+      sourceThreadId?: string
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperienceGoalBriefCreateResponses, unknown, ThrowOnError>({
+      url: "/experience/goal-brief",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Generate and persist a validated Goal Brief with the configured default model
+   */
+  public generate<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      requestId: string
+      goal: string
+      context?: string
+      projectId?: string
+      sourceThreadId?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "requestId" },
+            { in: "body", key: "goal" },
+            { in: "body", key: "context" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefGenerateResponses,
+      ExperienceGoalBriefGenerateErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/generate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the Goal Brief or a read-only legacy Charter view for a project
+   */
+  public project<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefProjectResponses,
+      ExperienceGoalBriefProjectErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/project/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List Goal Brief versions
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefHistoryResponses,
+      ExperienceGoalBriefHistoryErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append a validated Goal Brief version
+   */
+  public append<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+      expectedVersion: number
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "expectedVersion" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefAppendResponses,
+      ExperienceGoalBriefAppendErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the current Goal Brief version
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefGetResponses,
+      ExperienceGoalBriefGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Artifact extends HeyApiClient {
+  /**
+   * Read a project-bound delivery Artifact without exposing local filesystem paths
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      artifactID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "artifactID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceArtifactGetResponses,
+      ExperienceArtifactGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/projects/{projectID}/artifacts/{artifactID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Work extends HeyApiClient {
+  /**
+   * List stable user-facing work projections
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
+      url: "/experience/work",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read a stable user-facing work projection
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkGetResponses, ExperienceWorkGetErrors, ThrowOnError>({
+      url: "/experience/work/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Experience extends HeyApiClient {
+  private _goalBrief?: GoalBrief
+  get goalBrief(): GoalBrief {
+    return (this._goalBrief ??= new GoalBrief({ client: this.client }))
+  }
+
+  private _artifact?: Artifact
+  get artifact(): Artifact {
+    return (this._artifact ??= new Artifact({ client: this.client }))
+  }
+
+  private _work?: Work
+  get work(): Work {
+    return (this._work ??= new Work({ client: this.client }))
   }
 }
 
@@ -7205,9 +8077,9 @@ export class ControlPlaneClient extends HeyApiClient {
     return (this._experimental ??= new Experimental({ client: this.client }))
   }
 
-  private _project?: Project
-  get project(): Project {
-    return (this._project ??= new Project({ client: this.client }))
+  private _project?: Project3
+  get project(): Project3 {
+    return (this._project ??= new Project3({ client: this.client }))
   }
 
   private _companyAgent?: CompanyAgent
@@ -7223,6 +8095,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _companyProject?: CompanyProject
   get companyProject(): CompanyProject {
     return (this._companyProject ??= new CompanyProject({ client: this.client }))
+  }
+
+  private _experience?: Experience
+  get experience(): Experience {
+    return (this._experience ??= new Experience({ client: this.client }))
   }
 
   private _groupSession?: GroupSession

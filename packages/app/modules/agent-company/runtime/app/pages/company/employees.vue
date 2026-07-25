@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useCompanySnapshot } from "../../composables/useCompanySnapshot"
 
-const { data: snapshot } = useCompanySnapshot()
+const { data: snapshot, pending, refresh } = useCompanySnapshot()
+const companyAvailable = computed(() => ["ready", "degraded"].includes(snapshot.value.connection))
 </script>
 
 <template>
@@ -22,7 +24,18 @@ const { data: snapshot } = useCompanySnapshot()
 
         <CompanyModuleNav />
 
-        <section class="company-employee-grid" aria-label="Company employees">
+        <CompanyConnectionState
+          v-if="!companyAvailable"
+          :connection="snapshot.connection"
+          :issue="snapshot.issue"
+          :pending="pending"
+          show-settings
+          @retry="refresh()"
+        />
+
+        <p v-else-if="snapshot.notice" class="company-notice">{{ snapshot.notice }}</p>
+
+        <section v-if="companyAvailable" class="company-employee-grid" aria-label="Company employees">
           <article v-for="agent in snapshot.agents" :key="agent.id" class="company-employee">
             <div class="company-employee__top">
               <span class="company-employee__avatar">{{ agent.name.slice(0, 1) }}</span>
@@ -42,6 +55,7 @@ const { data: snapshot } = useCompanySnapshot()
             </dl>
             <span class="company-employee__subject">{{ agent.subject }}</span>
           </article>
+          <p v-if="!snapshot.agents.length" class="company-empty">No employees were returned by the Control Plane.</p>
         </section>
       </div>
     </template>

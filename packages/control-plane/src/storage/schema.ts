@@ -35,3 +35,9 @@ export {
   CompanyApprovalGateTable,
   CompanyProjectEventTable,
 } from "../company-project/company-project.sql"
+export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
+export {
+  GoalBriefGenerationRequestTable,
+  GoalBriefTable,
+  GoalBriefVersionTable,
+} from "../goal-brief/goal-brief.sql"

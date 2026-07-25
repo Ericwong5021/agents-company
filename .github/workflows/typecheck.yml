@@ -17,7 +17,25 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
-      - name: Run typecheck
+      - name: Typecheck shared contracts
+        working-directory: packages/shared
+        run: bun typecheck
+
+      - name: Typecheck Control Plane
+        working-directory: packages/control-plane
+        run: bun typecheck
+
+      - name: Typecheck WebUI
+        working-directory: packages/app
+        run: bun typecheck
+
+      - name: Typecheck JavaScript SDK
+        working-directory: packages/sdk/js
+        run: bun typecheck
+
+      - name: Verify generated JavaScript SDK is current
         run: |
-          cd packages/control-plane
-          bun typecheck
+          ./packages/sdk/js/script/build.ts
+          git diff --exit-code -- \
+            packages/sdk/openapi.json \
+            packages/sdk/js/src/v2/gen

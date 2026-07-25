@@ -13,29 +13,12 @@ const displayName = computed(
 const items = computed<DropdownMenuItem[][]>(() => [
   [
     {
-      label: "Settings",
+      label: "设置",
       icon: "i-lucide-settings",
-      to: "/settings/profile",
-    },
-    {
-      label: "Integrations",
-      icon: "i-lucide-plug",
-      to: "/settings/integrations",
-    },
-  ],
-  [
-    {
-      label: "Sign out",
-      icon: "i-lucide-log-out",
-      onSelect: signOut,
+      to: "/settings",
     },
   ],
 ]);
-
-async function signOut() {
-  await authClient.signOut();
-  await navigateTo("/login");
-}
 </script>
 
 <template>
@@ -49,12 +32,12 @@ async function signOut() {
       color="neutral"
       variant="ghost"
       square
-      class="rounded-full data-[state=open]:bg-elevated"
+      class="size-10 rounded-full data-[state=open]:bg-elevated"
       :avatar="{
         alt: displayName,
         size: 'xs',
       }"
-      aria-label="Account menu"
+      aria-label="本地账号菜单"
     />
 
     <template #content-top="{ sub }">

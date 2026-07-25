@@ -1,7 +1,9 @@
-import { createError, defineEventHandler, readBody } from "h3"
+import { createError, readBody } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { ofetch } from "ofetch"
 import z from "zod"
+import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
+import { controlPlaneURL } from "../utils/control-plane-client"
 
 const Input = z
   .object({
@@ -47,12 +49,13 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineAgentCompanyHandler(async (event) => {
   const parsed = Input.safeParse(await readBody(event))
   if (!parsed.success) throw createError({ statusCode: 400, statusMessage: "Charter 未满足正式下达条件" })
 
   const config = useRuntimeConfig(event)
-  const baseURL = new URL(config.agentCompanyControlPlaneUrl)
+  const baseURL = controlPlaneURL(config.agentCompanyControlPlaneUrl)
+  if (!baseURL) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const headers = config.agentCompanyControlPlaneAuthorization
     ? { authorization: config.agentCompanyControlPlaneAuthorization }
     : undefined

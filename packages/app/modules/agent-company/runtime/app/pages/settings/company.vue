@@ -1,20 +1,27 @@
 <script setup lang="ts">
 import { $fetch } from "ofetch"
-import { reactive, ref } from "vue"
+import { computed, reactive, ref } from "vue"
 import { useCompanySnapshot } from "../../composables/useCompanySnapshot"
 
 const { data: snapshot, pending, refresh } = useCompanySnapshot()
-const provider = reactive({
+const provider = reactive(useState("agent-company-provider-draft", () => ({
   format: "openai" as "openai" | "anthropic",
   providerID: "custom",
   baseURL: "",
   modelID: "",
   apiKey: "",
   headers: "{}",
-})
+})).value)
 const saving = ref(false)
 const providerMessage = ref("")
 const providerError = ref("")
+const connectionLabel = computed(() => ({
+  connecting: "正在连接",
+  ready: "已连接",
+  degraded: "部分可用",
+  disconnected: "未连接",
+  recovering: "正在恢复",
+})[snapshot.value.connection])
 
 function parseHeaders(value: string) {
   try {
@@ -28,19 +35,19 @@ function parseHeaders(value: string) {
 }
 
 function errorMessage(error: unknown) {
-  if (typeof error !== "object" || error === null) return "Provider 配置失败"
+  if (typeof error !== "object" || error === null) return "模型服务配置失败"
   const data = "data" in error && typeof error.data === "object" && error.data !== null
     ? error.data as Record<string, unknown>
     : undefined
   if (typeof data?.message === "string") return data.message
   if (typeof data?.statusMessage === "string") return data.statusMessage
   if ("message" in error && typeof error.message === "string") return error.message
-  return "Provider 配置失败"
+  return "模型服务配置失败"
 }
 
 async function saveProvider() {
   const headers = parseHeaders(provider.headers)
-  providerError.value = headers ? "" : "Headers 必须是只含字符串值的 JSON 对象"
+  providerError.value = headers ? "" : "请求头必须是只含字符串值的 JSON 对象"
   providerMessage.value = ""
   if (!headers || saving.value) return
 
@@ -65,7 +72,7 @@ async function saveProvider() {
   }
 
   provider.apiKey = ""
-  providerMessage.value = "Provider 已验证并绑定到当前公司"
+  providerMessage.value = "模型服务已验证并绑定到当前公司"
   await refresh()
 }
 </script>
@@ -80,69 +87,71 @@ async function saveProvider() {
       <div class="company-settings-page">
         <header class="company-settings-page__header">
           <h1>Settings</h1>
-          <p>Manage your identity, memory, integrations, and company module.</p>
+          <p>管理本地运行连接与 Agent Company 使用的模型服务。</p>
         </header>
-
-        <nav class="company-settings-tabs" aria-label="Settings">
-          <NuxtLink to="/settings/profile">Profile</NuxtLink>
-          <NuxtLink to="/settings/integrations">Integrations</NuxtLink>
-          <NuxtLink to="/settings/company" class="company-settings-tabs__active">Company</NuxtLink>
-        </nav>
 
         <div class="company-settings-stack">
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
-                <h2>Control Plane</h2>
-                <p>Local runtime connection and active company provider.</p>
+                <h2>本地运行</h2>
+                <p>连接本机服务并读取当前公司的真实配置。</p>
               </div>
               <UButton
                 color="neutral"
                 variant="ghost"
                 icon="i-lucide-refresh-cw"
-                aria-label="Refresh Control Plane"
+                aria-label="刷新本地运行状态"
                 :loading="pending"
                 @click="refresh()"
               />
             </div>
             <dl>
               <div>
-                <dt>Status</dt>
-                <dd>{{ snapshot.connection === "live" ? "Connected" : "Demo fallback" }}</dd>
+                <dt>连接</dt>
+                <dd>{{ connectionLabel }}</dd>
               </div>
               <div>
-                <dt>Company</dt>
+                <dt>公司</dt>
                 <dd>{{ snapshot.company.name }}</dd>
               </div>
               <div>
-                <dt>Provider</dt>
+                <dt>模型服务</dt>
                 <dd>{{ snapshot.company.provider }}</dd>
               </div>
             </dl>
           </section>
 
+          <CompanyConnectionState
+            v-if="snapshot.connection !== 'ready' && snapshot.connection !== 'degraded'"
+            :connection="snapshot.connection"
+            :issue="snapshot.issue"
+            :pending="pending"
+            @retry="refresh()"
+          />
+
           <form class="company-settings-section company-provider-form" @submit.prevent="saveProvider">
             <div class="company-settings-section__heading">
               <div>
-                <h2>Model Provider</h2>
-                <p>Configure an OpenAI- or Anthropic-compatible endpoint. The key is stored by the local Control Plane.</p>
+                <h2>模型服务</h2>
+                <p>连接兼容 OpenAI 或 Anthropic 的服务，密钥仅保存在本机。</p>
               </div>
             </div>
 
             <div class="company-provider-form__grid">
               <label>
-                <span>Format</span>
+                <span>接口格式</span>
                 <select v-model="provider.format">
                   <option value="openai">OpenAI compatible</option>
                   <option value="anthropic">Anthropic compatible</option>
                 </select>
               </label>
               <label>
-                <span>Provider ID</span>
-                <input v-model="provider.providerID" required autocomplete="off">
+                <span>模型</span>
+                <input v-model="provider.modelID" required placeholder="model-id" autocomplete="off">
               </label>
               <label class="company-provider-form__wide">
-                <span>Endpoint</span>
+                <span>API 地址</span>
                 <input
                   v-model="provider.baseURL"
                   required
@@ -151,24 +160,29 @@ async function saveProvider() {
                   autocomplete="url"
                 >
               </label>
-              <label>
-                <span>Model</span>
-                <input v-model="provider.modelID" required placeholder="model-id" autocomplete="off">
-              </label>
-              <label>
-                <span>API key</span>
+              <label class="company-provider-form__wide">
+                <span>API 密钥</span>
                 <input
                   v-model="provider.apiKey"
                   required
                   type="password"
-                  placeholder="Stored locally"
+                  placeholder="仅保存在本机"
                   autocomplete="new-password"
                 >
               </label>
-              <label class="company-provider-form__wide">
-                <span>Headers (JSON)</span>
-                <textarea v-model="provider.headers" rows="3" spellcheck="false" />
-              </label>
+              <details class="company-provider-form__wide ac-settings-disclosure">
+                <summary>高级设置</summary>
+                <div class="company-provider-form__grid">
+                  <label>
+                    <span>服务标识</span>
+                    <input v-model="provider.providerID" required autocomplete="off">
+                  </label>
+                  <label>
+                    <span>请求头 JSON</span>
+                    <textarea v-model="provider.headers" rows="3" spellcheck="false" />
+                  </label>
+                </div>
+              </details>
             </div>
 
             <p v-if="providerError" class="company-provider-form__message company-provider-form__message--error" role="alert">
@@ -178,28 +192,10 @@ async function saveProvider() {
 
             <div class="company-provider-form__actions">
               <span>当前：{{ snapshot.company.provider }}</span>
-              <UButton type="submit" color="neutral" :loading="saving">Verify and save</UButton>
+              <UButton type="submit" color="neutral" :loading="saving">验证并保存</UButton>
             </div>
           </form>
 
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>Source protection</h2>
-                <p>The upstream Eve template is verified against its import manifest.</p>
-              </div>
-            </div>
-            <dl>
-              <div>
-                <dt>Extension method</dt>
-                <dd>Nuxt module + client plugin</dd>
-              </div>
-              <div>
-                <dt>Template edits</dt>
-                <dd>None</dd>
-              </div>
-            </dl>
-          </section>
         </div>
       </div>
     </template>

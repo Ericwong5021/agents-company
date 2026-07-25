@@ -49,7 +49,7 @@ export function useSiteSeo(options?: {
       { name: "author", content: site.author },
       {
         name: "keywords",
-        content: "Eve, Nuxt, personal agent, AI assistant, Better Auth, Slack, iMessage, Linear, template",
+        content: "Agent Company, local AI team, autonomous agents, verified delivery",
       },
     ],
     script: [

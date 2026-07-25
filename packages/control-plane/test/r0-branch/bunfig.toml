@@ -1,0 +1,2 @@
+[test]
+preload = ["./test/r0-branch/preload.ts", "./test/preload.ts"]

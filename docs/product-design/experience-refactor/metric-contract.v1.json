@@ -1,0 +1,439 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-experience-metrics",
+  "version": "1.0.0",
+  "privacy": {
+    "storage": "local_first",
+    "externalUploadDefault": false,
+    "prohibitedProperties": ["api_key", "full_prompt", "file_content", "credential", "access_token", "refresh_token"],
+    "retention": "Keep raw benchmark events only inside the isolated run directory; retain aggregate results and redacted evidence by explicit release decision."
+  },
+  "eventEnvelope": {
+    "requiredFields": {
+      "eventId": "string",
+      "eventType": "string",
+      "occurredAt": "ISO-8601 timestamp",
+      "buildSha": "40-character git commit",
+      "scenarioId": "S01-S12 or null",
+      "runId": "string",
+      "subjectId": "pseudonymous local identifier",
+      "properties": "object"
+    },
+    "requiredOrdering": ["occurredAt", "eventId"],
+    "duplicateKey": "eventId",
+    "clockPolicy": "Use monotonic duration for elapsed-time metrics and wall clock only for audit timestamps."
+  },
+  "eventTypes": [
+    {
+      "id": "provider.connection_succeeded",
+      "requiredProperties": ["providerKind"]
+    },
+    {
+      "id": "goal.submitted",
+      "requiredProperties": ["intent", "source"]
+    },
+    {
+      "id": "goal.brief_visible",
+      "requiredProperties": ["briefId", "briefVersion"]
+    },
+    {
+      "id": "goal.work_started",
+      "requiredProperties": ["briefId", "actionCount"]
+    },
+    {
+      "id": "user.interruption_presented",
+      "requiredProperties": ["kind", "materialityReason"]
+    },
+    {
+      "id": "user.interruption_judged",
+      "requiredProperties": ["needed"]
+    },
+    {
+      "id": "connection.lost",
+      "requiredProperties": ["reasonKind"]
+    },
+    {
+      "id": "connection.recovered",
+      "requiredProperties": ["contextPreserved", "duplicateSideEffects"]
+    },
+    {
+      "id": "delivery.presented",
+      "requiredProperties": ["deliveryId", "artifactCount", "noFileReason"]
+    },
+    {
+      "id": "delivery.artifact_opened",
+      "requiredProperties": ["deliveryId", "artifactId", "succeeded"]
+    },
+    {
+      "id": "delivery.criterion_evaluated",
+      "requiredProperties": ["deliveryId", "criterionId", "status", "evidenceCount"]
+    },
+    {
+      "id": "benchmark.completed",
+      "requiredProperties": ["scenarioId", "finalDecision"]
+    },
+    {
+      "id": "trust.false_state_detected",
+      "requiredProperties": ["surface", "kind"]
+    },
+    {
+      "id": "research.sus_recorded",
+      "requiredProperties": ["studyId", "participantId", "score"]
+    },
+    {
+      "id": "research.state_comprehension_recorded",
+      "requiredProperties": ["studyId", "participantId", "correct", "total"]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "activation_success_rate",
+      "label": "First activation success rate",
+      "definition": "Share of new isolated workspaces that connect a real or deterministic test Provider and submit the first Goal.",
+      "formula": "subjects(provider.connection_succeeded AND goal.submitted) / eligible_new_workspace_subjects",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["provider.connection_succeeded", "goal.submitted"],
+      "target": {
+        "gate": "R3",
+        "operator": ">=",
+        "value": 0.8
+      }
+    },
+    {
+      "id": "goal_to_start_actions",
+      "label": "Goal-to-Start",
+      "definition": "Number of primary user actions from Goal submission through formal work start.",
+      "formula": "median(goal.work_started.actionCount)",
+      "unit": "actions",
+      "aggregation": "median",
+      "collectionMode": "automated",
+      "minimumEvidence": ["goal.submitted", "goal.work_started"],
+      "target": {
+        "gate": "R3",
+        "operator": "<=",
+        "value": 3
+      }
+    },
+    {
+      "id": "brief_time_to_first_value_ms",
+      "label": "Brief time to first value",
+      "definition": "Elapsed monotonic time from Goal submission until the structured Goal Brief is visible.",
+      "formula": "p95(goal.brief_visible.monotonicTime - goal.submitted.monotonicTime)",
+      "unit": "milliseconds",
+      "aggregation": "p95",
+      "collectionMode": "automated",
+      "minimumEvidence": ["goal.submitted", "goal.brief_visible"],
+      "target": {
+        "gate": "R3",
+        "operator": "<=",
+        "value": 60000
+      }
+    },
+    {
+      "id": "delivery_consumability_rate",
+      "label": "Delivery consumability rate",
+      "definition": "Share of Delivered work with at least one successfully opened artifact or an explicit valid no-file reason.",
+      "formula": "consumable_deliveries / presented_deliveries",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["delivery.presented", "delivery.artifact_opened"],
+      "target": {
+        "gate": "R3",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "acceptance_determinability_rate",
+      "label": "Acceptance determinability rate",
+      "definition": "Share of delivery criteria with an explicit status and at least one evidence item or an explicit evidence-not-applicable reason.",
+      "formula": "determinable_criteria / delivery_criteria",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["delivery.criterion_evaluated"],
+      "target": {
+        "gate": "R3",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "core_task_completion_rate",
+      "label": "Core task completion rate",
+      "definition": "Share of benchmark runs that pass every blocking criterion and produce an acceptable result.",
+      "formula": "benchmark_runs(finalDecision = pass) / eligible_benchmark_runs",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "hybrid",
+      "minimumEvidence": ["benchmark.completed", "criterionResults", "human rubric when declared by the scenario"],
+      "target": {
+        "gate": "R3",
+        "operator": ">=",
+        "value": 0.7
+      }
+    },
+    {
+      "id": "unnecessary_interruption_rate",
+      "label": "Unnecessary interruption rate",
+      "definition": "Share of presented clarification or approval interruptions judged unnecessary by the target user or the scenario materiality oracle.",
+      "formula": "interruptions(needed = false) / judged_interruptions",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "hybrid",
+      "minimumEvidence": ["user.interruption_presented", "user.interruption_judged"],
+      "target": {
+        "gate": "R3",
+        "operator": "<",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "recovery_success_rate",
+      "label": "Recovery success rate",
+      "definition": "Share of injected disconnect or restart runs that restore context without data loss or duplicate side effects.",
+      "formula": "recoveries(contextPreserved = true AND duplicateSideEffects = 0) / eligible_recovery_injections",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["connection.lost", "connection.recovered", "side-effect ledger"],
+      "target": {
+        "gate": "R3",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "false_success_or_data_count",
+      "label": "False success or false data",
+      "definition": "Count of user-visible fixtures, invented records, false progress, or success states without authoritative evidence.",
+      "formula": "count(trust.false_state_detected)",
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["trust.false_state_detected", "fault-injection DOM and API assertions"],
+      "target": {
+        "gate": "R0",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "sus_score",
+      "label": "System Usability Scale",
+      "definition": "Median standard SUS score from eligible target users using the release candidate.",
+      "formula": "median(standard_sus_score_per_participant)",
+      "unit": "score",
+      "aggregation": "median",
+      "collectionMode": "human_research",
+      "minimumEvidence": [
+        "research protocol",
+        "anonymized responses",
+        "standard SUS calculation",
+        "research.sus_recorded"
+      ],
+      "target": {
+        "gate": "R3",
+        "operator": ">=",
+        "value": 75
+      },
+      "cannotBeInferredFrom": ["source code", "screenshots", "automated browser completion", "agent judgment"]
+    },
+    {
+      "id": "state_comprehension_rate",
+      "label": "State comprehension rate",
+      "definition": "Share of sampled state explanations correctly understood by eligible target users.",
+      "formula": "sum(correct) / sum(total)",
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "human_research",
+      "minimumEvidence": [
+        "moderator script",
+        "anonymized explanations",
+        "scoring rubric",
+        "research.state_comprehension_recorded"
+      ],
+      "target": {
+        "gate": "R0",
+        "operator": ">=",
+        "value": 0.9
+      },
+      "cannotBeInferredFrom": ["string consistency", "copy review", "agent judgment"]
+    }
+  ],
+  "releaseGates": [
+    {
+      "id": "R0",
+      "currentStatus": "incomplete",
+      "requiredThresholds": [
+        {
+          "metricId": "false_success_or_data_count",
+          "operator": "=",
+          "value": 0
+        },
+        {
+          "metricId": "state_comprehension_rate",
+          "operator": ">=",
+          "value": 0.9,
+          "evidenceStatus": "human_research_required"
+        }
+      ],
+      "requiredHumanEvidence": [
+        {
+          "id": "HR-01",
+          "name": "Three-person terminology comprehension",
+          "status": "incomplete",
+          "automationSubstituteAllowed": false,
+          "blocking": true
+        },
+        {
+          "id": "HR-02",
+          "name": "Five-person brand cognition",
+          "status": "incomplete",
+          "automationSubstituteAllowed": false,
+          "blocking": true
+        },
+        {
+          "id": "HR-03",
+          "name": "Manual screenshot approval",
+          "status": "incomplete",
+          "automationSubstituteAllowed": false,
+          "blocking": true
+        }
+      ],
+      "requiredStructuralEvidence": [
+        "language contract validation passes",
+        "all twelve benchmark definitions validate and have stable digests",
+        "current HEAD baseline is reproducible",
+        "R0 product fault-injection tests pass"
+      ]
+    },
+    {
+      "id": "R1",
+      "requiredThresholds": [
+        {
+          "metricId": "goal_to_start_actions",
+          "operator": "<=",
+          "value": 3,
+          "scope": "S02, S03, S04, and S12 benchmark runs"
+        },
+        {
+          "metricId": "false_success_or_data_count",
+          "operator": "=",
+          "value": 0
+        }
+      ],
+      "requiredStructuralEvidence": ["Provider correction and first Goal paths pass without a real external Provider"]
+    },
+    {
+      "id": "R2",
+      "requiredThresholds": [
+        {
+          "metricId": "unnecessary_interruption_rate",
+          "operator": "<",
+          "value": 0.2
+        },
+        {
+          "metricId": "recovery_success_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "false_success_or_data_count",
+          "operator": "=",
+          "value": 0
+        }
+      ],
+      "requiredStructuralEvidence": ["Pause, resume, stop, redirect, approval, and retry idempotency tests pass"]
+    },
+    {
+      "id": "R3",
+      "requiredThresholds": [
+        {
+          "metricId": "activation_success_rate",
+          "operator": ">=",
+          "value": 0.8
+        },
+        {
+          "metricId": "goal_to_start_actions",
+          "operator": "<=",
+          "value": 3
+        },
+        {
+          "metricId": "brief_time_to_first_value_ms",
+          "operator": "<=",
+          "value": 60000
+        },
+        {
+          "metricId": "delivery_consumability_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "acceptance_determinability_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "core_task_completion_rate",
+          "operator": ">=",
+          "value": 0.7
+        },
+        {
+          "metricId": "unnecessary_interruption_rate",
+          "operator": "<",
+          "value": 0.2
+        },
+        {
+          "metricId": "recovery_success_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "false_success_or_data_count",
+          "operator": "=",
+          "value": 0
+        },
+        {
+          "metricId": "sus_score",
+          "operator": ">=",
+          "value": 75,
+          "evidenceStatus": "human_research_required"
+        }
+      ],
+      "requiredStructuralEvidence": [
+        "Core E2E, migration, recovery, visual, accessibility, and long-session gates pass"
+      ]
+    },
+    {
+      "id": "R4",
+      "requiredThresholds": [
+        {
+          "metricId": "delivery_consumability_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "acceptance_determinability_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "false_success_or_data_count",
+          "operator": "=",
+          "value": 0
+        }
+      ],
+      "requiredStructuralEvidence": ["Dynamic organization changes do not regress the R3 benchmark set"]
+    }
+  ],
+  "currentCollectionStatus": {
+    "buildRef": "09c269222f4696988e4fe40da07a98ff003e916b",
+    "automatedProductMetrics": "not_collectable",
+    "humanResearchMetrics": "not_scheduled",
+    "reason": "The current HEAD has no complete event envelope, benchmark runner, or eligible human study. Numeric product results must remain unset until evidence exists."
+  }
+}

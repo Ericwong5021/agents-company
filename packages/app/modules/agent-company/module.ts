@@ -1,7 +1,6 @@
 import {
   addComponent,
   addImports,
-  addPlugin,
   addServerHandler,
   createResolver,
   defineNuxtModule,
@@ -10,17 +9,15 @@ import {
 
 export type AgentCompanyModuleOptions = {
   enabled: boolean
-  label: string
 }
 
 export default defineNuxtModule<AgentCompanyModuleOptions>({
   meta: {
-    name: "@agents-company/eve-extension",
+    name: "@agents-company/webui",
     configKey: "agentCompany",
   },
   defaults: {
     enabled: true,
-    label: "Company",
   },
   setup(options, nuxt) {
     if (!options.enabled) return
@@ -28,19 +25,13 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
     const resolver = createResolver(import.meta.url)
 
     nuxt.options.css.push(resolver.resolve("./runtime/app/assets/company-extension.css"))
-    nuxt.options.appConfig.agentCompany = {
-      label: options.label,
-      navigation: [
-        { label: "Overview", to: "/company" },
-        { label: "Board", to: "/company/board" },
-        { label: "Employees", to: "/company/employees" },
-      ],
-    }
-
-    addPlugin(resolver.resolve("./runtime/app/plugins/company-extension.client"))
     addComponent({
       name: "CompanyModuleNav",
       filePath: resolver.resolve("./runtime/app/components/CompanyModuleNav.vue"),
+    })
+    addComponent({
+      name: "CompanyConnectionState",
+      filePath: resolver.resolve("./runtime/app/components/CompanyConnectionState.vue"),
     })
     addImports({
       name: "useCompanySnapshot",
@@ -77,42 +68,31 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/project.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/projects/:projectID/goal-brief",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/goal-brief.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/goal-brief/generate",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/goal-brief-generate.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID/artifacts/:artifactID",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/artifact.get"),
+    })
+    addServerHandler({
       route: "/api/agent-company/projects/:projectID/retry",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/project-retry.post"),
     })
 
     extendPages((pages) => {
-      const loginPage = pages.find((page) => page.path === "/login")
-      if (loginPage) {
-        loginPage.file = resolver.resolve("./runtime/app/pages/login.vue")
-        loginPage.meta = { ...loginPage.meta, layout: false }
-      }
-
       pages.push(
         {
-          name: "agent-company-overview",
-          path: "/company",
-          file: resolver.resolve("./runtime/app/pages/company/index.vue"),
-        },
-        {
-          name: "agent-company-board",
-          path: "/company/board",
-          file: resolver.resolve("./runtime/app/pages/company/board.vue"),
-        },
-        {
-          name: "agent-company-employees",
-          path: "/company/employees",
-          file: resolver.resolve("./runtime/app/pages/company/employees.vue"),
-        },
-        {
-          name: "agent-company-project",
-          path: "/company/projects/:projectID",
-          file: resolver.resolve("./runtime/app/pages/company/projects/[projectID].vue"),
-        },
-        {
           name: "agent-company-settings",
-          path: "/settings/company",
+          path: "/settings",
           file: resolver.resolve("./runtime/app/pages/settings/company.vue"),
         },
       )

@@ -1,0 +1,434 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-company.local/schemas/human-evidence-package.v1.json",
+  "title": "Agent Company R0 signed and anonymized human evidence package",
+  "schemaVersion": 1,
+  "packageVersion": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageVersion",
+    "packageId",
+    "buildSha",
+    "protocolBinding",
+    "runnerBinding",
+    "createdAt",
+    "studies",
+    "packageSignoff"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "packageVersion": {
+      "const": "1.0.0"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^R0-[a-z0-9-]{8,64}$"
+    },
+    "buildSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "protocolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {
+          "const": "agent-company-r0-human-research"
+        },
+        "version": {
+          "const": "1.0.0"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "runnerBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "studies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+      "properties": {
+        "HR-01": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["moderatorScriptVersion", "participants", "calculation", "signoff"],
+          "properties": {
+            "moderatorScriptVersion": {
+              "const": "HR01-v1"
+            },
+            "participants": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "$ref": "#/$defs/hr01Participant"
+              }
+            },
+            "calculation": {
+              "$ref": "#/$defs/rateCalculation"
+            },
+            "signoff": {
+              "$ref": "#/$defs/signoff"
+            }
+          }
+        },
+        "HR-02": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["moderatorScriptVersion", "participants", "calculation", "signoff"],
+          "properties": {
+            "moderatorScriptVersion": {
+              "const": "HR02-v1"
+            },
+            "participants": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "items": {
+                "$ref": "#/$defs/hr02Participant"
+              }
+            },
+            "calculation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["passingParticipants", "totalParticipants"],
+              "properties": {
+                "passingParticipants": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 5
+                },
+                "totalParticipants": {
+                  "const": 5
+                }
+              }
+            },
+            "signoff": {
+              "$ref": "#/$defs/signoff"
+            }
+          }
+        },
+        "HR-03": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewScriptVersion", "approverName", "approverRole", "approvals", "signoff"],
+          "properties": {
+            "reviewScriptVersion": {
+              "const": "HR03-v1"
+            },
+            "approverName": {
+              "type": "string",
+              "minLength": 2
+            },
+            "approverRole": {
+              "type": "string",
+              "minLength": 2
+            },
+            "approvals": {
+              "type": "array",
+              "minItems": 8,
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/screenshotApproval"
+              }
+            },
+            "signoff": {
+              "$ref": "#/$defs/signoff"
+            }
+          }
+        },
+        "FND-03-SPOT-CHECK": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reviewScriptVersion", "selectionSeed", "selectedScenarioIds", "reviews", "signoff"],
+          "properties": {
+            "reviewScriptVersion": {
+              "const": "FND03-SPOT-v1"
+            },
+            "selectionSeed": {
+              "const": 20260725
+            },
+            "selectedScenarioIds": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "enum": ["S01", "S02", "S05"]
+              },
+              "uniqueItems": true
+            },
+            "reviews": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "$ref": "#/$defs/spotCheckReview"
+              }
+            },
+            "signoff": {
+              "$ref": "#/$defs/signoff"
+            }
+          }
+        }
+      }
+    },
+    "packageSignoff": {
+      "$ref": "#/$defs/signoff"
+    }
+  },
+  "$defs": {
+    "participantEligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetUser", "documentationNaive", "notContributor", "consented"],
+      "properties": {
+        "targetUser": {
+          "const": true
+        },
+        "documentationNaive": {
+          "const": true
+        },
+        "notContributor": {
+          "const": true
+        },
+        "consented": {
+          "const": true
+        }
+      }
+    },
+    "hr01Participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["participantId", "eligibility", "responses"],
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "pattern": "^P-[a-f0-9]{12}$"
+        },
+        "eligibility": {
+          "$ref": "#/$defs/participantEligibility"
+        },
+        "responses": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/hr01Response"
+          }
+        }
+      }
+    },
+    "hr01Response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["promptId", "rawExplanation", "rubricElements", "correct", "scoredBy"],
+      "properties": {
+        "promptId": {
+          "type": "string",
+          "pattern": "^HR01-P(?:0[1-9]|1[0-2])$"
+        },
+        "rawExplanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rubricElements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currentSituation", "userImpact", "validNextStep"],
+          "properties": {
+            "currentSituation": {
+              "type": "boolean"
+            },
+            "userImpact": {
+              "type": "boolean"
+            },
+            "validNextStep": {
+              "type": "boolean"
+            }
+          }
+        },
+        "correct": {
+          "type": "boolean"
+        },
+        "scoredBy": {
+          "type": "string",
+          "minLength": 2
+        }
+      }
+    },
+    "hr02Participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["participantId", "eligibility", "exposureSeconds", "responses", "participantPassed"],
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "pattern": "^P-[a-f0-9]{12}$"
+        },
+        "eligibility": {
+          "$ref": "#/$defs/participantEligibility"
+        },
+        "exposureSeconds": {
+          "const": 10
+        },
+        "responses": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/hr02Response"
+          }
+        },
+        "participantPassed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "hr02Response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["questionId", "rawAnswer", "correct", "scoredBy"],
+      "properties": {
+        "questionId": {
+          "enum": ["HR02-Q1", "HR02-Q2", "HR02-Q3"]
+        },
+        "rawAnswer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correct": {
+          "type": "boolean"
+        },
+        "scoredBy": {
+          "type": "string",
+          "minLength": 2
+        }
+      }
+    },
+    "rateCalculation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correct", "total", "rate"],
+      "properties": {
+        "correct": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "screenshotApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "buildSha", "relativePath", "sha256", "decision", "signedAt"],
+      "properties": {
+        "surface": {
+          "enum": ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"]
+        },
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "relativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "decision": {
+          "enum": ["accepted", "rejected"]
+        },
+        "signedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "spotCheckReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenarioId", "executionRecordDigests", "reviewerAgrees", "notes"],
+      "properties": {
+        "scenarioId": {
+          "enum": ["S01", "S02", "S05"]
+        },
+        "executionRecordDigests": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": false
+        },
+        "reviewerAgrees": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "signedBy", "role", "signedAt", "attestation"],
+      "properties": {
+        "method": {
+          "const": "named_human_attestation"
+        },
+        "signedBy": {
+          "type": "string",
+          "minLength": 2
+        },
+        "role": {
+          "type": "string",
+          "minLength": 2
+        },
+        "signedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "attestation": {
+          "const": "I reviewed the recorded raw responses or artifacts against this protocol and attest that the submitted decisions are accurate for the identified build."
+        }
+      }
+    }
+  }
+}

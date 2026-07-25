@@ -1,0 +1,617 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-user-language",
+  "version": "1.0.0",
+  "audience": {
+    "primary": [
+      "AI-native independent developers",
+      "technical founders",
+      "advanced agent users delivering research, product, writing, analysis, and software outcomes"
+    ],
+    "jobToBeDone": "Give a goal to a local AI team, keep execution controllable, and receive a usable, traceable, verifiable delivery."
+  },
+  "primaryNavigation": [
+    {
+      "id": "inbox",
+      "label": "Inbox",
+      "route": "/inbox",
+      "description": "Inputs, approvals, blockers, failures, and deliveries that need the user."
+    },
+    {
+      "id": "work",
+      "label": "Work",
+      "route": "/work",
+      "description": "Goals, active work, projects, milestones, and high-signal progress."
+    },
+    {
+      "id": "team",
+      "label": "Team",
+      "route": "/team",
+      "description": "Current responsibility, load, availability, and capability evidence."
+    },
+    {
+      "id": "library",
+      "label": "Library",
+      "route": "/library",
+      "description": "Artifacts, deliveries, decisions, reports, and prior versions."
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "route": "/settings",
+      "description": "Provider, approval policy, local runtime, data, and diagnostics."
+    }
+  ],
+  "intentContract": [
+    {
+      "id": "message",
+      "label": "Message",
+      "description": "Conversation or context that does not request formal work.",
+      "defaultRoute": "conversation",
+      "mayCreateWork": false
+    },
+    {
+      "id": "question",
+      "label": "Question",
+      "description": "A request for an answer without an implied delivery lifecycle.",
+      "defaultRoute": "conversation",
+      "mayCreateWork": false
+    },
+    {
+      "id": "goal",
+      "label": "Goal",
+      "description": "A requested outcome that may require a Goal Brief and formal work.",
+      "defaultRoute": "goal_brief",
+      "mayCreateWork": true
+    },
+    {
+      "id": "intervention",
+      "label": "Change direction",
+      "description": "A pause, stop, correction, new material, or scope change for existing work.",
+      "defaultRoute": "existing_work",
+      "mayCreateWork": false
+    },
+    {
+      "id": "approval_response",
+      "label": "Decision",
+      "description": "An explicit approval, rejection, or request for changes against a pending decision.",
+      "defaultRoute": "pending_decision",
+      "mayCreateWork": false
+    }
+  ],
+  "intentRoutingContract": {
+    "schemaVersion": 1,
+    "classificationInput": {
+      "requiredFields": ["schemaVersion", "requestId", "text", "context", "createdAt"],
+      "schemaVersion": 1,
+      "contextRequiredFields": [],
+      "contextOptionalFields": ["existingWorkId", "pendingDecisionId", "replyToId"],
+      "additionalFields": false,
+      "contextAdditionalFields": false
+    },
+    "classificationResult": {
+      "commonRequiredFields": [
+        "schemaVersion",
+        "requestId",
+        "decision",
+        "confidence",
+        "decisionReason",
+        "source",
+        "classifiedAt"
+      ],
+      "decisionVariants": ["routed", "needs_confirmation"],
+      "routedRequiredFields": ["intent", "route", "workCreationPolicy"],
+      "confirmationRequiredFields": ["proposedIntent", "confirmationOptions"],
+      "confirmationOptions": [
+        "execute_as_goal",
+        "discuss_only",
+        "answer_only",
+        "append_to_work",
+        "respond_to_approval"
+      ],
+      "goalModes": ["direct", "briefed"],
+      "workCreationPolicies": ["forbidden", "requires_explicit_start"],
+      "lowConfidenceDecision": "needs_confirmation",
+      "lowConfidenceWorkCreationPolicy": "forbidden",
+      "decisionReasonRule": "Short auditable factual reason only; never private model reasoning or chain-of-thought."
+    },
+    "correctionResult": {
+      "requiredFields": [
+        "schemaVersion",
+        "correctionId",
+        "requestId",
+        "previousResultRef",
+        "correctedBy",
+        "correctedAt",
+        "result"
+      ],
+      "optionalFields": ["reason"],
+      "correctedBy": "user",
+      "sameIntentCorrectionAllowed": true,
+      "targetCorrectionAllowed": true,
+      "previousResultReferenceRequired": true,
+      "additionalFields": false
+    }
+  },
+  "projectionContract": {
+    "availabilityDiscriminator": "availability",
+    "availabilityVariants": ["available", "unavailable"],
+    "unavailableIsUserStatus": false,
+    "userStatusValue": "state.id",
+    "availableRequiredFields": [
+      "availability",
+      "projectorVersion",
+      "sourceWatermark",
+      "summary",
+      "progress",
+      "attentionItems",
+      "diagnostics"
+    ],
+    "unavailableRequiredFields": [
+      "availability",
+      "projectorVersion",
+      "sourceWatermark",
+      "workId",
+      "title",
+      "updatedAt",
+      "reason",
+      "diagnostics"
+    ],
+    "unavailableForbiddenFields": ["userStatus", "progress", "delivery", "attentionItems"],
+    "reason": {
+      "availabilityDiscriminator": "availability",
+      "availabilityVariants": ["known", "unavailable"],
+      "knownRequiredFields": ["availability", "text", "sourceRefs"],
+      "unavailableRequiredFields": ["availability", "text", "diagnosticIds"],
+      "unavailableText": "当前原因不可用"
+    },
+    "action": {
+      "idField": "id",
+      "labelOwner": "frontend_localization",
+      "requiredFields": ["id", "enabled"],
+      "optionalFields": ["targetRef", "disabledReason"],
+      "missingNextAction": null,
+      "mutationWithoutValidHandler": "disabled",
+      "unavailableAllowedActionIds": ["open_diagnostics"]
+    }
+  },
+  "actions": [
+    {
+      "id": "continue_editing",
+      "label": "Continue editing",
+      "description": "Keep refining the goal or brief without starting work.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "answer_question",
+      "label": "Answer question",
+      "description": "Provide information that materially changes the expected result.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "start_work",
+      "label": "Start",
+      "description": "Approve the current brief and begin formal work.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "adjust_brief",
+      "label": "Adjust",
+      "description": "Change the goal, scope, constraints, or expected delivery before execution.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "view_progress",
+      "label": "View progress",
+      "description": "Open high-signal progress without changing execution.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "pause_work",
+      "label": "Pause",
+      "description": "Pause new execution while preserving recoverable state.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "resume_work",
+      "label": "Resume",
+      "description": "Continue paused work from preserved state.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "stop_work",
+      "label": "Stop",
+      "description": "Cancel work without deleting retained evidence or prior artifacts.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "resolve_blocker",
+      "label": "Resolve blocker",
+      "description": "Open the specific action needed to unblock work.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "approve",
+      "label": "Approve",
+      "description": "Explicitly allow the described high-impact action.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "reject",
+      "label": "Reject",
+      "description": "Decline the pending action without silently choosing an alternative.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "request_change",
+      "label": "Request changes",
+      "description": "Return a decision or delivery with a specific requested change.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "view_evidence",
+      "label": "View evidence",
+      "description": "Inspect verification evidence and reviewer findings.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "view_revision",
+      "label": "View changes",
+      "description": "Inspect what changed in the current revision.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "open_delivery",
+      "label": "Open delivery",
+      "description": "Open the usable result and its acceptance evidence.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "accept_delivery",
+      "label": "Accept",
+      "description": "Accept the delivered result against its criteria.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "retry",
+      "label": "Retry",
+      "description": "Retry a failed operation without duplicating completed side effects.",
+      "mutatesBusinessState": true
+    },
+    {
+      "id": "open_diagnostics",
+      "label": "View diagnostics",
+      "description": "Inspect technical details in an explicitly diagnostic surface.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "view_retained_results",
+      "label": "View retained results",
+      "description": "Inspect artifacts and evidence retained after cancellation.",
+      "mutatesBusinessState": false
+    },
+    {
+      "id": "archive",
+      "label": "Archive",
+      "description": "Remove completed work from active views without deleting its history.",
+      "mutatesBusinessState": true
+    }
+  ],
+  "states": [
+    {
+      "id": "draft",
+      "label": "Draft",
+      "description": "The goal is still being edited or the brief is incomplete.",
+      "whyItMatters": "Formal work has not started.",
+      "needsUserAction": true,
+      "nextStep": "Continue editing the goal or brief.",
+      "allowedActions": ["continue_editing", "adjust_brief"],
+      "eventMappings": [
+        {
+          "source": "company_project.status",
+          "values": ["intake"],
+          "predicate": "no valid Goal Brief or read-only legacy Charter view exists",
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "needs_input",
+      "label": "Needs input",
+      "description": "Information that materially affects the result is missing.",
+      "whyItMatters": "Continuing would risk a materially wrong result.",
+      "needsUserAction": true,
+      "nextStep": "Answer the material question.",
+      "allowedActions": ["answer_question", "adjust_brief", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "company_project.event",
+          "events": ["goal_brief.created", "goal_brief.versioned"],
+          "predicate": "data.blocking_question_count is greater than zero",
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "label": "Ready",
+      "description": "The brief is valid and work can start.",
+      "whyItMatters": "The expected result and boundaries are explicit.",
+      "needsUserAction": true,
+      "nextStep": "Start or adjust the brief.",
+      "allowedActions": ["start_work", "adjust_brief"],
+      "eventMappings": [
+        {
+          "source": "company_project.event",
+          "events": ["goal_brief.created", "goal_brief.versioned"],
+          "predicate": "data.blocking_question_count equals zero and the referenced Goal Brief version validates",
+          "availability": "current"
+        },
+        {
+          "source": "company_project.event",
+          "events": ["charter.saved"],
+          "predicate": "no Goal Brief exists and the read-only legacy Charter view validates",
+          "availability": "legacy_read_only"
+        }
+      ]
+    },
+    {
+      "id": "running",
+      "label": "Running",
+      "description": "The team is executing and does not need user action.",
+      "whyItMatters": "Work is progressing within the approved boundaries.",
+      "needsUserAction": false,
+      "nextStep": "View progress or pause.",
+      "allowedActions": ["view_progress", "pause_work", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "company_project.status",
+          "values": ["planning", "executing"],
+          "availability": "current"
+        },
+        {
+          "source": "company_project.event",
+          "events": ["project.status_changed"],
+          "predicate": "data.to is planning or executing",
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "paused",
+      "label": "Paused",
+      "description": "Execution is paused and recoverable state is preserved.",
+      "whyItMatters": "No new execution should occur until the user resumes.",
+      "needsUserAction": true,
+      "nextStep": "Resume, adjust, or stop.",
+      "allowedActions": ["resume_work", "adjust_brief", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "work_control",
+          "events": ["work.paused"],
+          "availability": "r0_contract"
+        }
+      ]
+    },
+    {
+      "id": "blocked",
+      "label": "Blocked",
+      "description": "Work cannot continue because of a specific blocker.",
+      "whyItMatters": "Progress will not resume without resolving the blocker.",
+      "needsUserAction": true,
+      "nextStep": "Resolve the named blocker.",
+      "allowedActions": ["resolve_blocker", "open_diagnostics", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "company_project.status",
+          "values": ["blocked"],
+          "availability": "current"
+        },
+        {
+          "source": "company_project.event",
+          "events": ["work_item.blocked"],
+          "predicate": "the blocked item prevents all remaining critical-path work; otherwise emit only an Attention Item",
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "needs_approval",
+      "label": "Needs approval",
+      "description": "A high-impact action is waiting for an explicit decision.",
+      "whyItMatters": "The action may change user-visible or external state.",
+      "needsUserAction": true,
+      "nextStep": "Approve, reject, or request changes.",
+      "allowedActions": ["approve", "reject", "request_change", "open_diagnostics"],
+      "eventMappings": [
+        {
+          "source": "company_project.status",
+          "values": ["awaiting_approval"],
+          "availability": "current"
+        },
+        {
+          "source": "company_project.event",
+          "events": ["gate.requested"],
+          "predicate": "gate status is pending",
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "reviewing",
+      "label": "Reviewing",
+      "description": "The result is undergoing independent verification.",
+      "whyItMatters": "The delivery is not yet ready for acceptance.",
+      "needsUserAction": false,
+      "nextStep": "View evidence when available.",
+      "allowedActions": ["view_evidence", "view_progress"],
+      "eventMappings": [
+        {
+          "source": "company_project.status",
+          "values": ["reviewing"],
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "revision",
+      "label": "Revision",
+      "description": "The team is revising a result in response to specific findings.",
+      "whyItMatters": "The prior result did not satisfy at least one requirement.",
+      "needsUserAction": false,
+      "nextStep": "View the requested and completed changes.",
+      "allowedActions": ["view_revision", "view_evidence", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "company_project.event",
+          "events": ["work_item.rework_requested", "work_item.rework_scheduled"],
+          "availability": "current"
+        },
+        {
+          "source": "company_project.status",
+          "values": ["rejected"],
+          "availability": "current"
+        }
+      ]
+    },
+    {
+      "id": "delivered",
+      "label": "Delivered",
+      "description": "A usable result and its evidence are ready for acceptance.",
+      "whyItMatters": "The user can now inspect the result against its criteria.",
+      "needsUserAction": true,
+      "nextStep": "Open, accept, or request changes.",
+      "allowedActions": ["open_delivery", "accept_delivery", "request_change", "view_evidence"],
+      "eventMappings": [
+        {
+          "source": "delivery",
+          "events": ["delivery.ready"],
+          "predicate": "data contains a stable delivery id and version, at least one real openable Artifact ref exists in both artifact.created facts and storage, and acceptance is pending",
+          "availability": "r0_contract"
+        }
+      ]
+    },
+    {
+      "id": "accepted",
+      "label": "Accepted",
+      "description": "The delivery has been accepted by the user or explicit policy.",
+      "whyItMatters": "The work has completed its acceptance lifecycle.",
+      "needsUserAction": false,
+      "nextStep": "Use or archive the result.",
+      "allowedActions": ["open_delivery", "view_evidence", "archive"],
+      "eventMappings": [
+        {
+          "source": "delivery",
+          "events": ["delivery.accepted"],
+          "availability": "r0_contract"
+        }
+      ]
+    },
+    {
+      "id": "failed",
+      "label": "Failed",
+      "description": "The current execution failed and cannot continue automatically.",
+      "whyItMatters": "The failure needs a retry, correction, or stop decision.",
+      "needsUserAction": true,
+      "nextStep": "Retry, inspect diagnostics, or stop.",
+      "allowedActions": ["retry", "open_diagnostics", "adjust_brief", "stop_work"],
+      "eventMappings": [
+        {
+          "source": "company_project.event",
+          "events": ["work_item.failed"],
+          "predicate": "no automatic retry remains",
+          "availability": "r0_contract"
+        }
+      ]
+    },
+    {
+      "id": "cancelled",
+      "label": "Cancelled",
+      "description": "The user stopped the work and no further execution will occur.",
+      "whyItMatters": "Existing artifacts and evidence remain available.",
+      "needsUserAction": false,
+      "nextStep": "View retained results or archive.",
+      "allowedActions": ["view_retained_results", "archive"],
+      "eventMappings": [
+        {
+          "source": "work_control",
+          "events": ["work.cancelled"],
+          "availability": "r0_contract"
+        }
+      ]
+    }
+  ],
+  "prohibitedTerms": [
+    {
+      "term": "Bidding",
+      "replacement": "Choosing the right owner",
+      "reason": "Internal scheduling mechanics do not describe user value.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "projecting",
+      "replacement": "Preparing the result",
+      "reason": "Raw runtime state is not a user state.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "投影诊断",
+      "replacement": "状态诊断",
+      "reason": "Internal projection architecture is not actionable user language.",
+      "allowedSurfaces": ["developer_documentation"]
+    },
+    {
+      "term": "raw status",
+      "replacement": "Mapped user state",
+      "reason": "User-visible state must explain impact and next action.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "dependency ID",
+      "replacement": "Prerequisite work",
+      "reason": "Opaque identifiers are not actionable.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "Provider ID",
+      "replacement": "Model provider",
+      "reason": "The normal path uses the provider name, not its internal identifier.",
+      "allowedSurfaces": ["settings_advanced", "diagnostics"]
+    },
+    {
+      "term": "Source Protection",
+      "replacement": "No user-facing replacement",
+      "reason": "Template implementation boundaries are not a product feature.",
+      "allowedSurfaces": ["developer_documentation"]
+    },
+    {
+      "term": "Work Item",
+      "replacement": "Step or milestone",
+      "reason": "Internal decomposition should be expressed through user outcomes.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "Gate",
+      "replacement": "Approval",
+      "reason": "The user acts on a decision, not an internal object.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "winner selected",
+      "replacement": "Owner assigned",
+      "reason": "Competitive scheduling language is not the user outcome.",
+      "allowedSurfaces": ["diagnostics"]
+    },
+    {
+      "term": "attempt",
+      "replacement": "Retry",
+      "reason": "Attempt counters belong in diagnostics unless needed to explain a failure.",
+      "allowedSurfaces": ["diagnostics"]
+    }
+  ],
+  "fallbackRule": {
+    "unknownInternalState": "Do not infer success or a nearby user state. Emit a diagnostic warning and show an explicit unavailable state.",
+    "missingReason": "Do not fabricate a reason. State that the reason is unavailable and link to diagnostics.",
+    "missingNextAction": "Disable mutation controls until a valid action is provided by the projection contract."
+  }
+}

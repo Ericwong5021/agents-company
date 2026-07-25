@@ -1,7 +1,9 @@
-import { createError, defineEventHandler, getRouterParam } from "h3"
+import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { ofetch } from "ofetch"
 import type { CompanyProjectDetail } from "../../shared/company-contract"
+import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
+import { controlPlaneURL } from "../utils/control-plane-client"
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -23,12 +25,13 @@ function records(value: unknown) {
   return Array.isArray(value) ? value.filter(record) : []
 }
 
-export default defineEventHandler(async (event): Promise<CompanyProjectDetail> => {
+export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDetail> => {
   const projectID = getRouterParam(event, "projectID")
   if (!projectID) throw createError({ statusCode: 400, statusMessage: "Project ID is required" })
 
   const config = useRuntimeConfig(event)
-  const baseURL = new URL(config.agentCompanyControlPlaneUrl)
+  const baseURL = controlPlaneURL(config.agentCompanyControlPlaneUrl)
+  if (!baseURL) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const headers = config.agentCompanyControlPlaneAuthorization
     ? { authorization: config.agentCompanyControlPlaneAuthorization }
     : undefined
@@ -55,11 +58,13 @@ export default defineEventHandler(async (event): Promise<CompanyProjectDetail> =
   const people = [
     ...records(agentsRaw).flatMap((entry) =>
       record(entry.agent)
-        ? [{
-            id: text(entry.agent.id),
-            name: text(entry.agent.name),
-            lifecycle: text(entry.agent.lifecycle),
-          }]
+        ? [
+            {
+              id: text(entry.agent.id),
+              name: text(entry.agent.name),
+              lifecycle: text(entry.agent.lifecycle),
+            },
+          ]
         : [],
     ),
     ...candidates.map((candidate) => ({

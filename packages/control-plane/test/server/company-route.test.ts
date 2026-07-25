@@ -2,10 +2,18 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { count } from "drizzle-orm"
+import { CompanyProjectTable } from "../../src/company-project/company-project.sql"
 import { CompanyProviderList } from "../../src/company/schema"
 import { Config } from "../../src/config"
 import { AppRuntime } from "../../src/effect/app-runtime"
+import {
+  GoalBriefGenerationRequestTable,
+  GoalBriefTable,
+  GoalBriefVersionTable,
+} from "../../src/goal-brief/goal-brief.sql"
 import { Server } from "../../src/server/server"
+import { Database } from "../../src/storage"
 import { resetDatabase } from "../fixture/db"
 
 const boardMessagesOverride = process.env.AGENTCOMPANY_DISABLE_BOARD_MESSAGES
@@ -76,6 +84,57 @@ describe.serial("/company", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ body: "为新产品准备发布计划" }),
     })
+    Database.use((db) => {
+      db.insert(CompanyProjectTable)
+        .values({
+          id: "project-reset",
+          goal: "验证公司重置",
+          title: "公司重置",
+          status: "intake",
+          output_dir: "/tmp/project-reset",
+          created_at: 100,
+          updated_at: 100,
+        })
+        .run()
+      db.insert(GoalBriefTable)
+        .values({
+          id: "brief-reset",
+          project_id: "project-reset",
+          created_at: 100,
+          updated_at: 100,
+        })
+        .run()
+      db.insert(GoalBriefVersionTable)
+        .values({
+          brief_id: "brief-reset",
+          version: 1,
+          goal: "验证公司重置",
+          deliverables_json: "[]",
+          acceptance_criteria_json: "[]",
+          constraints_json: "[]",
+          non_goals_json: "[]",
+          assumptions_json: "[]",
+          open_questions_json: "[]",
+          risk_level: "low",
+          recommended_plan_json: '{"summary":"重置","steps":[]}',
+          approval_mode: "balanced",
+          source: "user_input",
+          source_refs_json: "[]",
+          created_at: 100,
+        })
+        .run()
+      db.insert(GoalBriefGenerationRequestTable)
+        .values({
+          request_id: "request-reset",
+          payload_hash: "hash-reset",
+          owner_token: "owner-reset",
+          lease_expires_at: 200,
+          brief_id: "brief-reset",
+          created_at: 100,
+          updated_at: 100,
+        })
+        .run()
+    })
 
     const rejected = await app.request("/company/reset", {
       method: "POST",
@@ -98,6 +157,11 @@ describe.serial("/company", () => {
         setup_goal: null,
       },
     })
+    expect(Database.use((db) => db.select({ value: count() }).from(GoalBriefGenerationRequestTable).get())?.value).toBe(
+      0,
+    )
+    expect(Database.use((db) => db.select({ value: count() }).from(GoalBriefVersionTable).get())?.value).toBe(0)
+    expect(Database.use((db) => db.select({ value: count() }).from(GoalBriefTable).get())?.value).toBe(0)
   })
 
   test.serial("rejects non-git repository inspection with a product error", async () => {

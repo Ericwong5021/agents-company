@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Effect } from "effect"
+import { createHash } from "node:crypto"
 import fs from "fs/promises"
+import path from "node:path"
 import { CompanyAgent } from "../../src/company-agent/company-agent"
+import { CompanyAgentID } from "../../src/company-agent/schema"
 import { Instance } from "../../src/project/instance"
 import {
   agentDir,
+  agentHomeLegacyMigrationPaths,
   agentInstructPath,
   agentKanbanPath,
   agentMemoryDir,
@@ -14,6 +18,7 @@ import {
   agentSkillsDir,
   agentSoulPath,
   companyAgentMemoryPath,
+  migrateAgentHome,
 } from "../../src/session/checkpoint-paths"
 import { Log } from "../../src/util"
 import { FrontMatter } from "../../src/workspace"
@@ -36,11 +41,68 @@ async function readFrontMatter(filePath: string) {
   return FrontMatter.parseFrontMatter(await Bun.file(filePath).text()).frontMatter
 }
 
+async function treeEntries(root: string, current = root): Promise<[string, string][]> {
+  if ((await fs.stat(current)).isFile())
+    return [[path.relative(root, current) || ".", await fs.readFile(current, "base64")]]
+  return (
+    await Promise.all((await fs.readdir(current)).sort().map((entry) => treeEntries(root, path.join(current, entry))))
+  ).flat()
+}
+
+async function treeHash(root: string) {
+  return createHash("sha256")
+    .update(JSON.stringify(await treeEntries(root)))
+    .digest("hex")
+}
+
 afterEach(async () => {
   await Instance.disposeAll()
 })
 
 describe("company agent file bundle", () => {
+  test("migrates the complete legacy bundle without changing content hashes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const agentID = CompanyAgentID.make("legacy-bundle-agent")
+        const migration = agentHomeLegacyMigrationPaths(agentID)
+        const legacyDirectories = new Set(["skills", "memory", "projects"])
+
+        await Promise.all(
+          migration.map(async (entry, index) => {
+            await fs.mkdir(path.dirname(entry.legacy), { recursive: true })
+            if (!legacyDirectories.has(path.basename(entry.legacy))) {
+              await fs.writeFile(entry.legacy, `legacy-file-${index}`)
+              return
+            }
+            await fs.mkdir(entry.legacy, { recursive: true })
+            await fs.writeFile(path.join(entry.legacy, "legacy.txt"), `legacy-directory-${index}`)
+          }),
+        )
+        const before = Object.fromEntries(
+          await Promise.all(migration.map(async (entry) => [entry.target, await treeHash(entry.legacy)] as const)),
+        )
+
+        await migrateAgentHome(agentID)
+
+        expect(
+          Object.fromEntries(
+            await Promise.all(migration.map(async (entry) => [entry.target, await treeHash(entry.target)] as const)),
+          ),
+        ).toEqual(before)
+        expect(await Promise.all(migration.map((entry) => exists(entry.legacy)))).toEqual(migration.map(() => false))
+
+        await migrateAgentHome(agentID)
+        expect(
+          Object.fromEntries(
+            await Promise.all(migration.map(async (entry) => [entry.target, await treeHash(entry.target)] as const)),
+          ),
+        ).toEqual(before)
+      },
+    })
+  })
+
   test("creates, reads, updates, and repairs the persistent agent bundle", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

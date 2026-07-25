@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-current-head-baseline",
+  "baselineKind": "committed_source_and_measurement_readiness",
+  "refRequested": "09c269222f4696988e4fe40da07a98ff003e916b",
+  "commitSha": "09c269222f4696988e4fe40da07a98ff003e916b",
+  "commitTime": "2026-07-24T01:29:16+08:00",
+  "subjectTree": "committed tree only; worktree changes are excluded",
+  "collector": "script/experience-baseline.ts",
+  "scenarioContract": {
+    "path": "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
+    "sha256": "e349a4d6e5b949c3d2615d15626ab345154569408b70d94878700ff9e32090c8"
+  },
+  "staticEvidence": {
+    "canonicalPlanTracked": false,
+    "primaryNavigation": {
+      "observedLabels": ["Company", "Overview", "Board", "Employees"],
+      "requiredLabels": ["Inbox", "Work", "Team", "Library", "Settings"],
+      "requiredLabelCount": 0
+    },
+    "domNavigationInjection": {
+      "count": 13,
+      "samples": [
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:8:.company-module-launcher {",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:26:.company-module-launcher:hover,",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:27:.company-module-launcher--active {",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:32:.company-module-launcher:active {",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:36:.company-module-launcher:focus-visible,",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:44:.company-module-launcher__mark {",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/assets/company-extension.css:892:  .company-module-launcher,",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/components/CompanyModuleLauncher.vue:10:    class=\"company-module-launcher\""
+      ]
+    },
+    "productionFixtureFallback": {
+      "count": 4,
+      "samples": [
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/settings/company.vue:111:                <dd>{{ snapshot.connection === \"live\" ? \"Connected\" : \"Demo fallback\" }}</dd>",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/server/api/snapshot.get.ts:11:const fixture: CompanySnapshot = {",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/server/api/snapshot.get.ts:94:  notice: \"Control Plane is offline. Showing deterministic module data.\",",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/server/api/snapshot.get.ts:172:  if (!isRecord(state) || state.state !== \"ready\" || !isRecord(state.company)) return fixture"
+      ]
+    },
+    "legacyProductSignatures": {
+      "count": 33,
+      "samples": [
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/app.config.ts:6:      \"Your personal AI agent. Chat on the web, Slack, or iMessage — query Linear and pick up where you left off.\",",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:10:  unlinkSlack,",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:11:} = useSlackLink();",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:29:    await unlinkSlack();",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:65:            Slack",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:89:            Uses your profile and service connections in Slack.",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:102:          aria-label=\"Unlink Slack\"",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/app/components/integrations/SlackLinkCard.vue:125:          <span>In Slack, message <code class=\"text-toned\">@V link {{ pendingCode }}</code></span>"
+      ]
+    },
+    "rawUserStateSignatures": {
+      "count": 16,
+      "samples": [
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:53:  thread.value?.run && [\"queued\", \"running\", \"projecting\"].includes(thread.value.run.state),",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:302:              <span v-if=\"threadRunning\">董事会正在 bidding 与发言…</span>",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:306:              <span v-if=\"thread.bidding?.winnerAgentID\">",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:307:                第 {{ thread.bidding.roundNum }} 轮由 {{ agentName(thread.bidding.winnerAgentID) }} 发言",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:309:              <span v-else-if=\"thread.bidding?.state === 'decided'\">",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/company/board.vue:310:                第 {{ thread.bidding.roundNum }} 轮全员 pass，自然结束",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/app/pages/settings/company.vue:141:                <span>Provider ID</span>",
+        "09c269222f4696988e4fe40da07a98ff003e916b:packages/app/modules/agent-company/runtime/server/api/board.get.ts:53:  const bidding = items.find((entry) => record(entry) && entry.type === \"bidding\" && record(entry.bidding))"
+      ]
+    },
+    "webuiTestCommand": "echo 'No standalone WebUI tests are registered.'",
+    "webuiTestGateRegistered": false
+  },
+  "metricEvidence": [
+    {
+      "metricId": "activation_success_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "goal_to_start_actions",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "brief_time_to_first_value_ms",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "delivery_consumability_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "acceptance_determinability_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "core_task_completion_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "unnecessary_interruption_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "recovery_success_rate",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "false_success_or_data_count",
+      "value": null,
+      "status": "not_collectable",
+      "reason": "The committed build has no complete benchmark event envelope and runner for this metric."
+    },
+    {
+      "metricId": "sus_score",
+      "value": null,
+      "status": "not_scheduled",
+      "reason": "No eligible human study is recorded for this committed build."
+    },
+    {
+      "metricId": "state_comprehension_rate",
+      "value": null,
+      "status": "not_scheduled",
+      "reason": "No eligible human study is recorded for this committed build."
+    }
+  ],
+  "humanResearch": [
+    {
+      "id": "HR-01",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "result": null,
+      "rule": "Do not infer a result from source code, fixtures, or agent judgment."
+    },
+    {
+      "id": "HR-02",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "result": null,
+      "rule": "Do not infer a result from source code, fixtures, or agent judgment."
+    },
+    {
+      "id": "HR-03",
+      "status": "not_scheduled",
+      "completionStatus": "incomplete",
+      "automationSubstituteAllowed": false,
+      "result": null,
+      "rule": "Do not infer a result from source code, fixtures, or agent judgment."
+    }
+  ]
+}

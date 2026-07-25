@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { fileURLToPath } from "url"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -9,7 +11,20 @@ import path from "path"
 
 import { createClient } from "@hey-api/openapi-ts"
 
-await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../control-plane"))
+const generationHome = await mkdtemp(path.join(os.tmpdir(), "agent-company-sdk-"))
+try {
+  await $`bun dev generate > ${dir}/openapi.json`
+    .cwd(path.resolve(dir, "../../control-plane"))
+    .env({
+      ...process.env,
+      AGENTCOMPANY_HOME: generationHome,
+      AGENTCOMPANY_DB: ":memory:",
+      XDG_DATA_HOME: path.join(generationHome, "xdg-data"),
+      XDG_CONFIG_HOME: path.join(generationHome, "xdg-config"),
+    })
+} finally {
+  await rm(generationHome, { recursive: true, force: true })
+}
 
 const openapiPath = path.join(dir, "openapi.json")
 const openapi = await Bun.file(openapiPath).json()
@@ -79,11 +94,36 @@ async function generate(output: string) {
   })
 }
 
+async function requireGoalBriefRequestParameters(file: string) {
+  let source = await Bun.file(file).text()
+  const classStart = source.indexOf("export class GoalBrief extends HeyApiClient")
+  if (classStart < 0) throw new Error("Missing generated GoalBrief client")
+  for (const [method, fields] of [
+    ["create", ["source", "brief"]],
+    ["generate", ["requestId", "goal"]],
+    ["append", ["expectedVersion", "source", "brief"]],
+  ] as const) {
+    const start = source.indexOf(`  public ${method}<`, classStart)
+    const end = source.indexOf("\n    options?:", start)
+    if (start < 0 || end < 0) throw new Error(`Missing generated GoalBrief.${method} signature`)
+    let signature = source.slice(start, end)
+    signature = signature.replace("\n    parameters?: {", "\n    parameters: {")
+    for (const field of fields) signature = signature.replace(`\n      ${field}?:`, `\n      ${field}:`)
+    if (!signature.includes("\n    parameters: {")) throw new Error(`GoalBrief.${method} parameters are optional`)
+    for (const field of fields)
+      if (!signature.includes(`\n      ${field}:`)) throw new Error(`GoalBrief.${method}.${field} is optional`)
+    source = `${source.slice(0, start)}${signature}${source.slice(end)}`
+  }
+  await Bun.write(file, source)
+}
+
 await generate("./src/v2/gen")
 
 for (const file of await Array.fromAsync(new Bun.Glob("src/v2/**/*.ts").scan())) {
   await $`bun prettier --write ${file}`
 }
+await requireGoalBriefRequestParameters("./src/v2/gen/sdk.gen.ts")
+await $`bun prettier --write ./src/v2/gen/sdk.gen.ts`
 await $`rm -rf dist`
 await $`bun typecheck`
 await $`rm openapi.json`

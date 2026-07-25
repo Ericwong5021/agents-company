@@ -1,13 +1,58 @@
-export type CompanyConnection = "live" | "demo"
+import type { WorkProjection } from "@agents-company/shared/experience"
+
+export type CompanyConnection = "connecting" | "ready" | "degraded" | "disconnected" | "recovering"
+
+export type CompanySnapshotResource = "company" | "agents" | "work" | "channels" | "messages"
+
+export type CompanyConnectionDiagnostic = {
+  checkedAt: string
+  endpoint: string
+  issue: CompanyConnectionIssue["kind"]
+  statusCode?: number
+  controlPlaneVersion?: string
+  readiness?: "ready" | "blocked" | "unknown"
+  unavailable: CompanySnapshotResource[]
+}
+
+export type CompanyConnectionIssue = {
+  kind:
+    | "authorization_required"
+    | "invalid_configuration"
+    | "invalid_response"
+    | "migration_required"
+    | "partial_data"
+    | "provider_required"
+    | "service_error"
+    | "service_unreachable"
+    | "version_mismatch"
+  title: string
+  detail: string
+  impact: string
+  nextAction: string
+  retryable: boolean
+  unavailable: CompanySnapshotResource[]
+  diagnostic: CompanyConnectionDiagnostic
+}
 
 export type CompanyAgent = {
   id: string
   name: string
-  role: string
-  department: string
-  activity: string
-  subject: string
+  role?: string
+  department?: string
+  responsibilities: string[]
+  attention: "none" | "available" | "focused" | "urgent"
+  activity: "idle" | "waiting" | "working" | "recovering" | "completed" | "failed" | "interrupted"
+  subject?: string
   presence: "online" | "offline"
+  location?: string
+  since: number
+  interruptibility: "interruptible" | "coordinate_first" | "needs_intervention"
+  risk?: string
+  collaborators: string[]
+  evidence?: {
+    kind: "agent_run"
+    timeUpdated: number
+  }
 }
 
 export type CompanyMessage = {
@@ -24,7 +69,7 @@ export type CompanyProject = {
   id: string
   title: string
   status: string
-  progress: number
+  progress?: number
 }
 
 export type CompanyBoardThread = {
@@ -125,21 +170,23 @@ export type CompanyProjectDetail = {
 
 export type CompanySnapshot = {
   connection: CompanyConnection
+  issue?: CompanyConnectionIssue
   company: {
     id: string
     name: string
     provider: string
-    providerConfigured: boolean
+    providerConfigured?: boolean
     approvalPolicy: string
     setupGoal?: string
   }
   stats: {
-    online: number
-    activeProjects: number
-    boardMessages: number
+    online?: number
+    activeProjects?: number
+    boardMessages?: number
   }
   agents: CompanyAgent[]
   messages: CompanyMessage[]
+  work: WorkProjection[]
   projects: CompanyProject[]
   notice?: string
 }

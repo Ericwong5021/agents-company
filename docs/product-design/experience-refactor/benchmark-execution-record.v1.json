@@ -1,0 +1,480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-company.local/schemas/benchmark-execution-record.v1.json",
+  "title": "Agent Company benchmark execution record",
+  "schemaVersion": 1,
+  "recordVersion": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordSchemaVersion",
+    "scenarioId",
+    "scenarioVersion",
+    "scenarioDigest",
+    "buildSha",
+    "runId",
+    "seed",
+    "startedAt",
+    "finishedAt",
+    "stateTrace",
+    "sideEffectLedger",
+    "artifacts",
+    "evidence",
+    "criterionResults",
+    "humanReview",
+    "finalDecision",
+    "failureReason",
+    "eligibility",
+    "blockedByTasks"
+  ],
+  "properties": {
+    "recordSchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "scenarioId": {
+      "type": "string",
+      "pattern": "^S(?:0[1-9]|1[0-2])$"
+    },
+    "scenarioVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenarioDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "buildSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^run-(?:01|02)$"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stateTrace": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "state", "evidenceIds"],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "enum": ["scheduled", "running", "completed", "failed", "blocked", "human_pending"]
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "sideEffectLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "auditArtifactId",
+        "auditSha256",
+        "network",
+        "fakeControlPlane",
+        "isolatedRunTree",
+        "productionCandidates",
+        "serverNetworkBoundary"
+      ],
+      "properties": {
+        "mode": {
+          "enum": ["measured_adapter", "deferred_no_execution"]
+        },
+        "auditArtifactId": {
+          "type": ["string", "null"]
+        },
+        "auditSha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy", "externalAttemptCount", "observedLoopbackRequestCount"],
+          "properties": {
+            "policy": {
+              "enum": ["loopback-only", "not_executed"]
+            },
+            "externalAttemptCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observedLoopbackRequestCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "fakeControlPlane": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requestCount"],
+          "properties": {
+            "requestCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "isolatedRunTree": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["writeEntryCount"],
+          "properties": {
+            "writeEntryCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "productionCandidates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["snapshotCount", "changedCount", "contentsRead"],
+          "properties": {
+            "snapshotCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "changedCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contentsRead": {
+              "const": false
+            }
+          }
+        },
+        "serverNetworkBoundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["browserFullyObserved", "serverEgressInstrumented", "failClosedControls"],
+          "properties": {
+            "browserFullyObserved": {
+              "type": "boolean"
+            },
+            "serverEgressInstrumented": {
+              "const": false
+            },
+            "failClosedControls": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "relativePath", "sha256", "mediaType", "byteLength", "openCheck"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relativePath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "mediaType": {
+            "const": "application/json"
+          },
+          "byteLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "openCheck": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "checkedBy"],
+            "properties": {
+              "status": {
+                "enum": ["pass", "fail"]
+              },
+              "checkedBy": {
+                "const": "JSON.parse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "source", "sha256", "summary"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": ["playwright", "deferred_contract", "human_policy", "side_effect_audit"]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "criterionResults": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterionId",
+          "status",
+          "evidenceIds",
+          "failureReason",
+          "humanEvidenceRequired",
+          "gateEligibility"
+        ],
+        "properties": {
+          "criterionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["pass", "fail", "not_evaluated", "human_pending"]
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "failureReason": {
+            "type": ["string", "null"]
+          },
+          "humanEvidenceRequired": {
+            "type": "boolean"
+          },
+          "gateEligibility": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["gate", "includedInGateDecision", "deferredToGate", "reason"],
+            "properties": {
+              "gate": {
+                "const": "R0"
+              },
+              "includedInGateDecision": {
+                "type": "boolean"
+              },
+              "deferredToGate": {
+                "type": ["string", "null"],
+                "pattern": "^R[1-4]$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected", "status", "selectionSeed", "selectionRank"],
+      "properties": {
+        "selected": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": ["not_selected", "human_pending"]
+        },
+        "selectionSeed": {
+          "type": "integer"
+        },
+        "selectionRank": {
+          "type": ["integer", "null"]
+        }
+      }
+    },
+    "finalDecision": {
+      "enum": ["pass", "fail", "blocked", "human_pending"]
+    },
+    "failureReason": {
+      "type": ["string", "null"]
+    },
+    "eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "includedInGateDenominator", "reason"],
+      "properties": {
+        "gate": {
+          "const": "R0"
+        },
+        "includedInGateDenominator": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "blockedByTasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    }
+  },
+  "governance": {
+    "criterionStatuses": ["pass", "fail", "not_evaluated", "human_pending"],
+    "finalDecisions": ["pass", "fail", "blocked", "human_pending"],
+    "r0ExecutableScenarios": ["S05", "S12"],
+    "deferredScenarios": {
+      "S01": {
+        "gate": "R3",
+        "blockedByTasks": ["DELIV-03", "DELIV-05", "QA-01"]
+      },
+      "S02": {
+        "gate": "R3",
+        "blockedByTasks": ["WORK-07", "DELIV-05", "QA-01"]
+      },
+      "S03": {
+        "gate": "R3",
+        "blockedByTasks": ["DELIV-05", "QA-01"]
+      },
+      "S04": {
+        "gate": "R1",
+        "blockedByTasks": ["GOAL-01", "GOAL-03", "GOAL-04"]
+      },
+      "S06": {
+        "gate": "R1",
+        "blockedByTasks": ["TRUST-03"]
+      },
+      "S07": {
+        "gate": "R2",
+        "blockedByTasks": ["WORK-07", "DELIV-04"]
+      },
+      "S08": {
+        "gate": "R3",
+        "blockedByTasks": ["DELIV-05", "DELIV-06"]
+      },
+      "S09": {
+        "gate": "R3",
+        "blockedByTasks": ["DELIV-05", "DELIV-06"]
+      },
+      "S10": {
+        "gate": "R2",
+        "blockedByTasks": ["WORK-06", "WORK-07"]
+      },
+      "S11": {
+        "gate": "R3",
+        "blockedByTasks": ["WORK-06", "QA-05"]
+      }
+    },
+    "humanResearchBindings": {
+      "S12": ["HR-02"]
+    },
+    "r0CriterionTaskBindings": {
+      "S05-C1": ["TRUST-01", "TRUST-02", "QA-02"],
+      "S05-C2": ["TRUST-02", "QA-02"],
+      "S05-C3": ["TRUST-02", "QA-02"],
+      "S12-C1": ["SHELL-01", "SHELL-02", "TRUST-01", "TRUST-02", "QA-02"],
+      "S12-C2": ["SHELL-02", "TRUST-02", "QA-02"],
+      "S12-C3": ["TRUST-04", "GOAL-03", "QA-02"]
+    },
+    "r0CriterionEligibility": {
+      "S05-C1": {
+        "includedInGateDecision": true,
+        "deferredToGate": null
+      },
+      "S05-C2": {
+        "includedInGateDecision": true,
+        "deferredToGate": null
+      },
+      "S05-C3": {
+        "includedInGateDecision": true,
+        "deferredToGate": null
+      },
+      "S12-C1": {
+        "includedInGateDecision": true,
+        "deferredToGate": null
+      },
+      "S12-C2": {
+        "includedInGateDecision": true,
+        "deferredToGate": null
+      },
+      "S12-C3": {
+        "includedInGateDecision": false,
+        "deferredToGate": "R1"
+      }
+    },
+    "criterionTagFormat": "@criterion-<scenario-id-lowercase>-c<number>",
+    "humanCriterionTagFormat": "<scenario-id>-H<number>",
+    "humanEvidenceCannotPassWithoutSignedEvidence": true,
+    "spotCheck": {
+      "rate": 0.2,
+      "rounding": "ceil",
+      "seed": 20260725,
+      "stratification": "at_least_one_executable_automated_scenario",
+      "unsignedStatus": "human_pending"
+    },
+    "reproducibilityIgnoredFields": [
+      "runId",
+      "startedAt",
+      "finishedAt",
+      "artifact relative paths",
+      "isolated run directory",
+      "side-effect audit raw digest and byte length plus measured fake-server or run-tree counts",
+      "normalized-evidence raw artifact and evidence digests plus byte length after its runId-normalized semantic digest is bound in the Playwright evidence summary"
+    ],
+    "runnerSuccessMeaning": "The runner completed, records validated, and repeated normalized digests matched. It does not mean any scenario or gate passed."
+  }
+}

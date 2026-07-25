@@ -130,8 +130,24 @@ export function agentPublicProfilePath(agentID: CompanyAgentID): string {
   return path.join(agentPublicDir(agentID), "PROFILE.md")
 }
 
+export function agentHomeLegacyMigrationPaths(agentID: CompanyAgentID) {
+  return [
+    { legacy: path.join(agentDir(agentID), "SOUL.md"), target: agentSoulPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "settings.json"), target: agentSettingsPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "MEMORY.md"), target: companyAgentMemoryPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "INSTRUCT.md"), target: agentInstructPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "relationships.md"), target: agentRelationshipsPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "kanban.md"), target: agentKanbanPath(agentID) },
+    { legacy: path.join(agentDir(agentID), "skills"), target: agentSkillsDir(agentID) },
+    { legacy: path.join(agentDir(agentID), "memory"), target: agentMemoryDir(agentID) },
+    {
+      legacy: path.join(agentDir(agentID), "projects"),
+      target: path.join(agentPrivateDir(agentID), "projects"),
+    },
+  ]
+}
+
 export async function migrateAgentHome(agentID: CompanyAgentID): Promise<void> {
-  const root = agentDir(agentID)
   const privateDir = agentPrivateDir(agentID)
   const professionalDir = agentProfessionalDir(agentID)
   await Promise.all([
@@ -151,17 +167,7 @@ export async function migrateAgentHome(agentID: CompanyAgentID): Promise<void> {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
     })
   }
-  await Promise.all([
-    move(path.join(root, "SOUL.md"), agentSoulPath(agentID)),
-    move(path.join(root, "settings.json"), agentSettingsPath(agentID)),
-    move(path.join(root, "MEMORY.md"), companyAgentMemoryPath(agentID)),
-    move(path.join(root, "INSTRUCT.md"), agentInstructPath(agentID)),
-    move(path.join(root, "relationships.md"), agentRelationshipsPath(agentID)),
-    move(path.join(root, "kanban.md"), agentKanbanPath(agentID)),
-    move(path.join(root, "skills"), agentSkillsDir(agentID)),
-    move(path.join(root, "memory"), agentMemoryDir(agentID)),
-    move(path.join(root, "projects"), path.join(agentPrivateDir(agentID), "projects")),
-  ])
+  await Promise.all(agentHomeLegacyMigrationPaths(agentID).map((entry) => move(entry.legacy, entry.target)))
 }
 
 /**

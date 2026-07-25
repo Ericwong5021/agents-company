@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-experience-refactor-governance",
+  "canonicalPlan": "docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md",
+  "canonicalArtifacts": {
+    "languageContract": "docs/product-design/experience-refactor/language-contract.v1.json",
+    "benchmarkScenarios": "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
+    "benchmarkExecutionRecord": "docs/product-design/experience-refactor/benchmark-execution-record.v1.json",
+    "humanResearchProtocol": "docs/product-design/experience-refactor/human-research-protocol.v1.json",
+    "humanEvidencePackage": "docs/product-design/experience-refactor/human-evidence-package.v1.json",
+    "r0GateEvaluator": "script/experience-gate.ts",
+    "metricContract": "docs/product-design/experience-refactor/metric-contract.v1.json",
+    "currentHeadBaseline": "docs/product-design/experience-refactor/baselines/current-head.v1.json"
+  },
+  "r0PrerequisiteSlices": [
+    {
+      "id": "FND-04[R0-contract]",
+      "sourceTask": "FND-04",
+      "requiredBy": ["SHELL-02"],
+      "deliverables": [
+        "Freeze the five primary navigation destinations and routes",
+        "Freeze shell slots for connection, workspace, context title, and user settings",
+        "Freeze loading, empty, error, disabled, offline, focus, and direct-route behavior"
+      ],
+      "deferredToR1": [
+        "Full responsive composition",
+        "Final visual hierarchy and density",
+        "Complete component styling and motion"
+      ]
+    },
+    {
+      "id": "GOAL-01[R0-contract]",
+      "sourceTask": "GOAL-01",
+      "requiredBy": ["GOAL-02"],
+      "deliverables": [
+        "Freeze the five user intent identifiers",
+        "Freeze the classifier input and correction result contract",
+        "Freeze the rule that ordinary messages cannot silently create formal work"
+      ],
+      "deferredToR1": [
+        "Runtime classifier implementation",
+        "Confidence calibration",
+        "Correction UI and training sample expansion"
+      ]
+    }
+  ],
+  "validationCommands": [
+    "bun script/experience-validate.ts",
+    "bun script/experience-benchmark.ts --self-test",
+    "bun script/experience-benchmark.ts --ref <full-sha> --gate R0 --all --out .artifacts/experience-refactor/<full-sha> --repeat 2",
+    "bun script/experience-gate.ts --self-test",
+    "bun script/experience-gate.ts --ref <full-sha> --gate R0 --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --human-evidence <signed-anonymized-package.json> --out .artifacts/experience-refactor/<full-sha>/r0-gate-decision.json --require-pass",
+    "bun script/experience-baseline.ts --recorded-head",
+    "bun script/experience-pr-metadata.ts --self-test"
+  ],
+  "humanResearchPolicy": {
+    "rule": "Human research results must never be inferred from source code, generated fixtures, or agent judgment.",
+    "automationMaySubstitute": false,
+    "allowedStatuses": ["not_scheduled", "scheduled", "in_progress", "completed"],
+    "r0BlockingItems": ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+    "requiredEvidence": [
+      "participant criteria and anonymized participant IDs",
+      "build commit",
+      "moderator script version",
+      "raw task outcomes or survey responses",
+      "calculation method",
+      "reviewer sign-off"
+    ]
+  }
+}

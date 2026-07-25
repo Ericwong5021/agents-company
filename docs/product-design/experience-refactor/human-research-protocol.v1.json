@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-r0-human-research",
+  "version": "1.0.0",
+  "gate": "R0",
+  "privacy": {
+    "participantIdPattern": "^P-[a-f0-9]{12}$",
+    "prohibitedParticipantFields": ["name", "email", "phone", "accountId"],
+    "rawResponsesRemainLocal": true
+  },
+  "studies": {
+    "HR-01": {
+      "title": "Three-person terminology comprehension",
+      "moderatorScriptVersion": "HR01-v1",
+      "minimumParticipants": 3,
+      "participantCriteria": [
+        "target user who delegates knowledge-work outcomes",
+        "has not read Agent Company product or engineering documentation",
+        "is not a contributor to the tested build",
+        "gave informed consent for anonymized local research storage"
+      ],
+      "presentation": "Show the release-candidate state card with its state label hidden. Do not explain the state before the response.",
+      "exactPrompt": "请用自己的话回答三个问题：现在发生了什么？为什么这件事重要？你下一步会怎么做？",
+      "scoring": {
+        "unit": "participant-prompt",
+        "correctRule": "Correct only when the response covers all three rubric elements: current situation, user impact, and valid next step.",
+        "formula": "correct participant-prompt results / all participant-prompt results",
+        "threshold": 0.9,
+        "requiredPromptsPerParticipant": 12,
+        "scorerMustBeNamed": true
+      },
+      "prompts": [
+        {
+          "id": "HR01-P01",
+          "stateId": "needs_input",
+          "requiredConcepts": [
+            "material information is missing",
+            "continuing risks a materially wrong result",
+            "answer the named material question"
+          ]
+        },
+        {
+          "id": "HR01-P02",
+          "stateId": "ready",
+          "requiredConcepts": [
+            "the brief is valid and work can start",
+            "the result and boundaries are explicit",
+            "start work or adjust the brief"
+          ]
+        },
+        {
+          "id": "HR01-P03",
+          "stateId": "running",
+          "requiredConcepts": [
+            "the team is executing without needing user action",
+            "work remains inside approved boundaries",
+            "view progress or pause"
+          ]
+        },
+        {
+          "id": "HR01-P04",
+          "stateId": "paused",
+          "requiredConcepts": [
+            "execution is paused with recoverable state preserved",
+            "no new execution should occur",
+            "resume, adjust, or stop"
+          ]
+        },
+        {
+          "id": "HR01-P05",
+          "stateId": "blocked",
+          "requiredConcepts": [
+            "work cannot continue because of a specific blocker",
+            "progress cannot resume without resolution",
+            "resolve the named blocker"
+          ]
+        },
+        {
+          "id": "HR01-P06",
+          "stateId": "needs_approval",
+          "requiredConcepts": [
+            "a high-impact action awaits an explicit decision",
+            "the action may change user-visible or external state",
+            "approve, reject, or request changes"
+          ]
+        },
+        {
+          "id": "HR01-P07",
+          "stateId": "reviewing",
+          "requiredConcepts": [
+            "the result is undergoing independent verification",
+            "the delivery is not ready for acceptance",
+            "view evidence when available"
+          ]
+        },
+        {
+          "id": "HR01-P08",
+          "stateId": "revision",
+          "requiredConcepts": [
+            "the team is revising against specific findings",
+            "a prior result missed at least one requirement",
+            "view requested and completed changes"
+          ]
+        },
+        {
+          "id": "HR01-P09",
+          "stateId": "delivered",
+          "requiredConcepts": [
+            "a usable result and evidence await acceptance",
+            "the result can be checked against criteria",
+            "open, accept, or request changes"
+          ]
+        },
+        {
+          "id": "HR01-P10",
+          "stateId": "accepted",
+          "requiredConcepts": [
+            "the delivery was explicitly accepted",
+            "the acceptance lifecycle is complete",
+            "use or archive the result"
+          ]
+        },
+        {
+          "id": "HR01-P11",
+          "stateId": "failed",
+          "requiredConcepts": [
+            "the current execution failed and cannot continue automatically",
+            "a retry, correction, or stop decision is needed",
+            "retry, inspect diagnostics, or stop"
+          ]
+        },
+        {
+          "id": "HR01-P12",
+          "stateId": "cancelled",
+          "requiredConcepts": [
+            "the user stopped the work",
+            "no further execution occurs while prior evidence remains",
+            "view retained results or archive"
+          ]
+        }
+      ]
+    },
+    "HR-02": {
+      "title": "Five-person ten-second brand cognition",
+      "moderatorScriptVersion": "HR02-v1",
+      "requiredParticipants": 5,
+      "participantCriteria": [
+        "target user who delegates knowledge-work outcomes",
+        "has not read Agent Company product or engineering documentation",
+        "is not a contributor to the tested build",
+        "gave informed consent for anonymized local research storage"
+      ],
+      "exposure": {
+        "surface": "First-run",
+        "durationSeconds": 10,
+        "instruction": "Show the untouched release-candidate First-run surface for exactly ten seconds, then hide it before asking questions."
+      },
+      "questions": [
+        {
+          "id": "HR02-Q1",
+          "text": "这是什么产品？",
+          "requiredConcepts": ["local-first AI team or Agent company"]
+        },
+        {
+          "id": "HR02-Q2",
+          "text": "它能帮你完成什么？",
+          "requiredConcepts": ["takes a delivery goal through controlled team execution to a verifiable result"]
+        },
+        {
+          "id": "HR02-Q3",
+          "text": "你接下来会做什么？",
+          "requiredConcepts": ["connect or configure a Provider"]
+        }
+      ],
+      "participantPassRule": "All three questions are correct.",
+      "studyPassRule": {
+        "minimumPassingParticipants": 4,
+        "outOfParticipants": 5
+      }
+    },
+    "HR-03": {
+      "title": "Named manual screenshot approval",
+      "reviewScriptVersion": "HR03-v1",
+      "approverCriteria": [
+        "named product approver",
+        "reviewed the exact release-candidate build",
+        "reviewed each image at native scale",
+        "records accept or reject independently for every surface"
+      ],
+      "requiredSurfaces": ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"],
+      "passRule": "Every required surface has an openable PNG bound to the build SHA and an accepted named decision."
+    },
+    "FND-03-SPOT-CHECK": {
+      "title": "Deterministic twenty-percent adjudication review",
+      "reviewScriptVersion": "FND03-SPOT-v1",
+      "selectionSeed": 20260725,
+      "selectionRate": 0.2,
+      "rounding": "ceil",
+      "stratification": "at_least_one_executable_automated_scenario",
+      "expectedSelectedScenarioIds": ["S05", "S02", "S01"],
+      "reviewPrompt": "For each selected scenario, inspect the execution record and its cited evidence. Does the recorded automated or deferred decision follow the protocol without overstating a pass?",
+      "passRule": "A named reviewer agrees with all three selected decisions and signs the package."
+    }
+  },
+  "signoff": {
+    "method": "named_human_attestation",
+    "requiredAttestation": "I reviewed the recorded raw responses or artifacts against this protocol and attest that the submitted decisions are accurate for the identified build."
+  }
+}

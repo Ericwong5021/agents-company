@@ -2,8 +2,8 @@ import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { chromium, type Page } from "@playwright/test"
 
-const baseURL = process.env.EVE_QA_BASE_URL || "http://127.0.0.1:3210"
-const outputDir = path.resolve(import.meta.dirname, "../design-qa-artifacts")
+const baseURL = process.env.AGENT_COMPANY_QA_BASE_URL || "http://127.0.0.1:3210"
+const outputDir = path.resolve(import.meta.dirname, "../.artifacts/visual-qa")
 const browser = await chromium.launch()
 const timeout = setTimeout(() => void browser.close(), 60_000)
 
@@ -44,28 +44,22 @@ try {
   await mkdir(outputDir, { recursive: true })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
-  await page.goto(`${baseURL}/login`, { waitUntil: "domcontentloaded" })
-  await page.getByRole("button", { name: "Need an account? Sign up", exact: true }).click()
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("Agent Company Visual QA")
-  await page
-    .getByRole("textbox", { name: "Email", exact: true })
-    .fill(`visual-qa-${Date.now()}@agent-company.local`)
-  await page.getByRole("textbox", { name: "Password", exact: true }).fill("Local-Visual-QA-2026!")
-  await page.getByRole("button", { name: "Create account", exact: true }).click()
-  await page.waitForURL(`${baseURL}/company`)
+  await page.goto(`${baseURL}/inbox`, { waitUntil: "domcontentloaded" })
+  await page.waitForURL(`${baseURL}/inbox`)
 
   const desktop = await captureSet(page, [
-    ["company-desktop", "/company", "Agent Company"],
-    ["board-desktop", "/company/board", "Roundtable"],
-    ["employees-desktop", "/company/employees", "Employees"],
-    ["settings-desktop", "/settings/company", "Settings"],
+    ["inbox-desktop", "/inbox", "Inbox"],
+    ["work-desktop", "/work", "Work"],
+    ["team-desktop", "/team", "Team"],
+    ["settings-desktop", "/settings", "Settings"],
   ])
 
   await page.setViewportSize({ width: 390, height: 844 })
   const mobile = await captureSet(page, [
-    ["company-mobile", "/company", "Agent Company"],
-    ["board-mobile", "/company/board", "Roundtable"],
-    ["settings-mobile", "/settings/company", "Settings"],
+    ["inbox-mobile", "/inbox", "Inbox"],
+    ["work-mobile", "/work", "Work"],
+    ["team-mobile", "/team", "Team"],
+    ["settings-mobile", "/settings", "Settings"],
   ])
 
   const metrics = { baseURL, capturedAt: new Date().toISOString(), desktop, mobile }

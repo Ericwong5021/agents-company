@@ -52,6 +52,7 @@ const charter = reactive(emptyCharter())
 const threadRunning = computed(() =>
   thread.value?.run && ["queued", "running", "projecting"].includes(thread.value.run.state),
 )
+const companyAvailable = computed(() => ["ready", "degraded"].includes(snapshot.value.connection))
 
 function agentName(agentID: string) {
   return snapshot.value.agents.find((agent) => agent.id === agentID)?.name ?? agentID
@@ -277,12 +278,22 @@ onBeforeUnmount(() => {
 
         <CompanyModuleNav />
 
-        <p v-if="submitError" class="company-board-state company-board-state--error" role="alert">
+        <CompanyConnectionState
+          v-if="!companyAvailable"
+          :connection="snapshot.connection"
+          :issue="snapshot.issue"
+          show-settings
+          @retry="refresh()"
+        />
+
+        <p v-else-if="snapshot.notice" class="company-notice">{{ snapshot.notice }}</p>
+
+        <p v-if="companyAvailable && submitError" class="company-board-state company-board-state--error" role="alert">
           {{ submitError }}
           <NuxtLink v-if="!snapshot.company.providerConfigured" to="/settings/company">配置 Provider</NuxtLink>
         </p>
 
-        <section class="company-board-feed" aria-label="Board messages">
+        <section v-if="companyAvailable" class="company-board-feed" aria-label="Board messages">
           <article
             v-for="message in snapshot.messages"
             :key="message.id"
@@ -419,7 +430,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <form class="company-composer" @submit.prevent="submit">
+        <form v-if="companyAvailable" class="company-composer" @submit.prevent="submit">
           <textarea
             v-model="draft"
             rows="3"

@@ -1,12 +1,20 @@
+import { fileURLToPath } from "node:url"
 import agentCompanyModule from "./modules/agent-company/module"
 
 const privateNoStore = { "cache-control": "private, no-store" } as const
 const noStore = { "cache-control": "no-store" } as const
+const nativeLibsqlPackage = process.platform === "darwin"
+  ? `@libsql/darwin-${process.arch}`
+  : process.platform === "linux" && process.arch === "x64"
+    ? "@libsql/linux-x64-gnu"
+    : process.platform === "win32" && process.arch === "x64"
+      ? "@libsql/win32-x64-msvc"
+      : undefined
 
 export default defineNuxtConfig({
-  modules: ["@nuxt/ui", "@comark/nuxt", "eve/nuxt", "@nuxthub/core", "@vercel/analytics", agentCompanyModule],
+  modules: ["@nuxt/ui", "@comark/nuxt", "eve/nuxt", "@nuxthub/core", agentCompanyModule],
   css: ["~/assets/css/main.css"],
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NUXT_DEVTOOLS !== "false" },
   compatibilityDate: "latest",
   experimental: {
     payloadExtraction: true,
@@ -14,6 +22,10 @@ export default defineNuxtConfig({
   },
   routeRules: {
     "/": { ssr: true, headers: privateNoStore },
+    "/inbox/**": { ssr: true, headers: privateNoStore },
+    "/work/**": { ssr: true, headers: privateNoStore },
+    "/team/**": { ssr: true, headers: privateNoStore },
+    "/library/**": { ssr: true, headers: privateNoStore },
     "/company/**": { ssr: true, headers: privateNoStore },
     "/chat/**": { ssr: true, headers: privateNoStore },
     "/settings/**": { ssr: true, headers: privateNoStore },
@@ -24,6 +36,11 @@ export default defineNuxtConfig({
   },
   nitro: {
     compressPublicAssets: true,
+    externals: {
+      traceInclude: nativeLibsqlPackage
+        ? [fileURLToPath(import.meta.resolve(nativeLibsqlPackage))]
+        : [],
+    },
     prerender: { routes: ["/login"], crawlLinks: false },
   },
   app: {
@@ -39,7 +56,7 @@ export default defineNuxtConfig({
         { name: "color-scheme", content: "light dark" },
         { name: "robots", content: "noindex, nofollow" },
       ],
-      link: [{ rel: "icon", href: "/favicon.ico" }],
+      link: [{ rel: "icon", type: "image/svg+xml", href: "/agent-company-mark.svg" }],
     },
   },
   fonts: {

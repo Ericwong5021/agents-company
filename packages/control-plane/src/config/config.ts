@@ -331,7 +331,7 @@ const InfoSchema = Schema.Struct({
     Schema.Struct({
       auto: Schema.optional(Schema.Boolean).annotate({
         description:
-          "Auto-trigger dream memory consolidation on new session start. Default: true.",
+          "Auto-trigger dream memory consolidation on new session start. Experimental and disabled by default.",
       }),
       interval_days: Schema.optional(NonNegativeInt).annotate({
         description: "Minimum days between automatic dream runs. Set to 0 to trigger on every new session. Default: 7.",
@@ -342,7 +342,7 @@ const InfoSchema = Schema.Struct({
     Schema.Struct({
       auto: Schema.optional(Schema.Boolean).annotate({
         description:
-          "Auto-trigger distill workflow packaging on new session start. Default: true.",
+          "Auto-trigger distill workflow packaging on new session start. Experimental and disabled by default.",
       }),
       interval_days: Schema.optional(NonNegativeInt).annotate({
         description: "Minimum days between automatic distill runs. Default: 30.",

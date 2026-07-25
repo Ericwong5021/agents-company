@@ -3,7 +3,15 @@
 import { $ } from "bun"
 
 // drizzle-kit check compares schema to migrations, exits non-zero if drift
-const result = await $`bun drizzle-kit check`.quiet().nothrow()
+const result = await $`bun drizzle-kit check`
+  .env({
+    ...process.env,
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, "--preserve-symlinks", "--preserve-symlinks-main"]
+      .filter(Boolean)
+      .join(" "),
+  })
+  .quiet()
+  .nothrow()
 
 if (result.exitCode !== 0) {
   console.error("Schema has changes not captured in migrations!")

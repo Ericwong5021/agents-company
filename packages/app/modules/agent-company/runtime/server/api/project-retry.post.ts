@@ -1,17 +1,20 @@
-import { createError, defineEventHandler, getRouterParam } from "h3"
+import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { ofetch } from "ofetch"
+import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
+import { controlPlaneURL } from "../utils/control-plane-client"
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineAgentCompanyHandler(async (event) => {
   const projectID = getRouterParam(event, "projectID")
   if (!projectID) throw createError({ statusCode: 400, statusMessage: "Project ID is required" })
 
   const config = useRuntimeConfig(event)
-  const baseURL = new URL(config.agentCompanyControlPlaneUrl)
+  const baseURL = controlPlaneURL(config.agentCompanyControlPlaneUrl)
+  if (!baseURL) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const headers = config.agentCompanyControlPlaneAuthorization
     ? { authorization: config.agentCompanyControlPlaneAuthorization }
     : undefined

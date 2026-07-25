@@ -1,131 +1,84 @@
 <script setup lang="ts">
-import { startNewChat } from "~/composables/chat/navigation";
-import { useThreadList } from "~/composables/chat/useThreads";
+import {
+  isShellNavigationActive,
+  visibleShellNavigation,
+} from "../utils/shell-navigation";
 
-const sidebarOpen = ref(false);
-const searchOpen = ref(false);
-
-const { threads, pending, refresh } = useThreadList();
-
-const searchGroups = computed(() => [
-  {
-    id: "actions",
-    label: "Actions",
-    items: [
-      {
-        label: "New chat",
-        to: "/",
-        icon: "i-lucide-circle-plus",
-        kbds: ["meta", "o"],
-        onSelect: () => startNewChat(),
-      },
-    ],
-  },
-  ...(threads.value.length
-    ? [{
-        id: "threads",
-        label: "Recent chats",
-        items: threads.value.map(thread => ({
-          label: thread.title,
-          to: `/chat/${thread.id}`,
-          icon: "i-lucide-message-square",
-        })),
-      }]
-    : []),
-]);
-
-defineShortcuts({
-  meta_o: () => startNewChat(),
-  meta_k: () => {
-    searchOpen.value = true;
-  },
-});
+const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
+const route = useRoute();
+const appConfig = useAppConfig();
+const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigation));
 </script>
 
 <template>
-  <UDashboardGroup unit="rem">
+  <a class="ac-skip-link" href="#main-content">
+    跳到主要内容
+  </a>
+
+  <UDashboardGroup unit="rem" class="ac-shell">
     <UDashboardSidebar
-      id="default"
+      id="primary"
       v-model:open="sidebarOpen"
-      :min-size="12"
+      :default-size="16"
+      :min-size="15"
+      :max-size="19"
+      :collapsed-size="4.5"
       collapsible
       resizable
       :menu="{ inset: true }"
-      class="border-r-0 py-4 dark:[--ui-bg-elevated:var(--ui-color-neutral-900)]"
+      class="ac-shell-sidebar"
     >
       <template #header="{ collapsed }">
         <NuxtLink
-          to="/"
-          class="flex items-center min-w-0"
-          :class="collapsed ? 'mx-auto' : 'px-2.5'"
+          to="/inbox"
+          class="ac-shell-brand"
+          :class="{ 'ac-shell-brand--collapsed': collapsed }"
+          aria-label="Agent Company Inbox"
         >
-          <Logo class="h-5 w-auto shrink-0 text-highlighted" />
+          <Logo class="ac-shell-brand__mark" />
+          <span v-if="!collapsed" class="ac-shell-brand__text">
+            Agent Company
+          </span>
         </NuxtLink>
 
         <UDashboardSidebarCollapse
           v-if="!collapsed"
-          class="ms-auto"
+          class="ac-shell-collapse"
+          aria-label="收起主导航"
         />
       </template>
 
       <template #default="{ collapsed }">
-        <UNavigationMenu
-          :items="[
-            {
-              label: 'New chat',
-              icon: 'i-lucide-circle-plus',
-              kbds: ['meta', 'o'],
-              onSelect: () => startNewChat(),
-            },
-            {
-              label: 'Search',
-              icon: 'i-lucide-search',
-              kbds: ['meta', 'k'],
-              onSelect: () => {
-                searchOpen = true;
-              },
-            },
-          ]"
-          :collapsed="collapsed"
-          orientation="vertical"
-        >
-          <template #item-trailing="{ item }">
-            <div
-              v-if="item.kbds?.length"
-              class="flex items-center gap-px opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              <UKbd
-                v-for="kbd in item.kbds"
-                :key="kbd"
-                :value="kbd"
-                size="sm"
-                variant="soft"
-                class="bg-accented/50"
-              />
-            </div>
-          </template>
-        </UNavigationMenu>
-
-        <ChatThreadList
-          v-if="!collapsed"
-          class="mt-4 min-h-0 flex-1"
-          :threads="threads"
-          :pending="pending"
-          @refresh="refresh()"
-        />
+        <nav class="ac-primary-nav" aria-label="主导航">
+          <NuxtLink
+            v-for="item in navigation"
+            :key="item.to"
+            :to="item.to"
+            class="ac-primary-nav__item"
+            :class="{
+              'ac-primary-nav__item--active': isShellNavigationActive(item, route.path),
+              'ac-primary-nav__item--collapsed': collapsed,
+            }"
+            :aria-label="collapsed ? item.label : undefined"
+            :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
+            :title="collapsed ? item.label : undefined"
+          >
+            <UIcon :name="item.icon" class="ac-primary-nav__icon" />
+            <span v-if="!collapsed">{{ item.label }}</span>
+          </NuxtLink>
+        </nav>
       </template>
 
-      <template #footer />
+      <template #footer="{ collapsed }">
+        <div class="ac-shell-account" :class="{ 'ac-shell-account--collapsed': collapsed }">
+          <UserMenu />
+          <span v-if="!collapsed">本地工作区</span>
+        </div>
+      </template>
     </UDashboardSidebar>
 
-    <UDashboardSearch
-      v-model:open="searchOpen"
-      placeholder="Search chats and actions..."
-      :groups="searchGroups"
-    />
-
-    <div class="m-2 flex flex-1 min-w-0 overflow-hidden rounded-xl bg-muted shadow-sm ring ring-default lg:ml-0">
+    <main id="main-content" tabindex="-1" class="ac-shell-workspace">
       <slot />
-    </div>
+    </main>
   </UDashboardGroup>
 </template>
