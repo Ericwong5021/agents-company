@@ -1130,6 +1130,27 @@ function environmentFromAllowlist(environment: NodeJS.ProcessEnv) {
   )
 }
 
+function commandIsolationDirectories(isolationRoot: string) {
+  return Object.fromEntries(
+    [
+      ["HOME", "home"],
+      ["USERPROFILE", "home"],
+      ["AGENTCOMPANY_HOME", "agentcompany-home"],
+      ["AGENT_COMPANY_WEBUI_DATA_DIR", "webui-data"],
+      ["XDG_DATA_HOME", "xdg-data"],
+      ["XDG_CONFIG_HOME", "xdg-config"],
+      ["XDG_CACHE_HOME", "xdg-cache"],
+      ["XDG_STATE_HOME", "xdg-state"],
+      ["XDG_RUNTIME_DIR", "xdg-runtime"],
+      ["TMPDIR", "temp"],
+      ["TMP", "temp"],
+      ["TEMP", "temp"],
+      ["APPDATA", "app-data"],
+      ["LOCALAPPDATA", "local-app-data"],
+    ].map(([key, value]) => [key, path.join(isolationRoot, value)]),
+  )
+}
+
 function commandEnvironment(
   inherited: NodeJS.ProcessEnv,
   directories: Record<string, string>,
@@ -1179,29 +1200,11 @@ async function runCommand(
   buildSha: string,
 ) {
   const commandIsolation = path.join(isolationRoot, requirement.id)
-  const directories = Object.fromEntries(
-    [
-      ["HOME", "home"],
-      ["USERPROFILE", "home"],
-      ["AGENTCOMPANY_HOME", "agentcompany-home"],
-      ["XDG_DATA_HOME", "xdg-data"],
-      ["XDG_CONFIG_HOME", "xdg-config"],
-      ["XDG_CACHE_HOME", "xdg-cache"],
-      ["XDG_STATE_HOME", "xdg-state"],
-      ["XDG_RUNTIME_DIR", "xdg-runtime"],
-      ["TMPDIR", "temp"],
-      ["TMP", "temp"],
-      ["TEMP", "temp"],
-      ["APPDATA", "app-data"],
-      ["LOCALAPPDATA", "local-app-data"],
-    ].map(([key, value]) => [key, path.join(commandIsolation, value)]),
-  )
-  directories.AGENT_COMPANY_WEBUI_DATA_DIR = path.join(worktree, "packages/app/.r0-config-matrix-data")
+  const directories = commandIsolationDirectories(commandIsolation)
   await Promise.all(
     [...new Set(Object.values(directories))].map((directory) => fs.mkdir(directory, { recursive: true })),
   )
   await cleanIgnoredRuntimePaths(worktree)
-  await fs.mkdir(directories.AGENT_COMPANY_WEBUI_DATA_DIR, { recursive: true })
   await Promise.all(
     requirement.reports.map(async (report) => {
       const reportPath = path.join(worktree, requirement.cwd, report.path)
@@ -2207,6 +2210,7 @@ async function dependencyIsolationSelfTest(directory: string) {
     },
     reports: [],
   } satisfies RequirementCommand
+  const commandDirectories = commandIsolationDirectories(path.join(directory, "environment-command"))
   const environment = commandEnvironment(
     {
       PATH: "/safe/bin",
@@ -2227,7 +2231,7 @@ async function dependencyIsolationSelfTest(directory: string) {
       PLAYWRIGHT_DESKTOP_SERVER_PORT: "9996",
       PORT: "9995",
     },
-    { HOME: "/isolated/home" },
+    commandDirectories,
     requirement,
     "/safe/playwright-browsers",
   )
@@ -2285,7 +2289,10 @@ async function dependencyIsolationSelfTest(directory: string) {
       installEnvironment.BUN_INSTALL_CACHE_DIR === installDirectories.BUN_INSTALL_CACHE_DIR,
     environmentSanitized:
       forbiddenEnvironment.every((key) => environment[key] === undefined) &&
-      environment.HOME === "/isolated/home" &&
+      environment.HOME === commandDirectories.HOME &&
+      environment.AGENT_COMPANY_WEBUI_DATA_DIR === commandDirectories.AGENT_COMPANY_WEBUI_DATA_DIR &&
+      pathIsInside(directory, commandDirectories.AGENT_COMPANY_WEBUI_DATA_DIR) &&
+      !pathIsInside(worktree, commandDirectories.AGENT_COMPANY_WEBUI_DATA_DIR) &&
       environment.PATH === "/safe/bin" &&
       environment.PLAYWRIGHT_BROWSERS_PATH === "/safe/playwright-browsers" &&
       environment.PLAYWRIGHT_JUNIT_OUTPUT === ".artifacts/junit.xml",
