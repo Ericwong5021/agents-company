@@ -4,12 +4,19 @@
   "baselineKind": "committed_source_and_measurement_readiness",
   "refRequested": "09c269222f4696988e4fe40da07a98ff003e916b",
   "commitSha": "09c269222f4696988e4fe40da07a98ff003e916b",
+  "contractCommitSha": "2995b0edf98c0867c779695379a3cdda64089226",
   "commitTime": "2026-07-24T01:29:16+08:00",
-  "subjectTree": "committed tree only; worktree changes are excluded",
+  "subjectTree": "subject evidence comes from commitSha; governance contracts come from contractCommitSha; worktree changes are excluded",
   "collector": "script/experience-baseline.ts",
   "scenarioContract": {
+    "commitSha": "2995b0edf98c0867c779695379a3cdda64089226",
     "path": "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
     "sha256": "e349a4d6e5b949c3d2615d15626ab345154569408b70d94878700ff9e32090c8"
+  },
+  "metricContract": {
+    "commitSha": "2995b0edf98c0867c779695379a3cdda64089226",
+    "path": "docs/product-design/experience-refactor/metric-contract.v1.json",
+    "sha256": "3af4cfcc43c3ad19478a5e05882c1f0fa6692584e9632ceca2000f51a3806a3c"
   },
   "staticEvidence": {
     "canonicalPlanTracked": false,

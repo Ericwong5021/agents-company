@@ -1,13 +1,17 @@
 import { mkdir, rename } from "node:fs/promises"
 import path from "node:path"
 import {
+  ExperienceActionMutatesBusinessState,
+  ExperienceAllowedActionTypes,
   ExperienceArtifactView,
+  ExperienceNeedsUserAction,
   GoalBrief,
   GoalBriefProjectView,
   GoalBriefStructuredFailure,
   WorkProjectionList,
   type ExperienceActionDescriptor,
   type ExperienceActionType,
+  type ExperienceUserStatus,
 } from "@agents-company/shared/experience"
 
 const updatedAt = "2026-07-25T09:00:00.000Z"
@@ -312,6 +316,215 @@ const work = WorkProjectionList.parse({
       ],
     },
   ],
+})
+const hr01States = [
+  {
+    promptId: "HR01-P01",
+    status: "needs_input",
+    title: "地区范围尚未确定",
+    phase: "目标核对",
+    reasonText: "目标缺少必须确认的地区范围，继续执行可能产出错误结论。请先回答地区范围问题。",
+    completedItems: 0,
+    totalItems: 4,
+    nextAction: null,
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P02",
+    status: "ready",
+    title: "本地研究交付",
+    phase: "目标确认",
+    reasonText: "交付内容、来源边界和验收标准已经明确。现在可以开始执行，也可以先调整 Brief。",
+    completedItems: 0,
+    totalItems: 4,
+    nextAction: null,
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P03",
+    status: "running",
+    title: "核验本地发布路径",
+    phase: "执行",
+    reasonText: "团队正在已确认的范围内执行，目前不需要用户处理。可以查看进展，必要时停止在当前检查点。",
+    completedItems: 2,
+    totalItems: 4,
+    nextAction: "view_progress",
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P04",
+    status: "paused",
+    title: "市场资料核验",
+    phase: "执行控制",
+    reasonText: "执行已停止在可恢复检查点，期间不会产生新的执行。可以恢复、调整目标或停止工作。",
+    completedItems: 2,
+    totalItems: 4,
+    nextAction: null,
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P05",
+    status: "blocked",
+    title: "整理验收证据",
+    phase: "依赖处理",
+    reasonText: "缺少发布凭据，工作在补齐前无法继续。请先解决这项凭据问题，也可以查看诊断依据。",
+    completedItems: 2,
+    totalItems: 4,
+    nextAction: "open_diagnostics",
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P06",
+    status: "needs_approval",
+    title: "发布候选版本",
+    phase: "高影响决策",
+    reasonText: "外部发布会改变用户可见状态，正在等待明确决定。请批准、拒绝或要求修改后再继续。",
+    completedItems: 3,
+    totalItems: 4,
+    nextAction: null,
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P07",
+    status: "reviewing",
+    title: "体验审查报告",
+    phase: "独立核验",
+    reasonText: "独立审查人正在按验收标准核对结果，当前还不能接受交付。证据可用时可以直接查看。",
+    completedItems: 4,
+    totalItems: 5,
+    nextAction: "view_evidence",
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P08",
+    status: "revision",
+    title: "体验审查报告",
+    phase: "质量修正",
+    reasonText: "前一版缺少两项来源引用，团队正按明确发现修改。可以查看要求修改的范围和已完成变化。",
+    completedItems: 3,
+    totalItems: 5,
+    nextAction: "view_revision",
+    deliveryState: "revision_requested",
+  },
+  {
+    promptId: "HR01-P09",
+    status: "delivered",
+    title: "体验审查报告",
+    phase: "交付验收",
+    reasonText: "可用报告和验证证据已经形成，正在等待按标准验收。可以打开交付、接受或要求修改。",
+    completedItems: 5,
+    totalItems: 5,
+    nextAction: "open_delivery",
+    deliveryState: "pending",
+  },
+  {
+    promptId: "HR01-P10",
+    status: "accepted",
+    title: "体验审查报告",
+    phase: "交付完成",
+    reasonText: "用户已经明确确认交付符合标准，本次验收生命周期完成。现在可以使用结果或将其归档。",
+    completedItems: 5,
+    totalItems: 5,
+    nextAction: "open_delivery",
+    deliveryState: "accepted",
+  },
+  {
+    promptId: "HR01-P11",
+    status: "failed",
+    title: "生成来源索引",
+    phase: "执行恢复",
+    reasonText: "本次执行在生成来源索引时终止，无法自动继续。请重试、检查诊断或停止这项工作。",
+    completedItems: 2,
+    totalItems: 4,
+    nextAction: "open_diagnostics",
+    deliveryState: null,
+  },
+  {
+    promptId: "HR01-P12",
+    status: "cancelled",
+    title: "竞品资料整理",
+    phase: "工作收尾",
+    reasonText: "用户已经停止这项工作，不会再发生新的执行，先前证据仍被保留。可以查看保留结果或归档。",
+    completedItems: 2,
+    totalItems: 4,
+    nextAction: "view_retained_results",
+    deliveryState: null,
+  },
+] as const satisfies readonly {
+  promptId: string
+  status: ExperienceUserStatus
+  title: string
+  phase: string
+  reasonText: string
+  completedItems: number
+  totalItems: number
+  nextAction: ExperienceActionType | null
+  deliveryState: "pending" | "accepted" | "revision_requested" | null
+}[]
+const hr01Work = WorkProjectionList.parse({
+  items: hr01States.map((item, index) => {
+    const workID = `hr01-${item.status.replaceAll("_", "-")}`
+    const allowedActions = ExperienceAllowedActionTypes[item.status].map(id =>
+      action(workID, id, !ExperienceActionMutatesBusinessState[id]))
+    const nextAction = item.nextAction
+      ? allowedActions.find(candidate => candidate.id === item.nextAction && candidate.enabled) ?? null
+      : null
+    return {
+      availability: "available",
+      projectorVersion: 1,
+      sourceWatermark: (index + 1).toString(16).padStart(64, "0"),
+      summary: {
+        workId: workID,
+        title: item.title,
+        userStatus: item.status,
+        phase: item.phase,
+        owner: { id: "agent-1", name: "小岚" },
+        needsUserAction: ExperienceNeedsUserAction[item.status],
+        reason: reason(workID, item.reasonText),
+        nextAction,
+        updatedAt,
+        sourceRefs: sourceRefs(workID),
+        allowedActions,
+      },
+      progress: {
+        workId: workID,
+        userStatus: item.status,
+        phase: item.phase,
+        completedItems: item.completedItems,
+        totalItems: item.totalItems,
+        percent: Math.round((item.completedItems / item.totalItems) * 100),
+        reason: reason(workID, item.reasonText),
+        nextAction,
+        updatedAt,
+        sourceRefs: sourceRefs(workID),
+        allowedActions,
+      },
+      attentionItems: [],
+      ...(item.deliveryState
+        ? {
+            delivery: {
+              id: `delivery-${workID}`,
+              workId: workID,
+              version: item.deliveryState === "revision_requested" ? 2 : 1,
+              acceptanceState: item.deliveryState,
+              artifacts: [{
+                id: `artifact-${workID}`,
+                projectId: workID,
+                kind: "report",
+                title: "体验审查报告",
+                href: `/experience/projects/${workID}/artifacts/artifact-${workID}`,
+              }],
+              reason: reason(workID, item.reasonText),
+              nextAction,
+              updatedAt,
+              sourceRefs: sourceRefs(workID),
+              allowedActions,
+            },
+          }
+        : {}),
+      diagnostics: [],
+    }
+  }),
 })
 const longReason = reason(
   "project-running",
@@ -810,6 +1023,7 @@ Bun.serve({
       if (mode === "work-500") return json({ error: "injected" }, 500)
       if (mode === "work-invalid") return json({ items: [{ status: "running" }] })
       if (mode === "empty-work" || mode === "empty-work-ready") return json({ items: [] })
+      if (mode === "hr01-states") return json(hr01Work)
       if (mode === "quiet-work") return json({ items: [work.items[0]] })
       if (mode === "slow-ready") await Bun.sleep(900)
       if (mode === "long-content") return json(longWork)

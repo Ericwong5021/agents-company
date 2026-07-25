@@ -1,4 +1,5 @@
 import path from "node:path"
+import { requiredR0TaskIDs, runAutomaticEvidenceSelfTest } from "./experience-automatic-evidence"
 import { runBenchmarkSelfTest } from "./experience-benchmark"
 import { runGateSelfTest } from "./experience-gate"
 import { runSelfTest, validatePRMetadata } from "./experience-pr-metadata"
@@ -90,6 +91,15 @@ const manifest = await readJson<{
     automationMaySubstitute: boolean
     r0BlockingItems: string[]
     requiredEvidence: string[]
+    releaseAuthorization: {
+      method: string
+      namespace: string
+      principal: string
+      allowedSignersLocation: string
+      allowedSignersSha256: string | null
+      trustAnchorStatus: string
+      unsignedStatus: string
+    }
   }
 }>("docs/product-design/experience-refactor/manifest.v1.json")
 const language = await readJson<{
@@ -233,6 +243,11 @@ const humanResearchProtocol = await readJson<{
       scoring: { threshold: number; requiredPromptsPerParticipant: number }
       prompts: Array<{ id: string; stateId: string; requiredConcepts: string[] }>
     }
+    "FND-02-LANGUAGE-SIGNOFF": {
+      requiredRoles: string[]
+      languageContractPath: string
+      attestation: string
+    }
     "HR-02": {
       moderatorScriptVersion: string
       requiredParticipants: number
@@ -252,10 +267,45 @@ const humanResearchProtocol = await readJson<{
       expectedSelectedScenarioIds: string[]
     }
   }
+  releaseAuthorization: {
+    method: string
+    namespace: string
+    principal: string
+    signedPayload: string
+    allowedSignersSource: string
+    allowedSignersSha256: string | null
+    trustAnchorStatus: string
+    unsignedStatus: string
+  }
   signoff: { method: string; requiredAttestation: string }
 }>("docs/product-design/experience-refactor/human-research-protocol.v1.json")
 const humanEvidencePackage = await readJson<Record<string, unknown>>(
   "docs/product-design/experience-refactor/human-evidence-package.v1.json",
+)
+const automaticEvidenceRequirements = await readJson<{
+  schemaVersion: number
+  id: string
+  version: string
+  gate: string
+  requiredTaskIds: string[]
+  isolation: {
+    mode: string
+    requiredEnvironment: string[]
+    liveDatabaseAllowed: boolean
+  }
+  commands: Array<{
+    id: string
+    cwd: string
+    argv: string[]
+    reports: Array<{ path: string; validator: string }>
+  }>
+  tasks: Array<{
+    id: string
+    criteria: Array<{ id: string; evidenceRefs: string[] }>
+  }>
+}>("docs/product-design/experience-refactor/automatic-evidence-requirements.v1.json")
+const automaticEvidencePackage = await readJson<Record<string, unknown>>(
+  "docs/product-design/experience-refactor/automatic-evidence-package.v1.json",
 )
 const metrics = await readJson<{
   eventEnvelope: { requiredFields: Record<string, string>; duplicateKey: string }
@@ -291,25 +341,36 @@ const plan = await Bun.file(path.join(root, manifest.canonicalPlan)).text()
 const workflow = await Bun.file(path.join(root, ".github/workflows/experience-refactor-metadata.yml")).text()
 const pullRequestTemplate = await Bun.file(path.join(root, ".github/pull_request_template.md")).text()
 const metadataValidator = await Bun.file(path.join(root, "script/experience-pr-metadata.ts")).text()
-const reachableUISurfaces = [
-  { file: "packages/app/app/pages/login.vue", surface: "normal_ui" },
-  { file: "packages/app/app/layouts/default.vue", surface: "normal_ui" },
-  { file: "packages/app/app/pages/inbox/index.vue", surface: "normal_ui" },
-  { file: "packages/app/app/pages/work/index.vue", surface: "normal_ui" },
-  { file: "packages/app/app/pages/work/[projectID].vue", surface: "normal_ui" },
-  { file: "packages/app/app/pages/team/index.vue", surface: "normal_ui" },
-  { file: "packages/app/app/pages/library/index.vue", surface: "normal_ui" },
-  { file: "packages/app/modules/agent-company/runtime/app/pages/settings/company.vue", surface: "settings_advanced" },
-  {
-    file: "packages/app/modules/agent-company/runtime/app/components/CompanyConnectionState.vue",
-    surface: "normal_ui",
-  },
-  { file: "packages/app/app/app.config.ts", surface: "normal_ui" },
-  { file: "packages/app/app/composables/useSite.ts", surface: "normal_ui" },
-  { file: "packages/app/app/components/Navbar.vue", surface: "normal_ui" },
-  { file: "packages/app/app/components/Logo.vue", surface: "normal_ui" },
-  { file: "packages/app/app/components/UserMenu.vue", surface: "normal_ui" },
-] as const
+const reachableUISurfaceFiles = (
+  await Promise.all(
+    [
+      "packages/app/app/pages/**/*.{vue,ts}",
+      "packages/app/app/layouts/**/*.{vue,ts}",
+      "packages/app/public/**/*.{svg,html,json}",
+    ].map((pattern) => Array.fromAsync(new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true }))),
+  )
+)
+  .flat()
+  .concat([
+    "packages/app/app/app.vue",
+    "packages/app/app/app.config.ts",
+    "packages/app/app/components/BrandMark.vue",
+    "packages/app/app/components/Logo.vue",
+    "packages/app/app/components/UserMenu.vue",
+    "packages/app/nuxt.config.ts",
+    "packages/app/modules/agent-company/runtime/app/components/CompanyConnectionState.vue",
+    "packages/app/modules/agent-company/runtime/app/pages/settings/company.vue",
+  ])
+  .filter((file, index, files) => files.indexOf(file) === index)
+  .sort()
+const reachableUISurfaces = reachableUISurfaceFiles.map((file) => ({
+  file,
+  surface: file.includes("/settings/")
+    ? "settings_advanced"
+    : file.endsWith("/CompanyConnectionState.vue")
+      ? "diagnostics"
+      : "normal_ui",
+}))
 const reachableUISources = await Promise.all(
   reachableUISurfaces.map(async (entry) => ({
     ...entry,
@@ -322,17 +383,38 @@ Object.values(manifest.canonicalArtifacts).forEach((file) => {
   check(Bun.file(path.join(root, file)).size > 0, `Canonical artifact is missing or empty: ${file}`)
 })
 check(
+  reachableUISurfaceFiles.includes("packages/app/app/pages/library/artifacts/[projectID]/[artifactID].vue") &&
+    reachableUISurfaceFiles.length >= 25,
+  "User-visible language scanning must discover the complete App surface instead of a fixed file allowlist.",
+)
+check(
   sameValues(
     manifest.r0PrerequisiteSlices.map((slice) => slice.id),
     ["FND-04[R0-contract]", "GOAL-01[R0-contract]"],
   ),
   "R0 prerequisite slices are incomplete.",
 )
-check(manifest.humanResearchPolicy.requiredEvidence.length >= 5, "Human research evidence policy is incomplete.")
+check(manifest.humanResearchPolicy.requiredEvidence.length >= 6, "Human research evidence policy is incomplete.")
 check(
   !manifest.humanResearchPolicy.automationMaySubstitute &&
-    sameValues(manifest.humanResearchPolicy.r0BlockingItems, ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"]),
-  "R0 human evidence policy must forbid automation substitution for all four blocking items.",
+    sameValues(manifest.humanResearchPolicy.r0BlockingItems, [
+      "FND-02-LANGUAGE-SIGNOFF",
+      "HR-01",
+      "HR-02",
+      "HR-03",
+      "FND-03-SPOT-CHECK",
+    ]) &&
+    manifest.humanResearchPolicy.releaseAuthorization.method === "openssh_detached_signature" &&
+    manifest.humanResearchPolicy.releaseAuthorization.namespace === "agent-company-r0-human-evidence" &&
+    manifest.humanResearchPolicy.releaseAuthorization.principal === "agent-company-r0-release-owner" &&
+    manifest.humanResearchPolicy.releaseAuthorization.allowedSignersLocation === "outside_repository" &&
+    ((manifest.humanResearchPolicy.releaseAuthorization.allowedSignersSha256 === null &&
+      manifest.humanResearchPolicy.releaseAuthorization.trustAnchorStatus === "not_configured") ||
+      (typeof manifest.humanResearchPolicy.releaseAuthorization.allowedSignersSha256 === "string" &&
+        /^[a-f0-9]{64}$/.test(manifest.humanResearchPolicy.releaseAuthorization.allowedSignersSha256) &&
+        manifest.humanResearchPolicy.releaseAuthorization.trustAnchorStatus === "configured")) &&
+    manifest.humanResearchPolicy.releaseAuthorization.unsignedStatus === "incomplete",
+  "R0 human evidence policy must forbid automation substitution for all five blocking items.",
 )
 
 const navigationIDs = language.primaryNavigation.map((item) => item.id)
@@ -677,7 +759,17 @@ check(
 )
 const legacyIdentityHits = reachableUISources.flatMap((entry) =>
   ["Eve", "Slack", "iMessage", "Linear"].flatMap((term) =>
-    containsTerm(entry.source, term) ? [`${entry.file}: ${term}`] : [],
+    containsTerm(
+      entry.file === "packages/app/nuxt.config.ts"
+        ? entry.source
+            .split("\n")
+            .filter((line) => !line.includes("eve/nuxt") && !line.includes("/_eve_internal/"))
+            .join("\n")
+        : entry.source,
+      term,
+    )
+      ? [`${entry.file}: ${term}`]
+      : [],
   ),
 )
 check(
@@ -774,6 +866,15 @@ check(
     humanResearchProtocol.id === "agent-company-r0-human-research" &&
     humanResearchProtocol.version === "1.0.0" &&
     humanResearchProtocol.gate === "R0" &&
+    sameValues(humanResearchProtocol.studies["FND-02-LANGUAGE-SIGNOFF"].requiredRoles, [
+      "product",
+      "design",
+      "frontend",
+      "backend",
+    ]) &&
+    humanResearchProtocol.studies["FND-02-LANGUAGE-SIGNOFF"].languageContractPath ===
+      "docs/product-design/experience-refactor/language-contract.v1.json" &&
+    Boolean(humanResearchProtocol.studies["FND-02-LANGUAGE-SIGNOFF"].attestation) &&
     humanResearchProtocol.studies["HR-01"].moderatorScriptVersion === "HR01-v1" &&
     humanResearchProtocol.studies["HR-01"].minimumParticipants === 3 &&
     humanResearchProtocol.studies["HR-01"].scoring.threshold === 0.9 &&
@@ -808,13 +909,28 @@ check(
     humanResearchProtocol.studies["FND-03-SPOT-CHECK"].selectionRate === 0.2 &&
     humanResearchProtocol.studies["FND-03-SPOT-CHECK"].rounding === "ceil" &&
     sameValues(humanResearchProtocol.studies["FND-03-SPOT-CHECK"].expectedSelectedScenarioIds, ["S05", "S02", "S01"]) &&
+    humanResearchProtocol.releaseAuthorization.method === "openssh_detached_signature" &&
+    humanResearchProtocol.releaseAuthorization.namespace === "agent-company-r0-human-evidence" &&
+    humanResearchProtocol.releaseAuthorization.principal === "agent-company-r0-release-owner" &&
+    humanResearchProtocol.releaseAuthorization.signedPayload === "exact_human_evidence_package_bytes" &&
+    humanResearchProtocol.releaseAuthorization.allowedSignersSource === "external_release_owner_file" &&
+    humanResearchProtocol.releaseAuthorization.allowedSignersSha256 ===
+      manifest.humanResearchPolicy.releaseAuthorization.allowedSignersSha256 &&
+    humanResearchProtocol.releaseAuthorization.trustAnchorStatus ===
+      manifest.humanResearchPolicy.releaseAuthorization.trustAnchorStatus &&
+    ((humanResearchProtocol.releaseAuthorization.allowedSignersSha256 === null &&
+      humanResearchProtocol.releaseAuthorization.trustAnchorStatus === "not_configured") ||
+      (typeof humanResearchProtocol.releaseAuthorization.allowedSignersSha256 === "string" &&
+        /^[a-f0-9]{64}$/.test(humanResearchProtocol.releaseAuthorization.allowedSignersSha256) &&
+        humanResearchProtocol.releaseAuthorization.trustAnchorStatus === "configured")) &&
+    humanResearchProtocol.releaseAuthorization.unsignedStatus === "incomplete" &&
     humanResearchProtocol.signoff.method === "named_human_attestation" &&
     Boolean(humanResearchProtocol.signoff.requiredAttestation),
-  "Versioned HR-01/02/03 or FND-03 spot-check protocol is incomplete.",
+  "Versioned language signoff, HR-01/02/03, or FND-03 spot-check protocol is incomplete.",
 )
 check(
   humanEvidencePackage.schemaVersion === 1 &&
-    humanEvidencePackage.packageVersion === "1.0.0" &&
+    humanEvidencePackage.packageVersion === "1.1.0" &&
     humanEvidencePackage.additionalProperties === false &&
     schemaPatternsAreStringTyped(humanEvidencePackage),
   "Human evidence package schema is not strict or permits non-string pattern bypasses.",
@@ -828,10 +944,128 @@ check(
       manifest.canonicalArtifacts.humanEvidencePackage,
       "docs/product-design/experience-refactor/human-evidence-package.v1.json",
     ) &&
+    sameStructure(
+      manifest.canonicalArtifacts.automaticEvidenceRequirements,
+      "docs/product-design/experience-refactor/automatic-evidence-requirements.v1.json",
+    ) &&
+    sameStructure(
+      manifest.canonicalArtifacts.automaticEvidencePackage,
+      "docs/product-design/experience-refactor/automatic-evidence-package.v1.json",
+    ) &&
     manifest.canonicalArtifacts.r0GateEvaluator === "script/experience-gate.ts" &&
+    manifest.validationCommands.includes("bun script/experience-automatic-evidence.ts --self-test") &&
+    manifest.validationCommands.includes(
+      "bun script/experience-automatic-evidence.ts --ref <full-sha> --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --out .artifacts/experience-refactor/<full-sha>/automatic-evidence",
+    ) &&
+    manifest.validationCommands.some(
+      (command) =>
+        command.startsWith("bun script/experience-gate.ts --ref") &&
+        command.includes("--execute-automatic .artifacts/experience-refactor/<full-sha>/automatic-evidence-release") &&
+        command.includes("--human-signature") &&
+        command.includes("--human-allowed-signers") &&
+        command.includes("--require-pass") &&
+        !command.includes("--automatic-evidence "),
+    ) &&
     manifest.validationCommands.includes("bun script/experience-gate.ts --self-test") &&
-    sameValues(manifest.humanResearchPolicy.r0BlockingItems, ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"]),
-  "Manifest does not govern the protocol, evidence package, evaluator, and 20% review.",
+    sameValues(manifest.humanResearchPolicy.r0BlockingItems, [
+      "FND-02-LANGUAGE-SIGNOFF",
+      "HR-01",
+      "HR-02",
+      "HR-03",
+      "FND-03-SPOT-CHECK",
+    ]),
+  "Manifest does not govern automatic evidence, human evidence, the evaluator, and blocking reviews.",
+)
+const automaticCommandIDs = automaticEvidenceRequirements.commands.map((command) => command.id)
+const automaticCriterionRefs = automaticEvidenceRequirements.tasks.flatMap((task) =>
+  task.criteria.flatMap((criterion) => criterion.evidenceRefs),
+)
+check(
+  automaticEvidenceRequirements.schemaVersion === 1 &&
+    automaticEvidenceRequirements.id === "agent-company-r0-automatic-evidence-requirements" &&
+    automaticEvidenceRequirements.version === "1.0.0" &&
+    automaticEvidenceRequirements.gate === "R0" &&
+    sameValues(automaticEvidenceRequirements.requiredTaskIds, [...requiredR0TaskIDs]) &&
+    sameValues(
+      automaticEvidenceRequirements.tasks.map((task) => task.id),
+      [...requiredR0TaskIDs],
+    ) &&
+    automaticEvidenceRequirements.tasks.every(
+      (task) =>
+        task.criteria.length > 0 &&
+        unique(task.criteria.map((criterion) => criterion.id)) &&
+        task.criteria.every(
+          (criterion) =>
+            criterion.evidenceRefs.length > 0 &&
+            criterion.evidenceRefs.every(
+              (reference) =>
+                reference === "runner" ||
+                (reference.startsWith("command:") && automaticCommandIDs.includes(reference.slice("command:".length))),
+            ),
+        ),
+    ) &&
+    unique(automaticEvidenceRequirements.tasks.flatMap((task) => task.criteria.map((criterion) => criterion.id))) &&
+    automaticEvidenceRequirements.isolation.mode === "detached_exact_commit_worktree" &&
+    !automaticEvidenceRequirements.isolation.liveDatabaseAllowed &&
+    sameValues(automaticEvidenceRequirements.isolation.requiredEnvironment, [
+      "HOME",
+      "USERPROFILE",
+      "AGENTCOMPANY_HOME",
+      "AGENT_COMPANY_WEBUI_DATA_DIR",
+      "XDG_DATA_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_CACHE_HOME",
+      "XDG_STATE_HOME",
+    ]),
+  "Automatic evidence requirements do not exactly cover all R0 tasks, criteria, references, and isolation.",
+)
+check(
+  [
+    "governance-validation",
+    "shared-typecheck",
+    "control-plane-typecheck",
+    "app-typecheck",
+    "sdk-js-typecheck",
+    "desktop-typecheck",
+    "control-plane-r0-unit",
+    "control-plane-r0-branches",
+    "shared-unit",
+    "sdk-js-unit",
+    "sdk-js-build",
+    "sdk-js-generated-diff",
+    "app-unit",
+    "app-r0-config-matrix",
+    "app-r0-shell",
+    "app-production",
+    "desktop-e2e",
+  ].every((command) => automaticCommandIDs.includes(command)) &&
+    automaticCommandIDs.every((command) => automaticCriterionRefs.includes(`command:${command}`)) &&
+    automaticEvidenceRequirements.tasks
+      .find((task) => task.id === "FND-01")
+      ?.criteria.some(
+        (criterion) =>
+          criterion.id === "FND-01-DEFAULT-AND-ENABLED-CONFIG" &&
+          criterion.evidenceRefs.includes("command:app-r0-config-matrix"),
+      ) === true &&
+    sameValues(
+      automaticEvidenceRequirements.tasks
+        .find((task) => task.id === "SHELL-03")
+        ?.criteria.map((criterion) => criterion.id) ?? [],
+      [
+        "SHELL-03-NO-DOM-OR-FLOATING-INJECTION",
+        "SHELL-03-NO-DUPLICATE-OR-FLASHING-NAVIGATION",
+        "SHELL-03-LEGACY-ROUTES-NO-LOOP",
+        "SHELL-03-SINGLE-NAVIGATION-CONFIG",
+      ],
+    ),
+  "Automatic evidence commands omit config, type, SDK, Desktop, or SHELL-03 acceptance gates.",
+)
+check(
+  automaticEvidencePackage.schemaVersion === 1 &&
+    automaticEvidencePackage.packageVersion === "1.0.0" &&
+    automaticEvidencePackage.additionalProperties === false &&
+    schemaPatternsAreStringTyped(automaticEvidencePackage),
+  "Automatic evidence package schema is not strict or permits non-string pattern bypasses.",
 )
 const metricIDs = metrics.metrics.map((metric) => metric.id)
 check(
@@ -976,6 +1210,7 @@ check(
 )
 const metadataSelfTest = runSelfTest()
 const benchmarkRunnerSelfTest = await runBenchmarkSelfTest()
+const automaticEvidenceSelfTest = await runAutomaticEvidenceSelfTest()
 const gateEvaluatorSelfTest = await runGateSelfTest()
 
 if (errors.length) {
@@ -1002,6 +1237,7 @@ console.log(
         runnerSelfTest: benchmarkRunnerSelfTest,
         gateEvaluatorSelfTest,
       },
+      automaticEvidence: automaticEvidenceSelfTest,
       metrics: {
         metrics: metricIDs.length,
         releaseGates: metrics.releaseGates.length,

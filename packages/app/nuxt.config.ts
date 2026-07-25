@@ -1,17 +1,23 @@
+import { mkdirSync } from "node:fs"
+import path from "node:path"
 import { fileURLToPath } from "node:url"
 import agentCompanyModule from "./modules/agent-company/module"
 
 const privateNoStore = { "cache-control": "private, no-store" } as const
 const noStore = { "cache-control": "no-store" } as const
-const nativeLibsqlPackage = process.platform === "darwin"
-  ? `@libsql/darwin-${process.arch}`
-  : process.platform === "linux" && process.arch === "x64"
-    ? "@libsql/linux-x64-gnu"
-    : process.platform === "win32" && process.arch === "x64"
-      ? "@libsql/win32-x64-msvc"
-      : undefined
+const webuiDataDir = process.env.AGENT_COMPANY_WEBUI_DATA_DIR
+if (webuiDataDir) mkdirSync(path.join(webuiDataDir, "db"), { recursive: true })
+const nativeLibsqlPackage =
+  process.platform === "darwin"
+    ? `@libsql/darwin-${process.arch}`
+    : process.platform === "linux" && process.arch === "x64"
+      ? "@libsql/linux-x64-gnu"
+      : process.platform === "win32" && process.arch === "x64"
+        ? "@libsql/win32-x64-msvc"
+        : undefined
 
 export default defineNuxtConfig({
+  buildDir: process.env.AGENT_COMPANY_WEBUI_BUILD_DIR || ".nuxt",
   modules: ["@nuxt/ui", "@comark/nuxt", "eve/nuxt", "@nuxthub/core", agentCompanyModule],
   css: ["~/assets/css/main.css"],
   devtools: { enabled: process.env.NUXT_DEVTOOLS !== "false" },
@@ -35,11 +41,12 @@ export default defineNuxtConfig({
     "/_eve_internal/**": { headers: noStore },
   },
   nitro: {
+    output: {
+      dir: process.env.AGENT_COMPANY_WEBUI_OUTPUT_DIR || ".output",
+    },
     compressPublicAssets: true,
     externals: {
-      traceInclude: nativeLibsqlPackage
-        ? [fileURLToPath(import.meta.resolve(nativeLibsqlPackage))]
-        : [],
+      traceInclude: nativeLibsqlPackage ? [fileURLToPath(import.meta.resolve(nativeLibsqlPackage))] : [],
     },
     prerender: { routes: ["/login"], crawlLinks: false },
   },
@@ -65,7 +72,16 @@ export default defineNuxtConfig({
       { name: "Geist Mono", weights: ["100 900"], global: true },
     ],
   },
-  hub: { db: "sqlite" },
+  hub: {
+    db: webuiDataDir
+      ? {
+          dialect: "sqlite",
+          driver: "libsql",
+          connection: { url: `file:${path.join(webuiDataDir, "db/sqlite.db")}` },
+        }
+      : "sqlite",
+    dir: ".data",
+  },
   runtimeConfig: {
     betterAuthSecret: process.env.BETTER_AUTH_SECRET,
     betterAuthUrl: process.env.BETTER_AUTH_URL,

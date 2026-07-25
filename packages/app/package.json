@@ -20,6 +20,7 @@
     "typecheck": "bun ./script/run-nuxt.ts typecheck",
     "test": "bun run test:unit && bun run test:r0-shell",
     "test:unit": "bun test ./test",
+    "test:r0-config-matrix": "bun ./script/r0-config-matrix.ts",
     "test:r0-shell": "playwright test --config playwright.config.ts --grep @r0-shell",
     "test:r0-candidates": "playwright test --config playwright.config.ts e2e/r0-candidates.spec.ts",
     "test:production": "playwright test --config playwright.production.config.ts",

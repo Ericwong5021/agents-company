@@ -1,28 +1,17 @@
-import { execFile } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { promisify } from "node:util"
 import { fileURLToPath } from "node:url"
-import {
-  _electron as electron,
-  expect,
-  test,
-  type APIRequestContext,
-  type APIResponse,
-  type ElectronApplication,
-  type Page,
-} from "@playwright/test"
+import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test"
 import electronPath from "electron"
 
-const run = promisify(execFile)
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const artifacts = path.join(desktop, ".artifacts", "m2-desktop")
 const appData = path.join(artifacts, "app-data")
 const companyHome = path.join(artifacts, "company-home")
-const repository = path.join(artifacts, "repository")
 const serverPort = process.env.PLAYWRIGHT_DESKTOP_SERVER_PORT ?? "4397"
 const serverURL = `http://127.0.0.1:${serverPort}`
-const messageBody = "Desktop native gate sends a real M2 board goal"
+const webUIURL = "http://127.0.0.1:3210"
+const goalDraft = "Desktop restart keeps this local goal draft"
 
 let application: ElectronApplication | undefined
 const rendererDiagnostics: string[] = []
@@ -80,11 +69,12 @@ async function firstWindow(app: ElectronApplication) {
   page.on("console", (message) => rendererDiagnostics.push(`console:${message.type()}: ${message.text()}`))
   page.on("pageerror", (error) => rendererDiagnostics.push(`pageerror: ${error.stack ?? error.message}`))
   page.on("requestfailed", (request) => {
-    if (!request.url().includes("/company/")) return
-    rendererDiagnostics.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`)
+    rendererDiagnostics.push(
+      `requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`,
+    )
   })
   page.on("response", (response) => {
-    if (!response.url().includes("/company/")) return
+    if (!response.url().includes("/api/agent-company/")) return
     rendererDiagnostics.push(`response: ${response.status()} ${response.url()}`)
   })
   await page.waitForLoadState("domcontentloaded")
@@ -119,145 +109,40 @@ async function restoreAppLifecycle(app: ElectronApplication) {
   })
 }
 
-async function bootstrap(page: Page) {
-  await expect(page.getByRole("heading", { name: "Set up your local company" })).toBeVisible()
-  await expect(page.getByLabel("Provider").locator('option[value="openai"]')).toHaveCount(1)
-  await page.getByLabel("Provider").selectOption("openai")
-  await page.getByPlaceholder("API key").fill("test-openai-key")
-  await page.getByRole("button", { name: "Connect", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled()
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
-
-  await expect(page.getByLabel("Company name")).toHaveValue("Agent Company")
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
-
-  await page.getByLabel("Repository path").fill(repository)
-  await page.getByRole("button", { name: "Inspect repository", exact: true }).click()
-  await expect(page.getByText("main", { exact: true })).toBeVisible()
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
-
-  await expect(page.getByRole("radio", { name: /Balanced/ })).toBeChecked()
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await page.getByRole("button", { name: "Create company", exact: true }).click()
-  await expect(page.locator(".company-composer")).toBeVisible()
-}
-
-async function sidecarConnection(page: Page) {
-  return page.evaluate(() => window.api.awaitInitialization(() => undefined))
-}
-
-async function probeProviders(page: Page, request: APIRequestContext) {
-  const [serviceProviders, serviceAuth, renderer] = await Promise.all([
-    request.get(serverURL + "/company/providers"),
-    request.get(serverURL + "/company/providers/auth"),
-    page.evaluate(async (url) => {
-      const probe = (path: string) =>
-        fetch(url + path)
-          .then(async (response) => {
-            const body = await response.text()
-            return {
-              status: response.status,
-              hasOpenAI: body.includes('"provider_id":"openai"'),
-              body: body.slice(0, 2_000),
-            }
-          })
-          .catch((error) => ({ error: String(error) }))
-      const [providers, auth] = await Promise.all([probe("/company/providers"), probe("/company/providers/auth")])
-      return { origin: location.origin, providers, auth }
-    }, serverURL),
+async function expectSharedWorkspace(page: Page) {
+  await page.waitForURL((url) => url.origin === webUIURL && url.pathname === "/inbox", { timeout: 120_000 })
+  await expect(page).toHaveTitle("Inbox · Agent Company")
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
+  const navigation = page.getByRole("navigation", { name: "主导航" })
+  await expect(navigation.getByRole("link")).toHaveCount(5)
+  await expect(navigation.getByRole("link").allTextContents()).resolves.toEqual([
+    "Inbox",
+    "Work",
+    "Team",
+    "Library",
+    "Settings",
   ])
-  const [serviceProviderBody, serviceAuthBody] = await Promise.all([serviceProviders.text(), serviceAuth.text()])
-  await test.info().attach("desktop-provider-probe", {
-    body: Buffer.from(
-      JSON.stringify(
-        {
-          service: {
-            providers: {
-              status: serviceProviders.status(),
-              hasOpenAI: serviceProviderBody.includes('"provider_id":"openai"'),
-              body: serviceProviderBody.slice(0, 2_000),
-            },
-            auth: { status: serviceAuth.status(), body: serviceAuthBody.slice(0, 2_000) },
-          },
-          renderer,
-        },
-        null,
-        2,
-      ),
-    ),
-    contentType: "application/json",
+  await expect(page.getByRole("link", { name: "本地连接状态：需要配置，还未连接模型 Provider" })).toHaveAttribute(
+    "data-connection",
+    "degraded",
+  )
+  const snapshot: unknown = await page.evaluate(async () => {
+    const response = await fetch("/api/agent-company/snapshot")
+    if (!response.ok) throw new Error(`Snapshot request failed with ${response.status}.`)
+    return response.json()
   })
-  expect(serviceProviders.status()).toBe(200)
-  expect(serviceProviderBody).toContain('"provider_id":"openai"')
-  expect(serviceAuth.status()).toBe(200)
-  expect(renderer.providers).toMatchObject({ status: 200, hasOpenAI: true })
-  expect(renderer.auth).toMatchObject({ status: 200 })
-}
-
-function objectValue(value: unknown, label: string) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`)
-  return value
-}
-
-function stringValue(value: unknown, label: string) {
-  if (typeof value !== "string") throw new Error(`${label} must be a string`)
-  return value
-}
-
-async function responseJson(response: APIResponse) {
-  const value: unknown = await response.json()
-  return value
-}
-
-function companyID(value: unknown) {
-  const response = objectValue(value, "Company response")
-  const company = objectValue(Reflect.get(response, "company"), "Company response company")
-  return stringValue(Reflect.get(company, "id"), "Company id")
-}
-
-function channelList(value: unknown) {
-  if (!Array.isArray(value)) throw new Error("Channels response must be an array")
-  return value.map((item, index) => {
-    const channel = objectValue(item, `Channel ${index}`)
-    return {
-      id: stringValue(Reflect.get(channel, "id"), `Channel ${index} id`),
-      kind: stringValue(Reflect.get(channel, "kind"), `Channel ${index} kind`),
-    }
+  expect(snapshot).toMatchObject({
+    connection: "degraded",
+    issue: { kind: "provider_required" },
+    company: { id: "cmp_local", providerConfigured: false },
+    work: [],
   })
-}
-
-function messageList(value: unknown) {
-  const response = objectValue(value, "Messages response")
-  const items = Reflect.get(response, "items")
-  if (!Array.isArray(items)) throw new Error("Messages response items must be an array")
-  return items.map((item, index) => {
-    const message = objectValue(item, `Message ${index}`)
-    const sourceThreadID = Reflect.get(message, "sourceThreadID")
-    if (sourceThreadID !== undefined && typeof sourceThreadID !== "string") {
-      throw new Error(`Message ${index} sourceThreadID must be a string`)
-    }
-    return {
-      id: stringValue(Reflect.get(message, "id"), `Message ${index} id`),
-      body: stringValue(Reflect.get(message, "body"), `Message ${index} body`),
-      sourceThreadID,
-    }
-  })
+  return navigation
 }
 
 test.beforeAll(async () => {
   rendererDiagnostics.length = 0
   await fs.rm(artifacts, { recursive: true, force: true })
-  await fs.mkdir(repository, { recursive: true })
-  await fs.writeFile(path.join(repository, "README.md"), "# Desktop M2 acceptance repository\n")
-  for (const args of [
-    ["init", "--initial-branch=main"],
-    ["config", "user.email", "desktop-e2e@agentcompany.test"],
-    ["config", "user.name", "Desktop E2E"],
-    ["add", "README.md"],
-    ["commit", "-m", "Initial desktop fixture"],
-  ]) {
-    await run("git", args, { cwd: repository })
-  }
 })
 
 test.afterEach(async ({}, testInfo) => {
@@ -274,7 +159,7 @@ test.afterEach(async ({}, testInfo) => {
   await stop()
 })
 
-test("closes the native Desktop gate from home selection through restart and shared conversation", async ({ request }) => {
+test("closes the native Desktop R0 gate through shared WebUI and restart recovery", async ({ request }) => {
   const preflightApp = await launch()
   const preflight = await firstWindow(preflightApp)
   await expect(preflight.getByRole("heading", { name: "Choose a Company home" })).toBeVisible()
@@ -291,49 +176,36 @@ test("closes the native Desktop gate from home selection through restart and sha
 
   const readyApp = await launch()
   const desktopPage = await firstWindow(readyApp)
-  const firstSidecar = await sidecarConnection(desktopPage)
-  expect(firstSidecar.url).toBe(serverURL)
-  await probeProviders(desktopPage, request)
-  await bootstrap(desktopPage)
+  const navigation = await expectSharedWorkspace(desktopPage)
+  expect((await request.get(serverURL + "/global/health")).status()).toBe(200)
+  expect((await request.get(serverURL + "/global/readiness")).status()).toBe(200)
+  const companyBeforeRestart = await request.get(serverURL + "/company")
+  expect(companyBeforeRestart.status()).toBe(200)
+  expect((await companyBeforeRestart.json()) as unknown).toMatchObject({ company: { id: "cmp_local" } })
 
-  await desktopPage.getByLabel("Send a message").fill(messageBody)
-  await desktopPage.getByRole("button", { name: "Send", exact: true }).click()
-  await expect(desktopPage.locator(".company-board")).toContainText(messageBody)
-  await expect(desktopPage.getByRole("complementary", { name: "Thread" })).toBeVisible()
-
-  const companyResponse = await request.get(serverURL + "/company")
-  expect(companyResponse.ok()).toBe(true)
-  const company = companyID(await responseJson(companyResponse))
-  const channelsResponse = await request.get(`${serverURL}/company/channels?company_id=${company}`)
-  expect(channelsResponse.ok()).toBe(true)
-  const board = channelList(await responseJson(channelsResponse)).find((channel) => channel.kind === "board")
-  if (!board) throw new Error("Board channel was not returned")
-  const messagesResponse = await request.get(
-    `${serverURL}/company/channels/${board.id}/messages?company_id=${company}&limit=50`,
-  )
-  expect(messagesResponse.ok()).toBe(true)
-  const sharedMessage = messageList(await responseJson(messagesResponse)).find((message) => message.body === messageBody)
-  if (!sharedMessage?.sourceThreadID) throw new Error("Shared Desktop message has no source Thread")
-  const threadResponse = await request.get(
-    `${serverURL}/company/threads/${sharedMessage.sourceThreadID}?company_id=${company}`,
-  )
-  expect(threadResponse.ok()).toBe(true)
+  await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
+  const draft = desktopPage.getByLabel("描述你希望团队交付的结果")
+  await draft.fill(goalDraft)
+  await expect(desktopPage.getByRole("button", { name: "生成只读目标摘要" })).toBeDisabled()
+  await expect(desktopPage.getByRole("link", { name: "连接 Provider" })).toHaveAttribute("href", "/settings")
+  await navigation.getByRole("link", { name: "Work" }).click()
+  await expect(desktopPage).toHaveURL(`${webUIURL}/work`)
+  await expect(desktopPage.getByRole("heading", { level: 1, name: "Work" })).toBeVisible()
 
   await stop()
   await expect
-    .poll(() => fetch(serverURL + "/global/health", { signal: AbortSignal.timeout(500) }).then(() => false).catch(() => true))
+    .poll(() =>
+      fetch(serverURL + "/global/health", { signal: AbortSignal.timeout(500) })
+        .then(() => false)
+        .catch(() => true),
+    )
     .toBe(true)
 
   const restartedApp = await launch()
   const restartedPage = await firstWindow(restartedApp)
-  await expect(restartedPage.locator(".company-board")).toContainText(messageBody)
-  const afterRestart = await request.get(
-    `${serverURL}/company/channels/${board.id}/messages?company_id=${company}&limit=50`,
-  )
-  expect(afterRestart.ok()).toBe(true)
-  expect(messageList(await responseJson(afterRestart)).find((message) => message.id === sharedMessage.id)?.sourceThreadID).toBe(
-    sharedMessage.sourceThreadID,
-  )
-
-  expect((await request.get(serverURL + "/company")).status()).toBe(200)
+  await expectSharedWorkspace(restartedPage)
+  await expect(restartedPage.getByLabel("描述你希望团队交付的结果")).toHaveValue(goalDraft)
+  const companyAfterRestart = await request.get(serverURL + "/company")
+  expect(companyAfterRestart.status()).toBe(200)
+  expect((await companyAfterRestart.json()) as unknown).toMatchObject({ company: { id: "cmp_local" } })
 })

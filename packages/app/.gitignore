@@ -13,4 +13,5 @@ dist
 .DS_Store
 *.tsbuildinfo
 .nuxt
+.nuxt-locks
 .pnpm-store

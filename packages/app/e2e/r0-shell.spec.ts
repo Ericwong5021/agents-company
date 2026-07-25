@@ -567,8 +567,10 @@ test("@r0-shell preserves route context across direct access, refresh, back, and
   for (const item of navigation) {
     await page.goto(item.path)
     await expect(page).toHaveURL((url) => url.pathname === item.path)
+    await expect(page).toHaveTitle(`${item.label} · Agent Company`)
     await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
     await page.reload()
+    await expect(page).toHaveTitle(`${item.label} · Agent Company`)
     await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
   }
 
@@ -609,6 +611,30 @@ test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ pag
       .boundingBox()
     expect(box?.height).toBeGreaterThanOrEqual(40)
     expect(box?.width).toBeGreaterThanOrEqual(40)
+  }
+
+  await page.reload()
+  const inboxLink = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "Inbox" })
+  for (let tabIndex = 0; tabIndex < 8; tabIndex += 1) {
+    await page.keyboard.press("Tab")
+    if (await inboxLink.evaluate(element => element === document.activeElement)) break
+  }
+  await expect(inboxLink).toBeFocused()
+  for (const [index, item] of navigation.entries()) {
+    const link = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: item.label })
+    await expect(link).toBeFocused()
+    if (index < navigation.length - 1) await page.keyboard.press("Tab")
+  }
+  for (const item of navigation) {
+    await page.goto("/inbox")
+    const link = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: item.label })
+    for (let tabIndex = 0; tabIndex < 12; tabIndex += 1) {
+      await page.keyboard.press("Tab")
+      if (await link.evaluate((element) => element === document.activeElement)) break
+    }
+    await expect(link).toBeFocused()
+    await page.keyboard.press("Enter")
+    await expect(page).toHaveURL((url) => url.pathname === item.path)
   }
 })
 

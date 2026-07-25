@@ -9,6 +9,13 @@
     "rawResponsesRemainLocal": true
   },
   "studies": {
+    "FND-02-LANGUAGE-SIGNOFF": {
+      "title": "Cross-functional user-language contract approval",
+      "requiredRoles": ["product", "design", "frontend", "backend"],
+      "languageContractPath": "docs/product-design/experience-refactor/language-contract.v1.json",
+      "attestation": "I reviewed the identified language contract for the identified build and approve it for my named role.",
+      "passRule": "All four required roles provide distinct named approvals bound to the same build SHA and language-contract digest."
+    },
     "HR-01": {
       "title": "Three-person terminology comprehension",
       "moderatorScriptVersion": "HR01-v1",
@@ -201,6 +208,16 @@
       "reviewPrompt": "For each selected scenario, inspect the execution record and its cited evidence. Does the recorded automated or deferred decision follow the protocol without overstating a pass?",
       "passRule": "A named reviewer agrees with all three selected decisions and signs the package."
     }
+  },
+  "releaseAuthorization": {
+    "method": "openssh_detached_signature",
+    "namespace": "agent-company-r0-human-evidence",
+    "principal": "agent-company-r0-release-owner",
+    "signedPayload": "exact_human_evidence_package_bytes",
+    "allowedSignersSource": "external_release_owner_file",
+    "allowedSignersSha256": null,
+    "trustAnchorStatus": "not_configured",
+    "unsignedStatus": "incomplete"
   },
   "signoff": {
     "method": "named_human_attestation",

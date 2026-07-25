@@ -1,0 +1,537 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-r0-automatic-evidence-requirements",
+  "version": "1.0.0",
+  "gate": "R0",
+  "requiredTaskIds": [
+    "FND-01",
+    "FND-02",
+    "FND-03",
+    "FND-04[R0-contract]",
+    "GOAL-01[R0-contract]",
+    "SHELL-01",
+    "SHELL-02",
+    "SHELL-03",
+    "TRUST-01",
+    "TRUST-02",
+    "GOAL-02",
+    "WORK-05",
+    "QA-02"
+  ],
+  "isolation": {
+    "mode": "detached_exact_commit_worktree",
+    "requiredEnvironment": [
+      "HOME",
+      "USERPROFILE",
+      "AGENTCOMPANY_HOME",
+      "AGENT_COMPANY_WEBUI_DATA_DIR",
+      "XDG_DATA_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_CACHE_HOME",
+      "XDG_STATE_HOME"
+    ],
+    "liveDatabaseAllowed": false
+  },
+  "commands": [
+    {
+      "id": "governance-validation",
+      "cwd": ".",
+      "argv": ["bun", "script/experience-validate.ts"],
+      "timeoutMs": 300000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "shared-typecheck",
+      "cwd": "packages/shared",
+      "argv": ["bun", "typecheck"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "control-plane-typecheck",
+      "cwd": "packages/control-plane",
+      "argv": ["bun", "typecheck"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "app-typecheck",
+      "cwd": "packages/app",
+      "argv": ["bun", "typecheck"],
+      "timeoutMs": 900000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "sdk-js-typecheck",
+      "cwd": "packages/sdk/js",
+      "argv": ["bun", "typecheck"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "desktop-typecheck",
+      "cwd": "packages/desktop",
+      "argv": ["bun", "typecheck"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "control-plane-r0-unit",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--timeout",
+        "30000",
+        "test/config/config.test.ts",
+        "test/company/activity.test.ts",
+        "test/company-agent/file-bundle.test.ts",
+        "test/company-project/work-projection.test.ts",
+        "test/goal-brief/experience-contract.test.ts",
+        "test/goal-brief/goal-brief.test.ts",
+        "test/goal-brief/migration.test.ts",
+        "test/goal-brief/model-adapter.test.ts",
+        "test/goal-brief/schema.test.ts",
+        "test/server/company-route.test.ts",
+        "test/server/experience-route.test.ts",
+        "test/session/auto-dream-default.test.ts",
+        "test/storage/db-cold-start.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/unit-junit.xml"
+      ],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/unit-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "control-plane-r0-branches",
+      "cwd": "packages/control-plane",
+      "argv": ["bun", "run", "test:r0-branches"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/r0-branch-coverage/report.json",
+          "validator": "r0_branch_coverage"
+        }
+      ]
+    },
+    {
+      "id": "shared-unit",
+      "cwd": "packages/shared",
+      "argv": [
+        "bun",
+        "test",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"
+      ],
+      "timeoutMs": 300000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "sdk-js-unit",
+      "cwd": "packages/sdk/js",
+      "argv": [
+        "bun",
+        "test",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"
+      ],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "sdk-js-build",
+      "cwd": "packages/sdk/js",
+      "argv": ["bun", "./script/build.ts"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "sdk-js-generated-diff",
+      "cwd": ".",
+      "argv": [
+        "git",
+        "diff",
+        "--exit-code",
+        "--",
+        "packages/sdk/openapi.json",
+        "packages/sdk/js/src/v2/gen"
+      ],
+      "timeoutMs": 300000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "app-unit",
+      "cwd": "packages/app",
+      "argv": [
+        "bun",
+        "test",
+        "./test",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/unit-junit.xml"
+      ],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/unit-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "app-r0-config-matrix",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:r0-config-matrix"],
+      "timeoutMs": 900000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "app-r0-shell",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:r0-shell"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {
+        "PLAYWRIGHT_JUNIT_OUTPUT": ".artifacts/automatic-evidence/r0-shell-junit.xml"
+      },
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/r0-shell-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "app-production",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:production"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/e2e-production/junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "desktop-e2e",
+      "cwd": "packages/desktop",
+      "argv": ["bun", "run", "test:e2e"],
+      "timeoutMs": 1800000,
+      "stdoutValidator": "none",
+      "environment": {
+        "MODELS_DEV_API_JSON": "test/tool/fixtures/models-api.json",
+        "PLAYWRIGHT_JUNIT_OUTPUT": ".artifacts/automatic-evidence/junit.xml"
+      },
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/junit.xml",
+          "validator": "junit"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "FND-01",
+      "criteria": [
+        {
+          "id": "FND-01-SCOPE-AND-GATES",
+          "evidenceRefs": ["command:governance-validation"]
+        },
+        {
+          "id": "FND-01-DEFAULT-AND-ENABLED-CONFIG",
+          "evidenceRefs": ["command:app-r0-config-matrix"]
+        },
+        {
+          "id": "FND-01-LEGACY-DATA-COMPATIBILITY",
+          "evidenceRefs": ["command:control-plane-r0-unit"]
+        }
+      ]
+    },
+    {
+      "id": "FND-02",
+      "criteria": [
+        {
+          "id": "FND-02-LANGUAGE-CONTRACT",
+          "evidenceRefs": [
+            "command:governance-validation",
+            "command:control-plane-r0-unit",
+            "command:shared-typecheck",
+            "command:app-typecheck"
+          ]
+        },
+        {
+          "id": "FND-02-PROHIBITED-USER-LANGUAGE",
+          "evidenceRefs": ["command:governance-validation", "command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "FND-03",
+      "criteria": [
+        {
+          "id": "FND-03-SCENARIO-AND-METRIC-CONTRACTS",
+          "evidenceRefs": ["command:governance-validation"]
+        },
+        {
+          "id": "FND-03-REPRODUCIBLE-BASELINE",
+          "evidenceRefs": ["command:governance-validation"]
+        },
+        {
+          "id": "FND-03-EXACT-SHA-DOUBLE-RUN",
+          "evidenceRefs": ["runner"]
+        }
+      ]
+    },
+    {
+      "id": "FND-04[R0-contract]",
+      "criteria": [
+        {
+          "id": "FND-04-R0-FIVE-STABLE-ROUTES",
+          "evidenceRefs": ["command:app-r0-config-matrix", "command:app-r0-shell"]
+        },
+        {
+          "id": "FND-04-R0-SHELL-SLOTS",
+          "evidenceRefs": ["command:app-r0-shell"]
+        },
+        {
+          "id": "FND-04-R0-STATE-FOCUS-AND-DIRECT-ROUTES",
+          "evidenceRefs": ["command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "GOAL-01[R0-contract]",
+      "criteria": [
+        {
+          "id": "GOAL-01-R0-FIVE-INTENTS",
+          "evidenceRefs": ["command:governance-validation", "command:control-plane-r0-unit"]
+        },
+        {
+          "id": "GOAL-01-R0-INPUT-AND-CORRECTION-CONTRACT",
+          "evidenceRefs": [
+            "command:control-plane-r0-unit",
+            "command:shared-typecheck",
+            "command:control-plane-typecheck"
+          ]
+        },
+        {
+          "id": "GOAL-01-R0-NO-SILENT-PROJECT-CREATION",
+          "evidenceRefs": ["command:control-plane-r0-unit"]
+        }
+      ]
+    },
+    {
+      "id": "SHELL-01",
+      "criteria": [
+        {
+          "id": "SHELL-01-NATIVE-PRODUCT-IDENTITY",
+          "evidenceRefs": ["command:governance-validation", "command:app-r0-shell"]
+        },
+        {
+          "id": "SHELL-01-PRODUCTION-IDENTITY",
+          "evidenceRefs": ["command:app-production", "command:desktop-e2e"]
+        }
+      ]
+    },
+    {
+      "id": "SHELL-02",
+      "criteria": [
+        {
+          "id": "SHELL-02-PRIMARY-NAVIGATION",
+          "evidenceRefs": ["command:app-r0-config-matrix", "command:app-r0-shell"]
+        },
+        {
+          "id": "SHELL-02-ROUTE-CONTEXT",
+          "evidenceRefs": ["command:app-r0-shell"]
+        },
+        {
+          "id": "SHELL-02-KEYBOARD-AND-FOCUS",
+          "evidenceRefs": ["command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "SHELL-03",
+      "criteria": [
+        {
+          "id": "SHELL-03-NO-DOM-OR-FLOATING-INJECTION",
+          "evidenceRefs": ["command:governance-validation", "command:app-unit"]
+        },
+        {
+          "id": "SHELL-03-NO-DUPLICATE-OR-FLASHING-NAVIGATION",
+          "evidenceRefs": ["command:app-r0-shell"]
+        },
+        {
+          "id": "SHELL-03-LEGACY-ROUTES-NO-LOOP",
+          "evidenceRefs": ["command:app-r0-config-matrix", "command:app-r0-shell"]
+        },
+        {
+          "id": "SHELL-03-SINGLE-NAVIGATION-CONFIG",
+          "evidenceRefs": ["command:governance-validation", "command:app-unit", "command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "TRUST-01",
+      "criteria": [
+        {
+          "id": "TRUST-01-NO-FIXTURE-FALLBACK",
+          "evidenceRefs": ["command:app-r0-shell", "command:app-production", "runner"]
+        },
+        {
+          "id": "TRUST-01-UNKNOWN-REMAINS-UNKNOWN",
+          "evidenceRefs": ["command:app-unit", "command:app-r0-shell"]
+        },
+        {
+          "id": "TRUST-01-OBSERVABILITY-OUTCOMES",
+          "evidenceRefs": ["command:app-unit", "command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "TRUST-02",
+      "criteria": [
+        {
+          "id": "TRUST-02-DISCONNECTED-STATE",
+          "evidenceRefs": ["command:app-r0-shell", "runner"]
+        },
+        {
+          "id": "TRUST-02-DIAGNOSTIC-SANITIZATION",
+          "evidenceRefs": ["command:app-unit", "command:app-r0-shell", "runner"]
+        },
+        {
+          "id": "TRUST-02-RECOVERY-CONTEXT",
+          "evidenceRefs": ["command:app-r0-shell", "runner"]
+        }
+      ]
+    },
+    {
+      "id": "GOAL-02",
+      "criteria": [
+        {
+          "id": "GOAL-02-VERSIONED-BRIEF-CONTRACT",
+          "evidenceRefs": [
+            "command:control-plane-r0-unit",
+            "command:shared-unit",
+            "command:sdk-js-unit",
+            "command:sdk-js-build",
+            "command:sdk-js-generated-diff"
+          ]
+        },
+        {
+          "id": "GOAL-02-STRUCTURED-FAILURE",
+          "evidenceRefs": ["command:control-plane-r0-unit", "command:app-r0-shell"]
+        },
+        {
+          "id": "GOAL-02-LEGACY-READ-ONLY",
+          "evidenceRefs": ["command:control-plane-r0-unit", "command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "WORK-05",
+      "criteria": [
+        {
+          "id": "WORK-05-USER-STATE-PROJECTION",
+          "evidenceRefs": [
+            "command:control-plane-r0-unit",
+            "command:shared-unit",
+            "command:shared-typecheck",
+            "command:control-plane-typecheck",
+            "command:app-typecheck",
+            "command:app-r0-shell"
+          ]
+        },
+        {
+          "id": "WORK-05-ACTION-AVAILABILITY",
+          "evidenceRefs": ["command:control-plane-r0-unit", "command:app-r0-shell"]
+        },
+        {
+          "id": "WORK-05-ERROR-AND-UNAVAILABLE-PROJECTION",
+          "evidenceRefs": ["command:control-plane-r0-unit", "command:app-r0-shell"]
+        }
+      ]
+    },
+    {
+      "id": "QA-02",
+      "criteria": [
+        {
+          "id": "QA-02-SHARED-SCHEMA-AND-API-CONTRACTS",
+          "evidenceRefs": [
+            "command:control-plane-r0-unit",
+            "command:shared-unit",
+            "command:sdk-js-unit",
+            "command:sdk-js-typecheck",
+            "command:sdk-js-build",
+            "command:sdk-js-generated-diff"
+          ]
+        },
+        {
+          "id": "QA-02-MIGRATION-AND-CONCURRENCY",
+          "evidenceRefs": ["command:control-plane-r0-unit"]
+        },
+        {
+          "id": "QA-02-KEY-BRANCH-COVERAGE",
+          "evidenceRefs": ["command:control-plane-r0-branches"]
+        },
+        {
+          "id": "QA-02-COMPONENT-INTERACTION-STATES",
+          "evidenceRefs": [
+            "command:app-unit",
+            "command:app-typecheck",
+            "command:desktop-typecheck",
+            "command:app-r0-shell",
+            "command:app-production",
+            "command:desktop-e2e"
+          ]
+        }
+      ]
+    }
+  ]
+}

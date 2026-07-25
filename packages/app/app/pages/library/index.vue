@@ -37,17 +37,22 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
           </div>
         </header>
 
-        <CompanyConnectionState
+        <div
           v-if="!available || workUnavailable"
-          :connection="snapshot.connection"
-          :issue="snapshot.issue"
-          :pending="pending"
-          show-settings
-          @retry="refresh()"
-        />
+          key="connection-state"
+        >
+          <CompanyConnectionState
+            :connection="snapshot.connection"
+            :issue="snapshot.issue"
+            :pending="pending"
+            show-settings
+            @retry="refresh()"
+          />
+        </div>
 
         <section
           v-else-if="deliveries.length || unavailableWork.length"
+          key="library-list"
           class="ac-card-list"
           aria-label="交付成果"
         >
@@ -104,7 +109,7 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
           </NuxtLink>
         </section>
 
-        <section v-else class="ac-empty-state">
+        <section v-else key="library-empty" class="ac-empty-state">
           <div class="ac-empty-state__content">
             <span class="ac-empty-state__icon" aria-hidden="true">
               <UIcon name="i-lucide-library" />

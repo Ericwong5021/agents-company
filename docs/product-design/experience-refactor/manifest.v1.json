@@ -6,6 +6,8 @@
     "languageContract": "docs/product-design/experience-refactor/language-contract.v1.json",
     "benchmarkScenarios": "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
     "benchmarkExecutionRecord": "docs/product-design/experience-refactor/benchmark-execution-record.v1.json",
+    "automaticEvidenceRequirements": "docs/product-design/experience-refactor/automatic-evidence-requirements.v1.json",
+    "automaticEvidencePackage": "docs/product-design/experience-refactor/automatic-evidence-package.v1.json",
     "humanResearchProtocol": "docs/product-design/experience-refactor/human-research-protocol.v1.json",
     "humanEvidencePackage": "docs/product-design/experience-refactor/human-evidence-package.v1.json",
     "r0GateEvaluator": "script/experience-gate.ts",
@@ -48,8 +50,10 @@
     "bun script/experience-validate.ts",
     "bun script/experience-benchmark.ts --self-test",
     "bun script/experience-benchmark.ts --ref <full-sha> --gate R0 --all --out .artifacts/experience-refactor/<full-sha> --repeat 2",
+    "bun script/experience-automatic-evidence.ts --self-test",
+    "bun script/experience-automatic-evidence.ts --ref <full-sha> --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --out .artifacts/experience-refactor/<full-sha>/automatic-evidence",
     "bun script/experience-gate.ts --self-test",
-    "bun script/experience-gate.ts --ref <full-sha> --gate R0 --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --human-evidence <signed-anonymized-package.json> --out .artifacts/experience-refactor/<full-sha>/r0-gate-decision.json --require-pass",
+    "bun script/experience-gate.ts --ref <full-sha> --gate R0 --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --execute-automatic .artifacts/experience-refactor/<full-sha>/automatic-evidence-release --human-evidence <anonymized-package.json> --human-signature <anonymized-package.json.sig> --human-allowed-signers <external-release-owner-allowed_signers> --out .artifacts/experience-refactor/<full-sha>/r0-gate-decision.json --require-pass",
     "bun script/experience-baseline.ts --recorded-head",
     "bun script/experience-pr-metadata.ts --self-test"
   ],
@@ -57,14 +61,24 @@
     "rule": "Human research results must never be inferred from source code, generated fixtures, or agent judgment.",
     "automationMaySubstitute": false,
     "allowedStatuses": ["not_scheduled", "scheduled", "in_progress", "completed"],
-    "r0BlockingItems": ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+    "r0BlockingItems": ["FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
     "requiredEvidence": [
       "participant criteria and anonymized participant IDs",
       "build commit",
       "moderator script version",
       "raw task outcomes or survey responses",
       "calculation method",
-      "reviewer sign-off"
-    ]
+      "reviewer sign-off",
+      "OpenSSH detached signature over the exact package bytes verified against an external release-owner allowed_signers file"
+    ],
+    "releaseAuthorization": {
+      "method": "openssh_detached_signature",
+      "namespace": "agent-company-r0-human-evidence",
+      "principal": "agent-company-r0-release-owner",
+      "allowedSignersLocation": "outside_repository",
+      "allowedSignersSha256": null,
+      "trustAnchorStatus": "not_configured",
+      "unsignedStatus": "incomplete"
+    }
   }
 }

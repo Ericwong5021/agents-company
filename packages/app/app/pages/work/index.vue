@@ -34,16 +34,25 @@ function ownerName(owner?: { id: string; name?: string }) {
           </div>
         </header>
 
-        <CompanyConnectionState
+        <div
           v-if="!available || workUnavailable"
-          :connection="snapshot.connection"
-          :issue="snapshot.issue"
-          :pending="pending"
-          show-settings
-          @retry="refresh()"
-        />
+          key="connection-state"
+        >
+          <CompanyConnectionState
+            :connection="snapshot.connection"
+            :issue="snapshot.issue"
+            :pending="pending"
+            show-settings
+            @retry="refresh()"
+          />
+        </div>
 
-        <section v-else-if="snapshot.work.length" class="ac-card-list" aria-label="工作列表">
+        <section
+          v-else-if="snapshot.work.length"
+          key="work-list"
+          class="ac-card-list"
+          aria-label="工作列表"
+        >
           <NuxtLink
             v-for="work in snapshot.work"
             :key="work.availability === 'available' ? work.summary.workId : work.workId"
@@ -112,7 +121,7 @@ function ownerName(owner?: { id: string; name?: string }) {
           </NuxtLink>
         </section>
 
-        <section v-else class="ac-empty-state">
+        <section v-else key="work-empty" class="ac-empty-state">
           <div class="ac-empty-state__content">
             <span class="ac-empty-state__icon" aria-hidden="true">
               <UIcon name="i-lucide-panels-top-left" />

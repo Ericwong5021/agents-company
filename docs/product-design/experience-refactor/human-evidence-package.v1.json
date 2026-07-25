@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-company.local/schemas/human-evidence-package.v1.json",
-  "title": "Agent Company R0 signed and anonymized human evidence package",
+  "title": "Agent Company R0 anonymized human evidence payload requiring an externally trusted OpenSSH detached signature",
   "schemaVersion": 1,
-  "packageVersion": "1.0.0",
+  "packageVersion": "1.1.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,7 +22,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "packageId": {
       "type": "string",
@@ -71,15 +71,51 @@
     "studies": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+      "required": ["FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
       "properties": {
+        "FND-02-LANGUAGE-SIGNOFF": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["buildSha", "languageContract", "approvals"],
+          "properties": {
+            "buildSha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "languageContract": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": {
+                  "const": "docs/product-design/experience-refactor/language-contract.v1.json"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            "approvals": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/languageContractApproval"
+              }
+            }
+          }
+        },
         "HR-01": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["moderatorScriptVersion", "participants", "calculation", "signoff"],
+          "required": ["moderatorScriptVersion", "stimulusSet", "participants", "calculation", "signoff"],
           "properties": {
             "moderatorScriptVersion": {
               "const": "HR01-v1"
+            },
+            "stimulusSet": {
+              "$ref": "#/$defs/hr01StimulusSet"
             },
             "participants": {
               "type": "array",
@@ -201,6 +237,58 @@
     }
   },
   "$defs": {
+    "languageContractApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "signedBy", "signedAt", "attestation"],
+      "properties": {
+        "role": {
+          "enum": ["product", "design", "frontend", "backend"]
+        },
+        "signedBy": {
+          "type": "string",
+          "minLength": 2
+        },
+        "signedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "attestation": {
+          "const": "I reviewed the identified language contract for the identified build and approve it for my named role."
+        }
+      }
+    },
+    "hr01StimulusSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buildSha",
+        "manifestRelativePath",
+        "manifestSha256",
+        "stateLabelHidden",
+        "presentedToAllParticipants"
+      ],
+      "properties": {
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifestRelativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "stateLabelHidden": {
+          "const": true
+        },
+        "presentedToAllParticipants": {
+          "const": true
+        }
+      }
+    },
     "participantEligibility": {
       "type": "object",
       "additionalProperties": false,

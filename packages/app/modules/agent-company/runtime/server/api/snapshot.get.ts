@@ -16,6 +16,7 @@ import {
   type ControlPlaneFailure,
 } from "../utils/control-plane-client"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
+import { observeSnapshot } from "../utils/snapshot-observability"
 
 function issue(
   input: Omit<CompanyConnectionIssue, "diagnostic"> & {
@@ -47,7 +48,7 @@ function issue(
 }
 
 function unavailableSnapshot(connectionIssue: CompanyConnectionIssue): CompanySnapshot {
-  return {
+  return observeSnapshot({
     connection: "disconnected",
     issue: connectionIssue,
     company: {
@@ -61,7 +62,7 @@ function unavailableSnapshot(connectionIssue: CompanyConnectionIssue): CompanySn
     messages: [],
     work: [],
     projects: [],
-  }
+  })
 }
 
 function failureIssue(
@@ -364,7 +365,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
   const fullyProjectedWork = work.ok && projectedWork.length === availableWork.length
   const availableMessages = messages.ok ? messages.value : []
 
-  return {
+  return observeSnapshot({
     connection: connectionIssue ? "degraded" : "ready",
     issue: connectionIssue,
     company: {
@@ -406,5 +407,5 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
           },
     ),
     notice: connectionIssue?.detail,
-  }
+  })
 })

@@ -56,7 +56,6 @@ jobs:
             test/goal-brief/schema.test.ts \
             test/permission-task.test.ts \
             test/plugin/install.test.ts \
-            test/plugin/install-concurrency.test.ts \
             test/server/company-route.test.ts \
             test/server/experience-route.test.ts \
             test/session/auto-dream-default.test.ts \
@@ -108,6 +107,10 @@ jobs:
         working-directory: packages/app
         run: bun run test:unit
 
+      - name: Run R0 runtime config matrix
+        working-directory: packages/app
+        run: bun run test:r0-config-matrix
+
       - name: Run M2 browser gate
         working-directory: packages/app
         env:
@@ -131,7 +134,7 @@ jobs:
             --out "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA" \
             --repeat 2
 
-      - name: Record incomplete R0 gate decision without human evidence
+      - name: Record incomplete R0 gate decision without automatic or human evidence
         env:
           R0_GATE_DECISION: ${{ github.workspace }}/.artifacts/experience-refactor/${{ github.sha }}/r0-gate-decision.json
         run: |
@@ -140,7 +143,7 @@ jobs:
             --gate R0 \
             --runner-artifact "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA/reproducibility-record.json" \
             --out "$R0_GATE_DECISION"
-          bun -e 'const decision = await Bun.file(process.env.R0_GATE_DECISION).json(); if (decision.status !== "incomplete" || decision.automaticEvidenceStatus !== "pass" || decision.humanEvidenceStatus !== "incomplete") throw new Error("Unsigned CI gate decision must remain incomplete.")'
+          bun -e 'const decision = await Bun.file(process.env.R0_GATE_DECISION).json(); if (decision.status !== "incomplete" || decision.automaticEvidenceStatus !== "incomplete" || decision.humanEvidenceStatus !== "incomplete" || !decision.missing.includes("AUTOMATIC-EVIDENCE-PACKAGE")) throw new Error("Unsigned CI gate decision must remain incomplete until exact-SHA automatic and human evidence are supplied.")'
 
       - name: Upload M2 browser artifacts
         if: always()

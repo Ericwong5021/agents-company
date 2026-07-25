@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  activeShellNavigationItem,
   isShellNavigationActive,
   visibleShellNavigation,
 } from "../utils/shell-navigation";
@@ -8,6 +9,11 @@ const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const route = useRoute();
 const appConfig = useAppConfig();
 const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigation));
+const pageTitle = computed(() => activeShellNavigationItem(navigation.value, route.path)?.label);
+
+useHead(() => ({
+  title: pageTitle.value,
+}));
 </script>
 
 <template>

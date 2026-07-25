@@ -3,6 +3,12 @@ import os from "node:os"
 import path from "node:path"
 import sharp from "sharp"
 import {
+  generateAutomaticEvidence,
+  validateAutomaticEvidencePackage,
+  writeStructuralAutomaticEvidenceFixture,
+  type AutomaticEvidenceGovernance,
+} from "./experience-automatic-evidence"
+import {
   canonicalize,
   deterministicHumanReviewSelection,
   normalizeExecutionRecord,
@@ -12,19 +18,61 @@ import {
   validateArtifactFiles,
   validateExecutionRecord,
   verifyExactCommit,
+  type BenchmarkContract,
   type ExecutionRecord,
+  type RecordContract,
 } from "./experience-benchmark"
 
 const root = path.resolve(import.meta.dir, "..")
-const protocolPath = path.join(root, "docs/product-design/experience-refactor/human-research-protocol.v1.json")
-const evidenceSchemaPath = path.join(root, "docs/product-design/experience-refactor/human-evidence-package.v1.json")
+const protocolRelativePath = "docs/product-design/experience-refactor/human-research-protocol.v1.json"
+const evidenceSchemaRelativePath = "docs/product-design/experience-refactor/human-evidence-package.v1.json"
+const languageContractRelativePath = "docs/product-design/experience-refactor/language-contract.v1.json"
+const benchmarkRelativePath = "docs/product-design/experience-refactor/benchmark-scenarios.v1.json"
+const benchmarkRecordRelativePath = "docs/product-design/experience-refactor/benchmark-execution-record.v1.json"
+const metricContractRelativePath = "docs/product-design/experience-refactor/metric-contract.v1.json"
+const manifestRelativePath = "docs/product-design/experience-refactor/manifest.v1.json"
+const governedExecutionPaths = [
+  protocolRelativePath,
+  evidenceSchemaRelativePath,
+  languageContractRelativePath,
+  benchmarkRelativePath,
+  benchmarkRecordRelativePath,
+  metricContractRelativePath,
+  manifestRelativePath,
+  "script/experience-gate.ts",
+  "script/experience-benchmark.ts",
+  "script/experience-automatic-evidence.ts",
+]
+const humanSignatureNamespace = "agent-company-r0-human-evidence"
+const humanSignerIdentity = "agent-company-r0-release-owner"
+const languageSignoffRoles = ["product", "design", "frontend", "backend"]
+const languageSignoffAttestation =
+  "I reviewed the identified language contract for the identified build and approve it for my named role."
 const scenarioIDs = Array.from({ length: 12 }, (_, index) => `S${String(index + 1).padStart(2, "0")}`)
 const runIDs = ["run-01", "run-02"]
 const selectedScenarioIDs = ["S05", "S02", "S01"]
 const hr01PromptIDs = Array.from({ length: 12 }, (_, index) => `HR01-P${String(index + 1).padStart(2, "0")}`)
+const hr01StateIDs = [
+  "needs_input",
+  "ready",
+  "running",
+  "paused",
+  "blocked",
+  "needs_approval",
+  "reviewing",
+  "revision",
+  "delivered",
+  "accepted",
+  "failed",
+  "cancelled",
+]
+const hr01Presentation =
+  "Show the release-candidate state card with its state label hidden. Do not explain the state before the response."
+const hr01ExactPrompt = "请用自己的话回答三个问题：现在发生了什么？为什么这件事重要？你下一步会怎么做？"
 const hr02QuestionIDs = ["HR02-Q1", "HR02-Q2", "HR02-Q3"]
 const hr03Surfaces = ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"]
 const screenshotMinimum = { width: 1280, height: 720 }
+const stimulusMinimum = { width: 600, height: 140 }
 const attestation =
   "I reviewed the recorded raw responses or artifacts against this protocol and attest that the submitted decisions are accurate for the identified build."
 
@@ -52,8 +100,53 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : []
 }
 
+function validReleaseTrustAnchor(value: unknown) {
+  if (!isRecord(value)) return false
+  if (value.allowedSignersSha256 === null && value.trustAnchorStatus === "not_configured") return true
+  return (
+    typeof value.allowedSignersSha256 === "string" &&
+    /^[a-f0-9]{64}$/.test(value.allowedSignersSha256) &&
+    value.trustAnchorStatus === "configured"
+  )
+}
+
 async function readJson(file: string) {
   const source = await Bun.file(file).text()
+  return {
+    source,
+    value: JSON.parse(source) as unknown,
+    sha256: sha256(source),
+  }
+}
+
+function readAtBuild(buildSha: string, file: string) {
+  const result = Bun.spawnSync(["git", "show", `${buildSha}:${file}`], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString().trim() || `Missing ${file} at ${buildSha}.`)
+  return result.stdout.toString()
+}
+
+async function readGovernedSources(buildSha?: string) {
+  const entries = await Promise.all(
+    governedExecutionPaths.map(async (relativePath) => {
+      const currentSource = await Bun.file(path.join(root, relativePath)).text()
+      if (!buildSha) return [relativePath, currentSource] as const
+      const buildSource = readAtBuild(buildSha, relativePath)
+      if (sha256(buildSource) !== sha256(currentSource)) {
+        throw new Error(`Gate governance differs from exact build ${buildSha}: ${relativePath}`)
+      }
+      return [relativePath, buildSource] as const
+    }),
+  )
+  return Object.fromEntries(entries)
+}
+
+function governedJson(sources: Record<string, string>, relativePath: string) {
+  const source = sources[relativePath]
+  if (source === undefined) throw new Error(`Missing governed source: ${relativePath}`)
   return {
     source,
     value: JSON.parse(source) as unknown,
@@ -93,8 +186,14 @@ function validateSignoff(value: unknown, label: string, errors: string[]) {
   }
 }
 
-async function loadGovernance() {
-  const [protocol, evidenceSchema] = await Promise.all([readJson(protocolPath), readJson(evidenceSchemaPath)])
+async function loadGovernance(buildSha?: string) {
+  const sources = await readGovernedSources(buildSha)
+  const protocol = governedJson(sources, protocolRelativePath)
+  const evidenceSchema = governedJson(sources, evidenceSchemaRelativePath)
+  const languageContract = governedJson(sources, languageContractRelativePath)
+  const metricContract = governedJson(sources, metricContractRelativePath)
+  const manifest = governedJson(sources, manifestRelativePath)
+  const { benchmark, recordContract } = await readBenchmarkContracts()
   if (
     !isRecord(protocol.value) ||
     protocol.value.schemaVersion !== 1 ||
@@ -104,20 +203,55 @@ async function loadGovernance() {
     !isRecord(protocol.value.studies) ||
     !isRecord(protocol.value.signoff) ||
     protocol.value.signoff.requiredAttestation !== attestation ||
+    !isRecord(protocol.value.releaseAuthorization) ||
+    protocol.value.releaseAuthorization.method !== "openssh_detached_signature" ||
+    protocol.value.releaseAuthorization.namespace !== humanSignatureNamespace ||
+    protocol.value.releaseAuthorization.principal !== humanSignerIdentity ||
+    protocol.value.releaseAuthorization.signedPayload !== "exact_human_evidence_package_bytes" ||
+    protocol.value.releaseAuthorization.allowedSignersSource !== "external_release_owner_file" ||
+    !validReleaseTrustAnchor(protocol.value.releaseAuthorization) ||
+    protocol.value.releaseAuthorization.unsignedStatus !== "incomplete" ||
     !isRecord(evidenceSchema.value) ||
     evidenceSchema.value.schemaVersion !== 1 ||
-    evidenceSchema.value.packageVersion !== "1.0.0"
+    evidenceSchema.value.packageVersion !== "1.1.0" ||
+    !isRecord(languageContract.value) ||
+    languageContract.value.schemaVersion !== 1 ||
+    !isRecord(metricContract.value) ||
+    metricContract.value.schemaVersion !== 1 ||
+    metricContract.value.id !== "agent-company-experience-metrics" ||
+    !isRecord(manifest.value) ||
+    manifest.value.schemaVersion !== 1 ||
+    manifest.value.id !== "agent-company-experience-refactor-governance" ||
+    !isRecord(manifest.value.humanResearchPolicy) ||
+    !isRecord(manifest.value.humanResearchPolicy.releaseAuthorization) ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.method !== "openssh_detached_signature" ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.namespace !== humanSignatureNamespace ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.principal !== humanSignerIdentity ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.allowedSignersLocation !== "outside_repository" ||
+    !validReleaseTrustAnchor(manifest.value.humanResearchPolicy.releaseAuthorization) ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.unsignedStatus !== "incomplete" ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.allowedSignersSha256 !==
+      protocol.value.releaseAuthorization.allowedSignersSha256 ||
+    manifest.value.humanResearchPolicy.releaseAuthorization.trustAnchorStatus !==
+      protocol.value.releaseAuthorization.trustAnchorStatus
   ) {
-    throw new Error("Human research protocol or evidence package schema is invalid.")
+    throw new Error("R0 gate governance is invalid.")
   }
   const hr01 = protocol.value.studies["HR-01"]
+  const languageSignoff = protocol.value.studies["FND-02-LANGUAGE-SIGNOFF"]
   const hr02 = protocol.value.studies["HR-02"]
   const hr03 = protocol.value.studies["HR-03"]
   const spot = protocol.value.studies["FND-03-SPOT-CHECK"]
   if (
+    !isRecord(languageSignoff) ||
+    !sameValues(stringArray(languageSignoff.requiredRoles), languageSignoffRoles) ||
+    languageSignoff.languageContractPath !== languageContractRelativePath ||
+    languageSignoff.attestation !== languageSignoffAttestation ||
     !isRecord(hr01) ||
     hr01.moderatorScriptVersion !== "HR01-v1" ||
     hr01.minimumParticipants !== 3 ||
+    hr01.presentation !== hr01Presentation ||
+    hr01.exactPrompt !== hr01ExactPrompt ||
     !isRecord(hr01.scoring) ||
     hr01.scoring.threshold !== 0.9 ||
     hr01.scoring.requiredPromptsPerParticipant !== 12 ||
@@ -126,6 +260,13 @@ async function loadGovernance() {
       hr01.prompts.flatMap((item) => (isRecord(item) && typeof item.id === "string" ? [item.id] : [])),
       hr01PromptIDs,
     ) ||
+    canonicalize(
+      hr01.prompts.flatMap((item) =>
+        isRecord(item) && typeof item.id === "string" && typeof item.stateId === "string"
+          ? [{ promptId: item.id, stateId: item.stateId }]
+          : [],
+      ),
+    ) !== canonicalize(hr01PromptIDs.map((promptId, index) => ({ promptId, stateId: hr01StateIDs[index] }))) ||
     !isRecord(hr02) ||
     hr02.moderatorScriptVersion !== "HR02-v1" ||
     hr02.requiredParticipants !== 5 ||
@@ -151,10 +292,29 @@ async function loadGovernance() {
   return {
     protocol,
     evidenceSchema,
+    languageContract,
+    metricContract,
+    manifest,
+    releaseAuthorization: {
+      allowedSignersSha256:
+        typeof protocol.value.releaseAuthorization.allowedSignersSha256 === "string"
+          ? protocol.value.releaseAuthorization.allowedSignersSha256
+          : null,
+    },
+    benchmark,
+    recordContract,
+    digests: Object.fromEntries(
+      Object.entries(sources).map(([relativePath, source]) => [relativePath, sha256(source)]),
+    ),
   }
 }
 
-async function validateRunner(buildSha: string, runnerPath: string) {
+async function validateRunner(
+  buildSha: string,
+  runnerPath: string,
+  benchmark: BenchmarkContract,
+  recordContract: RecordContract,
+) {
   const errors: string[] = []
   const runnerFile = path.resolve(runnerPath)
   const runner = await readJson(runnerFile).catch(() => null)
@@ -167,7 +327,6 @@ async function validateRunner(buildSha: string, runnerPath: string) {
       automaticFailures: [] as string[],
     }
   }
-  const { benchmark, recordContract } = await readBenchmarkContracts()
   const contractScenarioIDs = benchmark.scenarios.map((scenario) => scenario.id)
   const contractRunIDs = Array.from({ length: 2 }, (_, index) => `run-${String(index + 1).padStart(2, "0")}`)
   const selection = deterministicHumanReviewSelection(benchmark.scenarios, recordContract)
@@ -356,12 +515,125 @@ async function validateRunner(buildSha: string, runnerPath: string) {
   }
 }
 
+async function validateHR01StimulusSet(
+  value: unknown,
+  evidenceFile: string,
+  buildSha: string,
+  protocolSha256: string,
+  errors: string[],
+) {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, [
+      "buildSha",
+      "manifestRelativePath",
+      "manifestSha256",
+      "stateLabelHidden",
+      "presentedToAllParticipants",
+    ]) ||
+    value.buildSha !== buildSha ||
+    !confinedRelativePath(value.manifestRelativePath) ||
+    typeof value.manifestSha256 !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.manifestSha256) ||
+    value.stateLabelHidden !== true ||
+    value.presentedToAllParticipants !== true
+  ) {
+    errors.push("HR-01: invalid release-candidate stimulus binding")
+    return
+  }
+  const base = path.dirname(evidenceFile)
+  const manifestPath = await resolveConfinedFile(base, value.manifestRelativePath)
+  const manifest = manifestPath ? await readJson(manifestPath).catch(() => null) : null
+  if (
+    !manifest ||
+    manifest.sha256 !== value.manifestSha256 ||
+    !isRecord(manifest.value) ||
+    !exactKeys(manifest.value, [
+      "schemaVersion",
+      "buildSha",
+      "protocol",
+      "presentation",
+      "exactPrompt",
+      "stateLabelHidden",
+      "relativePathBase",
+      "viewport",
+      "stimuli",
+    ]) ||
+    manifest.value.schemaVersion !== 1 ||
+    manifest.value.buildSha !== buildSha ||
+    manifest.value.presentation !== hr01Presentation ||
+    manifest.value.exactPrompt !== hr01ExactPrompt ||
+    manifest.value.stateLabelHidden !== true ||
+    manifest.value.relativePathBase !== "build-artifact-root" ||
+    !isRecord(manifest.value.protocol) ||
+    !exactKeys(manifest.value.protocol, ["id", "version", "sha256", "studyId", "moderatorScriptVersion"]) ||
+    manifest.value.protocol.id !== "agent-company-r0-human-research" ||
+    manifest.value.protocol.version !== "1.0.0" ||
+    manifest.value.protocol.sha256 !== protocolSha256 ||
+    manifest.value.protocol.studyId !== "HR-01" ||
+    manifest.value.protocol.moderatorScriptVersion !== "HR01-v1" ||
+    !isRecord(manifest.value.viewport) ||
+    !exactKeys(manifest.value.viewport, ["width", "height"]) ||
+    manifest.value.viewport.width !== 1440 ||
+    manifest.value.viewport.height !== 1600 ||
+    !Array.isArray(manifest.value.stimuli) ||
+    manifest.value.stimuli.length !== 12
+  ) {
+    errors.push("HR-01: stimulus manifest is missing, mismatched, or structurally invalid")
+    return
+  }
+  const expected = hr01PromptIDs.map((promptId, index) => ({ promptId, stateId: hr01StateIDs[index] }))
+  const observed: Array<{ promptId: string; stateId: string }> = []
+  const stimulusPaths: string[] = []
+  const stimulusDigests: string[] = []
+  for (const [index, stimulus] of manifest.value.stimuli.entries()) {
+    if (
+      !isRecord(stimulus) ||
+      !exactKeys(stimulus, ["promptId", "stateId", "relativePath", "sha256"]) ||
+      typeof stimulus.promptId !== "string" ||
+      typeof stimulus.stateId !== "string" ||
+      !confinedRelativePath(stimulus.relativePath) ||
+      path.posix.basename(stimulus.relativePath.replaceAll("\\", "/")) !== `${stimulus.promptId}.png` ||
+      typeof stimulus.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(stimulus.sha256)
+    ) {
+      errors.push(`HR-01 stimulus ${index + 1}: invalid identity, path, or digest`)
+      continue
+    }
+    observed.push({ promptId: stimulus.promptId, stateId: stimulus.stateId })
+    const stimulusPath = await resolveConfinedFile(base, stimulus.relativePath)
+    const bytes = stimulusPath ? new Uint8Array(await Bun.file(stimulusPath).arrayBuffer()) : null
+    const image = bytes
+      ? await sharp(bytes, { failOn: "error", limitInputPixels: 16_777_216 })
+          .toBuffer({ resolveWithObject: true })
+          .catch(() => null)
+      : null
+    if (
+      !stimulusPath ||
+      !bytes ||
+      sha256(bytes) !== stimulus.sha256 ||
+      image?.info.format !== "png" ||
+      image.info.width < stimulusMinimum.width ||
+      image.info.height < stimulusMinimum.height
+    ) {
+      errors.push(`HR-01 ${stimulus.promptId}: stimulus is missing, escaped, invalid, too small, or digest-mismatched`)
+      continue
+    }
+    stimulusPaths.push(stimulusPath)
+    stimulusDigests.push(stimulus.sha256)
+  }
+  if (canonicalize(observed) !== canonicalize(expected)) errors.push("HR-01: prompt and state stimulus set mismatch")
+  if (new Set(stimulusPaths).size !== 12) errors.push("HR-01: stimulus paths must be unique")
+  if (new Set(stimulusDigests).size !== 12) errors.push("HR-01: stimulus contents must be unique")
+}
+
 async function validateHumanEvidence(
   value: unknown,
   evidenceFile: string,
   buildSha: string,
   runner: Awaited<ReturnType<typeof validateRunner>>,
   protocolSha256: string,
+  languageContractSha256: string,
 ) {
   const errors: string[] = []
   const failures: string[] = []
@@ -383,7 +655,7 @@ async function validateHumanEvidence(
   }
   if (
     value.schemaVersion !== 1 ||
-    value.packageVersion !== "1.0.0" ||
+    value.packageVersion !== "1.1.0" ||
     typeof value.packageId !== "string" ||
     !/^R0-[a-z0-9-]{8,64}$/.test(value.packageId) ||
     value.buildSha !== buildSha ||
@@ -412,20 +684,59 @@ async function validateHumanEvidence(
   ) {
     errors.push("evidence package: runner artifact binding mismatch")
   }
-  if (!isRecord(value.studies) || !exactKeys(value.studies, ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"])) {
+  if (
+    !isRecord(value.studies) ||
+    !exactKeys(value.studies, ["FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"])
+  ) {
     errors.push("evidence package: required study set mismatch")
     return { errors, failures }
+  }
+  const languageSignoff = value.studies["FND-02-LANGUAGE-SIGNOFF"]
+  if (
+    !isRecord(languageSignoff) ||
+    !exactKeys(languageSignoff, ["buildSha", "languageContract", "approvals"]) ||
+    languageSignoff.buildSha !== buildSha ||
+    !isRecord(languageSignoff.languageContract) ||
+    !exactKeys(languageSignoff.languageContract, ["path", "sha256"]) ||
+    languageSignoff.languageContract.path !== languageContractRelativePath ||
+    languageSignoff.languageContract.sha256 !== languageContractSha256 ||
+    !Array.isArray(languageSignoff.approvals) ||
+    languageSignoff.approvals.length !== 4
+  ) {
+    errors.push("FND-02 language contract: build, contract digest, or four-role approvals are missing")
+  } else {
+    const roles: string[] = []
+    const names: string[] = []
+    languageSignoff.approvals.forEach((approval, index) => {
+      if (
+        !isRecord(approval) ||
+        !exactKeys(approval, ["role", "signedBy", "signedAt", "attestation"]) ||
+        typeof approval.role !== "string" ||
+        !languageSignoffRoles.includes(approval.role) ||
+        !validName(approval.signedBy) ||
+        !validDate(approval.signedAt) ||
+        approval.attestation !== languageSignoffAttestation
+      ) {
+        errors.push(`FND-02 language contract approval ${index + 1}: invalid named role attestation`)
+        return
+      }
+      roles.push(approval.role)
+      names.push(String(approval.signedBy).trim())
+    })
+    if (!sameValues(roles, languageSignoffRoles)) errors.push("FND-02 language contract: required role set mismatch")
+    if (new Set(names).size !== 4) errors.push("FND-02 language contract: approvers must be four distinct people")
   }
   const hr01 = value.studies["HR-01"]
   if (
     !isRecord(hr01) ||
-    !exactKeys(hr01, ["moderatorScriptVersion", "participants", "calculation", "signoff"]) ||
+    !exactKeys(hr01, ["moderatorScriptVersion", "stimulusSet", "participants", "calculation", "signoff"]) ||
     hr01.moderatorScriptVersion !== "HR01-v1" ||
     !Array.isArray(hr01.participants) ||
     hr01.participants.length < 3
   ) {
     errors.push("HR-01: missing participants or protocol version")
   } else {
+    await validateHR01StimulusSet(hr01.stimulusSet, evidenceFile, buildSha, protocolSha256, errors)
     const participantIDs: string[] = []
     let correct = 0
     let total = 0
@@ -608,7 +919,9 @@ async function validateHumanEvidence(
         image.info.width < screenshotMinimum.width ||
         image.info.height < screenshotMinimum.height
       ) {
-        errors.push(`HR-03 ${approval.surface}: screenshot is missing, escaped, invalid, too small, or digest-mismatched`)
+        errors.push(
+          `HR-03 ${approval.surface}: screenshot is missing, escaped, invalid, too small, or digest-mismatched`,
+        )
       } else {
         screenshotPaths.push(screenshotPath)
         screenshotDigests.push(approval.sha256)
@@ -667,16 +980,142 @@ async function validateHumanEvidence(
   return { errors, failures }
 }
 
-type GateOptions = { buildSha: string; runnerPath: string; humanEvidencePath?: string }
+async function verifyHumanEvidenceAuthorization(
+  evidenceSource: string,
+  expectedAllowedSignersSha256: string | null,
+  allowedSignersPath?: string,
+  signaturePath?: string,
+) {
+  if (!expectedAllowedSignersSha256) {
+    return {
+      status: "incomplete" as const,
+      missing: ["HUMAN-EVIDENCE-TRUST-ANCHOR"],
+      errors: [] as string[],
+      allowedSignersSha256: null,
+      signatureSha256: null,
+    }
+  }
+  if (!allowedSignersPath || !signaturePath) {
+    return {
+      status: "incomplete" as const,
+      missing: ["HUMAN-EVIDENCE-TRUSTED-SIGNATURE"],
+      errors: [] as string[],
+      allowedSignersSha256: null,
+      signatureSha256: null,
+    }
+  }
+  const [allowedSignersFile, signatureFile, repositoryRealPath] = await Promise.all([
+    fs.realpath(path.resolve(allowedSignersPath)).catch(() => null),
+    fs.realpath(path.resolve(signaturePath)).catch(() => null),
+    fs.realpath(root),
+  ])
+  if (!allowedSignersFile || !signatureFile) {
+    return {
+      status: "incomplete" as const,
+      missing: ["HUMAN-EVIDENCE-TRUSTED-SIGNATURE"],
+      errors: [] as string[],
+      allowedSignersSha256: null,
+      signatureSha256: null,
+    }
+  }
+  const [allowedSignersSource, signatureSource] = await Promise.all([
+    Bun.file(allowedSignersFile).text(),
+    Bun.file(signatureFile).text(),
+  ])
+  if (sha256(allowedSignersSource) !== expectedAllowedSignersSha256) {
+    return {
+      status: "invalid" as const,
+      missing: [] as string[],
+      errors: ["human evidence signature: allowed_signers does not match the exact-build trust anchor"],
+      allowedSignersSha256: sha256(allowedSignersSource),
+      signatureSha256: sha256(signatureSource),
+    }
+  }
+  if (allowedSignersFile === repositoryRealPath || allowedSignersFile.startsWith(`${repositoryRealPath}${path.sep}`)) {
+    return {
+      status: "invalid" as const,
+      missing: [] as string[],
+      errors: ["human evidence signature: allowed_signers must be supplied from outside the repository"],
+      allowedSignersSha256: sha256(allowedSignersSource),
+      signatureSha256: sha256(signatureSource),
+    }
+  }
+  if (!Bun.which("ssh-keygen")) {
+    return {
+      status: "incomplete" as const,
+      missing: ["OPENSSH-SIGNATURE-VERIFIER"],
+      errors: [] as string[],
+      allowedSignersSha256: sha256(allowedSignersSource),
+      signatureSha256: sha256(signatureSource),
+    }
+  }
+  const verification = Bun.spawn(
+    [
+      "ssh-keygen",
+      "-Y",
+      "verify",
+      "-f",
+      allowedSignersFile,
+      "-I",
+      humanSignerIdentity,
+      "-n",
+      humanSignatureNamespace,
+      "-s",
+      signatureFile,
+    ],
+    {
+      cwd: root,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  )
+  verification.stdin.write(evidenceSource)
+  verification.stdin.end()
+  const [exitCode, stderr] = await Promise.all([verification.exited, new Response(verification.stderr).text()])
+  return {
+    status: exitCode === 0 ? ("pass" as const) : ("invalid" as const),
+    missing: [] as string[],
+    errors:
+      exitCode === 0
+        ? []
+        : [`human evidence signature: OpenSSH verification failed${stderr.length ? ` (${stderr.trim()})` : ""}`],
+    allowedSignersSha256: sha256(allowedSignersSource),
+    signatureSha256: sha256(signatureSource),
+  }
+}
+
+type GateOptions = {
+  buildSha: string
+  runnerPath: string
+  automaticEvidencePath?: string
+  executeAutomaticOutputDirectory?: string
+  humanEvidencePath?: string
+  humanAllowedSignersPath?: string
+  humanSignaturePath?: string
+}
 
 async function evaluateR0GateWithDependencies(
   options: GateOptions,
-  dependencies: { verifyCommit: (buildSha: string) => string },
+  dependencies: {
+    verifyCommit: (buildSha: string) => string
+    governance?: Awaited<ReturnType<typeof loadGovernance>>
+    automaticEvidenceGovernance?: AutomaticEvidenceGovernance
+    automaticEvidenceExecuted?: boolean
+    humanAllowedSignersSha256?: string | null
+    languageContractSha256?: string
+  },
 ) {
   if (!/^[a-f0-9]{40}$/.test(options.buildSha)) throw new Error("R0 gate requires a full lowercase build SHA.")
   dependencies.verifyCommit(options.buildSha)
-  const governance = await loadGovernance()
-  const runner = await validateRunner(options.buildSha, options.runnerPath)
+  const governance = dependencies.governance ?? (await loadGovernance(options.buildSha))
+  const runner = await validateRunner(
+    options.buildSha,
+    options.runnerPath,
+    governance.benchmark,
+    governance.recordContract,
+  )
+  const automaticEvidenceExecution = dependencies.automaticEvidenceExecuted ? "current_process" : "not_performed"
   if (runner.errors.length) {
     return {
       schemaVersion: 1,
@@ -684,23 +1123,77 @@ async function evaluateR0GateWithDependencies(
       buildSha: options.buildSha,
       status: "invalid",
       automaticEvidenceStatus: "invalid",
+      automaticEvidenceExecution,
       humanEvidenceStatus: "not_evaluated",
       missing: [],
       failures: [],
       errors: runner.errors,
     }
   }
-  const automaticEvidenceStatus = runner.automaticFailures.length ? "fail" : "pass"
+  const automaticEvidence = options.automaticEvidencePath
+    ? await validateAutomaticEvidencePackage({
+        packagePath: options.automaticEvidencePath,
+        buildSha: options.buildSha,
+        runnerSha256: runner.runnerSha256!,
+        governance: dependencies.automaticEvidenceGovernance,
+      })
+    : {
+        status: "incomplete" as const,
+        packageSha256: null,
+        missing: ["AUTOMATIC-EVIDENCE-PACKAGE"],
+        failures: [],
+        errors: [],
+        coveredTaskIds: [],
+        coveredCriterionIds: [],
+      }
+  const automaticPackageStatus =
+    automaticEvidence.status === "invalid"
+      ? "invalid"
+      : runner.automaticFailures.length || automaticEvidence.status === "fail"
+        ? "fail"
+        : automaticEvidence.status === "incomplete"
+          ? "incomplete"
+          : "pass"
+  const automaticEvidenceStatus =
+    automaticPackageStatus === "pass" && automaticEvidenceExecution !== "current_process"
+      ? "incomplete"
+      : automaticPackageStatus
+  const automaticMissing = [
+    ...automaticEvidence.missing,
+    ...(automaticPackageStatus === "pass" && automaticEvidenceExecution !== "current_process"
+      ? ["AUTOMATIC-EVIDENCE-IN-PROCESS-EXECUTION"]
+      : []),
+  ]
+  const automaticFailures = [...runner.automaticFailures, ...automaticEvidence.failures]
+  if (automaticEvidenceStatus === "invalid") {
+    return {
+      schemaVersion: 1,
+      gate: "R0",
+      buildSha: options.buildSha,
+      status: "invalid",
+      automaticEvidenceStatus,
+      automaticEvidencePackageStatus: automaticPackageStatus,
+      automaticEvidenceExecution,
+      humanEvidenceStatus: "not_evaluated",
+      automaticEvidencePackageSha256: automaticEvidence.packageSha256,
+      missing: automaticMissing,
+      failures: automaticFailures,
+      errors: automaticEvidence.errors,
+    }
+  }
   if (!options.humanEvidencePath) {
     return {
       schemaVersion: 1,
       gate: "R0",
       buildSha: options.buildSha,
-      status: automaticEvidenceStatus === "pass" ? "incomplete" : "fail",
+      status: automaticEvidenceStatus === "fail" ? "fail" : "incomplete",
       automaticEvidenceStatus,
+      automaticEvidencePackageStatus: automaticPackageStatus,
+      automaticEvidenceExecution,
       humanEvidenceStatus: "incomplete",
-      missing: ["HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
-      failures: runner.automaticFailures,
+      automaticEvidencePackageSha256: automaticEvidence.packageSha256,
+      missing: [...automaticMissing, "FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+      failures: automaticFailures,
       errors: [],
     }
   }
@@ -713,9 +1206,12 @@ async function evaluateR0GateWithDependencies(
       buildSha: options.buildSha,
       status: "invalid",
       automaticEvidenceStatus,
+      automaticEvidencePackageStatus: automaticPackageStatus,
+      automaticEvidenceExecution,
       humanEvidenceStatus: "invalid",
+      automaticEvidencePackageSha256: automaticEvidence.packageSha256,
       missing: [],
-      failures: runner.automaticFailures,
+      failures: automaticFailures,
       errors: ["evidence package: explicitly supplied file is missing or invalid JSON"],
     }
   }
@@ -725,20 +1221,36 @@ async function evaluateR0GateWithDependencies(
     options.buildSha,
     runner,
     governance.protocol.sha256,
+    dependencies.languageContractSha256 ?? governance.languageContract.sha256,
   )
-  const humanEvidenceStatus = validation.errors.length ? "invalid" : validation.failures.length ? "fail" : "pass"
+  const authorization = await verifyHumanEvidenceAuthorization(
+    evidence.source,
+    dependencies.humanAllowedSignersSha256 ?? governance.releaseAuthorization.allowedSignersSha256,
+    options.humanAllowedSignersPath,
+    options.humanSignaturePath,
+  )
+  const humanEvidenceStatus =
+    validation.errors.length || authorization.status === "invalid"
+      ? "invalid"
+      : validation.failures.length
+        ? "fail"
+        : authorization.status
   const status =
     humanEvidenceStatus === "invalid"
       ? "invalid"
       : automaticEvidenceStatus === "fail" || humanEvidenceStatus === "fail"
         ? "fail"
-        : "pass"
+        : automaticEvidenceStatus === "incomplete" || humanEvidenceStatus === "incomplete"
+          ? "incomplete"
+          : "pass"
   return {
     schemaVersion: 1,
     gate: "R0",
     buildSha: options.buildSha,
     status,
     automaticEvidenceStatus,
+    automaticEvidencePackageStatus: automaticPackageStatus,
+    automaticEvidenceExecution,
     humanEvidenceStatus,
     protocol: {
       id: "agent-company-r0-human-research",
@@ -746,19 +1258,50 @@ async function evaluateR0GateWithDependencies(
       sha256: governance.protocol.sha256,
     },
     evidenceSchema: {
-      packageVersion: "1.0.0",
+      packageVersion: "1.1.0",
       sha256: governance.evidenceSchema.sha256,
     },
     runnerArtifactSha256: runner.runnerSha256,
+    automaticEvidencePackageSha256: automaticEvidence.packageSha256,
     humanEvidencePackageSha256: evidence.sha256,
-    missing: [],
-    failures: [...runner.automaticFailures, ...validation.failures],
-    errors: validation.errors,
+    humanEvidenceAuthorization: {
+      method: "openssh_detached_signature",
+      namespace: humanSignatureNamespace,
+      principal: humanSignerIdentity,
+      allowedSignersSha256: authorization.allowedSignersSha256,
+      signatureSha256: authorization.signatureSha256,
+    },
+    governance: {
+      exactBuildSha: options.buildSha,
+      files: governance.digests,
+    },
+    missing: [...automaticMissing, ...authorization.missing],
+    failures: [...automaticFailures, ...validation.failures],
+    errors: [...validation.errors, ...authorization.errors],
   }
 }
 
 export async function evaluateR0Gate(options: GateOptions) {
-  return evaluateR0GateWithDependencies(options, { verifyCommit: verifyExactCommit })
+  if (options.automaticEvidencePath && options.executeAutomaticOutputDirectory) {
+    throw new Error("--automatic-evidence and --execute-automatic are mutually exclusive.")
+  }
+  const generated = options.executeAutomaticOutputDirectory
+    ? await generateAutomaticEvidence({
+        buildSha: options.buildSha,
+        runnerPath: options.runnerPath,
+        outputDirectory: options.executeAutomaticOutputDirectory,
+      })
+    : null
+  return evaluateR0GateWithDependencies(
+    {
+      ...options,
+      automaticEvidencePath: generated?.packagePath ?? options.automaticEvidencePath,
+    },
+    {
+      verifyCommit: verifyExactCommit,
+      automaticEvidenceExecuted: Boolean(generated),
+    },
+  )
 }
 
 function structuralFixtureSignoff(signedBy = "Research Reviewer", role = "Product Researcher") {
@@ -1130,6 +1673,7 @@ async function writeStructuralHumanEvidenceFixture(
   runnerPath: string,
   recordDigests: Map<string, string[]>,
   protocolSha256: string,
+  languageContractSha256: string,
 ) {
   const screenshotDirectory = path.join(directory, "screenshots")
   await fs.mkdir(screenshotDirectory, { recursive: true })
@@ -1162,9 +1706,62 @@ async function writeStructuralHumanEvidenceFixture(
       }
     }),
   )
+  const stimulusDirectory = path.join(directory, "hr01-state-cards")
+  await fs.mkdir(stimulusDirectory, { recursive: true })
+  const stimuli = await Promise.all(
+    hr01PromptIDs.map(async (promptId, index) => {
+      const filename = `${promptId}.png`
+      const relativePath = path.posix.join("hr01-state-cards", filename)
+      const png = await sharp({
+        create: {
+          width: 800,
+          height: 180,
+          channels: 4,
+          background: {
+            r: 32 + index * 11,
+            g: 44 + index * 9,
+            b: 56 + index * 7,
+            alpha: 1,
+          },
+        },
+      })
+        .png()
+        .toBuffer()
+      await Bun.write(path.join(directory, relativePath), png)
+      return {
+        promptId,
+        stateId: hr01StateIDs[index],
+        relativePath,
+        sha256: sha256(png),
+      }
+    }),
+  )
+  const stimulusManifestRelativePath = path.posix.join("hr01-state-cards", "stimuli-manifest.json")
+  const stimulusManifestSource = `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      buildSha,
+      protocol: {
+        id: "agent-company-r0-human-research",
+        version: "1.0.0",
+        sha256: protocolSha256,
+        studyId: "HR-01",
+        moderatorScriptVersion: "HR01-v1",
+      },
+      presentation: hr01Presentation,
+      exactPrompt: hr01ExactPrompt,
+      stateLabelHidden: true,
+      relativePathBase: "build-artifact-root",
+      viewport: { width: 1440, height: 1600 },
+      stimuli,
+    },
+    null,
+    2,
+  )}\n`
+  await Bun.write(path.join(directory, stimulusManifestRelativePath), stimulusManifestSource)
   const packageValue = {
     schemaVersion: 1,
-    packageVersion: "1.0.0",
+    packageVersion: "1.1.0",
     packageId: "R0-structural-fixture",
     buildSha,
     protocolBinding: {
@@ -1178,8 +1775,28 @@ async function writeStructuralHumanEvidenceFixture(
     },
     createdAt: "2026-07-25T08:00:00.000Z",
     studies: {
+      "FND-02-LANGUAGE-SIGNOFF": {
+        buildSha,
+        languageContract: {
+          path: languageContractRelativePath,
+          sha256: languageContractSha256,
+        },
+        approvals: languageSignoffRoles.map((role, index) => ({
+          role,
+          signedBy: `Language Approver ${index + 1}`,
+          signedAt: "2026-07-25T08:00:00.000Z",
+          attestation: languageSignoffAttestation,
+        })),
+      },
       "HR-01": {
         moderatorScriptVersion: "HR01-v1",
+        stimulusSet: {
+          buildSha,
+          manifestRelativePath: stimulusManifestRelativePath,
+          manifestSha256: sha256(stimulusManifestSource),
+          stateLabelHidden: true,
+          presentedToAllParticipants: true,
+        },
         participants: Array.from({ length: 3 }, (_, participantIndex) => ({
           participantId: `P-${String(participantIndex + 1).padStart(12, "0")}`,
           eligibility: structuralFixtureEligibility(),
@@ -1366,28 +1983,137 @@ async function writeAutomaticFailureRunnerFixture(directory: string, runnerPath:
   )
 }
 
+async function writeEphemeralHumanSignature(directory: string, evidencePath: string) {
+  if (!Bun.which("ssh-keygen")) throw new Error("OpenSSH ssh-keygen is required for the R0 gate self-test.")
+  const keyPath = path.join(directory, "ephemeral-release-owner")
+  const generated = Bun.spawnSync(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", keyPath], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (generated.exitCode !== 0) throw new Error(generated.stderr.toString().trim() || "Failed to generate test key.")
+  const allowedSignersPath = path.join(directory, "external-allowed_signers")
+  await Bun.write(allowedSignersPath, `${humanSignerIdentity} ${(await Bun.file(`${keyPath}.pub`).text()).trim()}\n`)
+  const signed = Bun.spawnSync(
+    ["ssh-keygen", "-Y", "sign", "-q", "-f", keyPath, "-n", humanSignatureNamespace, evidencePath],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  )
+  if (signed.exitCode !== 0) throw new Error(signed.stderr.toString().trim() || "Failed to sign test evidence.")
+  return {
+    allowedSignersPath,
+    signaturePath: `${evidencePath}.sig`,
+  }
+}
+
 export async function runGateSelfTest() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-r0-gate-"))
   const buildSha = "b".repeat(40)
-  const evaluateFixture = (options: GateOptions) =>
-    evaluateR0GateWithDependencies(options, { verifyCommit: () => buildSha })
+  const languageContractSha256 = "d".repeat(64)
   const governance = await loadGovernance()
   const runner = await writeStructuralRunnerFixture(path.join(directory, "runner"), buildSha)
+  const automaticEvidence = await writeStructuralAutomaticEvidenceFixture(
+    path.join(directory, "automatic-evidence"),
+    buildSha,
+    "a".repeat(40),
+    sha256(await Bun.file(runner.runnerPath).text()),
+  )
   const evidence = await writeStructuralHumanEvidenceFixture(
     path.join(directory, "evidence"),
     buildSha,
     runner.runnerPath,
     runner.recordDigests,
     governance.protocol.sha256,
+    languageContractSha256,
   )
-  const valid = await evaluateFixture({
+  const ephemeralSignature = await writeEphemeralHumanSignature(directory, evidence.evidencePath)
+  const ephemeralAllowedSignersSha256 = sha256(await Bun.file(ephemeralSignature.allowedSignersPath).text())
+  const evaluateUnanchoredFixture = (options: GateOptions) =>
+    evaluateR0GateWithDependencies(options, {
+      verifyCommit: () => buildSha,
+      governance,
+      automaticEvidenceGovernance: automaticEvidence.governance,
+      languageContractSha256,
+    })
+  const evaluateFixture = (options: GateOptions) =>
+    evaluateR0GateWithDependencies(options, {
+      verifyCommit: () => buildSha,
+      governance,
+      automaticEvidenceGovernance: automaticEvidence.governance,
+      humanAllowedSignersSha256: ephemeralAllowedSignersSha256,
+      languageContractSha256,
+    })
+  const evaluateExecutedAutomaticFixture = (options: GateOptions) =>
+    evaluateR0GateWithDependencies(options, {
+      verifyCommit: () => buildSha,
+      governance,
+      automaticEvidenceGovernance: automaticEvidence.governance,
+      automaticEvidenceExecuted: true,
+      humanAllowedSignersSha256: ephemeralAllowedSignersSha256,
+      languageContractSha256,
+    })
+  const unanchoredStructuralEvidence = await evaluateUnanchoredFixture({
     buildSha,
     runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    humanEvidencePath: evidence.evidencePath,
+    humanAllowedSignersPath: ephemeralSignature.allowedSignersPath,
+    humanSignaturePath: ephemeralSignature.signaturePath,
+  })
+  const unsignedStructuralEvidence = await evaluateFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
     humanEvidencePath: evidence.evidencePath,
   })
+  const unsignedWithExecutedAutomaticEvidence = await evaluateExecutedAutomaticFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    humanEvidencePath: evidence.evidencePath,
+  })
+  const signedWithExecutedAutomaticEvidence = await evaluateExecutedAutomaticFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    humanEvidencePath: evidence.evidencePath,
+    humanAllowedSignersPath: ephemeralSignature.allowedSignersPath,
+    humanSignaturePath: ephemeralSignature.signaturePath,
+  })
+  const verifiedEphemeralSignature = await verifyHumanEvidenceAuthorization(
+    await Bun.file(evidence.evidencePath).text(),
+    ephemeralAllowedSignersSha256,
+    ephemeralSignature.allowedSignersPath,
+    ephemeralSignature.signaturePath,
+  )
+  const rejectedTamperedPayload = await verifyHumanEvidenceAuthorization(
+    `${await Bun.file(evidence.evidencePath).text()} `,
+    ephemeralAllowedSignersSha256,
+    ephemeralSignature.allowedSignersPath,
+    ephemeralSignature.signaturePath,
+  )
+  const rejectedUnanchoredSignature = await verifyHumanEvidenceAuthorization(
+    await Bun.file(evidence.evidencePath).text(),
+    null,
+    ephemeralSignature.allowedSignersPath,
+    ephemeralSignature.signaturePath,
+  )
+  const rejectedWrongTrustAnchor = await verifyHumanEvidenceAuthorization(
+    await Bun.file(evidence.evidencePath).text(),
+    "f".repeat(64),
+    ephemeralSignature.allowedSignersPath,
+    ephemeralSignature.signaturePath,
+  )
   const incomplete = await evaluateFixture({
     buildSha,
     runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+  })
+  const missingAutomaticEvidence = await evaluateFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    humanEvidencePath: evidence.evidencePath,
   })
   const wrongBuild = await writeMutatedEvidence(
     path.dirname(evidence.evidencePath),
@@ -1452,6 +2178,42 @@ export async function runGateSelfTest() {
       ;(participants[0]!.responses as Array<Record<string, unknown>>)[0]!.promptId = 1
     },
   )
+  const wrongStimulusDigest = await writeMutatedEvidence(
+    path.dirname(evidence.evidencePath),
+    "wrong-stimulus-digest",
+    evidence.packageValue,
+    (value) => {
+      const study = (value.studies as Record<string, Record<string, unknown>>)["HR-01"]!
+      ;(study.stimulusSet as Record<string, unknown>).manifestSha256 = "c".repeat(64)
+    },
+  )
+  const missingLanguageRole = await writeMutatedEvidence(
+    path.dirname(evidence.evidencePath),
+    "missing-language-role",
+    evidence.packageValue,
+    (value) => {
+      const study = (value.studies as Record<string, Record<string, unknown>>)["FND-02-LANGUAGE-SIGNOFF"]!
+      ;(study.approvals as unknown[]).pop()
+    },
+  )
+  const wrongLanguageDigest = await writeMutatedEvidence(
+    path.dirname(evidence.evidencePath),
+    "wrong-language-digest",
+    evidence.packageValue,
+    (value) => {
+      const study = (value.studies as Record<string, Record<string, unknown>>)["FND-02-LANGUAGE-SIGNOFF"]!
+      ;(study.languageContract as Record<string, unknown>).sha256 = "c".repeat(64)
+    },
+  )
+  const visibleStimulusLabel = await writeMutatedEvidence(
+    path.dirname(evidence.evidencePath),
+    "visible-stimulus-label",
+    evidence.packageValue,
+    (value) => {
+      const study = (value.studies as Record<string, Record<string, unknown>>)["HR-01"]!
+      ;(study.stimulusSet as Record<string, unknown>).stateLabelHidden = false
+    },
+  )
   const missingSurface = await writeMutatedEvidence(
     path.dirname(evidence.evidencePath),
     "missing-surface",
@@ -1469,8 +2231,9 @@ export async function runGateSelfTest() {
     "magic-only-screenshot",
     evidence.packageValue,
     (value) => {
-      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!
-        .approvals as Array<Record<string, unknown>>
+      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
+        Record<string, unknown>
+      >
       approvals[0]!.relativePath = path.relative(path.dirname(evidence.evidencePath), invalidPngPath)
       approvals[0]!.sha256 = sha256(invalidPng)
     },
@@ -1488,8 +2251,9 @@ export async function runGateSelfTest() {
     "tiny-screenshot",
     evidence.packageValue,
     (value) => {
-      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!
-        .approvals as Array<Record<string, unknown>>
+      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
+        Record<string, unknown>
+      >
       approvals[0]!.relativePath = path.relative(path.dirname(evidence.evidencePath), tinyPngPath)
       approvals[0]!.sha256 = sha256(tinyPng)
     },
@@ -1499,8 +2263,9 @@ export async function runGateSelfTest() {
     "duplicate-screenshot",
     evidence.packageValue,
     (value) => {
-      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!
-        .approvals as Array<Record<string, unknown>>
+      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
+        Record<string, unknown>
+      >
       approvals[1]!.relativePath = approvals[0]!.relativePath
       approvals[1]!.sha256 = approvals[0]!.sha256
     },
@@ -1535,6 +2300,10 @@ export async function runGateSelfTest() {
       ["wrong_runner_digest_rejected", wrongRunnerDigest, "invalid"],
       ["duplicate_participant_rejected", duplicateParticipant, "invalid"],
       ["non_string_pattern_bypass_rejected", nonStringPrompt, "invalid"],
+      ["missing_language_role_rejected", missingLanguageRole, "invalid"],
+      ["wrong_language_digest_rejected", wrongLanguageDigest, "invalid"],
+      ["wrong_stimulus_digest_rejected", wrongStimulusDigest, "invalid"],
+      ["visible_stimulus_label_rejected", visibleStimulusLabel, "invalid"],
       ["missing_surface_rejected", missingSurface, "invalid"],
       ["magic_only_screenshot_rejected", magicOnlyScreenshot, "invalid"],
       ["tiny_screenshot_rejected", tinyScreenshot, "invalid"],
@@ -1548,6 +2317,7 @@ export async function runGateSelfTest() {
           await evaluateFixture({
             buildSha,
             runnerPath: runner.runnerPath,
+            automaticEvidencePath: automaticEvidence.packagePath,
             humanEvidencePath,
           })
         ).status === expected,
@@ -1656,9 +2426,96 @@ export async function runGateSelfTest() {
     () => false,
     () => true,
   )
+  const offlineRequirePassRejected = await Promise.resolve()
+    .then(() =>
+      parseArguments([
+        "--ref",
+        buildSha,
+        "--gate",
+        "R0",
+        "--runner-artifact",
+        runner.runnerPath,
+        "--automatic-evidence",
+        automaticEvidence.packagePath,
+        "--human-evidence",
+        evidence.evidencePath,
+        "--human-signature",
+        ephemeralSignature.signaturePath,
+        "--human-allowed-signers",
+        ephemeralSignature.allowedSignersPath,
+        "--out",
+        path.join(directory, "decision.json"),
+        "--require-pass",
+      ]),
+    )
+    .then(
+      () => false,
+      () => true,
+    )
   const assertions = [
-    { name: "structurally_valid_fixture_passes_schema_only", passed: valid.status === "pass" },
+    {
+      name: "unanchored_signer_cannot_authorize_release",
+      passed:
+        unanchoredStructuralEvidence.status === "incomplete" &&
+        unanchoredStructuralEvidence.humanEvidenceStatus === "incomplete" &&
+        unanchoredStructuralEvidence.missing.includes("HUMAN-EVIDENCE-TRUST-ANCHOR"),
+    },
+    {
+      name: "structurally_valid_unsigned_fixture_remains_incomplete",
+      passed:
+        unsignedStructuralEvidence.status === "incomplete" &&
+        unsignedStructuralEvidence.humanEvidenceStatus === "incomplete" &&
+        unsignedStructuralEvidence.missing.includes("HUMAN-EVIDENCE-TRUSTED-SIGNATURE") &&
+        unsignedStructuralEvidence.errors.length === 0,
+    },
+    {
+      name: "offline_automatic_package_cannot_authorize_release",
+      passed:
+        unsignedStructuralEvidence.automaticEvidencePackageStatus === "pass" &&
+        unsignedStructuralEvidence.automaticEvidenceStatus === "incomplete" &&
+        unsignedStructuralEvidence.missing.includes("AUTOMATIC-EVIDENCE-IN-PROCESS-EXECUTION"),
+    },
+    {
+      name: "unsigned_human_evidence_cannot_pass_with_executed_automatic_evidence",
+      passed:
+        unsignedWithExecutedAutomaticEvidence.automaticEvidenceStatus === "pass" &&
+        unsignedWithExecutedAutomaticEvidence.humanEvidenceStatus === "incomplete" &&
+        unsignedWithExecutedAutomaticEvidence.status === "incomplete",
+    },
+    {
+      name: "structurally_valid_signed_fixture_passes_with_explicit_test_trust_anchor",
+      passed:
+        signedWithExecutedAutomaticEvidence.status === "pass" &&
+        signedWithExecutedAutomaticEvidence.automaticEvidenceStatus === "pass" &&
+        signedWithExecutedAutomaticEvidence.humanEvidenceStatus === "pass" &&
+        signedWithExecutedAutomaticEvidence.humanEvidenceAuthorization.allowedSignersSha256 ===
+          ephemeralAllowedSignersSha256,
+    },
+    {
+      name: "explicit_test_trust_anchor_verifies_exact_bytes",
+      passed: verifiedEphemeralSignature.status === "pass",
+    },
+    {
+      name: "ephemeral_openssh_signature_rejects_tampered_bytes",
+      passed: rejectedTamperedPayload.status === "invalid",
+    },
+    {
+      name: "unanchored_ephemeral_signature_remains_incomplete",
+      passed:
+        rejectedUnanchoredSignature.status === "incomplete" &&
+        rejectedUnanchoredSignature.missing.includes("HUMAN-EVIDENCE-TRUST-ANCHOR"),
+    },
+    {
+      name: "wrong_trust_anchor_rejects_ephemeral_signature",
+      passed: rejectedWrongTrustAnchor.status === "invalid",
+    },
     { name: "missing_human_evidence_is_incomplete", passed: incomplete.status === "incomplete" },
+    {
+      name: "missing_automatic_evidence_is_incomplete",
+      passed:
+        missingAutomaticEvidence.status === "incomplete" &&
+        missingAutomaticEvidence.automaticEvidenceStatus === "incomplete",
+    },
     ...mutatedResults,
     ...runnerMutationResults,
     {
@@ -1678,22 +2535,41 @@ export async function runGateSelfTest() {
     },
     { name: "forged_s12_c3_pass_rejected", passed: forgedRunnerResult.status === "invalid" },
     { name: "nonexistent_exact_commit_rejected", passed: nonexistentCommitRejected },
+    { name: "offline_require_pass_rejected", passed: offlineRequirePassRejected },
   ]
   await fs.rm(directory, { recursive: true, force: true })
   if (assertions.some((assertion) => !assertion.passed)) {
-    throw new Error(`R0 gate evaluator self-test failed: ${JSON.stringify({ assertions, valid, incomplete })}`)
+    throw new Error(
+      `R0 gate evaluator self-test failed: ${JSON.stringify({ assertions, unsignedStructuralEvidence, incomplete })}`,
+    )
   }
   return {
     result: "pass",
-    structurallyValidFixture: "pass",
-    humanIdentityAuthentication: "not_performed",
+    structuralValidation: "pass",
+    releaseAuthorizationBoundary: "verified_against_explicit_test_trust_anchor",
+    reusableHumanPassPackageProduced: false,
     missingEvidenceStatus: "incomplete",
-    negativeCases: assertions.filter((assertion) => !assertion.name.startsWith("structurally_")),
+    negativeCases: assertions.filter(
+      (assertion) =>
+        !assertion.name.startsWith("structurally_") &&
+        !assertion.name.startsWith("explicit_test_trust_anchor_verifies_"),
+    ),
   }
 }
 
 function parseArguments(args: string[]) {
-  const allowed = new Set(["--ref", "--gate", "--runner-artifact", "--human-evidence", "--out", "--require-pass"])
+  const allowed = new Set([
+    "--ref",
+    "--gate",
+    "--runner-artifact",
+    "--automatic-evidence",
+    "--execute-automatic",
+    "--human-evidence",
+    "--human-signature",
+    "--human-allowed-signers",
+    "--out",
+    "--require-pass",
+  ])
   const flags = new Set<string>()
   const values = new Map<string, string>()
   for (let index = 0; index < args.length; index += 1) {
@@ -1702,7 +2578,11 @@ function parseArguments(args: string[]) {
     if (!allowed.has(item)) throw new Error(`Unknown argument: ${item}`)
     if (flags.has(item)) throw new Error(`Duplicate argument: ${item}`)
     flags.add(item)
-    if (item !== "--require-pass") values.set(item, args[index + 1] ?? "")
+    if (item !== "--require-pass") {
+      const value = args[index + 1]
+      if (!value || value.startsWith("--")) throw new Error(`Missing value for ${item}.`)
+      values.set(item, value)
+    }
   }
   const consumed = new Set(values.values())
   const stray = args.filter((item) => !item.startsWith("--") && !consumed.has(item))
@@ -1711,10 +2591,27 @@ function parseArguments(args: string[]) {
     throw new Error("Required arguments: --ref <sha> --gate R0 --runner-artifact <json> --out <json>")
   }
   if (values.get("--gate") !== "R0") throw new Error("This evaluator implements only R0.")
+  if (flags.has("--automatic-evidence") && flags.has("--execute-automatic")) {
+    throw new Error("--automatic-evidence and --execute-automatic are mutually exclusive.")
+  }
+  if (
+    flags.has("--require-pass") &&
+    ["--execute-automatic", "--human-evidence", "--human-signature", "--human-allowed-signers"].some(
+      (item) => !flags.has(item),
+    )
+  ) {
+    throw new Error(
+      "--require-pass requires --execute-automatic, --human-evidence, --human-signature, and --human-allowed-signers.",
+    )
+  }
   return {
     buildSha: values.get("--ref") ?? "",
     runnerPath: values.get("--runner-artifact") ?? "",
+    automaticEvidencePath: values.get("--automatic-evidence"),
+    executeAutomaticOutputDirectory: values.get("--execute-automatic"),
     humanEvidencePath: values.get("--human-evidence"),
+    humanSignaturePath: values.get("--human-signature"),
+    humanAllowedSignersPath: values.get("--human-allowed-signers"),
     out: values.get("--out") ?? "",
     requirePass: flags.has("--require-pass"),
   }

@@ -16,7 +16,7 @@ function runGit(args: string[], allowedExitCodes = [0]) {
 }
 
 function readAt(ref: string, file: string) {
-  return runGit(["show", `${ref}:${file}`], [0, 128])
+  return runGit(["show", `${ref}:${file}`])
 }
 
 function existsAt(ref: string, file: string) {
@@ -46,8 +46,9 @@ function evidence(lines: string[]) {
   }
 }
 
-export async function collectBaseline(ref = "HEAD") {
+export async function collectBaseline(ref = "HEAD", contractRef = "HEAD") {
   const commitSha = runGit(["rev-parse", `${ref}^{commit}`]).trim()
+  const contractCommitSha = runGit(["rev-parse", `${contractRef}^{commit}`]).trim()
   const moduleSource = readAt(commitSha, "packages/app/modules/agent-company/module.ts")
   const appPackageSource = readAt(commitSha, "packages/app/package.json")
   const navigationLabels = [...moduleSource.matchAll(/label:\s*["']([^"']+)["']/g)].map((match) => match[1])
@@ -55,8 +56,14 @@ export async function collectBaseline(ref = "HEAD") {
   const appTestCommand = appPackageSource
     ? (JSON.parse(appPackageSource) as { scripts?: Record<string, string> }).scripts?.test
     : undefined
-  const benchmarkSource = await Bun.file(path.join(contractDirectory, "benchmark-scenarios.v1.json")).text()
-  const metricContract = (await Bun.file(path.join(contractDirectory, "metric-contract.v1.json")).json()) as {
+  const benchmarkSource = readAt(
+    contractCommitSha,
+    "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
+  )
+  const metricContract = JSON.parse(readAt(
+    contractCommitSha,
+    "docs/product-design/experience-refactor/metric-contract.v1.json",
+  )) as {
     metrics: Array<{ id: string; collectionMode: string }>
   }
   const benchmark = JSON.parse(benchmarkSource) as {
@@ -80,12 +87,19 @@ export async function collectBaseline(ref = "HEAD") {
     baselineKind: "committed_source_and_measurement_readiness",
     refRequested: ref,
     commitSha,
+    contractCommitSha,
     commitTime: runGit(["show", "-s", "--format=%cI", commitSha]).trim(),
-    subjectTree: "committed tree only; worktree changes are excluded",
+    subjectTree: "subject evidence comes from commitSha; governance contracts come from contractCommitSha; worktree changes are excluded",
     collector: "script/experience-baseline.ts",
     scenarioContract: {
+      commitSha: contractCommitSha,
       path: "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
       sha256: digest(benchmarkSource),
+    },
+    metricContract: {
+      commitSha: contractCommitSha,
+      path: "docs/product-design/experience-refactor/metric-contract.v1.json",
+      sha256: digest(readAt(contractCommitSha, "docs/product-design/experience-refactor/metric-contract.v1.json")),
     },
     staticEvidence: {
       canonicalPlanTracked: existsAt(commitSha, "docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md"),
@@ -140,15 +154,26 @@ function argument(name: string) {
   return index >= 0 ? Bun.argv[index + 1] : undefined
 }
 
-async function requestedRef() {
-  if (!Bun.argv.includes("--recorded-head")) return argument("--ref") ?? "HEAD"
-  return (
+async function requestedRefs() {
+  if (!Bun.argv.includes("--recorded-head")) {
+    return {
+      ref: argument("--ref") ?? "HEAD",
+      contractRef: argument("--contract-ref") ?? "HEAD",
+    }
+  }
+  const recorded = (
     (await Bun.file(path.join(contractDirectory, "baselines/current-head.v1.json")).json()) as {
       commitSha: string
+      contractCommitSha: string
     }
-  ).commitSha
+  )
+  return {
+    ref: recorded.commitSha,
+    contractRef: recorded.contractCommitSha,
+  }
 }
 
 if (import.meta.main) {
-  console.log(JSON.stringify(await collectBaseline(await requestedRef()), null, 2))
+  const requested = await requestedRefs()
+  console.log(JSON.stringify(await collectBaseline(requested.ref, requested.contractRef), null, 2))
 }

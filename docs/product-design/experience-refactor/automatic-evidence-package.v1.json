@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
+  "title": "Agent Company R0 exact-build automatic evidence package",
+  "schemaVersion": 1,
+  "packageVersion": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageVersion",
+    "packageId",
+    "gate",
+    "buildSha",
+    "buildTreeSha",
+    "requirementsBinding",
+    "schemaBinding",
+    "runnerBinding",
+    "isolation",
+    "createdAt",
+    "commands",
+    "coverage",
+    "overallStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "packageVersion": {
+      "const": "1.0.0"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^R0-AUTO-[a-f0-9]{12,40}$"
+    },
+    "gate": {
+      "const": "R0"
+    },
+    "buildSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "buildTreeSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "requirementsBinding": {
+      "$ref": "#/$defs/governanceBinding"
+    },
+    "schemaBinding": {
+      "$ref": "#/$defs/governanceBinding"
+    },
+    "runnerBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildSha", "sha256"],
+      "properties": {
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "environment", "liveDatabaseAccess", "playwright"],
+      "properties": {
+        "mode": {
+          "const": "detached_exact_commit_worktree"
+        },
+        "environment": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "liveDatabaseAccess": {
+          "const": false
+        },
+        "playwright": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "packageVersion", "browsersJsonSha256", "browserTreeSha256"],
+          "properties": {
+            "mode": {
+              "const": "fresh_isolated_install"
+            },
+            "packageVersion": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+            },
+            "browsersJsonSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "browserTreeSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/commandEvidence"
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/taskCoverage"
+      }
+    },
+    "overallStatus": {
+      "enum": ["pass", "fail"]
+    }
+  },
+  "$defs": {
+    "governanceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "fileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256", "byteLength", "mediaType"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reportEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePath", "validator", "file", "summary"],
+      "properties": {
+        "sourcePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validator": {
+          "enum": ["junit", "r0_branch_coverage"]
+        },
+        "file": {
+          "$ref": "#/$defs/fileEvidence"
+        },
+        "summary": {
+          "type": "object"
+        }
+      }
+    },
+    "commandEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "cwd",
+        "argv",
+        "environment",
+        "startedAt",
+        "finishedAt",
+        "durationMs",
+        "exitCode",
+        "timedOut",
+        "status",
+        "stdout",
+        "stderr",
+        "stdoutSummary",
+        "reports"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exitCode": {
+          "type": ["integer", "null"]
+        },
+        "timedOut": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": ["pass", "fail"]
+        },
+        "stdout": {
+          "$ref": "#/$defs/fileEvidence"
+        },
+        "stderr": {
+          "$ref": "#/$defs/fileEvidence"
+        },
+        "stdoutSummary": {
+          "type": ["object", "null"]
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reportEvidence"
+          }
+        }
+      }
+    },
+    "taskCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "criteria"],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["criterionId", "evidenceRefs"],
+            "properties": {
+              "criterionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidenceRefs": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
