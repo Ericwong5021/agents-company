@@ -1786,6 +1786,7 @@ export async function runBenchmark(args: string[]) {
   const records = new Map<string, ExecutionRecord[]>()
   for (const scenario of benchmark.scenarios) {
     const scenarioRecords: ExecutionRecord[] = []
+    await fs.mkdir(path.join(out, scenario.id), { recursive: false })
     for (const repeat of [1, 2]) {
       const runID = `run-${String(repeat).padStart(2, "0")}`
       const runDirectory = path.join(out, scenario.id, runID)
