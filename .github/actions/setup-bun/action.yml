@@ -3,6 +3,11 @@ description: "Setup Bun with caching and install dependencies"
 runs:
   using: "composite"
   steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+
     - name: Get baseline download URL
       id: bun-url
       shell: bash

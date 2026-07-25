@@ -6,10 +6,26 @@ const upstreamRoot = packageRoot
 const host = Bun.env.HOST || "127.0.0.1"
 const port = Bun.env.PORT || "3210"
 const workerReadyTimeoutMs = Number(Bun.env.EVE_DEV_SERVER_READY_TIMEOUT_MS || "180000")
+const nodePath = (
+  await Promise.all(
+    [...new Set(
+      (Bun.env.PATH ?? "")
+        .split(path.delimiter)
+        .filter(Boolean)
+        .map((directory) => path.join(directory, process.platform === "win32" ? "node.exe" : "node")),
+    )].map(async (candidate) => {
+      if (!(await Bun.file(candidate).exists())) return undefined
+      const result = Bun.spawnSync([candidate, "--version"], { stdout: "pipe", stderr: "ignore" })
+      if (result.exitCode === 0 && Number(result.stdout.toString().match(/^v(\d+)/)?.[1]) >= 24) return candidate
+      return undefined
+    }),
+  )
+).find((candidate) => candidate !== undefined)
 
 if (!Number.isFinite(workerReadyTimeoutMs) || workerReadyTimeoutMs <= 0) {
   throw new Error("EVE_DEV_SERVER_READY_TIMEOUT_MS must be a positive number.")
 }
+if (!nodePath) throw new Error("Agent Company WebUI requires Node.js >=24 on PATH.")
 
 if (Bun.argv.includes("--describe")) {
   console.log(JSON.stringify({
@@ -23,7 +39,7 @@ if (Bun.argv.includes("--describe")) {
 
 const worker = Bun.spawn({
   cmd: [
-    "node",
+    nodePath,
     path.join(packageRoot, "node_modules/eve/bin/eve.js"),
     "dev",
     "--no-ui",
@@ -103,7 +119,7 @@ console.log(`[eve:launcher] worker ready at ${origin}; starting Nuxt on http://$
 
 const nuxt = Bun.spawn({
   cmd: [
-    "node",
+    nodePath,
     path.join(packageRoot, "node_modules/nuxt/bin/nuxt.mjs"),
     "dev",
     "--host",
