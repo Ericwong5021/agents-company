@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/human-evidence-package.v1.json",
   "title": "Agent Company R0 anonymized human evidence payload requiring an externally trusted OpenSSH detached signature",
   "schemaVersion": 1,
-  "packageVersion": "1.1.0",
+  "packageVersion": "1.2.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,7 +22,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "packageId": {
       "type": "string",
@@ -135,10 +135,13 @@
         "HR-02": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["moderatorScriptVersion", "participants", "calculation", "signoff"],
+          "required": ["moderatorScriptVersion", "stimulusSet", "participants", "calculation", "signoff"],
           "properties": {
             "moderatorScriptVersion": {
               "const": "HR02-v1"
+            },
+            "stimulusSet": {
+              "$ref": "#/$defs/hr02StimulusSet"
             },
             "participants": {
               "type": "array",
@@ -171,10 +174,13 @@
         "HR-03": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["reviewScriptVersion", "approverName", "approverRole", "approvals", "signoff"],
+          "required": ["reviewScriptVersion", "screenshotSet", "approverName", "approverRole", "approvals", "signoff"],
           "properties": {
             "reviewScriptVersion": {
               "const": "HR03-v1"
+            },
+            "screenshotSet": {
+              "$ref": "#/$defs/hr03ScreenshotSet"
             },
             "approverName": {
               "type": "string",
@@ -286,6 +292,48 @@
         },
         "presentedToAllParticipants": {
           "const": true
+        }
+      }
+    },
+    "hr02StimulusSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildSha", "manifestRelativePath", "manifestSha256", "surface", "presentedToAllParticipants"],
+      "properties": {
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifestRelativePath": {
+          "const": "human-review/screenshots-manifest.json"
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "surface": {
+          "const": "First-run"
+        },
+        "presentedToAllParticipants": {
+          "const": true
+        }
+      }
+    },
+    "hr03ScreenshotSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildSha", "manifestRelativePath", "manifestSha256"],
+      "properties": {
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifestRelativePath": {
+          "const": "human-review/screenshots-manifest.json"
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
         }
       }
     },

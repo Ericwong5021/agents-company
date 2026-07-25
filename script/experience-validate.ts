@@ -930,7 +930,7 @@ check(
 )
 check(
   humanEvidencePackage.schemaVersion === 1 &&
-    humanEvidencePackage.packageVersion === "1.1.0" &&
+    humanEvidencePackage.packageVersion === "1.2.0" &&
     humanEvidencePackage.additionalProperties === false &&
     schemaPatternsAreStringTyped(humanEvidencePackage),
   "Human evidence package schema is not strict or permits non-string pattern bypasses.",
@@ -957,6 +957,7 @@ check(
     manifest.validationCommands.includes(
       "bun script/experience-automatic-evidence.ts --ref <full-sha> --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --out .artifacts/experience-refactor/<full-sha>/automatic-evidence",
     ) &&
+    manifest.validationCommands.includes("(cd packages/app && bun run test:r0-candidates)") &&
     manifest.validationCommands.some(
       (command) =>
         command.startsWith("bun script/experience-gate.ts --ref") &&
@@ -980,10 +981,33 @@ const automaticCommandIDs = automaticEvidenceRequirements.commands.map((command)
 const automaticCriterionRefs = automaticEvidenceRequirements.tasks.flatMap((task) =>
   task.criteria.flatMap((criterion) => criterion.evidenceRefs),
 )
+const humanEvidenceDefinitions = isRecord(humanEvidencePackage.$defs) ? humanEvidencePackage.$defs : {}
+const hr01StimulusSetSchema = isRecord(humanEvidenceDefinitions.hr01StimulusSet)
+  ? humanEvidenceDefinitions.hr01StimulusSet
+  : {}
+const hr02StimulusSetSchema = isRecord(humanEvidenceDefinitions.hr02StimulusSet)
+  ? humanEvidenceDefinitions.hr02StimulusSet
+  : {}
+const hr03ScreenshotSetSchema = isRecord(humanEvidenceDefinitions.hr03ScreenshotSet)
+  ? humanEvidenceDefinitions.hr03ScreenshotSet
+  : {}
+const hr01StimulusProperties = isRecord(hr01StimulusSetSchema.properties) ? hr01StimulusSetSchema.properties : {}
+const hr02StimulusProperties = isRecord(hr02StimulusSetSchema.properties) ? hr02StimulusSetSchema.properties : {}
+const hr03ScreenshotProperties = isRecord(hr03ScreenshotSetSchema.properties) ? hr03ScreenshotSetSchema.properties : {}
+check(
+  sameStructure(hr01StimulusProperties.manifestRelativePath, { type: "string", minLength: 1 }) &&
+    sameStructure(hr02StimulusProperties.manifestRelativePath, {
+      const: "human-review/screenshots-manifest.json",
+    }) &&
+    sameStructure(hr03ScreenshotProperties.manifestRelativePath, {
+      const: "human-review/screenshots-manifest.json",
+    }),
+  "Human evidence schema does not preserve the distinct HR-01 stimulus and HR-02/03 screenshot manifest paths.",
+)
 check(
   automaticEvidenceRequirements.schemaVersion === 1 &&
     automaticEvidenceRequirements.id === "agent-company-r0-automatic-evidence-requirements" &&
-    automaticEvidenceRequirements.version === "1.0.0" &&
+    automaticEvidenceRequirements.version === "1.1.0" &&
     automaticEvidenceRequirements.gate === "R0" &&
     sameValues(automaticEvidenceRequirements.requiredTaskIds, [...requiredR0TaskIDs]) &&
     sameValues(
@@ -1036,6 +1060,7 @@ check(
     "app-unit",
     "app-r0-config-matrix",
     "app-r0-shell",
+    "app-r0-candidates",
     "app-production",
     "desktop-e2e",
   ].every((command) => automaticCommandIDs.includes(command)) &&
@@ -1058,12 +1083,14 @@ check(
         "SHELL-03-SINGLE-NAVIGATION-CONFIG",
       ],
     ),
-  "Automatic evidence commands omit config, type, SDK, Desktop, or SHELL-03 acceptance gates.",
+  "Automatic evidence commands omit config, type, SDK, Desktop, candidate provenance, or SHELL-03 acceptance gates.",
 )
 check(
   automaticEvidencePackage.schemaVersion === 1 &&
-    automaticEvidencePackage.packageVersion === "1.0.0" &&
+    automaticEvidencePackage.packageVersion === "1.1.0" &&
     automaticEvidencePackage.additionalProperties === false &&
+    Array.isArray(automaticEvidencePackage.required) &&
+    automaticEvidencePackage.required.includes("releaseCandidateScreenshots") &&
     schemaPatternsAreStringTyped(automaticEvidencePackage),
   "Automatic evidence package schema is not strict or permits non-string pattern bypasses.",
 )

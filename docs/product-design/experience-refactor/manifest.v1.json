@@ -52,6 +52,7 @@
     "bun script/experience-benchmark.ts --ref <full-sha> --gate R0 --all --out .artifacts/experience-refactor/<full-sha> --repeat 2",
     "bun script/experience-automatic-evidence.ts --self-test",
     "bun script/experience-automatic-evidence.ts --ref <full-sha> --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --out .artifacts/experience-refactor/<full-sha>/automatic-evidence",
+    "(cd packages/app && bun run test:r0-candidates)",
     "bun script/experience-gate.ts --self-test",
     "bun script/experience-gate.ts --ref <full-sha> --gate R0 --runner-artifact .artifacts/experience-refactor/<full-sha>/reproducibility-record.json --execute-automatic .artifacts/experience-refactor/<full-sha>/automatic-evidence-release --human-evidence <anonymized-package.json> --human-signature <anonymized-package.json.sig> --human-allowed-signers <external-release-owner-allowed_signers> --out .artifacts/experience-refactor/<full-sha>/r0-gate-decision.json --require-pass",
     "bun script/experience-baseline.ts --recorded-head",

@@ -6,6 +6,12 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 const controlPlaneURL = "http://127.0.0.1:3311"
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..")
+test.use({
+  colorScheme: "light",
+  locale: "zh-CN",
+  reducedMotion: "reduce",
+  timezoneId: "UTC",
+})
 const candidateSourcePaths = [
   "package.json",
   "bun.lock",
@@ -82,10 +88,13 @@ async function capture(page: Page, name: string) {
   await page.evaluate(() => {
     document.scrollingElement?.scrollTo(0, 0)
     document.querySelector(".ac-shell-workspace")?.scrollTo(0, 0)
+    return document.fonts.ready
   })
   await page.screenshot({
     path: path.join(screenshotRoot, `${name}.png`),
     fullPage: true,
+    animations: "disabled",
+    caret: "hide",
   })
 }
 

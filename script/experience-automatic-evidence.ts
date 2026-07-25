@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import { createReadStream } from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import sharp from "sharp"
 import { canonicalize, sha256, verifyExactCommit } from "./experience-benchmark"
 
 const root = path.resolve(import.meta.dir, "..")
@@ -53,6 +54,11 @@ const inheritedEnvironmentAllowlist = new Set([
   "WINDIR",
 ])
 const requirementEnvironmentAllowlist = new Set(["MODELS_DEV_API_JSON", "PLAYWRIGHT_JUNIT_OUTPUT"])
+const releaseCandidateGeneratorCommandId = "app-r0-candidates"
+const releaseCandidateManifestSourceRelativePath = "human-review/screenshots-manifest.json"
+const releaseCandidateArchiveDirectory = "files/app-r0-candidates/release-candidate-screenshots"
+const releaseCandidateSurfaces = ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"]
+const releaseCandidateScreenshotMinimum = { width: 1280, height: 720 }
 const packageKeys = [
   "schemaVersion",
   "packageVersion",
@@ -67,6 +73,7 @@ const packageKeys = [
   "createdAt",
   "commands",
   "coverage",
+  "releaseCandidateScreenshots",
   "overallStatus",
 ]
 const commandKeys = [
@@ -157,6 +164,33 @@ type CommandEvidence = {
   reports: ReportEvidence[]
 }
 
+type ReleaseCandidateScreenshotEvidence = {
+  surface: string
+  sourceRelativePath: string
+  file: FileEvidence
+}
+
+type ReleaseCandidateScreenshotsEvidence = {
+  generatorCommandId: string
+  buildSha: string
+  manifest: FileEvidence
+  screenshots: ReleaseCandidateScreenshotEvidence[]
+}
+
+export type TrustedReleaseCandidateScreenshots = {
+  buildSha: string
+  manifestSha256: string
+  viewport: {
+    width: number
+    height: number
+  }
+  screenshots: Array<{
+    surface: string
+    relativePath: string
+    sha256: string
+  }>
+}
+
 type AutomaticEvidencePackage = {
   schemaVersion: number
   packageVersion: string
@@ -196,6 +230,7 @@ type AutomaticEvidencePackage = {
       evidenceRefs: string[]
     }>
   }>
+  releaseCandidateScreenshots: ReleaseCandidateScreenshotsEvidence | null
   overallStatus: "pass" | "fail"
 }
 
@@ -224,6 +259,7 @@ export type AutomaticEvidenceValidation = {
   errors: string[]
   coveredTaskIds: string[]
   coveredCriterionIds: string[]
+  trustedReleaseCandidateScreenshots: TrustedReleaseCandidateScreenshots | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -282,7 +318,7 @@ function validateRequirements(value: unknown) {
     ]) ||
     value.schemaVersion !== 1 ||
     value.id !== "agent-company-r0-automatic-evidence-requirements" ||
-    value.version !== "1.0.0" ||
+    value.version !== "1.1.0" ||
     value.gate !== "R0" ||
     !Array.isArray(value.requiredTaskIds) ||
     !value.requiredTaskIds.every((item) => typeof item === "string") ||
@@ -506,8 +542,16 @@ async function validateFileEvidence(
     return null
   }
   const file = await resolveConfinedFile(base, value.relativePath)
+  const stat = await fs.lstat(path.resolve(base, value.relativePath)).catch(() => null)
   const bytes = file ? new Uint8Array(await Bun.file(file).arrayBuffer()) : null
-  if (!file || !bytes || bytes.byteLength !== value.byteLength || sha256(bytes) !== value.sha256) {
+  if (
+    !file ||
+    !stat?.isFile() ||
+    stat.isSymbolicLink() ||
+    !bytes ||
+    bytes.byteLength !== value.byteLength ||
+    sha256(bytes) !== value.sha256
+  ) {
     errors.push(`${label}: missing, escaped, or digest-mismatched file`)
     return null
   }
@@ -516,6 +560,253 @@ async function validateFileEvidence(
     bytes,
     source: new TextDecoder().decode(bytes),
   }
+}
+
+type ReleaseCandidateManifest = {
+  schemaVersion: number
+  buildSha: string
+  relativePathBase: string
+  viewport: {
+    width: number
+    height: number
+  }
+  screenshots: Array<{
+    surface: string
+    relativePath: string
+    sha256: string
+  }>
+}
+
+async function parseReleaseCandidateManifest(source: string, buildSha: string) {
+  const value = await Promise.resolve()
+    .then(() => JSON.parse(source) as unknown)
+    .catch(() => null)
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, ["schemaVersion", "buildSha", "relativePathBase", "viewport", "screenshots"]) ||
+    value.schemaVersion !== 1 ||
+    value.buildSha !== buildSha ||
+    value.relativePathBase !== "build-artifact-root" ||
+    !isRecord(value.viewport) ||
+    !exactKeys(value.viewport, ["width", "height"]) ||
+    value.viewport.width !== 1440 ||
+    value.viewport.height !== 1600 ||
+    !Array.isArray(value.screenshots) ||
+    value.screenshots.length !== releaseCandidateSurfaces.length
+  ) {
+    throw new Error("Release-candidate screenshot manifest is structurally invalid.")
+  }
+  value.screenshots.forEach((screenshot, index) => {
+    const surface = releaseCandidateSurfaces[index]!
+    if (
+      !isRecord(screenshot) ||
+      !exactKeys(screenshot, ["surface", "relativePath", "sha256"]) ||
+      screenshot.surface !== surface ||
+      screenshot.relativePath !==
+        `human-review/screenshots/${surface.toLowerCase().replaceAll(" ", "-")}.png` ||
+      typeof screenshot.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(screenshot.sha256)
+    ) {
+      throw new Error(`Release-candidate screenshot manifest entry ${index + 1} is invalid.`)
+    }
+  })
+  return value as unknown as ReleaseCandidateManifest
+}
+
+async function inspectReleaseCandidatePng(bytes: Uint8Array, label: string) {
+  const image = await sharp(bytes, { failOn: "error", limitInputPixels: 16_777_216 })
+    .toBuffer({ resolveWithObject: true })
+    .catch(() => null)
+  if (
+    image?.info.format !== "png" ||
+    image.info.width < releaseCandidateScreenshotMinimum.width ||
+    image.info.height < releaseCandidateScreenshotMinimum.height
+  ) {
+    throw new Error(`${label} is not a valid release-candidate PNG.`)
+  }
+}
+
+async function collectReleaseCandidateScreenshots(worktree: string, outputDirectory: string, buildSha: string) {
+  const sourceBase = path.join(worktree, ".artifacts/experience-refactor", buildSha)
+  const manifestPath = await resolveConfinedFile(sourceBase, releaseCandidateManifestSourceRelativePath)
+  const manifestStat = await fs
+    .lstat(path.resolve(sourceBase, releaseCandidateManifestSourceRelativePath))
+    .catch(() => null)
+  if (!manifestPath || !manifestStat?.isFile() || manifestStat.isSymbolicLink()) {
+    throw new Error("Release-candidate screenshot manifest is missing, escaped, or not a regular file.")
+  }
+  const manifestBytes = new Uint8Array(await Bun.file(manifestPath).arrayBuffer())
+  const manifest = await parseReleaseCandidateManifest(new TextDecoder().decode(manifestBytes), buildSha)
+  const screenshots = await Promise.all(
+    manifest.screenshots.map(async (screenshot) => {
+      const sourcePath = await resolveConfinedFile(sourceBase, screenshot.relativePath)
+      const sourceStat = await fs.lstat(path.resolve(sourceBase, screenshot.relativePath)).catch(() => null)
+      if (!sourcePath || !sourceStat?.isFile() || sourceStat.isSymbolicLink()) {
+        throw new Error(`${screenshot.surface} release-candidate screenshot is missing, escaped, or not a regular file.`)
+      }
+      const bytes = new Uint8Array(await Bun.file(sourcePath).arrayBuffer())
+      if (sha256(bytes) !== screenshot.sha256) {
+        throw new Error(`${screenshot.surface} release-candidate screenshot digest does not match its manifest.`)
+      }
+      await inspectReleaseCandidatePng(bytes, `${screenshot.surface} release-candidate screenshot`)
+      return {
+        surface: screenshot.surface,
+        sourceRelativePath: screenshot.relativePath,
+        bytes,
+      }
+    }),
+  )
+  if (new Set(screenshots.map((screenshot) => screenshot.sourceRelativePath)).size !== releaseCandidateSurfaces.length) {
+    throw new Error("Release-candidate screenshot source paths must be unique.")
+  }
+  if (new Set(screenshots.map((screenshot) => sha256(screenshot.bytes))).size !== releaseCandidateSurfaces.length) {
+    throw new Error("Release-candidate screenshot contents must be unique.")
+  }
+  const archivedScreenshots = await Promise.all(
+    screenshots.map(async (screenshot) => ({
+      surface: screenshot.surface,
+      sourceRelativePath: screenshot.sourceRelativePath,
+      file: await writeEvidenceFile(
+        outputDirectory,
+        path.posix.join(
+          releaseCandidateArchiveDirectory,
+          "screenshots",
+          path.posix.basename(screenshot.sourceRelativePath),
+        ),
+        screenshot.bytes,
+        "image/png",
+      ),
+    })),
+  )
+  return {
+    generatorCommandId: releaseCandidateGeneratorCommandId,
+    buildSha,
+    manifest: await writeEvidenceFile(
+      outputDirectory,
+      path.posix.join(releaseCandidateArchiveDirectory, "screenshots-manifest.json"),
+      manifestBytes,
+      "application/json",
+    ),
+    screenshots: archivedScreenshots,
+  } satisfies ReleaseCandidateScreenshotsEvidence
+}
+
+async function validateReleaseCandidateScreenshotsEvidence(
+  base: string,
+  value: unknown,
+  buildSha: string,
+  errors: string[],
+) {
+  const errorCount = errors.length
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, ["generatorCommandId", "buildSha", "manifest", "screenshots"]) ||
+    value.generatorCommandId !== releaseCandidateGeneratorCommandId ||
+    value.buildSha !== buildSha ||
+    !Array.isArray(value.screenshots) ||
+    value.screenshots.length !== releaseCandidateSurfaces.length
+  ) {
+    errors.push("automatic evidence release-candidate screenshots: invalid top-level binding")
+    return null
+  }
+  const manifestFile = await validateFileEvidence(
+    base,
+    value.manifest,
+    "application/json",
+    "release-candidate screenshot manifest",
+    errors,
+  )
+  if (
+    !isRecord(value.manifest) ||
+    value.manifest.relativePath !== path.posix.join(releaseCandidateArchiveDirectory, "screenshots-manifest.json")
+  ) {
+    errors.push("automatic evidence release-candidate screenshots: unexpected manifest archive path")
+  }
+  const manifest = manifestFile ? await parseReleaseCandidateManifest(manifestFile.source, buildSha).catch(() => null) : null
+  if (!manifest) errors.push("automatic evidence release-candidate screenshots: invalid manifest content")
+  const screenshots: TrustedReleaseCandidateScreenshots["screenshots"] = []
+  for (const [index, evidence] of value.screenshots.entries()) {
+    const manifestScreenshot = manifest?.screenshots[index]
+    const expectedSurface = releaseCandidateSurfaces[index]!
+    if (
+      !isRecord(evidence) ||
+      !exactKeys(evidence, ["surface", "sourceRelativePath", "file"]) ||
+      evidence.surface !== expectedSurface ||
+      evidence.sourceRelativePath !== manifestScreenshot?.relativePath
+    ) {
+      errors.push(`automatic evidence release-candidate screenshot ${index + 1}: invalid identity or source path`)
+      continue
+    }
+    const file = await validateFileEvidence(
+      base,
+      evidence.file,
+      "image/png",
+      `${expectedSurface} release-candidate screenshot`,
+      errors,
+    )
+    if (
+      !isRecord(evidence.file) ||
+      evidence.file.relativePath !==
+        path.posix.join(
+          releaseCandidateArchiveDirectory,
+          "screenshots",
+          `${expectedSurface.toLowerCase().replaceAll(" ", "-")}.png`,
+        ) ||
+      evidence.file.sha256 !== manifestScreenshot?.sha256
+    ) {
+      errors.push(`automatic evidence ${expectedSurface}: screenshot archive path or manifest digest mismatch`)
+    }
+    if (file) {
+      const validImage = await inspectReleaseCandidatePng(file.bytes, `${expectedSurface} release-candidate screenshot`).then(
+        () => true,
+        () => false,
+      )
+      if (!validImage) errors.push(`automatic evidence ${expectedSurface}: invalid release-candidate PNG`)
+    }
+    screenshots.push({
+      surface: expectedSurface,
+      relativePath: String(evidence.sourceRelativePath),
+      sha256: isRecord(evidence.file) ? String(evidence.file.sha256) : "",
+    })
+  }
+  if (
+    new Set(
+      value.screenshots.flatMap((evidence) =>
+        isRecord(evidence) && typeof evidence.sourceRelativePath === "string" ? [evidence.sourceRelativePath] : [],
+      ),
+    ).size !== releaseCandidateSurfaces.length
+  ) {
+    errors.push("automatic evidence release-candidate screenshot source paths must be unique")
+  }
+  if (
+    new Set(
+      value.screenshots.flatMap((evidence) =>
+        isRecord(evidence) && isRecord(evidence.file) && typeof evidence.file.relativePath === "string"
+          ? [evidence.file.relativePath]
+          : [],
+      ),
+    ).size !== releaseCandidateSurfaces.length
+  ) {
+    errors.push("automatic evidence release-candidate screenshot archive paths must be unique")
+  }
+  if (
+    new Set(
+      value.screenshots.flatMap((evidence) =>
+        isRecord(evidence) && isRecord(evidence.file) && typeof evidence.file.sha256 === "string"
+          ? [evidence.file.sha256]
+          : [],
+      ),
+    ).size !== releaseCandidateSurfaces.length
+  ) {
+    errors.push("automatic evidence release-candidate screenshot contents must be unique")
+  }
+  if (errors.length !== errorCount || !manifest || !manifestFile) return null
+  return {
+    buildSha,
+    manifestSha256: isRecord(value.manifest) ? String(value.manifest.sha256) : "",
+    viewport: manifest.viewport,
+    screenshots,
+  } satisfies TrustedReleaseCandidateScreenshots
 }
 
 function expectedCoverage(requirements: AutomaticEvidenceRequirements) {
@@ -550,6 +841,7 @@ export async function validateAutomaticEvidencePackage(options: {
       errors,
       coveredTaskIds: [],
       coveredCriterionIds: [],
+      trustedReleaseCandidateScreenshots: null,
     }
   }
   const parsed = await Promise.resolve()
@@ -564,12 +856,13 @@ export async function validateAutomaticEvidencePackage(options: {
       errors: ["automatic evidence package: invalid JSON or top-level shape"],
       coveredTaskIds: [],
       coveredCriterionIds: [],
+      trustedReleaseCandidateScreenshots: null,
     }
   }
   const governance = options.governance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
   if (
     parsed.schemaVersion !== 1 ||
-    parsed.packageVersion !== "1.0.0" ||
+    parsed.packageVersion !== "1.1.0" ||
     typeof parsed.packageId !== "string" ||
     !/^R0-AUTO-[a-f0-9]{12,40}$/.test(parsed.packageId) ||
     parsed.gate !== "R0" ||
@@ -625,6 +918,15 @@ export async function validateAutomaticEvidencePackage(options: {
   ) {
     errors.push("automatic evidence package: isolation contract mismatch")
   }
+  const trustedReleaseCandidateScreenshots =
+    parsed.releaseCandidateScreenshots === null
+      ? null
+      : await validateReleaseCandidateScreenshotsEvidence(
+          path.dirname(file),
+          parsed.releaseCandidateScreenshots,
+          options.buildSha,
+          errors,
+        )
   const commands = Array.isArray(parsed.commands) ? parsed.commands : []
   const commandIDs = commands.flatMap((item) => (isRecord(item) && typeof item.id === "string" ? [item.id] : []))
   const expectedCommandIDs = governance.requirements.commands.map((command) => command.id)
@@ -726,7 +1028,8 @@ export async function validateAutomaticEvidencePackage(options: {
       Boolean(stdout) &&
       Boolean(stderr) &&
       stdoutResult.valid &&
-      reportsPass
+      reportsPass &&
+      (requirement.id !== releaseCandidateGeneratorCommandId || Boolean(trustedReleaseCandidateScreenshots))
     const status = pass ? "pass" : "fail"
     recomputedStatuses.set(requirement.id, status)
     if (value.status !== status) errors.push(`automatic evidence ${requirement.id}: forged command status`)
@@ -737,6 +1040,10 @@ export async function validateAutomaticEvidencePackage(options: {
         )}`,
       )
     }
+  }
+  const releaseCandidateGeneratorStatus = recomputedStatuses.get(releaseCandidateGeneratorCommandId)
+  if (parsed.releaseCandidateScreenshots !== null && releaseCandidateGeneratorStatus !== "pass") {
+    errors.push("automatic evidence release-candidate screenshots: generator command did not pass")
   }
   const coverage = Array.isArray(parsed.coverage) ? parsed.coverage : []
   const taskIDs = coverage.flatMap((task) => (isRecord(task) && typeof task.taskId === "string" ? [task.taskId] : []))
@@ -790,6 +1097,7 @@ export async function validateAutomaticEvidencePackage(options: {
     errors: [...new Set(errors)].sort(),
     coveredTaskIds: taskIDs.sort(),
     coveredCriterionIds: coveredCriterionIDs.sort(),
+    trustedReleaseCandidateScreenshots,
   }
 }
 
@@ -868,6 +1176,7 @@ async function runCommand(
   isolationRoot: string,
   requirement: RequirementCommand,
   playwrightBrowsersPath: string,
+  buildSha: string,
 ) {
   const commandIsolation = path.join(isolationRoot, requirement.id)
   const directories = Object.fromEntries(
@@ -943,6 +1252,27 @@ async function runCommand(
   ])
   clearTimeout(timer)
   if (forceTimer) clearTimeout(forceTimer)
+  const releaseCandidateResult: {
+    value: ReleaseCandidateScreenshotsEvidence | null
+    error: string | null
+  } =
+    requirement.id === releaseCandidateGeneratorCommandId && exitCode === 0 && !timedOut
+      ? await collectReleaseCandidateScreenshots(worktree, outputDirectory, buildSha).then(
+          (value) => ({ value, error: null }),
+          (error) => ({
+            value: null,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        )
+      : { value: null, error: null }
+  const collectionFailureBytes = releaseCandidateResult.error
+    ? new TextEncoder().encode(
+        `${stderrBytes.byteLength && !new TextDecoder().decode(stderrBytes).endsWith("\n") ? "\n" : ""}Automatic evidence collector: ${releaseCandidateResult.error}\n`,
+      )
+    : new Uint8Array()
+  const archivedStderrBytes = new Uint8Array(stderrBytes.byteLength + collectionFailureBytes.byteLength)
+  archivedStderrBytes.set(stderrBytes)
+  archivedStderrBytes.set(collectionFailureBytes, stderrBytes.byteLength)
   const finished = Date.now()
   const commandDirectory = path.posix.join("files", requirement.id)
   const stdout = await writeEvidenceFile(
@@ -954,7 +1284,7 @@ async function runCommand(
   const stderr = await writeEvidenceFile(
     outputDirectory,
     path.posix.join(commandDirectory, "stderr.log"),
-    stderrBytes,
+    archivedStderrBytes,
     "text/plain",
   )
   const stdoutResult = stdoutSummary(requirement.stdoutValidator, new TextDecoder().decode(stdoutBytes))
@@ -984,26 +1314,34 @@ async function runCommand(
     })
   }
   const status =
-    exitCode === 0 && !timedOut && stdoutResult.valid && reports.length === requirement.reports.length && reportsPass
+    exitCode === 0 &&
+    !timedOut &&
+    stdoutResult.valid &&
+    reports.length === requirement.reports.length &&
+    reportsPass &&
+    (requirement.id !== releaseCandidateGeneratorCommandId || Boolean(releaseCandidateResult.value))
       ? "pass"
       : "fail"
   await cleanIgnoredRuntimePaths(worktree)
   return {
-    id: requirement.id,
-    cwd: requirement.cwd,
-    argv: requirement.argv,
-    environment: requirement.environment,
-    startedAt: new Date(started).toISOString(),
-    finishedAt: new Date(finished).toISOString(),
-    durationMs: finished - started,
-    exitCode,
-    timedOut,
-    status,
-    stdout,
-    stderr,
-    stdoutSummary: stdoutResult.summary,
-    reports,
-  } satisfies CommandEvidence
+    command: {
+      id: requirement.id,
+      cwd: requirement.cwd,
+      argv: requirement.argv,
+      environment: requirement.environment,
+      startedAt: new Date(started).toISOString(),
+      finishedAt: new Date(finished).toISOString(),
+      durationMs: finished - started,
+      exitCode,
+      timedOut,
+      status,
+      stdout,
+      stderr,
+      stdoutSummary: stdoutResult.summary,
+      reports,
+    } satisfies CommandEvidence,
+    releaseCandidateScreenshots: releaseCandidateResult.value,
+  }
 }
 
 function pathIsInside(base: string, candidate: string) {
@@ -1483,17 +1821,23 @@ export async function generateAutomaticEvidence(options: {
     await installDependencies(worktree, path.join(isolationRoot, "dependency-install"))
     const playwright = await installPlaywrightBrowsers(worktree, path.join(isolationRoot, "playwright"))
     await assertPlaywrightBrowsersUnchanged(playwright)
-    const commands: CommandEvidence[] = []
+    const commandResults: Awaited<ReturnType<typeof runCommand>>[] = []
     for (const command of governance.requirements.commands) {
-      commands.push(await runCommand(worktree, outputDirectory, isolationRoot, command, playwright.directory))
+      commandResults.push(
+        await runCommand(worktree, outputDirectory, isolationRoot, command, playwright.directory, buildSha),
+      )
     }
+    const commands = commandResults.map((result) => result.command)
+    const releaseCandidateScreenshots =
+      commandResults.find((result) => result.command.id === releaseCandidateGeneratorCommandId)
+        ?.releaseCandidateScreenshots ?? null
     await assertPlaywrightBrowsersUnchanged(playwright)
     await cleanIgnoredRuntimePaths(worktree)
     const worktreeStatus = runGit(["status", "--porcelain", "--untracked-files=all"], worktree).trim()
     if (worktreeStatus) throw new Error(`Automatic evidence exact-commit worktree became dirty:\n${worktreeStatus}`)
     const packageValue: AutomaticEvidencePackage = {
       schemaVersion: 1,
-      packageVersion: "1.0.0",
+      packageVersion: "1.1.0",
       packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
       gate: "R0",
       buildSha,
@@ -1524,6 +1868,7 @@ export async function generateAutomaticEvidence(options: {
       createdAt: new Date().toISOString(),
       commands,
       coverage: expectedCoverage(governance.requirements),
+      releaseCandidateScreenshots,
       overallStatus: commands.every((command) => command.status === "pass") ? "pass" : "fail",
     }
     const packagePath = path.join(outputDirectory, "automatic-evidence-package.json")
@@ -1609,9 +1954,67 @@ export async function writeStructuralAutomaticEvidenceFixture(
       reports,
     })
   }
+  const releaseCandidateScreenshotFiles = await Promise.all(
+    releaseCandidateSurfaces.map(async (surface, index) => {
+      const sourceRelativePath = `human-review/screenshots/${surface.toLowerCase().replaceAll(" ", "-")}.png`
+      return {
+        surface,
+        sourceRelativePath,
+        file: await writeEvidenceFile(
+          directory,
+          path.posix.join(
+            releaseCandidateArchiveDirectory,
+            "screenshots",
+            path.posix.basename(sourceRelativePath),
+          ),
+          await sharp({
+            create: {
+              width: 1440,
+              height: 900,
+              channels: 4,
+              background: {
+                r: 24 + index * 20,
+                g: 36 + index * 12,
+                b: 48 + index * 8,
+                alpha: 1,
+              },
+            },
+          })
+            .png()
+            .toBuffer(),
+          "image/png",
+        ),
+      }
+    }),
+  )
+  const releaseCandidateScreenshots: ReleaseCandidateScreenshotsEvidence = {
+    generatorCommandId: releaseCandidateGeneratorCommandId,
+    buildSha,
+    manifest: await writeEvidenceFile(
+      directory,
+      path.posix.join(releaseCandidateArchiveDirectory, "screenshots-manifest.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          buildSha,
+          relativePathBase: "build-artifact-root",
+          viewport: { width: 1440, height: 1600 },
+          screenshots: releaseCandidateScreenshotFiles.map((screenshot) => ({
+            surface: screenshot.surface,
+            relativePath: screenshot.sourceRelativePath,
+            sha256: screenshot.file.sha256,
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+      "application/json",
+    ),
+    screenshots: releaseCandidateScreenshotFiles,
+  }
   const packageValue: AutomaticEvidencePackage = {
     schemaVersion: 1,
-    packageVersion: "1.0.0",
+    packageVersion: "1.1.0",
     packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
     gate: "R0",
     buildSha,
@@ -1642,6 +2045,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
     createdAt: "2026-07-25T08:00:00.000Z",
     commands,
     coverage: expectedCoverage(governance.requirements),
+    releaseCandidateScreenshots,
     overallStatus: "pass",
   }
   const packagePath = path.join(directory, "automatic-evidence-package.json")
@@ -1962,6 +2366,18 @@ export async function runAutomaticEvidenceSelfTest() {
     value.commands[0]!.status = "fail"
     value.overallStatus = "fail"
   })
+  const failedCandidateCommand = await writeMutatedPackage(
+    directory,
+    "failed-candidate-command",
+    fixture.packageValue,
+    (value) => {
+      const command = value.commands.find((item) => item.id === releaseCandidateGeneratorCommandId)!
+      command.exitCode = 1
+      command.status = "fail"
+      value.releaseCandidateScreenshots = null
+      value.overallStatus = "fail"
+    },
+  )
   const missingTask = await writeMutatedPackage(directory, "missing-task", fixture.packageValue, (value) => {
     value.coverage.pop()
   })
@@ -1981,10 +2397,24 @@ export async function runAutomaticEvidenceSelfTest() {
   await Bun.write(tamperedLogPath, `${originalLog}tampered\n`)
   const tamperedLog = await validate(fixture.packagePath)
   await Bun.write(tamperedLogPath, originalLog)
+  const tamperedCandidatePath = path.join(
+    directory,
+    fixture.packageValue.releaseCandidateScreenshots!.screenshots[0]!.file.relativePath,
+  )
+  const originalCandidate = new Uint8Array(await Bun.file(tamperedCandidatePath).arrayBuffer())
+  await Bun.write(tamperedCandidatePath, "tampered candidate PNG\n")
+  const tamperedCandidate = await validate(fixture.packagePath)
+  await Bun.write(tamperedCandidatePath, originalCandidate)
   const dependencyIsolation = await dependencyIsolationSelfTest(directory)
   const playwrightIsolation = await playwrightIsolationSelfTest(directory)
   const assertions = [
-    { name: "valid_complete_package_passes", passed: valid.status === "pass" },
+    {
+      name: "valid_complete_package_passes",
+      passed:
+        valid.status === "pass" &&
+        valid.trustedReleaseCandidateScreenshots?.buildSha === buildSha &&
+        valid.trustedReleaseCandidateScreenshots.screenshots.length === releaseCandidateSurfaces.length,
+    },
     {
       name: "git_command_is_not_rewritten_as_bun",
       passed:
@@ -1993,9 +2423,14 @@ export async function runAutomaticEvidenceSelfTest() {
     },
     { name: "missing_command_is_incomplete", passed: (await validate(missingCommand)).status === "incomplete" },
     { name: "failed_command_fails", passed: (await validate(failedCommand)).status === "fail" },
+    {
+      name: "failed_candidate_command_allows_null_candidate_bundle",
+      passed: (await validate(failedCandidateCommand)).status === "fail",
+    },
     { name: "missing_task_is_incomplete", passed: (await validate(missingTask)).status === "incomplete" },
     { name: "wrong_build_is_invalid", passed: (await validate(wrongBuild)).status === "invalid" },
     { name: "tampered_log_is_invalid", passed: tamperedLog.status === "invalid" },
+    { name: "tampered_release_candidate_png_is_invalid", passed: tamperedCandidate.status === "invalid" },
     {
       name: "invalid_playwright_browser_binding_is_rejected",
       passed: (await validate(invalidBrowserBinding)).status === "invalid",

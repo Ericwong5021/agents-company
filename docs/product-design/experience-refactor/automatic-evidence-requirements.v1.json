@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agent-company-r0-automatic-evidence-requirements",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "gate": "R0",
   "requiredTaskIds": [
     "FND-01",
@@ -244,6 +244,15 @@
       ]
     },
     {
+      "id": "app-r0-candidates",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:r0-candidates"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
       "id": "app-production",
       "cwd": "packages/app",
       "argv": ["bun", "run", "test:production"],
@@ -320,7 +329,7 @@
         },
         {
           "id": "FND-03-REPRODUCIBLE-BASELINE",
-          "evidenceRefs": ["command:governance-validation"]
+          "evidenceRefs": ["command:governance-validation", "command:app-r0-candidates"]
         },
         {
           "id": "FND-03-EXACT-SHA-DOUBLE-RUN",

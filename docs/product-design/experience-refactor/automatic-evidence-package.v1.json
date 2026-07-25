@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
   "title": "Agent Company R0 exact-build automatic evidence package",
   "schemaVersion": 1,
-  "packageVersion": "1.0.0",
+  "packageVersion": "1.1.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,6 +20,7 @@
     "createdAt",
     "commands",
     "coverage",
+    "releaseCandidateScreenshots",
     "overallStatus"
   ],
   "properties": {
@@ -27,7 +28,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "packageId": {
       "type": "string",
@@ -126,6 +127,16 @@
         "$ref": "#/$defs/taskCoverage"
       }
     },
+    "releaseCandidateScreenshots": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/releaseCandidateScreenshots"
+        }
+      ]
+    },
     "overallStatus": {
       "enum": ["pass", "fail"]
     }
@@ -186,6 +197,48 @@
         },
         "summary": {
           "type": "object"
+        }
+      }
+    },
+    "releaseCandidateScreenshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "sourceRelativePath", "file"],
+      "properties": {
+        "surface": {
+          "enum": ["First-run", "Inbox", "Goal Brief", "Running", "Blocked", "Gate", "Delivery", "Team"]
+        },
+        "sourceRelativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file": {
+          "$ref": "#/$defs/fileEvidence"
+        }
+      }
+    },
+    "releaseCandidateScreenshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatorCommandId", "buildSha", "manifest", "screenshots"],
+      "properties": {
+        "generatorCommandId": {
+          "const": "app-r0-candidates"
+        },
+        "buildSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "manifest": {
+          "$ref": "#/$defs/fileEvidence"
+        },
+        "screenshots": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/releaseCandidateScreenshot"
+          }
         }
       }
     },

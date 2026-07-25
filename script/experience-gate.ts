@@ -76,6 +76,20 @@ const stimulusMinimum = { width: 600, height: 140 }
 const attestation =
   "I reviewed the recorded raw responses or artifacts against this protocol and attest that the submitted decisions are accurate for the identified build."
 
+type TrustedReleaseCandidateScreenshots = {
+  buildSha: string
+  manifestSha256: string
+  viewport: {
+    width: number
+    height: number
+  }
+  screenshots: Array<{
+    surface: string
+    relativePath: string
+    sha256: string
+  }>
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
@@ -213,7 +227,7 @@ async function loadGovernance(buildSha?: string) {
     protocol.value.releaseAuthorization.unsignedStatus !== "incomplete" ||
     !isRecord(evidenceSchema.value) ||
     evidenceSchema.value.schemaVersion !== 1 ||
-    evidenceSchema.value.packageVersion !== "1.1.0" ||
+    evidenceSchema.value.packageVersion !== "1.2.0" ||
     !isRecord(languageContract.value) ||
     languageContract.value.schemaVersion !== 1 ||
     !isRecord(metricContract.value) ||
@@ -627,6 +641,113 @@ async function validateHR01StimulusSet(
   if (new Set(stimulusDigests).size !== 12) errors.push("HR-01: stimulus contents must be unique")
 }
 
+async function validateReleaseCandidateScreenshots(
+  value: unknown,
+  evidenceFile: string,
+  buildSha: string,
+  errors: string[],
+  studyId: "HR-02" | "HR-03",
+  trusted: TrustedReleaseCandidateScreenshots | null,
+) {
+  if (
+    !isRecord(value) ||
+    value.buildSha !== buildSha ||
+    value.manifestRelativePath !== "human-review/screenshots-manifest.json" ||
+    typeof value.manifestSha256 !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.manifestSha256)
+  ) {
+    errors.push(`${studyId}: invalid release-candidate screenshot binding`)
+    return null
+  }
+  const base = path.dirname(evidenceFile)
+  const manifestPath = await resolveConfinedFile(base, value.manifestRelativePath)
+  const manifest = manifestPath ? await readJson(manifestPath).catch(() => null) : null
+  if (
+    !manifest ||
+    manifest.sha256 !== value.manifestSha256 ||
+    !isRecord(manifest.value) ||
+    !exactKeys(manifest.value, ["schemaVersion", "buildSha", "relativePathBase", "viewport", "screenshots"]) ||
+    manifest.value.schemaVersion !== 1 ||
+    manifest.value.buildSha !== buildSha ||
+    manifest.value.relativePathBase !== "build-artifact-root" ||
+    !isRecord(manifest.value.viewport) ||
+    !exactKeys(manifest.value.viewport, ["width", "height"]) ||
+    manifest.value.viewport.width !== 1440 ||
+    manifest.value.viewport.height !== 1600 ||
+    !Array.isArray(manifest.value.screenshots) ||
+    manifest.value.screenshots.length !== 8
+  ) {
+    errors.push(`${studyId}: screenshot manifest is missing, mismatched, or structurally invalid`)
+    return null
+  }
+  if (
+    trusted &&
+    (trusted.buildSha !== buildSha ||
+      trusted.manifestSha256 !== manifest.sha256 ||
+      trusted.viewport.width !== manifest.value.viewport.width ||
+      trusted.viewport.height !== manifest.value.viewport.height ||
+      canonicalize(trusted.screenshots) !== canonicalize(manifest.value.screenshots))
+  ) {
+    errors.push(`${studyId}: screenshot manifest does not match in-process exact-build candidate evidence`)
+    return null
+  }
+  const errorCount = errors.length
+  const surfaces: string[] = []
+  const screenshotPaths: string[] = []
+  const screenshotDigests: string[] = []
+  const screenshots = new Map<string, { relativePath: string; sha256: string }>()
+  for (const [index, screenshot] of manifest.value.screenshots.entries()) {
+    if (
+      !isRecord(screenshot) ||
+      !exactKeys(screenshot, ["surface", "relativePath", "sha256"]) ||
+      typeof screenshot.surface !== "string" ||
+      !hr03Surfaces.includes(screenshot.surface) ||
+      screenshot.relativePath !==
+        `human-review/screenshots/${screenshot.surface.toLowerCase().replaceAll(" ", "-")}.png` ||
+      typeof screenshot.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(screenshot.sha256)
+    ) {
+      errors.push(`${studyId} screenshot ${index + 1}: invalid identity, path, or digest`)
+      continue
+    }
+    surfaces.push(screenshot.surface)
+    const screenshotPath = await resolveConfinedFile(base, screenshot.relativePath)
+    const bytes = screenshotPath ? new Uint8Array(await Bun.file(screenshotPath).arrayBuffer()) : null
+    const image = bytes
+      ? await sharp(bytes, { failOn: "error", limitInputPixels: 16_777_216 })
+          .toBuffer({ resolveWithObject: true })
+          .catch(() => null)
+      : null
+    if (
+      !screenshotPath ||
+      !bytes ||
+      sha256(bytes) !== screenshot.sha256 ||
+      image?.info.format !== "png" ||
+      image.info.width < screenshotMinimum.width ||
+      image.info.height < screenshotMinimum.height
+    ) {
+      errors.push(
+        `${studyId} ${screenshot.surface}: screenshot is missing, escaped, invalid, too small, or digest-mismatched`,
+      )
+      continue
+    }
+    screenshotPaths.push(screenshotPath)
+    screenshotDigests.push(screenshot.sha256)
+    screenshots.set(screenshot.surface, {
+      relativePath: screenshot.relativePath,
+      sha256: screenshot.sha256,
+    })
+  }
+  if (!sameValues(surfaces, hr03Surfaces)) errors.push(`${studyId}: screenshot surface set mismatch`)
+  if (new Set(screenshotPaths).size !== 8) errors.push(`${studyId}: screenshot paths must be unique`)
+  if (new Set(screenshotDigests).size !== 8) errors.push(`${studyId}: screenshot contents must be unique`)
+  if (errors.length !== errorCount) return null
+  return {
+    manifestSha256: value.manifestSha256,
+    screenshots,
+  }
+}
+
 async function validateHumanEvidence(
   value: unknown,
   evidenceFile: string,
@@ -634,6 +755,7 @@ async function validateHumanEvidence(
   runner: Awaited<ReturnType<typeof validateRunner>>,
   protocolSha256: string,
   languageContractSha256: string,
+  trustedReleaseCandidateScreenshots: TrustedReleaseCandidateScreenshots | null,
 ) {
   const errors: string[] = []
   const failures: string[] = []
@@ -655,7 +777,7 @@ async function validateHumanEvidence(
   }
   if (
     value.schemaVersion !== 1 ||
-    value.packageVersion !== "1.1.0" ||
+    value.packageVersion !== "1.2.0" ||
     typeof value.packageId !== "string" ||
     !/^R0-[a-z0-9-]{8,64}$/.test(value.packageId) ||
     value.buildSha !== buildSha ||
@@ -802,13 +924,34 @@ async function validateHumanEvidence(
   const hr02 = value.studies["HR-02"]
   if (
     !isRecord(hr02) ||
-    !exactKeys(hr02, ["moderatorScriptVersion", "participants", "calculation", "signoff"]) ||
+    !exactKeys(hr02, ["moderatorScriptVersion", "stimulusSet", "participants", "calculation", "signoff"]) ||
     hr02.moderatorScriptVersion !== "HR02-v1" ||
+    !isRecord(hr02.stimulusSet) ||
+    !exactKeys(hr02.stimulusSet, [
+      "buildSha",
+      "manifestRelativePath",
+      "manifestSha256",
+      "surface",
+      "presentedToAllParticipants",
+    ]) ||
+    hr02.stimulusSet.surface !== "First-run" ||
+    hr02.stimulusSet.presentedToAllParticipants !== true ||
     !Array.isArray(hr02.participants) ||
     hr02.participants.length !== 5
   ) {
-    errors.push("HR-02: exactly five participants are required")
+    errors.push("HR-02: release-candidate stimulus or exactly five participants are missing")
   } else {
+    const candidateScreenshots = await validateReleaseCandidateScreenshots(
+      hr02.stimulusSet,
+      evidenceFile,
+      buildSha,
+      errors,
+      "HR-02",
+      trustedReleaseCandidateScreenshots,
+    )
+    if (!candidateScreenshots?.screenshots.has("First-run")) {
+      errors.push("HR-02: First-run release-candidate stimulus is missing")
+    }
     const participantIDs: string[] = []
     let passingParticipants = 0
     hr02.participants.forEach((participant, participantIndex) => {
@@ -875,15 +1018,32 @@ async function validateHumanEvidence(
   const hr03 = value.studies["HR-03"]
   if (
     !isRecord(hr03) ||
-    !exactKeys(hr03, ["reviewScriptVersion", "approverName", "approverRole", "approvals", "signoff"]) ||
+    !exactKeys(hr03, [
+      "reviewScriptVersion",
+      "screenshotSet",
+      "approverName",
+      "approverRole",
+      "approvals",
+      "signoff",
+    ]) ||
     hr03.reviewScriptVersion !== "HR03-v1" ||
+    !isRecord(hr03.screenshotSet) ||
+    !exactKeys(hr03.screenshotSet, ["buildSha", "manifestRelativePath", "manifestSha256"]) ||
     !validName(hr03.approverName) ||
     !validName(hr03.approverRole) ||
     !Array.isArray(hr03.approvals) ||
     hr03.approvals.length !== 8
   ) {
-    errors.push("HR-03: named approver or eight approvals are missing")
+    errors.push("HR-03: release-candidate screenshot set, named approver, or eight approvals are missing")
   } else {
+    const candidateScreenshots = await validateReleaseCandidateScreenshots(
+      hr03.screenshotSet,
+      evidenceFile,
+      buildSha,
+      errors,
+      "HR-03",
+      trustedReleaseCandidateScreenshots,
+    )
     const surfaces: string[] = []
     const screenshotPaths: string[] = []
     const screenshotDigests: string[] = []
@@ -904,6 +1064,15 @@ async function validateHumanEvidence(
         continue
       }
       surfaces.push(approval.surface)
+      const candidateScreenshot = candidateScreenshots?.screenshots.get(approval.surface)
+      if (
+        !candidateScreenshot ||
+        candidateScreenshot.relativePath !== approval.relativePath ||
+        candidateScreenshot.sha256 !== approval.sha256
+      ) {
+        errors.push(`HR-03 ${approval.surface}: approval does not match the release-candidate screenshot manifest`)
+        continue
+      }
       const screenshotPath = await resolveConfinedFile(path.dirname(evidenceFile), String(approval.relativePath))
       const screenshot = screenshotPath ? new Uint8Array(await Bun.file(screenshotPath).arrayBuffer()) : null
       const image = screenshot
@@ -1145,6 +1314,7 @@ async function evaluateR0GateWithDependencies(
         errors: [],
         coveredTaskIds: [],
         coveredCriterionIds: [],
+        trustedReleaseCandidateScreenshots: null,
       }
   const automaticPackageStatus =
     automaticEvidence.status === "invalid"
@@ -1222,6 +1392,7 @@ async function evaluateR0GateWithDependencies(
     runner,
     governance.protocol.sha256,
     dependencies.languageContractSha256 ?? governance.languageContract.sha256,
+    dependencies.automaticEvidenceExecuted ? automaticEvidence.trustedReleaseCandidateScreenshots : null,
   )
   const authorization = await verifyHumanEvidenceAuthorization(
     evidence.source,
@@ -1258,11 +1429,15 @@ async function evaluateR0GateWithDependencies(
       sha256: governance.protocol.sha256,
     },
     evidenceSchema: {
-      packageVersion: "1.1.0",
+      packageVersion: "1.2.0",
       sha256: governance.evidenceSchema.sha256,
     },
     runnerArtifactSha256: runner.runnerSha256,
     automaticEvidencePackageSha256: automaticEvidence.packageSha256,
+    releaseCandidateScreenshotsManifestSha256:
+      dependencies.automaticEvidenceExecuted && automaticEvidence.trustedReleaseCandidateScreenshots
+        ? automaticEvidence.trustedReleaseCandidateScreenshots.manifestSha256
+        : null,
     humanEvidencePackageSha256: evidence.sha256,
     humanEvidenceAuthorization: {
       method: "openssh_detached_signature",
@@ -1674,38 +1849,61 @@ async function writeStructuralHumanEvidenceFixture(
   recordDigests: Map<string, string[]>,
   protocolSha256: string,
   languageContractSha256: string,
+  automaticEvidenceDirectory: string,
+  releaseCandidateScreenshots: unknown,
 ) {
-  const screenshotDirectory = path.join(directory, "screenshots")
+  if (
+    !isRecord(releaseCandidateScreenshots) ||
+    !isRecord(releaseCandidateScreenshots.manifest) ||
+    !Array.isArray(releaseCandidateScreenshots.screenshots)
+  ) {
+    throw new Error("Structural human evidence fixture requires trusted release-candidate screenshots.")
+  }
+  const screenshotDirectory = path.join(directory, "human-review/screenshots")
   await fs.mkdir(screenshotDirectory, { recursive: true })
   const approvals = await Promise.all(
-    hr03Surfaces.map(async (surface, index) => {
-      const relativePath = path.join("screenshots", `${surface.toLowerCase().replaceAll(" ", "-")}.png`)
-      const png = await sharp({
-        create: {
-          width: 1440,
-          height: 900,
-          channels: 4,
-          background: {
-            r: 24 + index * 20,
-            g: 36 + index * 12,
-            b: 48 + index * 8,
-            alpha: 1,
-          },
-        },
-      })
-        .png()
-        .toBuffer()
-      await Bun.write(path.join(directory, relativePath), png)
+    releaseCandidateScreenshots.screenshots.map(async (screenshot, index) => {
+      if (
+        !isRecord(screenshot) ||
+        screenshot.surface !== hr03Surfaces[index] ||
+        typeof screenshot.sourceRelativePath !== "string" ||
+        !isRecord(screenshot.file) ||
+        typeof screenshot.file.relativePath !== "string" ||
+        typeof screenshot.file.sha256 !== "string"
+      ) {
+        throw new Error(`Structural release-candidate screenshot ${index + 1} is invalid.`)
+      }
+      const png = new Uint8Array(
+        await Bun.file(path.join(automaticEvidenceDirectory, screenshot.file.relativePath)).arrayBuffer(),
+      )
+      if (sha256(png) !== screenshot.file.sha256) {
+        throw new Error(`Structural release-candidate screenshot ${index + 1} digest mismatch.`)
+      }
+      await Bun.write(path.join(directory, screenshot.sourceRelativePath), png)
       return {
-        surface,
+        surface: screenshot.surface,
         buildSha,
-        relativePath,
-        sha256: sha256(png),
+        relativePath: screenshot.sourceRelativePath,
+        sha256: screenshot.file.sha256,
         decision: "accepted",
         signedAt: "2026-07-25T08:00:00.000Z",
       }
     }),
   )
+  const screenshotManifestRelativePath = path.posix.join("human-review", "screenshots-manifest.json")
+  if (typeof releaseCandidateScreenshots.manifest.relativePath !== "string") {
+    throw new Error("Structural release-candidate screenshot manifest path is invalid.")
+  }
+  const screenshotManifestSource = await Bun.file(
+    path.join(automaticEvidenceDirectory, releaseCandidateScreenshots.manifest.relativePath),
+  ).text()
+  if (
+    typeof releaseCandidateScreenshots.manifest.sha256 !== "string" ||
+    sha256(screenshotManifestSource) !== releaseCandidateScreenshots.manifest.sha256
+  ) {
+    throw new Error("Structural release-candidate screenshot manifest digest mismatch.")
+  }
+  await Bun.write(path.join(directory, screenshotManifestRelativePath), screenshotManifestSource)
   const stimulusDirectory = path.join(directory, "hr01-state-cards")
   await fs.mkdir(stimulusDirectory, { recursive: true })
   const stimuli = await Promise.all(
@@ -1761,7 +1959,7 @@ async function writeStructuralHumanEvidenceFixture(
   await Bun.write(path.join(directory, stimulusManifestRelativePath), stimulusManifestSource)
   const packageValue = {
     schemaVersion: 1,
-    packageVersion: "1.1.0",
+    packageVersion: "1.2.0",
     packageId: "R0-structural-fixture",
     buildSha,
     protocolBinding: {
@@ -1821,6 +2019,13 @@ async function writeStructuralHumanEvidenceFixture(
       },
       "HR-02": {
         moderatorScriptVersion: "HR02-v1",
+        stimulusSet: {
+          buildSha,
+          manifestRelativePath: screenshotManifestRelativePath,
+          manifestSha256: sha256(screenshotManifestSource),
+          surface: "First-run",
+          presentedToAllParticipants: true,
+        },
         participants: Array.from({ length: 5 }, (_, participantIndex) => ({
           participantId: `P-${String(participantIndex + 101).padStart(12, "0")}`,
           eligibility: structuralFixtureEligibility(),
@@ -1841,6 +2046,11 @@ async function writeStructuralHumanEvidenceFixture(
       },
       "HR-03": {
         reviewScriptVersion: "HR03-v1",
+        screenshotSet: {
+          buildSha,
+          manifestRelativePath: screenshotManifestRelativePath,
+          manifestSha256: sha256(screenshotManifestSource),
+        },
         approverName: "Product Approver",
         approverRole: "Product Owner",
         approvals,
@@ -1880,6 +2090,44 @@ async function writeMutatedEvidence(
   const file = path.join(directory, `${name}.json`)
   await Bun.write(file, `${JSON.stringify(value, null, 2)}\n`)
   return file
+}
+
+async function writeCoherentCandidateEvidenceMutation(
+  sourceEvidencePath: string,
+  directory: string,
+  name: string,
+  source: Record<string, unknown>,
+  mutate: (candidateRoot: string) => Promise<void>,
+) {
+  const target = path.join(directory, name)
+  await fs.cp(path.dirname(sourceEvidencePath), target, { recursive: true })
+  await mutate(target)
+  const manifestPath = path.join(target, "human-review/screenshots-manifest.json")
+  const manifest = (await Bun.file(manifestPath).json()) as Record<string, unknown>
+  const screenshots = manifest.screenshots as Array<Record<string, unknown>>
+  await Promise.all(
+    screenshots.map(async (screenshot) => {
+      screenshot.sha256 = sha256(
+        new Uint8Array(await Bun.file(path.join(target, String(screenshot.relativePath))).arrayBuffer()),
+      )
+    }),
+  )
+  const manifestSource = `${JSON.stringify(manifest, null, 2)}\n`
+  await Bun.write(manifestPath, manifestSource)
+  const value = structuredClone(source)
+  const studies = value.studies as Record<string, Record<string, unknown>>
+  ;(studies["HR-02"]!.stimulusSet as Record<string, unknown>).manifestSha256 = sha256(manifestSource)
+  ;(studies["HR-03"]!.screenshotSet as Record<string, unknown>).manifestSha256 = sha256(manifestSource)
+  const approvals = studies["HR-03"]!.approvals as Array<Record<string, unknown>>
+  screenshots.forEach((screenshot) => {
+    const approval = approvals.find((item) => item.surface === screenshot.surface)
+    if (!approval) return
+    approval.relativePath = screenshot.relativePath
+    approval.sha256 = screenshot.sha256
+  })
+  const evidencePath = path.join(target, `${name}.json`)
+  await Bun.write(evidencePath, `${JSON.stringify(value, null, 2)}\n`)
+  return evidencePath
 }
 
 async function writeMutatedRunnerFixture(
@@ -2026,6 +2274,8 @@ export async function runGateSelfTest() {
     runner.recordDigests,
     governance.protocol.sha256,
     languageContractSha256,
+    path.dirname(automaticEvidence.packagePath),
+    automaticEvidence.packageValue.releaseCandidateScreenshots,
   )
   const ephemeralSignature = await writeEphemeralHumanSignature(directory, evidence.evidencePath)
   const ephemeralAllowedSignersSha256 = sha256(await Bun.file(ephemeralSignature.allowedSignersPath).text())
@@ -2187,6 +2437,15 @@ export async function runGateSelfTest() {
       ;(study.stimulusSet as Record<string, unknown>).manifestSha256 = "c".repeat(64)
     },
   )
+  const wrongCandidateManifestDigest = await writeMutatedEvidence(
+    path.dirname(evidence.evidencePath),
+    "wrong-candidate-manifest-digest",
+    evidence.packageValue,
+    (value) => {
+      const study = (value.studies as Record<string, Record<string, unknown>>)["HR-02"]!
+      ;(study.stimulusSet as Record<string, unknown>).manifestSha256 = "c".repeat(64)
+    },
+  )
   const missingLanguageRole = await writeMutatedEvidence(
     path.dirname(evidence.evidencePath),
     "missing-language-role",
@@ -2223,20 +2482,15 @@ export async function runGateSelfTest() {
       ;(study.approvals as unknown[]).pop()
     },
   )
+  const unboundScreenshotDirectory = path.join(path.dirname(evidence.evidencePath), "human-review/unbound-screenshots")
+  await fs.mkdir(unboundScreenshotDirectory, { recursive: true })
   const invalidPng = Uint8Array.from([...Buffer.from("89504e470d0a1a0a", "hex"), 0])
-  const invalidPngPath = path.join(path.dirname(evidence.evidencePath), "screenshots", "magic-only.png")
-  await Bun.write(invalidPngPath, invalidPng)
-  const magicOnlyScreenshot = await writeMutatedEvidence(
-    path.dirname(evidence.evidencePath),
+  const magicOnlyScreenshot = await writeCoherentCandidateEvidenceMutation(
+    evidence.evidencePath,
+    directory,
     "magic-only-screenshot",
     evidence.packageValue,
-    (value) => {
-      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
-        Record<string, unknown>
-      >
-      approvals[0]!.relativePath = path.relative(path.dirname(evidence.evidencePath), invalidPngPath)
-      approvals[0]!.sha256 = sha256(invalidPng)
-    },
+    (target) => Bun.write(path.join(target, "human-review/screenshots/first-run.png"), invalidPng).then(() => undefined),
   )
   const tinyPng = Uint8Array.from(
     Buffer.from(
@@ -2244,30 +2498,76 @@ export async function runGateSelfTest() {
       "base64",
     ),
   )
-  const tinyPngPath = path.join(path.dirname(evidence.evidencePath), "screenshots", "tiny.png")
-  await Bun.write(tinyPngPath, tinyPng)
-  const tinyScreenshot = await writeMutatedEvidence(
-    path.dirname(evidence.evidencePath),
+  const tinyScreenshot = await writeCoherentCandidateEvidenceMutation(
+    evidence.evidencePath,
+    directory,
     "tiny-screenshot",
     evidence.packageValue,
-    (value) => {
-      const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
-        Record<string, unknown>
-      >
-      approvals[0]!.relativePath = path.relative(path.dirname(evidence.evidencePath), tinyPngPath)
-      approvals[0]!.sha256 = sha256(tinyPng)
-    },
+    (target) => Bun.write(path.join(target, "human-review/screenshots/first-run.png"), tinyPng).then(() => undefined),
   )
-  const duplicateScreenshot = await writeMutatedEvidence(
+  const unboundValidPng = await sharp({
+    create: {
+      width: 1440,
+      height: 1600,
+      channels: 4,
+      background: { r: 127, g: 31, b: 63, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer()
+  const unboundValidPngPath = path.join(unboundScreenshotDirectory, "valid-but-unbound.png")
+  await Bun.write(unboundValidPngPath, unboundValidPng)
+  const unboundValidScreenshot = await writeMutatedEvidence(
     path.dirname(evidence.evidencePath),
-    "duplicate-screenshot",
+    "valid-but-unbound-screenshot",
     evidence.packageValue,
     (value) => {
       const approvals = (value.studies as Record<string, Record<string, unknown>>)["HR-03"]!.approvals as Array<
         Record<string, unknown>
       >
-      approvals[1]!.relativePath = approvals[0]!.relativePath
-      approvals[1]!.sha256 = approvals[0]!.sha256
+      approvals[0]!.relativePath = path.relative(path.dirname(evidence.evidencePath), unboundValidPngPath)
+      approvals[0]!.sha256 = sha256(unboundValidPng)
+    },
+  )
+  const duplicateScreenshot = await writeCoherentCandidateEvidenceMutation(
+    evidence.evidencePath,
+    directory,
+    "duplicate-screenshot",
+    evidence.packageValue,
+    async (target) => {
+      await fs.copyFile(
+        path.join(target, "human-review/screenshots/first-run.png"),
+        path.join(target, "human-review/screenshots/inbox.png"),
+      )
+    },
+  )
+  const coherentlyForgedCandidateSet = await writeCoherentCandidateEvidenceMutation(
+    evidence.evidencePath,
+    directory,
+    "coherently-forged-candidate-set",
+    evidence.packageValue,
+    async (target) => {
+      await Promise.all(
+        hr03Surfaces.map(async (surface, index) => {
+          const png = await sharp({
+            create: {
+              width: 1440,
+              height: 1600,
+              channels: 4,
+              background: { r: 191 - index * 7, g: 47 + index * 13, b: 79 + index * 11, alpha: 1 },
+            },
+          })
+            .png()
+            .toBuffer()
+          await Bun.write(
+            path.join(
+              target,
+              `human-review/screenshots/${surface.toLowerCase().replaceAll(" ", "-")}.png`,
+            ),
+            png,
+          )
+        }),
+      )
     },
   )
   const wrongSpotDigest = await writeMutatedEvidence(
@@ -2303,10 +2603,12 @@ export async function runGateSelfTest() {
       ["missing_language_role_rejected", missingLanguageRole, "invalid"],
       ["wrong_language_digest_rejected", wrongLanguageDigest, "invalid"],
       ["wrong_stimulus_digest_rejected", wrongStimulusDigest, "invalid"],
+      ["wrong_candidate_manifest_digest_rejected", wrongCandidateManifestDigest, "invalid"],
       ["visible_stimulus_label_rejected", visibleStimulusLabel, "invalid"],
       ["missing_surface_rejected", missingSurface, "invalid"],
       ["magic_only_screenshot_rejected", magicOnlyScreenshot, "invalid"],
       ["tiny_screenshot_rejected", tinyScreenshot, "invalid"],
+      ["unbound_valid_screenshot_rejected", unboundValidScreenshot, "invalid"],
       ["duplicate_screenshot_rejected", duplicateScreenshot, "invalid"],
       ["wrong_spot_digest_rejected", wrongSpotDigest, "invalid"],
       ["forged_score_rejected", forgedScore, "invalid"],
@@ -2323,6 +2625,12 @@ export async function runGateSelfTest() {
         ).status === expected,
     })),
   )
+  const coherentCandidateForgery = await evaluateExecutedAutomaticFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    humanEvidencePath: coherentlyForgedCandidateSet,
+  })
   const [forgedScenarioDigest, forgedEvidenceID, forgedNormalizedDigest, forgedRunnerSummary, tamperedArtifact] =
     await Promise.all([
       writeMutatedRunnerFixture(directory, "forged-scenario-digest", runner.runnerPath, (value, fixtureDirectory) =>
@@ -2517,6 +2825,10 @@ export async function runGateSelfTest() {
         missingAutomaticEvidence.automaticEvidenceStatus === "incomplete",
     },
     ...mutatedResults,
+    {
+      name: "coherently_forged_human_candidate_set_rejected",
+      passed: coherentCandidateForgery.status === "invalid",
+    },
     ...runnerMutationResults,
     {
       name: "automatic_failure_is_gate_failure",
