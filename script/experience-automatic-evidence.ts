@@ -894,7 +894,11 @@ async function runCommand(
   await cleanIgnoredRuntimePaths(worktree)
   await fs.mkdir(directories.AGENT_COMPANY_WEBUI_DATA_DIR, { recursive: true })
   await Promise.all(
-    requirement.reports.map((report) => fs.rm(path.join(worktree, requirement.cwd, report.path), { force: true })),
+    requirement.reports.map(async (report) => {
+      const reportPath = path.join(worktree, requirement.cwd, report.path)
+      await fs.mkdir(path.dirname(reportPath), { recursive: true })
+      await fs.rm(reportPath, { force: true })
+    }),
   )
   const environment = commandEnvironment(process.env, directories, requirement, playwrightBrowsersPath)
   const started = Date.now()
@@ -1469,7 +1473,9 @@ export async function generateAutomaticEvidence(options: {
   if (!isRecord(runner) || runner.buildSha !== buildSha) {
     throw new Error("Automatic evidence runner binding does not match the exact build SHA.")
   }
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-r0-automatic-evidence-"))
+  const temporaryRoot = await fs.mkdtemp(
+    path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "ac-r0-"),
+  )
   const worktree = path.join(temporaryRoot, "worktree")
   const isolationRoot = path.join(temporaryRoot, "isolation")
   runGit(["worktree", "add", "--detach", worktree, buildSha])
