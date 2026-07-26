@@ -11,7 +11,9 @@ You set the direction. The company forms the right team, delivers verifiable res
 </div>
 
 > [!IMPORTANT]
-> Agent Company is an in-development **Pre-Public** product. The local Control Plane, real board conversation, shared WebUI, Electron shell, agent runtime, and governance foundations exist. Domain-neutral delivery, desktop background lifecycle, strict private spaces, and the complete Agent life layer are still being implemented. Target behavior is defined by the product documents; current gaps are recorded in the implementation plan.
+> Agent Company is an in-development **Pre-Public** product, currently in stage R0 of an [experience refactor](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) that rebuilds the user-facing product layer on top of the existing Control Plane. The local Control Plane, agent runtime, governance and delivery foundations, Electron shell, and shared WebUI exist. The group-chat workspace, artifact and delivery experience, desktop background lifecycle, strict private spaces, and the Agent life layer are **not** built yet — several are deliberately frozen until the delivery loop is verified.
+>
+> Everything below describes **target behavior** defined by the product documents, not shipped capability. For what actually exists today, read the [implementation plan](docs/product-design/implementation-plan.md); for what is being built now, read the experience refactor plan.
 
 ## What it is
 
@@ -19,11 +21,11 @@ Agent Company lets one person operate a persistent AI organization on their own 
 
 The product has three inseparable layers:
 
-| Layer | Responsibility |
-|---|---|
-| Work | Goals, group collaboration, execution, artifacts, validation, and delivery |
-| Governance | Charter, delegation, approval policy, gates, reputation, recovery, and audit |
-| Life | Persistent identity, relationships, private space, reflection, ambient activity, and Dreaming |
+| Layer | Responsibility | Status |
+|---|---|---|
+| Work | Goals, group collaboration, execution, artifacts, validation, and delivery | Being rebuilt (R0–R3) |
+| Governance | Charter, delegation, approval policy, gates, reputation, recovery, and audit | Foundations in place |
+| Life | Persistent identity, relationships, private space, reflection, ambient activity, and Dreaming | Frozen until the delivery loop is verified |
 
 ## Product principles
 
@@ -32,7 +34,7 @@ The product has three inseparable layers:
 - **Group-chat first.** The main conversation carries conclusions, decisions, risks, approvals, and deliveries. Threads reveal work logs, artifacts, previews, attempts, and nested tool details.
 - **Visible failures.** Failed attempts, their causes, changed strategy, and recovery state remain traceable instead of disappearing behind a polished final answer.
 - **Visual quality is product capability.** Marvis is an important UI reference for office atmosphere, legible characters, activity states, and layered results. Agent Company adapts those strengths to a multi-agent group workspace.
-- **Real employee presence.** Employee cards project actual work, waiting, review, collaboration, roaming, socializing, reflection, and recovery events. Ambient activity can create relationships, cultural understanding, proposals, and personality growth. Future 2D/3D office views reuse the same state contract.
+- **Real employee presence.** Employee cards read one activity projection derived from real runs, never a decorative animation. Today that projection covers working, waiting, recovering, and failure states; roaming, socializing, reflection, and the relationships and personality growth they feed belong to the frozen Life layer. Future 2D/3D office views must reuse the same state contract rather than inventing activity.
 - **Local-first.** Browser and desktop consume one local Control Plane through the same shared WebUI. Electron provides the persistent local product experience.
 - **Domain-neutral core, deep adapters.** Research, documents, local applications, and software delivery share one company model. Software adds strict repository, Worktree, review, merge, and verification rules without defining the whole product.
 
@@ -64,9 +66,14 @@ Clients do not write SQLite, identity files, or managed resources directly. The 
 
 ## Current delivery path
 
-The codebase has completed the shared app shell, local company bootstrap, and a real persistent board conversation with source Threads. Current work focuses on the Agent Execution Kernel and a governed, domain-neutral delivery loop. Desktop background lifecycle, Agent Home/private spaces, richer ambient life, and release hardening follow in later milestones.
+Current work is stage **R0 — Truthful Product Shell** of the experience refactor: real product identity, real connection state, and a user-facing state projection layer, so that what the interface claims is always backed by a fact from the Control Plane. R0 is not yet passed; its remaining blockers are human acceptance studies that automation is not allowed to substitute for.
 
-See the [implementation plan](docs/product-design/implementation-plan.md) for the current evidence, gaps, milestones, and release gates.
+Underneath, the Control Plane carries a company bootstrap, persistent channels and threads, an agent execution kernel with explicit skills, charter and approval governance, and worktree-based software delivery through merge and main-branch verification. The board conversation UI was removed with the Solid-to-Nuxt WebUI migration and is scheduled for rebuild in R2.
+
+Later stages: Goal → Start (R1), controllable execution and attention (R2), verified delivery (R3), dynamic organization (R4). Desktop background lifecycle, private spaces, the Agent life layer, and release hardening follow.
+
+- [Experience refactor plan](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md): what is being built now, in what order, and the release gates.
+- [Implementation plan](docs/product-design/implementation-plan.md): current code facts, per-milestone exit criteria, and remaining gaps.
 
 ## Development
 
@@ -98,7 +105,8 @@ Repository conventions are in [AGENTS.md](AGENTS.md). Contribution workflow is i
 - [Product Constitution](docs/product-design/PRODUCT-CONSTITUTION.md): durable principles and hard boundaries
 - [Product PRD](docs/Agent%20Company%20产品%20PRD.md): Pre-Public requirements and acceptance
 - [Product Design Overview](docs/product-design/00-overview.md): system model and topic map
-- [Implementation Plan](docs/product-design/implementation-plan.md): current facts, gaps, milestones, and gates
+- [Experience Refactor Plan](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md): current execution order (R0–R4), tasks, and release gates
+- [Implementation Plan](docs/product-design/implementation-plan.md): current facts, gaps, milestone exit criteria
 - [Documentation Index](docs/README.md): authority order and maintenance rules
 
 ## License

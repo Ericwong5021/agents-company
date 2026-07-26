@@ -8,9 +8,11 @@
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
 - Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
-## Core Focus (as of 2026-07-18)
+## Core Focus (as of 2026-07-26)
 
 The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
+
+Current execution order comes from `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` (stages R0–R4; the active stage is R0). `docs/product-design/implementation-plan.md` defines milestone architecture and exit criteria but no longer decides what to work on next. Ambient, Reflection, Direct, Dreaming, and Agent Home are frozen until the Life-layer unfreeze conditions in PRD 4.1 are met — do not start work on them, and do not describe them as available.
 
 - The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
 - The local Control Plane and agent runtime live in `packages/control-plane`.
@@ -18,7 +20,7 @@ The current product target is the local-first **Pre-Public** release described i
 - The first public release focuses on a single-user, local-first, domain-neutral Agent company whose core differentiator is dynamic self-organization and self-governance. Do not reduce the product to software development or a preconfigured team of specialist Agents.
 - Software development is a deep domain adapter, not the global product boundary. Prefer one primary repository per independently verifiable software delivery unit, while keeping Project and cross-domain work independent from repository count.
 - The shared WebUI must prioritize visual quality, group-chat high-signal collaboration, Thread worklog/artifact/preview layers, visible failure attempts, and employee cards driven by real Agent activity projections.
-- Ambient roaming, observation, exploration, and socializing are valuable when backed by real events and can contribute to relationships, culture understanding, proposals, and personality growth. Future 2D/3D office views must reuse the employee-card state contract instead of inventing decorative activity.
+- Ambient roaming, observation, exploration, and socializing remain the long-term design intent — valuable only when backed by real events — but are frozen for now (see above). Future 2D/3D office views must reuse the employee-card state contract instead of inventing decorative activity.
 - Keep multi-user cloud hosting, mobile clients, Kanban-first project management, exhaustive industry/app coverage, and a complex 2D/3D office out of the active release scope unless another explicit product decision changes it.
 - Product decisions and document precedence are indexed in `docs/README.md`. When code and target design differ, describe the gap rather than presenting planned behavior as implemented.
 

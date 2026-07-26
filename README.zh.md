@@ -11,7 +11,9 @@
 </div>
 
 > [!IMPORTANT]
-> Agent Company 是仍在开发中的 **Pre-Public** 产品。本地 Control Plane、真实董事会会话、共享 WebUI、Electron、Agent Runtime 和治理基础已经存在；领域中立交付、桌面后台生命周期、严格私人空间和完整的 Agent 生命层仍在实施。目标行为以产品文档为准，当前差距以实施计划为准。
+> Agent Company 是仍在开发中的 **Pre-Public** 产品，当前处于[体验重构](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 R0 阶段——在既有 Control Plane 之上重做用户可感知的产品层。本地 Control Plane、Agent Runtime、治理与交付基础、Electron 和共享 WebUI 已经存在；群聊工作台、制品与交付体验、桌面后台生命周期、严格私人空间和 Agent 生命层**尚未建成**，其中若干项被有意冻结，直到交付闭环通过验证。
+>
+> 以下内容描述的是产品文档定义的**目标行为**，不代表已交付能力。当前实际实现见[实施计划](docs/product-design/implementation-plan.md)，当前在做什么见体验重构计划。
 
 ## 它是什么
 
@@ -19,11 +21,11 @@ Agent Company 让一个用户在自己的电脑上经营一个持续存在的 AI
 
 产品包含三个缺一不可的层次：
 
-| 层次 | 职责 |
-|---|---|
-| 工作层 | 目标、群体协作、执行、制品、验证与交付 |
-| 治理层 | Charter、委派、批准策略、Gate、声誉、恢复与审计 |
-| 生命层 | 持久身份、关系、私人空间、Reflection、Ambient 与 Dreaming |
+| 层次 | 职责 | 现状 |
+|---|---|---|
+| 工作层 | 目标、群体协作、执行、制品、验证与交付 | 重建中（R0–R3） |
+| 治理层 | Charter、委派、批准策略、Gate、声誉、恢复与审计 | 基础已具备 |
+| 生命层 | 持久身份、关系、私人空间、Reflection、Ambient 与 Dreaming | 冻结，待交付闭环通过验证 |
 
 ## 产品原则
 
@@ -32,7 +34,7 @@ Agent Company 让一个用户在自己的电脑上经营一个持续存在的 AI
 - **群聊优先。** 主会话承载结论、决定、风险、审批和交付；Thread 展开工作日志、产出物、预览、失败 Attempt 与嵌套工具细节。
 - **失败真实可见。** 失败原因、策略调整与恢复状态不会被最终答案掩盖，而是成为可追踪、可审计的正式事实。
 - **视觉品质就是产品能力。** Marvis 是办公室氛围、角色辨识、行为状态和结果分层的重要 UI 参照；Agent Company 将这些优点融合进多 Agent 群聊工作台。
-- **员工真实存在。** 员工卡片投影实际的工作、等待、Review、协作、闲逛、社交、反思和恢复事件。Ambient 活动可以形成关系、文化理解、提案与人格成长；后续二维或三维办公室复用同一状态契约。
+- **员工真实存在。** 员工卡片读取同一份来自真实运行的活动投影，不做装饰性动画。当前投影覆盖工作、等待、恢复和失败状态；闲逛、社交、反思，以及由它们产生的关系与人格成长属于冻结中的生命层。后续二维或三维办公室必须复用同一状态契约，不得自行编造活动。
 - **Local-first。** 浏览器和桌面端通过同一套共享 WebUI 消费本地 Control Plane，Electron 提供常驻的本地产品体验。
 - **领域中立内核，深度领域适配器。** 研究、文档、本地应用和软件交付复用同一公司模型；软件适配器额外提供严格仓库、Worktree、审查、合并与验证规则，但不定义整个产品。
 
@@ -64,9 +66,14 @@ Local Control Plane
 
 ## 当前交付路径
 
-代码已经完成共享 App Shell、本地公司初始化，以及带来源 Thread 的真实持久化董事会会话。当前工作聚焦 Agent Execution Kernel 和受治理的领域中立交付闭环；桌面后台生命周期、Agent Home/私人空间、更完整的 Ambient 生命层和发布硬化位于后续里程碑。
+当前工作是体验重构的 **R0 — Truthful Product Shell**：真实的产品身份、真实的连接状态、可投影的用户状态层，让界面上的每一句陈述都有 Control Plane 的事实支撑。R0 尚未通过，剩余阻断项是不允许用自动化替代的真人验收研究。
 
-当前事实、缺口、里程碑与发布 Gate 见[实施计划](docs/product-design/implementation-plan.md)。
+底层已具备：公司初始化、持久频道与 Thread、带显式 Skill 的 Agent 执行内核、Charter 与批准治理，以及基于 Worktree 的软件交付（含合并与主分支复验）。董事会会话界面随 Solid → Nuxt 的 WebUI 迁移被删除，计划在 R2 重建。
+
+后续阶段：Goal → Start（R1）、可控执行与注意力（R2）、可验证交付（R3）、动态组织（R4）。桌面后台生命周期、私人空间、Agent 生命层与发布硬化排在其后。
+
+- [体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前在做什么、按什么顺序、发布门槛是什么。
+- [实施计划](docs/product-design/implementation-plan.md)：当前代码事实、各里程碑退出标准与剩余缺口。
 
 ## 本地开发
 
@@ -98,7 +105,8 @@ bun test
 - [产品宪法](docs/product-design/PRODUCT-CONSTITUTION.md)：长期原则与硬边界
 - [产品 PRD](docs/Agent%20Company%20产品%20PRD.md)：Pre-Public 需求与验收
 - [产品设计总览](docs/product-design/00-overview.md)：系统模型与专题导航
-- [实施计划](docs/product-design/implementation-plan.md)：当前事实、缺口、里程碑与 Gate
+- [体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前执行顺序（R0–R4）、任务与发布门槛
+- [实施计划](docs/product-design/implementation-plan.md)：当前事实、缺口与里程碑退出标准
 - [文档导航](docs/README.md)：权威顺序与维护规则
 
 ## 许可证

@@ -1,7 +1,11 @@
 # Agent Company × Marvis Pencil 设计稿
 
+> **验收证据已失效（2026-07-26 标注）**：本目录的同视口 QA 对照图产生于 2026-07-17 的 Solid/Vite 实现（`e3b74a1`），该实现已在 2026-07-23 的 Eve/Nuxt 迁移（`f51af90`）中整体删除，`packages/app/src` 目录不复存在。下方“验收输出”中的 `qa/compare-*.png` 与 [design-qa.md](design-qa.md) 只能作为历史记录阅读，**不构成当前 Nuxt WebUI 的验收证据**。当前 WebUI 的视觉与交互门槛由[体验重构计划](../product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 SHELL-04、QA-03、QA-04 定义，尚未产生新的同视口验收记录。
+>
+> 目标稿本身（Pencil 画板、Marvis 参照存档、`exports/*.png`）不受影响，继续作为设计参照有效。
+
 - 主设计文件：`agent-company-marvis-pencil.pen`
-- 本轮设计权威：Pencil
+- 本轮设计权威：Pencil（目标稿层面）；WebUI 视觉语言的当前事实源见 [CODEX-DESIGN-LANGUAGE.md](../product-design/CODEX-DESIGN-LANGUAGE.md)
 - 标准视口：1421 × 768
 - 视觉基准：Marvis macOS 客户端实机界面
 - 办公室画板现状：已替换为真实员工活动卡片目标稿
@@ -38,7 +42,9 @@ Marvis 是 Agent Company 的重要前端学习对象，重点吸收办公室氛�
 
 ## 设计系统
 
-Pencil 文件内变量与 `UI-DESIGN-TOKENS.md`、`company-tokens.css` 对齐。可复用组件包含 Sidebar、Composer、Work Panel Header、Artifact Row、Tool Event、Signal Message、Attempt Card、Employee Activity Card 和 Status Badge。
+Pencil 文件内变量与 `UI-DESIGN-TOKENS.md` 对齐。可复用组件包含 Sidebar、Composer、Work Panel Header、Artifact Row、Tool Event、Signal Message、Attempt Card、Employee Activity Card 和 Status Badge。
+
+原先并列的 `company-tokens.css` 已随 Solid WebUI 一并删除；当前实现的样式来源是 `packages/ui/src/styles/` 与 `packages/app/app/assets/css/main.css`，两者与本文件的 token 对齐关系尚未重新建立。
 
 ## 验收输出
 
@@ -49,7 +55,10 @@ Pencil 文件内变量与 `UI-DESIGN-TOKENS.md`、`company-tokens.css` 对齐。
 - `exports/d5FhYn.png`：Agent Activity Detail
 - `exports/VQyEm.png`：Office · Employee Cards
 - `exports/zXTfi.png`：Responsive · 375px
+- Pencil 布局检查：当前 Master Board 无裁切、重叠或溢出问题
+
+以下同视口对照图针对已删除的 Solid 实现，保留为历史记录，不作为当前验收证据（见页首标注）：
+
 - `qa/compare-board-reference-implementation-final.png`：董事会同视口对照
 - `qa/compare-office-reference-implementation-final.png`：办公室同视口对照
 - `qa/compare-settings-reference-implementation-final.png`：Marvis 与实装设置弹窗同视口对照
-- Pencil 布局检查：当前 Master Board 无裁切、重叠或溢出问题

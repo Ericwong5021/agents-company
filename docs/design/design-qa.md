@@ -1,8 +1,14 @@
 # Agent Company WebUI 设计 QA
 
 日期：2026-07-18
+验收对象：Solid/Vite 实现（`packages/app/src`，截至 `e3b74a1`）
+状态：**已失效**（2026-07-26 标注）
 
-## 已通过
+> 本记录验收的 Solid 实现已在 2026-07-23 的 Eve/Nuxt 迁移（`f51af90`）中整体删除。下列“已通过”“当前阻塞”“下一轮验证门槛”全部针对那份不再存在的代码，保留为历史记录，不描述当前 Nuxt WebUI 的质量状态，也不得被引用为其验收证据。
+>
+> 当前 WebUI 的视觉与可访问性门槛由[体验重构计划](../product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 SHELL-04、QA-03（视觉回归与交互状态审查）、QA-04（WCAG 2.2 AA）定义，均排在 R1–R3，尚未执行。
+
+## 已通过（针对已删除的 Solid 实现）
 
 - 已存档 Marvis 首页、自动任务、技能广场、应用、办公室、工作日志、产出物与预览等真实界面状态，并记录来源日期。
 - Pencil 已完成 Reference Archive、Company Group、Thread Attempt Recovery、Agent Activity Detail、375px 响应式和目标 Contact Sheet。

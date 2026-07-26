@@ -1,6 +1,6 @@
 # Agent Company 文档导航
 
-> 最近清理：2026-07-18
+> 最近清理：2026-07-26
 
 本文档目录采用“一个主题、一个事实源”的原则。阅读或修改前先确认文档层级，避免把历史计划当成当前产品定义。
 
@@ -12,6 +12,14 @@
 4. [体验重构计划](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前 R0-R4 的执行顺序、任务依赖和发布门槛。
 5. [实施计划](product-design/implementation-plan.md)：基于当前代码事实的架构收敛路径。
 冲突时以上位文档为准，并应在同一次文档变更中消除下位冲突。
+
+## 两套计划的分工（2026-07-25 起）
+
+体验重构计划自 2026-07-25 起为 `In Execution`，接管**当前执行顺序**：现在的工作批次由 R0-R4 定义，R0 未通过前不进入 R1。实施计划的 M0-M6 继续作为**架构收敛路径与里程碑退出标准**的事实源，但其“当前下一步”不再决定排期。
+
+- 问“现在该做哪一批”→ 看体验重构计划的 R 阶段与 Task 总览。
+- 问“某个子系统的目标架构、退出标准与 PRD 覆盖关系”→ 看实施计划的 M 里程碑。
+- 两者对同一能力给出不同状态时，以代码事实为准，并在同一次变更中修正过时的一侧。
 
 ## 当前产品设计
 
@@ -26,9 +34,9 @@
 | [05-interaction-primitives.md](product-design/05-interaction-primitives.md) | IM-first、频道、Thread 与交互原语 | 当前 |
 | [06-governance.md](product-design/06-governance.md) | Charter、审批、Gate、审计 | 当前 |
 | [07-work-types.md](product-design/07-work-types.md) | 领域中立工作契约、动态能力组合与软件深度适配器 | 当前 |
-| [Agent-Company-Experience-Refactor-Plan-v1.0.md](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) | Goal 到 Verified Delivery 的体验重构执行清单 | 执行中 |
+| [Agent-Company-Experience-Refactor-Plan-v1.0.md](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) | Goal 到 Verified Delivery 的体验重构执行清单 | 执行中 / 决定当前排期 |
 | [experience-refactor/manifest.v1.json](product-design/experience-refactor/manifest.v1.json) | 体验重构机器可读语言契约、基准、指标、基线与验证入口 | 执行中 |
-| [implementation-plan.md](product-design/implementation-plan.md) | 实现基础、缺口和工作流 | 当前 |
+| [implementation-plan.md](product-design/implementation-plan.md) | 架构收敛路径、里程碑退出标准与 PRD 覆盖自审 | 当前 / 不决定排期 |
 | [CODEX-DESIGN-LANGUAGE.md](product-design/CODEX-DESIGN-LANGUAGE.md) | WebUI 视觉语言：色板、字号、圆角、Phosphor、设置 IA | 当前 |
 
 ## 组件与设计资产
@@ -43,4 +51,5 @@
 - 实施计划必须区分“代码模块存在”和“产品闭环已通过验收”。
 - M1 的 Company 数据目录由启动 Control Plane 的 host 在动态导入前固定；本地浏览器直接读取该 host 已选目录，不能在线搬迁它。
 - 已完成的临时计划、故障报告和验证快照由 Git 历史追溯，不在现行文档树长期保留。
+- 设计 QA 与验收快照必须写明验收对象（实现与提交）。被验收的实现一旦被替换或删除，该记录立即标注失效，不得继续当作当前实现的验收证据。
 - 新增文档前先检查能否补充现有事实源；不创建平行版本的总览、路线图或实施日志。

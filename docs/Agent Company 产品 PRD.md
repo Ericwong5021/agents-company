@@ -1,10 +1,13 @@
 # Agent Company 产品 PRD
 
 > 状态：当前 / 首次公开版本基线
-> 版本：0.3
-> 更新日期：2026-07-17
+> 版本：0.4
+> 更新日期：2026-07-26
 > 上位文档：[产品宪法](product-design/PRODUCT-CONSTITUTION.md)
-> 实施路径：[implementation-plan.md](product-design/implementation-plan.md)
+> 当前排期：[体验重构计划](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)（R0-R4）
+> 架构路径：[implementation-plan.md](product-design/implementation-plan.md)（M0-M6）
+
+> 0.4 变更说明：吸收 2026-07-25 生效的体验重构范围决定，消除本文与下位计划在**目标用户**（2.1）、**版本范围与 Life 层排序**（4.1）、**一级导航**（5.1）三处的冲突。本文继续定义首次公开版本的完整验收目标；体验重构计划决定这些目标按 R0-R4 的哪一段交付。
 
 ## 1. 产品概述
 
@@ -50,6 +53,8 @@
 - 已使用各类 Agent，希望把单任务能力升级为持续组织能力的高阶用户。
 
 共同特征：愿意让 Agent 自主执行，但要求数据留在本地、过程可追溯、重要决定可控，并希望公司能随目标变化自行形成最合适的协作结构。
+
+**首个稳定版本的优化对象（2026-07-25 范围决定）**：体验设计只围绕 AI 原生独立开发者、技术创业者，以及需要完成研究、产品定义、写作、分析和软件交付的高阶 Agent 用户优化，不同时为全部知识工作者设计。架构保持领域中立，上述更宽的用户面仍是首次公开版本的目标，但不作为当前体验取舍的依据。机器可读事实源为 `product-design/experience-refactor/language-contract.v1.json` 的 `audience`，由 CI 校验。
 
 ### 2.2 核心 Jobs to Be Done
 
@@ -109,6 +114,19 @@ Agent 有工作职责，也有其他 Agent 不可见的私人空间。人格连�
 - 安装、升级、备份、导出、恢复、Windows/macOS 打包；
 - 关键隐私、审批、Worktree 与恢复测试。
 
+**交付顺序（2026-07-25 范围决定）**：以上是首次公开版本的完整验收范围，不是当前批次的开发清单。体验重构计划把交付顺序固定为“结果可用 → 过程可控 → 状态可信 → 责任可追溯 → 组织连续性 → 人格与生命感”，并据此重排：
+
+| 本节能力 | 当前阶段 |
+|---|---|
+| 真实产品外壳、连接可信、用户状态投影 | R0（执行中） |
+| Goal → Charter、Provider 向导、Work 入口 | R1 |
+| 可控执行、Inbox、Gate 交互 | R2 |
+| Artifact、Delivery、验收与返工闭环 | R3 |
+| 候选池、正式岗位、动态组织与能力证据 | R4 |
+| Agent Home、公开 PROFILE、Direct、Reflection、Ambient、人格型 Dreaming | 冻结，须先满足 Life 层解冻条件 |
+
+Life 层解冻条件（R3 连续两个发布候选通过、核心任务完成率 ≥ 70%、Delivery 可消费率与验收可判定率 100%、SUS 中位数 ≥ 75、无效打断率 < 20%、目标用户明确表达需求）见体验重构计划第 10 节。冻结指“不在当前批次开发”，不等于从首次公开版本删除；解冻条件未满足时，本节对应能力不得作为发布门槛的已完成项。
+
 ### 4.2 明确非目标
 
 - 多用户、多租户和云端公司托管；
@@ -125,14 +143,28 @@ Agent 有工作职责，也有其他 Agent 不可见的私人空间。人格连�
 
 ### 5.1 一级导航
 
-| 区域 | 内容 |
+首个稳定版本使用五个一级入口（2026-07-25 范围决定）。机器可读事实源为 `product-design/experience-refactor/language-contract.v1.json` 的 `primaryNavigation`，路由与文案由 CI 校验，本表不得与之独立演化。
+
+| 入口 | 路由 | 内容 |
+|---|---|---|
+| Inbox | `/inbox` | 需要用户处理的输入、审批、阻塞、失败和交付 |
+| Work | `/work` | 目标、进行中的工作、项目、里程碑和高信号进展 |
+| Team | `/team` | Agent 当前责任、负载、可用性和能力证据 |
+| Library | `/library` | 制品、交付、决定、报告和历史版本 |
+| Settings | `/settings` | Provider、批准策略、本地运行、数据和诊断 |
+
+原六区模型（Inbox / Company / Projects / Agents / Views / Settings）不再作为导航结构，其内容需求按下表并入五入口；第 8 节各小节描述的是这些内容要求，不再对应独立的一级区域。
+
+| 原区域 | 现位置 |
 |---|---|
-| Inbox | 需要用户处理的审批、问题、阻塞和异常 |
-| Company | 公司大群、董事会、部门群和组织级动态 |
-| Projects | 项目群、状态、里程碑和制品 |
-| Agents | 候选池、正式员工、公开名片和 Agent Home |
-| Views | 辅助看板、组织图、制品库、审计和 Token 统计 |
-| Settings | 模型、权限、批准等级、本地服务、数据和备份 |
+| Inbox | Inbox |
+| Company（公司群、董事会、部门群） | Work 中的长期频道或目标入口 |
+| Projects | Work > Project |
+| Agents（候选池、正式员工、公开名片） | Team |
+| Agent Home 与私域入口 | 冻结，随 Life 层解冻条件重新进入（见 4.1） |
+| Views > 制品库 | Library |
+| Views > 看板、组织图、审计、Token 统计 | Work / Team / Library 的上下文视图与 Diagnostics |
+| Settings | Settings |
 
 ### 5.2 主工作区
 
@@ -347,6 +379,8 @@ Ambient 行为可以形成关系变化、人格经历、企业文化理解、改
 | GROW-11 | 现有记忆 consolidation 在 UI 中与人格型 Dreaming 明确区分 |
 
 ## 8. 页面与视图
+
+本节定义各视图的**内容要求**，不定义导航结构。一级入口以 5.1 的五入口为准，本节各小节按 5.1 的映射表落到对应入口；Agent Home 与私域入口随 Life 层解冻条件重新进入（见 4.1）。
 
 ### 8.1 Inbox
 

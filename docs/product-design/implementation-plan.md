@@ -1,7 +1,8 @@
 # Implementation Plan：Pre-Public 纵向交付
 
-> 状态：M0、M1、M2 已完成；当前优先完成 M3A-1 自然 Agent Turn 与显式 Skill，再进入 M3B Charter、自治治理与领域中立交付闭环
-> 事实基线更新：2026-07-21
+> 角色：本文是**架构收敛路径与里程碑退出标准**的事实源，不决定当前排期。当前执行顺序由[体验重构计划](Agent-Company-Experience-Refactor-Plan-v1.0.md)的 R0-R4 决定（自 2026-07-25 起 `In Execution`，当前批次为 R0）。
+> 状态：M0、M1 已完成；M2 后端契约完成、用户可见闭环随 WebUI 迁移回退（见 2.1）；M3A 实施中；M3B 部分实现（见 2.1）；M4、M5、M6 未进入验收
+> 事实基线更新：2026-07-26
 > 视觉决策：Company Workspace 的产品信息架构保留；其 Solid/Vite 实现已由 Eve/Nuxt WebUI 迁移取代
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -29,25 +30,26 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | 区域 | 当前事实 | 当前结论 |
 |---|---|---|
 | 产品文档 | 宪法、PRD、00–07 专题设计和本计划已有单向优先级 | S0 产品收敛基本完成 |
-| Company Workspace | M2 已接入持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影 | 当前可作为真实公司会话入口；M3 才增加 Charter、治理与交付事实 |
+| Company Workspace | 控制面已有持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影；但用户可见的频道栏、主会话、Thread 面板与 Composer 已随 Solid WebUI 在 `f51af90` 删除 | **不再是可用的公司会话入口**：`packages/app/app/pages/company/board.vue` 只做 302 重定向到 `/work`，模块内 board 页未注册。当前产品入口是 R0 的 Inbox → Goal Brief → Work 投影 |
 | 共享 App Shell | M0 已把根路由、Titlebar、通知、Deep Link 与构建 CSS 接入同一 App Chrome；M1 在其上接入 Company data source | 可以继续承接 M2 的真实会话数据 |
 | Local Server / Runtime | M1/M2 已提供仅绑定 loopback 的 trusted Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成；非回环监听仍不属于当前主路径 |
-| Company Project | 已有 Project、Plan、Work Item、Artifact 和两个人工 Gate | 当前仍是固定游戏 MVP 流程，创建新空仓库，不处理导入仓库、严格 Worktree、合并或主分支验证 |
+| Company Project | 默认路径已是自适应 planner 与动态任务树；Charter、三预设继承、WorktreeRun 状态机、`merge --no-ff` 与主分支复验已落地（`fc45cc7`、`02d3406`、`09c2692`），有约 2700 行专项测试 | 固定游戏 MVP 已不是默认路径。仍缺：只能在 `output_dir` 下新建空仓库、不能绑定用户已有主仓库；WorktreeRun 无 destroyable/destroyed 状态与销毁实现；`recovery_needed` 无赋值点，启动不做 `git worktree list` 交叉核对 |
 | SDK | M1 Company/Local Auth 与 M2 Conversation operation 已生成具体 response/error 类型 | 新产品接口不以 `unknown` 作为契约 |
-| Desktop | M1/M2 Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、发送、Thread、trusted loopback API 与重启恢复；发布目录包含 sidecar 运行依赖 | M4 的托盘、关窗后台运行、通知恢复仍未实现 |
+| Desktop | Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、trusted loopback API 与重启恢复；发布目录包含 sidecar 运行依赖。托盘（Show/Hide/Quit）与关窗后台已存在于 `src/main/index.ts` | M4 缺的是产品语义而非基础设施：暂停公司/停止新动作、窗口销毁后从托盘或协议重建、通知的事件生产者与高信号定位、Gate/受管资源恢复注册表、备份恢复与导出 |
 | Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
 | Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
-| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI；M2 有真实发送/Thread/作用域拒绝/恢复纵向，Windows unpacked 打包已验证运行依赖 | Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
+| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI，Windows unpacked 打包已验证运行依赖 | 浏览器 Gate 当前跑在 `packages/app/e2e/fake-control-plane.ts` 测试替身上，只有 Desktop Gate 走真实内嵌 Control Plane；M2 的“真实发送/Thread 纵向”在浏览器侧已无载体。Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
 
 因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
 ```text
 S0 产品事实基线：基本完成
-视觉验证：完成
 M1 Company Bootstrap：完成
-真实 IM 用户旅程：M2 完成
-自治领域交付闭环：软件方向有可复用原型，通用契约与跨领域验收尚未完成
+真实 IM 用户旅程：控制面契约完成；用户可见闭环随 WebUI 迁移回退，重建排在 R2
+Agent 执行内核：M3A 实施中
+自治领域交付闭环：Charter/治理/合并验证已落地，资源处置与跨领域验收未完成
 Agent 生命层与 Pre-Public 发布：尚未进入验收
+当前批次：体验重构 R0（gate 未通过，卡在 5 项真人验收）
 ```
 
 ## 3. 目标架构与边界
@@ -175,7 +177,12 @@ Local Control Plane（唯一权威写入者）
 
 目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-状态：已完成（2026-07-15）。真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry、SSE 重连和 Desktop sidecar 均已收口。Browser 与 Windows 原生 Electron 纵向 Gate 已纳入 CI；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
+状态：**控制面完成（2026-07-15），用户可见闭环于 2026-07-23 回退**。
+
+- 仍然成立：真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry、SSE 重连和 Desktop sidecar 均已收口；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
+- 已回退：`f51af90` 把共享 WebUI 整体迁移到 Eve/Nuxt，承载 M2 用户闭环的 Solid 应用（`packages/app/src`）随之删除。主要工作第 8 条（频道栏、主会话、Thread Panel、Composer 接生成 SDK）与最后一条退出标准（App Playwright 走真实本地 Server 完成董事会消息到 Thread 主路径）当前**均无代码载体**；浏览器 Gate 已改为跑在 `e2e/fake-control-plane.ts` 上。
+- 未达成项：主要工作第 7 条的八种高信号只有六种能真实产生——`signal-projector.ts` 的白名单是 conclusion/plan/status/risk/intervention 五种，decision 走董事会立项独立路径，approval 与 delivery 即使带事实源也会被拒为 `unsupported_signal`。
+- 重建归属：会话与 Thread 的用户界面按体验重构计划在 R2（WORK-02、WORK-03）重建，不在本里程碑内补做。本节其余内容作为控制面契约的退出标准继续有效。
 
 主要工作：
 
@@ -206,7 +213,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：建立以 Pi 为内置默认、Codex 与 Claude Code 为可选平级实现的统一 Agent Runtime；Workflow Engine 负责公司流程，不建设第二套 CLI、数据库或产品消息系统。
 
-状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通；当前最高优先级是 M3A-1，以统一 Agent Turn 修复机械式董事会发言并接通 Pi 显式 Skill；Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。
+状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通。M3A-1 的第一批（自然董事会聊天）与第三批（Pi 显式 Skill）已合并，第二批（统一 AgentTurn）部分完成——`src/agent-turn` 目前只做 prompt 组装，身份逻辑与 `session/llm.ts` 并存两份，且只被 GroupSession 调用；第四批的控制面证据已就绪，但 WebUI 契约丢弃了 skills/tools/usage 字段。Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。
 
 主要工作：
 
@@ -230,7 +237,7 @@ M3A 退出标准：
 - 运行事实可以重建 Session、Thread 和高信号投影，SSE 断线不影响权威状态；
 - 没有新增平行数据库、wanman API 或产品消息模型。
 
-#### M3A-1 — 自然 Agent Turn 与显式 Skill（当前开发计划）
+#### M3A-1 — 自然 Agent Turn 与显式 Skill（第一、三批已合并；第二、四批未完成）
 
 目标：所有员工使用 Pi Agent 作为默认心智运行时；角色只定义身份、职责、关注范围和决策权限，不规定固定回答模式；普通话题以自然语言交流，专业话题由 Agent 在运行中显式调用获准 Skill。董事会、项目群、Direct 和后续 Ambient 共用同一个 Agent Turn 内核，不再各自拼装人格和工作流 Prompt。
 
@@ -421,6 +428,8 @@ bun typecheck
 最小热修只包含第一批，可以立刻消除问候场景的机械感；它不构成 M3A-1 完成，因为没有实现统一 AgentTurn、显式 Skill 和审计闭环。
 
 #### M3B：Charter、动态组织与领域交付
+
+状态：部分实现。第 1、2、9、10、11 条已落地（正式领域模型与 Charter Definition of Ready、三预设与 Company→Project 继承、WorktreeRun 状态机、执行/复核绑定、审批后合并与主分支复验），并有约 2700 行 `test/company-project/` 专项测试；第 5 条只到 attempt 计数与失败 Artifact，无独立 Attempt 实体；第 7 条（文档与本地应用适配器）与第 12 条的启动交叉核对未做；第 13 条只有投影层契约，WebUI 无 Delivery Card。资源处置是最大缺口：WorktreeRun 没有 destroyable/destroyed 状态，也没有任何销毁实现，因此“未验证禁止销毁”目前是空洞满足。
 
 主要工作：
 
@@ -707,7 +716,7 @@ M0 App Shell 修复
 - 为产品方向再次整体重写 Eve/Nuxt、Electron、Bun/Effect 技术栈，或维护平行的正式 WebUI；
 - 为旧 API 保留长期双轨消息或项目模型：新产品不承担默认兼容义务。
 
-## 11. 关键假设与当前下一步
+## 11. 关键假设与里程碑剩余项
 
 最脆弱的技术假设是：现有 Session、AgentMessage、Workflow、Delegation、Admission 和 Worktree 能作为运行引擎被领域中立的新产品应用层适配，而不需要整体重写。
 
@@ -717,4 +726,13 @@ M0 App Shell 修复
 - M3 必须证明现有 Workflow/Admission 能在三类代表性任务中复用同一治理契约，并在导入仓库和严格 Worktree 状态机下完成软件交付；
 - 如果任一验证失败，只重写对应产品 application service / adaptor，不重写共享 WebUI 或整个 Agent Runtime。
 
-M0、M1、M2 已完成并通过各自退出标准。当前下一步固定为 M3A-1，按“自然董事会聊天 → 统一 AgentTurn 与身份上下文 → Pi 显式 Skill → 治理信号与 WebUI 工作记录分层”四批交付；M3A-1 退出后再推进 M3B 的 `Goal → Charter → Project → Work Item` 正式领域链路。M4 可以并行建立常驻体验、通知恢复和可供员工卡片复用的 AgentActivityProjection，但不得绕过 AgentTurn 或另建行为状态来源。
+**当前排期不在本文。** 自 2026-07-25 起，做哪一批由体验重构计划的 R0-R4 决定，当前批次是 R0（gate 未通过，卡在 5 项真人验收）。本文的 M 里程碑继续定义各子系统的目标架构与退出标准，供 R 阶段引用，但不再宣布“下一步做什么”。
+
+按里程碑口径，剩余项为：
+
+- M2：用户可见的会话与 Thread 界面待在 R2 重建；approval 与 delivery 两种高信号待接入投影器。
+- M3A：Pi 跨进程会话恢复、正式 Codex app-server 与 Claude Code Agent SDK 适配、CLI 适配器的实时投递、持久 follow_up 队列的消费者接线。
+- M3B：受管资源处置（WorktreeRun 销毁与孤儿扫描）、绑定用户已有主仓库、文档与本地应用适配器、跨领域验收。
+- M4：暂停与停止语义、窗口重建、通知生产者、恢复注册表、备份恢复与导出。
+- M5：私域硬边界闭环（当前 `PATCH /company_agent/:id` 可直接改写 SOUL/INSTRUCT，dream 子代理对全部 agent home 可读写），以及 Direct、Reflection、Ambient、人格型 Dreaming。这些能力受 PRD 4.1 的 Life 层解冻条件约束。
+- M6：隐私越权负向测试（当前为零）、领域测试进 CI（当前 CI 只跑 16 个 control-plane 测试文件）、macOS CI、打包签名与安装升级演练。
