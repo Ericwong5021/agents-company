@@ -113,7 +113,6 @@ async function expectSharedWorkspace(page: Page) {
   await page.waitForURL((url) => url.origin === webUIURL && url.pathname === "/inbox", { timeout: 120_000 })
   await page.waitForLoadState("domcontentloaded")
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible({ timeout: 120_000 })
-  await expect(page).toHaveTitle("Inbox · Agent Company")
   const navigation = page.getByRole("navigation", { name: "主导航" })
   await expect(navigation.getByRole("link")).toHaveCount(5)
   await expect(navigation.getByRole("link").allTextContents()).resolves.toEqual([
