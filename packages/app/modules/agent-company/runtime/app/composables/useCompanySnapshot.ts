@@ -1,6 +1,6 @@
 import { $fetch } from "ofetch"
-import { useFetch, useState } from "nuxt/app"
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useFetch, useRequestHeaders, useState } from "nuxt/app"
+import { computed, onBeforeUnmount, onMounted, onServerPrefetch, ref, watch } from "vue"
 import type { CompanySnapshot } from "../../shared/company-contract"
 import {
   companyReconnectDelay,
@@ -66,6 +66,8 @@ export function useCompanySnapshot() {
   const connection = useState("agent-company-connection", () => snapshot.value.connection)
   const reconnectAttempt = useState("agent-company-reconnect-attempt", () => 0)
   const reconnectTimer = ref<ReturnType<typeof setTimeout>>()
+  const nativeShell = import.meta.server
+    && /\bElectron\//.test(useRequestHeaders(["user-agent"])["user-agent"] ?? "")
 
   function applySnapshot(value: CompanySnapshot) {
     snapshot.value = value
@@ -91,6 +93,12 @@ export function useCompanySnapshot() {
   }
 
   watch([request.data, request.error], synchronizeSnapshot, { immediate: true })
+
+  onServerPrefetch(async () => {
+    if (!nativeShell || connection.value !== "connecting") return
+    await request
+    synchronizeSnapshot()
+  })
 
   async function refresh() {
     if (request.pending.value) return

@@ -10,6 +10,8 @@ const appConfig = useAppConfig();
 const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const connectionState = useState<CompanyConnection | undefined>("agent-company-connection");
 const snapshotState = useState<CompanySnapshot | undefined>("agent-company-snapshot-value");
+const nativeShell = useState("agent-company-native-shell", () =>
+  import.meta.server && /\bElectron\//.test(useRequestHeader("user-agent") ?? ""));
 const hydrated = ref(false);
 
 const activeItem = computed(() =>
@@ -17,7 +19,8 @@ const activeItem = computed(() =>
 );
 const observedConnection = computed(() =>
   connectionState.value ?? snapshotState.value?.connection ?? "connecting");
-const connection = computed(() => hydrated.value ? observedConnection.value : "connecting");
+const connection = computed(() =>
+  nativeShell.value || hydrated.value ? observedConnection.value : "connecting");
 const connectionLabel = computed(() => {
   if (connection.value === "ready") return "已连接";
   if (
