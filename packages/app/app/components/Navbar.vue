@@ -13,14 +13,14 @@ const snapshotState = useState<CompanySnapshot | undefined>("agent-company-snaps
 const nativeSnapshot = useState<CompanySnapshot | undefined>("agent-company-native-shell-snapshot");
 const hydrated = ref(false);
 
-if (
-  import.meta.server
-  && /\bElectron\//.test(useRequestHeader("user-agent") ?? "")
-  && !nativeSnapshot.value
-) {
+const nativeShell = import.meta.server
+  && /\bElectron\//.test(useRequestHeader("user-agent") ?? "");
+
+onServerPrefetch(async () => {
+  if (!nativeShell || nativeSnapshot.value) return;
   nativeSnapshot.value = await useRequestFetch()<CompanySnapshot>("/api/agent-company/snapshot")
     .then(value => value, () => undefined);
-}
+});
 
 const activeItem = computed(() =>
   activeShellNavigationItem(appConfig.shell.navigation, route.path),
