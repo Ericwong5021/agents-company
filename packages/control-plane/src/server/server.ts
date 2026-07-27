@@ -22,6 +22,7 @@ import { LocalAuthPublicRoutes, LocalAuthRoutes } from "./routes/local-auth"
 import { WorkspaceRouterMiddleware } from "./workspace"
 import { InstanceMiddleware } from "./routes/instance/middleware"
 import { WorkspaceRoutes } from "./routes/control/workspace"
+import { ExperienceRoutes } from "./routes/instance/experience"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { AppRuntime } from "@/effect/app-runtime"
@@ -76,6 +77,7 @@ export function create(opts: CreateOptions = {}) {
     .use(AuthMiddleware(auth))
     .route("/company/recruitment", CompanyRecruitmentRoutes())
     .route("/company", CompanyRoutes())
+    .route("/experience", ExperienceRoutes())
     .route("/global", GlobalRoutes())
     .route("/local-auth", LocalAuthRoutes())
 

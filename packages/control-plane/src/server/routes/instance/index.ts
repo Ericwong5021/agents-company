@@ -34,7 +34,6 @@ import { ConfigRoutes } from "./config"
 import { ExperimentalRoutes } from "./experimental"
 import { ProviderRoutes } from "./provider"
 import { EventRoutes } from "./event"
-import { ExperienceRoutes } from "./experience"
 import { SyncRoutes } from "./sync"
 import { InstanceMiddleware } from "./middleware"
 import { jsonRequest } from "./trace"
@@ -64,7 +63,6 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     .route("/company-agent", CompanyAgentRoutes())
     .route("/agent-run", AgentRunRoutes())
     .route("/company-project", CompanyProjectRoutes())
-    .route("/experience", ExperienceRoutes())
     .route("/group-session", GroupSessionRoutes())
     .route("/thread", ThreadRoutes())
     .route("/", AgentLifecycleRoutes())
