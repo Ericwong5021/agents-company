@@ -22,6 +22,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
     });
   }
 
+  useState<{ name: string; email: string } | undefined>(
+    "agent-company-session-user",
+  ).value = {
+    name: session.user.name,
+    email: session.user.email,
+  };
+
   if (
     !/\bElectron\//.test(useRequestHeader("user-agent") ?? "")
   ) return;
