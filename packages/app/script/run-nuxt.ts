@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
 
 const command = Bun.argv[2]
@@ -11,7 +11,7 @@ const exitCode = await (async () => {
     [
       "node",
       "--import",
-      path.join(import.meta.dir, "nuxt-process-lock.mjs"),
+      pathToFileURL(path.join(import.meta.dir, "nuxt-process-lock.mjs")).href,
       "./node_modules/nuxt/bin/nuxt.mjs",
       command,
     ],
