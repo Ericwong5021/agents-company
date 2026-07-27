@@ -8,7 +8,7 @@
       "y": 0,
       "name": "Agent Company · Marvis Pencil Master Board",
       "width": 4463,
-      "height": 3286,
+      "height": 8200,
       "fill": "#F2F2F4",
       "layout": "none",
       "children": [
@@ -17,7 +17,7 @@
           "id": "jriae",
           "x": 0,
           "y": 0,
-          "name": "01 · New Conversation",
+          "name": "01 · New Goal",
           "clip": true,
           "width": 1421,
           "height": 768,
@@ -68,7 +68,7 @@
               "y": 102,
               "name": "Marvis Hero Name",
               "fill": "$text",
-              "content": "Marvis",
+              "content": "Agent Company",
               "fontFamily": "$font-primary",
               "fontSize": 30,
               "fontWeight": "700"
@@ -80,7 +80,7 @@
               "y": 144,
               "name": "Marvis Hero Status",
               "fill": "$text-muted",
-              "content": "◌ 马维斯 为你24小时随时在线",
+              "content": "说出目标，公司会围绕真实进展动态组织团队",
               "fontFamily": "$font-primary",
               "fontSize": 14,
               "fontWeight": "normal"
@@ -6508,7 +6508,7 @@
           "id": "VQyEm",
           "x": 0,
           "y": 1736,
-          "name": "07 · Office · Static",
+          "name": "07 · Office · Employee Cards",
           "clip": true,
           "width": 1421,
           "height": 768,
@@ -6539,314 +6539,327 @@
             {
               "type": "text",
               "id": "viRw3",
-              "x": 168,
-              "y": 38,
+              "x": 216,
+              "y": 58,
               "name": "Office Page Title",
               "fill": "$text",
               "textGrowth": "fixed-width",
-              "width": 1253,
-              "content": "Marvis办公室",
-              "textAlign": "center",
+              "width": 650,
+              "content": "Agent Company 办公室",
               "fontFamily": "$font-primary",
-              "fontSize": 16,
+              "fontSize": 28,
               "fontWeight": "600"
             },
             {
-              "type": "frame",
-              "id": "g6FYov",
-              "x": 246,
-              "y": 84,
-              "name": "Office Animation Stage",
-              "width": 720,
-              "height": 646,
-              "fill": "$surface",
-              "cornerRadius": 12,
-              "layout": "none"
+              "type": "text",
+              "id": "OGYMp",
+              "x": 216,
+              "y": 36,
+              "name": "Office Eyebrow",
+              "fill": "$accent",
+              "content": "实时公司视图",
+              "fontFamily": "$font-primary",
+              "fontSize": 10,
+              "fontWeight": "600",
+              "letterSpacing": 1
+            },
+            {
+              "type": "text",
+              "id": "ntl8A",
+              "x": 216,
+              "y": 98,
+              "name": "Office Subtitle",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 660,
+              "content": "员工状态来自真实 Agent Run 与 Thread 事实。没有证据时只显示空闲。",
+              "fontFamily": "$font-primary",
+              "fontSize": 11,
+              "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "SOtMk",
-              "x": 1050,
-              "y": 84,
-              "name": "Office Metrics Panel",
-              "width": 324,
-              "height": 520,
-              "layout": "none",
+              "id": "ejT4E",
+              "x": 930,
+              "y": 42,
+              "name": "Office Summary",
+              "width": 430,
+              "height": 66,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
               "children": [
                 {
-                  "type": "text",
-                  "id": "dkE31",
-                  "x": 0,
-                  "y": 0,
-                  "name": "Office Consumed Label",
-                  "fill": "$text-faint",
-                  "content": "今日消耗Token",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "sFLm6",
-                  "x": 0,
-                  "y": 20,
-                  "name": "Office Consumed Value",
-                  "fill": "$text",
-                  "content": "66,988",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 16,
-                  "fontWeight": "600"
-                },
-                {
-                  "type": "text",
-                  "id": "Z79Ktu",
-                  "x": 58,
-                  "y": 23,
-                  "name": "Office Consumed Total",
-                  "fill": "$text-faint",
-                  "content": "/1000万  ◉",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 11,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "rectangle",
-                  "id": "s9gC9",
-                  "x": 0,
-                  "y": 50,
-                  "name": "Office Consumed Divider",
-                  "fill": "$border",
-                  "width": 154,
-                  "height": 1
-                },
-                {
-                  "type": "text",
-                  "id": "yLuvg",
-                  "x": 170,
-                  "y": 0,
-                  "name": "Office Saved Label",
-                  "fill": "$text-faint",
-                  "content": "今日节省Token",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "yxQR3",
-                  "x": 170,
-                  "y": 20,
-                  "name": "Office Saved Value",
-                  "fill": "$text",
-                  "content": "0  ◉",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 16,
-                  "fontWeight": "600"
-                },
-                {
-                  "type": "text",
-                  "id": "xQ3WK",
-                  "x": 170,
-                  "y": 43,
-                  "name": "Office Saved Note",
-                  "fill": "$text-faint",
-                  "content": "使用本地模型节省",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 9,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "UtO6O",
-                  "x": 0,
-                  "y": 92,
-                  "name": "Office Detail Heading",
-                  "fill": "$text-faint",
-                  "content": "对话明细",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "z2qKS",
-                  "x": 292,
-                  "y": 92,
-                  "name": "Office Detail Filter",
-                  "fill": "$text-muted",
-                  "content": "全部⌄",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
-                },
-                {
                   "type": "frame",
-                  "id": "OVzHT",
-                  "x": 0,
-                  "y": 118,
-                  "name": "Office Summary Card",
-                  "width": 324,
-                  "height": 78,
-                  "fill": "$sidebar",
-                  "cornerRadius": 12,
-                  "layout": "none",
+                  "id": "CcMgY",
+                  "name": "Metric 真实员工",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 3,
+                  "justifyContent": "center",
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "s99Zn",
-                      "x": 0,
-                      "y": 20,
-                      "name": "Office Summary Value / 进行中",
+                      "id": "gXv2t",
+                      "name": "Metric Value 真实员工",
                       "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "0",
-                      "textAlign": "center",
+                      "content": "3",
                       "fontFamily": "$font-primary",
-                      "fontSize": 14,
+                      "fontSize": 18,
                       "fontWeight": "600"
                     },
                     {
                       "type": "text",
-                      "id": "PHaJQ",
-                      "x": 0,
-                      "y": 44,
-                      "name": "Office Summary Label / 进行中",
+                      "id": "P3338",
+                      "name": "Metric Label 真实员工",
                       "fill": "$text-faint",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "进行中",
-                      "textAlign": "center",
+                      "content": "真实员工",
                       "fontFamily": "$font-primary",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "RPr5y",
-                      "x": 108,
-                      "y": 20,
-                      "name": "Office Summary Value / 已完成",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "1",
-                      "textAlign": "center",
-                      "fontFamily": "$font-primary",
-                      "fontSize": 14,
-                      "fontWeight": "600"
-                    },
-                    {
-                      "type": "text",
-                      "id": "FDSN6",
-                      "x": 108,
-                      "y": 44,
-                      "name": "Office Summary Label / 已完成",
-                      "fill": "$text-faint",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "已完成",
-                      "textAlign": "center",
-                      "fontFamily": "$font-primary",
-                      "fontSize": 10,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "faRvi",
-                      "x": 216,
-                      "y": 20,
-                      "name": "Office Summary Value / 总计",
-                      "fill": "$text",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "1",
-                      "textAlign": "center",
-                      "fontFamily": "$font-primary",
-                      "fontSize": 14,
-                      "fontWeight": "600"
-                    },
-                    {
-                      "type": "text",
-                      "id": "QDOj2",
-                      "x": 216,
-                      "y": 44,
-                      "name": "Office Summary Label / 总计",
-                      "fill": "$text-faint",
-                      "textGrowth": "fixed-width",
-                      "width": 108,
-                      "content": "总计",
-                      "textAlign": "center",
-                      "fontFamily": "$font-primary",
-                      "fontSize": 10,
+                      "fontSize": 9,
                       "fontWeight": "normal"
                     }
                   ]
                 },
                 {
-                  "type": "text",
-                  "id": "slWSU",
-                  "x": 0,
-                  "y": 222,
-                  "name": "Office Conversation Title",
-                  "fill": "$text",
-                  "textGrowth": "fixed-width",
-                  "width": 248,
-                  "content": "请使用 ths-advanced-analysis skill...",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 12,
-                  "fontWeight": "600"
+                  "type": "frame",
+                  "id": "JGcXZ",
+                  "name": "Metric 运行或等待",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 3,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sErEa",
+                      "name": "Metric Value 运行或等待",
+                      "fill": "$text",
+                      "content": "2",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "N4l8GX",
+                      "name": "Metric Label 运行或等待",
+                      "fill": "$text-faint",
+                      "content": "运行或等待",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 },
                 {
-                  "type": "text",
-                  "id": "gK6d8",
-                  "x": 276,
-                  "y": 222,
-                  "name": "Office Conversation Status",
-                  "fill": "$text-muted",
-                  "content": "已完成 ›",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
+                  "type": "frame",
+                  "id": "MIH2u",
+                  "name": "Metric 需关注",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 3,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "I773Is",
+                      "name": "Metric Value 需关注",
+                      "fill": "$danger",
+                      "content": "1",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S0RW3",
+                      "name": "Metric Label 需关注",
+                      "fill": "$text-faint",
+                      "content": "需关注",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 },
                 {
-                  "type": "text",
-                  "id": "SdyZh",
-                  "x": 0,
-                  "y": 248,
-                  "name": "Office Conversation Token",
-                  "fill": "$text-faint",
-                  "content": "累计Token消耗 21308",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
+                  "type": "frame",
+                  "id": "zgCy4",
+                  "name": "Metric 今日事件",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 3,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "tiEuP",
+                      "name": "Metric Value 今日事件",
+                      "fill": "$text",
+                      "content": "24",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "QPZUt",
+                      "name": "Metric Label 今日事件",
+                      "fill": "$text-faint",
+                      "content": "今日事件",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "cK9zi",
+              "type": "ref",
+              "ref": "qvPwL",
+              "name": "Employee Card / Product Lead",
+              "x": 216,
+              "y": 154,
+              "width": 540,
+              "height": 250
+            },
+            {
+              "id": "Z2iPK",
+              "type": "ref",
+              "ref": "qvPwL",
+              "name": "Employee Card / CTO",
+              "x": 772,
+              "y": 154,
+              "width": 540,
+              "height": 250,
+              "descendants": {
+                "JwnhY": {
+                  "content": "CTO"
+                },
+                "znI4E": {
+                  "content": "临时责任 · 技术验证与风险控制"
+                },
+                "wL9aS": {
+                  "content": "等待 Review"
+                },
+                "v9BNKD": {
+                  "content": "项目 Thread"
+                },
+                "zoqg6": {
+                  "content": "验证方案可执行性与边界"
+                },
+                "P3vlX": {
+                  "content": "可以协调"
+                }
+              }
+            },
+            {
+              "id": "G6Kw9",
+              "type": "ref",
+              "ref": "qvPwL",
+              "name": "Employee Card / CEO",
+              "x": 216,
+              "y": 420,
+              "width": 540,
+              "height": 250,
+              "descendants": {
+                "JwnhY": {
+                  "content": "CEO"
+                },
+                "znI4E": {
+                  "content": "董事会 · 公司目标与最终取舍"
+                },
+                "t00mkI": {
+                  "fill": "$danger-soft"
+                },
+                "wL9aS": {
+                  "content": "失败待恢复"
+                },
+                "v9BNKD": {
+                  "content": "董事会"
+                },
+                "zoqg6": {
+                  "content": "工具限频导致当前交付中断"
+                },
+                "P3vlX": {
+                  "content": "需要介入"
+                },
+                "htA27": {
+                  "content": "需关注 · since 14:41",
+                  "fill": "$danger"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "eopMh",
+              "x": 772,
+              "y": 420,
+              "name": "Ambient Contract",
+              "width": 540,
+              "height": 118,
+              "fill": "$surface-subtle",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "gap": 12,
+              "padding": 18,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "bozxC",
+                  "name": "Ambient Icon",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "footprints",
+                  "library": "lucide",
+                  "fill": "$accent"
                 },
                 {
-                  "type": "text",
-                  "id": "E9AUZ",
-                  "x": 258,
-                  "y": 248,
-                  "name": "Office Conversation Time",
-                  "fill": "$text-faint",
-                  "content": "19:08 07/16",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "n4Nwq",
-                  "x": 0,
-                  "y": 312,
-                  "name": "Office End Label",
-                  "fill": "$text-faint",
-                  "textGrowth": "fixed-width",
-                  "width": 324,
-                  "content": "没有更多了",
-                  "textAlign": "center",
-                  "fontFamily": "$font-primary",
-                  "fontSize": 10,
-                  "fontWeight": "normal"
+                  "type": "frame",
+                  "id": "x4WPm",
+                  "name": "Ambient Copy",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "s92q1i",
+                      "name": "Ambient Title",
+                      "fill": "$text",
+                      "content": "闲逛会创造真实价值，但不会被伪造",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Etd7j",
+                      "name": "Ambient Body",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "roaming、socializing、reflecting、dreaming 只有产生可审计事件后才会显示，并继续复用员工卡片状态契约。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 }
               ]
             }
@@ -6860,7 +6873,7 @@
           "name": "00 · Design System",
           "clip": true,
           "width": 1421,
-          "height": 1450,
+          "height": 1650,
           "fill": "$canvas",
           "layout": "none",
           "children": [
@@ -7416,7 +7429,7 @@
               "id": "A39ypg",
               "x": 48,
               "y": 540,
-              "name": "Component / Sidebar / Marvis",
+              "name": "Component / Sidebar / Agent Company",
               "reusable": true,
               "clip": true,
               "width": 168,
@@ -7466,9 +7479,9 @@
                   "y": 38,
                   "name": "Brand Label",
                   "fill": "$text",
-                  "content": "Marvis",
+                  "content": "Agent Company",
                   "fontFamily": "$font-primary",
-                  "fontSize": 18,
+                  "fontSize": 13,
                   "fontWeight": "700"
                 },
                 {
@@ -7529,7 +7542,7 @@
                   "cornerRadius": 6,
                   "id": "hxlbO",
                   "x": 20,
-                  "y": 396,
+                  "y": 164,
                   "name": "Office Active Background",
                   "enabled": false,
                   "fill": "$selected",
@@ -7577,7 +7590,7 @@
                       "y": 6,
                       "name": "Primary / New Label",
                       "fill": "$text",
-                      "content": "新建对话",
+                      "content": "新建目标",
                       "fontFamily": "$font-primary",
                       "fontSize": 11,
                       "fontWeight": "500"
@@ -7590,6 +7603,7 @@
                   "x": 20,
                   "y": 152,
                   "name": "Primary / Tasks",
+                  "enabled": false,
                   "width": 138,
                   "height": 28,
                   "layout": "none",
@@ -7627,6 +7641,7 @@
                   "x": 20,
                   "y": 184,
                   "name": "Primary / Skills",
+                  "enabled": false,
                   "width": 138,
                   "height": 28,
                   "layout": "none",
@@ -7662,7 +7677,7 @@
                   "type": "frame",
                   "id": "zHOo9",
                   "x": 20,
-                  "y": 260,
+                  "y": 248,
                   "name": "Library / Apps",
                   "width": 138,
                   "height": 28,
@@ -7676,7 +7691,7 @@
                       "name": "Library / Apps Icon",
                       "width": 14,
                       "height": 14,
-                      "icon": "layout-grid",
+                      "icon": "building-2",
                       "library": "lucide",
                       "weight": 600,
                       "fill": "$text"
@@ -7688,7 +7703,7 @@
                       "y": 6,
                       "name": "Library / Apps Label",
                       "fill": "$text",
-                      "content": "应用",
+                      "content": "公司",
                       "fontFamily": "$font-primary",
                       "fontSize": 11,
                       "fontWeight": "500"
@@ -7699,7 +7714,7 @@
                   "type": "frame",
                   "id": "d46bhr",
                   "x": 20,
-                  "y": 292,
+                  "y": 280,
                   "name": "Library / Docs",
                   "width": 138,
                   "height": 28,
@@ -7713,7 +7728,7 @@
                       "name": "Library / Docs Icon",
                       "width": 14,
                       "height": 14,
-                      "icon": "file-text",
+                      "icon": "circle-dot",
                       "library": "lucide",
                       "weight": 600,
                       "fill": "$text"
@@ -7725,7 +7740,7 @@
                       "y": 6,
                       "name": "Library / Docs Label",
                       "fill": "$text",
-                      "content": "文档",
+                      "content": "董事会",
                       "fontFamily": "$font-primary",
                       "fontSize": 11,
                       "fontWeight": "500"
@@ -7738,6 +7753,7 @@
                   "x": 20,
                   "y": 324,
                   "name": "Library / Gallery",
+                  "enabled": false,
                   "width": 138,
                   "height": 28,
                   "layout": "none",
@@ -7773,7 +7789,7 @@
                   "type": "frame",
                   "id": "KHQsL",
                   "x": 20,
-                  "y": 396,
+                  "y": 164,
                   "name": "Conversation / Office",
                   "width": 138,
                   "height": 28,
@@ -7810,10 +7826,10 @@
                   "type": "text",
                   "id": "a15tcZ",
                   "x": 26,
-                  "y": 236,
+                  "y": 220,
                   "name": "Local Knowledge Label",
                   "fill": "$text-faint",
-                  "content": "本地知识库",
+                  "content": "公司协作",
                   "fontFamily": "$font-primary",
                   "fontSize": 9,
                   "fontWeight": "normal"
@@ -7824,6 +7840,7 @@
                   "x": 26,
                   "y": 372,
                   "name": "Conversation Section Label",
+                  "enabled": false,
                   "fill": "$text-faint",
                   "content": "对话",
                   "fontFamily": "$font-primary",
@@ -7834,7 +7851,7 @@
                   "type": "frame",
                   "id": "lgSeS",
                   "x": 20,
-                  "y": 428,
+                  "y": 312,
                   "name": "Conversation / Current",
                   "width": 138,
                   "height": 28,
@@ -7849,7 +7866,7 @@
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": 112,
-                      "content": "请使用 ths-advanced...",
+                      "content": "真实项目频道",
                       "fontFamily": "$font-primary",
                       "fontSize": 10,
                       "fontWeight": "normal"
@@ -7862,7 +7879,7 @@
                       "name": "Conversation More Icon",
                       "width": 12,
                       "height": 12,
-                      "icon": "ellipsis",
+                      "icon": "folder",
                       "library": "lucide",
                       "fill": "$text-faint"
                     }
@@ -7885,7 +7902,7 @@
                   "y": 725,
                   "name": "Profile Name",
                   "fill": "$text-muted",
-                  "content": "大东",
+                  "content": "本地用户",
                   "fontFamily": "$font-primary",
                   "fontSize": 10,
                   "fontWeight": "normal"
@@ -8433,7 +8450,7 @@
                   "y": 16,
                   "name": "Composer Placeholder",
                   "fill": "$text-muted",
-                  "content": "请输入任务，交给我来帮你完成",
+                  "content": "请输入目标，交给公司来推进",
                   "fontFamily": "$font-primary",
                   "fontSize": 12,
                   "fontWeight": "normal"
@@ -8649,7 +8666,7 @@
               "id": "U5frQ",
               "x": 460,
               "y": 820,
-              "name": "Component / Output Row",
+              "name": "Component / Artifact Row",
               "reusable": true,
               "width": 379,
               "height": 68,
@@ -8796,6 +8813,2539 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "frame",
+              "id": "qvPwL",
+              "x": 890,
+              "y": 540,
+              "name": "Component / Employee Activity Card",
+              "reusable": true,
+              "width": 480,
+              "height": 250,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "advSb",
+                  "x": 18,
+                  "y": 18,
+                  "name": "Employee Avatar",
+                  "fill": "$surface-subtle",
+                  "width": 42,
+                  "height": 42
+                },
+                {
+                  "type": "text",
+                  "id": "JwnhY",
+                  "x": 74,
+                  "y": 18,
+                  "name": "Employee Name",
+                  "fill": "$text",
+                  "content": "Product Lead",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "znI4E",
+                  "x": 74,
+                  "y": 40,
+                  "name": "Employee Role",
+                  "fill": "$text-muted",
+                  "content": "临时责任 · 目标收敛与证据组织",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "t00mkI",
+                  "x": 378,
+                  "y": 18,
+                  "name": "Activity Badge",
+                  "width": 84,
+                  "height": 24,
+                  "fill": "$accent-soft",
+                  "cornerRadius": 999,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wL9aS",
+                      "name": "Activity Badge Label",
+                      "fill": "$accent",
+                      "content": "协作中",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "f5UVTG",
+                  "x": 18,
+                  "y": 88,
+                  "name": "位置 Label",
+                  "fill": "$text-faint",
+                  "content": "位置",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "v9BNKD",
+                  "x": 92,
+                  "y": 88,
+                  "name": "位置 Value",
+                  "fill": "$text",
+                  "content": "董事会",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "T3ETT",
+                  "x": 18,
+                  "y": 120,
+                  "name": "正在关注 Label",
+                  "fill": "$text-faint",
+                  "content": "正在关注",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "zoqg6",
+                  "x": 92,
+                  "y": 120,
+                  "name": "正在关注 Value",
+                  "fill": "$text",
+                  "content": "确认高信号消息与来源 Thread",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "fEjMu",
+                  "x": 18,
+                  "y": 152,
+                  "name": "可打断性 Label",
+                  "fill": "$text-faint",
+                  "content": "可打断性",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "P3vlX",
+                  "x": 92,
+                  "y": 152,
+                  "name": "可打断性 Value",
+                  "fill": "$text",
+                  "content": "建议先查看 Thread",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "rectangle",
+                  "id": "L4mUB",
+                  "x": 18,
+                  "y": 190,
+                  "name": "Card Divider",
+                  "fill": "$border",
+                  "width": 444,
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "htA27",
+                  "x": 18,
+                  "y": 210,
+                  "name": "Attention",
+                  "fill": "$text-muted",
+                  "content": "专注 · since 14:32",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "j282P",
+                  "x": 384,
+                  "y": 210,
+                  "name": "Evidence Link",
+                  "fill": "$text",
+                  "content": "查看证据 →",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "sDa4A",
+              "x": 890,
+              "y": 820,
+              "name": "Component / Signal Message",
+              "reusable": true,
+              "width": 480,
+              "height": 112,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SrFS6",
+                  "x": 16,
+                  "y": 16,
+                  "name": "Signal Author",
+                  "fill": "$text",
+                  "content": "Product Lead",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "eOat1",
+                  "x": 105,
+                  "y": 16,
+                  "name": "Signal Badge",
+                  "fill": "$accent",
+                  "content": "结论",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 9,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "PPoCm",
+                  "x": 16,
+                  "y": 44,
+                  "name": "Signal Body",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": 448,
+                  "content": "目标已经收敛，下一步进入验证并保留来源证据。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "jbmQY",
+                  "x": 16,
+                  "y": 86,
+                  "name": "Signal Evidence",
+                  "fill": "$text-muted",
+                  "content": "查看来源 Thread →",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 9,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ws7nH",
+              "x": 890,
+              "y": 960,
+              "name": "Component / Attempt Card",
+              "reusable": true,
+              "width": 480,
+              "height": 142,
+              "fill": "$danger-soft",
+              "cornerRadius": "$radius-input",
+              "stroke": "$danger",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "qO7Ow",
+                  "x": 16,
+                  "y": 14,
+                  "name": "Attempt Number",
+                  "fill": "$text-muted",
+                  "content": "ATTEMPT 2",
+                  "fontFamily": "$font-mono",
+                  "fontSize": 9,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "HY8w5",
+                  "x": 370,
+                  "y": 14,
+                  "name": "Attempt State",
+                  "fill": "$danger",
+                  "content": "失败 · 可重试",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "v3JHaA",
+                  "x": 16,
+                  "y": 42,
+                  "name": "Attempt Cause",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": 448,
+                  "content": "工具调用触发限频，当前交付未完成。失败现场和输入已保留。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "m0E0eB",
+                  "x": 16,
+                  "y": 96,
+                  "name": "Attempt Adjustment",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 448,
+                  "content": "调整：降低并发，加入退避后重试。风险扩大时再投影到群聊。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xfeb3",
+              "x": 890,
+              "y": 1130,
+              "name": "Component / Status Badge",
+              "reusable": true,
+              "width": 88,
+              "height": 26,
+              "fill": "$success-soft",
+              "cornerRadius": 999,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "BF3hJ",
+                  "name": "Status Label",
+                  "fill": "$success",
+                  "content": "已验证",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Jt5bC",
+          "x": 0,
+          "y": 3386,
+          "name": "Marvis Reference Archive · 2026-07-18",
+          "clip": true,
+          "width": 4463,
+          "height": 1860,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "HlAvs",
+              "x": 48,
+              "y": 38,
+              "name": "Archive Title",
+              "fill": "$text",
+              "content": "Marvis Reference Archive · 2026-07-18 实机",
+              "fontFamily": "$font-primary",
+              "fontSize": 24,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "UTQ12",
+              "x": 48,
+              "y": 76,
+              "name": "Archive Note",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 2100,
+              "content": "吸收：轻盈桌面氛围、空间感、主回答与工作分层。改造：单聊变群聊，办公室变真实状态投影。拒绝：虚假 Token、无能力导航和任意本地路径暴露。",
+              "lineHeight": 1.5,
+              "fontFamily": "$font-primary",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "ZVjnY",
+              "x": 48,
+              "y": 124,
+              "name": "Reference / 首页",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "YDgDS",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 首页",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-home-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "lD2kv",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 首页",
+                  "fill": "$text",
+                  "content": "首页",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "CJlx4",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 首页",
+                  "fill": "$text-muted",
+                  "content": "吸收 · 留白与目标 Composer",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fy9r4",
+              "x": 1138,
+              "y": 124,
+              "name": "Reference / 自动任务",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "X4NBWw",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 自动任务",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-auto-tasks-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "N2Jr0Q",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 自动任务",
+                  "fill": "$text",
+                  "content": "自动任务",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "aDpdH",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 自动任务",
+                  "fill": "$text-muted",
+                  "content": "拒绝 · 首版不复制无能力入口",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "c2cLi",
+              "x": 2228,
+              "y": 124,
+              "name": "Reference / 技能广场",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "neTYb",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 技能广场",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-skill-plaza-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "Igfwn",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 技能广场",
+                  "fill": "$text",
+                  "content": "技能广场",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "Kv5Re",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 技能广场",
+                  "fill": "$text-muted",
+                  "content": "改造 · 能力由自组织选择",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "z8A4jH",
+              "x": 3318,
+              "y": 124,
+              "name": "Reference / 应用",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "cjqm8",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 应用",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-apps-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "yyluy",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 应用",
+                  "fill": "$text",
+                  "content": "应用",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "Tzt0d",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 应用",
+                  "fill": "$text-muted",
+                  "content": "拒绝 · 不提前覆盖全量行业",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Bz44J",
+              "x": 48,
+              "y": 690,
+              "name": "Reference / 办公室",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "Mkj0X",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 办公室",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-office-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "kiH2K",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 办公室",
+                  "fill": "$text",
+                  "content": "办公室",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "VwlAb",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 办公室",
+                  "fill": "$text-muted",
+                  "content": "改造 · 真实员工活动卡片",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DCxmu",
+              "x": 1138,
+              "y": 690,
+              "name": "Reference / 主回答",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "xC9v7",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 主回答",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-conversation-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "u0VLfl",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 主回答",
+                  "fill": "$text",
+                  "content": "主回答",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "r6WSm",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 主回答",
+                  "fill": "$text-muted",
+                  "content": "吸收 · 高信号结果层",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "LpiDS",
+              "x": 2228,
+              "y": 690,
+              "name": "Reference / 工作日志",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "YMfiR",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 工作日志",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-worklog-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "i7c2a",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 工作日志",
+                  "fill": "$text",
+                  "content": "工作日志",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "u7N9aX",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 工作日志",
+                  "fill": "$text-muted",
+                  "content": "吸收 · 失败尝试可追踪",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "pT5Mu",
+              "x": 3318,
+              "y": 690,
+              "name": "Reference / 产出物",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "f52UZG",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 产出物",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-artifacts-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "ia8t3",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 产出物",
+                  "fill": "$text",
+                  "content": "产出物",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "blebb",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 产出物",
+                  "fill": "$text-muted",
+                  "content": "吸收 · 独立产出物列表",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xeqeD",
+              "x": 48,
+              "y": 1256,
+              "name": "Reference / 预览",
+              "width": 1040,
+              "height": 540,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "P9B3GI",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Screenshot / 预览",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "assets/references/marvis-preview-2026-07-18.png",
+                    "mode": "fill"
+                  },
+                  "width": 1020,
+                  "height": 458
+                },
+                {
+                  "type": "text",
+                  "id": "PAfmC",
+                  "x": 16,
+                  "y": 486,
+                  "name": "Reference Label / 预览",
+                  "fill": "$text",
+                  "content": "预览",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "lq8LI",
+                  "x": 126,
+                  "y": 486,
+                  "name": "Reference Decision / 预览",
+                  "fill": "$text-muted",
+                  "content": "改造 · 安全预览与受管位置",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "DOEOk",
+          "x": 0,
+          "y": 5346,
+          "name": "08 · Company Group · High Signal",
+          "clip": true,
+          "width": 1421,
+          "height": 768,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "id": "NdBT9",
+              "type": "ref",
+              "ref": "A39ypg",
+              "name": "Company Group Sidebar",
+              "x": 0,
+              "y": 0,
+              "width": 168,
+              "height": 768,
+              "descendants": {
+                "MHGhe": {
+                  "enabled": false
+                },
+                "hxlbO": {
+                  "enabled": false
+                },
+                "adZqE": {
+                  "enabled": true
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "Amz2O",
+              "x": 208,
+              "y": 30,
+              "name": "Company Group Title",
+              "fill": "$text",
+              "content": "公司群",
+              "fontFamily": "$font-primary",
+              "fontSize": 16,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "Z1S5Fb",
+              "x": 208,
+              "y": 56,
+              "name": "Company Group Subtitle",
+              "fill": "$text-muted",
+              "content": "只展示结论、决策、计划、状态、风险、审批、交付和介入",
+              "fontFamily": "$font-primary",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "EkJHE",
+              "x": 208,
+              "y": 92,
+              "name": "High Signal Feed",
+              "width": 760,
+              "height": 520,
+              "fill": "$canvas",
+              "layout": "vertical",
+              "gap": 14,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dk7p0",
+                  "name": "User Goal Message",
+                  "width": "fill_container",
+                  "height": 86,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-card",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "M3cvuN",
+                      "x": 16,
+                      "y": 14,
+                      "name": "User Author",
+                      "fill": "$text",
+                      "content": "你",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "BSdrB",
+                      "x": 16,
+                      "y": 40,
+                      "name": "User Goal",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "研究 Agent 公司如何形成可持续的自组织与自治理，并给出下一阶段产品决策。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "id": "C8Zhj4",
+                  "type": "ref",
+                  "ref": "sDa4A",
+                  "name": "Signal / Plan",
+                  "width": "fill_container",
+                  "height": 112,
+                  "descendants": {
+                    "eOat1": {
+                      "content": "计划"
+                    },
+                    "PPoCm": {
+                      "content": "先验证状态投影，再完成群聊、Thread 和员工卡片的一条真实闭环。"
+                    }
+                  }
+                },
+                {
+                  "id": "RpmWI",
+                  "type": "ref",
+                  "ref": "sDa4A",
+                  "name": "Signal / Risk",
+                  "width": "fill_container",
+                  "height": 112,
+                  "descendants": {
+                    "SrFS6": {
+                      "content": "CTO"
+                    },
+                    "eOat1": {
+                      "content": "风险",
+                      "fill": "$danger"
+                    },
+                    "PPoCm": {
+                      "content": "现有 Attempt 只保留当前计数，历史失败链需要服务端新增权威记录。"
+                    }
+                  }
+                },
+                {
+                  "id": "Mw3yf",
+                  "type": "ref",
+                  "ref": "sDa4A",
+                  "name": "Signal / Delivery",
+                  "width": "fill_container",
+                  "height": 112,
+                  "descendants": {
+                    "SrFS6": {
+                      "content": "Product Lead"
+                    },
+                    "eOat1": {
+                      "content": "交付",
+                      "fill": "$success"
+                    },
+                    "PPoCm": {
+                      "content": "交互规范、视觉 Token 与 Marvis 参考档案已经完成并可追溯。"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IkfqV",
+              "x": 994,
+              "y": 0,
+              "name": "Source Thread Context",
+              "width": 427,
+              "height": 768,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": {
+                "left": 1
+              },
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": [
+                32,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "jRbPD",
+                  "name": "Source Thread Heading",
+                  "fill": "$text",
+                  "content": "来源 Thread",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "r7W3C",
+                  "name": "Source Thread Title",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "产品方向与状态投影验证",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "id": "j76rUq",
+                  "type": "ref",
+                  "ref": "xfeb3",
+                  "name": "Thread Verified Badge"
+                },
+                {
+                  "type": "text",
+                  "id": "oBKuh",
+                  "name": "Context Copy",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "每条高信号消息都能回到这个 Thread。普通协作、工具调用和失败重试留在工作日志，不污染公司群。",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "id": "P9WQGD",
+              "type": "ref",
+              "ref": "o1YxC",
+              "name": "Company Group Composer",
+              "x": 208,
+              "y": 632,
+              "width": 764,
+              "height": 108,
+              "descendants": {
+                "JMGo7": {
+                  "content": "向公司群补充目标或上下文"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "EGnIP",
+          "x": 1521,
+          "y": 5346,
+          "name": "09 · Thread · Attempt Recovery",
+          "clip": true,
+          "width": 1421,
+          "height": 768,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "id": "PLrBY",
+              "type": "ref",
+              "ref": "A39ypg",
+              "name": "Recovery Sidebar",
+              "x": 0,
+              "y": 0,
+              "width": 168,
+              "height": 768
+            },
+            {
+              "type": "text",
+              "id": "S4faL",
+              "x": 208,
+              "y": 30,
+              "name": "Recovery Title",
+              "fill": "$text",
+              "content": "Thread · 数据收集与验证",
+              "fontFamily": "$font-primary",
+              "fontSize": 16,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "DqZiI",
+              "x": 208,
+              "y": 58,
+              "name": "Recovery Status",
+              "fill": "$success",
+              "content": "已完成 · 失败尝试仍保留",
+              "fontFamily": "$font-primary",
+              "fontSize": 10,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "dXHTd",
+              "x": 208,
+              "y": 96,
+              "name": "Recovery Work Log",
+              "width": 738,
+              "height": 590,
+              "fill": "$canvas",
+              "layout": "vertical",
+              "gap": 14,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "y3YiUw",
+                  "name": "Work Log Start",
+                  "width": "fill_container",
+                  "height": 72,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-input",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u0jxF",
+                      "x": 16,
+                      "y": 14,
+                      "name": "Start Agent",
+                      "fill": "$text",
+                      "content": "Research Agent",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "w6g3n",
+                      "x": 16,
+                      "y": 38,
+                      "name": "Start Body",
+                      "fill": "$text-muted",
+                      "content": "开始收集证据并核验来源。",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "id": "jjiR3",
+                  "type": "ref",
+                  "ref": "ws7nH",
+                  "name": "Attempt 1 / Failed",
+                  "width": "fill_container",
+                  "height": 142,
+                  "descendants": {
+                    "qO7Ow": {
+                      "content": "ATTEMPT 1"
+                    },
+                    "v3JHaA": {
+                      "content": "搜索接口超时，未获得完整来源。失败现场和输入已保留。"
+                    },
+                    "m0E0eB": {
+                      "content": "调整：缩小查询范围，改用权威一手来源。"
+                    }
+                  }
+                },
+                {
+                  "id": "xr8Tg",
+                  "type": "ref",
+                  "ref": "ws7nH",
+                  "name": "Attempt 2 / Failed",
+                  "width": "fill_container",
+                  "height": 142,
+                  "descendants": {
+                    "qO7Ow": {
+                      "content": "ATTEMPT 2"
+                    },
+                    "v3JHaA": {
+                      "content": "第二来源返回结构异常，当前产出不可验证。"
+                    },
+                    "m0E0eB": {
+                      "content": "调整：切换读取方式，并在解析前保存原始响应。"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "avEg2",
+                  "name": "Attempt 3 / Completed",
+                  "width": "fill_container",
+                  "height": 112,
+                  "fill": "$success-soft",
+                  "cornerRadius": "$radius-input",
+                  "stroke": "$success",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "s7fOV",
+                      "x": 16,
+                      "y": 14,
+                      "name": "Attempt 3 Number",
+                      "fill": "$text-muted",
+                      "content": "ATTEMPT 3",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Y9Stk",
+                      "x": 610,
+                      "y": 14,
+                      "name": "Attempt 3 State",
+                      "fill": "$success",
+                      "content": "已验证",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "bUdCV",
+                      "x": 16,
+                      "y": 44,
+                      "name": "Attempt 3 Body",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 700,
+                      "content": "证据已收集并通过来源核验。前两次失败继续保留，便于复盘恢复策略。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wZIHW",
+              "x": 994,
+              "y": 0,
+              "name": "Recovery Detail",
+              "width": 427,
+              "height": 768,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": {
+                "left": 1
+              },
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "gap": 14,
+              "padding": [
+                32,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "p0Kgg",
+                  "name": "Recovery Detail Title",
+                  "fill": "$text",
+                  "content": "Attempt 恢复记录",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "FGF9d",
+                  "name": "Recovery Detail Meta",
+                  "fill": "$text-muted",
+                  "content": "负责人 · Research Agent\n尝试 · 3\n失败 · 2\n最终状态 · 已完成",
+                  "lineHeight": 2,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "rectangle",
+                  "id": "PBmxG",
+                  "name": "Recovery Divider",
+                  "fill": "$border",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "hrOyM",
+                  "name": "Recovery Principle",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "成功不会覆盖失败。只有风险扩大或需要用户介入时，Attempt 才投影到公司群。",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "d5FhYn",
+          "x": 3042,
+          "y": 5346,
+          "name": "10 · Agent Activity Detail",
+          "clip": true,
+          "width": 1421,
+          "height": 768,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "id": "A0MAVC",
+              "type": "ref",
+              "ref": "A39ypg",
+              "name": "Activity Sidebar",
+              "x": 0,
+              "y": 0,
+              "width": 168,
+              "height": 768,
+              "descendants": {
+                "hxlbO": {
+                  "enabled": true
+                },
+                "adZqE": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "M1vozz",
+              "x": 216,
+              "y": 40,
+              "name": "Activity Page Title",
+              "fill": "$text",
+              "content": "员工活动详情",
+              "fontFamily": "$font-primary",
+              "fontSize": 24,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "MmCNa",
+              "x": 216,
+              "y": 78,
+              "name": "Activity Page Subtitle",
+              "fill": "$text-muted",
+              "content": "公开状态与来源证据，不包含私聊和私人记忆",
+              "fontFamily": "$font-primary",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "id": "ajV2m",
+              "type": "ref",
+              "ref": "qvPwL",
+              "name": "Focused Employee Activity",
+              "x": 216,
+              "y": 124,
+              "width": 620,
+              "height": 250,
+              "descendants": {
+                "v9BNKD": {
+                  "content": "Thread · UI 融合实施"
+                },
+                "zoqg6": {
+                  "content": "整理 Agent Company 的高信号消息与失败链"
+                },
+                "P3vlX": {
+                  "content": "建议先查看当前 Thread"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "VyIFs",
+              "x": 216,
+              "y": 398,
+              "name": "Activity Facts",
+              "width": 620,
+              "height": 292,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "q12RYX",
+                  "name": "Facts Title",
+                  "fill": "$text",
+                  "content": "公开状态事实",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 13,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "qXEgW",
+                  "name": "Fact / Presence",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BfOvr",
+                      "name": "Presence Label",
+                      "fill": "$text-faint",
+                      "content": "Presence",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u3o93l",
+                      "name": "Presence Value",
+                      "fill": "$text",
+                      "content": "online",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qURKp",
+                  "name": "Fact / Attention",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WNPKO",
+                      "name": "Attention Label",
+                      "fill": "$text-faint",
+                      "content": "Attention",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "aoxR9",
+                      "name": "Attention Value",
+                      "fill": "$text",
+                      "content": "focused",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ezoLj",
+                  "name": "Fact / Activity",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uySQk",
+                      "name": "Activity Label",
+                      "fill": "$text-faint",
+                      "content": "Activity",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gjoyL",
+                      "name": "Activity Value",
+                      "fill": "$text",
+                      "content": "working",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y7gglZ",
+                  "name": "Fact / Location",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "RFozr",
+                      "name": "Location Label",
+                      "fill": "$text-faint",
+                      "content": "Location",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "a24ln",
+                      "name": "Location Value",
+                      "fill": "$text",
+                      "content": "Thread · UI 融合实施",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Gk2Iw",
+                  "name": "Fact / Subject",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "hi8Qp",
+                      "name": "Subject Label",
+                      "fill": "$text-faint",
+                      "content": "Subject",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xv2xO",
+                      "name": "Subject Value",
+                      "fill": "$text",
+                      "content": "高信号群聊与 Attempt 恢复",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HvRYO",
+                  "name": "Fact / Since",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "F07VGi",
+                      "name": "Since Label",
+                      "fill": "$text-faint",
+                      "content": "Since",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "f9H9ks",
+                      "name": "Since Value",
+                      "fill": "$text",
+                      "content": "2026-07-18 14:32",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WK9b6",
+                  "name": "Fact / Interruptibility",
+                  "width": "fill_container",
+                  "height": 20,
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "mivM8",
+                      "name": "Interruptibility Label",
+                      "fill": "$text-faint",
+                      "content": "Interruptibility",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vg4jZ",
+                      "name": "Interruptibility Value",
+                      "fill": "$text",
+                      "content": "coordinate_first",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q8iXqL",
+              "x": 876,
+              "y": 124,
+              "name": "Activity Evidence Panel",
+              "width": 484,
+              "height": 566,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 22,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "b6iimy",
+                  "name": "Evidence Title",
+                  "fill": "$text",
+                  "content": "证据链",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "wmTaZ",
+                  "name": "Evidence Intro",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "卡片上的具体行为必须能回到以下权威事实。没有证据时，状态退化为“空闲”。",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "alwRE",
+                  "name": "Evidence / Agent Run",
+                  "width": "fill_container",
+                  "height": 86,
+                  "fill": "$surface-subtle",
+                  "cornerRadius": "$radius-input",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "NJyzC",
+                      "x": 14,
+                      "y": 16,
+                      "name": "Agent Run Icon",
+                      "width": 18,
+                      "height": 18,
+                      "icon": "circle-play",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "KLTxJ",
+                      "x": 46,
+                      "y": 14,
+                      "name": "Agent Run Title",
+                      "fill": "$text",
+                      "content": "Agent Run",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "g5u6rq",
+                      "x": 46,
+                      "y": 40,
+                      "name": "Agent Run Meta",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 390,
+                      "content": "run_01 · running",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "czmhG",
+                  "name": "Evidence / Thread",
+                  "width": "fill_container",
+                  "height": 86,
+                  "fill": "$surface-subtle",
+                  "cornerRadius": "$radius-input",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "T4VUH",
+                      "x": 14,
+                      "y": 16,
+                      "name": "Thread Icon",
+                      "width": 18,
+                      "height": 18,
+                      "icon": "messages-square",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "f5hZYv",
+                      "x": 46,
+                      "y": 14,
+                      "name": "Thread Title",
+                      "fill": "$text",
+                      "content": "Thread",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ufCqx",
+                      "x": 46,
+                      "y": 40,
+                      "name": "Thread Meta",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 390,
+                      "content": "产品 UI 融合实施",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "O1xmh",
+                  "name": "Evidence / Artifact",
+                  "width": "fill_container",
+                  "height": 86,
+                  "fill": "$surface-subtle",
+                  "cornerRadius": "$radius-input",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "mHnlr",
+                      "x": 14,
+                      "y": 16,
+                      "name": "Artifact Icon",
+                      "width": 18,
+                      "height": 18,
+                      "icon": "file-check",
+                      "library": "lucide",
+                      "fill": "$accent"
+                    },
+                    {
+                      "type": "text",
+                      "id": "QRLkA",
+                      "x": 46,
+                      "y": 14,
+                      "name": "Artifact Title",
+                      "fill": "$text",
+                      "content": "Artifact",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HXxI0",
+                      "x": 46,
+                      "y": 40,
+                      "name": "Artifact Meta",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 390,
+                      "content": "PRODUCT-INTERACTION-DESIGN.md",
+                      "fontFamily": "$font-mono",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "MDP42",
+                  "name": "Privacy Note",
+                  "fill": "$danger",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "私人 Direct 内容、私有记忆和未授权路径不会进入活动投影。",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-primary",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "zXTfi",
+          "x": 0,
+          "y": 6214,
+          "name": "11 · Responsive · 375px",
+          "clip": true,
+          "width": 375,
+          "height": 812,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "I3L6d",
+              "x": 0,
+              "y": 0,
+              "name": "Mobile Header",
+              "width": 375,
+              "height": 64,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "strokeAlignment": "inner",
+              "gap": 14,
+              "padding": [
+                0,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "t8s2j",
+                  "name": "Mobile Menu",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "menu",
+                  "library": "lucide",
+                  "fill": "$text"
+                },
+                {
+                  "type": "frame",
+                  "id": "xsLbz",
+                  "name": "Mobile Title Copy",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ig7OU",
+                      "name": "Mobile Title",
+                      "fill": "$text",
+                      "content": "公司群",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "m0FIbD",
+                      "name": "Mobile Status",
+                      "fill": "$text-muted",
+                      "content": "3 名员工 · 1 个 Thread 运行中",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "u67Ij",
+              "x": 16,
+              "y": 84,
+              "name": "Mobile Signal Feed",
+              "width": 343,
+              "height": 568,
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "BELYC",
+                  "name": "Mobile Goal",
+                  "width": "fill_container",
+                  "height": 100,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-card",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UeO7e",
+                      "x": 14,
+                      "y": 12,
+                      "name": "Mobile Goal Author",
+                      "fill": "$text",
+                      "content": "你",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "lctup",
+                      "x": 14,
+                      "y": 36,
+                      "name": "Mobile Goal Body",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 315,
+                      "content": "完成 Agent Company 与 Marvis 的 UI 融合，同时保留真实状态与证据链。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JKbGA",
+                  "name": "Mobile Signal / 计划",
+                  "width": "fill_container",
+                  "height": 112,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-card",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UW9Vp",
+                      "x": 14,
+                      "y": 12,
+                      "name": "Mobile Signal Author 计划",
+                      "fill": "$text",
+                      "content": "Product Lead",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "EfyjL",
+                      "x": 98,
+                      "y": 12,
+                      "name": "Mobile Signal Badge 计划",
+                      "fill": "$accent",
+                      "content": "计划",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "CaJnO",
+                      "x": 14,
+                      "y": 42,
+                      "name": "Mobile Signal Body 计划",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 315,
+                      "content": "先完成状态投影和群聊闭环。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "y2UI8",
+                      "x": 14,
+                      "y": 86,
+                      "name": "Mobile Source 计划",
+                      "fill": "$text-muted",
+                      "content": "查看来源 Thread →",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xtY0D",
+                  "name": "Mobile Signal / 风险",
+                  "width": "fill_container",
+                  "height": 112,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-card",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Q21hCG",
+                      "x": 14,
+                      "y": 12,
+                      "name": "Mobile Signal Author 风险",
+                      "fill": "$text",
+                      "content": "Product Lead",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "M6rYD",
+                      "x": 98,
+                      "y": 12,
+                      "name": "Mobile Signal Badge 风险",
+                      "fill": "$danger",
+                      "content": "风险",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yRZD6",
+                      "x": 14,
+                      "y": 42,
+                      "name": "Mobile Signal Body 风险",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 315,
+                      "content": "Attempt 历史记录仍需服务端权威表。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "egDIp",
+                      "x": 14,
+                      "y": 86,
+                      "name": "Mobile Source 风险",
+                      "fill": "$text-muted",
+                      "content": "查看来源 Thread →",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TsLxy",
+                  "name": "Mobile Signal / 交付",
+                  "width": "fill_container",
+                  "height": 112,
+                  "fill": "$surface",
+                  "cornerRadius": "$radius-card",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vTHQl",
+                      "x": 14,
+                      "y": 12,
+                      "name": "Mobile Signal Author 交付",
+                      "fill": "$text",
+                      "content": "Product Lead",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 10,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NUd9S",
+                      "x": 98,
+                      "y": 12,
+                      "name": "Mobile Signal Badge 交付",
+                      "fill": "$success",
+                      "content": "交付",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "v5ZNBO",
+                      "x": 14,
+                      "y": 42,
+                      "name": "Mobile Signal Body 交付",
+                      "fill": "$text",
+                      "textGrowth": "fixed-width",
+                      "width": 315,
+                      "content": "Token、交互规范和 Pencil 已更新。",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$font-primary",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "r00Vlb",
+                      "x": 14,
+                      "y": 86,
+                      "name": "Mobile Source 交付",
+                      "fill": "$text-muted",
+                      "content": "查看来源 Thread →",
+                      "fontFamily": "$font-primary",
+                      "fontSize": 9,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iHZPp",
+              "x": 12,
+              "y": 680,
+              "name": "Mobile Composer",
+              "width": 351,
+              "height": 112,
+              "fill": "$surface",
+              "cornerRadius": "$radius-composer",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "VW34R",
+                  "x": 14,
+                  "y": 14,
+                  "name": "Mobile Placeholder",
+                  "fill": "$text-muted",
+                  "content": "补充目标或上下文",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "BRxh4",
+                  "x": 307,
+                  "y": 68,
+                  "name": "Mobile Send",
+                  "fill": "$text",
+                  "width": 30,
+                  "height": 30
+                },
+                {
+                  "type": "icon",
+                  "id": "tjHDj",
+                  "x": 315,
+                  "y": 76,
+                  "name": "Mobile Send Icon",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "arrow-up",
+                  "library": "lucide",
+                  "fill": "$surface"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KFn6r",
+          "x": 1521,
+          "y": 6214,
+          "name": "12 · Agent Company Target Contact Sheet",
+          "clip": true,
+          "width": 1421,
+          "height": 768,
+          "fill": "$canvas",
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "Zivsg",
+              "x": 48,
+              "y": 36,
+              "name": "Contact Sheet Title",
+              "fill": "$text",
+              "content": "Agent Company × Marvis · 目标界面总览",
+              "fontFamily": "$font-primary",
+              "fontSize": 24,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "NAQDy",
+              "x": 48,
+              "y": 74,
+              "name": "Contact Sheet Subtitle",
+              "fill": "$text-muted",
+              "content": "群聊高信号 · Attempt 恢复 · 员工活动证据 · 375px 响应式",
+              "fontFamily": "$font-primary",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "mWYrx",
+              "x": 48,
+              "y": 112,
+              "name": "Contact / 公司群高信号",
+              "width": 650,
+              "height": 286,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "OQcip",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Contact Image / 公司群高信号",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "exports/DOEOk.png",
+                    "mode": "fit"
+                  },
+                  "width": 630,
+                  "height": 238
+                },
+                {
+                  "type": "text",
+                  "id": "e8s3E",
+                  "x": 14,
+                  "y": 260,
+                  "name": "Contact Label / 公司群高信号",
+                  "fill": "$text",
+                  "content": "公司群高信号",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YwwZL",
+              "x": 722,
+              "y": 112,
+              "name": "Contact / Thread Attempt 恢复",
+              "width": 650,
+              "height": 286,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "o2QDO6",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Contact Image / Thread Attempt 恢复",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "exports/EGnIP.png",
+                    "mode": "fit"
+                  },
+                  "width": 630,
+                  "height": 238
+                },
+                {
+                  "type": "text",
+                  "id": "VdWUR",
+                  "x": 14,
+                  "y": 260,
+                  "name": "Contact Label / Thread Attempt 恢复",
+                  "fill": "$text",
+                  "content": "Thread Attempt 恢复",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "pmMMX",
+              "x": 48,
+              "y": 428,
+              "name": "Contact / 员工活动详情",
+              "width": 650,
+              "height": 286,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "ekTk1",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Contact Image / 员工活动详情",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "exports/d5FhYn.png",
+                    "mode": "fit"
+                  },
+                  "width": 630,
+                  "height": 238
+                },
+                {
+                  "type": "text",
+                  "id": "RcOZr",
+                  "x": 14,
+                  "y": 260,
+                  "name": "Contact Label / 员工活动详情",
+                  "fill": "$text",
+                  "content": "员工活动详情",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Pz4aO",
+              "x": 722,
+              "y": 428,
+              "name": "Contact / Responsive · 375px",
+              "width": 650,
+              "height": 286,
+              "fill": "$surface",
+              "cornerRadius": "$radius-card",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 8,
+                  "id": "JEBxG",
+                  "x": 10,
+                  "y": 10,
+                  "name": "Contact Image / Responsive · 375px",
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "exports/zXTfi.png",
+                    "mode": "fit"
+                  },
+                  "width": 630,
+                  "height": 238
+                },
+                {
+                  "type": "text",
+                  "id": "LqH4F",
+                  "x": 14,
+                  "y": 260,
+                  "name": "Contact Label / Responsive · 375px",
+                  "fill": "$text",
+                  "content": "Responsive · 375px",
+                  "fontFamily": "$font-primary",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                }
+              ]
             }
           ]
         }
@@ -8825,7 +11375,7 @@
     },
     "border": {
       "type": "color",
-      "value": "#E7E7EA"
+      "value": "#E7E6EA"
     },
     "border-strong": {
       "type": "color",
@@ -8833,11 +11383,11 @@
     },
     "text": {
       "type": "color",
-      "value": "#16171A"
+      "value": "#222126"
     },
     "text-muted": {
       "type": "color",
-      "value": "#6F7179"
+      "value": "#77747E"
     },
     "text-faint": {
       "type": "color",
@@ -8845,23 +11395,23 @@
     },
     "accent": {
       "type": "color",
-      "value": "#6D66DF"
+      "value": "#6D64DD"
     },
     "accent-soft": {
       "type": "color",
-      "value": "#EFF0FF"
+      "value": "#F0EFFF"
     },
     "success": {
       "type": "color",
-      "value": "#2F9B54"
+      "value": "#2F9459"
     },
     "warning": {
       "type": "color",
-      "value": "#DF8A17"
+      "value": "#C98621"
     },
     "danger": {
       "type": "color",
-      "value": "#E25372"
+      "value": "#C94B53"
     },
     "font-primary": {
       "type": "string",
@@ -8873,7 +11423,55 @@
     },
     "radius-control": {
       "type": "number",
-      "value": 7
+      "value": 6
+    },
+    "success-soft": {
+      "type": "color",
+      "value": "#ECF8F0"
+    },
+    "warning-soft": {
+      "type": "color",
+      "value": "#FFF5E2"
+    },
+    "danger-soft": {
+      "type": "color",
+      "value": "#FDEFF0"
+    },
+    "font-mono": {
+      "type": "string",
+      "value": "JetBrains Mono"
+    },
+    "space-1": {
+      "type": "number",
+      "value": 4
+    },
+    "space-2": {
+      "type": "number",
+      "value": 8
+    },
+    "space-3": {
+      "type": "number",
+      "value": 12
+    },
+    "space-4": {
+      "type": "number",
+      "value": 16
+    },
+    "space-6": {
+      "type": "number",
+      "value": 24
+    },
+    "space-8": {
+      "type": "number",
+      "value": 32
+    },
+    "radius-input": {
+      "type": "number",
+      "value": 8
+    },
+    "radius-composer": {
+      "type": "number",
+      "value": 14
     }
   },
   "fileToken": "57fe9e28-9ff1-4e3e-bfe6-205fd0d8a4ad"
