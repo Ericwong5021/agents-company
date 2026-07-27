@@ -1681,6 +1681,376 @@ export class Company extends HeyApiClient {
   }
 }
 
+export class GoalBrief extends HeyApiClient {
+  /**
+   * Create a validated Goal Brief
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectId?: string
+      sourceThreadId?: string
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperienceGoalBriefCreateResponses, unknown, ThrowOnError>({
+      url: "/experience/goal-brief",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Generate and persist a validated Goal Brief with the configured default model
+   */
+  public generate<ThrowOnError extends boolean = false>(
+    parameters: {
+      requestId: string
+      goal: string
+      context?: string
+      projectId?: string
+      sourceThreadId?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "requestId" },
+            { in: "body", key: "goal" },
+            { in: "body", key: "context" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefGenerateResponses,
+      ExperienceGoalBriefGenerateErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/generate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the Goal Brief or a read-only legacy Charter view for a project
+   */
+  public project<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefProjectResponses,
+      ExperienceGoalBriefProjectErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/project/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List Goal Brief versions
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "briefID" }] }])
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefHistoryResponses,
+      ExperienceGoalBriefHistoryErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append a validated Goal Brief version
+   */
+  public append<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      expectedVersion: number
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "body", key: "expectedVersion" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefAppendResponses,
+      ExperienceGoalBriefAppendErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the current Goal Brief version
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "briefID" }] }])
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefGetResponses,
+      ExperienceGoalBriefGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Artifact extends HeyApiClient {
+  /**
+   * Read a project-bound delivery Artifact without exposing local filesystem paths
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      artifactID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "artifactID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceArtifactGetResponses,
+      ExperienceArtifactGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/projects/{projectID}/artifacts/{artifactID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Work extends HeyApiClient {
+  /**
+   * List stable user-facing work projections
+   */
+  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
+      url: "/experience/work",
+      ...options,
+    })
+  }
+
+  /**
+   * Read a stable user-facing work projection
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
+    return (options?.client ?? this.client).get<ExperienceWorkGetResponses, ExperienceWorkGetErrors, ThrowOnError>({
+      url: "/experience/work/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Experience extends HeyApiClient {
+  private _goalBrief?: GoalBrief
+  get goalBrief(): GoalBrief {
+    return (this._goalBrief ??= new GoalBrief({ client: this.client }))
+  }
+
+  private _artifact?: Artifact
+  get artifact(): Artifact {
+    return (this._artifact ??= new Artifact({ client: this.client }))
+  }
+
+  private _work?: Work
+  get work(): Work {
+    return (this._work ??= new Work({ client: this.client }))
+  }
+}
+
 export class Auth extends HeyApiClient {
   /**
    * Remove auth credentials
@@ -3391,462 +3761,6 @@ export class CompanyProject extends HeyApiClient {
         ...params.headers,
       },
     })
-  }
-}
-
-export class GoalBrief extends HeyApiClient {
-  /**
-   * Create a validated Goal Brief
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory?: string
-      workspace?: string
-      projectId?: string
-      sourceThreadId?: string
-      source: "user_input" | "system_suggestion" | "user_confirmation"
-      brief: {
-        goal: string
-        deliverables: Array<{
-          id: string
-          title: string
-          description: string
-        }>
-        acceptanceCriteria: Array<{
-          id: string
-          description: string
-          verification: string
-        }>
-        constraints: Array<string>
-        nonGoals: Array<string>
-        assumptions: Array<{
-          id: string
-          description: string
-          confirmed: boolean
-        }>
-        openQuestions: Array<{
-          id: string
-          question: string
-          impact: string
-          blocking: boolean
-        }>
-        riskLevel: "low" | "medium" | "high" | "critical"
-        recommendedPlan: {
-          summary: string
-          steps: Array<{
-            id: string
-            title: string
-            outcome: string
-          }>
-        }
-        approvalMode: "autonomous" | "balanced" | "strict"
-        sourceRefs: Array<{
-          kind:
-            | "project"
-            | "project_event"
-            | "goal_brief"
-            | "legacy_charter"
-            | "work_item"
-            | "approval_gate"
-            | "artifact"
-            | "delivery"
-            | "conversation"
-            | "goal_request"
-            | "user"
-          id: string
-          version?: number
-          eventType?: string
-        }>
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { in: "body", key: "projectId" },
-            { in: "body", key: "sourceThreadId" },
-            { in: "body", key: "source" },
-            { in: "body", key: "brief" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ExperienceGoalBriefCreateResponses, unknown, ThrowOnError>({
-      url: "/experience/goal-brief",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Generate and persist a validated Goal Brief with the configured default model
-   */
-  public generate<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory?: string
-      workspace?: string
-      requestId: string
-      goal: string
-      context?: string
-      projectId?: string
-      sourceThreadId?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { in: "body", key: "requestId" },
-            { in: "body", key: "goal" },
-            { in: "body", key: "context" },
-            { in: "body", key: "projectId" },
-            { in: "body", key: "sourceThreadId" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperienceGoalBriefGenerateResponses,
-      ExperienceGoalBriefGenerateErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/generate",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Read the Goal Brief or a read-only legacy Charter view for a project
-   */
-  public project<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefProjectResponses,
-      ExperienceGoalBriefProjectErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/project/{projectID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List Goal Brief versions
-   */
-  public history<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "briefID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefHistoryResponses,
-      ExperienceGoalBriefHistoryErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}/versions",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Append a validated Goal Brief version
-   */
-  public append<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-      directory?: string
-      workspace?: string
-      expectedVersion: number
-      source: "user_input" | "system_suggestion" | "user_confirmation"
-      brief: {
-        goal: string
-        deliverables: Array<{
-          id: string
-          title: string
-          description: string
-        }>
-        acceptanceCriteria: Array<{
-          id: string
-          description: string
-          verification: string
-        }>
-        constraints: Array<string>
-        nonGoals: Array<string>
-        assumptions: Array<{
-          id: string
-          description: string
-          confirmed: boolean
-        }>
-        openQuestions: Array<{
-          id: string
-          question: string
-          impact: string
-          blocking: boolean
-        }>
-        riskLevel: "low" | "medium" | "high" | "critical"
-        recommendedPlan: {
-          summary: string
-          steps: Array<{
-            id: string
-            title: string
-            outcome: string
-          }>
-        }
-        approvalMode: "autonomous" | "balanced" | "strict"
-        sourceRefs: Array<{
-          kind:
-            | "project"
-            | "project_event"
-            | "goal_brief"
-            | "legacy_charter"
-            | "work_item"
-            | "approval_gate"
-            | "artifact"
-            | "delivery"
-            | "conversation"
-            | "goal_request"
-            | "user"
-          id: string
-          version?: number
-          eventType?: string
-        }>
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "briefID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { in: "body", key: "expectedVersion" },
-            { in: "body", key: "source" },
-            { in: "body", key: "brief" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperienceGoalBriefAppendResponses,
-      ExperienceGoalBriefAppendErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}/versions",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Read the current Goal Brief version
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "briefID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefGetResponses,
-      ExperienceGoalBriefGetErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Artifact extends HeyApiClient {
-  /**
-   * Read a project-bound delivery Artifact without exposing local filesystem paths
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      artifactID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "path", key: "artifactID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceArtifactGetResponses,
-      ExperienceArtifactGetErrors,
-      ThrowOnError
-    >({
-      url: "/experience/projects/{projectID}/artifacts/{artifactID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Work extends HeyApiClient {
-  /**
-   * List stable user-facing work projections
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
-      url: "/experience/work",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read a stable user-facing work projection
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperienceWorkGetResponses, ExperienceWorkGetErrors, ThrowOnError>({
-      url: "/experience/work/{projectID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Experience extends HeyApiClient {
-  private _goalBrief?: GoalBrief
-  get goalBrief(): GoalBrief {
-    return (this._goalBrief ??= new GoalBrief({ client: this.client }))
-  }
-
-  private _artifact?: Artifact
-  get artifact(): Artifact {
-    return (this._artifact ??= new Artifact({ client: this.client }))
-  }
-
-  private _work?: Work
-  get work(): Work {
-    return (this._work ??= new Work({ client: this.client }))
   }
 }
 
@@ -8062,6 +7976,11 @@ export class ControlPlaneClient extends HeyApiClient {
     return (this._company ??= new Company({ client: this.client }))
   }
 
+  private _experience?: Experience
+  get experience(): Experience {
+    return (this._experience ??= new Experience({ client: this.client }))
+  }
+
   private _auth?: Auth
   get auth(): Auth {
     return (this._auth ??= new Auth({ client: this.client }))
@@ -8095,11 +8014,6 @@ export class ControlPlaneClient extends HeyApiClient {
   private _companyProject?: CompanyProject
   get companyProject(): CompanyProject {
     return (this._companyProject ??= new CompanyProject({ client: this.client }))
-  }
-
-  private _experience?: Experience
-  get experience(): Experience {
-    return (this._experience ??= new Experience({ client: this.client }))
   }
 
   private _groupSession?: GroupSession

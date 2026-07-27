@@ -5564,6 +5564,2974 @@ export type CompanyThreadActionResponses = {
 
 export type CompanyThreadActionResponse = CompanyThreadActionResponses[keyof CompanyThreadActionResponses]
 
+export type ExperienceGoalBriefCreateData = {
+  body: {
+    projectId?: string
+    sourceThreadId?: string
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    brief: {
+      goal: string
+      deliverables: Array<{
+        id: string
+        title: string
+        description: string
+      }>
+      acceptanceCriteria: Array<{
+        id: string
+        description: string
+        verification: string
+      }>
+      constraints: Array<string>
+      nonGoals: Array<string>
+      assumptions: Array<{
+        id: string
+        description: string
+        confirmed: boolean
+      }>
+      openQuestions: Array<{
+        id: string
+        question: string
+        impact: string
+        blocking: boolean
+      }>
+      riskLevel: "low" | "medium" | "high" | "critical"
+      recommendedPlan: {
+        summary: string
+        steps: Array<{
+          id: string
+          title: string
+          outcome: string
+        }>
+      }
+      approvalMode: "autonomous" | "balanced" | "strict"
+      sourceRefs: Array<{
+        kind:
+          | "project"
+          | "project_event"
+          | "goal_brief"
+          | "legacy_charter"
+          | "work_item"
+          | "approval_gate"
+          | "artifact"
+          | "delivery"
+          | "conversation"
+          | "goal_request"
+          | "user"
+        id: string
+        version?: number
+        eventType?: string
+      }>
+    }
+  }
+  path?: never
+  query?: never
+  url: "/experience/goal-brief"
+}
+
+export type ExperienceGoalBriefCreateResponses = {
+  /**
+   * Goal Brief version
+   */
+  200: {
+    goal: string
+    deliverables: Array<{
+      id: string
+      title: string
+      description: string
+    }>
+    acceptanceCriteria: Array<{
+      id: string
+      description: string
+      verification: string
+    }>
+    constraints: Array<string>
+    nonGoals: Array<string>
+    assumptions: Array<{
+      id: string
+      description: string
+      confirmed: boolean
+    }>
+    openQuestions: Array<{
+      id: string
+      question: string
+      impact: string
+      blocking: boolean
+    }>
+    riskLevel: "low" | "medium" | "high" | "critical"
+    recommendedPlan: {
+      summary: string
+      steps: Array<{
+        id: string
+        title: string
+        outcome: string
+      }>
+    }
+    approvalMode: "autonomous" | "balanced" | "strict"
+    sourceRefs: Array<{
+      kind:
+        | "project"
+        | "project_event"
+        | "goal_brief"
+        | "legacy_charter"
+        | "work_item"
+        | "approval_gate"
+        | "artifact"
+        | "delivery"
+        | "conversation"
+        | "goal_request"
+        | "user"
+      id: string
+      version?: number
+      eventType?: string
+    }>
+    id: string
+    version: number
+    projectId?: string
+    sourceThreadId?: string
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    createdAt: string
+  }
+}
+
+export type ExperienceGoalBriefCreateResponse =
+  ExperienceGoalBriefCreateResponses[keyof ExperienceGoalBriefCreateResponses]
+
+export type ExperienceGoalBriefGenerateData = {
+  body: {
+    requestId: string
+    goal: string
+    context?: string
+    projectId?: string
+    sourceThreadId?: string
+  }
+  path?: never
+  query?: never
+  url: "/experience/goal-brief/generate"
+}
+
+export type ExperienceGoalBriefGenerateErrors = {
+  /**
+   * Goal Brief generation request conflict
+   */
+  409:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+  /**
+   * Structured Goal Brief generation failed after bounded repair attempts
+   */
+  422: {
+    code: "goal_brief_structured_output_failed"
+    message: string
+    attempts: number
+    recoveryActions: ["retry", "manual_edit"]
+  }
+}
+
+export type ExperienceGoalBriefGenerateError =
+  ExperienceGoalBriefGenerateErrors[keyof ExperienceGoalBriefGenerateErrors]
+
+export type ExperienceGoalBriefGenerateResponses = {
+  /**
+   * Generated Goal Brief version
+   */
+  200: {
+    goal: string
+    deliverables: Array<{
+      id: string
+      title: string
+      description: string
+    }>
+    acceptanceCriteria: Array<{
+      id: string
+      description: string
+      verification: string
+    }>
+    constraints: Array<string>
+    nonGoals: Array<string>
+    assumptions: Array<{
+      id: string
+      description: string
+      confirmed: boolean
+    }>
+    openQuestions: Array<{
+      id: string
+      question: string
+      impact: string
+      blocking: boolean
+    }>
+    riskLevel: "low" | "medium" | "high" | "critical"
+    recommendedPlan: {
+      summary: string
+      steps: Array<{
+        id: string
+        title: string
+        outcome: string
+      }>
+    }
+    approvalMode: "autonomous" | "balanced" | "strict"
+    sourceRefs: Array<{
+      kind:
+        | "project"
+        | "project_event"
+        | "goal_brief"
+        | "legacy_charter"
+        | "work_item"
+        | "approval_gate"
+        | "artifact"
+        | "delivery"
+        | "conversation"
+        | "goal_request"
+        | "user"
+      id: string
+      version?: number
+      eventType?: string
+    }>
+    id: string
+    version: number
+    projectId?: string
+    sourceThreadId?: string
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    createdAt: string
+  }
+}
+
+export type ExperienceGoalBriefGenerateResponse =
+  ExperienceGoalBriefGenerateResponses[keyof ExperienceGoalBriefGenerateResponses]
+
+export type ExperienceGoalBriefProjectData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/goal-brief/project/{projectID}"
+}
+
+export type ExperienceGoalBriefProjectErrors = {
+  /**
+   * Goal Brief not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceGoalBriefProjectError = ExperienceGoalBriefProjectErrors[keyof ExperienceGoalBriefProjectErrors]
+
+export type ExperienceGoalBriefProjectResponses = {
+  /**
+   * Project Goal Brief view
+   */
+  200:
+    | {
+        kind: "goal_brief"
+        brief: {
+          goal: string
+          deliverables: Array<{
+            id: string
+            title: string
+            description: string
+          }>
+          acceptanceCriteria: Array<{
+            id: string
+            description: string
+            verification: string
+          }>
+          constraints: Array<string>
+          nonGoals: Array<string>
+          assumptions: Array<{
+            id: string
+            description: string
+            confirmed: boolean
+          }>
+          openQuestions: Array<{
+            id: string
+            question: string
+            impact: string
+            blocking: boolean
+          }>
+          riskLevel: "low" | "medium" | "high" | "critical"
+          recommendedPlan: {
+            summary: string
+            steps: Array<{
+              id: string
+              title: string
+              outcome: string
+            }>
+          }
+          approvalMode: "autonomous" | "balanced" | "strict"
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          id: string
+          version: number
+          projectId?: string
+          sourceThreadId?: string
+          source: "user_input" | "system_suggestion" | "user_confirmation"
+          createdAt: string
+        }
+      }
+    | {
+        kind: "legacy_charter"
+        brief: {
+          id: string
+          version: 1
+          projectId: string
+          goal: string
+          deliverables: Array<string>
+          acceptanceCriteria: Array<string>
+          constraints: Array<string>
+          nonGoals: Array<string>
+          assumptions: Array<string>
+          openQuestions: Array<string>
+          riskLevel: null
+          recommendedPlan: null
+          approvalMode: "autonomous" | "balanced" | "strict"
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          source: "legacy_charter"
+          missingFields: Array<"riskLevel" | "recommendedPlan">
+          createdAt: string
+        }
+      }
+}
+
+export type ExperienceGoalBriefProjectResponse =
+  ExperienceGoalBriefProjectResponses[keyof ExperienceGoalBriefProjectResponses]
+
+export type ExperienceGoalBriefHistoryData = {
+  body?: never
+  path: {
+    briefID: string
+  }
+  query?: never
+  url: "/experience/goal-brief/{briefID}/versions"
+}
+
+export type ExperienceGoalBriefHistoryErrors = {
+  /**
+   * Goal Brief not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceGoalBriefHistoryError = ExperienceGoalBriefHistoryErrors[keyof ExperienceGoalBriefHistoryErrors]
+
+export type ExperienceGoalBriefHistoryResponses = {
+  /**
+   * Goal Brief history
+   */
+  200: {
+    id: string
+    versions: Array<{
+      goal: string
+      deliverables: Array<{
+        id: string
+        title: string
+        description: string
+      }>
+      acceptanceCriteria: Array<{
+        id: string
+        description: string
+        verification: string
+      }>
+      constraints: Array<string>
+      nonGoals: Array<string>
+      assumptions: Array<{
+        id: string
+        description: string
+        confirmed: boolean
+      }>
+      openQuestions: Array<{
+        id: string
+        question: string
+        impact: string
+        blocking: boolean
+      }>
+      riskLevel: "low" | "medium" | "high" | "critical"
+      recommendedPlan: {
+        summary: string
+        steps: Array<{
+          id: string
+          title: string
+          outcome: string
+        }>
+      }
+      approvalMode: "autonomous" | "balanced" | "strict"
+      sourceRefs: Array<{
+        kind:
+          | "project"
+          | "project_event"
+          | "goal_brief"
+          | "legacy_charter"
+          | "work_item"
+          | "approval_gate"
+          | "artifact"
+          | "delivery"
+          | "conversation"
+          | "goal_request"
+          | "user"
+        id: string
+        version?: number
+        eventType?: string
+      }>
+      id: string
+      version: number
+      projectId?: string
+      sourceThreadId?: string
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      createdAt: string
+    }>
+  }
+}
+
+export type ExperienceGoalBriefHistoryResponse =
+  ExperienceGoalBriefHistoryResponses[keyof ExperienceGoalBriefHistoryResponses]
+
+export type ExperienceGoalBriefAppendData = {
+  body: {
+    expectedVersion: number
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    brief: {
+      goal: string
+      deliverables: Array<{
+        id: string
+        title: string
+        description: string
+      }>
+      acceptanceCriteria: Array<{
+        id: string
+        description: string
+        verification: string
+      }>
+      constraints: Array<string>
+      nonGoals: Array<string>
+      assumptions: Array<{
+        id: string
+        description: string
+        confirmed: boolean
+      }>
+      openQuestions: Array<{
+        id: string
+        question: string
+        impact: string
+        blocking: boolean
+      }>
+      riskLevel: "low" | "medium" | "high" | "critical"
+      recommendedPlan: {
+        summary: string
+        steps: Array<{
+          id: string
+          title: string
+          outcome: string
+        }>
+      }
+      approvalMode: "autonomous" | "balanced" | "strict"
+      sourceRefs: Array<{
+        kind:
+          | "project"
+          | "project_event"
+          | "goal_brief"
+          | "legacy_charter"
+          | "work_item"
+          | "approval_gate"
+          | "artifact"
+          | "delivery"
+          | "conversation"
+          | "goal_request"
+          | "user"
+        id: string
+        version?: number
+        eventType?: string
+      }>
+    }
+  }
+  path: {
+    briefID: string
+  }
+  query?: never
+  url: "/experience/goal-brief/{briefID}/versions"
+}
+
+export type ExperienceGoalBriefAppendErrors = {
+  /**
+   * Goal Brief not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+  /**
+   * Goal Brief version conflict
+   */
+  409:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceGoalBriefAppendError = ExperienceGoalBriefAppendErrors[keyof ExperienceGoalBriefAppendErrors]
+
+export type ExperienceGoalBriefAppendResponses = {
+  /**
+   * Goal Brief version
+   */
+  200: {
+    goal: string
+    deliverables: Array<{
+      id: string
+      title: string
+      description: string
+    }>
+    acceptanceCriteria: Array<{
+      id: string
+      description: string
+      verification: string
+    }>
+    constraints: Array<string>
+    nonGoals: Array<string>
+    assumptions: Array<{
+      id: string
+      description: string
+      confirmed: boolean
+    }>
+    openQuestions: Array<{
+      id: string
+      question: string
+      impact: string
+      blocking: boolean
+    }>
+    riskLevel: "low" | "medium" | "high" | "critical"
+    recommendedPlan: {
+      summary: string
+      steps: Array<{
+        id: string
+        title: string
+        outcome: string
+      }>
+    }
+    approvalMode: "autonomous" | "balanced" | "strict"
+    sourceRefs: Array<{
+      kind:
+        | "project"
+        | "project_event"
+        | "goal_brief"
+        | "legacy_charter"
+        | "work_item"
+        | "approval_gate"
+        | "artifact"
+        | "delivery"
+        | "conversation"
+        | "goal_request"
+        | "user"
+      id: string
+      version?: number
+      eventType?: string
+    }>
+    id: string
+    version: number
+    projectId?: string
+    sourceThreadId?: string
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    createdAt: string
+  }
+}
+
+export type ExperienceGoalBriefAppendResponse =
+  ExperienceGoalBriefAppendResponses[keyof ExperienceGoalBriefAppendResponses]
+
+export type ExperienceGoalBriefGetData = {
+  body?: never
+  path: {
+    briefID: string
+  }
+  query?: never
+  url: "/experience/goal-brief/{briefID}"
+}
+
+export type ExperienceGoalBriefGetErrors = {
+  /**
+   * Goal Brief not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceGoalBriefGetError = ExperienceGoalBriefGetErrors[keyof ExperienceGoalBriefGetErrors]
+
+export type ExperienceGoalBriefGetResponses = {
+  /**
+   * Goal Brief version
+   */
+  200: {
+    goal: string
+    deliverables: Array<{
+      id: string
+      title: string
+      description: string
+    }>
+    acceptanceCriteria: Array<{
+      id: string
+      description: string
+      verification: string
+    }>
+    constraints: Array<string>
+    nonGoals: Array<string>
+    assumptions: Array<{
+      id: string
+      description: string
+      confirmed: boolean
+    }>
+    openQuestions: Array<{
+      id: string
+      question: string
+      impact: string
+      blocking: boolean
+    }>
+    riskLevel: "low" | "medium" | "high" | "critical"
+    recommendedPlan: {
+      summary: string
+      steps: Array<{
+        id: string
+        title: string
+        outcome: string
+      }>
+    }
+    approvalMode: "autonomous" | "balanced" | "strict"
+    sourceRefs: Array<{
+      kind:
+        | "project"
+        | "project_event"
+        | "goal_brief"
+        | "legacy_charter"
+        | "work_item"
+        | "approval_gate"
+        | "artifact"
+        | "delivery"
+        | "conversation"
+        | "goal_request"
+        | "user"
+      id: string
+      version?: number
+      eventType?: string
+    }>
+    id: string
+    version: number
+    projectId?: string
+    sourceThreadId?: string
+    source: "user_input" | "system_suggestion" | "user_confirmation"
+    createdAt: string
+  }
+}
+
+export type ExperienceGoalBriefGetResponse = ExperienceGoalBriefGetResponses[keyof ExperienceGoalBriefGetResponses]
+
+export type ExperienceArtifactGetData = {
+  body?: never
+  path: {
+    projectID: string
+    artifactID: string
+  }
+  query?: never
+  url: "/experience/projects/{projectID}/artifacts/{artifactID}"
+}
+
+export type ExperienceArtifactGetErrors = {
+  /**
+   * Project or Artifact not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+  /**
+   * Artifact exists but has no safely readable content
+   */
+  422: {
+    code: "artifact_unavailable"
+    message: string
+  }
+}
+
+export type ExperienceArtifactGetError = ExperienceArtifactGetErrors[keyof ExperienceArtifactGetErrors]
+
+export type ExperienceArtifactGetResponses = {
+  /**
+   * Safe read-only Artifact view
+   */
+  200: {
+    id: string
+    projectId: string
+    kind: string
+    title: string
+    href: string
+    source: "inline" | "project_file"
+    mediaType: string
+    encoding: "utf8" | "base64"
+    presentation: "text" | "media" | "download"
+    content: string
+    byteLength: number
+    createdAt: string
+  }
+}
+
+export type ExperienceArtifactGetResponse = ExperienceArtifactGetResponses[keyof ExperienceArtifactGetResponses]
+
+export type ExperienceWorkListData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/experience/work"
+}
+
+export type ExperienceWorkListResponses = {
+  /**
+   * Work projections
+   */
+  200: {
+    items: Array<
+      | {
+          availability: "available"
+          projectorVersion: number
+          sourceWatermark: string
+          summary: {
+            workId: string
+            title: string
+            userStatus:
+              | "draft"
+              | "needs_input"
+              | "ready"
+              | "running"
+              | "paused"
+              | "blocked"
+              | "needs_approval"
+              | "reviewing"
+              | "revision"
+              | "delivered"
+              | "accepted"
+              | "failed"
+              | "cancelled"
+            phase: string
+            owner?: {
+              id: string
+              name?: string
+            }
+            nextMilestone?: {
+              id: string
+              title: string
+              completed: boolean
+            }
+            needsUserAction: boolean
+            reason:
+              | {
+                  availability: "known"
+                  text: string
+                  sourceRefs: Array<{
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }>
+                }
+              | {
+                  availability: "unavailable"
+                  text: "当前原因不可用"
+                  diagnosticIds: Array<string>
+                }
+            nextAction:
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+              | null
+            updatedAt: string
+            sourceRefs: Array<{
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }>
+            allowedActions: Array<
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+            >
+          }
+          progress: {
+            workId: string
+            userStatus:
+              | "draft"
+              | "needs_input"
+              | "ready"
+              | "running"
+              | "paused"
+              | "blocked"
+              | "needs_approval"
+              | "reviewing"
+              | "revision"
+              | "delivered"
+              | "accepted"
+              | "failed"
+              | "cancelled"
+            phase: string
+            completedItems: number
+            totalItems: number
+            percent?: number
+            reason:
+              | {
+                  availability: "known"
+                  text: string
+                  sourceRefs: Array<{
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }>
+                }
+              | {
+                  availability: "unavailable"
+                  text: "当前原因不可用"
+                  diagnosticIds: Array<string>
+                }
+            nextAction:
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+              | null
+            updatedAt: string
+            sourceRefs: Array<{
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }>
+            allowedActions: Array<
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+            >
+          }
+          attentionItems: Array<{
+            id: string
+            type: "input" | "approval" | "blocked" | "delivery" | "failure"
+            workId: string
+            title: string
+            reason:
+              | {
+                  availability: "known"
+                  text: string
+                  sourceRefs: Array<{
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }>
+                }
+              | {
+                  availability: "unavailable"
+                  text: "当前原因不可用"
+                  diagnosticIds: Array<string>
+                }
+            impact: string
+            recommendedAction:
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+              | null
+            priority: "normal" | "high" | "critical"
+            updatedAt: string
+            sourceRefs: Array<{
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }>
+            allowedActions: Array<
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+            >
+          }>
+          delivery?: {
+            id: string
+            workId: string
+            version: number
+            acceptanceState: "pending" | "accepted" | "revision_requested"
+            artifacts: Array<{
+              id: string
+              projectId: string
+              kind: string
+              title: string
+              href: string
+            }>
+            reason: {
+              availability: "known"
+              text: string
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+            }
+            nextAction:
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+              | null
+            updatedAt: string
+            sourceRefs: Array<{
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }>
+            allowedActions: Array<
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: true
+                }
+              | {
+                  id:
+                    | "continue_editing"
+                    | "answer_question"
+                    | "start_work"
+                    | "adjust_brief"
+                    | "view_progress"
+                    | "pause_work"
+                    | "resume_work"
+                    | "stop_work"
+                    | "resolve_blocker"
+                    | "approve"
+                    | "reject"
+                    | "request_change"
+                    | "view_evidence"
+                    | "view_revision"
+                    | "open_delivery"
+                    | "accept_delivery"
+                    | "retry"
+                    | "open_diagnostics"
+                    | "view_retained_results"
+                    | "archive"
+                  targetRef?: {
+                    kind:
+                      | "project"
+                      | "project_event"
+                      | "goal_brief"
+                      | "legacy_charter"
+                      | "work_item"
+                      | "approval_gate"
+                      | "artifact"
+                      | "delivery"
+                      | "conversation"
+                      | "goal_request"
+                      | "user"
+                    id: string
+                    version?: number
+                    eventType?: string
+                  }
+                  enabled: false
+                  disabledReason: string
+                }
+            >
+          }
+          diagnostics: Array<{
+            id: string
+            code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
+            message: string
+            eventId?: string
+            sourceRef?: {
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }
+          }>
+        }
+      | {
+          availability: "unavailable"
+          projectorVersion: number
+          sourceWatermark: string
+          workId: string
+          title: string
+          updatedAt: string
+          reason: {
+            availability: "unavailable"
+            text: "当前原因不可用"
+            diagnosticIds: Array<string>
+          }
+          diagnostics: Array<{
+            id: string
+            code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
+            message: string
+            eventId?: string
+            sourceRef?: {
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }
+          }>
+        }
+    >
+  }
+}
+
+export type ExperienceWorkListResponse = ExperienceWorkListResponses[keyof ExperienceWorkListResponses]
+
+export type ExperienceWorkGetData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}"
+}
+
+export type ExperienceWorkGetErrors = {
+  /**
+   * Work projection not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkGetError = ExperienceWorkGetErrors[keyof ExperienceWorkGetErrors]
+
+export type ExperienceWorkGetResponses = {
+  /**
+   * Work projection
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        summary: {
+          workId: string
+          title: string
+          userStatus:
+            | "draft"
+            | "needs_input"
+            | "ready"
+            | "running"
+            | "paused"
+            | "blocked"
+            | "needs_approval"
+            | "reviewing"
+            | "revision"
+            | "delivered"
+            | "accepted"
+            | "failed"
+            | "cancelled"
+          phase: string
+          owner?: {
+            id: string
+            name?: string
+          }
+          nextMilestone?: {
+            id: string
+            title: string
+            completed: boolean
+          }
+          needsUserAction: boolean
+          reason:
+            | {
+                availability: "known"
+                text: string
+                sourceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+              }
+            | {
+                availability: "unavailable"
+                text: "当前原因不可用"
+                diagnosticIds: Array<string>
+              }
+          nextAction:
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+            | null
+          updatedAt: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          allowedActions: Array<
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+          >
+        }
+        progress: {
+          workId: string
+          userStatus:
+            | "draft"
+            | "needs_input"
+            | "ready"
+            | "running"
+            | "paused"
+            | "blocked"
+            | "needs_approval"
+            | "reviewing"
+            | "revision"
+            | "delivered"
+            | "accepted"
+            | "failed"
+            | "cancelled"
+          phase: string
+          completedItems: number
+          totalItems: number
+          percent?: number
+          reason:
+            | {
+                availability: "known"
+                text: string
+                sourceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+              }
+            | {
+                availability: "unavailable"
+                text: "当前原因不可用"
+                diagnosticIds: Array<string>
+              }
+          nextAction:
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+            | null
+          updatedAt: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          allowedActions: Array<
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+          >
+        }
+        attentionItems: Array<{
+          id: string
+          type: "input" | "approval" | "blocked" | "delivery" | "failure"
+          workId: string
+          title: string
+          reason:
+            | {
+                availability: "known"
+                text: string
+                sourceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+              }
+            | {
+                availability: "unavailable"
+                text: "当前原因不可用"
+                diagnosticIds: Array<string>
+              }
+          impact: string
+          recommendedAction:
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+            | null
+          priority: "normal" | "high" | "critical"
+          updatedAt: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          allowedActions: Array<
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+          >
+        }>
+        delivery?: {
+          id: string
+          workId: string
+          version: number
+          acceptanceState: "pending" | "accepted" | "revision_requested"
+          artifacts: Array<{
+            id: string
+            projectId: string
+            kind: string
+            title: string
+            href: string
+          }>
+          reason: {
+            availability: "known"
+            text: string
+            sourceRefs: Array<{
+              kind:
+                | "project"
+                | "project_event"
+                | "goal_brief"
+                | "legacy_charter"
+                | "work_item"
+                | "approval_gate"
+                | "artifact"
+                | "delivery"
+                | "conversation"
+                | "goal_request"
+                | "user"
+              id: string
+              version?: number
+              eventType?: string
+            }>
+          }
+          nextAction:
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+            | null
+          updatedAt: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          allowedActions: Array<
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: true
+              }
+            | {
+                id:
+                  | "continue_editing"
+                  | "answer_question"
+                  | "start_work"
+                  | "adjust_brief"
+                  | "view_progress"
+                  | "pause_work"
+                  | "resume_work"
+                  | "stop_work"
+                  | "resolve_blocker"
+                  | "approve"
+                  | "reject"
+                  | "request_change"
+                  | "view_evidence"
+                  | "view_revision"
+                  | "open_delivery"
+                  | "accept_delivery"
+                  | "retry"
+                  | "open_diagnostics"
+                  | "view_retained_results"
+                  | "archive"
+                targetRef?: {
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }
+                enabled: false
+                disabledReason: string
+              }
+          >
+        }
+        diagnostics: Array<{
+          id: string
+          code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
+          message: string
+          eventId?: string
+          sourceRef?: {
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }
+        }>
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        workId: string
+        title: string
+        updatedAt: string
+        reason: {
+          availability: "unavailable"
+          text: "当前原因不可用"
+          diagnosticIds: Array<string>
+        }
+        diagnostics: Array<{
+          id: string
+          code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
+          message: string
+          eventId?: string
+          sourceRef?: {
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+            id: string
+            version?: number
+            eventType?: string
+          }
+        }>
+      }
+}
+
+export type ExperienceWorkGetResponse = ExperienceWorkGetResponses[keyof ExperienceWorkGetResponses]
+
 export type GlobalLogData = {
   body?: never
   path?: never
@@ -7234,3001 +10202,6 @@ export type CompanyProjectResolveGateResponses = {
 
 export type CompanyProjectResolveGateResponse =
   CompanyProjectResolveGateResponses[keyof CompanyProjectResolveGateResponses]
-
-export type ExperienceGoalBriefCreateData = {
-  body: {
-    projectId?: string
-    sourceThreadId?: string
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    brief: {
-      goal: string
-      deliverables: Array<{
-        id: string
-        title: string
-        description: string
-      }>
-      acceptanceCriteria: Array<{
-        id: string
-        description: string
-        verification: string
-      }>
-      constraints: Array<string>
-      nonGoals: Array<string>
-      assumptions: Array<{
-        id: string
-        description: string
-        confirmed: boolean
-      }>
-      openQuestions: Array<{
-        id: string
-        question: string
-        impact: string
-        blocking: boolean
-      }>
-      riskLevel: "low" | "medium" | "high" | "critical"
-      recommendedPlan: {
-        summary: string
-        steps: Array<{
-          id: string
-          title: string
-          outcome: string
-        }>
-      }
-      approvalMode: "autonomous" | "balanced" | "strict"
-      sourceRefs: Array<{
-        kind:
-          | "project"
-          | "project_event"
-          | "goal_brief"
-          | "legacy_charter"
-          | "work_item"
-          | "approval_gate"
-          | "artifact"
-          | "delivery"
-          | "conversation"
-          | "goal_request"
-          | "user"
-        id: string
-        version?: number
-        eventType?: string
-      }>
-    }
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief"
-}
-
-export type ExperienceGoalBriefCreateResponses = {
-  /**
-   * Goal Brief version
-   */
-  200: {
-    goal: string
-    deliverables: Array<{
-      id: string
-      title: string
-      description: string
-    }>
-    acceptanceCriteria: Array<{
-      id: string
-      description: string
-      verification: string
-    }>
-    constraints: Array<string>
-    nonGoals: Array<string>
-    assumptions: Array<{
-      id: string
-      description: string
-      confirmed: boolean
-    }>
-    openQuestions: Array<{
-      id: string
-      question: string
-      impact: string
-      blocking: boolean
-    }>
-    riskLevel: "low" | "medium" | "high" | "critical"
-    recommendedPlan: {
-      summary: string
-      steps: Array<{
-        id: string
-        title: string
-        outcome: string
-      }>
-    }
-    approvalMode: "autonomous" | "balanced" | "strict"
-    sourceRefs: Array<{
-      kind:
-        | "project"
-        | "project_event"
-        | "goal_brief"
-        | "legacy_charter"
-        | "work_item"
-        | "approval_gate"
-        | "artifact"
-        | "delivery"
-        | "conversation"
-        | "goal_request"
-        | "user"
-      id: string
-      version?: number
-      eventType?: string
-    }>
-    id: string
-    version: number
-    projectId?: string
-    sourceThreadId?: string
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    createdAt: string
-  }
-}
-
-export type ExperienceGoalBriefCreateResponse =
-  ExperienceGoalBriefCreateResponses[keyof ExperienceGoalBriefCreateResponses]
-
-export type ExperienceGoalBriefGenerateData = {
-  body: {
-    requestId: string
-    goal: string
-    context?: string
-    projectId?: string
-    sourceThreadId?: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief/generate"
-}
-
-export type ExperienceGoalBriefGenerateErrors = {
-  /**
-   * Goal Brief generation request conflict
-   */
-  409:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-  /**
-   * Structured Goal Brief generation failed after bounded repair attempts
-   */
-  422: {
-    code: "goal_brief_structured_output_failed"
-    message: string
-    attempts: number
-    recoveryActions: ["retry", "manual_edit"]
-  }
-}
-
-export type ExperienceGoalBriefGenerateError =
-  ExperienceGoalBriefGenerateErrors[keyof ExperienceGoalBriefGenerateErrors]
-
-export type ExperienceGoalBriefGenerateResponses = {
-  /**
-   * Generated Goal Brief version
-   */
-  200: {
-    goal: string
-    deliverables: Array<{
-      id: string
-      title: string
-      description: string
-    }>
-    acceptanceCriteria: Array<{
-      id: string
-      description: string
-      verification: string
-    }>
-    constraints: Array<string>
-    nonGoals: Array<string>
-    assumptions: Array<{
-      id: string
-      description: string
-      confirmed: boolean
-    }>
-    openQuestions: Array<{
-      id: string
-      question: string
-      impact: string
-      blocking: boolean
-    }>
-    riskLevel: "low" | "medium" | "high" | "critical"
-    recommendedPlan: {
-      summary: string
-      steps: Array<{
-        id: string
-        title: string
-        outcome: string
-      }>
-    }
-    approvalMode: "autonomous" | "balanced" | "strict"
-    sourceRefs: Array<{
-      kind:
-        | "project"
-        | "project_event"
-        | "goal_brief"
-        | "legacy_charter"
-        | "work_item"
-        | "approval_gate"
-        | "artifact"
-        | "delivery"
-        | "conversation"
-        | "goal_request"
-        | "user"
-      id: string
-      version?: number
-      eventType?: string
-    }>
-    id: string
-    version: number
-    projectId?: string
-    sourceThreadId?: string
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    createdAt: string
-  }
-}
-
-export type ExperienceGoalBriefGenerateResponse =
-  ExperienceGoalBriefGenerateResponses[keyof ExperienceGoalBriefGenerateResponses]
-
-export type ExperienceGoalBriefProjectData = {
-  body?: never
-  path: {
-    projectID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief/project/{projectID}"
-}
-
-export type ExperienceGoalBriefProjectErrors = {
-  /**
-   * Goal Brief not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-}
-
-export type ExperienceGoalBriefProjectError = ExperienceGoalBriefProjectErrors[keyof ExperienceGoalBriefProjectErrors]
-
-export type ExperienceGoalBriefProjectResponses = {
-  /**
-   * Project Goal Brief view
-   */
-  200:
-    | {
-        kind: "goal_brief"
-        brief: {
-          goal: string
-          deliverables: Array<{
-            id: string
-            title: string
-            description: string
-          }>
-          acceptanceCriteria: Array<{
-            id: string
-            description: string
-            verification: string
-          }>
-          constraints: Array<string>
-          nonGoals: Array<string>
-          assumptions: Array<{
-            id: string
-            description: string
-            confirmed: boolean
-          }>
-          openQuestions: Array<{
-            id: string
-            question: string
-            impact: string
-            blocking: boolean
-          }>
-          riskLevel: "low" | "medium" | "high" | "critical"
-          recommendedPlan: {
-            summary: string
-            steps: Array<{
-              id: string
-              title: string
-              outcome: string
-            }>
-          }
-          approvalMode: "autonomous" | "balanced" | "strict"
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          id: string
-          version: number
-          projectId?: string
-          sourceThreadId?: string
-          source: "user_input" | "system_suggestion" | "user_confirmation"
-          createdAt: string
-        }
-      }
-    | {
-        kind: "legacy_charter"
-        brief: {
-          id: string
-          version: 1
-          projectId: string
-          goal: string
-          deliverables: Array<string>
-          acceptanceCriteria: Array<string>
-          constraints: Array<string>
-          nonGoals: Array<string>
-          assumptions: Array<string>
-          openQuestions: Array<string>
-          riskLevel: null
-          recommendedPlan: null
-          approvalMode: "autonomous" | "balanced" | "strict"
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          source: "legacy_charter"
-          missingFields: Array<"riskLevel" | "recommendedPlan">
-          createdAt: string
-        }
-      }
-}
-
-export type ExperienceGoalBriefProjectResponse =
-  ExperienceGoalBriefProjectResponses[keyof ExperienceGoalBriefProjectResponses]
-
-export type ExperienceGoalBriefHistoryData = {
-  body?: never
-  path: {
-    briefID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief/{briefID}/versions"
-}
-
-export type ExperienceGoalBriefHistoryErrors = {
-  /**
-   * Goal Brief not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-}
-
-export type ExperienceGoalBriefHistoryError = ExperienceGoalBriefHistoryErrors[keyof ExperienceGoalBriefHistoryErrors]
-
-export type ExperienceGoalBriefHistoryResponses = {
-  /**
-   * Goal Brief history
-   */
-  200: {
-    id: string
-    versions: Array<{
-      goal: string
-      deliverables: Array<{
-        id: string
-        title: string
-        description: string
-      }>
-      acceptanceCriteria: Array<{
-        id: string
-        description: string
-        verification: string
-      }>
-      constraints: Array<string>
-      nonGoals: Array<string>
-      assumptions: Array<{
-        id: string
-        description: string
-        confirmed: boolean
-      }>
-      openQuestions: Array<{
-        id: string
-        question: string
-        impact: string
-        blocking: boolean
-      }>
-      riskLevel: "low" | "medium" | "high" | "critical"
-      recommendedPlan: {
-        summary: string
-        steps: Array<{
-          id: string
-          title: string
-          outcome: string
-        }>
-      }
-      approvalMode: "autonomous" | "balanced" | "strict"
-      sourceRefs: Array<{
-        kind:
-          | "project"
-          | "project_event"
-          | "goal_brief"
-          | "legacy_charter"
-          | "work_item"
-          | "approval_gate"
-          | "artifact"
-          | "delivery"
-          | "conversation"
-          | "goal_request"
-          | "user"
-        id: string
-        version?: number
-        eventType?: string
-      }>
-      id: string
-      version: number
-      projectId?: string
-      sourceThreadId?: string
-      source: "user_input" | "system_suggestion" | "user_confirmation"
-      createdAt: string
-    }>
-  }
-}
-
-export type ExperienceGoalBriefHistoryResponse =
-  ExperienceGoalBriefHistoryResponses[keyof ExperienceGoalBriefHistoryResponses]
-
-export type ExperienceGoalBriefAppendData = {
-  body: {
-    expectedVersion: number
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    brief: {
-      goal: string
-      deliverables: Array<{
-        id: string
-        title: string
-        description: string
-      }>
-      acceptanceCriteria: Array<{
-        id: string
-        description: string
-        verification: string
-      }>
-      constraints: Array<string>
-      nonGoals: Array<string>
-      assumptions: Array<{
-        id: string
-        description: string
-        confirmed: boolean
-      }>
-      openQuestions: Array<{
-        id: string
-        question: string
-        impact: string
-        blocking: boolean
-      }>
-      riskLevel: "low" | "medium" | "high" | "critical"
-      recommendedPlan: {
-        summary: string
-        steps: Array<{
-          id: string
-          title: string
-          outcome: string
-        }>
-      }
-      approvalMode: "autonomous" | "balanced" | "strict"
-      sourceRefs: Array<{
-        kind:
-          | "project"
-          | "project_event"
-          | "goal_brief"
-          | "legacy_charter"
-          | "work_item"
-          | "approval_gate"
-          | "artifact"
-          | "delivery"
-          | "conversation"
-          | "goal_request"
-          | "user"
-        id: string
-        version?: number
-        eventType?: string
-      }>
-    }
-  }
-  path: {
-    briefID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief/{briefID}/versions"
-}
-
-export type ExperienceGoalBriefAppendErrors = {
-  /**
-   * Goal Brief not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-  /**
-   * Goal Brief version conflict
-   */
-  409:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-}
-
-export type ExperienceGoalBriefAppendError = ExperienceGoalBriefAppendErrors[keyof ExperienceGoalBriefAppendErrors]
-
-export type ExperienceGoalBriefAppendResponses = {
-  /**
-   * Goal Brief version
-   */
-  200: {
-    goal: string
-    deliverables: Array<{
-      id: string
-      title: string
-      description: string
-    }>
-    acceptanceCriteria: Array<{
-      id: string
-      description: string
-      verification: string
-    }>
-    constraints: Array<string>
-    nonGoals: Array<string>
-    assumptions: Array<{
-      id: string
-      description: string
-      confirmed: boolean
-    }>
-    openQuestions: Array<{
-      id: string
-      question: string
-      impact: string
-      blocking: boolean
-    }>
-    riskLevel: "low" | "medium" | "high" | "critical"
-    recommendedPlan: {
-      summary: string
-      steps: Array<{
-        id: string
-        title: string
-        outcome: string
-      }>
-    }
-    approvalMode: "autonomous" | "balanced" | "strict"
-    sourceRefs: Array<{
-      kind:
-        | "project"
-        | "project_event"
-        | "goal_brief"
-        | "legacy_charter"
-        | "work_item"
-        | "approval_gate"
-        | "artifact"
-        | "delivery"
-        | "conversation"
-        | "goal_request"
-        | "user"
-      id: string
-      version?: number
-      eventType?: string
-    }>
-    id: string
-    version: number
-    projectId?: string
-    sourceThreadId?: string
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    createdAt: string
-  }
-}
-
-export type ExperienceGoalBriefAppendResponse =
-  ExperienceGoalBriefAppendResponses[keyof ExperienceGoalBriefAppendResponses]
-
-export type ExperienceGoalBriefGetData = {
-  body?: never
-  path: {
-    briefID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/goal-brief/{briefID}"
-}
-
-export type ExperienceGoalBriefGetErrors = {
-  /**
-   * Goal Brief not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-}
-
-export type ExperienceGoalBriefGetError = ExperienceGoalBriefGetErrors[keyof ExperienceGoalBriefGetErrors]
-
-export type ExperienceGoalBriefGetResponses = {
-  /**
-   * Goal Brief version
-   */
-  200: {
-    goal: string
-    deliverables: Array<{
-      id: string
-      title: string
-      description: string
-    }>
-    acceptanceCriteria: Array<{
-      id: string
-      description: string
-      verification: string
-    }>
-    constraints: Array<string>
-    nonGoals: Array<string>
-    assumptions: Array<{
-      id: string
-      description: string
-      confirmed: boolean
-    }>
-    openQuestions: Array<{
-      id: string
-      question: string
-      impact: string
-      blocking: boolean
-    }>
-    riskLevel: "low" | "medium" | "high" | "critical"
-    recommendedPlan: {
-      summary: string
-      steps: Array<{
-        id: string
-        title: string
-        outcome: string
-      }>
-    }
-    approvalMode: "autonomous" | "balanced" | "strict"
-    sourceRefs: Array<{
-      kind:
-        | "project"
-        | "project_event"
-        | "goal_brief"
-        | "legacy_charter"
-        | "work_item"
-        | "approval_gate"
-        | "artifact"
-        | "delivery"
-        | "conversation"
-        | "goal_request"
-        | "user"
-      id: string
-      version?: number
-      eventType?: string
-    }>
-    id: string
-    version: number
-    projectId?: string
-    sourceThreadId?: string
-    source: "user_input" | "system_suggestion" | "user_confirmation"
-    createdAt: string
-  }
-}
-
-export type ExperienceGoalBriefGetResponse = ExperienceGoalBriefGetResponses[keyof ExperienceGoalBriefGetResponses]
-
-export type ExperienceArtifactGetData = {
-  body?: never
-  path: {
-    projectID: string
-    artifactID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/projects/{projectID}/artifacts/{artifactID}"
-}
-
-export type ExperienceArtifactGetErrors = {
-  /**
-   * Project or Artifact not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-  /**
-   * Artifact exists but has no safely readable content
-   */
-  422: {
-    code: "artifact_unavailable"
-    message: string
-  }
-}
-
-export type ExperienceArtifactGetError = ExperienceArtifactGetErrors[keyof ExperienceArtifactGetErrors]
-
-export type ExperienceArtifactGetResponses = {
-  /**
-   * Safe read-only Artifact view
-   */
-  200: {
-    id: string
-    projectId: string
-    kind: string
-    title: string
-    href: string
-    source: "inline" | "project_file"
-    mediaType: string
-    encoding: "utf8" | "base64"
-    presentation: "text" | "media" | "download"
-    content: string
-    byteLength: number
-    createdAt: string
-  }
-}
-
-export type ExperienceArtifactGetResponse = ExperienceArtifactGetResponses[keyof ExperienceArtifactGetResponses]
-
-export type ExperienceWorkListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/work"
-}
-
-export type ExperienceWorkListResponses = {
-  /**
-   * Work projections
-   */
-  200: {
-    items: Array<
-      | {
-          availability: "available"
-          projectorVersion: number
-          sourceWatermark: string
-          summary: {
-            workId: string
-            title: string
-            userStatus:
-              | "draft"
-              | "needs_input"
-              | "ready"
-              | "running"
-              | "paused"
-              | "blocked"
-              | "needs_approval"
-              | "reviewing"
-              | "revision"
-              | "delivered"
-              | "accepted"
-              | "failed"
-              | "cancelled"
-            phase: string
-            owner?: {
-              id: string
-              name?: string
-            }
-            nextMilestone?: {
-              id: string
-              title: string
-              completed: boolean
-            }
-            needsUserAction: boolean
-            reason:
-              | {
-                  availability: "known"
-                  text: string
-                  sourceRefs: Array<{
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }>
-                }
-              | {
-                  availability: "unavailable"
-                  text: "当前原因不可用"
-                  diagnosticIds: Array<string>
-                }
-            nextAction:
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-              | null
-            updatedAt: string
-            sourceRefs: Array<{
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }>
-            allowedActions: Array<
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-            >
-          }
-          progress: {
-            workId: string
-            userStatus:
-              | "draft"
-              | "needs_input"
-              | "ready"
-              | "running"
-              | "paused"
-              | "blocked"
-              | "needs_approval"
-              | "reviewing"
-              | "revision"
-              | "delivered"
-              | "accepted"
-              | "failed"
-              | "cancelled"
-            phase: string
-            completedItems: number
-            totalItems: number
-            percent?: number
-            reason:
-              | {
-                  availability: "known"
-                  text: string
-                  sourceRefs: Array<{
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }>
-                }
-              | {
-                  availability: "unavailable"
-                  text: "当前原因不可用"
-                  diagnosticIds: Array<string>
-                }
-            nextAction:
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-              | null
-            updatedAt: string
-            sourceRefs: Array<{
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }>
-            allowedActions: Array<
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-            >
-          }
-          attentionItems: Array<{
-            id: string
-            type: "input" | "approval" | "blocked" | "delivery" | "failure"
-            workId: string
-            title: string
-            reason:
-              | {
-                  availability: "known"
-                  text: string
-                  sourceRefs: Array<{
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }>
-                }
-              | {
-                  availability: "unavailable"
-                  text: "当前原因不可用"
-                  diagnosticIds: Array<string>
-                }
-            impact: string
-            recommendedAction:
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-              | null
-            priority: "normal" | "high" | "critical"
-            updatedAt: string
-            sourceRefs: Array<{
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }>
-            allowedActions: Array<
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-            >
-          }>
-          delivery?: {
-            id: string
-            workId: string
-            version: number
-            acceptanceState: "pending" | "accepted" | "revision_requested"
-            artifacts: Array<{
-              id: string
-              projectId: string
-              kind: string
-              title: string
-              href: string
-            }>
-            reason: {
-              availability: "known"
-              text: string
-              sourceRefs: Array<{
-                kind:
-                  | "project"
-                  | "project_event"
-                  | "goal_brief"
-                  | "legacy_charter"
-                  | "work_item"
-                  | "approval_gate"
-                  | "artifact"
-                  | "delivery"
-                  | "conversation"
-                  | "goal_request"
-                  | "user"
-                id: string
-                version?: number
-                eventType?: string
-              }>
-            }
-            nextAction:
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-              | null
-            updatedAt: string
-            sourceRefs: Array<{
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }>
-            allowedActions: Array<
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: true
-                }
-              | {
-                  id:
-                    | "continue_editing"
-                    | "answer_question"
-                    | "start_work"
-                    | "adjust_brief"
-                    | "view_progress"
-                    | "pause_work"
-                    | "resume_work"
-                    | "stop_work"
-                    | "resolve_blocker"
-                    | "approve"
-                    | "reject"
-                    | "request_change"
-                    | "view_evidence"
-                    | "view_revision"
-                    | "open_delivery"
-                    | "accept_delivery"
-                    | "retry"
-                    | "open_diagnostics"
-                    | "view_retained_results"
-                    | "archive"
-                  targetRef?: {
-                    kind:
-                      | "project"
-                      | "project_event"
-                      | "goal_brief"
-                      | "legacy_charter"
-                      | "work_item"
-                      | "approval_gate"
-                      | "artifact"
-                      | "delivery"
-                      | "conversation"
-                      | "goal_request"
-                      | "user"
-                    id: string
-                    version?: number
-                    eventType?: string
-                  }
-                  enabled: false
-                  disabledReason: string
-                }
-            >
-          }
-          diagnostics: Array<{
-            id: string
-            code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
-            message: string
-            eventId?: string
-            sourceRef?: {
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }
-          }>
-        }
-      | {
-          availability: "unavailable"
-          projectorVersion: number
-          sourceWatermark: string
-          workId: string
-          title: string
-          updatedAt: string
-          reason: {
-            availability: "unavailable"
-            text: "当前原因不可用"
-            diagnosticIds: Array<string>
-          }
-          diagnostics: Array<{
-            id: string
-            code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
-            message: string
-            eventId?: string
-            sourceRef?: {
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }
-          }>
-        }
-    >
-  }
-}
-
-export type ExperienceWorkListResponse = ExperienceWorkListResponses[keyof ExperienceWorkListResponses]
-
-export type ExperienceWorkGetData = {
-  body?: never
-  path: {
-    projectID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experience/work/{projectID}"
-}
-
-export type ExperienceWorkGetErrors = {
-  /**
-   * Work projection not found
-   */
-  404:
-    | {
-        code: "not_found"
-        message: string
-      }
-    | {
-        code: "version_conflict"
-        message: string
-        currentVersion: number
-      }
-    | {
-        code: "request_conflict"
-        message: string
-      }
-    | {
-        code: "request_in_progress"
-        message: string
-      }
-    | {
-        code: "artifact_unavailable"
-        message: string
-      }
-    | {
-        code: "goal_brief_structured_output_failed"
-        message: string
-        attempts: number
-        recoveryActions: ["retry", "manual_edit"]
-      }
-}
-
-export type ExperienceWorkGetError = ExperienceWorkGetErrors[keyof ExperienceWorkGetErrors]
-
-export type ExperienceWorkGetResponses = {
-  /**
-   * Work projection
-   */
-  200:
-    | {
-        availability: "available"
-        projectorVersion: number
-        sourceWatermark: string
-        summary: {
-          workId: string
-          title: string
-          userStatus:
-            | "draft"
-            | "needs_input"
-            | "ready"
-            | "running"
-            | "paused"
-            | "blocked"
-            | "needs_approval"
-            | "reviewing"
-            | "revision"
-            | "delivered"
-            | "accepted"
-            | "failed"
-            | "cancelled"
-          phase: string
-          owner?: {
-            id: string
-            name?: string
-          }
-          nextMilestone?: {
-            id: string
-            title: string
-            completed: boolean
-          }
-          needsUserAction: boolean
-          reason:
-            | {
-                availability: "known"
-                text: string
-                sourceRefs: Array<{
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }>
-              }
-            | {
-                availability: "unavailable"
-                text: "当前原因不可用"
-                diagnosticIds: Array<string>
-              }
-          nextAction:
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-            | null
-          updatedAt: string
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          allowedActions: Array<
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-          >
-        }
-        progress: {
-          workId: string
-          userStatus:
-            | "draft"
-            | "needs_input"
-            | "ready"
-            | "running"
-            | "paused"
-            | "blocked"
-            | "needs_approval"
-            | "reviewing"
-            | "revision"
-            | "delivered"
-            | "accepted"
-            | "failed"
-            | "cancelled"
-          phase: string
-          completedItems: number
-          totalItems: number
-          percent?: number
-          reason:
-            | {
-                availability: "known"
-                text: string
-                sourceRefs: Array<{
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }>
-              }
-            | {
-                availability: "unavailable"
-                text: "当前原因不可用"
-                diagnosticIds: Array<string>
-              }
-          nextAction:
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-            | null
-          updatedAt: string
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          allowedActions: Array<
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-          >
-        }
-        attentionItems: Array<{
-          id: string
-          type: "input" | "approval" | "blocked" | "delivery" | "failure"
-          workId: string
-          title: string
-          reason:
-            | {
-                availability: "known"
-                text: string
-                sourceRefs: Array<{
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }>
-              }
-            | {
-                availability: "unavailable"
-                text: "当前原因不可用"
-                diagnosticIds: Array<string>
-              }
-          impact: string
-          recommendedAction:
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-            | null
-          priority: "normal" | "high" | "critical"
-          updatedAt: string
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          allowedActions: Array<
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-          >
-        }>
-        delivery?: {
-          id: string
-          workId: string
-          version: number
-          acceptanceState: "pending" | "accepted" | "revision_requested"
-          artifacts: Array<{
-            id: string
-            projectId: string
-            kind: string
-            title: string
-            href: string
-          }>
-          reason: {
-            availability: "known"
-            text: string
-            sourceRefs: Array<{
-              kind:
-                | "project"
-                | "project_event"
-                | "goal_brief"
-                | "legacy_charter"
-                | "work_item"
-                | "approval_gate"
-                | "artifact"
-                | "delivery"
-                | "conversation"
-                | "goal_request"
-                | "user"
-              id: string
-              version?: number
-              eventType?: string
-            }>
-          }
-          nextAction:
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-            | null
-          updatedAt: string
-          sourceRefs: Array<{
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }>
-          allowedActions: Array<
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: true
-              }
-            | {
-                id:
-                  | "continue_editing"
-                  | "answer_question"
-                  | "start_work"
-                  | "adjust_brief"
-                  | "view_progress"
-                  | "pause_work"
-                  | "resume_work"
-                  | "stop_work"
-                  | "resolve_blocker"
-                  | "approve"
-                  | "reject"
-                  | "request_change"
-                  | "view_evidence"
-                  | "view_revision"
-                  | "open_delivery"
-                  | "accept_delivery"
-                  | "retry"
-                  | "open_diagnostics"
-                  | "view_retained_results"
-                  | "archive"
-                targetRef?: {
-                  kind:
-                    | "project"
-                    | "project_event"
-                    | "goal_brief"
-                    | "legacy_charter"
-                    | "work_item"
-                    | "approval_gate"
-                    | "artifact"
-                    | "delivery"
-                    | "conversation"
-                    | "goal_request"
-                    | "user"
-                  id: string
-                  version?: number
-                  eventType?: string
-                }
-                enabled: false
-                disabledReason: string
-              }
-          >
-        }
-        diagnostics: Array<{
-          id: string
-          code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
-          message: string
-          eventId?: string
-          sourceRef?: {
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }
-        }>
-      }
-    | {
-        availability: "unavailable"
-        projectorVersion: number
-        sourceWatermark: string
-        workId: string
-        title: string
-        updatedAt: string
-        reason: {
-          availability: "unavailable"
-          text: "当前原因不可用"
-          diagnosticIds: Array<string>
-        }
-        diagnostics: Array<{
-          id: string
-          code: "invalid_event" | "unknown_event" | "conflicting_duplicate" | "invalid_timestamp" | "missing_fact"
-          message: string
-          eventId?: string
-          sourceRef?: {
-            kind:
-              | "project"
-              | "project_event"
-              | "goal_brief"
-              | "legacy_charter"
-              | "work_item"
-              | "approval_gate"
-              | "artifact"
-              | "delivery"
-              | "conversation"
-              | "goal_request"
-              | "user"
-            id: string
-            version?: number
-            eventType?: string
-          }
-        }>
-      }
-}
-
-export type ExperienceWorkGetResponse = ExperienceWorkGetResponses[keyof ExperienceWorkGetResponses]
 
 export type GroupSessionListData = {
   body?: never
