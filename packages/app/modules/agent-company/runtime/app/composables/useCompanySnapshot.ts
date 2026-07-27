@@ -60,7 +60,6 @@ function failedSnapshot(): CompanySnapshot {
 export function useCompanySnapshot() {
   const request = useFetch<CompanySnapshot>("/api/agent-company/snapshot", {
     key: "agent-company-snapshot",
-    immediate: import.meta.server,
   })
   const snapshot = useState<CompanySnapshot>("agent-company-snapshot-value", () => loadingSnapshot)
   const connection = useState("agent-company-connection", () => snapshot.value.connection)

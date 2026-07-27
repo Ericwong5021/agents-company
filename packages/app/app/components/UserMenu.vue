@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from "@nuxt/ui";
+import { authClient } from "~/lib/auth-client";
 
-const user = useState<{ name: string; email: string } | undefined>(
-  "agent-company-session-user",
-);
+const session = authClient.useSession();
+
+const user = computed(() => session.value?.data?.user);
 
 const displayName = computed(
   () => user.value?.name?.trim() || user.value?.email?.split("@")[0] || "Account",
