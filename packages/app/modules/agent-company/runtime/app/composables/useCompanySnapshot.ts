@@ -119,7 +119,7 @@ export function useCompanySnapshot() {
 
   onMounted(async () => {
     if (connection.value === "connecting") {
-      await request.refresh()
+      await request
       synchronizeSnapshot()
     }
     scheduleReconnect()
