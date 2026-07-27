@@ -1,4 +1,3 @@
-import { $fetch } from "ofetch"
 import { useFetch, useState } from "nuxt/app"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { CompanySnapshot } from "../../shared/company-contract"
@@ -67,30 +66,28 @@ export function useCompanySnapshot() {
   const reconnectAttempt = useState("agent-company-reconnect-attempt", () => 0)
   const reconnectTimer = ref<ReturnType<typeof setTimeout>>()
 
-  function applySnapshot(value: CompanySnapshot) {
-    snapshot.value = value
-    connection.value = transitionCompanyConnection(connection.value, {
-      type: "snapshot_received",
-      connection: value.connection === "recovering" || value.connection === "connecting"
-        ? "disconnected"
-        : value.connection,
-    })
-    if (
-      value.connection === "ready"
-      || (value.connection === "degraded" && !value.issue?.retryable)
-    ) reconnectAttempt.value = 0
-  }
-
-  function synchronizeSnapshot() {
-    if (request.error.value) {
-      snapshot.value = failedSnapshot()
-      connection.value = transitionCompanyConnection(connection.value, { type: "request_failed" })
-      return
-    }
-    if (request.data.value) applySnapshot(request.data.value)
-  }
-
-  watch([request.data, request.error], synchronizeSnapshot, { immediate: true })
+  watch(
+    [request.data, request.error],
+    ([value, error]) => {
+      if (error) {
+        snapshot.value = failedSnapshot()
+        connection.value = transitionCompanyConnection(connection.value, { type: "request_failed" })
+        return
+      }
+      if (!value) return
+      snapshot.value = value
+      connection.value = transitionCompanyConnection(connection.value, {
+        type: "snapshot_received",
+        connection: value.connection === "recovering" || value.connection === "connecting"
+          ? "disconnected"
+          : value.connection,
+      })
+      if (value.connection === "ready" || (value.connection === "degraded" && !value.issue?.retryable)) {
+        reconnectAttempt.value = 0
+      }
+    },
+    { immediate: true },
+  )
 
   async function refresh() {
     if (request.pending.value) return
@@ -121,20 +118,7 @@ export function useCompanySnapshot() {
     { immediate: true },
   )
 
-  onMounted(async () => {
-    if (connection.value === "connecting") {
-      const fallback = await $fetch<CompanySnapshot>("/api/agent-company/snapshot").then(
-        value => value,
-        () => undefined,
-      )
-      if (fallback) applySnapshot(fallback)
-      if (!fallback) {
-        snapshot.value = failedSnapshot()
-        connection.value = transitionCompanyConnection(connection.value, { type: "request_failed" })
-      }
-    }
-    scheduleReconnect()
-  })
+  onMounted(scheduleReconnect)
 
   onBeforeUnmount(() => {
     if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
