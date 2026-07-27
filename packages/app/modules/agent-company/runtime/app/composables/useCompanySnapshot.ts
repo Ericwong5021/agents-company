@@ -123,10 +123,6 @@ export function useCompanySnapshot() {
 
   onMounted(async () => {
     if (connection.value === "connecting") {
-      await request
-      synchronizeSnapshot()
-    }
-    if (connection.value === "connecting") {
       const fallback = await $fetch<CompanySnapshot>("/api/agent-company/snapshot").then(
         value => value,
         () => undefined,
