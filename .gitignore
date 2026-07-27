@@ -63,6 +63,8 @@ experiment/last-outcome.json
 .artifacts/
 .agentcompany-cli-scenarios/
 packages/control-plane/.webui-progressive-verify-home/
+packages/control-plane/.agentcompany-test-fixtures-*/
 
 packages/eve-company-web/.data
 packages/app/.data
+.qoder/better-harness/
