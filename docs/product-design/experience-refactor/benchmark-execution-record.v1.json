@@ -472,7 +472,7 @@
       "finishedAt",
       "artifact relative paths",
       "isolated run directory",
-      "side-effect audit raw digest and byte length plus measured fake-server or run-tree counts",
+      "side-effect audit raw digest and byte length plus measured loopback, fake-server, or run-tree counts",
       "normalized-evidence raw artifact and evidence digests plus byte length after its runId-normalized semantic digest is bound in the Playwright evidence summary"
     ],
     "runnerSuccessMeaning": "The runner completed, records validated, and repeated normalized digests matched. It does not mean any scenario or gate passed."

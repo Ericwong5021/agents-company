@@ -1350,6 +1350,10 @@ export function normalizeExecutionRecord(record: ExecutionRecord) {
         ? {
             ...record.sideEffectLedger,
             auditSha256: "<side-effect-audit-sha256>",
+            network: {
+              ...record.sideEffectLedger.network,
+              observedLoopbackRequestCount: "<measured>",
+            },
             fakeControlPlane: { requestCount: "<measured>" },
             isolatedRunTree: { writeEntryCount: "<measured>" },
           }
