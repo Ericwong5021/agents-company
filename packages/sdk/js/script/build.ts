@@ -11,6 +11,14 @@ import path from "path"
 
 import { createClient } from "@hey-api/openapi-ts"
 
+const requiredBunVersion = (await Bun.file(path.resolve(dir, "../../../package.json")).json()).packageManager?.match(
+  /^bun@(.+)$/,
+)?.[1]
+if (!requiredBunVersion) throw new Error("Root package.json must declare packageManager as bun@<version>")
+if (process.versions.bun !== requiredBunVersion) {
+  throw new Error(`SDK generation requires bun@${requiredBunVersion}, received bun@${process.versions.bun}`)
+}
+
 const generationHome = await mkdtemp(path.join(os.tmpdir(), "agent-company-sdk-"))
 try {
   await $`bun dev generate > ${dir}/openapi.json`
