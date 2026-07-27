@@ -17,6 +17,8 @@ export function define<Type extends string, Properties extends ZodType>(type: Ty
 export function payloads() {
   return registry
     .entries()
+    .toArray()
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([type, def]) => {
       return z
         .object({
@@ -27,7 +29,6 @@ export function payloads() {
           ref: `Event.${def.type}`,
         })
     })
-    .toArray()
 }
 
 export * as BusEvent from "./bus-event"

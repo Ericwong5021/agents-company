@@ -782,49 +782,6 @@ export type ThreadActionInput =
       }
     }
 
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventCompanyChannelInvalidated = {
-  type: "company.channel.invalidated"
-  properties: {
-    channel_id: ChannelId
-  }
-}
-
-export type EventCompanyThreadInvalidated = {
-  type: "company.thread.invalidated"
-  properties: {
-    thread_id: ConversationThreadId
-  }
-}
-
-export type EventCompanyConversationRunUpdated = {
-  type: "company.conversation_run.updated"
-  properties: {
-    thread_id: ConversationThreadId
-    state: ConversationRunState
-  }
-}
-
-export type EventCompanyAgentActivityInvalidated = {
-  type: "company.agent_activity.invalidated"
-  properties: {
-    thread_id: ConversationThreadId
-  }
-}
-
 export type EventActorRegistered = {
   type: "actor.registered"
   properties: {
@@ -859,694 +816,6 @@ export type EventActorStuck = {
     description: string
     lastTurnTime: number
     stuckDuration: number
-  }
-}
-
-export type EventWriterCachePerf = {
-  type: "writer.cache_perf"
-  properties: {
-    sessionID: string
-    writerActorID: string
-    status: "completed" | "failed"
-    total_input_tokens: number
-    cache_read_tokens: number
-    cache_write_tokens: number
-    cache_hit_rate: number
-    num_llm_calls: number
-  }
-}
-
-export type EventInboxArrived = {
-  type: "inbox.arrived"
-  properties: {
-    receiverSessionID: string
-    receiverActorID: string
-    senderSessionID?: string
-    senderActorID?: string
-    inboxID: string
-    type: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    sessionID: string
-    task: {
-      id: string
-      session_id: string
-      parent_task_id?: string
-      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
-      summary: string
-      owner?: string
-      created_at: number
-      last_event_at: number
-      ended_at?: number
-      cleanup_after?: number
-    }
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    sessionID: string
-    task: {
-      id: string
-      session_id: string
-      parent_task_id?: string
-      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
-      summary: string
-      owner?: string
-      created_at: number
-      last_event_at: number
-      ended_at?: number
-      cleanup_after?: number
-    }
-    kind: "started" | "unstarted" | "blocked" | "unblocked" | "done" | "abandoned" | "renamed"
-  }
-}
-
-export type EventTeamCreated = {
-  type: "team.created"
-  properties: {
-    teamID: string
-    creatorSessionID: string
-  }
-}
-
-export type EventTeamMemberJoined = {
-  type: "team.member.joined"
-  properties: {
-    teamID: string
-    sessionID: string
-    agent: string
-    role: string
-  }
-}
-
-export type EventMetricsModelCall = {
-  type: "metrics.model_call"
-  properties: {
-    sessionID: string
-    finish_reason: string
-    ttft_ms?: number
-    latency_ms: number
-    cached_read_tokens: number
-    model_id: string
-    provider: string
-    total_tokens_in: number
-    total_tokens_out: number
-  }
-}
-
-export type EventMetricsToolCall = {
-  type: "metrics.tool_call"
-  properties: {
-    sessionID: string
-    tool_name: string
-    input_bytes: number
-    output_bytes: number
-    tool_call_id: string
-    tool_call_status: "success" | "error" | "cancelled"
-  }
-}
-
-export type EventMetricsAgentRequest = {
-  type: "metrics.agent_request"
-  properties: {
-    sessionID: string
-    phase: string
-    task_type: string
-    surface: string
-    total_tokens_in: number
-    total_tokens_out: number
-    files_changed: number
-    validation_status: string
-  }
-}
-
-export type EventWorkflowPhase = {
-  type: "workflow.phase"
-  properties: {
-    sessionID: string
-    runID: string
-    title: string
-  }
-}
-
-export type EventWorkflowLog = {
-  type: "workflow.log"
-  properties: {
-    sessionID: string
-    runID: string
-    message: string
-  }
-}
-
-export type EventWorkflowStarted = {
-  type: "workflow.started"
-  properties: {
-    sessionID: string
-    runID: string
-    name: string
-  }
-}
-
-export type EventWorkflowFinished = {
-  type: "workflow.finished"
-  properties: {
-    sessionID: string
-    runID: string
-    status: "completed" | "failed" | "cancelled"
-    error?: string
-  }
-}
-
-export type EventWorkflowAgentFailed = {
-  type: "workflow.agent_failed"
-  properties: {
-    sessionID: string
-    runID: string
-    actorID?: string
-    agentType: string
-    companyAgentID?: string
-    label?: string
-    phase?: string
-    reason: "over-cap" | "spawn-reject" | "timeout" | "actor-error" | "no-deliverable"
-    errorMessage?: string
-  }
-}
-
-export type EventWorkflowChildFailed = {
-  type: "workflow.child_failed"
-  properties: {
-    sessionID: string
-    runID: string
-    childRunID: string
-    name: string
-    status: "failed" | "cancelled"
-    error?: string
-  }
-}
-
-export type Project = {
-  id: string
-  worktree: string
-  vcs?: "git"
-  name?: string
-  icon?: {
-    url?: string
-    override?: string
-    color?: string
-  }
-  commands?: {
-    /**
-     * Startup script to run when creating a new workspace (worktree)
-     */
-    start?: string
-  }
-  time: {
-    created: number
-    updated: number
-    initialized?: number
-    blocked?: number
-  }
-  block?: {
-    reason: string
-    byAgentID?: string
-    time: number
-  }
-  sandboxes: Array<string>
-}
-
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-  }
-}
-
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-  }
-}
-
-export type SnapshotFileDiff = {
-  file: string
-  patch: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<SnapshotFileDiff>
-  }
-}
-
-export type ProviderAuthError = {
-  name: "ProviderAuthError"
-  data: {
-    providerID: string
-    message: string
-  }
-}
-
-export type MessageOutputLengthError = {
-  name: "MessageOutputLengthError"
-  data: {
-    [key: string]: unknown
-  }
-}
-
-export type MessageAbortedError = {
-  name: "MessageAbortedError"
-  data: {
-    message: string
-  }
-}
-
-export type StructuredOutputError = {
-  name: "StructuredOutputError"
-  data: {
-    message: string
-    retries: number
-  }
-}
-
-export type ContextOverflowError = {
-  name: "ContextOverflowError"
-  data: {
-    message: string
-    responseBody?: string
-  }
-}
-
-export type InvalidOutputError = {
-  name: "InvalidOutputError"
-  data: {
-    message: string
-  }
-}
-
-export type ContentFilterError = {
-  name: "ContentFilterError"
-  data: {
-    message: string
-  }
-}
-
-export type ModelError = {
-  name: "ModelError"
-  data: {
-    message: string
-  }
-}
-
-export type ApiError = {
-  name: "APIError"
-  data: {
-    message: string
-    statusCode?: number
-    isRetryable: boolean
-    responseHeaders?: {
-      [key: string]: string
-    }
-    responseBody?: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | ContextOverflowError
-      | InvalidOutputError
-      | ContentFilterError
-      | ModelError
-      | ApiError
-  }
-}
-
-export type EventSessionRetryAttempt = {
-  type: "session.retry.attempt"
-  properties: {
-    sessionID: string
-    messageID: string
-    attempt: number
-    maxAttempts: number
-    reason: string
-    nextDelayMs: number
-  }
-}
-
-export type EventHookExecuted = {
-  type: "hook.executed"
-  properties: {
-    event: "actor.preStop" | "actor.postStop"
-    hookID: string
-    pluginName: string
-    actorID: string
-    agentType: string
-    durationMs: number
-    outcome: "success" | "error" | "skipped"
-    continueRequested: boolean
-    reasonLength: number
-  }
-}
-
-export type EventHookReactReentered = {
-  type: "hook.react.reentered"
-  properties: {
-    phase: "pre" | "post"
-    actorID: string
-    agentType: string
-    iteration: number
-    triggeredByPlugins: Array<string>
-    reasonPreview: string
-  }
-}
-
-export type EventHookReactMaxReached = {
-  type: "hook.react.max_reached"
-  properties: {
-    phase: "pre" | "post"
-    actorID: string
-    agentType: string
-  }
-}
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
-}
-
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
-   * Allow selecting multiple choices
-   */
-  multiple?: boolean
-  /**
-   * Allow typing a custom answer (default: true)
-   */
-  custom?: boolean
-  /**
-   * i18n key for client-side translation (e.g. plan_exit). When set, clients may translate question/options text using this key as a namespace.
-   */
-  key?: string
-  /**
-   * Template parameters for i18n interpolation (e.g. { plan: '.agentcompany/plans/...' })
-   */
-  params?: {
-    [key: string]: string
-  }
-}
-
-export type QuestionTool = {
-  messageID: string
-  callID: string
-}
-
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: QuestionTool
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type QuestionAnswer = Array<string>
-
-export type QuestionReplied = {
-  sessionID: string
-  requestID: string
-  answers: Array<QuestionAnswer>
-}
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: QuestionReplied
-}
-
-export type QuestionRejected = {
-  sessionID: string
-  requestID: string
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: QuestionRejected
-}
-
-export type EventSessionCwd = {
-  type: "session.cwd"
-  properties: {
-    sessionID: string
-    cwd: string
-  }
-}
-
-export type EventBashInteractiveAsked = {
-  type: "bash.interactive.asked"
-  properties: {
-    id: string
-    command: string
-    cwd: string
-    env?: {
-      [key: string]: string
-    }
-    description: string
-  }
-}
-
-export type EventBashInteractiveReplied = {
-  type: "bash.interactive.replied"
-  properties: {
-    id: string
-    output: string
-    exitCode: number
-  }
-}
-
-export type EventCompanyAgentCreated = {
-  type: "company_agent.created"
-  properties: {
-    id: string
-    company_id?: CompanyId
-    role_key?: string
-    lifecycle: "candidate" | "assigned" | "employee" | "archived"
-    name: string
-    description?: string
-    public_profile?: string
-    skills?: Array<string>
-    model?: string
-    preferred_runtime: string
-    color?: string
-    icon?: string
-    org_layer?: string
-    department?: string
-    reports_to?: string
-    responsibilities?: Array<string>
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type EventCompanyAgentUpdated = {
-  type: "company_agent.updated"
-  properties: {
-    id: string
-    company_id?: CompanyId
-    role_key?: string
-    lifecycle: "candidate" | "assigned" | "employee" | "archived"
-    name: string
-    description?: string
-    public_profile?: string
-    skills?: Array<string>
-    model?: string
-    preferred_runtime: string
-    color?: string
-    icon?: string
-    org_layer?: string
-    department?: string
-    reports_to?: string
-    responsibilities?: Array<string>
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type EventCompanyAgentDeleted = {
-  type: "company_agent.deleted"
-  properties: {
-    id: string
-  }
-}
-
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type EventAuditEventRecorded = {
-  type: "audit_event.recorded"
-  properties: {
-    id: string
-    rootNeedID?: string
-    kind: "access" | "message" | "admission" | "escalation"
-    action: string
-    actorAgentID?: string
-    targetAgentID?: string
-    subjectID?: string
-    subjectType?: string
-    granted?: boolean
-    metadata?: {
-      [key: string]: unknown
-    }
-    time: {
-      created: number
-      updated: number
-    }
   }
 }
 
@@ -1596,254 +865,8 @@ export type EventAgentMessageRead = {
   }
 }
 
-export type EventWorkspaceReadDoc = {
-  type: "workspace.read_doc"
-  properties: {
-    agentId: string
-    docPath: string
-    granted: boolean
-    classification?: string
-  }
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-      message?: string
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventSessionGoal = {
-  type: "session.goal"
-  properties: {
-    sessionID: string
-    goal?: {
-      condition: string
-    }
-    lastVerdict?: {
-      ok: boolean
-      impossible?: boolean
-      reason: string
-      attempt: number
-      messageID?: string
-      error?: boolean
-    }
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type EventThreadCreated = {
-  type: "thread.created"
-  properties: {
-    id: string
-    agentID: string
-    kind: "primary" | "reactive" | "ambient"
-    status: "active" | "paused" | "completed"
-    sessionID?: string
-    description?: string
-    budgetTokens?: number
-    spentTokens?: number
-    timeStarted?: number
-    timeCompleted?: number
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type EventThreadUpdated = {
-  type: "thread.updated"
-  properties: {
-    id: string
-    agentID: string
-    kind: "primary" | "reactive" | "ambient"
-    status: "active" | "paused" | "completed"
-    sessionID?: string
-    description?: string
-    budgetTokens?: number
-    spentTokens?: number
-    timeStarted?: number
-    timeCompleted?: number
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type EventThreadCompleted = {
-  type: "thread.completed"
-  properties: {
-    id: string
-    agentID: string
-    kind: "primary" | "reactive" | "ambient"
-    status: "active" | "paused" | "completed"
-    sessionID?: string
-    description?: string
-    budgetTokens?: number
-    spentTokens?: number
-    timeStarted?: number
-    timeCompleted?: number
-    time: {
-      created: number
-      updated: number
-    }
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type Pty = {
-  id: string
-  title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
 export type EventAgentRunCreated = {
   type: "agent_run.created"
-  properties: {
-    id: string
-    agentID: string
-    runtime: "pi" | "claude-code" | "codex"
-    runtimeVersion?: string
-    workflowVersion?: string
-    capabilityChecksum?: string
-    lifecycle: "on_demand" | "idle_cached"
-    permissionMode: "read_only" | "workspace_write" | "full_access"
-    state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
-    sessionID?: string
-    groupSessionID?: string
-    workflowRunID?: string
-    conversationThreadID?: string
-    companyProjectID?: string
-    workItemID?: string
-    worktreeRunID?: string
-    model?: string
-    reasoningEffort?: "low" | "medium" | "high" | "xhigh"
-    cwd: string
-    runtimeHomePath: string
-    resumeSessionID?: string
-    exitCode?: number
-    safeErrorSummary?: string
-    time: {
-      created: number
-      updated: number
-      started?: number
-      finished?: number
-    }
-  }
-}
-
-export type EventAgentRunUpdated = {
-  type: "agent_run.updated"
   properties: {
     id: string
     agentID: string
@@ -1889,28 +912,264 @@ export type EventAgentRunEvent = {
   }
 }
 
-export type EventGroupSessionCreated = {
-  type: "group_session.created"
+export type EventAgentRunUpdated = {
+  type: "agent_run.updated"
   properties: {
     id: string
-    projectID: string
-    title: string
-    contextPolicy?: "work_scoped"
-    members: Array<{
-      sessionID: string
-      companyAgentID: string
-      position: number
-    }>
+    agentID: string
+    runtime: "pi" | "claude-code" | "codex"
+    runtimeVersion?: string
+    workflowVersion?: string
+    capabilityChecksum?: string
+    lifecycle: "on_demand" | "idle_cached"
+    permissionMode: "read_only" | "workspace_write" | "full_access"
+    state: "queued" | "starting" | "running" | "interrupting" | "awaiting_recovery" | "completed" | "failed" | "stopped"
+    sessionID?: string
+    groupSessionID?: string
+    workflowRunID?: string
+    conversationThreadID?: string
+    companyProjectID?: string
+    workItemID?: string
+    worktreeRunID?: string
+    model?: string
+    reasoningEffort?: "low" | "medium" | "high" | "xhigh"
+    cwd: string
+    runtimeHomePath: string
+    resumeSessionID?: string
+    exitCode?: number
+    safeErrorSummary?: string
     time: {
       created: number
       updated: number
-      archived?: number
+      started?: number
+      finished?: number
     }
   }
 }
 
-export type EventGroupSessionUpdated = {
-  type: "group_session.updated"
+export type EventAuditEventRecorded = {
+  type: "audit_event.recorded"
+  properties: {
+    id: string
+    rootNeedID?: string
+    kind: "access" | "message" | "admission" | "escalation"
+    action: string
+    actorAgentID?: string
+    targetAgentID?: string
+    subjectID?: string
+    subjectType?: string
+    granted?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventBashInteractiveAsked = {
+  type: "bash.interactive.asked"
+  properties: {
+    id: string
+    command: string
+    cwd: string
+    env?: {
+      [key: string]: string
+    }
+    description: string
+  }
+}
+
+export type EventBashInteractiveReplied = {
+  type: "bash.interactive.replied"
+  properties: {
+    id: string
+    output: string
+    exitCode: number
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
+export type EventCompanyAgentActivityInvalidated = {
+  type: "company.agent_activity.invalidated"
+  properties: {
+    thread_id: ConversationThreadId
+  }
+}
+
+export type EventCompanyChannelInvalidated = {
+  type: "company.channel.invalidated"
+  properties: {
+    channel_id: ChannelId
+  }
+}
+
+export type EventCompanyConversationRunUpdated = {
+  type: "company.conversation_run.updated"
+  properties: {
+    thread_id: ConversationThreadId
+    state: ConversationRunState
+  }
+}
+
+export type EventCompanyThreadInvalidated = {
+  type: "company.thread.invalidated"
+  properties: {
+    thread_id: ConversationThreadId
+  }
+}
+
+export type EventCompanyAgentCreated = {
+  type: "company_agent.created"
+  properties: {
+    id: string
+    company_id?: CompanyId
+    role_key?: string
+    lifecycle: "candidate" | "assigned" | "employee" | "archived"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventCompanyAgentDeleted = {
+  type: "company_agent.deleted"
+  properties: {
+    id: string
+  }
+}
+
+export type EventCompanyAgentUpdated = {
+  type: "company_agent.updated"
+  properties: {
+    id: string
+    company_id?: CompanyId
+    role_key?: string
+    lifecycle: "candidate" | "assigned" | "employee" | "archived"
+    name: string
+    description?: string
+    public_profile?: string
+    skills?: Array<string>
+    model?: string
+    preferred_runtime: string
+    color?: string
+    icon?: string
+    org_layer?: string
+    department?: string
+    reports_to?: string
+    responsibilities?: Array<string>
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventGlobalDisposed = {
+  type: "global.disposed"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventGroupSessionAgentCompleted = {
+  type: "group_session.agent_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+    statusSummary: "done" | "error" | "interrupted"
+  }
+}
+
+export type EventGroupSessionAgentStarted = {
+  type: "group_session.agent_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    sessionID: string
+    companyAgentID: string
+  }
+}
+
+export type EventGroupSessionBiddingCompleted = {
+  type: "group_session.bidding_completed"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    winnerId: string | null
+    bids: Array<{
+      agentId: string
+      level: "must" | "want" | "could" | "pass"
+      type: "objection" | "answer" | "question" | "claim" | "info" | "support"
+      addressedAs: "direct" | "mention" | "none"
+      reason: string
+      score: number
+      eligible: boolean
+    }>
+  }
+}
+
+export type EventGroupSessionBiddingStarted = {
+  type: "group_session.bidding_started"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventGroupSessionChatSent = {
+  type: "group_session.chat_sent"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+    userGroupMessageID: string
+    memberSessionIDs: Array<string>
+  }
+}
+
+export type EventGroupSessionCreated = {
+  type: "group_session.created"
   properties: {
     id: string
     projectID: string
@@ -1936,50 +1195,11 @@ export type EventGroupSessionDeleted = {
   }
 }
 
-export type EventGroupSessionChatSent = {
-  type: "group_session.chat_sent"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    userGroupMessageID: string
-    memberSessionIDs: Array<string>
-  }
-}
-
 export type EventGroupSessionRoundComplete = {
   type: "group_session.round_complete"
   properties: {
     groupSessionID: string
     roundNum: number
-  }
-}
-
-export type EventGroupSessionUserMessagePersisted = {
-  type: "group_session.user_message_persisted"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-  }
-}
-
-export type EventGroupSessionAgentStarted = {
-  type: "group_session.agent_started"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    sessionID: string
-    companyAgentID: string
-  }
-}
-
-export type EventGroupSessionAgentCompleted = {
-  type: "group_session.agent_completed"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    sessionID: string
-    companyAgentID: string
-    statusSummary: "done" | "error" | "interrupted"
   }
 }
 
@@ -1992,183 +1212,143 @@ export type EventGroupSessionTurnYielded = {
   }
 }
 
-export type EventGroupSessionBiddingStarted = {
-  type: "group_session.bidding_started"
+export type EventGroupSessionUpdated = {
+  type: "group_session.updated"
   properties: {
-    groupSessionID: string
-    roundNum: number
-  }
-}
-
-export type EventGroupSessionBiddingCompleted = {
-  type: "group_session.bidding_completed"
-  properties: {
-    groupSessionID: string
-    roundNum: number
-    winnerId: string | null
-    bids: Array<{
-      agentId: string
-      level: "must" | "want" | "could" | "pass"
-      type: "objection" | "answer" | "question" | "claim" | "info" | "support"
-      addressedAs: "direct" | "mention" | "none"
-      reason: string
-      score: number
-      eligible: boolean
+    id: string
+    projectID: string
+    title: string
+    contextPolicy?: "work_scoped"
+    members: Array<{
+      sessionID: string
+      companyAgentID: string
+      position: number
     }>
+    time: {
+      created: number
+      updated: number
+      archived?: number
+    }
   }
 }
 
-export type EventOrgDisbanded = {
-  type: "org.disbanded"
+export type EventGroupSessionUserMessagePersisted = {
+  type: "group_session.user_message_persisted"
+  properties: {
+    groupSessionID: string
+    roundNum: number
+  }
+}
+
+export type EventHookExecuted = {
+  type: "hook.executed"
+  properties: {
+    event: "actor.preStop" | "actor.postStop"
+    hookID: string
+    pluginName: string
+    actorID: string
+    agentType: string
+    durationMs: number
+    outcome: "success" | "error" | "skipped"
+    continueRequested: boolean
+    reasonLength: number
+  }
+}
+
+export type EventHookReactMaxReached = {
+  type: "hook.react.max_reached"
+  properties: {
+    phase: "pre" | "post"
+    actorID: string
+    agentType: string
+  }
+}
+
+export type EventHookReactReentered = {
+  type: "hook.react.reentered"
+  properties: {
+    phase: "pre" | "post"
+    actorID: string
+    agentType: string
+    iteration: number
+    triggeredByPlugins: Array<string>
+    reasonPreview: string
+  }
+}
+
+export type EventInboxArrived = {
+  type: "inbox.arrived"
+  properties: {
+    receiverSessionID: string
+    receiverActorID: string
+    senderSessionID?: string
+    senderActorID?: string
+    inboxID: string
+    type: string
+  }
+}
+
+export type EventInstallationUpdateAvailable = {
+  type: "installation.update-available"
+  properties: {
+    version: string
+  }
+}
+
+export type EventInstallationUpdated = {
+  type: "installation.updated"
+  properties: {
+    version: string
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
   properties: {
     [key: string]: unknown
   }
 }
 
-export type EventWorkspaceReady = {
-  type: "workspace.ready"
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
   properties: {
-    name: string
+    mcpName: string
+    url: string
   }
 }
 
-export type EventWorkspaceFailed = {
-  type: "workspace.failed"
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
   properties: {
-    message: string
+    server: string
   }
 }
 
-export type EventWorkspaceRestore = {
-  type: "workspace.restore"
-  properties: {
-    workspaceID: string
-    sessionID: string
-    total: number
-    step: number
-  }
-}
-
-export type EventWorkspaceStatus = {
-  type: "workspace.status"
-  properties: {
-    workspaceID: string
-    status: "connected" | "connecting" | "disconnected" | "error"
-  }
-}
-
-export type OutputFormatText = {
-  type: "text"
-}
-
-export type JsonSchema = {
-  [key: string]: unknown
-}
-
-export type OutputFormatJsonSchema = {
-  type: "json_schema"
-  schema: JsonSchema
-  retryCount?: number
-}
-
-export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
-
-export type Provenance = {
-  hookPhase: "pre" | "post"
-  hookIteration: number
-  pluginNames: Array<string>
-  hookIDs: Array<string>
-}
-
-export type UserMessage = {
-  id: string
-  sessionID: string
-  agentID?: string
-  role: "user"
-  companyAgentID?: string
-  time: {
-    created: number
-  }
-  format?: OutputFormat
-  summary?: {
-    title?: string
-    body?: string
-    diffs: Array<SnapshotFileDiff>
-  }
-  agent: string
-  model: {
-    providerID: string
-    modelID: string
-    variant?: string
-  }
-  system?: string
-  tools?: {
-    [key: string]: boolean
-  }
-  provenance?: Provenance
-}
-
-export type AssistantMessage = {
-  id: string
-  sessionID: string
-  agentID?: string
-  role: "assistant"
-  time: {
-    created: number
-    completed?: number
-  }
-  error?:
-    | ProviderAuthError
-    | UnknownError
-    | MessageOutputLengthError
-    | MessageAbortedError
-    | StructuredOutputError
-    | ContextOverflowError
-    | InvalidOutputError
-    | ContentFilterError
-    | ModelError
-    | ApiError
-  parentID: string
-  modelID: string
-  providerID: string
-  mode: string
-  agent: string
-  path: {
-    cwd: string
-    root: string
-  }
-  summary?: boolean
-  cost: number
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-  structured?: unknown
-  variant?: string
-  finish?: string
-}
-
-export type Message = UserMessage | AssistantMessage
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    sessionID: string
-    info: Message
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
+export type EventMessagePartDelta = {
+  type: "message.part.delta"
   properties: {
     sessionID: string
     messageID: string
+    partID: string
+    field: string
+    delta: string
+  }
+}
+
+export type EventMessagePartRemoved = {
+  type: "message.part.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
   }
 }
 
@@ -2399,6 +1579,22 @@ export type AgentPart = {
   }
 }
 
+export type ApiError = {
+  name: "APIError"
+  data: {
+    message: string
+    statusCode?: number
+    isRetryable: boolean
+    responseHeaders?: {
+      [key: string]: string
+    }
+    responseBody?: string
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
+
 export type RetryPart = {
   id: string
   sessionID: string
@@ -2455,12 +1651,444 @@ export type EventMessagePartUpdated = {
   }
 }
 
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
+export type EventMessageRemoved = {
+  type: "message.removed"
   properties: {
     sessionID: string
     messageID: string
-    partID: string
+  }
+}
+
+export type OutputFormatText = {
+  type: "text"
+}
+
+export type JsonSchema = {
+  [key: string]: unknown
+}
+
+export type OutputFormatJsonSchema = {
+  type: "json_schema"
+  schema: JsonSchema
+  retryCount?: number
+}
+
+export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
+
+export type SnapshotFileDiff = {
+  file: string
+  patch: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type Provenance = {
+  hookPhase: "pre" | "post"
+  hookIteration: number
+  pluginNames: Array<string>
+  hookIDs: Array<string>
+}
+
+export type UserMessage = {
+  id: string
+  sessionID: string
+  agentID?: string
+  role: "user"
+  companyAgentID?: string
+  time: {
+    created: number
+  }
+  format?: OutputFormat
+  summary?: {
+    title?: string
+    body?: string
+    diffs: Array<SnapshotFileDiff>
+  }
+  agent: string
+  model: {
+    providerID: string
+    modelID: string
+    variant?: string
+  }
+  system?: string
+  tools?: {
+    [key: string]: boolean
+  }
+  provenance?: Provenance
+}
+
+export type ProviderAuthError = {
+  name: "ProviderAuthError"
+  data: {
+    providerID: string
+    message: string
+  }
+}
+
+export type MessageOutputLengthError = {
+  name: "MessageOutputLengthError"
+  data: {
+    [key: string]: unknown
+  }
+}
+
+export type MessageAbortedError = {
+  name: "MessageAbortedError"
+  data: {
+    message: string
+  }
+}
+
+export type StructuredOutputError = {
+  name: "StructuredOutputError"
+  data: {
+    message: string
+    retries: number
+  }
+}
+
+export type ContextOverflowError = {
+  name: "ContextOverflowError"
+  data: {
+    message: string
+    responseBody?: string
+  }
+}
+
+export type InvalidOutputError = {
+  name: "InvalidOutputError"
+  data: {
+    message: string
+  }
+}
+
+export type ContentFilterError = {
+  name: "ContentFilterError"
+  data: {
+    message: string
+  }
+}
+
+export type ModelError = {
+  name: "ModelError"
+  data: {
+    message: string
+  }
+}
+
+export type AssistantMessage = {
+  id: string
+  sessionID: string
+  agentID?: string
+  role: "assistant"
+  time: {
+    created: number
+    completed?: number
+  }
+  error?:
+    | ProviderAuthError
+    | UnknownError
+    | MessageOutputLengthError
+    | MessageAbortedError
+    | StructuredOutputError
+    | ContextOverflowError
+    | InvalidOutputError
+    | ContentFilterError
+    | ModelError
+    | ApiError
+  parentID: string
+  modelID: string
+  providerID: string
+  mode: string
+  agent: string
+  path: {
+    cwd: string
+    root: string
+  }
+  summary?: boolean
+  cost: number
+  tokens: {
+    total?: number
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
+    }
+  }
+  structured?: unknown
+  variant?: string
+  finish?: string
+}
+
+export type Message = UserMessage | AssistantMessage
+
+export type EventMessageUpdated = {
+  type: "message.updated"
+  properties: {
+    sessionID: string
+    info: Message
+  }
+}
+
+export type EventMetricsAgentRequest = {
+  type: "metrics.agent_request"
+  properties: {
+    sessionID: string
+    phase: string
+    task_type: string
+    surface: string
+    total_tokens_in: number
+    total_tokens_out: number
+    files_changed: number
+    validation_status: string
+  }
+}
+
+export type EventMetricsModelCall = {
+  type: "metrics.model_call"
+  properties: {
+    sessionID: string
+    finish_reason: string
+    ttft_ms?: number
+    latency_ms: number
+    cached_read_tokens: number
+    model_id: string
+    provider: string
+    total_tokens_in: number
+    total_tokens_out: number
+  }
+}
+
+export type EventMetricsToolCall = {
+  type: "metrics.tool_call"
+  properties: {
+    sessionID: string
+    tool_name: string
+    input_bytes: number
+    output_bytes: number
+    tool_call_id: string
+    tool_call_status: "success" | "error" | "cancelled"
+  }
+}
+
+export type EventOrgDisbanded = {
+  type: "org.disbanded"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+  }
+}
+
+export type Project = {
+  id: string
+  worktree: string
+  vcs?: "git"
+  name?: string
+  icon?: {
+    url?: string
+    override?: string
+    color?: string
+  }
+  commands?: {
+    /**
+     * Startup script to run when creating a new workspace (worktree)
+     */
+    start?: string
+  }
+  time: {
+    created: number
+    updated: number
+    initialized?: number
+    blocked?: number
+  }
+  block?: {
+    reason: string
+    byAgentID?: string
+    time: number
+  }
+  sandboxes: Array<string>
+}
+
+export type EventProjectUpdated = {
+  type: "project.updated"
+  properties: Project
+}
+
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
+export type EventPtyCreated = {
+  type: "pty.created"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyDeleted = {
+  type: "pty.deleted"
+  properties: {
+    id: string
+  }
+}
+
+export type EventPtyExited = {
+  type: "pty.exited"
+  properties: {
+    id: string
+    exitCode: number
+  }
+}
+
+export type EventPtyUpdated = {
+  type: "pty.updated"
+  properties: {
+    info: Pty
+  }
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  /**
+   * Allow selecting multiple choices
+   */
+  multiple?: boolean
+  /**
+   * Allow typing a custom answer (default: true)
+   */
+  custom?: boolean
+  /**
+   * i18n key for client-side translation (e.g. plan_exit). When set, clients may translate question/options text using this key as a namespace.
+   */
+  key?: string
+  /**
+   * Template parameters for i18n interpolation (e.g. { plan: '.agentcompany/plans/...' })
+   */
+  params?: {
+    [key: string]: string
+  }
+}
+
+export type QuestionTool = {
+  messageID: string
+  callID: string
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: QuestionTool
+}
+
+export type EventQuestionAsked = {
+  type: "question.asked"
+  properties: QuestionRequest
+}
+
+export type QuestionRejected = {
+  sessionID: string
+  requestID: string
+}
+
+export type EventQuestionRejected = {
+  type: "question.rejected"
+  properties: QuestionRejected
+}
+
+export type QuestionAnswer = Array<string>
+
+export type QuestionReplied = {
+  sessionID: string
+  requestID: string
+  answers: Array<QuestionAnswer>
+}
+
+export type EventQuestionReplied = {
+  type: "question.replied"
+  properties: QuestionReplied
+}
+
+export type EventServerConnected = {
+  type: "server.connected"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
   }
 }
 
@@ -2520,11 +2148,11 @@ export type EventSessionCreated = {
   }
 }
 
-export type EventSessionUpdated = {
-  type: "session.updated"
+export type EventSessionCwd = {
+  type: "session.cwd"
   properties: {
     sessionID: string
-    info: Session
+    cwd: string
   }
 }
 
@@ -2533,6 +2161,378 @@ export type EventSessionDeleted = {
   properties: {
     sessionID: string
     info: Session
+  }
+}
+
+export type EventSessionDiff = {
+  type: "session.diff"
+  properties: {
+    sessionID: string
+    diff: Array<SnapshotFileDiff>
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | ContextOverflowError
+      | InvalidOutputError
+      | ContentFilterError
+      | ModelError
+      | ApiError
+  }
+}
+
+export type EventSessionGoal = {
+  type: "session.goal"
+  properties: {
+    sessionID: string
+    goal?: {
+      condition: string
+    }
+    lastVerdict?: {
+      ok: boolean
+      impossible?: boolean
+      reason: string
+      attempt: number
+      messageID?: string
+      error?: boolean
+    }
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionRetryAttempt = {
+  type: "session.retry.attempt"
+  properties: {
+    sessionID: string
+    messageID: string
+    attempt: number
+    maxAttempts: number
+    reason: string
+    nextDelayMs: number
+  }
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+      message?: string
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionUpdated = {
+  type: "session.updated"
+  properties: {
+    sessionID: string
+    info: Session
+  }
+}
+
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    sessionID: string
+    task: {
+      id: string
+      session_id: string
+      parent_task_id?: string
+      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+      summary: string
+      owner?: string
+      created_at: number
+      last_event_at: number
+      ended_at?: number
+      cleanup_after?: number
+    }
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    sessionID: string
+    task: {
+      id: string
+      session_id: string
+      parent_task_id?: string
+      status: "open" | "in_progress" | "blocked" | "done" | "abandoned"
+      summary: string
+      owner?: string
+      created_at: number
+      last_event_at: number
+      ended_at?: number
+      cleanup_after?: number
+    }
+    kind: "started" | "unstarted" | "blocked" | "unblocked" | "done" | "abandoned" | "renamed"
+  }
+}
+
+export type EventTeamCreated = {
+  type: "team.created"
+  properties: {
+    teamID: string
+    creatorSessionID: string
+  }
+}
+
+export type EventTeamMemberJoined = {
+  type: "team.member.joined"
+  properties: {
+    teamID: string
+    sessionID: string
+    agent: string
+    role: string
+  }
+}
+
+export type EventThreadCompleted = {
+  type: "thread.completed"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventThreadCreated = {
+  type: "thread.created"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type EventThreadUpdated = {
+  type: "thread.updated"
+  properties: {
+    id: string
+    agentID: string
+    kind: "primary" | "reactive" | "ambient"
+    status: "active" | "paused" | "completed"
+    sessionID?: string
+    description?: string
+    budgetTokens?: number
+    spentTokens?: number
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventWorkflowAgentFailed = {
+  type: "workflow.agent_failed"
+  properties: {
+    sessionID: string
+    runID: string
+    actorID?: string
+    agentType: string
+    companyAgentID?: string
+    label?: string
+    phase?: string
+    reason: "over-cap" | "spawn-reject" | "timeout" | "actor-error" | "no-deliverable"
+    errorMessage?: string
+  }
+}
+
+export type EventWorkflowChildFailed = {
+  type: "workflow.child_failed"
+  properties: {
+    sessionID: string
+    runID: string
+    childRunID: string
+    name: string
+    status: "failed" | "cancelled"
+    error?: string
+  }
+}
+
+export type EventWorkflowFinished = {
+  type: "workflow.finished"
+  properties: {
+    sessionID: string
+    runID: string
+    status: "completed" | "failed" | "cancelled"
+    error?: string
+  }
+}
+
+export type EventWorkflowLog = {
+  type: "workflow.log"
+  properties: {
+    sessionID: string
+    runID: string
+    message: string
+  }
+}
+
+export type EventWorkflowPhase = {
+  type: "workflow.phase"
+  properties: {
+    sessionID: string
+    runID: string
+    title: string
+  }
+}
+
+export type EventWorkflowStarted = {
+  type: "workflow.started"
+  properties: {
+    sessionID: string
+    runID: string
+    name: string
+  }
+}
+
+export type EventWorkspaceFailed = {
+  type: "workspace.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type EventWorkspaceReadDoc = {
+  type: "workspace.read_doc"
+  properties: {
+    agentId: string
+    docPath: string
+    granted: boolean
+    classification?: string
+  }
+}
+
+export type EventWorkspaceReady = {
+  type: "workspace.ready"
+  properties: {
+    name: string
+  }
+}
+
+export type EventWorkspaceRestore = {
+  type: "workspace.restore"
+  properties: {
+    workspaceID: string
+    sessionID: string
+    total: number
+    step: number
+  }
+}
+
+export type EventWorkspaceStatus = {
+  type: "workspace.status"
+  properties: {
+    workspaceID: string
+    status: "connected" | "connecting" | "disconnected" | "error"
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWriterCachePerf = {
+  type: "writer.cache_perf"
+  properties: {
+    sessionID: string
+    writerActorID: string
+    status: "completed" | "failed"
+    total_input_tokens: number
+    cache_read_tokens: number
+    cache_write_tokens: number
+    cache_hit_rate: number
+    num_llm_calls: number
   }
 }
 
@@ -2663,104 +2663,104 @@ export type GlobalEvent = {
   project?: string
   workspace?: string
   payload:
-    | EventServerConnected
-    | EventGlobalDisposed
-    | EventCompanyChannelInvalidated
-    | EventCompanyThreadInvalidated
-    | EventCompanyConversationRunUpdated
-    | EventCompanyAgentActivityInvalidated
     | EventActorRegistered
     | EventActorStatus
     | EventActorStuck
-    | EventWriterCachePerf
+    | EventAgentMessageCreated
+    | EventAgentMessageRead
+    | EventAgentRunCreated
+    | EventAgentRunEvent
+    | EventAgentRunUpdated
+    | EventAuditEventRecorded
+    | EventBashInteractiveAsked
+    | EventBashInteractiveReplied
+    | EventCommandExecuted
+    | EventCompanyAgentActivityInvalidated
+    | EventCompanyChannelInvalidated
+    | EventCompanyConversationRunUpdated
+    | EventCompanyThreadInvalidated
+    | EventCompanyAgentCreated
+    | EventCompanyAgentDeleted
+    | EventCompanyAgentUpdated
+    | EventFileEdited
+    | EventFileWatcherUpdated
+    | EventGlobalDisposed
+    | EventGroupSessionAgentCompleted
+    | EventGroupSessionAgentStarted
+    | EventGroupSessionBiddingCompleted
+    | EventGroupSessionBiddingStarted
+    | EventGroupSessionChatSent
+    | EventGroupSessionCreated
+    | EventGroupSessionDeleted
+    | EventGroupSessionRoundComplete
+    | EventGroupSessionTurnYielded
+    | EventGroupSessionUpdated
+    | EventGroupSessionUserMessagePersisted
+    | EventHookExecuted
+    | EventHookReactMaxReached
+    | EventHookReactReentered
     | EventInboxArrived
+    | EventInstallationUpdateAvailable
+    | EventInstallationUpdated
+    | EventLspClientDiagnostics
+    | EventLspUpdated
+    | EventMcpBrowserOpenFailed
+    | EventMcpToolsChanged
+    | EventMessagePartDelta
+    | EventMessagePartRemoved
+    | EventMessagePartUpdated
+    | EventMessageRemoved
+    | EventMessageUpdated
+    | EventMetricsAgentRequest
+    | EventMetricsModelCall
+    | EventMetricsToolCall
+    | EventOrgDisbanded
+    | EventPermissionAsked
+    | EventPermissionReplied
+    | EventProjectUpdated
+    | EventPtyCreated
+    | EventPtyDeleted
+    | EventPtyExited
+    | EventPtyUpdated
+    | EventQuestionAsked
+    | EventQuestionRejected
+    | EventQuestionReplied
+    | EventServerConnected
+    | EventServerInstanceDisposed
+    | EventSessionCompacted
+    | EventSessionCreated
+    | EventSessionCwd
+    | EventSessionDeleted
+    | EventSessionDiff
+    | EventSessionError
+    | EventSessionGoal
+    | EventSessionIdle
+    | EventSessionRetryAttempt
+    | EventSessionStatus
+    | EventSessionUpdated
     | EventTaskCreated
     | EventTaskUpdated
     | EventTeamCreated
     | EventTeamMemberJoined
-    | EventMetricsModelCall
-    | EventMetricsToolCall
-    | EventMetricsAgentRequest
-    | EventWorkflowPhase
-    | EventWorkflowLog
-    | EventWorkflowStarted
-    | EventWorkflowFinished
-    | EventWorkflowAgentFailed
-    | EventWorkflowChildFailed
-    | EventProjectUpdated
-    | EventServerInstanceDisposed
-    | EventFileEdited
-    | EventFileWatcherUpdated
-    | EventLspClientDiagnostics
-    | EventLspUpdated
-    | EventInstallationUpdated
-    | EventInstallationUpdateAvailable
-    | EventMessagePartDelta
-    | EventPermissionAsked
-    | EventPermissionReplied
-    | EventSessionDiff
-    | EventSessionError
-    | EventSessionRetryAttempt
-    | EventHookExecuted
-    | EventHookReactReentered
-    | EventHookReactMaxReached
-    | EventQuestionAsked
-    | EventQuestionReplied
-    | EventQuestionRejected
-    | EventSessionCwd
-    | EventBashInteractiveAsked
-    | EventBashInteractiveReplied
-    | EventCompanyAgentCreated
-    | EventCompanyAgentUpdated
-    | EventCompanyAgentDeleted
-    | EventTodoUpdated
-    | EventAuditEventRecorded
-    | EventAgentMessageCreated
-    | EventAgentMessageRead
-    | EventWorkspaceReadDoc
-    | EventSessionStatus
-    | EventSessionIdle
-    | EventSessionGoal
-    | EventSessionCompacted
-    | EventMcpToolsChanged
-    | EventMcpBrowserOpenFailed
-    | EventCommandExecuted
+    | EventThreadCompleted
     | EventThreadCreated
     | EventThreadUpdated
-    | EventThreadCompleted
+    | EventTodoUpdated
     | EventVcsBranchUpdated
-    | EventWorktreeReady
-    | EventWorktreeFailed
-    | EventPtyCreated
-    | EventPtyUpdated
-    | EventPtyExited
-    | EventPtyDeleted
-    | EventAgentRunCreated
-    | EventAgentRunUpdated
-    | EventAgentRunEvent
-    | EventGroupSessionCreated
-    | EventGroupSessionUpdated
-    | EventGroupSessionDeleted
-    | EventGroupSessionChatSent
-    | EventGroupSessionRoundComplete
-    | EventGroupSessionUserMessagePersisted
-    | EventGroupSessionAgentStarted
-    | EventGroupSessionAgentCompleted
-    | EventGroupSessionTurnYielded
-    | EventGroupSessionBiddingStarted
-    | EventGroupSessionBiddingCompleted
-    | EventOrgDisbanded
-    | EventWorkspaceReady
+    | EventWorkflowAgentFailed
+    | EventWorkflowChildFailed
+    | EventWorkflowFinished
+    | EventWorkflowLog
+    | EventWorkflowPhase
+    | EventWorkflowStarted
     | EventWorkspaceFailed
+    | EventWorkspaceReadDoc
+    | EventWorkspaceReady
     | EventWorkspaceRestore
     | EventWorkspaceStatus
-    | EventMessageUpdated
-    | EventMessageRemoved
-    | EventMessagePartUpdated
-    | EventMessagePartRemoved
-    | EventSessionCreated
-    | EventSessionUpdated
-    | EventSessionDeleted
+    | EventWorktreeFailed
+    | EventWorktreeReady
+    | EventWriterCachePerf
     | SyncEventMessageUpdated
     | SyncEventMessageRemoved
     | SyncEventMessagePartUpdated
@@ -3937,104 +3937,104 @@ export type File = {
 }
 
 export type Event =
-  | EventServerConnected
-  | EventGlobalDisposed
-  | EventCompanyChannelInvalidated
-  | EventCompanyThreadInvalidated
-  | EventCompanyConversationRunUpdated
-  | EventCompanyAgentActivityInvalidated
   | EventActorRegistered
   | EventActorStatus
   | EventActorStuck
-  | EventWriterCachePerf
+  | EventAgentMessageCreated
+  | EventAgentMessageRead
+  | EventAgentRunCreated
+  | EventAgentRunEvent
+  | EventAgentRunUpdated
+  | EventAuditEventRecorded
+  | EventBashInteractiveAsked
+  | EventBashInteractiveReplied
+  | EventCommandExecuted
+  | EventCompanyAgentActivityInvalidated
+  | EventCompanyChannelInvalidated
+  | EventCompanyConversationRunUpdated
+  | EventCompanyThreadInvalidated
+  | EventCompanyAgentCreated
+  | EventCompanyAgentDeleted
+  | EventCompanyAgentUpdated
+  | EventFileEdited
+  | EventFileWatcherUpdated
+  | EventGlobalDisposed
+  | EventGroupSessionAgentCompleted
+  | EventGroupSessionAgentStarted
+  | EventGroupSessionBiddingCompleted
+  | EventGroupSessionBiddingStarted
+  | EventGroupSessionChatSent
+  | EventGroupSessionCreated
+  | EventGroupSessionDeleted
+  | EventGroupSessionRoundComplete
+  | EventGroupSessionTurnYielded
+  | EventGroupSessionUpdated
+  | EventGroupSessionUserMessagePersisted
+  | EventHookExecuted
+  | EventHookReactMaxReached
+  | EventHookReactReentered
   | EventInboxArrived
+  | EventInstallationUpdateAvailable
+  | EventInstallationUpdated
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventMcpBrowserOpenFailed
+  | EventMcpToolsChanged
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventMessagePartUpdated
+  | EventMessageRemoved
+  | EventMessageUpdated
+  | EventMetricsAgentRequest
+  | EventMetricsModelCall
+  | EventMetricsToolCall
+  | EventOrgDisbanded
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventProjectUpdated
+  | EventPtyCreated
+  | EventPtyDeleted
+  | EventPtyExited
+  | EventPtyUpdated
+  | EventQuestionAsked
+  | EventQuestionRejected
+  | EventQuestionReplied
+  | EventServerConnected
+  | EventServerInstanceDisposed
+  | EventSessionCompacted
+  | EventSessionCreated
+  | EventSessionCwd
+  | EventSessionDeleted
+  | EventSessionDiff
+  | EventSessionError
+  | EventSessionGoal
+  | EventSessionIdle
+  | EventSessionRetryAttempt
+  | EventSessionStatus
+  | EventSessionUpdated
   | EventTaskCreated
   | EventTaskUpdated
   | EventTeamCreated
   | EventTeamMemberJoined
-  | EventMetricsModelCall
-  | EventMetricsToolCall
-  | EventMetricsAgentRequest
-  | EventWorkflowPhase
-  | EventWorkflowLog
-  | EventWorkflowStarted
-  | EventWorkflowFinished
-  | EventWorkflowAgentFailed
-  | EventWorkflowChildFailed
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
-  | EventFileEdited
-  | EventFileWatcherUpdated
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventMessagePartDelta
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionDiff
-  | EventSessionError
-  | EventSessionRetryAttempt
-  | EventHookExecuted
-  | EventHookReactReentered
-  | EventHookReactMaxReached
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
-  | EventSessionCwd
-  | EventBashInteractiveAsked
-  | EventBashInteractiveReplied
-  | EventCompanyAgentCreated
-  | EventCompanyAgentUpdated
-  | EventCompanyAgentDeleted
-  | EventTodoUpdated
-  | EventAuditEventRecorded
-  | EventAgentMessageCreated
-  | EventAgentMessageRead
-  | EventWorkspaceReadDoc
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventSessionGoal
-  | EventSessionCompacted
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventCommandExecuted
+  | EventThreadCompleted
   | EventThreadCreated
   | EventThreadUpdated
-  | EventThreadCompleted
+  | EventTodoUpdated
   | EventVcsBranchUpdated
-  | EventWorktreeReady
-  | EventWorktreeFailed
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
-  | EventAgentRunCreated
-  | EventAgentRunUpdated
-  | EventAgentRunEvent
-  | EventGroupSessionCreated
-  | EventGroupSessionUpdated
-  | EventGroupSessionDeleted
-  | EventGroupSessionChatSent
-  | EventGroupSessionRoundComplete
-  | EventGroupSessionUserMessagePersisted
-  | EventGroupSessionAgentStarted
-  | EventGroupSessionAgentCompleted
-  | EventGroupSessionTurnYielded
-  | EventGroupSessionBiddingStarted
-  | EventGroupSessionBiddingCompleted
-  | EventOrgDisbanded
-  | EventWorkspaceReady
+  | EventWorkflowAgentFailed
+  | EventWorkflowChildFailed
+  | EventWorkflowFinished
+  | EventWorkflowLog
+  | EventWorkflowPhase
+  | EventWorkflowStarted
   | EventWorkspaceFailed
+  | EventWorkspaceReadDoc
+  | EventWorkspaceReady
   | EventWorkspaceRestore
   | EventWorkspaceStatus
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartRemoved
-  | EventSessionCreated
-  | EventSessionUpdated
-  | EventSessionDeleted
+  | EventWorktreeFailed
+  | EventWorktreeReady
+  | EventWriterCachePerf
 
 export type McpStatusConnected = {
   status: "connected"
