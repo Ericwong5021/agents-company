@@ -38,6 +38,10 @@ async function copyDiagnostic() {
     copyStatus.value = "idle"
   }, 2_000)
 }
+
+function toggleStartup() {
+  startupVisible.value = !startupVisible.value
+}
 </script>
 
 <template>
@@ -87,7 +91,7 @@ async function copyDiagnostic() {
         variant="ghost"
         aria-controls="company-startup-instructions"
         :aria-expanded="startupVisible"
-        @click="startupVisible = !startupVisible"
+        @click="toggleStartup"
       >
         {{ startupVisible ? "收起启动说明" : "查看启动说明" }}
       </UButton>
