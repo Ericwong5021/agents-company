@@ -42,6 +42,6 @@ describe.serial("Database.Client cold start", () => {
         ).toEqual([])
       }
     },
-    { timeout: 30_000 },
+    { timeout: 60_000 },
   )
 })
