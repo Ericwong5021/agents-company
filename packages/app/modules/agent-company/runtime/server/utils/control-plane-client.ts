@@ -67,12 +67,14 @@ export async function requestControlPlane<T>(
   baseURL: string,
   path: string,
   authorization?: string,
+  retry = 0,
 ): Promise<ControlPlaneResult<T>> {
   const target = controlPlaneRequestURL(baseURL, path)
   if (!target) return { ok: false, failure: { kind: "invalid_configuration" } }
   return ofetch<T>(target.toString(), {
     headers: authorization ? { authorization } : undefined,
-    retry: 0,
+    retry,
+    retryDelay: retry ? 100 : undefined,
     timeout: 5_000,
   }).then(
     (value) => ({ ok: true as const, value }),

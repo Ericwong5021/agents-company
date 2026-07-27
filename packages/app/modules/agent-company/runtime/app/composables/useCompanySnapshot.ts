@@ -1,5 +1,5 @@
 import { useFetch, useState } from "nuxt/app"
-import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { CompanySnapshot } from "../../shared/company-contract"
 import {
   companyReconnectDelay,
@@ -95,22 +95,30 @@ export function useCompanySnapshot() {
     await request.refresh()
   }
 
+  function scheduleReconnect() {
+    if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
+    if (
+      !import.meta.client ||
+      !snapshot.value.issue?.retryable ||
+      (connection.value !== "disconnected" && connection.value !== "degraded")
+    ) return
+    reconnectTimer.value = setTimeout(() => {
+      reconnectAttempt.value += 1
+      if (connection.value === "degraded") {
+        void request.refresh()
+        return
+      }
+      void refresh()
+    }, companyReconnectDelay(reconnectAttempt.value))
+  }
+
   watch(
     () => [connection.value, snapshot.value.issue?.retryable] as const,
-    ([state, retryable]) => {
-      if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
-      if (!import.meta.client || !retryable || (state !== "disconnected" && state !== "degraded")) return
-      reconnectTimer.value = setTimeout(() => {
-        reconnectAttempt.value += 1
-        if (state === "degraded") {
-          void request.refresh()
-          return
-        }
-        void refresh()
-      }, companyReconnectDelay(reconnectAttempt.value))
-    },
+    scheduleReconnect,
     { immediate: true },
   )
+
+  onMounted(scheduleReconnect)
 
   onBeforeUnmount(() => {
     if (reconnectTimer.value) clearTimeout(reconnectTimer.value)

@@ -300,12 +300,14 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
       config.agentCompanyControlPlaneUrl,
       `/company/agents?company_id=${encodeURIComponent(company.value.id)}`,
       authorization,
+      1,
     ),
-    requestControlPlane<unknown>(config.agentCompanyControlPlaneUrl, "/experience/work", authorization),
+    requestControlPlane<unknown>(config.agentCompanyControlPlaneUrl, "/experience/work", authorization, 1),
     requestControlPlane<unknown>(
       config.agentCompanyControlPlaneUrl,
       `/company/channels?company_id=${encodeURIComponent(company.value.id)}`,
       authorization,
+      1,
     ),
   ])
   const agents = agentsResult.ok ? parseAgents(agentsResult.value) : { ok: false as const }
@@ -317,6 +319,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
           config.agentCompanyControlPlaneUrl,
           `/company/channels/${encodeURIComponent(board.value)}/messages?company_id=${encodeURIComponent(company.value.id)}&limit=30`,
           authorization,
+          1,
         )
       : board.ok
         ? { ok: true as const, value: { items: [] } }
