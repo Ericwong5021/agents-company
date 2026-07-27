@@ -3,10 +3,10 @@ import { createServer } from "node:http"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { chromium, expect } from "@playwright/test"
+import { chromium, expect as playwrightExpect } from "@playwright/test"
 import { z } from "zod"
 
-expect.configure({ timeout: 30_000 })
+const expect = playwrightExpect.configure({ timeout: 30_000 })
 
 const packageRoot = path.resolve(import.meta.dir, "..")
 const repositoryRoot = path.resolve(packageRoot, "../..")
