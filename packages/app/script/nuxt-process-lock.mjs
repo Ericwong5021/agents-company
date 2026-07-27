@@ -1,6 +1,6 @@
 import path from "node:path"
 import process from "node:process"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, rmSync, symlinkSync } from "node:fs"
 import { DatabaseSync } from "node:sqlite"
 import { setTimeout as delay } from "node:timers/promises"
 import { isMainThread } from "node:worker_threads"
@@ -76,10 +76,32 @@ for (const lockName of lockNames) {
   }
 }
 
+const packageRoot = path.resolve(import.meta.dirname, "..")
+const defaultNuxtBuildDirectory = path.join(packageRoot, ".nuxt")
+const configuredNuxtBuildDirectory = process.env.AGENT_COMPANY_WEBUI_BUILD_DIR
+  ? path.resolve(packageRoot, process.env.AGENT_COMPANY_WEBUI_BUILD_DIR)
+  : defaultNuxtBuildDirectory
+const ownsCustomBuildLink =
+  isMainThread && mode === "direct" && configuredNuxtBuildDirectory !== defaultNuxtBuildDirectory
+
+if (ownsCustomBuildLink) {
+  mkdirSync(configuredNuxtBuildDirectory, { recursive: true })
+  rmSync(defaultNuxtBuildDirectory, { recursive: true, force: true })
+  symlinkSync(
+    configuredNuxtBuildDirectory,
+    defaultNuxtBuildDirectory,
+    process.platform === "win32" ? "junction" : "dir",
+  )
+}
+
 let released = false
 function release() {
   if (released) return
   released = true
+  if (ownsCustomBuildLink) {
+    rmSync(defaultNuxtBuildDirectory, { recursive: true, force: true })
+    mkdirSync(defaultNuxtBuildDirectory, { recursive: true })
+  }
   for (const database of databases.reverse()) {
     database.exec("ROLLBACK")
     database.close()
