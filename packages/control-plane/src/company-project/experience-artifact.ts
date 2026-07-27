@@ -115,7 +115,7 @@ function fileView(
   return withProjectFile(artifact.outputDirectory, artifact.path, (file) => {
     const content = readFile(file.descriptor, file.byteLength)
     if (!content) return undefined
-    const mediaType = AppFileSystem.mimeType(file.path)
+    const mediaType = AppFileSystem.mimeType(artifact.path)
     const text =
       mediaType.startsWith("text/") || textMediaTypes.has(mediaType)
         ? attempt(() => new TextDecoder("utf-8", { fatal: true }).decode(content))
