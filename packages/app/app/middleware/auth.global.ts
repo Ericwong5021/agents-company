@@ -9,17 +9,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return;
   }
 
-  const { data: session } = await authClient.getSession({
-    fetchOptions: {
-      headers: useRequestHeaders(["cookie"]) as HeadersInit,
-    },
-  });
-
-  if (!session) {
-    return navigateTo({
-      path: "/login",
-      query: { redirect: to.fullPath },
+  const authenticated = useState("agent-company-authenticated", () => false);
+  if (!authenticated.value) {
+    const { data: session } = await authClient.getSession({
+      fetchOptions: {
+        headers: useRequestHeaders(["cookie"]) as HeadersInit,
+      },
     });
+
+    if (!session) {
+      return navigateTo({
+        path: "/login",
+        query: { redirect: to.fullPath },
+      });
+    }
+    authenticated.value = true;
   }
 
   if (
