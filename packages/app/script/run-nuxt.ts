@@ -12,7 +12,7 @@ const exitCode = await (async () => {
       "node",
       "--import",
       pathToFileURL(path.join(import.meta.dir, "nuxt-process-lock.mjs")).href,
-      "./node_modules/nuxt/bin/nuxt.mjs",
+      fileURLToPath(new URL("./bin/nuxt.mjs", import.meta.resolve("nuxt/package.json"))),
       command,
     ],
     {
