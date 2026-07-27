@@ -6,6 +6,8 @@ import path from "node:path"
 import { chromium, expect } from "@playwright/test"
 import { z } from "zod"
 
+expect.configure({ timeout: 30_000 })
+
 const packageRoot = path.resolve(import.meta.dir, "..")
 const repositoryRoot = path.resolve(packageRoot, "../..")
 const controlPlaneRoot = path.join(repositoryRoot, "packages/control-plane")
