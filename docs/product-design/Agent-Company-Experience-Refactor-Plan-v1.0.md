@@ -460,7 +460,7 @@ R0 不依赖任何完整的 R1 Task。为解除原计划中 SHELL-02 → FND-04�
 
 必须完成：FND-01、FND-02、FND-03、FND-04[R0-contract]、GOAL-01[R0-contract]、SHELL-01、SHELL-02、SHELL-03、TRUST-01、TRUST-02、GOAL-02、WORK-05，以及相关 QA-02。
 
-截至 2026-07-27，R0 技术候选固定为 `3d68a6a4839fc436b7ed1ed913a6169753847713`，已完成以下自动验收：
+截至 2026-07-27，R0 技术候选固定为 `18097acb73c6e2f6cf0d74fe93ac460d6b7e0eb2`，已完成以下自动验收：
 
 | 自动验收 | 当前结果 |
 |---|---|
