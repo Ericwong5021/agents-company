@@ -5,30 +5,25 @@ import type {
 import { authClient } from "~/lib/auth-client";
 
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (to.path === "/login") {
+  if (to.path === "/login" || import.meta.client) {
     return;
   }
 
-  const authenticated = useState("agent-company-authenticated", () => false);
-  if (!authenticated.value) {
-    const { data: session } = await authClient.getSession({
-      fetchOptions: {
-        headers: useRequestHeaders(["cookie"]) as HeadersInit,
-      },
-    });
+  const { data: session } = await authClient.getSession({
+    fetchOptions: {
+      headers: useRequestHeaders(["cookie"]) as HeadersInit,
+    },
+  });
 
-    if (!session) {
-      return navigateTo({
-        path: "/login",
-        query: { redirect: to.fullPath },
-      });
-    }
-    authenticated.value = true;
+  if (!session) {
+    return navigateTo({
+      path: "/login",
+      query: { redirect: to.fullPath },
+    });
   }
 
   if (
-    !import.meta.server
-    || !/\bElectron\//.test(useRequestHeader("user-agent") ?? "")
+    !/\bElectron\//.test(useRequestHeader("user-agent") ?? "")
   ) return;
 
   const snapshot = useState<CompanySnapshot | undefined>("agent-company-snapshot-value");
