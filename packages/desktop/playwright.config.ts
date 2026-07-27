@@ -27,7 +27,7 @@ export default defineConfig({
     url: `${webUIURL}/login`,
     timeout: 240_000,
     reuseExistingServer: false,
-    stdout: "ignore",
+    stdout: "pipe",
     stderr: "pipe",
     env: {
       HOST: "127.0.0.1",

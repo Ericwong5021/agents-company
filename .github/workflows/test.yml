@@ -164,7 +164,7 @@ jobs:
           if-no-files-found: warn
 
   m2-desktop:
-    needs: m2-e2e
+    needs: unit
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
