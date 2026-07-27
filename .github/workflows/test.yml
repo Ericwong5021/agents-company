@@ -111,6 +111,15 @@ jobs:
         working-directory: packages/app
         run: bun run test:r0-config-matrix
 
+      - name: Run committed R0 benchmark twice
+        run: |
+          bun script/experience-benchmark.ts \
+            --ref "$GITHUB_SHA" \
+            --gate R0 \
+            --all \
+            --out "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA" \
+            --repeat 2
+
       - name: Run M2 browser gate
         working-directory: packages/app
         env:
@@ -124,15 +133,6 @@ jobs:
         run: |
           mkdir -p .artifacts/e2e-production
           bun run test:production
-
-      - name: Run committed R0 benchmark twice
-        run: |
-          bun script/experience-benchmark.ts \
-            --ref "$GITHUB_SHA" \
-            --gate R0 \
-            --all \
-            --out "$GITHUB_WORKSPACE/.artifacts/experience-refactor/$GITHUB_SHA" \
-            --repeat 2
 
       - name: Record incomplete R0 gate decision without automatic or human evidence
         env:
