@@ -1,11 +1,15 @@
 import path from "node:path"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, rmSync, symlinkSync } from "node:fs"
 import { pathToFileURL } from "node:url"
 import { Database } from "bun:sqlite"
 import { findLocalEveServerOrigin } from "./dev-server-url"
 
 const packageRoot = path.resolve(import.meta.dir, "..")
 const upstreamRoot = packageRoot
+const defaultNuxtBuildDirectory = path.join(packageRoot, ".nuxt")
+const configuredNuxtBuildDirectory = Bun.env.AGENT_COMPANY_WEBUI_BUILD_DIR
+  ? path.resolve(packageRoot, Bun.env.AGENT_COMPANY_WEBUI_BUILD_DIR)
+  : defaultNuxtBuildDirectory
 const host = Bun.env.HOST || "127.0.0.1"
 const port = Bun.env.PORT || "3210"
 const workerReadyTimeoutMs = Number(Bun.env.EVE_DEV_SERVER_READY_TIMEOUT_MS || "180000")
@@ -186,6 +190,19 @@ children.delete(preparation)
 if (preparationExitCode !== 0) {
   console.error(`Nuxt preparation exited unexpectedly with code ${preparationExitCode}.`)
   await stop(preparationExitCode || 1)
+}
+
+if (configuredNuxtBuildDirectory !== defaultNuxtBuildDirectory) {
+  rmSync(defaultNuxtBuildDirectory, { recursive: true, force: true })
+  symlinkSync(
+    configuredNuxtBuildDirectory,
+    defaultNuxtBuildDirectory,
+    process.platform === "win32" ? "junction" : "dir",
+  )
+  process.once("exit", () => {
+    rmSync(defaultNuxtBuildDirectory, { recursive: true, force: true })
+    mkdirSync(defaultNuxtBuildDirectory, { recursive: true })
+  })
 }
 
 const worker = Bun.spawn({
