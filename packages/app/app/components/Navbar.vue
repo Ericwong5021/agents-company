@@ -10,26 +10,19 @@ const appConfig = useAppConfig();
 const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const connectionState = useState<CompanyConnection | undefined>("agent-company-connection");
 const snapshotState = useState<CompanySnapshot | undefined>("agent-company-snapshot-value");
-const { data: requestSnapshot } = useNuxtData<CompanySnapshot>("agent-company-snapshot");
 const hydrated = ref(false);
 
 const activeItem = computed(() =>
   activeShellNavigationItem(appConfig.shell.navigation, route.path),
 );
-const observedSnapshot = computed(() =>
-  !connectionState.value || connectionState.value === "connecting"
-    ? requestSnapshot.value ?? snapshotState.value
-    : snapshotState.value ?? requestSnapshot.value);
 const observedConnection = computed(() =>
-  !connectionState.value || connectionState.value === "connecting"
-    ? requestSnapshot.value?.connection ?? connectionState.value ?? "connecting"
-    : connectionState.value);
+  connectionState.value ?? snapshotState.value?.connection ?? "connecting");
 const connection = computed(() => hydrated.value ? observedConnection.value : "connecting");
 const connectionLabel = computed(() => {
   if (connection.value === "ready") return "已连接";
   if (
     connection.value === "degraded"
-    && observedSnapshot.value?.issue?.kind === "provider_required"
+    && snapshotState.value?.issue?.kind === "provider_required"
   ) return "需要配置";
   if (connection.value === "degraded") return "部分可用";
   if (connection.value === "disconnected") return "已断开";
@@ -37,8 +30,8 @@ const connectionLabel = computed(() => {
   return "正在连接";
 });
 const connectionAriaLabel = computed(() =>
-  `本地连接状态：${connectionLabel.value}${observedSnapshot.value?.issue?.title
-    ? `，${observedSnapshot.value.issue.title}`
+  `本地连接状态：${connectionLabel.value}${snapshotState.value?.issue?.title
+    ? `，${snapshotState.value.issue.title}`
     : ""}`);
 
 function openSidebar() {
