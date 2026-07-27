@@ -82,7 +82,9 @@ export function useCompanySnapshot() {
           ? "disconnected"
           : value.connection,
       })
-      if (value.connection === "ready" || value.connection === "degraded") reconnectAttempt.value = 0
+      if (value.connection === "ready" || (value.connection === "degraded" && !value.issue?.retryable)) {
+        reconnectAttempt.value = 0
+      }
     },
     { immediate: true },
   )
@@ -97,9 +99,13 @@ export function useCompanySnapshot() {
     () => [connection.value, snapshot.value.issue?.retryable] as const,
     ([state, retryable]) => {
       if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
-      if (!import.meta.client || state !== "disconnected" || !retryable) return
+      if (!import.meta.client || !retryable || (state !== "disconnected" && state !== "degraded")) return
       reconnectTimer.value = setTimeout(() => {
         reconnectAttempt.value += 1
+        if (state === "degraded") {
+          void request.refresh()
+          return
+        }
         void refresh()
       }, companyReconnectDelay(reconnectAttempt.value))
     },
