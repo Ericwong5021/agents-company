@@ -460,15 +460,29 @@ R0 不依赖任何完整的 R1 Task。为解除原计划中 SHELL-02 → FND-04�
 
 必须完成：FND-01、FND-02、FND-03、FND-04[R0-contract]、GOAL-01[R0-contract]、SHELL-01、SHELL-02、SHELL-03、TRUST-01、TRUST-02、GOAL-02、WORK-05，以及相关 QA-02。
 
-R0 gate 当前为**未完成**。以下人工验收均为阻断项，自动化检查、截图差异、文案扫描、Agent 判断或已有截图不能替代真人执行与签署：
+截至 2026-07-27，R0 技术候选固定为 `2c141b3ca8dd1cb96f563300662e819d5514597d`，已完成以下自动验收：
 
-| 人工验收 | 最低证据 | 当前状态 | 自动化可替代 |
+| 自动验收 | 当前结果 |
+|---|---|
+| 基准场景 | 12 个场景各重复执行 2 次，归一化摘要一致，`reproducible: true` |
+| exact-build 自动证据 | 18 条命令全部通过，覆盖 13 个 R0 Task、39 条验收标准 |
+| 发布候选素材 | 8 张核心界面截图、12 张 HR-01 状态卡均绑定候选 SHA |
+| 独立复现 | 20 张图片与 2 份清单共 22 个文件逐字节一致 |
+| Gate 当前进程复跑 | `automaticEvidenceStatus: pass`、`automaticEvidenceExecution: current_process`、`failures: []`、`errors: []` |
+
+上述结果只适用于该候选 SHA。后续仅记录进度的文档提交不替换候选版本；运行时源码、证据契约或候选素材发生变化时，必须冻结新的候选 SHA 并重新执行全部自动验收。
+
+R0 gate 当前仍为**未完成**，R1 尚未开始。以下人工与治理验收均为阻断项，自动化检查、截图差异、文案扫描、Agent 判断或已有截图不能替代真人执行与签署：
+
+| 人工与治理验收 | 最低证据 | 当前状态 | 自动化可替代 |
 |---|---|---|---|
+| FND-02：用户语言契约签署 | 产品、设计、前端、后端四个角色的具名审批，绑定同一候选 SHA 与语言契约摘要 | 未完成（`not_scheduled`） | 否 |
 | HR-01：3 名目标用户术语理解测试 | 参与者条件与匿名 ID、构建提交、主持脚本、12 个状态的原始解释与计分 | 未完成（`not_scheduled`） | 否 |
 | HR-02：5 名目标用户品牌认知测试 | 参与者条件与匿名 ID、构建提交、10 秒认知任务原始回答与计分 | 未完成（`not_scheduled`） | 否 |
-| HR-03：人工截图审批 | First-run、Inbox、Goal Brief、Running、Blocked、Gate、Delivery、Team 的发布候选截图与具名审批记录 | 未完成（`not_scheduled`） | 否 |
+| HR-03：人工截图审批 | First-run、Inbox、Goal Brief、Running、Blocked、Gate、Delivery、Team 的发布候选截图与具名审批记录 | 进行中（`in_progress`；素材已就绪，具名审批人与逐图决定未记录） | 否 |
+| FND-03：确定性场景抽查 | 具名复核人检查 S05、S02、S01 的执行记录和引用证据，并确认未夸大通过结论 | 未完成（`not_scheduled`） | 否 |
 
-三项全部达到目标并提交原始证据前，R0 不得标记通过，也不得进入 R1。
+五项全部达到目标后，匿名人工证据包还必须由仓库外信任根中的 `agent-company-r0-release-owner` 对精确包字节执行 OpenSSH detached signature。本次 Gate 未提供该签名及仓库外 `allowed_signers`，因此 R0 不得标记通过，也不得进入 R1。
 
 
 ### R1 — Goal → Start
