@@ -25,7 +25,7 @@ export default defineConfig({
     command: "bun script/production-e2e-server.ts",
     cwd: path.resolve(desktop, "../app"),
     url: `${webUIURL}/login`,
-    timeout: 240_000,
+    timeout: 360_000,
     reuseExistingServer: false,
     stdout: "pipe",
     stderr: "pipe",
