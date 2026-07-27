@@ -31217,138 +31217,6 @@
           }
         ]
       },
-      "Project": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "worktree": {
-            "type": "string"
-          },
-          "vcs": {
-            "type": "string",
-            "const": "git"
-          },
-          "name": {
-            "type": "string"
-          },
-          "icon": {
-            "type": "object",
-            "properties": {
-              "url": {
-                "type": "string"
-              },
-              "override": {
-                "type": "string"
-              },
-              "color": {
-                "type": "string"
-              }
-            }
-          },
-          "commands": {
-            "type": "object",
-            "properties": {
-              "start": {
-                "description": "Startup script to run when creating a new workspace (worktree)",
-                "type": "string"
-              }
-            }
-          },
-          "time": {
-            "type": "object",
-            "properties": {
-              "created": {
-                "type": "number"
-              },
-              "updated": {
-                "type": "number"
-              },
-              "initialized": {
-                "type": "number"
-              },
-              "blocked": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "created",
-              "updated"
-            ]
-          },
-          "block": {
-            "type": "object",
-            "properties": {
-              "reason": {
-                "type": "string"
-              },
-              "byAgentID": {
-                "type": "string"
-              },
-              "time": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "reason",
-              "time"
-            ]
-          },
-          "sandboxes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "worktree",
-          "time",
-          "sandboxes"
-        ]
-      },
-      "Event.project.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "project.updated"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/Project"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.server.instance.disposed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "server.instance.disposed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "directory": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "directory"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.server.connected": {
         "type": "object",
         "properties": {
@@ -31480,6 +31348,1030 @@
               "thread_id"
             ],
             "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.actor.registered": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "actor.registered"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "actorID": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "peer",
+                  "subagent",
+                  "main"
+                ]
+              },
+              "parentActorID": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "background": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sessionID",
+              "actorID",
+              "mode",
+              "description",
+              "agent",
+              "background"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.actor.status": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "actor.status"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "actorID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "running",
+                  "idle"
+                ]
+              },
+              "lastOutcome": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "failure",
+                  "cancelled"
+                ]
+              },
+              "turnCount": {
+                "type": "number"
+              },
+              "lastTurnTime": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "actorID",
+              "status",
+              "turnCount",
+              "lastTurnTime"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.actor.stuck": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "actor.stuck"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "actorID": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "lastTurnTime": {
+                "type": "number"
+              },
+              "stuckDuration": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sessionID",
+              "actorID",
+              "description",
+              "lastTurnTime",
+              "stuckDuration"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.writer.cache_perf": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "writer.cache_perf"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "writerActorID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "failed"
+                ]
+              },
+              "total_input_tokens": {
+                "type": "number"
+              },
+              "cache_read_tokens": {
+                "type": "number"
+              },
+              "cache_write_tokens": {
+                "type": "number"
+              },
+              "cache_hit_rate": {
+                "type": "number"
+              },
+              "num_llm_calls": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sessionID",
+              "writerActorID",
+              "status",
+              "total_input_tokens",
+              "cache_read_tokens",
+              "cache_write_tokens",
+              "cache_hit_rate",
+              "num_llm_calls"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.inbox.arrived": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "inbox.arrived"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "receiverSessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "receiverActorID": {
+                "type": "string"
+              },
+              "senderSessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "senderActorID": {
+                "type": "string"
+              },
+              "inboxID": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "receiverSessionID",
+              "receiverActorID",
+              "inboxID",
+              "type"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^T\\d+(\\.\\d+)*$"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^ses.*"
+                  },
+                  "parent_task_id": {
+                    "type": "string",
+                    "pattern": "^T\\d+(\\.\\d+)*$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "in_progress",
+                      "blocked",
+                      "done",
+                      "abandoned"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "number"
+                  },
+                  "last_event_at": {
+                    "type": "number"
+                  },
+                  "ended_at": {
+                    "type": "number"
+                  },
+                  "cleanup_after": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "session_id",
+                  "status",
+                  "summary",
+                  "created_at",
+                  "last_event_at"
+                ]
+              }
+            },
+            "required": [
+              "sessionID",
+              "task"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^T\\d+(\\.\\d+)*$"
+                  },
+                  "session_id": {
+                    "type": "string",
+                    "pattern": "^ses.*"
+                  },
+                  "parent_task_id": {
+                    "type": "string",
+                    "pattern": "^T\\d+(\\.\\d+)*$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "in_progress",
+                      "blocked",
+                      "done",
+                      "abandoned"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "number"
+                  },
+                  "last_event_at": {
+                    "type": "number"
+                  },
+                  "ended_at": {
+                    "type": "number"
+                  },
+                  "cleanup_after": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "session_id",
+                  "status",
+                  "summary",
+                  "created_at",
+                  "last_event_at"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "started",
+                  "unstarted",
+                  "blocked",
+                  "unblocked",
+                  "done",
+                  "abandoned",
+                  "renamed"
+                ]
+              }
+            },
+            "required": [
+              "sessionID",
+              "task",
+              "kind"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.team.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "team.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "teamID": {
+                "type": "string"
+              },
+              "creatorSessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              }
+            },
+            "required": [
+              "teamID",
+              "creatorSessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.team.member.joined": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "team.member.joined"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "teamID": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "teamID",
+              "sessionID",
+              "agent",
+              "role"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.metrics.model_call": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "metrics.model_call"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "finish_reason": {
+                "type": "string"
+              },
+              "ttft_ms": {
+                "type": "number"
+              },
+              "latency_ms": {
+                "type": "number"
+              },
+              "cached_read_tokens": {
+                "type": "number"
+              },
+              "model_id": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "total_tokens_in": {
+                "type": "number"
+              },
+              "total_tokens_out": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sessionID",
+              "finish_reason",
+              "latency_ms",
+              "cached_read_tokens",
+              "model_id",
+              "provider",
+              "total_tokens_in",
+              "total_tokens_out"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.metrics.tool_call": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "metrics.tool_call"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              },
+              "input_bytes": {
+                "type": "number"
+              },
+              "output_bytes": {
+                "type": "number"
+              },
+              "tool_call_id": {
+                "type": "string"
+              },
+              "tool_call_status": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "error",
+                  "cancelled"
+                ]
+              }
+            },
+            "required": [
+              "sessionID",
+              "tool_name",
+              "input_bytes",
+              "output_bytes",
+              "tool_call_id",
+              "tool_call_status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.metrics.agent_request": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "metrics.agent_request"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "task_type": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "total_tokens_in": {
+                "type": "number"
+              },
+              "total_tokens_out": {
+                "type": "number"
+              },
+              "files_changed": {
+                "type": "number"
+              },
+              "validation_status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "phase",
+              "task_type",
+              "surface",
+              "total_tokens_in",
+              "total_tokens_out",
+              "files_changed",
+              "validation_status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.phase": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.phase"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "title"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.log": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.log"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.started": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.started"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.finished": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.finished"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.agent_failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.agent_failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "actorID": {
+                "type": "string"
+              },
+              "agentType": {
+                "type": "string"
+              },
+              "companyAgentID": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "phase": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "over-cap",
+                  "spawn-reject",
+                  "timeout",
+                  "actor-error",
+                  "no-deliverable"
+                ]
+              },
+              "errorMessage": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "agentType",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.child_failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.child_failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "childRunID": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "runID",
+              "childRunID",
+              "name",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "worktree": {
+            "type": "string"
+          },
+          "vcs": {
+            "type": "string",
+            "const": "git"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "override": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              }
+            }
+          },
+          "commands": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "description": "Startup script to run when creating a new workspace (worktree)",
+                "type": "string"
+              }
+            }
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "updated": {
+                "type": "number"
+              },
+              "initialized": {
+                "type": "number"
+              },
+              "blocked": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "created",
+              "updated"
+            ]
+          },
+          "block": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "byAgentID": {
+                "type": "string"
+              },
+              "time": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "reason",
+              "time"
+            ]
+          },
+          "sandboxes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "worktree",
+          "time",
+          "sandboxes"
+        ]
+      },
+      "Event.project.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "project.updated"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.server.instance.disposed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.instance.disposed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory"
+            ]
           }
         },
         "required": [
@@ -31794,258 +32686,6 @@
               "sessionID",
               "requestID",
               "reply"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.actor.registered": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "actor.registered"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "actorID": {
-                "type": "string"
-              },
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "peer",
-                  "subagent",
-                  "main"
-                ]
-              },
-              "parentActorID": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "agent": {
-                "type": "string"
-              },
-              "background": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "sessionID",
-              "actorID",
-              "mode",
-              "description",
-              "agent",
-              "background"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.actor.status": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "actor.status"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "actorID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "running",
-                  "idle"
-                ]
-              },
-              "lastOutcome": {
-                "type": "string",
-                "enum": [
-                  "success",
-                  "failure",
-                  "cancelled"
-                ]
-              },
-              "turnCount": {
-                "type": "number"
-              },
-              "lastTurnTime": {
-                "type": "number"
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "actorID",
-              "status",
-              "turnCount",
-              "lastTurnTime"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.actor.stuck": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "actor.stuck"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "actorID": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "lastTurnTime": {
-                "type": "number"
-              },
-              "stuckDuration": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "sessionID",
-              "actorID",
-              "description",
-              "lastTurnTime",
-              "stuckDuration"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.writer.cache_perf": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "writer.cache_perf"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "writerActorID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "failed"
-                ]
-              },
-              "total_input_tokens": {
-                "type": "number"
-              },
-              "cache_read_tokens": {
-                "type": "number"
-              },
-              "cache_write_tokens": {
-                "type": "number"
-              },
-              "cache_hit_rate": {
-                "type": "number"
-              },
-              "num_llm_calls": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "sessionID",
-              "writerActorID",
-              "status",
-              "total_input_tokens",
-              "cache_read_tokens",
-              "cache_write_tokens",
-              "cache_hit_rate",
-              "num_llm_calls"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.inbox.arrived": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "inbox.arrived"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "receiverSessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "receiverActorID": {
-                "type": "string"
-              },
-              "senderSessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "senderActorID": {
-                "type": "string"
-              },
-              "inboxID": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "receiverSessionID",
-              "receiverActorID",
-              "inboxID",
-              "type"
             ]
           }
         },
@@ -32933,177 +33573,6 @@
           "properties"
         ]
       },
-      "Event.task.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "task": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^T\\d+(\\.\\d+)*$"
-                  },
-                  "session_id": {
-                    "type": "string",
-                    "pattern": "^ses.*"
-                  },
-                  "parent_task_id": {
-                    "type": "string",
-                    "pattern": "^T\\d+(\\.\\d+)*$"
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "open",
-                      "in_progress",
-                      "blocked",
-                      "done",
-                      "abandoned"
-                    ]
-                  },
-                  "summary": {
-                    "type": "string"
-                  },
-                  "owner": {
-                    "type": "string"
-                  },
-                  "created_at": {
-                    "type": "number"
-                  },
-                  "last_event_at": {
-                    "type": "number"
-                  },
-                  "ended_at": {
-                    "type": "number"
-                  },
-                  "cleanup_after": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "id",
-                  "session_id",
-                  "status",
-                  "summary",
-                  "created_at",
-                  "last_event_at"
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "task"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "task": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^T\\d+(\\.\\d+)*$"
-                  },
-                  "session_id": {
-                    "type": "string",
-                    "pattern": "^ses.*"
-                  },
-                  "parent_task_id": {
-                    "type": "string",
-                    "pattern": "^T\\d+(\\.\\d+)*$"
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "open",
-                      "in_progress",
-                      "blocked",
-                      "done",
-                      "abandoned"
-                    ]
-                  },
-                  "summary": {
-                    "type": "string"
-                  },
-                  "owner": {
-                    "type": "string"
-                  },
-                  "created_at": {
-                    "type": "number"
-                  },
-                  "last_event_at": {
-                    "type": "number"
-                  },
-                  "ended_at": {
-                    "type": "number"
-                  },
-                  "cleanup_after": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "id",
-                  "session_id",
-                  "status",
-                  "summary",
-                  "created_at",
-                  "last_event_at"
-                ]
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "started",
-                  "unstarted",
-                  "blocked",
-                  "unblocked",
-                  "done",
-                  "abandoned",
-                  "renamed"
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "task",
-              "kind"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.company_agent.created": {
         "type": "object",
         "properties": {
@@ -33369,72 +33838,6 @@
             "required": [
               "sessionID",
               "todos"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.team.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "team.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "teamID": {
-                "type": "string"
-              },
-              "creatorSessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              }
-            },
-            "required": [
-              "teamID",
-              "creatorSessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.team.member.joined": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "team.member.joined"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "teamID": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "agent": {
-                "type": "string"
-              },
-              "role": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "teamID",
-              "sessionID",
-              "agent",
-              "role"
             ]
           }
         },
@@ -33902,162 +34305,6 @@
             },
             "required": [
               "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.metrics.model_call": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "metrics.model_call"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "finish_reason": {
-                "type": "string"
-              },
-              "ttft_ms": {
-                "type": "number"
-              },
-              "latency_ms": {
-                "type": "number"
-              },
-              "cached_read_tokens": {
-                "type": "number"
-              },
-              "model_id": {
-                "type": "string"
-              },
-              "provider": {
-                "type": "string"
-              },
-              "total_tokens_in": {
-                "type": "number"
-              },
-              "total_tokens_out": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "sessionID",
-              "finish_reason",
-              "latency_ms",
-              "cached_read_tokens",
-              "model_id",
-              "provider",
-              "total_tokens_in",
-              "total_tokens_out"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.metrics.tool_call": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "metrics.tool_call"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "tool_name": {
-                "type": "string"
-              },
-              "input_bytes": {
-                "type": "number"
-              },
-              "output_bytes": {
-                "type": "number"
-              },
-              "tool_call_id": {
-                "type": "string"
-              },
-              "tool_call_status": {
-                "type": "string",
-                "enum": [
-                  "success",
-                  "error",
-                  "cancelled"
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "tool_name",
-              "input_bytes",
-              "output_bytes",
-              "tool_call_id",
-              "tool_call_status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.metrics.agent_request": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "metrics.agent_request"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "phase": {
-                "type": "string"
-              },
-              "task_type": {
-                "type": "string"
-              },
-              "surface": {
-                "type": "string"
-              },
-              "total_tokens_in": {
-                "type": "number"
-              },
-              "total_tokens_out": {
-                "type": "number"
-              },
-              "files_changed": {
-                "type": "number"
-              },
-              "validation_status": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "phase",
-              "task_type",
-              "surface",
-              "total_tokens_in",
-              "total_tokens_out",
-              "files_changed",
-              "validation_status"
             ]
           }
         },
@@ -34979,253 +35226,6 @@
               "type",
               "payloadJSON",
               "timeCreated"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.phase": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.phase"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "title": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "title"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.log": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.log"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.started": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.started"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "name"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.finished": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.finished"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "status"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.agent_failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.agent_failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "actorID": {
-                "type": "string"
-              },
-              "agentType": {
-                "type": "string"
-              },
-              "companyAgentID": {
-                "type": "string"
-              },
-              "label": {
-                "type": "string"
-              },
-              "phase": {
-                "type": "string"
-              },
-              "reason": {
-                "type": "string",
-                "enum": [
-                  "over-cap",
-                  "spawn-reject",
-                  "timeout",
-                  "actor-error",
-                  "no-deliverable"
-                ]
-              },
-              "errorMessage": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "agentType",
-              "reason"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.child_failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.child_failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "childRunID": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "runID",
-              "childRunID",
-              "name",
-              "status"
             ]
           }
         },
@@ -38303,12 +38303,6 @@
           "payload": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Event.project.updated"
-              },
-              {
-                "$ref": "#/components/schemas/Event.server.instance.disposed"
-              },
-              {
                 "$ref": "#/components/schemas/Event.server.connected"
               },
               {
@@ -38325,6 +38319,66 @@
               },
               {
                 "$ref": "#/components/schemas/Event.company.agent_activity.invalidated"
+              },
+              {
+                "$ref": "#/components/schemas/Event.actor.registered"
+              },
+              {
+                "$ref": "#/components/schemas/Event.actor.status"
+              },
+              {
+                "$ref": "#/components/schemas/Event.actor.stuck"
+              },
+              {
+                "$ref": "#/components/schemas/Event.writer.cache_perf"
+              },
+              {
+                "$ref": "#/components/schemas/Event.inbox.arrived"
+              },
+              {
+                "$ref": "#/components/schemas/Event.task.created"
+              },
+              {
+                "$ref": "#/components/schemas/Event.task.updated"
+              },
+              {
+                "$ref": "#/components/schemas/Event.team.created"
+              },
+              {
+                "$ref": "#/components/schemas/Event.team.member.joined"
+              },
+              {
+                "$ref": "#/components/schemas/Event.metrics.model_call"
+              },
+              {
+                "$ref": "#/components/schemas/Event.metrics.tool_call"
+              },
+              {
+                "$ref": "#/components/schemas/Event.metrics.agent_request"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.phase"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.log"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.started"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.finished"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.agent_failed"
+              },
+              {
+                "$ref": "#/components/schemas/Event.workflow.child_failed"
+              },
+              {
+                "$ref": "#/components/schemas/Event.project.updated"
+              },
+              {
+                "$ref": "#/components/schemas/Event.server.instance.disposed"
               },
               {
                 "$ref": "#/components/schemas/Event.file.edited"
@@ -38352,21 +38406,6 @@
               },
               {
                 "$ref": "#/components/schemas/Event.permission.replied"
-              },
-              {
-                "$ref": "#/components/schemas/Event.actor.registered"
-              },
-              {
-                "$ref": "#/components/schemas/Event.actor.status"
-              },
-              {
-                "$ref": "#/components/schemas/Event.actor.stuck"
-              },
-              {
-                "$ref": "#/components/schemas/Event.writer.cache_perf"
-              },
-              {
-                "$ref": "#/components/schemas/Event.inbox.arrived"
               },
               {
                 "$ref": "#/components/schemas/Event.session.diff"
@@ -38405,12 +38444,6 @@
                 "$ref": "#/components/schemas/Event.bash.interactive.replied"
               },
               {
-                "$ref": "#/components/schemas/Event.task.created"
-              },
-              {
-                "$ref": "#/components/schemas/Event.task.updated"
-              },
-              {
                 "$ref": "#/components/schemas/Event.company_agent.created"
               },
               {
@@ -38421,12 +38454,6 @@
               },
               {
                 "$ref": "#/components/schemas/Event.todo.updated"
-              },
-              {
-                "$ref": "#/components/schemas/Event.team.created"
-              },
-              {
-                "$ref": "#/components/schemas/Event.team.member.joined"
               },
               {
                 "$ref": "#/components/schemas/Event.audit_event.recorded"
@@ -38448,15 +38475,6 @@
               },
               {
                 "$ref": "#/components/schemas/Event.session.goal"
-              },
-              {
-                "$ref": "#/components/schemas/Event.metrics.model_call"
-              },
-              {
-                "$ref": "#/components/schemas/Event.metrics.tool_call"
-              },
-              {
-                "$ref": "#/components/schemas/Event.metrics.agent_request"
               },
               {
                 "$ref": "#/components/schemas/Event.session.compacted"
@@ -38508,24 +38526,6 @@
               },
               {
                 "$ref": "#/components/schemas/Event.agent_run.event"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.phase"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.log"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.started"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.finished"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.agent_failed"
-              },
-              {
-                "$ref": "#/components/schemas/Event.workflow.child_failed"
               },
               {
                 "$ref": "#/components/schemas/Event.group_session.created"
@@ -41549,12 +41549,6 @@
       "Event": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/Event.project.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.server.instance.disposed"
-          },
-          {
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
@@ -41571,6 +41565,66 @@
           },
           {
             "$ref": "#/components/schemas/Event.company.agent_activity.invalidated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.actor.registered"
+          },
+          {
+            "$ref": "#/components/schemas/Event.actor.status"
+          },
+          {
+            "$ref": "#/components/schemas/Event.actor.stuck"
+          },
+          {
+            "$ref": "#/components/schemas/Event.writer.cache_perf"
+          },
+          {
+            "$ref": "#/components/schemas/Event.inbox.arrived"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.team.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.team.member.joined"
+          },
+          {
+            "$ref": "#/components/schemas/Event.metrics.model_call"
+          },
+          {
+            "$ref": "#/components/schemas/Event.metrics.tool_call"
+          },
+          {
+            "$ref": "#/components/schemas/Event.metrics.agent_request"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.phase"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.log"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.started"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.finished"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.agent_failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.child_failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.project.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.server.instance.disposed"
           },
           {
             "$ref": "#/components/schemas/Event.file.edited"
@@ -41598,21 +41652,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
-            "$ref": "#/components/schemas/Event.actor.registered"
-          },
-          {
-            "$ref": "#/components/schemas/Event.actor.status"
-          },
-          {
-            "$ref": "#/components/schemas/Event.actor.stuck"
-          },
-          {
-            "$ref": "#/components/schemas/Event.writer.cache_perf"
-          },
-          {
-            "$ref": "#/components/schemas/Event.inbox.arrived"
           },
           {
             "$ref": "#/components/schemas/Event.session.diff"
@@ -41651,12 +41690,6 @@
             "$ref": "#/components/schemas/Event.bash.interactive.replied"
           },
           {
-            "$ref": "#/components/schemas/Event.task.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.updated"
-          },
-          {
             "$ref": "#/components/schemas/Event.company_agent.created"
           },
           {
@@ -41667,12 +41700,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.todo.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.team.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.team.member.joined"
           },
           {
             "$ref": "#/components/schemas/Event.audit_event.recorded"
@@ -41694,15 +41721,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.goal"
-          },
-          {
-            "$ref": "#/components/schemas/Event.metrics.model_call"
-          },
-          {
-            "$ref": "#/components/schemas/Event.metrics.tool_call"
-          },
-          {
-            "$ref": "#/components/schemas/Event.metrics.agent_request"
           },
           {
             "$ref": "#/components/schemas/Event.session.compacted"
@@ -41754,24 +41772,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.agent_run.event"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.phase"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.log"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.started"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.finished"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.agent_failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.child_failed"
           },
           {
             "$ref": "#/components/schemas/Event.group_session.created"
