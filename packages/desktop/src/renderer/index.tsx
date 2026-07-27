@@ -25,5 +25,5 @@ if (state.state === "needs_company_home") {
   showCompanyHomePicker(state.suggested_path)
 } else {
   await window.api.awaitInitialization(() => undefined)
-  window.location.replace(`${import.meta.env.VITE_AGENTCOMPANY_WEB_URL || "http://127.0.0.1:3210"}/company`)
+  window.location.replace(`${import.meta.env.VITE_AGENTCOMPANY_WEB_URL || "http://127.0.0.1:3210"}/inbox`)
 }
