@@ -59,7 +59,7 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
   minute: "2-digit",
 });
 
-onMounted(async () => {
+onBeforeMount(() => {
   const stored = (() => {
     try {
       return parseGoalDraftStorage(localStorage.getItem(goalDraftStorageKey));
@@ -71,7 +71,6 @@ onMounted(async () => {
   goalDraft.value = stored.draft;
   generationRequestID.value = stored.request?.requestId ?? "";
   generationRequestGoal.value = stored.request?.goal ?? "";
-  await nextTick();
   draftHydrated.value = true;
 });
 

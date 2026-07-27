@@ -10,19 +10,25 @@ const appConfig = useAppConfig();
 const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const connectionState = useState<CompanyConnection | undefined>("agent-company-connection");
 const snapshotState = useState<CompanySnapshot | undefined>("agent-company-snapshot-value");
+const nativeSnapshot = useState<CompanySnapshot | undefined>("agent-company-native-shell-snapshot");
 const hydrated = ref(false);
 
 const activeItem = computed(() =>
   activeShellNavigationItem(appConfig.shell.navigation, route.path),
 );
-const observedConnection = computed(() =>
-  connectionState.value ?? snapshotState.value?.connection ?? "connecting");
-const connection = computed(() => hydrated.value ? observedConnection.value : "connecting");
+const observedSnapshot = computed(() => snapshotState.value?.connection === "connecting"
+  ? nativeSnapshot.value ?? snapshotState.value
+  : snapshotState.value ?? nativeSnapshot.value);
+const observedConnection = computed(() => connectionState.value === "connecting"
+  ? observedSnapshot.value?.connection ?? "connecting"
+  : connectionState.value ?? observedSnapshot.value?.connection ?? "connecting");
+const connection = computed(() =>
+  hydrated.value ? observedConnection.value : nativeSnapshot.value?.connection ?? "connecting");
 const connectionLabel = computed(() => {
   if (connection.value === "ready") return "已连接";
   if (
     connection.value === "degraded"
-    && snapshotState.value?.issue?.kind === "provider_required"
+    && observedSnapshot.value?.issue?.kind === "provider_required"
   ) return "需要配置";
   if (connection.value === "degraded") return "部分可用";
   if (connection.value === "disconnected") return "已断开";
@@ -30,8 +36,8 @@ const connectionLabel = computed(() => {
   return "正在连接";
 });
 const connectionAriaLabel = computed(() =>
-  `本地连接状态：${connectionLabel.value}${snapshotState.value?.issue?.title
-    ? `，${snapshotState.value.issue.title}`
+  `本地连接状态：${connectionLabel.value}${observedSnapshot.value?.issue?.title
+    ? `，${observedSnapshot.value.issue.title}`
     : ""}`);
 
 function openSidebar() {
