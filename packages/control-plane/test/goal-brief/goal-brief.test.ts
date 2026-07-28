@@ -127,7 +127,7 @@ describe.serial("Goal Brief persistence", () => {
       source: "system_suggestion",
       brief: {
         ...brief(),
-        openQuestions: [{ id: "question-1", question: "确认预算", impact: "影响范围", blocking: true }],
+        openQuestions: [{ id: "question-1", question: "确认预算", impact: "影响范围", blocking: true, defaultAssumption: "按当前预算上限执行" }],
       },
     })
     const appended = GoalBriefStore.append(created.id, {

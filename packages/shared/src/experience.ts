@@ -64,8 +64,11 @@ export const GoalBriefOpenQuestion = z
   .object({
     id: Identifier,
     question: LongText,
+    // GOAL-04：不同答案带来的影响（为什么这个问题重要）。
     impact: LongText,
     blocking: z.boolean(),
+    // GOAL-04：用户不回答时系统将采用的默认假设，用于低风险可逆事项的自动决策与审计留痕。
+    defaultAssumption: LongText.describe("若用户不回答，系统将采用的默认假设"),
   })
   .strict()
 export type GoalBriefOpenQuestion = z.infer<typeof GoalBriefOpenQuestion>

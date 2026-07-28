@@ -15,6 +15,7 @@ import {
   ConversationThreadTable,
   RootNeedTable,
 } from "./conversation.sql"
+import { classifyMessageIntent, IntentOverride, MessageIntentKind } from "./intent"
 import {
   ChannelID,
   ChannelMessageID,
@@ -46,6 +47,8 @@ export const SendMessageInput = z
     replyToID: ChannelMessageID.optional(),
     referencedThreadID: ConversationThreadID.optional(),
     mentions: z.array(ConversationMention).max(20).default([]),
+    // GOAL-01：用户可显式纠正路由（作为目标执行 / 仅讨论 / 追加到已有项目）。
+    intentOverride: IntentOverride.optional(),
   })
   .strict()
 export type SendMessageInput = z.input<typeof SendMessageInput>
@@ -58,6 +61,11 @@ export const MessageAccepted = z
     threadID: ConversationThreadID.optional(),
     runID: ConversationRunID.optional(),
     replayed: z.boolean(),
+    // GOAL-01：分类结果投影（仅对 Board 新消息有意义）。不暴露模型内部推理。
+    intent: MessageIntentKind.optional(),
+    intentConfidence: z.number().min(0).max(1).optional(),
+    autoProjected: z.boolean().optional(),
+    needsIntentConfirmation: z.boolean().optional(),
   })
   .strict()
 export type MessageAccepted = z.infer<typeof MessageAccepted>
@@ -116,7 +124,11 @@ function mentionsAreVisible(input: { companyID: CompanyID; channelID: ChannelID;
   })
 }
 
-function acceptedFromMessage(message: typeof ChannelMessageTable.$inferSelect, replayed: boolean) {
+function acceptedFromMessage(
+  message: typeof ChannelMessageTable.$inferSelect,
+  replayed: boolean,
+  channel: typeof ChannelTable.$inferSelect,
+) {
   const run = Database.use((db) =>
     db
       .select({ id: ConversationRunTable.id })
@@ -124,12 +136,18 @@ function acceptedFromMessage(message: typeof ChannelMessageTable.$inferSelect, r
       .where(eq(ConversationRunTable.channel_message_id, message.id))
       .get(),
   )
+  // 分类器是确定性的，重放时重新推导意图投影而无需额外持久化。
+  const projection = channel.kind === "board" ? classifyMessageIntent(message.body) : undefined
   return {
     messageID: message.id,
     rootNeedID: message.root_need_id ?? undefined,
     threadID: message.source_thread_id ?? undefined,
     runID: run?.id,
     replayed,
+    intent: projection?.kind,
+    intentConfidence: projection?.confidence,
+    autoProjected: projection ? Boolean(message.root_need_id) : undefined,
+    needsIntentConfirmation: projection ? false : undefined,
   }
 }
 
@@ -143,7 +161,8 @@ function sameRequest(
   if (message.body !== input.body || (message.reply_to_id ?? undefined) !== input.replyToID) return false
   if (JSON.stringify(message.mentions) !== JSON.stringify(input.mentions)) return false
   if (thread) return message.source_thread_id === thread.id
-  if (channel.kind === "board") return Boolean(message.root_need_id && message.source_thread_id)
+  // Board 消息的根需求/线程投影由意图分类确定；作者/正文/提及/回复已匹配即为同一请求。
+  if (channel.kind === "board") return true
   return !message.root_need_id && !message.source_thread_id
 }
 
@@ -270,10 +289,14 @@ function write(input: ParsedSendMessageInput): TransactionResult {
         .where(and(eq(ChannelMessageTable.channel_id, channel.id), eq(ChannelMessageTable.request_id, input.requestID)))
         .get()
       if (existing && !sameRequest(existing, input, channel, thread)) return { type: "request_conflict" }
-      if (existing) return { type: "accepted", value: acceptedFromMessage(existing, true) }
+      if (existing) return { type: "accepted", value: acceptedFromMessage(existing, true, channel) }
 
       const now = Date.now()
-      const created = !thread && channel.kind === "board" ? createBoardThread(input, channel, now) : undefined
+      // GOAL-01：仅当意图判定为可执行任务/复杂目标（或用户显式要求执行）时才创建项目。
+      // 普通消息、知识问题、低置信度或干预/审批回应不静默立项，仅作为讨论保留。
+      const classification =
+        !thread && channel.kind === "board" ? classifyMessageIntent(input.body, input.intentOverride) : undefined
+      const created = classification?.createsProject ? createBoardThread(input, channel, now) : undefined
       const activeThread = thread ?? created?.thread
       const rootNeedID = thread?.root_need_id ?? created?.rootNeedID
       const messageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
@@ -322,6 +345,10 @@ function write(input: ParsedSendMessageInput): TransactionResult {
           threadID: activeThread?.id,
           runID,
           replayed: false,
+          intent: classification?.kind,
+          intentConfidence: classification?.confidence,
+          autoProjected: classification ? Boolean(created) : undefined,
+          needsIntentConfirmation: classification?.needsConfirmation,
         },
       }
     },
