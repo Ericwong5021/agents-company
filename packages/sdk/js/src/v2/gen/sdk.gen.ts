@@ -93,7 +93,6 @@ import type {
   CompanyProviderSetErrors,
   CompanyProviderSetResponses,
   CompanyProvidersResponses,
-  CompanyRecruitmentCapabilitiesResponses,
   CompanyRecruitmentDepartmentEnsureErrors,
   CompanyRecruitmentDepartmentEnsureResponses,
   CompanyRecruitmentEmploymentReviewResponses,
@@ -983,34 +982,6 @@ export class Recruitment extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<CompanyRecruitmentSnapshotResponses, unknown, ThrowOnError>({
       url: "/company/recruitment",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List capability evidence with declared/verified/expired status and runtime availability
-   */
-  public capabilities<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: CompanyId
-      agent_id?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "company_id" },
-            { in: "query", key: "agent_id" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<CompanyRecruitmentCapabilitiesResponses, unknown, ThrowOnError>({
-      url: "/company/recruitment/capabilities",
       ...options,
       ...params,
     })

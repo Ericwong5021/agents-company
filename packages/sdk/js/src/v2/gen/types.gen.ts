@@ -147,11 +147,10 @@ export type AgentActivityProjection = {
     name: string
     role?: string
     description?: string
-    lifecycle: "employee" | "assigned"
+    lifecycle: "employee"
     department?: string
     responsibilities: Array<string>
   }
-  employment: "employee" | "temporary"
   presence: "online" | "offline"
   attention: "none" | "available" | "focused" | "urgent"
   activity: "idle" | "waiting" | "working" | "recovering" | "completed" | "failed" | "interrupted"
@@ -161,16 +160,6 @@ export type AgentActivityProjection = {
   interruptibility: "interruptible" | "coordinate_first" | "needs_intervention"
   risk?: string
   collaborators: Array<string>
-  workload: {
-    active: number
-    blocked: number
-    recent_delivery?: {
-      work_item_id: string
-      title: string
-      review_status: string
-      time_completed: number
-    }
-  }
   evidence?: {
     kind: "agent_run"
     runID: string
@@ -4213,23 +4202,6 @@ export type CompanyRecruitmentSnapshotData = {
 export type CompanyRecruitmentSnapshotResponses = {
   /**
    * Recruitment and organization facts
-   */
-  200: unknown
-}
-
-export type CompanyRecruitmentCapabilitiesData = {
-  body?: never
-  path?: never
-  query: {
-    company_id: CompanyId
-    agent_id?: string
-  }
-  url: "/company/recruitment/capabilities"
-}
-
-export type CompanyRecruitmentCapabilitiesResponses = {
-  /**
-   * Capability evidence projections
    */
   200: unknown
 }

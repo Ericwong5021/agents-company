@@ -143,41 +143,6 @@
         ]
       }
     },
-    "/company/recruitment/capabilities": {
-      "get": {
-        "operationId": "company.recruitment.capabilities",
-        "summary": "List capability evidence with declared/verified/expired status and runtime availability",
-        "responses": {
-          "200": {
-            "description": "Capability evidence projections"
-          }
-        },
-        "parameters": [
-          {
-            "in": "query",
-            "name": "company_id",
-            "schema": {
-              "$ref": "#/components/schemas/CompanyID"
-            },
-            "required": true
-          },
-          {
-            "in": "query",
-            "name": "agent_id",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        ],
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.recruitment.capabilities({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/company/recruitment/needs": {
       "post": {
         "operationId": "company.recruitment.need.create",
@@ -28681,10 +28646,7 @@
               },
               "lifecycle": {
                 "type": "string",
-                "enum": [
-                  "employee",
-                  "assigned"
-                ]
+                "const": "employee"
               },
               "department": {
                 "type": "string"
@@ -28703,13 +28665,6 @@
               "responsibilities"
             ],
             "additionalProperties": false
-          },
-          "employment": {
-            "type": "string",
-            "enum": [
-              "employee",
-              "temporary"
-            ]
           },
           "presence": {
             "type": "string",
@@ -28767,52 +28722,6 @@
               "type": "string"
             }
           },
-          "workload": {
-            "type": "object",
-            "properties": {
-              "active": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "blocked": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "recent_delivery": {
-                "type": "object",
-                "properties": {
-                  "work_item_id": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "review_status": {
-                    "type": "string"
-                  },
-                  "time_completed": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  }
-                },
-                "required": [
-                  "work_item_id",
-                  "title",
-                  "review_status",
-                  "time_completed"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "active",
-              "blocked"
-            ],
-            "additionalProperties": false
-          },
           "evidence": {
             "type": "object",
             "properties": {
@@ -28842,14 +28751,12 @@
         },
         "required": [
           "agent",
-          "employment",
           "presence",
           "attention",
           "activity",
           "since",
           "interruptibility",
-          "collaborators",
-          "workload"
+          "collaborators"
         ],
         "additionalProperties": false
       },
