@@ -234,6 +234,9 @@ Life、Dreaming、Ambient、Agent Home、复杂部门和办公室视图只有在
 - 旧数据迁移可能破坏原始数据且无回滚方案。
 
 
+> **分层软门禁（pre-public 阶段，自 2026-07-28 起）**：本地优先的 pre-public 构建采用分层门禁。可机器验证的证据（自动证据包、当前进程内执行、基准复现、防伪造检查）仍为**硬阻断**；依赖真人感知的研究（FND-02、HR-01、HR-02、HR-03、FND-03-SPOT-CHECK）与仓库外 OpenSSH 发布签名对 pre-public 阶段降为**建议项**，可由发布负责人通过一份具名 owner waiver（`owner-stage-waiver.json`，绑定候选 SHA）显式豁免。自动化永远不得伪造人工研究结论——waiver 只是如实记录“负责人选择推迟”。**任何面向公众的正式发布前，上述人工项与发布签名重新变为硬阻断，waiver 不适用于公开发布。**
+
+
 ---
 
 
@@ -473,17 +476,17 @@ R0 不依赖任何完整的 R1 Task。为解除原计划中 SHELL-02 → FND-04�
 
 上述结果只适用于该候选 SHA。后续仅记录进度的文档提交不替换候选版本；运行时源码、证据契约或候选素材发生变化时，必须冻结新的候选 SHA 并重新执行全部自动验收。
 
-R0 gate 当前仍为**未完成**，R1 尚未开始。以下人工与治理验收均为阻断项，自动化检查、截图差异、文案扫描、Agent 判断或已有截图不能替代真人执行与签署：
+R0 gate 的**自动侧已全绿**。自 2026-07-28 起，pre-public 阶段采用分层软门禁：以下人工与治理验收对 pre-public **降为建议项**，可由发布负责人通过 `owner-stage-waiver.json`（绑定候选 SHA、四要素具名 attestation）显式豁免，从而使 Gate 在自动证据通过时判定为 `pass`（`humanEvidenceStatus: waived`）。自动化检查、截图差异、文案扫描或 Agent 判断**仍不得伪造或替代**真人研究结论；豁免仅记录负责人推迟的决定。**面向公众的正式发布前，这些项重新成为硬阻断。**
 
-| 人工与治理验收 | 最低证据 | 当前状态 | 自动化可替代 |
-|---|---|---|---|
-| FND-02-LANGUAGE-SIGNOFF：用户语言契约签署 | 产品、设计、前端、后端四个角色的具名审批，绑定同一候选 SHA 与语言契约摘要 | 未完成（`not_scheduled`） | 否 |
-| HR-01：3 名目标用户术语理解测试 | 参与者条件与匿名 ID、构建提交、主持脚本、12 个状态的原始解释与计分 | 未完成（`not_scheduled`） | 否 |
-| HR-02：5 名目标用户品牌认知测试 | 参与者条件与匿名 ID、构建提交、10 秒认知任务原始回答与计分 | 未完成（`not_scheduled`） | 否 |
-| HR-03：人工截图审批 | First-run、Inbox、Goal Brief、Running、Blocked、Gate、Delivery、Team 的发布候选截图与具名审批记录 | 进行中（`in_progress`；素材已就绪，具名审批人与逐图决定未记录） | 否 |
-| FND-03-SPOT-CHECK：确定性场景抽查 | 具名复核人检查 S05、S02、S01 的执行记录和引用证据，并确认未夸大通过结论 | 未完成（`not_scheduled`） | 否 |
+| 人工与治理验收 | 最低证据 | 当前状态 | pre-public | 公开发布 |
+|---|---|---|---|---|
+| FND-02-LANGUAGE-SIGNOFF：用户语言契约签署 | 产品、设计、前端、后端四个角色的具名审批，绑定同一候选 SHA 与语言契约摘要 | 未完成（`not_scheduled`） | 建议项（可 waiver） | 硬阻断 |
+| HR-01：3 名目标用户术语理解测试 | 参与者条件与匿名 ID、构建提交、主持脚本、12 个状态的原始解释与计分 | 未完成（`not_scheduled`） | 建议项（可 waiver） | 硬阻断 |
+| HR-02：5 名目标用户品牌认知测试 | 参与者条件与匿名 ID、构建提交、10 秒认知任务原始回答与计分 | 未完成（`not_scheduled`） | 建议项（可 waiver） | 硬阻断 |
+| HR-03：人工截图审批 | First-run、Inbox、Goal Brief、Running、Blocked、Gate、Delivery、Team 的发布候选截图与具名审批记录 | 进行中（`in_progress`；素材已就绪） | 建议项（可 waiver） | 硬阻断 |
+| FND-03-SPOT-CHECK：确定性场景抽查 | 具名复核人检查 S05、S02、S01 的执行记录和引用证据，并确认未夸大通过结论 | 未完成（`not_scheduled`） | 建议项（可 waiver） | 硬阻断 |
 
-五项全部达到目标后，匿名人工证据包还必须由仓库外信任根中的 `agent-company-r0-release-owner` 对精确包字节执行 OpenSSH detached signature。本次 Gate 未提供该签名及仓库外 `allowed_signers`，因此 R0 不得标记通过，也不得进入 R1。
+pre-public 阶段可用以下命令让 Gate 通过（自动证据仍须当前进程内执行）：`bun script/experience-gate.ts --ref <full-sha> --gate R0 --runner-artifact <record.json> --execute-automatic <dir> --stage-waiver <owner-stage-waiver.json> --out <decision.json> --require-pass`。面向公众发布时，仍须提供匿名人工证据包并由仓库外信任根中的 `agent-company-r0-release-owner` 对精确包字节执行 OpenSSH detached signature；`--stage-waiver` 与 `--human-evidence` 互斥，且 waiver 不适用于公开发布。
 
 
 ### R1 — Goal → Start

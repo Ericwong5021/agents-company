@@ -48,6 +48,9 @@ const humanSignerIdentity = "agent-company-r0-release-owner"
 const languageSignoffRoles = ["product", "design", "frontend", "backend"]
 const languageSignoffAttestation =
   "I reviewed the identified language contract for the identified build and approve it for my named role."
+const stageWaiverMode = "pre-public-tiered-soft"
+const stageWaiverAttestation =
+  "I am the release owner and I accept this pre-public build without the human research studies, which remain required before any public release."
 const scenarioIDs = Array.from({ length: 12 }, (_, index) => `S${String(index + 1).padStart(2, "0")}`)
 const runIDs = ["run-01", "run-02"]
 const selectedScenarioIDs = ["S05", "S02", "S01"]
@@ -1184,6 +1187,69 @@ async function validateHumanEvidence(
   return { errors, failures }
 }
 
+async function verifyStageWaiver(stageWaiverPath: string | undefined, buildSha: string, manifestValue: unknown) {
+  if (!stageWaiverPath) return { status: "absent" as const, errors: [] as string[], waiver: null }
+  const policy =
+    isRecord(manifestValue) && isRecord(manifestValue.stageGatePolicy) ? manifestValue.stageGatePolicy : null
+  if (
+    !policy ||
+    policy.enabled !== true ||
+    policy.mode !== stageWaiverMode ||
+    !Array.isArray(policy.advisoryStudies) ||
+    !isRecord(policy.waiver) ||
+    policy.waiver.attestation !== stageWaiverAttestation
+  ) {
+    return {
+      status: "invalid" as const,
+      errors: ["stage waiver: manifest stageGatePolicy does not authorize a pre-public tiered-soft waiver"],
+      waiver: null,
+    }
+  }
+  const waiver = await readJson(path.resolve(stageWaiverPath)).catch(() => null)
+  if (!waiver || !isRecord(waiver.value)) {
+    return { status: "invalid" as const, errors: ["stage waiver: missing or invalid JSON object"], waiver: null }
+  }
+  const doc = waiver.value
+  const errors: string[] = []
+  if (
+    !exactKeys(doc, ["schemaVersion", "mode", "buildSha", "gate", "waivedStudies", "reactivateBeforePublicRelease", "signoff"]) ||
+    doc.schemaVersion !== 1 ||
+    doc.mode !== stageWaiverMode ||
+    doc.buildSha !== buildSha ||
+    doc.gate !== "R0" ||
+    doc.reactivateBeforePublicRelease !== true ||
+    !sameValues(stringArray(doc.waivedStudies), stringArray(policy.advisoryStudies))
+  ) {
+    errors.push("stage waiver: file must bind this build and gate and waive exactly the advisory studies")
+  }
+  const signoff = doc.signoff
+  if (
+    !isRecord(signoff) ||
+    !exactKeys(signoff, ["method", "signedBy", "role", "signedAt", "attestation"]) ||
+    signoff.method !== "named_owner_attestation" ||
+    !validName(signoff.signedBy) ||
+    !validName(signoff.role) ||
+    !validDate(signoff.signedAt) ||
+    signoff.attestation !== stageWaiverAttestation
+  ) {
+    errors.push("stage waiver: invalid named release-owner attestation")
+  }
+  if (errors.length || !isRecord(signoff)) return { status: "invalid" as const, errors, waiver: null }
+  return {
+    status: "waived" as const,
+    errors: [] as string[],
+    waiver: {
+      mode: stageWaiverMode,
+      waivedStudies: stringArray(doc.waivedStudies),
+      signedBy: String(signoff.signedBy),
+      role: String(signoff.role),
+      signedAt: String(signoff.signedAt),
+      waiverSha256: waiver.sha256,
+      reactivateBeforePublicRelease: true,
+    },
+  }
+}
+
 async function verifyHumanEvidenceAuthorization(
   evidenceSource: string,
   expectedAllowedSignersSha256: string | null,
@@ -1297,6 +1363,7 @@ type GateOptions = {
   humanEvidencePath?: string
   humanAllowedSignersPath?: string
   humanSignaturePath?: string
+  stageWaiverPath?: string
 }
 
 async function evaluateR0GateWithDependencies(
@@ -1388,6 +1455,40 @@ async function evaluateR0GateWithDependencies(
     }
   }
   if (!options.humanEvidencePath) {
+    const waiver = await verifyStageWaiver(options.stageWaiverPath, options.buildSha, governance.manifest.value)
+    if (waiver.status === "invalid") {
+      return {
+        schemaVersion: 1,
+        gate: "R0",
+        buildSha: options.buildSha,
+        status: "invalid",
+        automaticEvidenceStatus,
+        automaticEvidencePackageStatus: automaticPackageStatus,
+        automaticEvidenceExecution,
+        humanEvidenceStatus: "invalid",
+        automaticEvidencePackageSha256: automaticEvidence.packageSha256,
+        missing: automaticMissing,
+        failures: automaticFailures,
+        errors: waiver.errors,
+      }
+    }
+    if (waiver.status === "waived") {
+      return {
+        schemaVersion: 1,
+        gate: "R0",
+        buildSha: options.buildSha,
+        status: automaticEvidenceStatus === "fail" ? "fail" : automaticEvidenceStatus === "incomplete" ? "incomplete" : "pass",
+        automaticEvidenceStatus,
+        automaticEvidencePackageStatus: automaticPackageStatus,
+        automaticEvidenceExecution,
+        humanEvidenceStatus: "waived",
+        automaticEvidencePackageSha256: automaticEvidence.packageSha256,
+        stageWaiver: waiver.waiver,
+        missing: automaticMissing,
+        failures: automaticFailures,
+        errors: [],
+      }
+    }
     return {
       schemaVersion: 1,
       gate: "R0",
@@ -2853,6 +2954,49 @@ export async function runGateSelfTest() {
       () => false,
       () => true,
     )
+  const stageWaiverPath = path.join(directory, "owner-stage-waiver.json")
+  await Bun.write(
+    stageWaiverPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        mode: stageWaiverMode,
+        buildSha,
+        gate: "R0",
+        waivedStudies: ["FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+        reactivateBeforePublicRelease: true,
+        signoff: {
+          method: "named_owner_attestation",
+          signedBy: "Release Owner",
+          role: "Release Owner",
+          signedAt: "2026-07-28T00:00:00.000Z",
+          attestation: stageWaiverAttestation,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  const staleWaiverPath = path.join(directory, "stale-stage-waiver.json")
+  await Bun.write(staleWaiverPath, (await Bun.file(stageWaiverPath).text()).replace(buildSha, "c".repeat(40)))
+  const waivedWithExecutedAutomaticEvidence = await evaluateExecutedAutomaticFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    stageWaiverPath,
+  })
+  const staleWaiverRejected = await evaluateExecutedAutomaticFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    stageWaiverPath: staleWaiverPath,
+  })
+  const offlineWaiverRemainsIncomplete = await evaluateFixture({
+    buildSha,
+    runnerPath: runner.runnerPath,
+    automaticEvidencePath: automaticEvidence.packagePath,
+    stageWaiverPath,
+  })
   const assertions = [
     {
       name: "unanchored_signer_cannot_authorize_release",
@@ -2947,6 +3091,23 @@ export async function runGateSelfTest() {
     { name: "forged_s12_c3_pass_rejected", passed: forgedRunnerResult.status === "invalid" },
     { name: "nonexistent_exact_commit_rejected", passed: nonexistentCommitRejected },
     { name: "offline_require_pass_rejected", passed: offlineRequirePassRejected },
+    {
+      name: "owner_waiver_passes_pre_public_with_executed_automatic_evidence",
+      passed:
+        waivedWithExecutedAutomaticEvidence.status === "pass" &&
+        waivedWithExecutedAutomaticEvidence.automaticEvidenceStatus === "pass" &&
+        waivedWithExecutedAutomaticEvidence.humanEvidenceStatus === "waived",
+    },
+    {
+      name: "stale_owner_waiver_rejected",
+      passed: staleWaiverRejected.status === "invalid" && staleWaiverRejected.humanEvidenceStatus === "invalid",
+    },
+    {
+      name: "owner_waiver_cannot_bypass_automatic_execution",
+      passed:
+        offlineWaiverRemainsIncomplete.status === "incomplete" &&
+        offlineWaiverRemainsIncomplete.automaticEvidenceStatus === "incomplete",
+    },
   ]
   await fs.rm(directory, { recursive: true, force: true })
   if (assertions.some((assertion) => !assertion.passed)) {
@@ -2978,6 +3139,7 @@ function parseArguments(args: string[]) {
     "--human-evidence",
     "--human-signature",
     "--human-allowed-signers",
+    "--stage-waiver",
     "--out",
     "--require-pass",
   ])
@@ -3005,15 +3167,18 @@ function parseArguments(args: string[]) {
   if (flags.has("--automatic-evidence") && flags.has("--execute-automatic")) {
     throw new Error("--automatic-evidence and --execute-automatic are mutually exclusive.")
   }
-  if (
-    flags.has("--require-pass") &&
-    ["--execute-automatic", "--human-evidence", "--human-signature", "--human-allowed-signers"].some(
-      (item) => !flags.has(item),
+  if (flags.has("--stage-waiver") && flags.has("--human-evidence")) {
+    throw new Error("--stage-waiver and --human-evidence are mutually exclusive.")
+  }
+  if (flags.has("--require-pass")) {
+    const hasHumanSet = ["--human-evidence", "--human-signature", "--human-allowed-signers"].every((item) =>
+      flags.has(item),
     )
-  ) {
-    throw new Error(
-      "--require-pass requires --execute-automatic, --human-evidence, --human-signature, and --human-allowed-signers.",
-    )
+    if (!flags.has("--execute-automatic") || (!hasHumanSet && !flags.has("--stage-waiver"))) {
+      throw new Error(
+        "--require-pass requires --execute-automatic plus either the full human evidence set (--human-evidence, --human-signature, --human-allowed-signers) or --stage-waiver.",
+      )
+    }
   }
   return {
     buildSha: values.get("--ref") ?? "",
@@ -3023,6 +3188,7 @@ function parseArguments(args: string[]) {
     humanEvidencePath: values.get("--human-evidence"),
     humanSignaturePath: values.get("--human-signature"),
     humanAllowedSignersPath: values.get("--human-allowed-signers"),
+    stageWaiverPath: values.get("--stage-waiver"),
     out: values.get("--out") ?? "",
     requirePass: flags.has("--require-pass"),
   }

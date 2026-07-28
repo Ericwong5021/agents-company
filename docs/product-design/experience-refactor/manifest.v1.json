@@ -58,6 +58,27 @@
     "bun script/experience-baseline.ts --recorded-head",
     "bun script/experience-pr-metadata.ts --self-test"
   ],
+  "stageGatePolicy": {
+    "mode": "pre-public-tiered-soft",
+    "enabled": true,
+    "rationale": "Solo, local-first pre-public builds run under a tiered gate: machine-verifiable evidence stays blocking, while human-perception studies and the external release signature are advisory and may be waived by the release owner. Automation never fabricates human study results; the waiver only records the owner's explicit decision to defer them.",
+    "blockingEvidence": [
+      "AUTOMATIC-EVIDENCE-PACKAGE",
+      "AUTOMATIC-EVIDENCE-IN-PROCESS-EXECUTION",
+      "BENCHMARK-REPRODUCIBILITY",
+      "ANTI-FORGERY-CHECKS"
+    ],
+    "advisoryStudies": ["FND-02-LANGUAGE-SIGNOFF", "HR-01", "HR-02", "HR-03", "FND-03-SPOT-CHECK"],
+    "advisoryReleaseAuthorization": true,
+    "waiver": {
+      "artifact": "owner-stage-waiver.json",
+      "mode": "pre-public-tiered-soft",
+      "method": "named_owner_attestation",
+      "reactivateBeforePublicRelease": true,
+      "attestation": "I am the release owner and I accept this pre-public build without the human research studies, which remain required before any public release."
+    },
+    "publicReleaseReactivation": "Before any public release, humanResearchPolicy.r0BlockingItems and the OpenSSH release signature become blocking again; the stage waiver does not apply to public releases."
+  },
   "humanResearchPolicy": {
     "rule": "Human research results must never be inferred from source code, generated fixtures, or agent judgment.",
     "automationMaySubstitute": false,
