@@ -190,7 +190,9 @@
       ],
       "timeoutMs": 1800000,
       "stdoutValidator": "none",
-      "environment": {},
+      "environment": {
+        "AGENTCOMPANY_PURE": "0"
+      },
       "reports": [
         {
           "path": ".artifacts/automatic-evidence/all-unit-junit.xml",

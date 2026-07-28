@@ -8,6 +8,8 @@ const appRoot = path.join(root, "packages/app")
 const controlPlaneRoot = path.join(root, "packages/control-plane")
 const chromium = createRequire(path.join(appRoot, "package.json"))("@playwright/test").chromium
 const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-seed-grow-real-"))
+await fs.mkdir(path.join(appRoot, ".artifacts"), { recursive: true })
+const webUIRuntimeRoot = await fs.mkdtemp(path.join(appRoot, ".artifacts/seed-grow-real-runtime-"))
 
 async function freePort() {
   const server = Bun.serve({
@@ -159,8 +161,24 @@ async function portClosed(url: string) {
   )
 }
 
+const providerID = "seed-grow-evidence"
+const providerModelID = "evidence-model"
+const providerServer = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  fetch(request) {
+    if (new URL(request.url).pathname === "/v1/models") {
+      return Response.json({ data: [{ id: providerModelID, name: "Evidence Model" }] })
+    }
+    return new Response("Not found", { status: 404 })
+  },
+})
 const [controlPlanePort, webUIPort] = await Promise.all([freePort(), freePort()])
-if (controlPlanePort === webUIPort) throw new Error("Dynamic ports must be unique.")
+if (new Set([providerServer.port, controlPlanePort, webUIPort]).size !== 3) {
+  await providerServer.stop(true)
+  throw new Error("Dynamic ports must be unique.")
+}
+const providerURL = `http://127.0.0.1:${providerServer.port}`
 const controlPlaneURL = `http://127.0.0.1:${controlPlanePort}`
 const webUIURL = `http://127.0.0.1:${webUIPort}`
 const controlPlaneEnvironment = {
@@ -187,7 +205,7 @@ const startControlPlane = () =>
       "127.0.0.1",
       "--port",
       String(controlPlanePort),
-      "--no-auth",
+      "--no-auth=true",
     ],
     controlPlaneRoot,
     controlPlaneEnvironment,
@@ -202,15 +220,15 @@ const webUIEnvironment = {
   INTERNAL_API_SECRET: "agent-company-seed-grow-local-preview-internal-secret",
   AGENT_COMPANY_CONTROL_PLANE_URL: controlPlaneURL,
   AGENT_COMPANY_WEBUI_DATA_DIR: path.join(temporaryRoot, "webui-data"),
-  AGENT_COMPANY_WEBUI_BUILD_DIR: path.join(temporaryRoot, "webui-build"),
-  AGENT_COMPANY_WEBUI_OUTPUT_DIR: path.join(temporaryRoot, "webui-output"),
+  AGENT_COMPANY_WEBUI_BUILD_DIR: path.join(webUIRuntimeRoot, "build"),
+  AGENT_COMPANY_WEBUI_OUTPUT_DIR: path.join(webUIRuntimeRoot, "output"),
 }
 
 let controlPlane = startControlPlane()
 let webUI: ReturnType<typeof start> | undefined
 let closeBrowser: (() => Promise<void>) | undefined
 let result: Record<string, unknown> | undefined
-let cleanup: { controlPlanePortClosed: boolean; webUIPortClosed: boolean } | undefined
+let cleanup: { providerPortClosed: boolean; controlPlanePortClosed: boolean; webUIPortClosed: boolean } | undefined
 
 try {
   const health = (await (await waitForResponse(`${controlPlaneURL}/global/health`, controlPlane, 180_000)).json()) as {
@@ -227,8 +245,23 @@ try {
     checks?: Array<{ status?: string }>
   }
   assertReadiness(readiness, "Real Control Plane readiness response is not ready.")
+  const providerResponse = await fetch(`${controlPlaneURL}/company/provider`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      format: "openai",
+      base_url: `${providerURL}/v1`,
+      api_key: "seed-grow-local-evidence-key",
+      headers: {},
+      provider_id: providerID,
+      model_id: providerModelID,
+    }),
+  })
+  if (!providerResponse.ok) {
+    throw new Error(`Real provider configuration returned ${providerResponse.status}: ${await providerResponse.text()}`)
+  }
   const companyBeforeRestart = durableCompanyIdentity(
-    await (await waitForResponse(`${controlPlaneURL}/company`, controlPlane, 30_000)).json(),
+    await providerResponse.json(),
   )
 
   webUI = start([process.execPath, "--no-orphans", "./script/production-e2e-server.ts"], appRoot, webUIEnvironment)
@@ -259,7 +292,7 @@ try {
     company?: { id?: string }
   }
   if (
-    snapshot.connection !== "connected" ||
+    snapshot.connection !== "ready" ||
     snapshot.issue ||
     snapshot.company?.id !== companyBeforeRestart.id
   ) {
@@ -311,7 +344,7 @@ try {
     company?: { id?: string }
   }
   if (
-    recoveredSnapshot.connection !== "connected" ||
+    recoveredSnapshot.connection !== "ready" ||
     recoveredSnapshot.issue ||
     recoveredSnapshot.company?.id !== companyBeforeRestart.id
   ) {
@@ -330,6 +363,7 @@ try {
       healthy: health.healthy,
       version: health.version,
       readiness: readiness.ready,
+      providerConfiguredThroughProductAPI: true,
       restarted: true,
       persistentCompanyIdentity: true,
     },
@@ -346,15 +380,18 @@ try {
   if (closeBrowser) await closeBrowser()
   if (webUI) await terminate(webUI)
   await terminate(controlPlane)
+  await providerServer.stop(true)
   cleanup = {
+    providerPortClosed: await portClosed(providerURL),
     controlPlanePortClosed: await portClosed(`${controlPlaneURL}/global/health`),
     webUIPortClosed: await portClosed(`${webUIURL}/login`),
   }
   await fs.rm(temporaryRoot, { recursive: true, force: true })
+  await fs.rm(webUIRuntimeRoot, { recursive: true, force: true })
   if (result) result.cleanup = cleanup
 }
 
-if (!cleanup?.controlPlanePortClosed || !cleanup.webUIPortClosed) {
+if (!cleanup?.providerPortClosed || !cleanup.controlPlanePortClosed || !cleanup.webUIPortClosed) {
   throw new Error(`Real surface cleanup failed: ${JSON.stringify(cleanup)}`)
 }
 console.log(JSON.stringify(result, null, 2))

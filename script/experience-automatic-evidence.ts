@@ -53,7 +53,11 @@ const inheritedEnvironmentAllowlist = new Set([
   "TERM",
   "WINDIR",
 ])
-const requirementEnvironmentAllowlist = new Set(["MODELS_DEV_API_JSON", "PLAYWRIGHT_JUNIT_OUTPUT"])
+const requirementEnvironmentAllowlist = new Set([
+  "AGENTCOMPANY_PURE",
+  "MODELS_DEV_API_JSON",
+  "PLAYWRIGHT_JUNIT_OUTPUT",
+])
 const releaseCandidateGeneratorCommandId = "app-r0-candidates"
 const releaseCandidateManifestSourceRelativePath = "human-review/screenshots-manifest.json"
 const releaseCandidateArchiveDirectory = "files/app-r0-candidates/release-candidate-screenshots"
