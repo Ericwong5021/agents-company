@@ -19,6 +19,8 @@ const prefixes = {
   companyProject: "cprj",
   companyPlan: "cpln",
   companyWorkItem: "cwi",
+  workAttempt: "wat",
+  workReceipt: "wrc",
   projectCharter: "cchr",
   worktreeRun: "wrun",
   artifact: "art",

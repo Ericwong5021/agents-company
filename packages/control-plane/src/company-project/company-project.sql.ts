@@ -189,6 +189,69 @@ export const CompanyArtifactTable = sqliteTable(
   ],
 )
 
+export const CompanyWorkAttemptTable = sqliteTable(
+  "company_work_attempt",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    work_item_id: text()
+      .notNull()
+      .references(() => CompanyWorkItemTable.id, { onDelete: "cascade" }),
+    agent_run_id: text(),
+    ordinal: integer().notNull(),
+    status: text().notNull(),
+    failure_kind: text(),
+    safe_summary: text(),
+    started_at: integer().notNull(),
+    finished_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_work_attempt_item_ordinal_idx").on(table.work_item_id, table.ordinal),
+    uniqueIndex("company_work_attempt_agent_run_idx").on(table.agent_run_id),
+    index("company_work_attempt_project_status_idx").on(table.project_id, table.status),
+  ],
+)
+
+export const CompanyWorkReceiptTable = sqliteTable(
+  "company_work_receipt",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    work_item_id: text()
+      .notNull()
+      .references(() => CompanyWorkItemTable.id, { onDelete: "cascade" }),
+    attempt_id: text()
+      .notNull()
+      .references(() => CompanyWorkAttemptTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    outcome: text().notNull(),
+    summary: text().notNull(),
+    artifact_ids_json: text().notNull(),
+    evidence_refs_json: text().notNull(),
+    confirmed_facts_json: text().notNull(),
+    invalidated_assumptions_json: text().notNull(),
+    unknowns_json: text().notNull(),
+    blockers_json: text().notNull(),
+    capability_gaps_json: text().notNull(),
+    task_proposals_json: text().notNull(),
+    dependency_proposals_json: text().notNull(),
+    questions_json: text().notNull(),
+    processing_status: text().notNull(),
+    processed_mutation_id: text(),
+    created_at: integer().notNull(),
+    processed_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_work_receipt_attempt_idx").on(table.attempt_id),
+    uniqueIndex("company_work_receipt_idempotency_idx").on(table.idempotency_key),
+    index("company_work_receipt_project_status_idx").on(table.project_id, table.processing_status),
+  ],
+)
+
 export const CompanyApprovalGateTable = sqliteTable(
   "company_approval_gate",
   {

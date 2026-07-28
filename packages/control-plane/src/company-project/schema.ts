@@ -219,6 +219,80 @@ export const Artifact = z.object({
 })
 export type Artifact = z.infer<typeof Artifact>
 
+export const WorkAttemptStatus = z.enum(["running", "completed", "failed", "stopped"])
+export type WorkAttemptStatus = z.infer<typeof WorkAttemptStatus>
+
+export const WorkAttemptFailureKind = z.enum([
+  "implementation",
+  "environment",
+  "missing_prerequisite",
+  "dependency",
+  "permission",
+  "validator",
+  "scope",
+  "unknown",
+])
+export type WorkAttemptFailureKind = z.infer<typeof WorkAttemptFailureKind>
+
+export const WorkAttempt = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  work_item_id: z.string(),
+  agent_run_id: z.string().optional(),
+  ordinal: z.number().int().positive(),
+  status: WorkAttemptStatus,
+  failure_kind: WorkAttemptFailureKind.optional(),
+  safe_summary: z.string().optional(),
+  started_at: z.number(),
+  finished_at: z.number().optional(),
+})
+export type WorkAttempt = z.infer<typeof WorkAttempt>
+
+export const WorkReceiptOutcome = z.enum(["completed", "blocked", "failed", "ask"])
+export type WorkReceiptOutcome = z.infer<typeof WorkReceiptOutcome>
+
+export const WorkReceiptProcessingStatus = z.enum(["pending", "processing", "processed", "rejected"])
+export type WorkReceiptProcessingStatus = z.infer<typeof WorkReceiptProcessingStatus>
+
+export const WorkReceiptEvidenceRef = z
+  .object({
+    kind: z.enum(["agent_run", "artifact", "project_event"]),
+    id: z.string().trim().min(1),
+  })
+  .strict()
+export type WorkReceiptEvidenceRef = z.infer<typeof WorkReceiptEvidenceRef>
+
+export const WorkReceiptSubmission = z
+  .object({
+    idempotency_key: z.string().trim().min(1).max(500),
+    outcome: WorkReceiptOutcome,
+    summary: z.string().trim().min(1).max(8_000),
+    artifact_ids: z.array(z.string().trim().min(1)).max(500),
+    evidence_refs: z.array(WorkReceiptEvidenceRef).max(1_000),
+    confirmed_facts: z.array(z.string().trim().min(1)).max(500),
+    invalidated_assumptions: z.array(z.string().trim().min(1)).max(500),
+    unknowns: z.array(z.string().trim().min(1)).max(500),
+    blockers: z.array(z.string().trim().min(1)).max(500),
+    capability_gaps: z.array(z.string().trim().min(1)).max(500),
+    task_proposals: z.array(z.record(z.string(), z.unknown())).max(500),
+    dependency_proposals: z.array(z.record(z.string(), z.unknown())).max(500),
+    questions: z.array(z.string().trim().min(1)).max(500),
+  })
+  .strict()
+export type WorkReceiptSubmission = z.infer<typeof WorkReceiptSubmission>
+
+export const WorkReceipt = WorkReceiptSubmission.extend({
+  id: z.string(),
+  project_id: z.string(),
+  work_item_id: z.string(),
+  attempt_id: z.string(),
+  processing_status: WorkReceiptProcessingStatus,
+  processed_mutation_id: z.string().optional(),
+  created_at: z.number(),
+  processed_at: z.number().optional(),
+})
+export type WorkReceipt = z.infer<typeof WorkReceipt>
+
 export const ProjectEvent = z.object({
   id: z.string(),
   project_id: z.string(),

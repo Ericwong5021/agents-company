@@ -32,6 +32,8 @@ export {
   CompanyWorkItemDependencyTable,
   CompanyWorktreeRunTable,
   CompanyArtifactTable,
+  CompanyWorkAttemptTable,
+  CompanyWorkReceiptTable,
   CompanyApprovalGateTable,
   CompanyProjectEventTable,
 } from "../company-project/company-project.sql"
