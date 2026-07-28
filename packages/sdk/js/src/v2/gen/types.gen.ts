@@ -147,10 +147,11 @@ export type AgentActivityProjection = {
     name: string
     role?: string
     description?: string
-    lifecycle: "employee"
+    lifecycle: "employee" | "assigned"
     department?: string
     responsibilities: Array<string>
   }
+  employment: "employee" | "temporary"
   presence: "online" | "offline"
   attention: "none" | "available" | "focused" | "urgent"
   activity: "idle" | "waiting" | "working" | "recovering" | "completed" | "failed" | "interrupted"
@@ -160,6 +161,16 @@ export type AgentActivityProjection = {
   interruptibility: "interruptible" | "coordinate_first" | "needs_intervention"
   risk?: string
   collaborators: Array<string>
+  workload: {
+    active: number
+    blocked: number
+    recent_delivery?: {
+      work_item_id: string
+      title: string
+      review_status: string
+      time_completed: number
+    }
+  }
   evidence?: {
     kind: "agent_run"
     runID: string
@@ -4206,6 +4217,23 @@ export type CompanyRecruitmentSnapshotResponses = {
   200: unknown
 }
 
+export type CompanyRecruitmentCapabilitiesData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+    agent_id?: string
+  }
+  url: "/company/recruitment/capabilities"
+}
+
+export type CompanyRecruitmentCapabilitiesResponses = {
+  /**
+   * Capability evidence projections
+   */
+  200: unknown
+}
+
 export type CompanyRecruitmentNeedCreateData = {
   body?: {
     company_id: CompanyId
@@ -5195,6 +5223,10 @@ export type CompanyChannelSendResponses = {
     threadID?: ConversationThreadId
     runID?: ConversationRunId
     replayed: boolean
+    intent?: "casual" | "question" | "task" | "goal" | "intervention" | "approval"
+    intentConfidence?: number
+    autoProjected?: boolean
+    needsIntentConfirmation?: boolean
   }
 }
 
@@ -5593,6 +5625,10 @@ export type ExperienceGoalBriefCreateData = {
         question: string
         impact: string
         blocking: boolean
+        /**
+         * 若用户不回答，系统将采用的默认假设
+         */
+        defaultAssumption: string
       }>
       riskLevel: "low" | "medium" | "high" | "critical"
       recommendedPlan: {
@@ -5656,6 +5692,10 @@ export type ExperienceGoalBriefCreateResponses = {
       question: string
       impact: string
       blocking: boolean
+      /**
+       * 若用户不回答，系统将采用的默认假设
+       */
+      defaultAssumption: string
     }>
     riskLevel: "low" | "medium" | "high" | "critical"
     recommendedPlan: {
@@ -5783,6 +5823,10 @@ export type ExperienceGoalBriefGenerateResponses = {
       question: string
       impact: string
       blocking: boolean
+      /**
+       * 若用户不回答，系统将采用的默认假设
+       */
+      defaultAssumption: string
     }>
     riskLevel: "low" | "medium" | "high" | "critical"
     recommendedPlan: {
@@ -5899,6 +5943,10 @@ export type ExperienceGoalBriefProjectResponses = {
             question: string
             impact: string
             blocking: boolean
+            /**
+             * 若用户不回答，系统将采用的默认假设
+             */
+            defaultAssumption: string
           }>
           riskLevel: "low" | "medium" | "high" | "critical"
           recommendedPlan: {
@@ -6053,6 +6101,10 @@ export type ExperienceGoalBriefHistoryResponses = {
         question: string
         impact: string
         blocking: boolean
+        /**
+         * 若用户不回答，系统将采用的默认假设
+         */
+        defaultAssumption: string
       }>
       riskLevel: "low" | "medium" | "high" | "critical"
       recommendedPlan: {
@@ -6122,6 +6174,10 @@ export type ExperienceGoalBriefAppendData = {
         question: string
         impact: string
         blocking: boolean
+        /**
+         * 若用户不回答，系统将采用的默认假设
+         */
+        defaultAssumption: string
       }>
       riskLevel: "low" | "medium" | "high" | "critical"
       recommendedPlan: {
@@ -6254,6 +6310,10 @@ export type ExperienceGoalBriefAppendResponses = {
       question: string
       impact: string
       blocking: boolean
+      /**
+       * 若用户不回答，系统将采用的默认假设
+       */
+      defaultAssumption: string
     }>
     riskLevel: "low" | "medium" | "high" | "critical"
     recommendedPlan: {
@@ -6367,6 +6427,10 @@ export type ExperienceGoalBriefGetResponses = {
       question: string
       impact: string
       blocking: boolean
+      /**
+       * 若用户不回答，系统将采用的默认假设
+       */
+      defaultAssumption: string
     }>
     riskLevel: "low" | "medium" | "high" | "critical"
     recommendedPlan: {

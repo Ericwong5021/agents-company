@@ -639,6 +639,9 @@ O0–O9 是稳定的能力包编号，不等于实际开发顺序。为消除 R3
 - `docs/product-design/experience-refactor/orchestration-contract.v1.json`
 - `docs/product-design/experience-refactor/seed-grow-stage-contract.v1.json`
 - `docs/product-design/experience-refactor/seed-grow-stage-evidence.v1.json`
+- `packages/sdk/js/src/v2/gen/sdk.gen.ts`
+- `packages/sdk/js/src/v2/gen/types.gen.ts`
+- `packages/sdk/openapi.json`
 - `script/seed-grow-stage-evidence.ts`
 - `script/seed-grow-stage-gate.ts`
 - Flag/config

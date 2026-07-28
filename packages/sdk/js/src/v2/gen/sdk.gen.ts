@@ -93,6 +93,7 @@ import type {
   CompanyProviderSetErrors,
   CompanyProviderSetResponses,
   CompanyProvidersResponses,
+  CompanyRecruitmentCapabilitiesResponses,
   CompanyRecruitmentDepartmentEnsureErrors,
   CompanyRecruitmentDepartmentEnsureResponses,
   CompanyRecruitmentEmploymentReviewResponses,
@@ -988,6 +989,34 @@ export class Recruitment extends HeyApiClient {
   }
 
   /**
+   * List capability evidence with declared/verified/expired status and runtime availability
+   */
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      agent_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "agent_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyRecruitmentCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/capabilities",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Evaluate and govern promotion from reusable candidate to formal employee
    */
   public employmentReview<ThrowOnError extends boolean = false>(
@@ -1714,6 +1743,10 @@ export class GoalBrief extends HeyApiClient {
           question: string
           impact: string
           blocking: boolean
+          /**
+           * 若用户不回答，系统将采用的默认假设
+           */
+          defaultAssumption: string
         }>
         riskLevel: "low" | "medium" | "high" | "critical"
         recommendedPlan: {
@@ -1888,6 +1921,10 @@ export class GoalBrief extends HeyApiClient {
           question: string
           impact: string
           blocking: boolean
+          /**
+           * 若用户不回答，系统将采用的默认假设
+           */
+          defaultAssumption: string
         }>
         riskLevel: "low" | "medium" | "high" | "critical"
         recommendedPlan: {

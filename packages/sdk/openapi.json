@@ -143,6 +143,41 @@
         ]
       }
     },
+    "/company/recruitment/capabilities": {
+      "get": {
+        "operationId": "company.recruitment.capabilities",
+        "summary": "List capability evidence with declared/verified/expired status and runtime availability",
+        "responses": {
+          "200": {
+            "description": "Capability evidence projections"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.recruitment.capabilities({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company/recruitment/needs": {
       "post": {
         "operationId": "company.recruitment.need.create",
@@ -2484,6 +2519,28 @@
                     },
                     "replayed": {
                       "type": "boolean"
+                    },
+                    "intent": {
+                      "type": "string",
+                      "enum": [
+                        "casual",
+                        "question",
+                        "task",
+                        "goal",
+                        "intervention",
+                        "approval"
+                      ]
+                    },
+                    "intentConfidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "autoProjected": {
+                      "type": "boolean"
+                    },
+                    "needsIntentConfirmation": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -4070,13 +4127,20 @@
                             },
                             "blocking": {
                               "type": "boolean"
+                            },
+                            "defaultAssumption": {
+                              "description": "若用户不回答，系统将采用的默认假设",
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
                             }
                           },
                           "required": [
                             "id",
                             "question",
                             "impact",
-                            "blocking"
+                            "blocking",
+                            "defaultAssumption"
                           ],
                           "additionalProperties": false
                         }
@@ -4360,13 +4424,20 @@
                           },
                           "blocking": {
                             "type": "boolean"
+                          },
+                          "defaultAssumption": {
+                            "description": "若用户不回答，系统将采用的默认假设",
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
                           }
                         },
                         "required": [
                           "id",
                           "question",
                           "impact",
-                          "blocking"
+                          "blocking",
+                          "defaultAssumption"
                         ],
                         "additionalProperties": false
                       }
@@ -4735,13 +4806,20 @@
                           },
                           "blocking": {
                             "type": "boolean"
+                          },
+                          "defaultAssumption": {
+                            "description": "若用户不回答，系统将采用的默认假设",
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
                           }
                         },
                         "required": [
                           "id",
                           "question",
                           "impact",
-                          "blocking"
+                          "blocking",
+                          "defaultAssumption"
                         ],
                         "additionalProperties": false
                       }
@@ -5274,13 +5352,20 @@
                                   },
                                   "blocking": {
                                     "type": "boolean"
+                                  },
+                                  "defaultAssumption": {
+                                    "description": "若用户不回答，系统将采用的默认假设",
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 8000
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "question",
                                   "impact",
-                                  "blocking"
+                                  "blocking",
+                                  "defaultAssumption"
                                 ],
                                 "additionalProperties": false
                               }
@@ -5973,13 +6058,20 @@
                                 },
                                 "blocking": {
                                   "type": "boolean"
+                                },
+                                "defaultAssumption": {
+                                  "description": "若用户不回答，系统将采用的默认假设",
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
                                 }
                               },
                               "required": [
                                 "id",
                                 "question",
                                 "impact",
-                                "blocking"
+                                "blocking",
+                                "defaultAssumption"
                               ],
                               "additionalProperties": false
                             }
@@ -6489,13 +6581,20 @@
                             },
                             "blocking": {
                               "type": "boolean"
+                            },
+                            "defaultAssumption": {
+                              "description": "若用户不回答，系统将采用的默认假设",
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
                             }
                           },
                           "required": [
                             "id",
                             "question",
                             "impact",
-                            "blocking"
+                            "blocking",
+                            "defaultAssumption"
                           ],
                           "additionalProperties": false
                         }
@@ -6780,13 +6879,20 @@
                           },
                           "blocking": {
                             "type": "boolean"
+                          },
+                          "defaultAssumption": {
+                            "description": "若用户不回答，系统将采用的默认假设",
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
                           }
                         },
                         "required": [
                           "id",
                           "question",
                           "impact",
-                          "blocking"
+                          "blocking",
+                          "defaultAssumption"
                         ],
                         "additionalProperties": false
                       }
@@ -7426,13 +7532,20 @@
                           },
                           "blocking": {
                             "type": "boolean"
+                          },
+                          "defaultAssumption": {
+                            "description": "若用户不回答，系统将采用的默认假设",
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
                           }
                         },
                         "required": [
                           "id",
                           "question",
                           "impact",
-                          "blocking"
+                          "blocking",
+                          "defaultAssumption"
                         ],
                         "additionalProperties": false
                       }
@@ -28568,7 +28681,10 @@
               },
               "lifecycle": {
                 "type": "string",
-                "const": "employee"
+                "enum": [
+                  "employee",
+                  "assigned"
+                ]
               },
               "department": {
                 "type": "string"
@@ -28587,6 +28703,13 @@
               "responsibilities"
             ],
             "additionalProperties": false
+          },
+          "employment": {
+            "type": "string",
+            "enum": [
+              "employee",
+              "temporary"
+            ]
           },
           "presence": {
             "type": "string",
@@ -28644,6 +28767,52 @@
               "type": "string"
             }
           },
+          "workload": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "blocked": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "recent_delivery": {
+                "type": "object",
+                "properties": {
+                  "work_item_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "review_status": {
+                    "type": "string"
+                  },
+                  "time_completed": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "work_item_id",
+                  "title",
+                  "review_status",
+                  "time_completed"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "active",
+              "blocked"
+            ],
+            "additionalProperties": false
+          },
           "evidence": {
             "type": "object",
             "properties": {
@@ -28673,12 +28842,14 @@
         },
         "required": [
           "agent",
+          "employment",
           "presence",
           "attention",
           "activity",
           "since",
           "interruptibility",
-          "collaborators"
+          "collaborators",
+          "workload"
         ],
         "additionalProperties": false
       },
