@@ -372,7 +372,7 @@ function validateRequirements(value: unknown) {
     ]) ||
     value.schemaVersion !== 1 ||
     value.id !== "agent-company-r0-automatic-evidence-requirements" ||
-    value.version !== "1.1.0" ||
+    value.version !== "1.2.0" ||
     value.gate !== "R0" ||
     !Array.isArray(value.requiredTaskIds) ||
     !value.requiredTaskIds.every((item) => typeof item === "string") ||

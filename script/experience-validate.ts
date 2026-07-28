@@ -3,6 +3,8 @@ import { requiredR0TaskIDs, runAutomaticEvidenceSelfTest } from "./experience-au
 import { runBenchmarkSelfTest } from "./experience-benchmark"
 import { runGateSelfTest } from "./experience-gate"
 import { runSelfTest, validatePRMetadata } from "./experience-pr-metadata"
+import { runSeedGrowEvidenceSelfTest } from "./seed-grow-stage-evidence"
+import { runSeedGrowStageSelfTest } from "./seed-grow-stage-gate"
 
 const root = path.resolve(import.meta.dir, "..")
 const requiredStates = [
@@ -1007,7 +1009,7 @@ check(
 check(
   automaticEvidenceRequirements.schemaVersion === 1 &&
     automaticEvidenceRequirements.id === "agent-company-r0-automatic-evidence-requirements" &&
-    automaticEvidenceRequirements.version === "1.1.0" &&
+    automaticEvidenceRequirements.version === "1.2.0" &&
     automaticEvidenceRequirements.gate === "R0" &&
     sameValues(automaticEvidenceRequirements.requiredTaskIds, [...requiredR0TaskIDs]) &&
     sameValues(
@@ -1299,6 +1301,8 @@ const metadataSelfTest = runSelfTest()
 const benchmarkRunnerSelfTest = await runBenchmarkSelfTest()
 const automaticEvidenceSelfTest = await runAutomaticEvidenceSelfTest()
 const gateEvaluatorSelfTest = await runGateSelfTest()
+const seedGrowEvidenceSelfTest = await runSeedGrowEvidenceSelfTest()
+const seedGrowStageSelfTest = await runSeedGrowStageSelfTest()
 
 if (errors.length) {
   errors.forEach((error) => console.error(error))
@@ -1325,6 +1329,10 @@ console.log(
         gateEvaluatorSelfTest,
       },
       automaticEvidence: automaticEvidenceSelfTest,
+      seedGrow: {
+        evidenceRunnerSelfTest: seedGrowEvidenceSelfTest,
+        stageGateSelfTest: seedGrowStageSelfTest,
+      },
       metrics: {
         metrics: metricIDs.length,
         releaseGates: metrics.releaseGates.length,

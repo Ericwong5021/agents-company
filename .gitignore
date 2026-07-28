@@ -61,6 +61,7 @@ experiment/last-outcome.json
 
 # AgentCompany run artifacts and test scenarios
 .artifacts/
+.agent/runs/
 .agentcompany-cli-scenarios/
 packages/control-plane/.webui-progressive-verify-home/
 packages/control-plane/.agentcompany-test-fixtures-*/

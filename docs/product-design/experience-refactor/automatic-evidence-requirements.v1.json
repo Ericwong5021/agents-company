@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agent-company-r0-automatic-evidence-requirements",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "gate": "R0",
   "requiredTaskIds": [
     "FND-01",
@@ -34,10 +34,55 @@
   },
   "commands": [
     {
+      "id": "root-lint",
+      "cwd": ".",
+      "argv": ["bun", "run", "lint"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
       "id": "governance-validation",
       "cwd": ".",
       "argv": ["bun", "script/experience-validate.ts"],
       "timeoutMs": 300000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "experience-benchmark-self-test",
+      "cwd": ".",
+      "argv": ["bun", "script/experience-benchmark.ts", "--self-test"],
+      "timeoutMs": 300000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "experience-automatic-evidence-self-test",
+      "cwd": ".",
+      "argv": ["bun", "script/experience-automatic-evidence.ts", "--self-test"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "experience-gate-self-test",
+      "cwd": ".",
+      "argv": ["bun", "script/experience-gate.ts", "--self-test"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
+    },
+    {
+      "id": "seed-grow-stage-self-test",
+      "cwd": ".",
+      "argv": ["bun", "script/seed-grow-stage-gate.ts", "--self-test"],
+      "timeoutMs": 600000,
       "stdoutValidator": "json_pass",
       "environment": {},
       "reports": []
@@ -88,6 +133,15 @@
       "reports": []
     },
     {
+      "id": "control-plane-migrations",
+      "cwd": "packages/control-plane",
+      "argv": ["bun", "run", "script/check-migrations.ts"],
+      "timeoutMs": 600000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -117,6 +171,27 @@
       "reports": [
         {
           "path": ".artifacts/automatic-evidence/unit-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "control-plane-all-unit",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--timeout",
+        "30000",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/all-unit-junit.xml"
+      ],
+      "timeoutMs": 1800000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/all-unit-junit.xml",
           "validator": "junit"
         }
       ]
@@ -253,6 +328,47 @@
       "reports": []
     },
     {
+      "id": "app-r1-r3",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:r1-r3"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {
+        "PLAYWRIGHT_JUNIT_OUTPUT": ".artifacts/automatic-evidence/r1-r3-junit.xml"
+      },
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/r1-r3-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "app-e2e",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "test:e2e"],
+      "timeoutMs": 1800000,
+      "stdoutValidator": "none",
+      "environment": {
+        "PLAYWRIGHT_JUNIT_OUTPUT": ".artifacts/automatic-evidence/app-e2e-junit.xml"
+      },
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/app-e2e-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "app-build",
+      "cwd": "packages/app",
+      "argv": ["bun", "run", "build"],
+      "timeoutMs": 1200000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": []
+    },
+    {
       "id": "app-production",
       "cwd": "packages/app",
       "argv": ["bun", "run", "test:production"],
@@ -265,6 +381,15 @@
           "validator": "junit"
         }
       ]
+    },
+    {
+      "id": "seed-grow-real-surfaces",
+      "cwd": ".",
+      "argv": ["bun", "script/seed-grow-real-surfaces.ts"],
+      "timeoutMs": 1800000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": []
     },
     {
       "id": "desktop-e2e",
@@ -290,7 +415,7 @@
       "criteria": [
         {
           "id": "FND-01-SCOPE-AND-GATES",
-          "evidenceRefs": ["command:governance-validation"]
+          "evidenceRefs": ["command:root-lint", "command:governance-validation"]
         },
         {
           "id": "FND-01-DEFAULT-AND-ENABLED-CONFIG",
@@ -329,7 +454,14 @@
         },
         {
           "id": "FND-03-REPRODUCIBLE-BASELINE",
-          "evidenceRefs": ["command:governance-validation", "command:app-r0-candidates"]
+          "evidenceRefs": [
+            "command:governance-validation",
+            "command:experience-benchmark-self-test",
+            "command:experience-automatic-evidence-self-test",
+            "command:experience-gate-self-test",
+            "command:seed-grow-stage-self-test",
+            "command:app-r0-candidates"
+          ]
         },
         {
           "id": "FND-03-EXACT-SHA-DOUBLE-RUN",
@@ -371,7 +503,11 @@
         },
         {
           "id": "GOAL-01-R0-NO-SILENT-PROJECT-CREATION",
-          "evidenceRefs": ["command:control-plane-r0-unit"]
+          "evidenceRefs": [
+            "command:control-plane-migrations",
+            "command:control-plane-r0-unit",
+            "command:control-plane-all-unit"
+          ]
         }
       ]
     },
@@ -536,7 +672,11 @@
             "command:app-typecheck",
             "command:desktop-typecheck",
             "command:app-r0-shell",
+            "command:app-r1-r3",
+            "command:app-e2e",
+            "command:app-build",
             "command:app-production",
+            "command:seed-grow-real-surfaces",
             "command:desktop-e2e"
           ]
         }
