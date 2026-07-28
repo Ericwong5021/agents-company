@@ -1,3 +1,5 @@
 export * as CompanyRecruitment from "./company-recruitment"
+export * from "./capability-evidence"
 export * from "./identity"
 export * from "./schema"
+export * from "./selection-policy"

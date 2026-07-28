@@ -14,7 +14,7 @@ beforeEach(resetDatabase)
 afterEach(resetDatabase)
 
 describe("Company activity projection", () => {
-  test("returns only employees with evidence-backed public run state", () => {
+  test("returns employees and assigned instances with evidence-backed public run state", () => {
     const companyID = CompanyID.parse("cmp_activity")
     Database.use((db) => {
       db.insert(CompanyTable)
@@ -127,13 +127,32 @@ describe("Company activity projection", () => {
           lifecycle: "employee",
           responsibilities: [],
         },
+        employment: "employee",
         presence: "online",
         attention: "focused",
         activity: "working",
         since: 3,
         interruptibility: "coordinate_first",
         collaborators: [],
+        workload: { active: 0, blocked: 0 },
         evidence: { kind: "agent_run", runID: "run_running", timeUpdated: 4 },
+      },
+      // TEAM-01：在岗临时实例也进入团队视图，用 employment 区分组织身份。
+      {
+        agent: {
+          id: "agent_assigned",
+          name: "Assigned Candidate",
+          lifecycle: "assigned",
+          responsibilities: [],
+        },
+        employment: "temporary",
+        presence: "offline",
+        attention: "none",
+        activity: "idle",
+        since: 1,
+        interruptibility: "interruptible",
+        collaborators: [],
+        workload: { active: 0, blocked: 0 },
       },
       {
         agent: {
@@ -143,6 +162,7 @@ describe("Company activity projection", () => {
           lifecycle: "employee",
           responsibilities: ["核验证据"],
         },
+        employment: "employee",
         presence: "offline",
         attention: "none",
         activity: "failed",
@@ -150,6 +170,7 @@ describe("Company activity projection", () => {
         interruptibility: "interruptible",
         risk: "上游证据不可达",
         collaborators: [],
+        workload: { active: 0, blocked: 0 },
         evidence: { kind: "agent_run", runID: "run_failed", timeUpdated: 3 },
       },
       {
@@ -159,12 +180,14 @@ describe("Company activity projection", () => {
           lifecycle: "employee",
           responsibilities: [],
         },
+        employment: "employee",
         presence: "offline",
         attention: "none",
         activity: "idle",
         since: 4,
         interruptibility: "interruptible",
         collaborators: [],
+        workload: { active: 0, blocked: 0 },
       },
     ])
   })
@@ -356,6 +379,7 @@ describe("Company activity projection", () => {
           department: "Quality",
           responsibilities: [],
         },
+        employment: "employee",
         presence: "online",
         attention: "focused",
         activity: "waiting",
@@ -364,6 +388,7 @@ describe("Company activity projection", () => {
         since: 3,
         interruptibility: "interruptible",
         collaborators: [],
+        workload: { active: 0, blocked: 0 },
         evidence: {
           kind: "agent_run",
           runID: "run_context",

@@ -33,7 +33,7 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { CompanyAgentID } from "../../src/company-agent/schema"
 import { Log } from "../../src/util"
-import { tmpdir } from "../fixture/fixture"
+import { provideProjectProviderSettings, tmpdir } from "../fixture/fixture"
 import { startScriptedLLMServer, toolCallResponse, textStopResponse, textLengthResponse } from "../lib/scripted-llm-server"
 
 void Log.init({ print: false })
@@ -88,6 +88,7 @@ describe("main runLoop history monotonic-growth invariant", () => {
           },
         }),
       )
+      await using providerSettings = await provideProjectProviderSettings(tmp.path)
 
       await Instance.provide({
         directory: tmp.path,
@@ -154,6 +155,7 @@ describe("main runLoop history monotonic-growth invariant", () => {
           },
         }),
       )
+      await using providerSettings = await provideProjectProviderSettings(tmp.path)
 
       await Instance.provide({
         directory: tmp.path,

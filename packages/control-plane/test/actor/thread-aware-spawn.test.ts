@@ -7,6 +7,7 @@ import { AgentMessage } from "../../src/agent-message"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
 import { CompanyAgent } from "../../src/company-agent"
+import { CompanyAgentID } from "../../src/company-agent/schema"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -302,7 +303,7 @@ describe("Thread-aware spawn (P1.3)", () => {
           const thread = yield* threadSvc.get(result.threadID!)
           expect(thread).toBeDefined()
           expect(thread?.kind).toBe("primary")
-          expect(thread?.agentID).toBe("build")
+          expect(thread?.agentID).toBe(result.actorID)
           expect(thread?.status).toBe("active")
 
           yield* Effect.sync(() => gate.resolve())
@@ -442,12 +443,13 @@ describe("Thread-aware spawn (P1.3)", () => {
   })
 
   describe("canAccept check", () => {
-    it.live("subagent spawn fails when agent already has an active primary thread", () =>
+    it.live("subagent spawn fails when a company agent already has an active primary thread", () =>
       provideTmpdirServer(
         Effect.fnUntraced(function* ({ llm }) {
           const actor = yield* Actor.Service
           const session = yield* Session.Service
           const threadSvc = yield* Thread.Service
+          const companyAgentID = CompanyAgentID.make("shared-build-agent")
 
           const parent = yield* session.create({
             title: "canAccept test",
@@ -467,6 +469,7 @@ describe("Thread-aware spawn (P1.3)", () => {
             tools: ["read"],
             background: true,
             model: ref,
+            companyAgentID,
           })
 
           expect(first.threadID).toBeDefined()
@@ -481,6 +484,7 @@ describe("Thread-aware spawn (P1.3)", () => {
             tools: ["read"],
             background: true,
             model: ref,
+            companyAgentID,
           })
 
           // The spawn should fail with an error about thread capacity

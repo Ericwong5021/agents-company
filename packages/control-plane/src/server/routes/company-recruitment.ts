@@ -4,6 +4,7 @@ import z from "zod"
 import { CompanyAgent } from "@/company-agent"
 import { CompanyRecruitment } from "@/company-recruitment"
 import {
+  AgentCapabilityQuery,
   CreateCapabilityNeedInput,
   DepartmentRecurringDemandNotProven,
   EnsureDepartmentInput,
@@ -45,6 +46,21 @@ export const CompanyRecruitmentRoutes = lazy(() =>
           assigned_candidates: snapshot.assigned_candidates.map(CompanyAgent.toPublicInfo),
         })
       },
+    )
+    .get(
+      "/capabilities",
+      describeRoute({
+        operationId: "company.recruitment.capabilities",
+        summary: "List capability evidence with declared/verified/expired status and runtime availability",
+        responses: { 200: { description: "Capability evidence projections" } },
+      }),
+      validator("query", AgentCapabilityQuery),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            CompanyRecruitment.Service.use((service) => service.listCapabilities(c.req.valid("query"))),
+          ),
+        ),
     )
     .post(
       "/needs",

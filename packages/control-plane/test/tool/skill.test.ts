@@ -9,11 +9,11 @@ import { Instance } from "../../src/project/instance"
 import { SkillTool } from "../../src/tool/skill"
 import { ToolRegistry } from "../../src/tool"
 import { provideTmpdirInstance } from "../fixture/fixture"
-import { SessionID, MessageID } from "../../src/session/schema"
+import { MessageID } from "../../src/session/schema"
+import { Session } from "../../src/session"
 import { testEffect } from "../lib/effect"
 
-const baseCtx: Omit<Tool.Context, "ask"> = {
-  sessionID: SessionID.make("ses_test"),
+const baseCtx: Omit<Tool.Context, "ask" | "sessionID"> = {
   messageID: MessageID.make(""),
   callID: "",
   agent: "build",
@@ -28,7 +28,7 @@ afterEach(async () => {
 
 const node = CrossSpawnSpawner.defaultLayer
 
-const it = testEffect(Layer.mergeAll(ToolRegistry.defaultLayer, node))
+const it = testEffect(Layer.mergeAll(ToolRegistry.defaultLayer, Session.defaultLayer, node))
 
 describe("tool.skill", () => {
   it.live("execute returns skill content block with files", () =>
@@ -64,6 +64,8 @@ Use this skill.
           )
 
           const registry = yield* ToolRegistry.Service
+          const sessions = yield* Session.Service
+          const session = yield* sessions.create({ title: "tool-skill" })
           const agent = { name: "build", mode: "primary" as const, permission: [], options: {} }
           const tool = (yield* registry.tools({
             providerID: "control-plane" as any,
@@ -75,6 +77,7 @@ Use this skill.
           const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
+            sessionID: session.id,
             ask: (req) =>
               Effect.sync(() => {
                 requests.push(req)

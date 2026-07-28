@@ -607,7 +607,7 @@ export const layer = Layer.effect(
                     }),
                   ).pipe(
                     // postStop LLM failure: log + break loop, do NOT propagate
-                    Effect.catch(() =>
+                    Effect.catchCause(() =>
                       Effect.gen(function* () {
                         log.error("actor.postStop runTurn failed", {
                           actorID: input.actorID,

@@ -1,5 +1,6 @@
 export * from "./interface"
 export * from "./agent-execution"
+export * from "./capability-matrix"
 export * from "./cli-adapter"
 export * from "./registry"
 export * from "./resolver"

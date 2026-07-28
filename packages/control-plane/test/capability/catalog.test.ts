@@ -8,8 +8,11 @@ describe("CapabilityCatalog", () => {
     expect(packs.map((pack) => pack.id)).toEqual([
       "board-strategy",
       "delivery-governance",
+      "design-production",
+      "document-authoring",
       "independent-review",
       "product-charter",
+      "research-analysis",
       "software-implementation",
       "technical-planning",
       "verification-testing",

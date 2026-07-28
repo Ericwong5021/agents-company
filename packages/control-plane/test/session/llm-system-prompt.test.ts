@@ -12,8 +12,8 @@ import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { checkpointPath, globalMemoryPath, memoryPath } from "../../src/session/checkpoint-paths"
 import { AppRuntime } from "../../src/effect/app-runtime"
-import { Global } from "../../src/global"
 
 // Reuses the same HTTP-mock approach from llm.test.ts to capture the
 // system prompt the LLM layer assembled before sending. The system prompt
@@ -466,11 +466,11 @@ describe("session.llm system prompt — memory-instructions guard", () => {
           .filter((m) => m.role === "system")
           .map((m) => m.content)
           .join("\n")
-        expect(allSys).toContain(path.join(Global.Path.data, "memory", "projects", Instance.current.project.id, "MEMORY.md"))
-        expect(allSys).toContain(path.join(Global.Path.data, "memory", "sessions", sessionID, "checkpoint.md"))
+        expect(allSys).toContain(memoryPath(Instance.current.project.id))
+        expect(allSys).toContain(checkpointPath(sessionID))
         // Global memory is taught (read-side) and points at the canonical path.
         expect(allSys).toContain("## Global memory")
-        expect(allSys).toContain(path.join(Global.Path.data, "memory", "global", "MEMORY.md"))
+        expect(allSys).toContain(globalMemoryPath())
         expect(allSys).not.toContain("<data>/memory/projects")
         expect(allSys).not.toContain("<data>/memory/sessions")
       },

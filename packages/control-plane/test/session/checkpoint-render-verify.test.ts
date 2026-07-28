@@ -12,7 +12,7 @@ import { Config } from "../../src/config"
 import { Memory } from "../../src/memory"
 import { Session } from "../../src/session"
 import { SessionCheckpoint } from "../../src/session/checkpoint"
-import { checkpointPath } from "../../src/session/checkpoint-paths"
+import { checkpointPath, memoryPath } from "../../src/session/checkpoint-paths"
 import { TaskRegistry } from "../../src/task/registry"
 import { ActorRegistry } from "../../src/actor/registry"
 import { Instance } from "../../src/project/instance"
@@ -85,7 +85,8 @@ describe("v5 verify (visual)", () => {
         const root = yield* memory.root()
         const sessDir = path.join(root, "sessions", sess.id)
         const taskDir = path.join(root, "sessions", sess.id, "tasks", t2.id)
-        const projDir = path.join(root, "projects", "global")
+        const projectFile = memoryPath(Instance.current.project.id)
+        const projDir = path.dirname(projectFile)
 
         yield* Effect.promise(async () => {
           await fs.mkdir(sessDir, { recursive: true })
@@ -93,7 +94,7 @@ describe("v5 verify (visual)", () => {
           await fs.mkdir(projDir, { recursive: true })
 
           await fs.writeFile(
-            path.join(projDir, "MEMORY.md"),
+            projectFile,
             `# Project memory
 Updated: 2026-05-15T10:00:00Z (ckpt #1)
 
@@ -203,6 +204,7 @@ Next: implement renderRebuildContext 9-section render in src/session/checkpoint.
         expect(out).toContain("agent=explorer")
         expect(out).toContain("Drizzle's sqliteTable")
       }),
+      { git: true },
     ),
   )
 

@@ -18,15 +18,22 @@ afterEach(async () => {
 
 const it = testEffect(Layer.mergeAll(Memory.defaultLayer, CrossSpawnSpawner.defaultLayer))
 
+async function resetMemory(root: string) {
+  await Promise.all(
+    ["agents", "projects", "sessions", "memory"].map((directory) =>
+      fs.rm(path.join(root, directory), { recursive: true, force: true }),
+    ),
+  )
+}
+
 describe("Memory.reconcile", () => {
   it.live("indexes a new file", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        // Make sure the memory dir starts empty for this test
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        const dir = path.join(root, "global")
+        yield* Effect.promise(() => resetMemory(root))
+        const dir = path.join(root, "memory")
         yield* Effect.promise(() => fs.mkdir(dir, { recursive: true }))
         yield* Effect.promise(() => fs.writeFile(path.join(dir, "test.md"), "hello world"))
 
@@ -46,8 +53,8 @@ describe("Memory.reconcile", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        const filePath = path.join(root, "global", "test.md")
+        yield* Effect.promise(() => resetMemory(root))
+        const filePath = path.join(root, "memory", "test.md")
         yield* Effect.promise(() => fs.mkdir(path.dirname(filePath), { recursive: true }))
         yield* Effect.promise(() => fs.writeFile(filePath, "hello"))
         yield* memory.reconcile()
@@ -71,8 +78,8 @@ describe("Memory.reconcile", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        const filePath = path.join(root, "global", "test.md")
+        yield* Effect.promise(() => resetMemory(root))
+        const filePath = path.join(root, "memory", "test.md")
         yield* Effect.promise(() => fs.mkdir(path.dirname(filePath), { recursive: true }))
         yield* Effect.promise(() => fs.writeFile(filePath, "hello"))
         yield* memory.reconcile()
@@ -95,8 +102,8 @@ describe("Memory.reconcile", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        const filePath = path.join(root, "global", "test.md")
+        yield* Effect.promise(() => resetMemory(root))
+        const filePath = path.join(root, "memory", "test.md")
         yield* Effect.promise(() => fs.mkdir(path.dirname(filePath), { recursive: true }))
         yield* Effect.promise(() => fs.writeFile(filePath, "v1"))
         yield* memory.reconcile()

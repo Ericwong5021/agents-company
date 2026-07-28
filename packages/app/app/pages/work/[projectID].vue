@@ -75,8 +75,10 @@ const composerTarget = computed<ComposerTarget | undefined>(() => work.value?.av
   : undefined);
 
 // 右侧上下文面板只依据真实数据存在与否派生；Thread 明细需后端接线，此处不虚构。
+// 目标摘要读取失败时仍保留“目标”面板入口，如实展示不可用状态而不是隐藏整个面板；404 表示本来就没有目标摘要，不制造面板。
 const panels = computed(() => availableContextPanels({
-  hasGoalBrief: goalBrief.value?.kind === "goal_brief" || goalBrief.value?.kind === "legacy_charter",
+  hasGoalBrief: (!!goalBriefError.value && goalBriefError.value.statusCode !== 404)
+    || goalBrief.value?.kind === "goal_brief" || goalBrief.value?.kind === "legacy_charter",
   gates: detail.value?.gates.length ?? 0,
   artifacts: detail.value?.artifacts.length ?? 0,
   agents: detail.value?.recruitment.candidates.length ?? 0,

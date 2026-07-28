@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "@/storage"
 import * as Database from "@/storage/db"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { CompanyWorkItemTable } from "@/company-project/company-project.sql"
 import { ChannelTable, ConversationThreadTable } from "@/conversation/conversation.sql"
 import { ConversationThreadID } from "@/conversation/schema"
 import { CompanyID } from "./schema"
@@ -23,6 +24,23 @@ export const Evidence = z
   })
   .strict()
 
+// TEAM-01：负载与最近交付来自真实工作项事实，而不是在线状态或角色名。
+export const Workload = z
+  .object({
+    active: z.number().int(),
+    blocked: z.number().int(),
+    recent_delivery: z
+      .object({
+        work_item_id: z.string(),
+        title: z.string(),
+        review_status: z.string(),
+        time_completed: z.number().int(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+
 export const AgentActivityProjection = z
   .object({
     agent: z
@@ -31,11 +49,13 @@ export const AgentActivityProjection = z
         name: z.string(),
         role: z.string().optional(),
         description: z.string().optional(),
-        lifecycle: z.literal("employee"),
+        lifecycle: z.enum(["employee", "assigned"]),
         department: z.string().optional(),
         responsibilities: z.array(z.string()),
       })
       .strict(),
+    // TEAM-01/TEAM-05：组织身份区分正式员工与在岗临时实例，供组织视图消费。
+    employment: z.enum(["employee", "temporary"]),
     presence: Presence,
     attention: Attention,
     activity: Activity,
@@ -45,6 +65,7 @@ export const AgentActivityProjection = z
     interruptibility: Interruptibility,
     risk: z.string().optional(),
     collaborators: z.array(z.string()),
+    workload: Workload,
     evidence: Evidence.optional(),
   })
   .strict()
@@ -111,7 +132,8 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
       .where(eq(CompanyAgentTable.company_id, companyID))
       .orderBy(asc(CompanyAgentTable.id))
       .all()
-      .filter((agent) => agent.lifecycle === "employee")
+      // TEAM-01：在岗临时实例（assigned）也进入团队视图，与正式员工用 employment 区分。
+      .filter((agent) => agent.lifecycle === "employee" || agent.lifecycle === "assigned")
       .map((agent) => {
         const projectionAgent = {
           id: agent.id,
@@ -121,6 +143,29 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
           lifecycle: agent.lifecycle,
           ...(agent.department ? { department: agent.department } : {}),
           responsibilities: responsibilities(agent.responsibilities),
+        }
+        const employment = agent.lifecycle === "employee" ? "employee" : "temporary"
+        const ownedItems = db
+          .select()
+          .from(CompanyWorkItemTable)
+          .where(eq(CompanyWorkItemTable.owner_agent_id, agent.id))
+          .all()
+        const delivered = ownedItems
+          .filter((item) => item.status === "completed" && item.completed_at !== null)
+          .toSorted((left, right) => right.completed_at! - left.completed_at!)[0]
+        const workload = {
+          active: ownedItems.filter((item) => item.status === "pending" || item.status === "running").length,
+          blocked: ownedItems.filter((item) => item.status === "blocked").length,
+          ...(delivered
+            ? {
+                recent_delivery: {
+                  work_item_id: delivered.id,
+                  title: delivered.title,
+                  review_status: delivered.review_status,
+                  time_completed: delivered.completed_at!,
+                },
+              }
+            : {}),
         }
         const run =
           db
@@ -143,12 +188,14 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
         if (!run) {
           return AgentActivityProjection.parse({
             agent: projectionAgent,
+            employment,
             presence: "offline",
             attention: "none",
             activity: "idle",
             since: agent.time_updated,
             interruptibility: "interruptible",
             collaborators: [],
+            workload,
           })
         }
         const threadID = run.conversation_thread_id
@@ -162,6 +209,7 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
           : undefined
         return AgentActivityProjection.parse({
           agent: projectionAgent,
+          employment,
           presence: onlineRunStates.has(run.state) ? "online" : "offline",
           ...state(run.state),
           ...(channel ? { location: channel.title } : {}),
@@ -169,6 +217,7 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
           since: run.time_started ?? run.time_updated,
           ...(run.safe_error_summary ? { risk: run.safe_error_summary } : {}),
           collaborators: [],
+          workload,
           evidence: {
             kind: "agent_run",
             runID: run.id,

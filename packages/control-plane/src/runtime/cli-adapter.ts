@@ -6,47 +6,12 @@ import type {
   AgentRunResult,
   AgentRunSpec,
   AgentRuntimePort,
-  RuntimeCapabilities,
   RuntimeID,
   RuntimeMessage,
 } from "./interface"
+import { RuntimeCapabilityMatrix } from "./capability-matrix"
 
 type CliRuntimeID = Exclude<RuntimeID, "pi">
-
-const capabilities: Record<CliRuntimeID, RuntimeCapabilities> = {
-  "claude-code": {
-    resume: true,
-    interrupt: true,
-    liveInput: false,
-    structuredEvents: true,
-    toolCalls: true,
-    structuredOutput: true,
-    workspaceRead: true,
-    workspaceWrite: true,
-    approvals: true,
-    reasoningEffort: false,
-    subagents: true,
-    usageAccounting: true,
-    dynamicSkills: false,
-    governanceSignals: false,
-  },
-  codex: {
-    resume: true,
-    interrupt: true,
-    liveInput: false,
-    structuredEvents: true,
-    toolCalls: true,
-    structuredOutput: true,
-    workspaceRead: true,
-    workspaceWrite: true,
-    approvals: true,
-    reasoningEffort: true,
-    subagents: true,
-    usageAccounting: true,
-    dynamicSkills: false,
-    governanceSignals: false,
-  },
-}
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
@@ -193,7 +158,7 @@ class CliRuntimeAdapter implements AgentRuntimePort {
   constructor(readonly runtime: CliRuntimeID) {}
 
   capabilities() {
-    return capabilities[this.runtime]
+    return RuntimeCapabilityMatrix[this.runtime]
   }
 
   async discover() {

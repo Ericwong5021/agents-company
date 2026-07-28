@@ -1659,8 +1659,8 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
 
     const result = ProviderTransform.message(msgs, controlPlaneModel, { store: false }) as any[]
 
-    expect(result[0].content[0].providerOptions?.controlPlane?.itemId).toBe("msg_123")
-    expect(result[0].content[0].providerOptions?.controlPlane?.otherOption).toBe("value")
+    expect(result[0].content[0].providerOptions?.["control-plane"]?.itemId).toBe("msg_123")
+    expect(result[0].content[0].providerOptions?.["control-plane"]?.otherOption).toBe("value")
   })
 
   test("preserves itemId across all providerOptions keys", () => {
@@ -1698,10 +1698,10 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
     const result = ProviderTransform.message(msgs, controlPlaneModel, { store: false }) as any[]
 
     expect(result[0].providerOptions?.openai?.itemId).toBe("msg_root")
-    expect(result[0].providerOptions?.controlPlane?.itemId).toBe("msg_control-plane")
+    expect(result[0].providerOptions?.["control-plane"]?.itemId).toBe("msg_control-plane")
     expect(result[0].providerOptions?.extra?.itemId).toBe("msg_extra")
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_openai_part")
-    expect(result[0].content[0].providerOptions?.controlPlane?.itemId).toBe("msg_control-plane_part")
+    expect(result[0].content[0].providerOptions?.["control-plane"]?.itemId).toBe("msg_control-plane_part")
     expect(result[0].content[0].providerOptions?.extra?.itemId).toBe("msg_extra_part")
   })
 

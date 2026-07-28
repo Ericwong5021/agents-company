@@ -28,7 +28,7 @@ import type { Actor } from "../../src/actor/spawn"
 import { MessageID } from "../../src/session/schema"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Log } from "../../src/util"
-import { tmpdir } from "../fixture/fixture"
+import { provideProjectProviderSettings, tmpdir } from "../fixture/fixture"
 import {
   startScriptedLLMServer,
   toolCallResponse,
@@ -62,8 +62,8 @@ function runFork(fx: Effect.Effect<any, any, any>) {
   )
 }
 
-function writeConfig(dir: string, origin: string) {
-  return Bun.write(
+async function writeConfig(dir: string, origin: string) {
+  await Bun.write(
     path.join(dir, "agent-company.json"),
     JSON.stringify({
       $schema: "https://control-plane.ai/config.json",
@@ -74,6 +74,7 @@ function writeConfig(dir: string, origin: string) {
       agent: { build: { model: "alibaba/qwen-plus" } },
     }),
   )
+  return provideProjectProviderSettings(dir)
 }
 
 const JSON_SCHEMA = {
@@ -92,7 +93,7 @@ describe("classifier routing — integration", () => {
     ])
     try {
       await Bun.write(readmePath, "# Hello\n")
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -123,7 +124,7 @@ describe("classifier routing — integration", () => {
     await using tmp = await tmpdir({ git: true })
     const stub = startScriptedLLMServer([{ lines: textStopResponse("plain text, not structured") }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -161,7 +162,7 @@ describe("classifier routing — integration", () => {
     ])
     try {
       await Bun.write(readmePath, "# Hello\n")
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -192,7 +193,7 @@ describe("classifier routing — integration", () => {
     await using tmp = await tmpdir({ git: true })
     const stub = startScriptedLLMServer([{ lines: contentFilterResponse() }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -224,7 +225,7 @@ describe("classifier routing — integration", () => {
     await using tmp = await tmpdir({ git: true })
     const stub = startScriptedLLMServer([{ lines: contentFilterResponse() }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -260,7 +261,7 @@ describe("classifier routing — integration", () => {
     // (logged) final, NOT be misclassified as an error or loop forever.
     const stub = startScriptedLLMServer([{ lines: otherFinishResponse("usable answer despite an odd finish") }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -299,7 +300,7 @@ describe("classifier routing — integration", () => {
     // user-visible error rather than silently completing.
     const stub = startScriptedLLMServer([{ lines: [], status: 400 }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -331,7 +332,7 @@ describe("classifier routing — integration", () => {
     const forkActorID = "explore-fork-1"
     const prevSpawnRef = spawnRef.current
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -412,7 +413,7 @@ describe("classifier routing — integration", () => {
     const forkActorID = "explore-fork-cf"
     const prevSpawnRef = spawnRef.current
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>

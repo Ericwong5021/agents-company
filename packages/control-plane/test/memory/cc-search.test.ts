@@ -19,6 +19,18 @@ afterEach(async () => {
 
 const it = testEffect(Layer.mergeAll(Memory.defaultLayer, CrossSpawnSpawner.defaultLayer))
 
+const memoryDirectories = ["agents", "projects", "sessions", "memory"]
+
+async function resetMemory(root: string) {
+  await Promise.all(
+    memoryDirectories.map((directory) =>
+      fs.rm(path.join(root, directory), { recursive: true, force: true }),
+    ),
+  )
+}
+
+const mimoRoots = (root: string) => memoryDirectories.map((directory) => path.join(root, directory))
+
 // CC's real layout is ~/.claude/projects/<slug>/memory; parseCcPath's regex
 // anchors on `.claude/projects` as a safety contract, so test fixtures must
 // mirror that path shape.
@@ -47,10 +59,10 @@ describe("memory.search with cc scope", () => {
         Effect.gen(function* () {
           const memory = yield* Memory.Service
           const mimoRoot = yield* memory.root()
-          yield* Effect.promise(() => fs.rm(mimoRoot, { recursive: true, force: true }))
-          yield* Effect.promise(() => fs.mkdir(path.join(mimoRoot, "global"), { recursive: true }))
+          yield* Effect.promise(() => resetMemory(mimoRoot))
+          yield* Effect.promise(() => fs.mkdir(path.join(mimoRoot, "memory"), { recursive: true }))
           yield* Effect.promise(() =>
-            fs.writeFile(path.join(mimoRoot, "global", "m.md"), "distinctivetoken from mimo"),
+            fs.writeFile(path.join(mimoRoot, "memory", "m.md"), "distinctivetoken from mimo"),
           )
 
           const ccBase = yield* Effect.promise(() => tmpCcBase())
@@ -67,7 +79,7 @@ distinctivetoken from CC`,
             ),
           )
 
-          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoot, cc: ccBase }))
+          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoots(mimoRoot), cc: ccBase }))
 
           const results = yield* memory.search({ query: "distinctivetoken" })
           expect(results.length).toBe(2)
@@ -84,9 +96,9 @@ distinctivetoken from CC`,
         Effect.gen(function* () {
           const memory = yield* Memory.Service
           const mimoRoot = yield* memory.root()
-          yield* Effect.promise(() => fs.rm(mimoRoot, { recursive: true, force: true }))
-          yield* Effect.promise(() => fs.mkdir(path.join(mimoRoot, "global"), { recursive: true }))
-          yield* Effect.promise(() => fs.writeFile(path.join(mimoRoot, "global", "m.md"), "tokenz"))
+          yield* Effect.promise(() => resetMemory(mimoRoot))
+          yield* Effect.promise(() => fs.mkdir(path.join(mimoRoot, "memory"), { recursive: true }))
+          yield* Effect.promise(() => fs.writeFile(path.join(mimoRoot, "memory", "m.md"), "tokenz"))
 
           const ccBase = yield* Effect.promise(() => tmpCcBase())
           yield* Effect.promise(() =>
@@ -97,7 +109,7 @@ metadata:
 tokenz`),
           )
 
-          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoot, cc: ccBase }))
+          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoots(mimoRoot), cc: ccBase }))
 
           const ccOnly = yield* memory.search({ query: "tokenz", scope: "cc" })
           expect(ccOnly.length).toBe(1)
@@ -117,7 +129,7 @@ tokenz`),
         Effect.gen(function* () {
           const memory = yield* Memory.Service
           const mimoRoot = yield* memory.root()
-          yield* Effect.promise(() => fs.rm(mimoRoot, { recursive: true, force: true }))
+          yield* Effect.promise(() => resetMemory(mimoRoot))
 
           const ccBase = yield* Effect.promise(() => tmpCcBase())
           yield* Effect.promise(() =>
@@ -135,7 +147,7 @@ metadata:
 sharedterm b`),
           )
 
-          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoot, cc: ccBase }))
+          yield* Effect.promise(() => reconcileMemory({ mimo: mimoRoots(mimoRoot), cc: ccBase }))
 
           const fb = yield* memory.search({ query: "sharedterm", type: "feedback" })
           expect(fb.length).toBe(1)

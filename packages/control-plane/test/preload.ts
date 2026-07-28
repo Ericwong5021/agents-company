@@ -3,7 +3,7 @@
 import os from "os"
 import path from "path"
 import fs from "fs/promises"
-import { setTimeout as sleep } from "node:timers/promises"
+import { rmSync } from "fs"
 import { afterAll } from "bun:test"
 
 // Set XDG env vars FIRST, before any src/ imports
@@ -15,26 +15,6 @@ await fs.mkdir(dir, { recursive: true })
 const fixtureRoot = path.join(process.cwd(), ".agentcompany-test-fixtures-" + process.pid)
 await fs.mkdir(fixtureRoot, { recursive: true })
 process.env["AGENTCOMPANY_TEST_TMPDIR_ROOT"] = fixtureRoot
-afterAll(async () => {
-  const { Database } = await import("../src/storage")
-  Database.close()
-  const busy = (error: unknown) =>
-    typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
-  const rm = async (target: string, left: number): Promise<void> => {
-    Bun.gc(true)
-    await sleep(100)
-    return fs.rm(target, { recursive: true, force: true }).catch((error) => {
-      if (!busy(error)) throw error
-      if (left <= 1) throw error
-      return rm(target, left - 1)
-    })
-  }
-
-  // Windows can keep SQLite WAL handles alive until GC finalizers run, so we
-  // force GC and retry teardown to avoid flaky EBUSY in test cleanup.
-  await rm(dir, 30)
-  await rm(fixtureRoot, 30)
-})
 
 process.env["XDG_DATA_HOME"] = path.join(dir, "share")
 process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
@@ -92,8 +72,15 @@ process.env["AGENTCOMPANY_DB"] = ":memory:"
 // Now safe to import from src/
 const { Log } = await import("../src/util")
 const { initProjectors } = await import("../src/server/projectors")
+const { Database } = await import("../src/storage")
 
-void Log.init({
+afterAll(() => Database.close())
+process.once("exit", () => {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 })
+  rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 30, retryDelay: 100 })
+})
+
+await Log.init({
   print: false,
   dev: true,
   level: "DEBUG",

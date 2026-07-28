@@ -171,6 +171,7 @@ describe.serial("M2 conversation runtime", () => {
               principal: { kind: "user", id: "usr_local" },
               requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d0",
               body: "Run the real M2 board runtime from the imported repository.",
+              intentOverride: "execute",
             }),
           ).pipe(Effect.provide(Conversation.layer)),
         )
@@ -285,6 +286,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d8",
             body: "Start this persisted board runtime exactly once.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )
@@ -386,6 +388,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d3",
             body: "Assess the provider risk before we release.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )
@@ -479,6 +482,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d5",
             body: "Recover this committed board request.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )
@@ -533,6 +537,7 @@ describe.serial("M2 conversation runtime", () => {
               principal: { kind: "user", id: "usr_local" },
               requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d7",
               body: "Recover the board binding created before the runtime group.",
+              intentOverride: "execute",
             }),
           ).pipe(Effect.provide(Conversation.layer)),
         )
@@ -593,6 +598,7 @@ describe.serial("M2 conversation runtime", () => {
               principal: { kind: "user", id: "usr_local" },
               requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d6",
               body: "Resume the persisted board discussion after its first response.",
+              intentOverride: "execute",
             }),
           ).pipe(Effect.provide(Conversation.layer)),
         )
@@ -705,6 +711,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d4",
             body: "Assess the private provider failure boundary.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )
@@ -759,6 +766,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d8",
             body: "Decide whether the provider is ready for release.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )
@@ -819,6 +827,7 @@ describe.serial("M2 conversation runtime", () => {
             principal: { kind: "user", id: "usr_local" },
             requestID: "018f84f8-9c21-7d4d-a850-d63f8f9344d9",
             body: "Assess the provider failure boundary for a board summary.",
+            intentOverride: "execute",
           }),
         ).pipe(Effect.provide(Conversation.layer)),
       )

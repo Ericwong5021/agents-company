@@ -6,7 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Log } from "../../src/util"
-import { tmpdir } from "../fixture/fixture"
+import { provideProjectProviderSettings, tmpdir } from "../fixture/fixture"
 import { startScriptedLLMServer, textStopResponse } from "../lib/scripted-llm-server"
 
 void Log.init({ print: false })
@@ -56,6 +56,7 @@ describe("SessionPrompt session loop hooks", () => {
             agent: { build: { model: "alibaba/qwen-plus" } },
           }),
         )
+        await using providerSettings = await provideProjectProviderSettings(tmp.path)
 
         const exit: any = await Instance.provide({
           directory: tmp.path,
@@ -125,6 +126,7 @@ describe("SessionPrompt session loop hooks", () => {
             agent: { build: { model: "alibaba/qwen-plus" } },
           }),
         )
+        await using providerSettings = await provideProjectProviderSettings(tmp.path)
 
         await Instance.provide({
           directory: tmp.path,

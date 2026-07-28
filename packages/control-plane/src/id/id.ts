@@ -38,6 +38,7 @@ const prefixes = {
   capabilityNeed: "cneed",
   teamSelection: "tsel",
   agentPerformance: "aperf",
+  agentCapability: "acap",
   employmentReview: "erev",
   department: "dept",
 } as const

@@ -349,8 +349,11 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
   })
 
   test.serial("returns run state, runtime entries, hydrated evidence, and a 404 for an unknown source", async () => {
-    const accepted = await send(BOARD_CHANNEL_ID, "Discuss the M2 scope.", requestID())
-    const { threadID, runID } = await accepted.json()
+    const accepted = await send(BOARD_CHANNEL_ID, "Create an M2 scope thread with hydrated evidence.", requestID())
+    const acceptedBody = await accepted.json()
+    expect(accepted.status).toBe(202)
+    const threadID = ConversationThreadID.parse(acceptedBody.threadID)
+    const runID = ConversationRunID.parse(acceptedBody.runID)
     Database.use((db) =>
       db.update(ConversationRunTable)
         .set({
@@ -424,7 +427,8 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
   })
 
   test.serial("applies an interrupt action and returns updated thread detail", async () => {
-    const accepted = await send(BOARD_CHANNEL_ID, "A goal to interrupt.", requestID())
+    const accepted = await send(BOARD_CHANNEL_ID, "Create a goal to interrupt.", requestID())
+    expect(accepted.status).toBe(202)
     const { runID, threadID } = await accepted.json()
     Database.use((db) =>
       db
@@ -513,7 +517,8 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
   })
 
   test.serial("includes company-visible Board signals in the company feed", async () => {
-    const accepted = await send(BOARD_CHANNEL_ID, "Publish a company-visible Board risk.", requestID())
+    const accepted = await send(BOARD_CHANNEL_ID, "Create a company-visible Board risk.", requestID())
+    expect(accepted.status).toBe(202)
     const { threadID, runID } = await accepted.json()
     const projected = seedProjectedBoardSignal({ threadID, runID })
 
@@ -532,7 +537,8 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
   })
 
   test.serial("rejects an invisible interrupt before mutating its thread or run", async () => {
-    const accepted = await send(BOARD_CHANNEL_ID, "A protected goal.", requestID())
+    const accepted = await send(BOARD_CHANNEL_ID, "Create a protected goal.", requestID())
+    expect(accepted.status).toBe(202)
     const { runID, threadID } = await accepted.json()
     Database.use((db) =>
       db
@@ -560,7 +566,8 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
   })
 
   test.serial("rejects a non-interrupt action as a 400 product error", async () => {
-    const accepted = await send(BOARD_CHANNEL_ID, "A goal.", requestID())
+    const accepted = await send(BOARD_CHANNEL_ID, "Create a goal for invalid action validation.", requestID())
+    expect(accepted.status).toBe(202)
     const { threadID } = await accepted.json()
     const response = await Server.Default().app.request(`/company/threads/${threadID}/actions?company_id=${companyID}`, {
       method: "POST",

@@ -16,7 +16,7 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Flag } from "../../src/flag/flag"
 import { Log } from "../../src/util"
-import { tmpdir } from "../fixture/fixture"
+import { provideProjectProviderSettings, tmpdir } from "../fixture/fixture"
 import {
   startScriptedLLMServer,
   textStopResponse,
@@ -36,8 +36,8 @@ function run<A, E>(fx: Effect.Effect<A, E, SessionPrompt.Service | Session.Servi
   )
 }
 
-function writeConfig(dir: string, origin: string) {
-  return Bun.write(
+async function writeConfig(dir: string, origin: string) {
+  await Bun.write(
     path.join(dir, "agent-company.json"),
     JSON.stringify({
       $schema: "https://control-plane.ai/config.json",
@@ -48,6 +48,7 @@ function writeConfig(dir: string, origin: string) {
       agent: { build: { model: "alibaba/qwen-plus" } },
     }),
   )
+  return provideProjectProviderSettings(dir)
 }
 
 describe("invalid-output continuation — integration", () => {
@@ -55,7 +56,7 @@ describe("invalid-output continuation — integration", () => {
     await using tmp = await tmpdir({ git: true })
     const stub = startScriptedLLMServer([{ lines: emptyStopResponse() }, { lines: textStopResponse("final answer") }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -89,7 +90,7 @@ describe("invalid-output continuation — integration", () => {
       { lines: textStopResponse("final answer") },
     ])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>
@@ -120,7 +121,7 @@ describe("invalid-output continuation — integration", () => {
     // Server repeats the last entry, so every call returns an empty stop.
     const stub = startScriptedLLMServer([{ lines: emptyStopResponse() }])
     try {
-      await writeConfig(tmp.path, stub.origin)
+      await using providerSettings = await writeConfig(tmp.path, stub.origin)
       await Instance.provide({
         directory: tmp.path,
         fn: () =>

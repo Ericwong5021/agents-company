@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm"
 import { Effect } from "effect"
 import { CompanyAgent } from "../../src/company-agent"
 import { CompanyAgentID } from "../../src/company-agent/schema"
-import { CompanyProjectTable } from "../../src/company-project/company-project.sql"
+import { CompanyPlanTable, CompanyProjectTable, CompanyWorkItemTable } from "../../src/company-project/company-project.sql"
 import {
   CompanyRecruitment,
   DepartmentRecurringDemandNotProven,
@@ -214,6 +214,16 @@ describe("company recruitment", () => {
             responsibilities: ["design"],
           }),
         )
+        await runAgents((service) =>
+          service.create({
+            id: "evidence-archivist",
+            company_id: companyID,
+            name: "Evidence Archivist",
+            lifecycle: "candidate",
+            description: "Analysis support",
+            responsibilities: ["analysis"],
+          }),
+        )
         const need = await runRecruitment((service) =>
           service.createNeed({
             company_id: companyID,
@@ -236,10 +246,26 @@ describe("company recruitment", () => {
           lifecycle: "assigned",
           role_key: "evidence analyst",
         })
-        expect(result.selections.map((item) => item.decision)).toEqual(["selected", "rejected"])
+        expect(result.selections.map((item) => item.decision)).toEqual(["selected", "rejected", "rejected"])
         expect(result.selections.every((item) => item.reason.length > 10)).toBe(true)
-        expect(result.selections.find((item) => item.decision === "rejected")?.reason).toContain("未入选")
-        expect(CompanyActivity.list(companyID).map((item) => item.agent.id)).not.toContain("evidence-analyst")
+        // TEAM-04: the selected reason points back to capability evidence and runtime state.
+        const selectedRow = result.selections.find((item) => item.decision === "selected")!
+        expect(selectedRow.candidate_rank).toBe(1)
+        expect(selectedRow.reason).toContain("能力证据强度")
+        expect(selectedRow.reason).toContain("负载可用性")
+        // Hard-constraint rejection records rank 0 and factual gaps, not a bare match score.
+        const designer = result.selections.find((item) => item.agent_id === "visual-designer")!
+        expect(designer.candidate_rank).toBe(0)
+        expect(designer.gaps).toEqual(["对所需能力包既无可用能力证据，也无可验证的画像匹配"])
+        expect(designer.reason).toContain("未入选")
+        // The runner-up is persisted with rank 2 and its dimension deficits.
+        const runnerUp = result.selections.find((item) => item.agent_id === "evidence-archivist")!
+        expect(runnerUp.candidate_rank).toBe(2)
+        expect(runnerUp.reason).toContain("第二候选")
+        expect(runnerUp.gaps).toContain("能力匹配 2 项低于入选者 4 项")
+        // TEAM-01：在岗临时实例进入团队视图，但组织身份是 temporary 而不是正式员工。
+        const activity = CompanyActivity.list(companyID).find((item) => item.agent.id === "evidence-analyst")
+        expect(activity).toMatchObject({ employment: "temporary", agent: { lifecycle: "assigned" } })
 
         const released = await runRecruitment((service) =>
           service.releaseProject({ company_id: companyID, project_id: "cprj_recruitment_one" }),
@@ -468,6 +494,147 @@ describe("company recruitment", () => {
             }),
           }),
         ])
+      },
+    })
+  })
+
+  test("retires temporary role instances without real task evidence and keeps evidenced ones in the candidate pool", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const companyID = CompanyID.parse("cmp_recruitment_lifecycle")
+        seed(companyID, ["cprj_lifecycle_alpha", "cprj_lifecycle_beta"])
+        const workerNeed = await runRecruitment((service) =>
+          service.createNeed({
+            company_id: companyID,
+            project_id: "cprj_lifecycle_alpha",
+            need_key: "delivery",
+            role: "delivery specialist",
+            work_type: "coding",
+            capability_packs: ["structured-delivery"],
+            risk_level: "medium",
+            demand_horizon: "project",
+          }),
+        )
+        const idleNeed = await runRecruitment((service) =>
+          service.createNeed({
+            company_id: companyID,
+            project_id: "cprj_lifecycle_alpha",
+            need_key: "advisory",
+            role: "advisory specialist",
+            work_type: "analysis",
+            capability_packs: ["domain-advisory"],
+            risk_level: "low",
+            demand_horizon: "project",
+          }),
+        )
+        const worker = await runRecruitment((service) =>
+          service.selectForNeed({ capability_need_id: workerNeed.id, exclude_agent_ids: [] }),
+        )
+        // 独立性约束排除执行者后，不强行复用，而是创建第二个临时角色实例。
+        const idle = await runRecruitment((service) =>
+          service.selectForNeed({ capability_need_id: idleNeed.id, exclude_agent_ids: [worker.agent.id] }),
+        )
+        expect(idle.agent.id).not.toBe(worker.agent.id)
+        expect(worker.selections.find((item) => item.decision === "selected")?.source).toBe("new_candidate")
+        expect(idle.selections.find((item) => item.decision === "selected")?.source).toBe("new_candidate")
+
+        const before = await runRecruitment((service) => service.snapshot({ company_id: companyID }))
+        expect(before.organization.temporary_instances.map((agent) => agent.id).toSorted()).toEqual(
+          [worker.agent.id, idle.agent.id].toSorted(),
+        )
+        expect(before.organization.employees).toHaveLength(0)
+        expect(before.organization.board_members).toHaveLength(0)
+
+        // 仅 worker 实例沉淀了真实任务证据：本项目一个已完成的工作项。
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(CompanyPlanTable)
+            .values({
+              id: "cpl_lifecycle_alpha_v1",
+              project_id: "cprj_lifecycle_alpha",
+              version: 1,
+              phase: "delivery",
+              status: "active",
+              summary: "Lifecycle evidence plan",
+              assumptions_json: "[]",
+              acceptance_criteria_json: "[]",
+              created_at: now,
+            })
+            .run()
+          db.insert(CompanyWorkItemTable)
+            .values({
+              id: "cwi_lifecycle_delivery",
+              project_id: "cprj_lifecycle_alpha",
+              plan_id: "cpl_lifecycle_alpha_v1",
+              source_task_key: "delivery",
+              title: "交付主任务",
+              description: "完成可验收的交付物。",
+              kind: "leaf",
+              work_type: "delivery",
+              role: "delivery specialist",
+              capability_packs_json: JSON.stringify(["structured-delivery"]),
+              decision_scope_json: "[]",
+              resource_scope_json: "[]",
+              inputs_json: "[]",
+              expected_outputs_json: "[]",
+              validators_json: "[]",
+              disposition: "execute",
+              model_group: "standard",
+              risk_level: "medium",
+              review_status: "approved",
+              status: "completed",
+              owner_agent_id: worker.agent.id,
+              acceptance_criteria_json: "[]",
+              completed_at: now,
+              created_at: now,
+              updated_at: now,
+            })
+            .run()
+        })
+        setProjectStatus("cprj_lifecycle_alpha", "completed")
+        await runRecruitment((service) =>
+          service.releaseProject({ company_id: companyID, project_id: "cprj_lifecycle_alpha" }),
+        )
+
+        // 有证据的临时实例回候选池；无证据的直接退役并留存审计记录。
+        expect(await runAgents((service) => service.get(worker.agent.id))).toMatchObject({ lifecycle: "candidate" })
+        expect(await runAgents((service) => service.get(idle.agent.id))).toMatchObject({ lifecycle: "archived" })
+        const after = await runRecruitment((service) => service.snapshot({ company_id: companyID }))
+        expect(after.organization.temporary_instances).toHaveLength(0)
+        expect(after.organization.candidate_pool.map((agent) => agent.id)).toContain(worker.agent.id)
+        expect(after.organization.candidate_pool.map((agent) => agent.id)).not.toContain(idle.agent.id)
+        expect(after.employment_reviews).toContainEqual(
+          expect.objectContaining({
+            agent_id: idle.agent.id,
+            status: "retired",
+            successful_project_count: 0,
+            rationale: expect.stringContaining("退役"),
+          }),
+        )
+
+        // 独立性：被排除的执行者不会被选为同类任务的复核者，改为新建临时实例。
+        const reviewNeed = await runRecruitment((service) =>
+          service.createNeed({
+            company_id: companyID,
+            project_id: "cprj_lifecycle_beta",
+            need_key: "delivery_review",
+            role: "delivery reviewer",
+            work_type: "coding",
+            capability_packs: ["structured-delivery"],
+            risk_level: "medium",
+            demand_horizon: "project",
+          }),
+        )
+        const reviewer = await runRecruitment((service) =>
+          service.selectForNeed({ capability_need_id: reviewNeed.id, exclude_agent_ids: [worker.agent.id] }),
+        )
+        expect(reviewer.agent.id).not.toBe(worker.agent.id)
+        expect(reviewer.selections.find((item) => item.decision === "selected")?.source).toBe("new_candidate")
+        expect(
+          reviewer.selections.find((item) => item.agent_id === worker.agent.id)?.reason,
+        ).toContain("独立执行或复核约束")
       },
     })
   })

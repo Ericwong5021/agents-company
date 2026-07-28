@@ -137,7 +137,7 @@ describe("AGENTCOMPANY_HOME end-to-end", () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     // Paths should reflect XDG layout (ends with "/agentcompany"), not AGENTCOMPANY_HOME layout
-    expect(result.paths.config).toBe(path.join(tmp.path, "config", "agentcompany"))
-    expect(result.paths.data).toBe(path.join(tmp.path, "data", "agentcompany"))
+    expect(result.paths.config).toBe(path.join(tmp.path, "config", "agent-company"))
+    expect(result.paths.data).toBe(path.join(tmp.path, "data", "agent-company"))
   })
 })

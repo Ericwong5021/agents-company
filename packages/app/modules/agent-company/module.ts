@@ -99,6 +99,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/project.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/agents/:agentID",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/agent.get"),
+    })
+    addServerHandler({
       route: "/api/agent-company/projects/:projectID/goal-brief",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/goal-brief.get"),

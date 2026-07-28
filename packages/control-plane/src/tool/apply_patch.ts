@@ -9,6 +9,7 @@ import { SessionCwd } from "./session-cwd"
 import { Patch } from "../patch"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { assertWriteAllowed } from "./external-directory"
+import { isManagedMemoryPath } from "./memory-path-guard"
 import { trimDiff } from "./edit"
 import { LSP } from "../lsp"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
@@ -190,7 +191,7 @@ export const ApplyPatchTool = Tool.define(
 
       // Check permissions if needed
       const permissionChanges = fileChanges.filter(
-        (change) => !AppFileSystem.contains(path.join(Global.Path.data, "memory"), change.movePath ?? change.filePath),
+        (change) => !isManagedMemoryPath(change.movePath ?? change.filePath, Global.Path.data),
       )
       // NOTE: permissionChanges already excludes memory-tree paths (filtered at
       // the `permissionChanges` definition above), so this ask never fires for
@@ -206,7 +207,7 @@ export const ApplyPatchTool = Tool.define(
             filepath: relativePaths.join(", "),
             diff: permissionChanges.map((change) => change.diff).join("\n") + "\n",
             files: files.filter(
-              (file) => !AppFileSystem.contains(path.join(Global.Path.data, "memory"), file.movePath ?? file.filePath),
+              (file) => !isManagedMemoryPath(file.movePath ?? file.filePath, Global.Path.data),
             ),
           },
         })

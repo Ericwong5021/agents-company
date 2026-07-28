@@ -23,6 +23,14 @@ const it = testEffect(
   Layer.mergeAll(Memory.defaultLayer, CrossSpawnSpawner.defaultLayer, Truncate.defaultLayer, Agent.defaultLayer),
 )
 
+async function resetMemory(root: string) {
+  await Promise.all(
+    ["agents", "projects", "sessions", "memory"].map((directory) =>
+      fs.rm(path.join(root, directory), { recursive: true, force: true }),
+    ),
+  )
+}
+
 const ctx = {
   sessionID: SessionID.make("ses_test"),
   messageID: MessageID.make(""),
@@ -40,9 +48,9 @@ describe("memory tool", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
-        yield* Effect.promise(() => fs.writeFile(path.join(root, "global", "auth.md"), "JWT signing notes"))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
+        yield* Effect.promise(() => fs.writeFile(path.join(root, "memory", "auth.md"), "JWT signing notes"))
 
         const info = yield* MemoryTool
         const tool = yield* info.init()
@@ -58,7 +66,7 @@ describe("memory tool", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
+        yield* Effect.promise(() => resetMemory(root))
 
         const info = yield* MemoryTool
         const tool = yield* info.init()

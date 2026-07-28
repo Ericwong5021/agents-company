@@ -5,6 +5,8 @@ import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Plugin } from "../../src/plugin/index"
+import { Config } from "../../src/config"
+import { Global } from "../../src/global"
 import { ModelsDev } from "../../src/provider"
 import { Provider } from "../../src/provider"
 import { ProviderID, ModelID } from "../../src/provider/schema"
@@ -15,6 +17,23 @@ import { makeRuntime } from "../../src/effect/run-service"
 
 const env = makeRuntime(Env.Service, Env.defaultLayer)
 const set = (k: string, v: string) => env.runSync((svc) => svc.set(k, v))
+
+async function provide<R>(input: {
+  directory: string
+  init?: () => Promise<unknown>
+  configDirectory?: string
+  fn: () => R
+}) {
+  const previous = Global.Path.config
+  ;(Global.Path as { config: string }).config = input.directory
+  await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
+  try {
+    return await Instance.provide(input)
+  } finally {
+    ;(Global.Path as { config: string }).config = previous
+    await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
+  }
+}
 
 async function run<A, E>(fn: (provider: Provider.Interface) => Effect.Effect<A, E, never>) {
   return AppRuntime.runPromise(
@@ -68,7 +87,7 @@ test("provider loaded from env variable", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -102,7 +121,7 @@ test("provider loaded from config with apiKey option", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -123,7 +142,7 @@ test("disabled_providers excludes provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -147,7 +166,7 @@ test("enabled_providers restricts to only listed providers", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -177,7 +196,7 @@ test("model whitelist filters models for provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -208,7 +227,7 @@ test("model blacklist excludes specific models", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -243,7 +262,7 @@ test("custom model alias via config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -289,7 +308,7 @@ test("custom provider with npm package", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -346,7 +365,7 @@ test("custom DeepSeek openai-compatible model defaults interleaved reasoning fie
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -380,7 +399,7 @@ test("env variable takes precedence, config merges options", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "env-api-key")
@@ -406,7 +425,7 @@ test("getModel returns model for valid provider/model", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -433,7 +452,7 @@ test("getModel throws ModelNotFoundError for invalid model", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -455,7 +474,7 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       expect(getModel(ProviderID.make("nonexistent-provider"), ModelID.make("some-model"))).rejects.toThrow()
@@ -486,7 +505,7 @@ test("defaultModel returns first available model when no config set", async () =
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -511,7 +530,7 @@ test("defaultModel respects config model setting", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -553,7 +572,7 @@ test("provider with baseURL from config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -591,7 +610,7 @@ test("model cost defaults to zero when not specified", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -626,7 +645,7 @@ test("model options are merged from existing model", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -655,7 +674,7 @@ test("provider removed when all models filtered out", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -678,7 +697,7 @@ test("closest finds model by partial match", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -703,7 +722,7 @@ test("closest returns undefined for nonexistent provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const result = await closest(ProviderID.make("nonexistent"), ["model"])
@@ -733,7 +752,7 @@ test("getModel uses realIdByKey for aliased models", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -779,7 +798,7 @@ test("provider api field sets model api.url", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -819,7 +838,7 @@ test("explicit baseURL overrides api field", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -848,7 +867,7 @@ test("model inherits properties from existing database model", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -876,7 +895,7 @@ test("disabled_providers prevents loading even with env var", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("OPENAI_API_KEY", "test-openai-key")
@@ -900,7 +919,7 @@ test("enabled_providers with empty array allows no providers", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -930,7 +949,7 @@ test("whitelist and blacklist can be combined", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -972,7 +991,7 @@ test("model modalities default correctly", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1015,7 +1034,7 @@ test("model with custom cost values", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1062,7 +1081,7 @@ test("getSmallModel resolves via the lite group", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const model = await getSmallModel(ProviderID.make("small"))
@@ -1090,7 +1109,7 @@ test("getSmallModel respects config small_model override", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const model = await getSmallModel(ProviderID.make("small"))
@@ -1135,7 +1154,7 @@ test("multiple providers can be configured simultaneously", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-anthropic-key")
@@ -1180,7 +1199,7 @@ test("provider with custom npm package", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1214,7 +1233,7 @@ test("model alias name defaults to alias key when id differs", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1254,7 +1273,7 @@ test("provider with multiple env var options only includes apiKey when single en
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("MULTI_ENV_KEY_1", "test-key")
@@ -1296,7 +1315,7 @@ test("provider with single env var includes apiKey automatically", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("SINGLE_ENV_KEY", "my-api-key")
@@ -1333,7 +1352,7 @@ test("model cost overrides existing cost values", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1383,7 +1402,7 @@ test("completely new provider not in database can be configured", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1412,7 +1431,7 @@ test("disabled_providers and enabled_providers interaction", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-anthropic")
@@ -1457,7 +1476,7 @@ test("model with tool_call false", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1492,7 +1511,7 @@ test("model defaults tool_call to true when not specified", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1531,7 +1550,7 @@ test("model headers are preserved", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1570,7 +1589,7 @@ test("provider env fallback - second env var used if first missing", async () =>
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       // Only set fallback, not primary
@@ -1595,7 +1614,7 @@ test("getModel returns consistent results", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1636,7 +1655,7 @@ test("provider name defaults to id when not in database", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1656,7 +1675,7 @@ test("ModelNotFoundError includes suggestions for typos", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1684,7 +1703,7 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1712,7 +1731,7 @@ test("getProvider returns undefined for nonexistent provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const provider = await getProvider(ProviderID.make("nonexistent"))
@@ -1732,7 +1751,7 @@ test("getProvider returns provider info", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1756,7 +1775,7 @@ test("closest returns undefined when no partial match found", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1779,7 +1798,7 @@ test("closest checks multiple query terms in order", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1819,7 +1838,7 @@ test("model limit defaults to DEFAULT_CONTEXT_WINDOW (1M) when not specified (F4
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -1851,7 +1870,7 @@ test("provider options are deeply merged", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -1889,7 +1908,7 @@ test("custom model inherits npm package from models.dev provider config", async 
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("OPENAI_API_KEY", "test-api-key")
@@ -1924,7 +1943,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("OPENROUTER_API_KEY", "test-api-key")
@@ -2057,7 +2076,7 @@ test("model variants are generated for reasoning models", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2095,7 +2114,7 @@ test("model variants can be disabled via config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2138,7 +2157,7 @@ test("model variants can be customized via config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2177,7 +2196,7 @@ test("disabled key is stripped from variant config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2215,7 +2234,7 @@ test("all variants can be disabled via config", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2253,7 +2272,7 @@ test("variant config merges with generated variants", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-api-key")
@@ -2291,7 +2310,7 @@ test("variants filtered in second pass for database models", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("OPENAI_API_KEY", "test-api-key")
@@ -2340,7 +2359,7 @@ test("custom model with variants enabled and disabled", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     fn: async () => {
       const providers = await list()
@@ -2395,7 +2414,7 @@ test("Google Vertex: retains baseURL for custom proxy", async () => {
     },
   })
 
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("GOOGLE_APPLICATION_CREDENTIALS", "test-creds")
@@ -2440,7 +2459,7 @@ test("Google Vertex: supports OpenAI compatible models", async () => {
     },
   })
 
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("GOOGLE_APPLICATION_CREDENTIALS", "test-creds")
@@ -2466,7 +2485,7 @@ test("cloudflare-ai-gateway loads with env variables", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("CLOUDFLARE_ACCOUNT_ID", "test-account")
@@ -2498,7 +2517,7 @@ test("cloudflare-ai-gateway forwards config metadata options", async () => {
       )
     },
   })
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("CLOUDFLARE_ACCOUNT_ID", "test-account")
@@ -2550,7 +2569,7 @@ test("plugin config providers persist after instance dispose", async () => {
     },
   })
 
-  const first = await Instance.provide({
+  const first = await provide({
     directory: tmp.path,
     fn: async () =>
       AppRuntime.runPromise(
@@ -2567,7 +2586,7 @@ test("plugin config providers persist after instance dispose", async () => {
 
   await Instance.disposeAll()
 
-  const second = await Instance.provide({
+  const second = await provide({
     directory: tmp.path,
     fn: async () => list(),
   })
@@ -2598,7 +2617,7 @@ test("plugin config enabled and disabled providers are honored", async () => {
     },
   })
 
-  await Instance.provide({
+  await provide({
     directory: tmp.path,
     init: async () => {
       set("ANTHROPIC_API_KEY", "test-anthropic-key")
@@ -2631,7 +2650,7 @@ test("control-plane and control-plane-go providers are disabled by MimoFreeAuthP
     },
   })
 
-  const providers = await Instance.provide({
+  const providers = await provide({
     directory: base.path,
     fn: async () => list(),
   })

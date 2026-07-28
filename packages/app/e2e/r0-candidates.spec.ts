@@ -105,7 +105,8 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
 
   await setControlPlaneMode(request, "empty-work")
   await open(page, "/inbox", true)
-  await expect(page.getByRole("heading", { name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "用本地 AI 团队交付第一个目标" })).toBeVisible()
+  await expect(page.getByRole("group", { name: "选择开始方式" }).getByRole("button")).toHaveCount(2)
   await capture(page, "first-run")
 
   await setControlPlaneMode(request, "ready")
@@ -119,19 +120,19 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await capture(page, "goal-brief")
 
   await open(page, "/work/project-running")
-  await expect(page.getByText("执行中", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("执行中", { exact: true })).toBeVisible()
   await capture(page, "running")
 
   await open(page, "/work/project-blocked")
-  await expect(page.getByText("受阻", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("受阻", { exact: true })).toBeVisible()
   await capture(page, "blocked")
 
   await open(page, "/work/project-gate")
-  await expect(page.getByText("等待审批", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("等待审批", { exact: true })).toBeVisible()
   await capture(page, "gate")
 
   await open(page, "/work/project-delivered")
-  await expect(page.getByText("已交付", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("已交付", { exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { level: 2, name: "交付版本 1" })).toBeVisible()
   await expect(page.getByText("1 项成果")).toBeVisible()
   await expect(page.getByRole("link", { name: /体验审查报告/ })).toBeVisible()

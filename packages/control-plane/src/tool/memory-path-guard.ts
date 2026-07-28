@@ -2,9 +2,15 @@ import * as path from "path"
 import type { ProjectID } from "../project/schema"
 import type { SessionID } from "../session/schema"
 
-const VALID_SCOPES = ["global", "projects", "sessions"] as const
+const MANAGED_SCOPES = ["memory", "projects", "sessions"] as const
 
 const TASK_ID_RE = /^T\d+(\.\d+)*$/
+
+export function isManagedMemoryPath(target: string, dataRoot: string) {
+  const rel = path.relative(dataRoot, target)
+  if (!rel || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return false
+  return MANAGED_SCOPES.includes(rel.split(path.sep)[0] as (typeof MANAGED_SCOPES)[number])
+}
 
 /**
  * Returns true when the relative path under <root>/memory/ is one of the
@@ -51,7 +57,7 @@ function isCheckpointWriterAllowed(parts: string[]): boolean {
  */
 function formatMainAgentHelp(memoryFile: string, notesFile: string, target: string): string {
   return (
-    `Memory writes go under <memoryRoot>/<scope>/<scope_id>/<key>.md (scope: global | projects | sessions). You attempted: ${target}.\n` +
+    `Memory writes go under <dataRoot>/(memory|projects|sessions)/<scope_id>/<key>.md. You attempted: ${target}.\n` +
     `\n` +
     `Canonical main-agent paths (copy verbatim):\n` +
     `  ${memoryFile}\n` +
@@ -95,27 +101,26 @@ function isReservedForCheckpointWriter(parts: string[]): boolean {
 export function assertMemoryWriteAllowed(input: {
   target: string
   agentName: string
-  memoryRoot: string
+  dataRoot: string
   projectID: ProjectID
   sessionID: SessionID
   taskId?: string
 }): void {
-  const { target, agentName, memoryRoot, projectID, sessionID } = input
-  const memoryFile = path.join(memoryRoot, "projects", projectID, "MEMORY.md")
-  const notesFile = path.join(memoryRoot, "sessions", sessionID, "notes.md")
-  const checkpointFile = path.join(memoryRoot, "sessions", sessionID, "checkpoint.md")
-  const taskMemDir = path.join(memoryRoot, "sessions", sessionID, "tasks")
-  const normalizedRoot = memoryRoot.endsWith(path.sep) ? memoryRoot : memoryRoot + path.sep
-  if (!target.startsWith(normalizedRoot)) return
+  const { target, agentName, dataRoot, projectID, sessionID } = input
+  const memoryFile = path.join(dataRoot, "projects", projectID, "MEMORY.md")
+  const notesFile = path.join(dataRoot, "sessions", sessionID, "notes.md")
+  const checkpointFile = path.join(dataRoot, "sessions", sessionID, "checkpoint.md")
+  const taskMemDir = path.join(dataRoot, "sessions", sessionID, "tasks")
+  if (!isManagedMemoryPath(target, dataRoot)) return
 
-  const rel = path.relative(memoryRoot, target)
+  const rel = path.relative(dataRoot, target)
   const parts = rel.split(path.sep)
 
   if (parts.length < 2) {
     throw new Error(formatMainAgentHelp(memoryFile, notesFile, target))
   }
   const scope = parts[0]
-  if (!VALID_SCOPES.includes(scope as (typeof VALID_SCOPES)[number])) {
+  if (!MANAGED_SCOPES.includes(scope as (typeof MANAGED_SCOPES)[number])) {
     throw new Error(formatMainAgentHelp(memoryFile, notesFile, target))
   }
 

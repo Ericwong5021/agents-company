@@ -219,11 +219,11 @@ describe("MimoAuthPlugin", () => {
   })
 
   describe("chat.headers hook", () => {
-    test("adds X-Mimo-Source header for mimo provider", async () => {
+    test("adds X-AgentCompany-Source header for mimo provider", async () => {
       const hooks = await MimoAuthPlugin(fakeInput)
       const output = { headers: {} as Record<string, string> }
       await hooks["chat.headers"]!({ model: { providerID: "xiaomi" } } as any, output as any)
-      expect(output.headers["X-Mimo-Source"]).toBe("agentcompany-cli")
+      expect(output.headers["X-AgentCompany-Source"]).toBe("agentcompany-cli")
     })
 
     test("does not add header for other providers", async () => {

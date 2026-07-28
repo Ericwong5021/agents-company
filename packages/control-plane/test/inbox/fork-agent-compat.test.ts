@@ -67,6 +67,9 @@ import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
+import { CompanyAgent } from "../../src/company-agent"
+import { AgentMessage } from "../../src/agent-message/agent-message"
+import { Thread } from "../../src/thread/thread"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -140,6 +143,9 @@ function makeLayer() {
     Plugin.defaultLayer,
     Config.defaultLayer,
     ProviderSvc.defaultLayer,
+    CompanyAgent.defaultLayer,
+    AgentMessage.defaultLayer,
+    Thread.defaultLayer,
     lsp,
     mcp,
     AppFileSystem.defaultLayer,

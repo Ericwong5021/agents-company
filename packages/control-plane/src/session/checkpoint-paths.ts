@@ -187,16 +187,23 @@ export function globalMemoryPath(): string {
  */
 export async function migrateProjectMemory(projectID: ProjectID): Promise<void> {
   const upper = memoryPath(projectID)
+  const dir = path.dirname(upper)
   const lower = path.join(path.dirname(upper), "memory.md")
-  if (await Bun.file(upper).exists()) return
-  if (await Bun.file(lower).exists())
-    // Two migrators (e.g. concurrent sessions/writers on the same project) can
-    // both pass the exists() checks; the loser's rename then sees lower already
-    // gone. ENOENT means the peer won — treat as success. Re-throw real FS
-    // errors (permissions, disk).
-    await fs.rename(lower, upper).catch((e) => {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e
-    })
+  const entries = await fs.readdir(dir).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [] as string[]
+    throw error
+  })
+  if (entries.includes("MEMORY.md") || !entries.includes("memory.md")) return
+  const intermediate = path.join(dir, `.memory-${crypto.randomUUID()}.tmp`)
+  const moved = await fs.rename(lower, intermediate).then(
+    () => true,
+    (error) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
+      throw error
+    },
+  )
+  if (!moved) return
+  await fs.rename(intermediate, upper)
 }
 
 /**

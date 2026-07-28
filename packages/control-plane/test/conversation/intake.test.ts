@@ -295,4 +295,48 @@ describe.serial("M2 board message intake", () => {
     })
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(0)
   })
+
+  test.serial("grants a non-board DRI thread access so it can sign the final board decision", async () => {
+    const accepted = await run((conversation) => conversation.sendMessage(input({ intentOverride: "execute" })))
+    const threadID = ConversationThreadID.parse(accepted.threadID!)
+    const expert = { kind: "agent" as const, id: "expert-dri" }
+    const decision = {
+      companyID,
+      threadID,
+      principal: expert,
+      requestID: requestID(),
+      projectScopeID: "cprj_dri_relaxed",
+      driAgentID: expert.id,
+      body: "项目最终收口决策：由非 Board 专家 DRI 签署。",
+    }
+    // 未授予成员资格前，非 Board DRI 无法签署。
+    await expect(run((conversation) => conversation.recordBoardDecision(decision))).rejects.toMatchObject({
+      name: "ConversationThreadNotVisible",
+    })
+
+    await run((conversation) => conversation.ensureThreadAccess({ companyID, threadID, principal: expert }))
+    // 幂等：重复授予不报错。
+    await run((conversation) => conversation.ensureThreadAccess({ companyID, threadID, principal: expert }))
+    const message = await run((conversation) => conversation.recordBoardDecision(decision))
+    expect(message).toMatchObject({
+      author: { kind: "agent", id: "expert-dri" },
+      dri: { kind: "agent", id: "expert-dri" },
+      signalType: "decision",
+    })
+    expect(
+      Database.use((db) =>
+        db.select().from(ConversationThreadTable).where(eq(ConversationThreadTable.id, threadID)).get()?.status,
+      ),
+    ).toBe("completed")
+
+    await expect(
+      run((conversation) =>
+        conversation.ensureThreadAccess({
+          companyID,
+          threadID: ConversationThreadID.parse("cth_missing"),
+          principal: expert,
+        }),
+      ),
+    ).rejects.toMatchObject({ name: "ConversationThreadNotVisible" })
+  })
 })

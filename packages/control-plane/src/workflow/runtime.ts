@@ -74,7 +74,8 @@ interface RunEntry {
   status: RunStatus
   deferred: Deferred.Deferred<RunOutcome>
   fiber: Fiber.Fiber<void> | undefined
-  childActorIDs: Set<string>
+  childActors: Map<string, SessionID>
+  cancelling: boolean
   worktrees: Set<string> // worktree directories pending disposition, for cancel cleanup
   childRunIDs: Set<string> // child workflow runIDs, for recursive cancel/reclaim
   childAgentRunIDs: Set<string>
@@ -364,11 +365,12 @@ export const layer = Layer.effect(
     // kept (success+changed) worktrees are the deliverable and must survive.
     const reclaim = (entry: RunEntry) =>
       Effect.gen(function* () {
+        entry.cancelling = true
         const actor = spawnRef.current
         if (actor) {
           yield* Effect.forEach(
-            [...entry.childActorIDs],
-            (childID) => actor.cancel(entry.sessionID, childID, "graceful").pipe(Effect.ignore),
+            [...entry.childActors],
+            ([childID, sessionID]) => actor.cancel(sessionID, childID, "graceful").pipe(Effect.ignore),
             { concurrency: "unbounded", discard: true },
           )
         }
@@ -444,7 +446,8 @@ export const layer = Layer.effect(
         status: "running",
         deferred,
         fiber: undefined,
-        childActorIDs: new Set<string>(),
+        childActors: new Map<string, SessionID>(),
+        cancelling: false,
         worktrees: new Set<string>(),
         childRunIDs: new Set<string>(),
         childAgentRunIDs: new Set<string>(),
@@ -836,7 +839,12 @@ export const layer = Layer.effect(
                 // fiber detaches. A cancel racing this spawn would otherwise miss
                 // it (the child runs detached in the actor scope, so interrupting
                 // the workflow fiber can't stop it) and leak an orphan. MR104 #2.
-                onActorID: (id) => entry.childActorIDs.add(id),
+                onActorID: (id) => entry.childActors.set(id, input.sessionID),
+                onReady: ({ actorID, sessionID }) =>
+                  Effect.gen(function* () {
+                    entry.childActors.set(actorID, sessionID)
+                    if (entry.cancelling) yield* actor.cancel(sessionID, actorID, "forced").pipe(Effect.ignore)
+                  }),
                 ...(o.schema ? { format: { type: "json_schema" as const, schema: o.schema, retryCount: 2 } } : {}),
               })
               actorID = spawned.actorID
@@ -866,7 +874,7 @@ export const layer = Layer.effect(
                   reason = "timeout"
                 },
               )
-              entry.childActorIDs.delete(spawned.actorID)
+              entry.childActors.delete(spawned.actorID)
               return deliverable
             }),
           )
@@ -958,7 +966,12 @@ export const layer = Layer.effect(
                     // Same MR104 #2 fix as spawnShared: register the child in the
                     // reclaim set synchronously inside the spawn Effect, before its
                     // work fiber detaches, so a racing cancel never orphans it.
-                    onActorID: (id) => entry.childActorIDs.add(id),
+                    onActorID: (id) => entry.childActors.set(id, input.sessionID),
+                    onReady: ({ actorID, sessionID }) =>
+                      Effect.gen(function* () {
+                        entry.childActors.set(actorID, sessionID)
+                        if (entry.cancelling) yield* actor.cancel(sessionID, actorID, "forced").pipe(Effect.ignore)
+                      }),
                     ...(o.schema ? { format: { type: "json_schema" as const, schema: o.schema, retryCount: 2 } } : {}),
                   })
                   actorIDOut = s.actorID
@@ -970,7 +983,7 @@ export const layer = Layer.effect(
                   const outcome = yield* awaitWithTimeout(s.actorID, o, Deferred.await(s.outcome), () => {
                     reason = "timeout"
                   })
-                  entry.childActorIDs.delete(s.actorID)
+                  entry.childActors.delete(s.actorID)
                   if (outcome === null) return null
                   if (outcome.status !== "success") {
                     reason = "actor-error"
