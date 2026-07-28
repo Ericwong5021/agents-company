@@ -882,12 +882,13 @@ export const layer = Layer.effect(
     })
 
     const impl = Service.of({ spawn, spawnForDelegation, cancel, getForkContext } as Interface)
+    const previous = spawnRef.current
     // Late-bind the impl so SessionCheckpoint.tryStartCheckpointWriter can resolve it
     // without forming a layer cycle. See spawn-ref.ts for rationale.
     spawnRef.current = impl
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
-        if (spawnRef.current === impl) spawnRef.current = undefined
+        if (spawnRef.current === impl) spawnRef.current = previous
       }),
     )
     return impl
