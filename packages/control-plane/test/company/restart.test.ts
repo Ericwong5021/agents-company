@@ -4,7 +4,7 @@ import path from "node:path"
 import { describe, expect, test } from "bun:test"
 import { CompanyProviderList, CompanyReadyState } from "../../src/company/schema"
 import { IssuedCredential, LocalPairing } from "../../src/local-auth/schema"
-import { providerTmpdir as tmpdir } from "../fixture/fixture"
+import { availablePort, providerTmpdir as tmpdir } from "../fixture/fixture"
 
 const basic = "Basic " + Buffer.from("agentcompany:restart-secret").toString("base64")
 
@@ -19,9 +19,7 @@ async function waitForHealth(url: string, attempts = 400): Promise<void> {
 }
 
 async function start(home: string) {
-  const reservation = Bun.serve({ port: 0, fetch: () => new Response("reserved") })
-  const port = reservation.port
-  await reservation.stop(true)
+  const port = await availablePort()
   const url = `http://127.0.0.1:${port}`
   const env = {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "AGENTCOMPANY_DB")),

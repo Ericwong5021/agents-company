@@ -1,5 +1,6 @@
 import { $ } from "bun"
 import * as fs from "fs/promises"
+import { createServer } from "node:net"
 import { setTimeout as sleep } from "node:timers/promises"
 import os from "os"
 import path from "path"
@@ -43,6 +44,28 @@ export async function cleanupTmpdir(dir: string, cleanup = clean) {
       `Failed to cleanup temporary directory ${dir}: ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     )
+  })
+}
+
+export async function availablePort() {
+  return new Promise<number>((resolve, reject) => {
+    const server = createServer()
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address()
+      if (!address || typeof address === "string") {
+        server.close()
+        reject(new Error("Unable to allocate an isolated loopback port."))
+        return
+      }
+      server.close((error) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(address.port)
+      })
+    })
   })
 }
 
