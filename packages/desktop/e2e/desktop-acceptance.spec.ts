@@ -183,6 +183,8 @@ test("closes the native Desktop R0 gate through shared WebUI and restart recover
   expect(companyBeforeRestart.status()).toBe(200)
   expect((await companyBeforeRestart.json()) as unknown).toMatchObject({ company: { id: "cmp_local" } })
 
+  await expect(desktopPage.getByRole("heading", { level: 2, name: "用本地 AI 团队交付第一个目标" })).toBeVisible()
+  await desktopPage.getByRole("button", { name: "跳过引导，直接进入空工作区" }).click()
   await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   const draft = desktopPage.getByLabel("描述你希望团队交付的结果")
   await draft.fill(goalDraft)

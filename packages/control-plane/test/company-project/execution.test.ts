@@ -810,6 +810,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 principal: { kind: "user", id: LOCAL_USER_ID },
                 requestID: crypto.randomUUID(),
                 body: "建立可审计的交付保障闭环。",
+                intentOverride: "execute",
               })
               const sessions = yield* Session.Service
               const session = yield* sessions.create({

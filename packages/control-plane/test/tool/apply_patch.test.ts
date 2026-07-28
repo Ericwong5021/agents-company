@@ -591,9 +591,7 @@ describe("tool.apply_patch memory-path-guard", () => {
     const { ctx: base } = makeCtx()
     const ctx = { ...base, taskId: "T3" }
 
-    const crossTask = path.join(
-      Global.Path.data, "memory", "sessions", "ses_test", "tasks", "T5", "progress.md",
-    )
+    const crossTask = path.join(Global.Path.data, "sessions", "ses_test", "tasks", "T5", "progress.md")
     const patchText = `*** Begin Patch\n*** Add File: ${crossTask}\n+x\n*** End Patch`
 
     await Instance.provide({
@@ -609,9 +607,7 @@ describe("tool.apply_patch memory-path-guard", () => {
     const { ctx: base, calls } = makeCtx()
     const ctx = { ...base, taskId: "T3" }
 
-    const ownTask = path.join(
-      Global.Path.data, "memory", "sessions", "ses_test", "tasks", "T3", "progress.md",
-    )
+    const ownTask = path.join(Global.Path.data, "sessions", "ses_test", "tasks", "T3", "progress.md")
     const patchText = `*** Begin Patch\n*** Add File: ${ownTask}\n+ok\n*** End Patch`
 
     await Instance.provide({

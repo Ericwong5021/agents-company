@@ -30,6 +30,7 @@ describe("agent lifecycle routes", () => {
                 id: "test-agent-1",
                 name: "Test Agent 1",
                 description: "A test agent",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )
@@ -73,6 +74,7 @@ describe("agent lifecycle routes", () => {
               svc.create({
                 id: "test-agent-conflict",
                 name: "Test Agent Conflict",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )
@@ -108,6 +110,7 @@ describe("agent lifecycle routes", () => {
               svc.create({
                 id: "test-agent-stop",
                 name: "Test Agent Stop",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )
@@ -212,6 +215,7 @@ describe("agent lifecycle routes", () => {
               svc.create({
                 id: "test-agent-status-busy",
                 name: "Test Agent Status Busy",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )
@@ -287,6 +291,7 @@ describe("agent lifecycle routes", () => {
               svc.create({
                 id: "test-agent-multi-status",
                 name: "Test Agent Multi Status",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )
@@ -326,6 +331,7 @@ describe("agent lifecycle routes", () => {
               svc.create({
                 id: "lifecycle-agent",
                 name: "Lifecycle Agent",
+                lifecycle: "employee",
               }),
             ).pipe(Effect.provide(CompanyAgent.defaultLayer)),
           )

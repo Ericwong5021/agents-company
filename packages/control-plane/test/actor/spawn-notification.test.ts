@@ -4,8 +4,10 @@ import { afterEach, describe, expect } from "bun:test"
 import { Deferred, Effect, Layer } from "effect"
 import { eq, and } from "drizzle-orm"
 import { Agent as AgentSvc } from "../../src/agent/agent"
+import { AgentMessage } from "../../src/agent-message"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
+import { CompanyAgent } from "../../src/company-agent"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -53,6 +55,7 @@ import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
+import { Thread } from "../../src/thread/thread"
 import { InboxTable } from "../../src/inbox/inbox.sql"
 
 afterEach(async () => {
@@ -120,9 +123,12 @@ function makeLayer() {
     Session.defaultLayer,
     Snapshot.defaultLayer,
     LLM.defaultLayer,
+    Thread.defaultLayer,
     Env.defaultLayer,
     AgentSvc.defaultLayer,
+    AgentMessage.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,
@@ -278,12 +284,7 @@ describe("Actor.spawn inbox notifications (Plan 3 / Task 2)", () => {
             db
               .select()
               .from(InboxTable)
-              .where(
-                and(
-                  eq(InboxTable.receiver_session_id, parent.id),
-                  eq(InboxTable.receiver_actor_id, "main"),
-                ),
-              )
+              .where(and(eq(InboxTable.receiver_session_id, parent.id), eq(InboxTable.receiver_actor_id, "main")))
               .all(),
           ),
         )
@@ -328,13 +329,7 @@ describe("Actor.spawn inbox notifications (Plan 3 / Task 2)", () => {
 
         // Inbox table must be empty — checkpoint-writer is gated out.
         const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(eq(InboxTable.receiver_session_id, parent.id))
-              .all(),
-          ),
+          Database.use((db) => db.select().from(InboxTable).where(eq(InboxTable.receiver_session_id, parent.id)).all()),
         )
 
         expect(rows.length).toBe(0)
@@ -376,13 +371,7 @@ describe("Actor.spawn inbox notifications (Plan 3 / Task 2)", () => {
 
         // No inbox row should exist — foreground path skips inbox.send.
         const rows = yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select()
-              .from(InboxTable)
-              .where(eq(InboxTable.receiver_session_id, parent.id))
-              .all(),
-          ),
+          Database.use((db) => db.select().from(InboxTable).where(eq(InboxTable.receiver_session_id, parent.id)).all()),
         )
 
         expect(rows.length).toBe(0)

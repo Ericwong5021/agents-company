@@ -1,11 +1,12 @@
 import fs from "node:fs/promises"
+import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
-import { chromium } from "@playwright/test"
 
 const root = path.resolve(import.meta.dir, "..")
 const appRoot = path.join(root, "packages/app")
 const controlPlaneRoot = path.join(root, "packages/control-plane")
+const chromium = createRequire(path.join(appRoot, "package.json"))("@playwright/test").chromium
 const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-seed-grow-real-"))
 
 async function freePort() {
@@ -21,14 +22,25 @@ async function freePort() {
   return port
 }
 
-async function captureTail(stream: ReadableStream<Uint8Array>) {
+function captureTail(stream: ReadableStream<Uint8Array>) {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
-  let output = ""
-  for (;;) {
-    const chunk = await reader.read()
-    if (chunk.done) return `${output}${decoder.decode()}`.slice(-16_000)
-    output = `${output}${decoder.decode(chunk.value, { stream: true })}`.slice(-16_000)
+  const state = { output: "" }
+  const completed = (async () => {
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) {
+        state.output = `${state.output}${decoder.decode()}`.slice(-16_000)
+        return
+      }
+      state.output = `${state.output}${decoder.decode(chunk.value, { stream: true })}`.slice(-16_000)
+    }
+  })()
+  return {
+    completed,
+    read() {
+      return state.output
+    },
   }
 }
 
@@ -63,10 +75,7 @@ async function terminate(managed: ReturnType<typeof start>) {
       } catch (error) {
         if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ESRCH") throw error
       }
-      const graceful = await Promise.race([
-        managed.child.exited.then(() => true),
-        Bun.sleep(10_000).then(() => false),
-      ])
+      const graceful = await Promise.race([managed.child.exited.then(() => true), Bun.sleep(10_000).then(() => false)])
       if (!graceful && managed.child.exitCode === null) {
         try {
           process.kill(-managed.child.pid, "SIGKILL")
@@ -77,27 +86,69 @@ async function terminate(managed: ReturnType<typeof start>) {
     }
   }
   await managed.child.exited
-  await Promise.allSettled([managed.stdout, managed.stderr])
+  await Promise.allSettled([managed.stdout.completed, managed.stderr.completed])
 }
 
-async function waitForResponse(
-  url: string,
-  process: ReturnType<typeof start>,
-  timeoutMs: number,
-) {
+async function waitForResponse(url: string, managed: ReturnType<typeof start>, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const response = await fetch(url, { signal: AbortSignal.timeout(2_000) }).catch(() => null)
     if (response?.ok) return response
-    if (process.child.exitCode !== null) {
-      throw new Error(
-        `Process exited before ${url} became ready: ${await process.stderr}\n${await process.stdout}`,
-      )
+    if (managed.child.exitCode !== null) {
+      await Promise.allSettled([managed.stdout.completed, managed.stderr.completed])
+      throw new Error(`Process exited before ${url} became ready: ${managed.stderr.read()}\n${managed.stdout.read()}`)
     }
     if (Date.now() >= deadline) {
-      throw new Error(`Timed out waiting for ${url}: ${await process.stderr}`)
+      throw new Error(`Timed out waiting for ${url}: ${managed.stderr.read()}`)
     }
     await Bun.sleep(250)
+  }
+}
+
+function assertReadiness(readiness: { ready?: boolean; checks?: Array<{ status?: string }> }, message: string) {
+  if (
+    readiness.ready !== true ||
+    !readiness.checks?.length ||
+    readiness.checks.some((check) => !["pass", "warning"].includes(check.status ?? ""))
+  ) {
+    throw new Error(message)
+  }
+}
+
+function durableCompanyIdentity(value: unknown) {
+  const state = value as {
+    data_directory?: unknown
+    company?: {
+      id?: unknown
+      name?: unknown
+      data_version?: unknown
+      created_at?: unknown
+      approval_policy?: unknown
+      repository?: unknown
+      board?: Array<{ id?: unknown; role?: unknown }>
+    }
+  }
+  if (
+    typeof state.data_directory !== "string" ||
+    typeof state.company?.id !== "string" ||
+    !state.company.id ||
+    typeof state.company.name !== "string" ||
+    state.company.data_version !== 1 ||
+    typeof state.company.created_at !== "number" ||
+    !Array.isArray(state.company.board) ||
+    state.company.board.length !== 3
+  ) {
+    throw new Error("Control Plane company identity is invalid.")
+  }
+  return {
+    dataDirectory: state.data_directory,
+    id: state.company.id,
+    name: state.company.name,
+    dataVersion: state.company.data_version,
+    createdAt: state.company.created_at,
+    approvalPolicy: state.company.approval_policy,
+    repository: state.company.repository,
+    board: state.company.board.map((member) => ({ id: member.id, role: member.role })),
   }
 }
 
@@ -157,7 +208,7 @@ const webUIEnvironment = {
 
 let controlPlane = startControlPlane()
 let webUI: ReturnType<typeof start> | undefined
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let closeBrowser: (() => Promise<void>) | undefined
 let result: Record<string, unknown> | undefined
 let cleanup: { controlPlanePortClosed: boolean; webUIPortClosed: boolean } | undefined
 
@@ -175,13 +226,15 @@ try {
     ready?: boolean
     checks?: Array<{ status?: string }>
   }
-  if (readiness.ready !== true || readiness.checks?.some((check) => check.status === "fail")) {
-    throw new Error("Real Control Plane readiness response is not ready.")
-  }
+  assertReadiness(readiness, "Real Control Plane readiness response is not ready.")
+  const companyBeforeRestart = durableCompanyIdentity(
+    await (await waitForResponse(`${controlPlaneURL}/company`, controlPlane, 30_000)).json(),
+  )
 
   webUI = start([process.execPath, "--no-orphans", "./script/production-e2e-server.ts"], appRoot, webUIEnvironment)
   await waitForResponse(`${webUIURL}/login`, webUI, 480_000)
-  browser = await chromium.launch()
+  const browser = await chromium.launch()
+  closeBrowser = () => browser.close()
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
   await page.goto(`${webUIURL}/login`, { waitUntil: "domcontentloaded" })
@@ -200,8 +253,16 @@ try {
   if (!snapshotResponse.ok()) {
     throw new Error(`Real WebUI snapshot returned ${snapshotResponse.status()}.`)
   }
-  const snapshot = (await snapshotResponse.json()) as { connection?: string; issue?: unknown }
-  if (snapshot.connection !== "connected" || snapshot.issue) {
+  const snapshot = (await snapshotResponse.json()) as {
+    connection?: string
+    issue?: unknown
+    company?: { id?: string }
+  }
+  if (
+    snapshot.connection !== "connected" ||
+    snapshot.issue ||
+    snapshot.company?.id !== companyBeforeRestart.id
+  ) {
     throw new Error(`Real WebUI did not connect to the candidate Control Plane: ${JSON.stringify(snapshot)}`)
   }
   const visualQA = start([process.execPath, "--no-orphans", "./script/visual-qa.ts"], appRoot, {
@@ -210,9 +271,10 @@ try {
   })
   const visualQAExit = await visualQA.child.exited
   if (visualQAExit !== 0) {
-    throw new Error(`Visual QA failed: ${await visualQA.stderr}\n${await visualQA.stdout}`)
+    await Promise.allSettled([visualQA.stdout.completed, visualQA.stderr.completed])
+    throw new Error(`Visual QA failed: ${visualQA.stderr.read()}\n${visualQA.stdout.read()}`)
   }
-  await Promise.all([visualQA.stdout, visualQA.stderr])
+  await Promise.all([visualQA.stdout.completed, visualQA.stderr.completed])
 
   await terminate(controlPlane)
   if (!(await portClosed(`${controlPlaneURL}/global/health`))) {
@@ -228,16 +290,31 @@ try {
   if (restartedHealth.healthy !== true || restartedHealth.version !== health.version) {
     throw new Error("Restarted Control Plane health does not match the initial candidate.")
   }
-  await waitForResponse(`${controlPlaneURL}/global/readiness`, controlPlane, 180_000)
+  const restartedReadiness = (await (
+    await waitForResponse(`${controlPlaneURL}/global/readiness`, controlPlane, 180_000)
+  ).json()) as {
+    ready?: boolean
+    checks?: Array<{ status?: string }>
+  }
+  assertReadiness(restartedReadiness, "Restarted Control Plane readiness response is not ready.")
+  const companyAfterRestart = durableCompanyIdentity(
+    await (await waitForResponse(`${controlPlaneURL}/company`, controlPlane, 30_000)).json(),
+  )
+  if (JSON.stringify(companyAfterRestart) !== JSON.stringify(companyBeforeRestart)) {
+    throw new Error("Control Plane durable company identity changed across restart.")
+  }
   await page.reload({ waitUntil: "domcontentloaded" })
   await page.waitForURL((url) => url.pathname === "/settings", { timeout: 30_000 })
-  const recoveredSnapshot = (await (
-    await context.request.get(`${webUIURL}/api/agent-company/snapshot`)
-  ).json()) as {
+  const recoveredSnapshot = (await (await context.request.get(`${webUIURL}/api/agent-company/snapshot`)).json()) as {
     connection?: string
     issue?: unknown
+    company?: { id?: string }
   }
-  if (recoveredSnapshot.connection !== "connected" || recoveredSnapshot.issue) {
+  if (
+    recoveredSnapshot.connection !== "connected" ||
+    recoveredSnapshot.issue ||
+    recoveredSnapshot.company?.id !== companyBeforeRestart.id
+  ) {
     throw new Error("WebUI did not reconnect to the restarted Control Plane.")
   }
   result = {
@@ -246,23 +323,27 @@ try {
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
-    }).stdout.toString().trim(),
+    })
+      .stdout.toString()
+      .trim(),
     controlPlane: {
       healthy: health.healthy,
       version: health.version,
       readiness: readiness.ready,
       restarted: true,
+      persistentCompanyIdentity: true,
     },
     webUI: {
       productionPreview: true,
       routes: routes.map(([route]) => route),
       realSnapshot: true,
       reconnected: true,
+      persistentCompanyProjection: true,
     },
     visualQA: "pass",
   }
 } finally {
-  if (browser) await browser.close()
+  if (closeBrowser) await closeBrowser()
   if (webUI) await terminate(webUI)
   await terminate(controlPlane)
   cleanup = {

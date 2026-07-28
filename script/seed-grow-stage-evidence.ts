@@ -238,6 +238,7 @@ export async function generateSeedGrowStageEvidence(options: {
         : new Set(attempts.map((attempt) => attempt.normalizedDigest)).size === 1
           ? "pass"
           : "invalid"
+  assertExactCandidate(options.buildSha, stage)
   const runnerSource = await Bun.file(path.join(root, stageRunnerPath)).text()
   const run = {
     schemaVersion: 1,

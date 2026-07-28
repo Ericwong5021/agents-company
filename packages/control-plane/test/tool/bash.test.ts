@@ -674,7 +674,7 @@ describe("tool.bash permissions", () => {
   }
 
   each("asks for external_directory permission when cd to parent", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ outsideWorkspace: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -830,6 +830,7 @@ describe("tool.bash permissions", () => {
 
   each("asks for external_directory permission when file arg is outside project", async () => {
     await using outerTmp = await tmpdir({
+      outsideWorkspace: true,
       init: async (dir) => {
         await Bun.write(path.join(dir, "outside.txt"), "x")
       },

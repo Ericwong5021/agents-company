@@ -3,9 +3,11 @@ import { FetchHttpClient } from "effect/unstable/http"
 import { afterEach, describe, expect } from "bun:test"
 import { Deferred, Effect, Layer } from "effect"
 import { Agent as AgentSvc } from "../../src/agent/agent"
+import { AgentMessage } from "../../src/agent-message"
 import { Auth } from "../../src/auth"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
+import { CompanyAgent } from "../../src/company-agent"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -51,6 +53,7 @@ import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
+import { Thread } from "../../src/thread/thread"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -117,9 +120,12 @@ function makeLayer() {
     Session.defaultLayer,
     Snapshot.defaultLayer,
     LLM.defaultLayer,
+    Thread.defaultLayer,
     Env.defaultLayer,
     AgentSvc.defaultLayer,
+    AgentMessage.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,

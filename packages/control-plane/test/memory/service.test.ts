@@ -18,19 +18,27 @@ afterEach(async () => {
 
 const it = testEffect(Layer.mergeAll(Memory.defaultLayer, CrossSpawnSpawner.defaultLayer))
 
+async function resetMemory(root: string) {
+  await Promise.all(
+    ["agents", "projects", "sessions", "memory"].map((directory) =>
+      fs.rm(path.join(root, directory), { recursive: true, force: true }),
+    ),
+  )
+}
+
 describe("Memory.search", () => {
   it.live("returns BM25-ranked matches across all scopes when no scope filter", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
         yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, "global", "auth.md"), "JWT signing with RS256 algorithm"),
+          fs.writeFile(path.join(root, "memory", "auth.md"), "JWT signing with RS256 algorithm"),
         )
         yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, "global", "perf.md"), "database query optimization tips"),
+          fs.writeFile(path.join(root, "memory", "perf.md"), "database query optimization tips"),
         )
 
         const results = yield* memory.search({ query: "JWT" })
@@ -46,15 +54,15 @@ describe("Memory.search", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
         yield* Effect.promise(() => fs.mkdir(path.join(root, "sessions/ses_a"), { recursive: true }))
-        yield* Effect.promise(() => fs.writeFile(path.join(root, "global", "x.md"), "matching content"))
+        yield* Effect.promise(() => fs.writeFile(path.join(root, "memory", "x.md"), "matching content"))
         yield* Effect.promise(() => fs.writeFile(path.join(root, "sessions/ses_a", "x.md"), "matching content"))
 
         const globalOnly = yield* memory.search({ query: "matching", scope: "global" })
         expect(globalOnly.length).toBe(1)
-        expect(globalOnly[0].path).toContain("/global/")
+        expect(globalOnly[0].path).toContain("/memory/")
 
         const sessionOnly = yield* memory.search({ query: "matching", scope: "sessions" })
         expect(sessionOnly.length).toBe(1)
@@ -68,7 +76,7 @@ describe("Memory.search", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
+        yield* Effect.promise(() => resetMemory(root))
         yield* Effect.promise(() => fs.mkdir(path.join(root, "sessions/ses_a"), { recursive: true }))
         yield* Effect.promise(() => fs.mkdir(path.join(root, "sessions/ses_b"), { recursive: true }))
         yield* Effect.promise(() => fs.writeFile(path.join(root, "sessions/ses_a", "x.md"), "alpha content"))
@@ -86,10 +94,10 @@ describe("Memory.search", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
         for (let i = 0; i < 15; i++) {
-          yield* Effect.promise(() => fs.writeFile(path.join(root, "global", `f${i}.md`), `match ${i}`))
+          yield* Effect.promise(() => fs.writeFile(path.join(root, "memory", `f${i}.md`), `match ${i}`))
         }
 
         const r5 = yield* memory.search({ query: "match", limit: 5 })
@@ -103,10 +111,10 @@ describe("Memory.search", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
         yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, "global", "x.md"), 'literal "quoted" content with stars'),
+          fs.writeFile(path.join(root, "memory", "x.md"), 'literal "quoted" content with stars'),
         )
 
         // Each of these contains a char that would crash the FTS5 MATCH parser
@@ -124,16 +132,16 @@ describe("Memory.search", () => {
       Effect.gen(function* () {
         const memory = yield* Memory.Service
         const root = yield* memory.root()
-        yield* Effect.promise(() => fs.rm(root, { recursive: true, force: true }))
-        yield* Effect.promise(() => fs.mkdir(path.join(root, "global"), { recursive: true }))
+        yield* Effect.promise(() => resetMemory(root))
+        yield* Effect.promise(() => fs.mkdir(path.join(root, "memory"), { recursive: true }))
         yield* Effect.promise(() =>
           fs.writeFile(
-            path.join(root, "global", "doc.md"),
+            path.join(root, "memory", "doc.md"),
             "T5.3 closure conversion abandoned — out of v0.1 scope per spec.md §4.4",
           ),
         )
         yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, "global", "other.md"), "unrelated text only"),
+          fs.writeFile(path.join(root, "memory", "other.md"), "unrelated text only"),
         )
 
         // Identifier with dot: tokenizer splits T5.3 into [t5, 3]; OR-join +

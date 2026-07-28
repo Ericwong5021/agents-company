@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Deferred, Effect, Stream } from "effect"
 import * as fs from "fs/promises"
-import { tmpdir } from "../fixture/fixture"
+import { provideProjectProviderSettings, tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Plugin, HookEvent } from "../../src/plugin"
 import { Bus } from "../../src/bus"
@@ -136,6 +136,7 @@ describe("CheckpointSplitoverPlugin spawn-loop integration", () => {
           )
         },
       })
+      await using _providerSettings = await provideProjectProviderSettings(tmp.path)
 
       const { outcome, reenteredEvents } = await Instance.provide({
         directory: tmp.path,
@@ -252,6 +253,7 @@ describe("CheckpointContext producer (tryStartCheckpointWriter)", () => {
           )
         },
       })
+      await using _providerSettings = await provideProjectProviderSettings(tmp.path)
 
       // Reset CheckpointContext so leftover entries from earlier tests in
       // the same process don't pollute the size assertion.
@@ -421,6 +423,7 @@ describe("parentSessionID end-to-end (Axis A wiring)", () => {
           )
         },
       })
+      await using _providerSettings = await provideProjectProviderSettings(tmp.path)
 
       const { reenteredEvents, parentID, childID } = await Instance.provide({
         directory: tmp.path,

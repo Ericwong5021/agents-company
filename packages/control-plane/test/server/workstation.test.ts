@@ -109,6 +109,7 @@ describe("workstation routes", () => {
             svc.create({
               id: "department-lead",
               name: "Department Lead",
+              lifecycle: "employee",
               org_layer: "department",
               department: "engineering",
               responsibilities: ["Translate strategy into project plans"],

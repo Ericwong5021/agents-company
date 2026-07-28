@@ -37,11 +37,11 @@ function makeCtx(calls: string[]): Tool.Context {
 
 describe("askEditUnlessMemory", () => {
   it.live(
-    "skips the edit ask for a path under <data>/memory/",
+    "skips the edit ask for a managed memory path",
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const calls: string[] = []
-        const target = path.join(Global.Path.data, "memory", "sessions", "ses_x", "checkpoint.md")
+        const target = path.join(Global.Path.data, "sessions", "ses_x", "checkpoint.md")
         yield* askEditUnlessMemory(makeCtx(calls), target, { patterns: ["checkpoint.md"], diff: "" })
         expect(calls).toEqual([]) // no edit ask
       }),
@@ -55,6 +55,18 @@ describe("askEditUnlessMemory", () => {
         const calls: string[] = []
         const target = path.join(Global.Path.data, "not-memory", "foo.md")
         yield* askEditUnlessMemory(makeCtx(calls), target, { patterns: ["foo.md"], diff: "" })
+        expect(calls).toEqual(["edit"])
+      }),
+    ),
+  )
+
+  it.live(
+    "asks for project metadata outside managed memory files",
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const calls: string[] = []
+        const target = path.join(Global.Path.data, "projects", "p_test", ".git", "config")
+        yield* askEditUnlessMemory(makeCtx(calls), target, { patterns: ["config"], diff: "" })
         expect(calls).toEqual(["edit"])
       }),
     ),

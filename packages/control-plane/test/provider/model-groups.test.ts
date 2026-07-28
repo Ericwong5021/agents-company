@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test"
 import path from "path"
 
-import { tmpdir } from "../fixture/fixture"
+import { providerTmpdir as tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { Provider } from "../../src/provider"

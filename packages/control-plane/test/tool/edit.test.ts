@@ -13,6 +13,7 @@ import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
 import { Truncate } from "../../src/tool"
 import { SessionID, MessageID } from "../../src/session/schema"
+import type * as Tool from "../../src/tool/tool"
 
 const ctx = {
   sessionID: SessionID.make("ses_test-edit-session"),
@@ -44,13 +45,37 @@ afterAll(async () => {
   await runtime.dispose()
 })
 
+function afterRead(filePath: string, input: Tool.Context) {
+  return {
+    ...input,
+    messages: [
+      {
+        parts: [
+          {
+            type: "tool",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { filePath },
+            },
+          },
+        ],
+      },
+    ] as unknown as Tool.Context["messages"],
+  }
+}
+
 const resolve = () =>
   runtime.runPromise(
     Effect.gen(function* () {
       const info = yield* EditTool
       return yield* info.init()
     }),
-  )
+  ).then((edit) => ({
+    ...edit,
+    execute: (input: Parameters<typeof edit.execute>[0], context: Tool.Context) =>
+      edit.execute(input, input.oldString === "" ? context : afterRead(input.filePath, context)),
+  }))
 
 const subscribeBus = <D extends BusEvent.Definition>(def: D, callback: () => unknown) =>
   runtime.runPromise(Bus.Service.use((bus) => bus.subscribeCallback(def, callback)))

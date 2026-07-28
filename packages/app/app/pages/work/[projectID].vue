@@ -76,7 +76,11 @@ const composerTarget = computed<ComposerTarget | undefined>(() => work.value?.av
 
 // 右侧上下文面板只依据真实数据存在与否派生；Thread 明细需后端接线，此处不虚构。
 const panels = computed(() => availableContextPanels({
-  hasGoalBrief: goalBrief.value?.kind === "goal_brief" || goalBrief.value?.kind === "legacy_charter",
+  hasGoalBrief:
+    goalBriefStatus.value === "pending"
+    || Boolean(goalBriefError.value)
+    || goalBrief.value?.kind === "goal_brief"
+    || goalBrief.value?.kind === "legacy_charter",
   gates: detail.value?.gates.length ?? 0,
   artifacts: detail.value?.artifacts.length ?? 0,
   agents: detail.value?.recruitment.candidates.length ?? 0,

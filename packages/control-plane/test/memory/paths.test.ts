@@ -3,7 +3,7 @@ import { parsePath, buildPath, resolveProjectId } from "../../src/memory/paths"
 
 describe("parsePath", () => {
   test("global scope, key is filename", () => {
-    expect(parsePath("/data/memory/global/tooling-prefs.md")).toEqual({
+    expect(parsePath("/data/memory/tooling-prefs.md")).toEqual({
       scope: "global",
       scope_id: "",
       type: "free",
@@ -12,7 +12,7 @@ describe("parsePath", () => {
   })
 
   test("project memory: <pid>/memory.md", () => {
-    expect(parsePath("/data/memory/projects/uuid-1/memory.md")).toEqual({
+    expect(parsePath("/data/projects/uuid-1/memory.md")).toEqual({
       scope: "projects",
       scope_id: "uuid-1",
       type: "memory",
@@ -21,7 +21,7 @@ describe("parsePath", () => {
   })
 
   test("project memory spillover: <pid>/memory-rules.md", () => {
-    expect(parsePath("/data/memory/projects/uuid-1/memory-rules.md")).toEqual({
+    expect(parsePath("/data/projects/uuid-1/memory-rules.md")).toEqual({
       scope: "projects",
       scope_id: "uuid-1",
       type: "memory",
@@ -30,7 +30,7 @@ describe("parsePath", () => {
   })
 
   test("uppercase MEMORY.md detects as memory type", () => {
-    expect(parsePath("/data/memory/projects/uuid-1/MEMORY.md")).toEqual({
+    expect(parsePath("/data/projects/uuid-1/MEMORY.md")).toEqual({
       scope: "projects",
       scope_id: "uuid-1",
       type: "memory",
@@ -39,7 +39,7 @@ describe("parsePath", () => {
   })
 
   test("uppercase MEMORY-rules.md spillover detects as memory type", () => {
-    expect(parsePath("/data/memory/projects/uuid-1/MEMORY-rules.md")).toEqual({
+    expect(parsePath("/data/projects/uuid-1/MEMORY-rules.md")).toEqual({
       scope: "projects",
       scope_id: "uuid-1",
       type: "memory",
@@ -48,7 +48,7 @@ describe("parsePath", () => {
   })
 
   test("session checkpoint: <sid>/checkpoint.md", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/checkpoint.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/checkpoint.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "checkpoint",
@@ -57,7 +57,7 @@ describe("parsePath", () => {
   })
 
   test("session checkpoint spillover: <sid>/checkpoint-lexer.md", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/checkpoint-lexer.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/checkpoint-lexer.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "checkpoint",
@@ -66,7 +66,7 @@ describe("parsePath", () => {
   })
 
   test("v4 <sid>/checkpoint/snapshot.md is now free type (legacy)", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/checkpoint/snapshot.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/checkpoint/snapshot.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "free",
@@ -75,7 +75,7 @@ describe("parsePath", () => {
   })
 
   test("v4 <pid>/pinned.md is now free type (legacy)", () => {
-    expect(parsePath("/data/memory/projects/uuid-1/pinned.md")).toEqual({
+    expect(parsePath("/data/projects/uuid-1/pinned.md")).toEqual({
       scope: "projects",
       scope_id: "uuid-1",
       type: "free",
@@ -84,7 +84,7 @@ describe("parsePath", () => {
   })
 
   test("task progress", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/tasks/T1.2/progress.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/tasks/T1.2/progress.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "progress",
@@ -93,7 +93,7 @@ describe("parsePath", () => {
   })
 
   test("project free file", () => {
-    expect(parsePath("/data/memory/projects/abc123def456/conventions.md")).toEqual({
+    expect(parsePath("/data/projects/abc123def456/conventions.md")).toEqual({
       scope: "projects",
       scope_id: "abc123def456",
       type: "free",
@@ -102,7 +102,7 @@ describe("parsePath", () => {
   })
 
   test("nested key under task", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/tasks/T3/notes/auth.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/tasks/T3/notes/auth.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "free",
@@ -115,7 +115,7 @@ describe("parsePath", () => {
   })
 
   test("session task narrative: progress.md under sessions scope (multi-segment key)", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/tasks/T1/progress.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/tasks/T1/progress.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "progress",
@@ -125,7 +125,7 @@ describe("parsePath", () => {
 
 
   test("session task narrative: notes.md under sessions scope", () => {
-    expect(parsePath("/data/memory/sessions/ses_abc/tasks/T1/notes.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/tasks/T1/notes.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "notes",
@@ -137,7 +137,7 @@ describe("parsePath", () => {
     // Aligns with memory-path-guard's TASK_NARR_RE which only allows bare
     // notes.md — multi-segment notes/<sub>.md is not part of the writer
     // allowlist, so it shouldn't be tagged with the privileged "notes" type.
-    expect(parsePath("/data/memory/sessions/ses_abc/tasks/T1/notes/draft.md")).toEqual({
+    expect(parsePath("/data/sessions/ses_abc/tasks/T1/notes/draft.md")).toEqual({
       scope: "sessions",
       scope_id: "ses_abc",
       type: "free",
@@ -146,50 +146,50 @@ describe("parsePath", () => {
   })
 
   test("legacy <root>/tasks/<id>/ path no longer matches (tasks dropped from Scope)", () => {
-    expect(parsePath("/data/memory/tasks/T1/progress.md")).toBeNull()
+    expect(parsePath("/data/tasks/T1/progress.md")).toBeNull()
   })
 })
 
 describe("buildPath", () => {
   test("session checkpoint", () => {
     expect(
-      buildPath({ root: "/data/memory", scope: "sessions", scope_id: "ses_abc", key: "checkpoint" }),
-    ).toBe("/data/memory/sessions/ses_abc/checkpoint.md")
+      buildPath({ root: "/data", scope: "sessions", scope_id: "ses_abc", key: "checkpoint" }),
+    ).toBe("/data/sessions/ses_abc/checkpoint.md")
   })
 
   test("global free", () => {
-    expect(buildPath({ root: "/data/memory", scope: "global", key: "tooling" })).toBe(
-      "/data/memory/global/tooling.md",
+    expect(buildPath({ root: "/data", scope: "global", key: "tooling" })).toBe(
+      "/data/memory/tooling.md",
     )
   })
 
   test("rejects key with .. segment", () => {
     expect(() =>
-      buildPath({ root: "/data/memory", scope: "sessions", scope_id: "ses_abc", key: "../escape" }),
+      buildPath({ root: "/data", scope: "sessions", scope_id: "ses_abc", key: "../escape" }),
     ).toThrow(/invalid path component/)
   })
 
   test("rejects scope_id with .. segment", () => {
     expect(() =>
-      buildPath({ root: "/data/memory", scope: "sessions", scope_id: "..", key: "checkpoint" }),
+      buildPath({ root: "/data", scope: "sessions", scope_id: "..", key: "checkpoint" }),
     ).toThrow(/invalid path component/)
   })
 
   test("rejects key starting with /", () => {
     expect(() =>
-      buildPath({ root: "/data/memory", scope: "global", key: "/etc/passwd" }),
+      buildPath({ root: "/data", scope: "global", key: "/etc/passwd" }),
     ).toThrow(/invalid path component/)
   })
 
   test("rejects scope_id starting with /", () => {
     expect(() =>
-      buildPath({ root: "/data/memory", scope: "sessions", scope_id: "/abs", key: "checkpoint" }),
+      buildPath({ root: "/data", scope: "sessions", scope_id: "/abs", key: "checkpoint" }),
     ).toThrow(/invalid path component/)
   })
 
   test("rejects nested .. inside multi-segment key", () => {
     expect(() =>
-      buildPath({ root: "/data/memory", scope: "sessions", scope_id: "ses_abc", key: "tasks/T1/notes/../sneak" }),
+      buildPath({ root: "/data", scope: "sessions", scope_id: "ses_abc", key: "tasks/T1/notes/../sneak" }),
     ).toThrow(/invalid path component/)
   })
 })

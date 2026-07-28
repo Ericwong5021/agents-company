@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import fs from "node:fs/promises"
 import { Effect } from "effect"
 import type { Tool } from "../../src/tool"
 import { Instance } from "../../src/project/instance"
 import { assertExternalDirectory } from "../../src/tool/external-directory"
+import { resolveWriteTargetPath } from "../../src/tool/memory-path-guard"
 import { Filesystem } from "../../src/util"
 import { tmpdir } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
@@ -67,7 +69,7 @@ describe("tool.assertExternalDirectory", () => {
 
     const directory = "/tmp/project"
     const target = "/tmp/outside/file.txt"
-    const expected = glob(path.join(path.dirname(target), "*"))
+    const expected = glob(path.join(path.dirname(resolveWriteTargetPath(target)), "*"))
 
     await Instance.provide({
       directory,
@@ -87,7 +89,7 @@ describe("tool.assertExternalDirectory", () => {
 
     const directory = "/tmp/project"
     const target = "/tmp/outside"
-    const expected = glob(path.join(target, "*"))
+    const expected = glob(path.join(resolveWriteTargetPath(target), "*"))
 
     await Instance.provide({
       directory,
@@ -118,18 +120,10 @@ describe("tool.assertExternalDirectory", () => {
   test("does NOT ask for paths under the memory root (defers to memory-path-guard)", async () => {
     const { requests, ctx } = makeCtx()
 
-    const memTarget = path.join(
-      Global.Path.data,
-      "memory",
-      "sessions",
-      "ses_test",
-      "tasks",
-      "T3",
-      "progress.md",
-    )
+    const memTarget = path.join(Global.Path.data, "sessions", "ses_test", "tasks", "T3", "progress.md")
 
     await Instance.provide({
-      directory: "/tmp/project", // memTarget is OUTSIDE the project dir on purpose
+      directory: "/tmp/project",
       fn: async () => {
         await assertExternalDirectory(ctx, memTarget)
       },
@@ -148,6 +142,41 @@ describe("tool.assertExternalDirectory", () => {
         await assertExternalDirectory(ctx, "/tmp/outside/file.txt")
       },
     })
+
+    expect(requests.find((r) => r.permission === "external_directory")).toBeDefined()
+  })
+
+  test("asks for project metadata outside the managed memory files", async () => {
+    const { requests, ctx } = makeCtx()
+    const target = path.join(Global.Path.data, "projects", "p_test", ".git", "config")
+
+    await Instance.provide({
+      directory: "/tmp/project",
+      fn: async () => {
+        await assertExternalDirectory(ctx, target)
+      },
+    })
+
+    expect(requests.find((r) => r.permission === "external_directory")).toBeDefined()
+  })
+
+  test("asks when a managed-looking path escapes through a symlink", async () => {
+    const { requests, ctx } = makeCtx()
+    await using outside = await tmpdir()
+    const sessionDir = path.join(Global.Path.data, "sessions", `ses_link_${crypto.randomUUID()}`)
+    await fs.mkdir(path.dirname(sessionDir), { recursive: true })
+    await fs.symlink(outside.path, sessionDir)
+
+    try {
+      await Instance.provide({
+        directory: "/tmp/project",
+        fn: async () => {
+          await assertExternalDirectory(ctx, path.join(sessionDir, "notes.md"))
+        },
+      })
+    } finally {
+      await fs.rm(sessionDir, { force: true })
+    }
 
     expect(requests.find((r) => r.permission === "external_directory")).toBeDefined()
   })

@@ -30,6 +30,10 @@ async function enterWorkspace(page: Page, path = "/inbox") {
   await page.waitForURL((url) => url.pathname === path)
 }
 
+async function chooseRealWorkspace(page: Page) {
+  await page.getByRole("button", { name: /连接真实工作区/ }).click()
+}
+
 async function setControlPlaneMode(request: APIRequestContext, mode: string, reset = false) {
   const response = await request.put(`${controlPlaneURL}/__test/mode`, { data: { mode, reset } })
   expect(response.ok()).toBe(true)
@@ -319,8 +323,9 @@ test("@r0-shell renders shared work and evidence projections without raw status"
 
   await page.goto("/work/project-unavailable")
   await expect(page.getByRole("heading", { level: 1, name: "恢复未知工作" })).toBeVisible()
-  await expect(page.getByText("状态不可用")).toBeVisible()
-  await expect(page.getByText("缺少决定当前状态所需的事实。")).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("状态不可用")).toBeVisible()
+  await page.getByLabel("上下文面板").getByRole("tab", { name: "诊断" }).click()
+  await expect(page.getByLabel("上下文面板").getByText("缺少决定当前状态所需的事实。")).toBeVisible()
   await expect(page.locator(".ac-progress")).toHaveCount(0)
   await expect(page.getByRole("heading", { name: /交付/ })).toHaveCount(0)
   await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
@@ -342,7 +347,7 @@ test("@r0-shell renders shared work and evidence projections without raw status"
 
   await page.goto("/work/project-delivered")
   await expect(page.getByRole("button", { name: /接受交付|要求修改/ })).toHaveCount(0)
-  const artifactLink = page.getByRole("link", { name: /体验审查报告/ })
+  const artifactLink = page.locator("a.ac-artifact-link", { hasText: "体验审查报告" })
   await expect(artifactLink).toHaveAttribute("href", "/library/artifacts/project-delivered/artifact-report")
   await artifactLink.click()
   await expect(page).toHaveURL((url) => url.pathname === "/library/artifacts/project-delivered/artifact-report")
@@ -378,22 +383,24 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
 }, testInfo) => {
   await enterWorkspace(page, "/work/project-gate")
   await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
-  await expect(page.getByText("等待审批", { exact: true })).toBeVisible()
-  await expect(page.getByRole("heading", { level: 2, name: "目标摘要" })).toBeVisible()
-  await expect(page.getByText("版本 2")).toBeVisible()
-  await expect(page.getByText("用户确认")).toBeVisible()
-  await expect(page.getByText("形成可审批的本地发布候选，并保留完整验证证据。")).toBeVisible()
-  await expect(page.getByRole("heading", { level: 3, name: "交付内容" })).toBeVisible()
-  await expect(page.getByRole("heading", { level: 3, name: "验收标准" })).toBeVisible()
-  await expect(page.getByRole("heading", { level: 3, name: "约束" })).toBeVisible()
-  await expect(page.locator('[aria-disabled="true"]').filter({ hasText: "批准" })).toBeVisible()
-  await expect(page.getByRole("button", { name: /批准|拒绝|要求修改|开始执行/ })).toHaveCount(0)
+  await expect(page.getByLabel("高信号工作流").getByText("等待审批", { exact: true })).toBeVisible()
+  const goalPanel = page.getByLabel("上下文面板")
+  await expect(goalPanel.getByRole("tab", { name: "目标" })).toHaveAttribute("aria-selected", "true")
+  await expect(goalPanel.getByText("用户确认", { exact: true })).toBeVisible()
+  await expect(goalPanel.getByText("2", { exact: true })).toBeVisible()
+  await expect(goalPanel.getByText("形成可审批的本地发布候选，并保留完整验证证据。")).toBeVisible()
+  await expect(goalPanel.getByRole("heading", { level: 3, name: "约束" })).toBeVisible()
+  await Promise.all(
+    ["批准", "驳回", "请求修改"].map((name) =>
+      expect(page.getByLabel("高信号工作流").getByRole("button", { name, exact: true })).toBeDisabled(),
+    ),
+  )
   await screenshotFromTop(page, testInfo.outputPath("goal-brief-gate.png"))
 
   await page.goto("/work/project-blocked")
-  await expect(page.getByText("旧数据 · 只读")).toBeVisible()
-  await expect(page.getByText(/旧项目 Charter 读取的只读目标摘要/)).toBeVisible()
-  await expect(page.getByText("整理旧项目的验收证据。")).toBeVisible()
+  await expect(goalPanel.getByText("旧项目 Charter", { exact: true })).toBeVisible()
+  await expect(goalPanel.getByText("保持旧数据只读", { exact: true })).toBeVisible()
+  await expect(goalPanel.getByText("整理旧项目的验收证据。")).toBeVisible()
 
   await setControlPlaneMode(request, "brief-invalid")
   await page.goto("/work/project-gate")
@@ -410,18 +417,17 @@ test("@r0-shell @scenario-s12 @criterion-s12-c1 @criterion-s12-c2 distinguishes 
   await expect(
     page.getByRole("heading", {
       level: 2,
-      name: "让本地 AI 团队接手第一个交付目标",
+      name: "用本地 AI 团队交付第一个目标",
     }),
   ).toBeVisible()
-  await expect(page.getByText(/过程可控的团队执行/)).toBeVisible()
-  await expect(page.getByText(/可验证成果/)).toBeVisible()
+  await expect(page.getByRole("button", { name: /连接真实工作区/ })).toBeVisible()
+  await expect(page.getByRole("button", { name: /查看演示/ })).toBeVisible()
+  await expect(page.getByRole("button", { name: "跳过引导，直接进入空工作区" })).toBeVisible()
   await expect(page.locator(".ac-work-card, .ac-team-card, .ac-progress")).toHaveCount(0)
   await expect(page.locator("body")).not.toContainText(/小岚|阿衡|准备本地发布|输出体验审查报告/)
-  await expect(page.locator(".ac-empty-state__action")).toHaveCount(1)
-  const nextStep = page.getByRole("link", { name: "连接 Provider" })
-  await expect(nextStep).toHaveAttribute("href", "/settings")
-  await nextStep.focus()
-  await expect(nextStep).toBeFocused()
+  await screenshotFromTop(page, testInfo.outputPath("first-run-empty.png"))
+  await chooseRealWorkspace(page)
+  await expect(page).toHaveURL((url) => url.pathname === "/settings")
   await expect(
     page.getByRole("link", {
       name: /本地连接状态：需要配置，还未连接模型 Provider/,
@@ -440,7 +446,6 @@ test("@r0-shell @scenario-s12 @criterion-s12-c1 @criterion-s12-c2 distinguishes 
   expect(snapshot.messages).toEqual([])
   const requests = await request.get(`${controlPlaneURL}/__test/requests`).then((response) => response.json())
   expect(requests.items.some((item: { path: string }) => item.path.endsWith("/messages"))).toBe(false)
-  await screenshotFromTop(page, testInfo.outputPath("first-run-empty.png"))
 
   await setControlPlaneMode(request, "quiet-work")
   await page.goto("/inbox")
@@ -457,6 +462,7 @@ test("@r0-shell @scenario-s05 preserves an unsent goal draft and page context th
   test.setTimeout(45_000)
   await setControlPlaneMode(request, "empty-work-ready")
   await enterWorkspace(page)
+  await chooseRealWorkspace(page)
   const draft = "整理本地研究材料，形成结论与来源逐项对应的报告。"
   const input = page.getByLabel("描述你希望团队交付的结果")
   await input.fill(draft)
@@ -510,6 +516,7 @@ test("@r0-shell keeps the goal editable and reports truthfully when browser stor
   })
   await setControlPlaneMode(request, "empty-work-ready")
   await enterWorkspace(page)
+  await chooseRealWorkspace(page)
   const input = page.getByLabel("描述你希望团队交付的结果")
   await input.fill("形成一份可验证的本地报告。")
   await expect(input).toHaveValue("形成一份可验证的本地报告。")
@@ -523,6 +530,7 @@ test("@r0-shell generates an unbound Goal Brief and retries structured failure i
 }) => {
   await setControlPlaneMode(request, "empty-work-ready")
   await enterWorkspace(page)
+  await chooseRealWorkspace(page)
   const draft = "形成一份验收结论和证据来源都可追溯的本地报告。"
   const input = page.getByLabel("描述你希望团队交付的结果")
   await input.fill(draft)
@@ -535,8 +543,8 @@ test("@r0-shell generates an unbound Goal Brief and retries structured failure i
   await expect(input).toBeFocused()
   await page.getByRole("button", { name: "重试" }).click()
 
-  await expect(page.getByRole("heading", { level: 3, name: "只读目标摘要" })).toBeVisible()
-  await expect(page.getByText("未立项", { exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 3, name: "系统理解的目标" })).toBeVisible()
+  await expect(page.getByText("先看 Brief", { exact: true })).toBeVisible()
   await expect(page.getByText(/没有绑定 Project，也不会开始执行/)).toBeVisible()
   await expect(input).toHaveValue(draft)
   const generated = await request
@@ -615,7 +623,7 @@ test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ pag
 
   await page.reload()
   const inboxLink = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "Inbox" })
-  for (let tabIndex = 0; tabIndex < 8; tabIndex += 1) {
+  for (let tabIndex = 0; tabIndex < 16; tabIndex += 1) {
     await page.keyboard.press("Tab")
     if (await inboxLink.evaluate(element => element === document.activeElement)) break
   }
@@ -859,16 +867,18 @@ test("@r0-shell @scenario-s05 @criterion-s05-c1 @criterion-s05-c2 @criterion-s05
 test("@r0-shell preserves unsaved settings through in-place recovery and retry", async ({ page, request }) => {
   await enterWorkspace(page, "/settings")
   await expect(page.getByRole("link", { name: /本地连接状态：已连接/ })).toBeVisible()
+  await page.getByRole("radio", { name: /自定义/ }).click()
   await page.getByLabel("API 地址").fill("https://provider.example.test/")
-  await page.getByLabel("模型", { exact: true }).fill("model-under-edit")
   await page.getByLabel("API 密钥").fill("unsaved-local-key")
+  await page.getByText("高级设置", { exact: true }).click()
+  await page.getByLabel("服务标识").fill("provider-under-edit")
 
   await setControlPlaneMode(request, "health-500", true)
   await page.getByRole("button", { name: "刷新本地运行状态" }).click()
   await expect(page.getByRole("heading", { level: 2, name: "Control Plane 返回服务错误" })).toBeVisible()
   await expect(page.getByLabel("API 地址")).toHaveValue("https://provider.example.test/")
-  await expect(page.getByLabel("模型", { exact: true })).toHaveValue("model-under-edit")
   await expect(page.getByLabel("API 密钥")).toHaveValue("unsaved-local-key")
+  await expect(page.getByLabel("服务标识")).toHaveValue("provider-under-edit")
   await setControlPlaneMode(request, "ready")
   const retry = page.getByRole("button", { name: "重新连接" })
   await retry.evaluate((button) => {
@@ -878,8 +888,8 @@ test("@r0-shell preserves unsaved settings through in-place recovery and retry",
 
   await expect(page).toHaveURL((url) => url.pathname === "/settings")
   await expect(page.getByLabel("API 地址")).toHaveValue("https://provider.example.test/")
-  await expect(page.getByLabel("模型", { exact: true })).toHaveValue("model-under-edit")
   await expect(page.getByLabel("API 密钥")).toHaveValue("unsaved-local-key")
+  await expect(page.getByLabel("服务标识")).toHaveValue("provider-under-edit")
   await expect(page.getByRole("link", { name: /本地连接状态：已连接/ })).toBeVisible()
 
   const log = await request.get(`${controlPlaneURL}/__test/requests`).then((response) => response.json())

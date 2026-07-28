@@ -673,6 +673,10 @@ export const ActorTool = Tool.define(
               modelID: msg.info.modelID,
               providerID: msg.info.providerID,
             })
+        yield* ctx.metadata({
+          title: op.description,
+          metadata: { sessionId: ctx.sessionID, model },
+        })
 
         // Validate task_id by reference at execute time (NOT in the schema, so a
         // bad value degrades instead of hard-failing the call). A malformed shape

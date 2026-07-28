@@ -4,7 +4,7 @@ import path from "node:path"
 import { describe, expect, test } from "bun:test"
 import { CompanyProviderList, CompanyReadyState } from "../../src/company/schema"
 import { IssuedCredential, LocalPairing } from "../../src/local-auth/schema"
-import { tmpdir } from "../fixture/fixture"
+import { providerTmpdir as tmpdir } from "../fixture/fixture"
 
 const basic = "Basic " + Buffer.from("agentcompany:restart-secret").toString("base64")
 

@@ -29,7 +29,7 @@ describe("Git", () => {
   })
 
   test("branch() returns undefined for non-git directories", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ outsideWorkspace: true })
 
     await withGit(async (rt) => {
       const branch = await rt.runPromise(Git.Service.use((git) => git.branch(tmp.path)))

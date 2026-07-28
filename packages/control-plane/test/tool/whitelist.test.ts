@@ -3,8 +3,10 @@ import { FetchHttpClient } from "effect/unstable/http"
 import { afterEach, describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { Agent as AgentSvc } from "../../src/agent/agent"
+import { AgentMessage } from "../../src/agent-message"
 import { Bus } from "../../src/bus"
 import { Command } from "../../src/command"
+import { CompanyAgent } from "../../src/company-agent"
 import { Config } from "../../src/config"
 import { LSP } from "../../src/lsp"
 import { MCP } from "../../src/mcp"
@@ -51,6 +53,7 @@ import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 import { Inbox } from "../../src/inbox"
+import { Thread } from "../../src/thread/thread"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -118,9 +121,12 @@ function makeLayer() {
     Session.defaultLayer,
     Snapshot.defaultLayer,
     LLM.defaultLayer,
+    Thread.defaultLayer,
     Env.defaultLayer,
     AgentSvc.defaultLayer,
+    AgentMessage.defaultLayer,
     Command.defaultLayer,
+    CompanyAgent.defaultLayer,
     Permission.defaultLayer,
     Plugin.defaultLayer,
     Config.defaultLayer,
@@ -251,7 +257,7 @@ function providerCfg(url: string) {
 }
 
 describe("Tool whitelist (Task 14)", () => {
-  it.live("rejects bash when actor.tools = ['read'] and tool is not in whitelist", () =>
+  it.live("rejects bash at execution when checkpoint-writer actor whitelist excludes it", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {
         const prompt = yield* SessionPrompt.Service
@@ -271,7 +277,7 @@ describe("Tool whitelist (Task 14)", () => {
           sessionID: session.id,
           actorID,
           mode: "subagent",
-          agent: "build",
+          agent: "checkpoint-writer",
           description: "test actor",
           contextMode: "none",
           background: false,
@@ -285,7 +291,7 @@ describe("Tool whitelist (Task 14)", () => {
 
         yield* prompt.prompt({
           sessionID: session.id,
-          agent: "build",
+          agent: "checkpoint-writer",
           agentID: actorID,
           model: ref,
           parts: [{ type: "text", text: "please run echo" }],

@@ -99,7 +99,7 @@ describe("SessionCheckpoint.insertRebuildBoundary", () => {
           expect(after.some((m) => m.info.id === m3.id)).toBe(true)
           expect(after.length).toBe(3)
         }),
-      { config: { checkpoint: { push_caps: { recent_user: 0 } } } },
+      { outsideWorkspace: true, config: { checkpoint: { push_caps: { recent_user: 0 } } } },
     ),
   )
 })

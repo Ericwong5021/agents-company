@@ -63,7 +63,7 @@ function ensureGlobal() {
 describe("migrateFromGlobal", () => {
   test("migrates global sessions on first project creation", async () => {
     // 1. Start in a non-git directory — fromDirectory yields the "global" project ID.
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ outsideWorkspace: true })
     const { project: pre } = await run((svc) => svc.fromDirectory(tmp.path))
     expect(pre.id).toBe(ProjectID.global)
 

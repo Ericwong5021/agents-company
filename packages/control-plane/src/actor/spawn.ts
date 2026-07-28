@@ -232,8 +232,11 @@ export const layer = Layer.effect(
 
     // ForkContext snapshot per actor, captured at spawn for fork agents
     // (contextMode = "full"). Read by fork's runLoop (see prompt.ts) and
-    // cleared on terminal status. Fiber tracking moved to SessionRunState.
+    // cleared on terminal status.
     const forkContexts = new Map<string, ForkContext>()
+    const workFibers = new Map<string, Fiber.Fiber<void>>()
+    const pendingCancels = new Set<string>()
+    const actorKey = (sessionID: SessionID, actorID: string) => `${sessionID}\0${actorID}`
 
     // Real agent loop: marks the actor running, then drives a SessionPrompt.prompt
     // turn. The user message persisted by SessionPrompt carries the actor's
@@ -607,7 +610,7 @@ export const layer = Layer.effect(
                     }),
                   ).pipe(
                     // postStop LLM failure: log + break loop, do NOT propagate
-                    Effect.catch(() =>
+                    Effect.catchCause(() =>
                       Effect.gen(function* () {
                         log.error("actor.postStop runTurn failed", {
                           actorID: input.actorID,
@@ -645,7 +648,14 @@ export const layer = Layer.effect(
               }),
           }),
         )
+        const key = actorKey(input.sessionID, input.actorID)
         const fiber = yield* work.pipe(Effect.forkIn(scope))
+        workFibers.set(key, fiber)
+        yield* Fiber.await(fiber).pipe(
+          Effect.ensuring(Effect.sync(() => workFibers.delete(key))),
+          Effect.forkIn(scope),
+        )
+        if (pendingCancels.delete(key)) yield* Fiber.interrupt(fiber)
         return { fiber, outcome }
       })
 
@@ -703,6 +713,7 @@ export const layer = Layer.effect(
         format: input.format,
         threadID: peerThread.id,
       })
+      if (input.onReady) yield* Effect.ignore(input.onReady({ actorID: child.id, sessionID: child.id }))
       if (!input.background) yield* Fiber.join(fiber).pipe(Effect.ignore)
       return { actorID: child.id, sessionID: child.id, outcome, threadID: peerThread.id as ThreadID }
     })
@@ -845,13 +856,21 @@ export const layer = Layer.effect(
     const cancel: (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") => Effect.Effect<void> =
       Effect.fn("Actor.cancel")(function* (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") {
         const actor = yield* actorReg.get(sessionID, actorID)
+        if (!actor) return
         if (actor?.threadID) yield* threadService.complete(actor.threadID).pipe(Effect.ignore)
         const children = yield* actorReg.listByParent(sessionID, actorID)
         yield* Effect.forEach(children, (c) => cancel(sessionID, c.actorID, mode), {
           concurrency: "unbounded",
           discard: true,
         })
+        const key = actorKey(sessionID, actorID)
+        pendingCancels.add(key)
         yield* state.cancelActor(sessionID, actorID)
+        const fiber = workFibers.get(key)
+        if (fiber) {
+          yield* Fiber.interrupt(fiber)
+          pendingCancels.delete(key)
+        }
         yield* actorReg
           .updateStatus(sessionID, actorID, { status: "idle", lastOutcome: "cancelled" })
           .pipe(Effect.ignore)

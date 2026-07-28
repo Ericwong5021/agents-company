@@ -27,7 +27,6 @@ import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
 afterEach(async () => {
-  spawnRef.current = undefined
   await Instance.disposeAll()
 })
 
@@ -36,8 +35,8 @@ afterEach(async () => {
 function installMockSpawn(onSpawn?: (input: SpawnInput) => void) {
   return Effect.gen(function* () {
     const actorReg = yield* ActorRegistry.Service
-
-    spawnRef.current = {
+    const previous = spawnRef.current
+    const impl: NonNullable<typeof spawnRef.current> = {
       spawn: (input: SpawnInput) =>
         Effect.gen(function* () {
           onSpawn?.(input)
@@ -68,6 +67,12 @@ function installMockSpawn(onSpawn?: (input: SpawnInput) => void) {
       cancel: () => Effect.void,
       getForkContext: () => Effect.succeed(undefined),
     }
+    spawnRef.current = impl
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        if (spawnRef.current === impl) spawnRef.current = previous
+      }),
+    )
   })
 }
 

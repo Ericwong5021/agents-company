@@ -10,6 +10,7 @@ import { Worktree } from "../../src/worktree"
 import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { WorkflowRuntime } from "../../src/workflow/runtime"
+import { ActorRegistry } from "../../src/actor/registry"
 import { makeLayer, ref, providerCfg } from "./lib"
 
 // Worktree isolation lives in its own file: it boots a real Instance per isolated
@@ -210,6 +211,46 @@ describe("WorkflowRuntime worktree isolation", () => {
         yield* runtime.cancel({ runID })
         const s = yield* runtime.status({ runID })
         expect(s.status).toBe("cancelled")
+      }),
+      { git: true, config: providerCfg },
+    ),
+    30000,
+  )
+
+  it.live("cancel interrupts an in-flight peer bound to an explicit workspace", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ dir, llm }) {
+        const runtime = yield* WorkflowRuntime.Service
+        const session = yield* Session.Service
+        const registry = yield* ActorRegistry.Service
+        const parent = yield* session.create({
+          title: "wf project workspace cancel",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        })
+        const project = `${dir}-cancel-project`
+        yield* Effect.promise(() => fsp.mkdir(project, { recursive: true }))
+        yield* Effect.addFinalizer(() => Effect.promise(() => fsp.rm(project, { recursive: true, force: true })))
+        yield* llm.hang
+        const script = [
+          `export const meta = { name: "project-workspace-cancel", description: "d" }`,
+          `return await agent("WORKSPACE_CANCEL")`,
+        ].join("\n")
+        const { runID } = yield* runtime.start({
+          script,
+          sessionID: parent.id,
+          parentActorID: "main",
+          model: ref,
+          workspace: project,
+        })
+        yield* llm.wait(1)
+        const children = yield* session.children(parent.id)
+        expect(children).toHaveLength(1)
+        yield* runtime.cancel({ runID })
+        expect((yield* runtime.status({ runID })).status).toBe("cancelled")
+        expect((yield* registry.get(children[0].id, children[0].id))?.lastOutcome).toBe("cancelled")
+        const calls = yield* llm.calls
+        yield* Effect.sleep("100 millis")
+        expect(yield* llm.calls).toBe(calls)
       }),
       { git: true, config: providerCfg },
     ),

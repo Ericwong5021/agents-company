@@ -3,7 +3,7 @@ import path from "path"
 import { unlink } from "fs/promises"
 
 import { ProviderID } from "../../src/provider/schema"
-import { tmpdir } from "../fixture/fixture"
+import { providerTmpdir as tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider"
 import { Env } from "../../src/env"

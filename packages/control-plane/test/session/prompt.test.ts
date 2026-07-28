@@ -9,7 +9,7 @@ import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Log } from "../../src/util"
-import { tmpdir } from "../fixture/fixture"
+import { providerTmpdir as tmpdir } from "../fixture/fixture"
 
 void Log.init({ print: false })
 

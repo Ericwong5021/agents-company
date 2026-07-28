@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import { randomUUID } from "node:crypto"
 import os from "node:os"
 import path from "node:path"
 import {
@@ -139,6 +140,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
   automaticGovernance?: AutomaticEvidenceGovernance
   runnerSource?: string
   now?: number
+  allowStructuralFixtures?: boolean
 }): Promise<GateEvaluation> {
   const governance = options.governance ?? (await loadSeedGrowGovernance(options.buildSha))
   const stage = stageDefinition(governance.contract, options.stage)
@@ -432,6 +434,8 @@ export async function evaluateSeedGrowStageEvidence(options: {
       buildSha: options.buildSha,
       runnerSha256: runnerDigest,
       governance: automaticGovernance,
+      packageSource: automatic.source,
+      allowStructuralFixture: options.allowStructuralFixtures,
     })
     const status = mappedStatus(validation.status)
     statuses.push(status)
@@ -512,6 +516,7 @@ export async function evaluateAndWriteSeedGrowStageGate(options: {
   const governance = await loadSeedGrowGovernance(options.buildSha)
   const expectedRoot = path.join(root, ".agent/runs/agent-company-seed-grow")
   const evidenceDirectory = path.resolve(options.evidenceDirectory)
+  const evidenceStat = await fs.lstat(evidenceDirectory).catch(() => null)
   const relative = path.relative(expectedRoot, evidenceDirectory)
   if (
     !relative ||
@@ -522,6 +527,16 @@ export async function evaluateAndWriteSeedGrowStageGate(options: {
   ) {
     throw new Error(`--evidence must be one direct run directory inside ${expectedRoot}.`)
   }
+  if (!evidenceStat?.isDirectory() || evidenceStat.isSymbolicLink()) {
+    throw new Error("--evidence must be a regular directory.")
+  }
+  const [expectedRootReal, evidenceReal] = await Promise.all([
+    fs.realpath(expectedRoot),
+    fs.realpath(evidenceDirectory),
+  ])
+  if (path.dirname(evidenceReal) !== expectedRootReal) {
+    throw new Error("--evidence escaped the Seed-and-Grow run root.")
+  }
   if (path.resolve(options.outputPath) !== path.join(evidenceDirectory, "stage-decision.json")) {
     throw new Error("--out must be <evidence-directory>/stage-decision.json.")
   }
@@ -530,12 +545,24 @@ export async function evaluateAndWriteSeedGrowStageGate(options: {
     throw new Error(`Seed-and-Grow stage ${options.stage} is not implemented yet.`)
   }
   assertExactCandidate(options.buildSha, stage)
-  const evaluation = await evaluateSeedGrowStageEvidence({
-    buildSha: options.buildSha,
-    stage: options.stage,
-    evidenceDirectory,
-    governance,
-  })
+  const snapshotRoot = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-seed-grow-gate-snapshot-"))
+  const snapshotDirectory = path.join(snapshotRoot, "evidence")
+  const evaluation = await Promise.resolve()
+    .then(async () => {
+      await fs.cp(evidenceDirectory, snapshotDirectory, {
+        recursive: true,
+        dereference: false,
+        errorOnExist: true,
+        force: false,
+      })
+      return evaluateSeedGrowStageEvidence({
+        buildSha: options.buildSha,
+        stage: options.stage,
+        evidenceDirectory: snapshotDirectory,
+        governance,
+      })
+    })
+    .finally(() => fs.rm(snapshotRoot, { recursive: true, force: true }))
   const gateSource = runGit(["show", `${options.buildSha}:${stageGatePath}`]).stdout
   const decision = {
     schemaVersion: 1,
@@ -567,8 +594,36 @@ export async function evaluateAndWriteSeedGrowStageGate(options: {
     advisory: evaluation.advisory,
     normalizedDigest: evaluation.normalizedDigest,
   }
-  await Bun.write(options.outputPath, `${JSON.stringify(decision, null, 2)}\n`)
+  await writeStageDecision(evidenceDirectory, options.outputPath, `${JSON.stringify(decision, null, 2)}\n`)
   return decision
+}
+
+async function writeStageDecision(evidenceDirectory: string, outputPath: string, source: string) {
+  const [evidenceReal, parentReal] = await Promise.all([
+    fs.realpath(evidenceDirectory),
+    fs.realpath(path.dirname(outputPath)),
+  ])
+  if (evidenceReal !== parentReal || path.basename(outputPath) !== "stage-decision.json") {
+    throw new Error("Stage decision output escaped the evidence directory.")
+  }
+  const existing = await fs.lstat(outputPath).catch(() => null)
+  if (existing?.isSymbolicLink() || (existing && !existing.isFile())) {
+    throw new Error("Stage decision output must be a regular file, never a symlink.")
+  }
+  const temporary = path.join(evidenceReal, `.stage-decision-${randomUUID()}.tmp`)
+  const handle = await fs.open(temporary, "wx", 0o600)
+  try {
+    await handle.writeFile(source)
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+  try {
+    if (existing) await fs.rm(outputPath, { force: true })
+    await fs.rename(temporary, outputPath)
+  } finally {
+    await fs.rm(temporary, { force: true })
+  }
 }
 
 async function fixtureBinding(base: string, relativePath: string) {
@@ -710,7 +765,17 @@ export async function runSeedGrowStageSelfTest() {
       automaticGovernance: fixture.automaticGovernance,
       runnerSource,
       now: Date.now(),
+      allowStructuralFixtures: true,
     })
+  const structuralFixtureRejected = await evaluateSeedGrowStageEvidence({
+    buildSha,
+    stage: "A0",
+    evidenceDirectory: directory,
+    governance,
+    automaticGovernance: fixture.automaticGovernance,
+    runnerSource,
+    now: Date.now(),
+  })
   const valid = await evaluate()
   const originalSource = await Bun.file(path.join(directory, "run.json")).text()
   const original = JSON.parse(originalSource) as Record<string, unknown>
@@ -780,7 +845,21 @@ export async function runSeedGrowStageSelfTest() {
   if (stdoutPath) await Bun.write(stdoutPath, `${stdoutSource}tampered\n`)
   const tamperedLogRejected = stdoutPath ? (await evaluate()).status === "invalid" : false
   if (stdoutPath) await Bun.write(stdoutPath, stdoutSource)
+  const victimPath = path.join(directory, "stage-decision-victim.json")
+  const outputPath = path.join(directory, "stage-decision.json")
+  await Bun.write(victimPath, "unchanged\n")
+  await fs.symlink(victimPath, outputPath)
+  const outputSymlinkRejected = await writeStageDecision(directory, outputPath, "tampered\n").then(
+    () => false,
+    () => true,
+  )
+  const outputSymlinkVictimUnchanged = (await Bun.file(victimPath).text()) === "unchanged\n"
+  await fs.rm(outputPath, { force: true })
   const assertions = [
+    {
+      name: "structural_fixture_cannot_pass_production_gate",
+      passed: structuralFixtureRejected.status === "invalid",
+    },
     { name: "valid_complete_double_run_passes", passed: valid.status === "pass" },
     { name: "wrong_build_rejected", passed: wrongBuildRejected },
     { name: "missing_attempt_blocked", passed: missingAttemptBlocked },
@@ -792,6 +871,10 @@ export async function runSeedGrowStageSelfTest() {
     { name: "human_field_cannot_substitute", passed: humanFieldRejected },
     { name: "fabricated_ci_success_rejected", passed: fabricatedCIRejected },
     { name: "tampered_log_rejected", passed: tamperedLogRejected },
+    {
+      name: "decision_output_symlink_rejected_without_overwrite",
+      passed: outputSymlinkRejected && outputSymlinkVictimUnchanged,
+    },
   ]
   await fs.rm(directory, { recursive: true, force: true })
   if (assertions.some((assertion) => !assertion.passed)) {
@@ -802,7 +885,7 @@ export async function runSeedGrowStageSelfTest() {
     stages: governance.contract.stages.length,
     tasks: governance.contract.stages.flatMap((stage) => stage.taskIds).length,
     criteria: governance.contract.stages.flatMap((stage) => stage.criteria).length,
-    negativeCases: assertions.slice(1),
+    negativeCases: assertions.slice(2),
   }
 }
 

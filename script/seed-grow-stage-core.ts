@@ -887,11 +887,14 @@ export function normalizeAutomaticPackage(value: unknown, requiredCommandIDs: st
       buildTreeSha: value.buildTreeSha,
       requirementsBinding: value.requirementsBinding,
       schemaBinding: value.schemaBinding,
+      provenance: value.provenance,
       isolation: isRecord(value.isolation)
         ? {
             mode: value.isolation.mode,
             environment: value.isolation.environment,
-            liveDatabaseAccess: value.isolation.liveDatabaseAccess,
+            productionDataEnvironmentInherited: value.isolation.productionDataEnvironmentInherited,
+            hostPermissionIsolation: value.isolation.hostPermissionIsolation,
+            networkIsolation: value.isolation.networkIsolation,
             playwright: isRecord(value.isolation.playwright)
               ? {
                   mode: value.isolation.playwright.mode,

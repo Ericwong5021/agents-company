@@ -12,7 +12,7 @@ import { Config } from "../../src/config"
 import { Memory } from "../../src/memory"
 import { Session } from "../../src/session"
 import { SessionCheckpoint } from "../../src/session/checkpoint"
-import { checkpointPath } from "../../src/session/checkpoint-paths"
+import { checkpointPath, memoryPath } from "../../src/session/checkpoint-paths"
 import { TaskRegistry } from "../../src/task/registry"
 import { ActorRegistry } from "../../src/actor/registry"
 import { Instance } from "../../src/project/instance"
@@ -79,13 +79,38 @@ describe("v5 verify (visual)", () => {
           lifecycle: "ephemeral",
         })
         yield* actorReg.updateStatus(sess.id, "explorer-1", { status: "running" })
+        const child = yield* session.create({ parentID: sess.id, title: "workspace peer" })
+        yield* actorReg.register({
+          sessionID: child.id,
+          actorID: child.id,
+          mode: "peer",
+          agent: "builder",
+          description: "build in workspace",
+          contextMode: "none",
+          background: true,
+          lifecycle: "persistent",
+        })
+        yield* actorReg.updateStatus(child.id, child.id, { status: "running" })
+        const unrelated = yield* session.create({ title: "unrelated root" })
+        yield* actorReg.register({
+          sessionID: unrelated.id,
+          actorID: unrelated.id,
+          mode: "peer",
+          agent: "outsider",
+          description: "unrelated work",
+          contextMode: "none",
+          background: true,
+          lifecycle: "persistent",
+        })
+        yield* actorReg.updateStatus(unrelated.id, unrelated.id, { status: "running" })
 
         // Seed v5 single-file checkpoint artifacts on disk. Focus is on t2
         // (started last), so seed progress.md under t2's task dir.
         const root = yield* memory.root()
         const sessDir = path.join(root, "sessions", sess.id)
         const taskDir = path.join(root, "sessions", sess.id, "tasks", t2.id)
-        const projDir = path.join(root, "projects", "global")
+        const projectFile = memoryPath(Instance.current.project.id)
+        const projDir = path.dirname(projectFile)
 
         yield* Effect.promise(async () => {
           await fs.mkdir(sessDir, { recursive: true })
@@ -93,7 +118,7 @@ describe("v5 verify (visual)", () => {
           await fs.mkdir(projDir, { recursive: true })
 
           await fs.writeFile(
-            path.join(projDir, "MEMORY.md"),
+            projectFile,
             `# Project memory
 Updated: 2026-05-15T10:00:00Z (ckpt #1)
 
@@ -201,8 +226,11 @@ Next: implement renderRebuildContext 9-section render in src/session/checkpoint.
         expect(out).toContain("## Session checkpoint")
         expect(out).toContain("Active actors")
         expect(out).toContain("agent=explorer")
+        expect(out).toContain("agent=builder")
+        expect(out).not.toContain("agent=outsider")
         expect(out).toContain("Drizzle's sqliteTable")
       }),
+      { git: true },
     ),
   )
 

@@ -7,6 +7,7 @@ import { Config } from "../../src/config"
 import { Memory } from "../../src/memory"
 import { Session } from "../../src/session"
 import { SessionCheckpoint } from "../../src/session/checkpoint"
+import { globalMemoryPath, memoryPath } from "../../src/session/checkpoint-paths"
 import { TaskRegistry } from "../../src/task/registry"
 import { ActorRegistry } from "../../src/actor/registry"
 import { Instance } from "../../src/project/instance"
@@ -41,6 +42,7 @@ describe("renderRebuildContext v3", () => {
         const out = yield* cp.renderRebuildContext(sess.id)
         expect(out).toBe("")
       }),
+      { git: true },
     ),
   )
 
@@ -67,11 +69,10 @@ describe("renderRebuildContext v3", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const cp = yield* SessionCheckpoint.Service
-        const memory = yield* Memory.Service
         const session = yield* Session.Service
         const sess = yield* session.create({ title: "Test" })
-        const root = yield* memory.root()
-        const projDir = path.join(root, "projects", "global")
+        const projectFile = memoryPath(Instance.current.project.id)
+        const projDir = path.dirname(projectFile)
         yield* Effect.promise(() => fs.mkdir(projDir, { recursive: true }))
         yield* Effect.promise(() =>
           fs.writeFile(path.join(projDir, "memory.md"), "用 Bun 不用 npm"),
@@ -83,6 +84,7 @@ describe("renderRebuildContext v3", () => {
         // No global/MEMORY.md written → no spurious Global memory header.
         expect(out).not.toContain("## Global memory")
       }),
+      { git: true },
     ),
   )
 
@@ -90,15 +92,12 @@ describe("renderRebuildContext v3", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const cp = yield* SessionCheckpoint.Service
-        const memory = yield* Memory.Service
         const session = yield* Session.Service
         const sess = yield* session.create({ title: "Test" })
-        const root = yield* memory.root()
-        const globalDir = path.join(root, "global")
+        const globalFile = globalMemoryPath()
+        const globalDir = path.dirname(globalFile)
         yield* Effect.promise(() => fs.mkdir(globalDir, { recursive: true }))
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(globalDir, "MEMORY.md"), "prefer terse responses"),
-        )
+        yield* Effect.promise(() => fs.writeFile(globalFile, "prefer terse responses"))
 
         const out = yield* cp.renderRebuildContext(sess.id)
         expect(out).toContain("## Global memory")
@@ -111,15 +110,12 @@ describe("renderRebuildContext v3", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const cp = yield* SessionCheckpoint.Service
-        const memory = yield* Memory.Service
         const session = yield* Session.Service
         const sess = yield* session.create({ title: "Test" })
-        const root = yield* memory.root()
-        const globalDir = path.join(root, "global")
+        const globalFile = globalMemoryPath()
+        const globalDir = path.dirname(globalFile)
         yield* Effect.promise(() => fs.mkdir(globalDir, { recursive: true }))
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(globalDir, "MEMORY.md"), "global only content"),
-        )
+        yield* Effect.promise(() => fs.writeFile(globalFile, "global only content"))
 
         // No tasks, no checkpoint.md, no project memory.md — only global.
         const out = yield* cp.renderRebuildContext(sess.id)

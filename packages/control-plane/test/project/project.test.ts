@@ -85,7 +85,7 @@ describe("Project.fromDirectory", () => {
     const legacy = path.join(tmp.path, ".git", "agentcompany")
     expect(await Bun.file(legacy).exists()).toBe(false)
     // v5 UUID cache file should exist.
-    const idFile = path.join(tmp.path, ".git", "agentcompany-project-id")
+    const idFile = path.join(tmp.path, ".git", "agent-company-project-id")
     expect(await Bun.file(idFile).exists()).toBe(true)
   })
 
@@ -99,12 +99,12 @@ describe("Project.fromDirectory", () => {
     expect(project.vcs).toBe("git")
     expect(project.worktree).toBe(tmp.path)
 
-    const idFile = path.join(tmp.path, ".git", "agentcompany-project-id")
+    const idFile = path.join(tmp.path, ".git", "agent-company-project-id")
     expect(await Bun.file(idFile).exists()).toBe(true)
   })
 
   test("returns global for non-git directory", async () => {
-    await using tmp = await tmpdir()
+    await using tmp = await tmpdir({ outsideWorkspace: true })
     const { project } = await run((svc) => svc.fromDirectory(tmp.path))
     expect(project.id).toBe(ProjectID.global)
   })
@@ -216,7 +216,7 @@ describe("Project.fromDirectory with worktrees", () => {
       expect(wt.id).toBe(main.id)
 
       // Cache should live in the common .git dir, not the worktree's .git file
-      const cache = path.join(tmp.path, ".git", "agentcompany-project-id")
+      const cache = path.join(tmp.path, ".git", "agent-company-project-id")
       const exists = await Bun.file(cache).exists()
       expect(exists).toBe(true)
     } finally {

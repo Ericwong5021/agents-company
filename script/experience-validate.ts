@@ -1009,7 +1009,7 @@ check(
 check(
   automaticEvidenceRequirements.schemaVersion === 1 &&
     automaticEvidenceRequirements.id === "agent-company-r0-automatic-evidence-requirements" &&
-    automaticEvidenceRequirements.version === "1.2.0" &&
+    automaticEvidenceRequirements.version === "1.3.0" &&
     automaticEvidenceRequirements.gate === "R0" &&
     sameValues(automaticEvidenceRequirements.requiredTaskIds, [...requiredR0TaskIDs]) &&
     sameValues(
@@ -1105,7 +1105,7 @@ const automaticHR01StimulusProperties = isRecord(automaticHR01StimulusSchema.pro
   : {}
 check(
   automaticEvidencePackage.schemaVersion === 1 &&
-    automaticEvidencePackage.packageVersion === "1.2.0" &&
+    automaticEvidencePackage.packageVersion === "1.3.0" &&
     automaticEvidencePackage.additionalProperties === false &&
     Array.isArray(automaticEvidencePackage.required) &&
     automaticEvidencePackage.required.includes("releaseCandidateScreenshots") &&

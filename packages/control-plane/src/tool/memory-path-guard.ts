@@ -1,10 +1,45 @@
 import * as path from "path"
+import { lstatSync, realpathSync } from "node:fs"
 import type { ProjectID } from "../project/schema"
 import type { SessionID } from "../session/schema"
 
-const VALID_SCOPES = ["global", "projects", "sessions"] as const
+const MANAGED_SCOPES = ["memory", "projects", "sessions"] as const
 
 const TASK_ID_RE = /^T\d+(\.\d+)*$/
+
+export function resolveWriteTargetPath(target: string): string {
+  const absolute = path.resolve(target)
+  const exists = (() => {
+    try {
+      lstatSync(absolute)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
+      throw error
+    }
+  })()
+  if (exists) return realpathSync.native(absolute)
+  const parent = path.dirname(absolute)
+  if (parent === absolute) return absolute
+  return path.join(resolveWriteTargetPath(parent), path.basename(absolute))
+}
+
+function isMemoryNamespacePath(target: string, dataRoot: string) {
+  const rel = path.relative(resolveWriteTargetPath(dataRoot), resolveWriteTargetPath(target))
+  if (!rel || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return false
+  return MANAGED_SCOPES.includes(rel.split(path.sep)[0] as (typeof MANAGED_SCOPES)[number])
+}
+
+export function isManagedMemoryPath(target: string, dataRoot: string) {
+  const rel = path.relative(resolveWriteTargetPath(dataRoot), resolveWriteTargetPath(target))
+  if (!rel || rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return false
+  const parts = rel.split(path.sep)
+  if (parts[0] === "memory") return parts.length === 2
+  if (parts[0] === "projects") return parts.length === 3
+  if (parts[0] !== "sessions") return false
+  if (parts.length === 3) return true
+  return parts.length >= 5 && parts[2] === "tasks" && TASK_ID_RE.test(parts[3])
+}
 
 /**
  * Returns true when the relative path under <root>/memory/ is one of the
@@ -51,7 +86,7 @@ function isCheckpointWriterAllowed(parts: string[]): boolean {
  */
 function formatMainAgentHelp(memoryFile: string, notesFile: string, target: string): string {
   return (
-    `Memory writes go under <memoryRoot>/<scope>/<scope_id>/<key>.md (scope: global | projects | sessions). You attempted: ${target}.\n` +
+    `Memory writes go under <dataRoot>/(memory|projects|sessions)/<scope_id>/<key>.md. You attempted: ${target}.\n` +
     `\n` +
     `Canonical main-agent paths (copy verbatim):\n` +
     `  ${memoryFile}\n` +
@@ -95,28 +130,35 @@ function isReservedForCheckpointWriter(parts: string[]): boolean {
 export function assertMemoryWriteAllowed(input: {
   target: string
   agentName: string
-  memoryRoot: string
+  dataRoot: string
   projectID: ProjectID
   sessionID: SessionID
   taskId?: string
 }): void {
-  const { target, agentName, memoryRoot, projectID, sessionID } = input
-  const memoryFile = path.join(memoryRoot, "projects", projectID, "MEMORY.md")
-  const notesFile = path.join(memoryRoot, "sessions", sessionID, "notes.md")
-  const checkpointFile = path.join(memoryRoot, "sessions", sessionID, "checkpoint.md")
-  const taskMemDir = path.join(memoryRoot, "sessions", sessionID, "tasks")
-  const normalizedRoot = memoryRoot.endsWith(path.sep) ? memoryRoot : memoryRoot + path.sep
-  if (!target.startsWith(normalizedRoot)) return
+  const { agentName, dataRoot, projectID, sessionID } = input
+  const target = resolveWriteTargetPath(input.target)
+  const resolvedDataRoot = resolveWriteTargetPath(dataRoot)
+  const memoryFile = path.join(dataRoot, "projects", projectID, "MEMORY.md")
+  const notesFile = path.join(dataRoot, "sessions", sessionID, "notes.md")
+  const checkpointFile = path.join(dataRoot, "sessions", sessionID, "checkpoint.md")
+  const taskMemDir = path.join(dataRoot, "sessions", sessionID, "tasks")
+  if (!isMemoryNamespacePath(target, dataRoot)) return
 
-  const rel = path.relative(memoryRoot, target)
+  const rel = path.relative(resolvedDataRoot, target)
   const parts = rel.split(path.sep)
 
   if (parts.length < 2) {
     throw new Error(formatMainAgentHelp(memoryFile, notesFile, target))
   }
   const scope = parts[0]
-  if (!VALID_SCOPES.includes(scope as (typeof VALID_SCOPES)[number])) {
+  if (!MANAGED_SCOPES.includes(scope as (typeof MANAGED_SCOPES)[number])) {
     throw new Error(formatMainAgentHelp(memoryFile, notesFile, target))
+  }
+  if (scope === "projects" && parts[1] !== projectID) {
+    throw new Error(`Project memory path '${rel}' is outside the current project '${projectID}'.`)
+  }
+  if (scope === "sessions" && parts[1] !== sessionID) {
+    throw new Error(`Session memory path '${rel}' is outside the current session '${sessionID}'.`)
   }
 
   if (agentName === "checkpoint-writer") {

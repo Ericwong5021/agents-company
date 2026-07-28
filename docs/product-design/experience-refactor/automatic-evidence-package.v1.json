@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
   "title": "Agent Company R0 exact-build automatic evidence package",
   "schemaVersion": 1,
-  "packageVersion": "1.2.0",
+  "packageVersion": "1.3.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,6 +16,7 @@
     "requirementsBinding",
     "schemaBinding",
     "runnerBinding",
+    "provenance",
     "isolation",
     "createdAt",
     "commands",
@@ -29,7 +30,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.2.0"
+      "const": "1.3.0"
     },
     "packageId": {
       "type": "string",
@@ -67,10 +68,31 @@
         }
       }
     },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "worktreeHead"],
+      "properties": {
+        "kind": {
+          "enum": ["executed", "structural_fixture"]
+        },
+        "worktreeHead": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      }
+    },
     "isolation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "environment", "liveDatabaseAccess", "playwright"],
+      "required": [
+        "mode",
+        "environment",
+        "productionDataEnvironmentInherited",
+        "hostPermissionIsolation",
+        "networkIsolation",
+        "playwright"
+      ],
       "properties": {
         "mode": {
           "const": "detached_exact_commit_worktree"
@@ -83,8 +105,14 @@
           },
           "uniqueItems": true
         },
-        "liveDatabaseAccess": {
+        "productionDataEnvironmentInherited": {
           "const": false
+        },
+        "hostPermissionIsolation": {
+          "const": false
+        },
+        "networkIsolation": {
+          "const": "proxy_environment_only"
         },
         "playwright": {
           "type": "object",
@@ -201,7 +229,7 @@
           "minLength": 1
         },
         "validator": {
-          "enum": ["junit", "r0_branch_coverage"]
+          "enum": ["junit", "r0_branch_coverage", "artifact"]
         },
         "file": {
           "$ref": "#/$defs/fileEvidence"

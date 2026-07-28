@@ -90,6 +90,7 @@ const packageKeys = [
   "requirementsBinding",
   "schemaBinding",
   "runnerBinding",
+  "provenance",
   "isolation",
   "createdAt",
   "commands",
@@ -117,7 +118,7 @@ const commandKeys = [
 
 type RequirementReport = {
   path: string
-  validator: "junit" | "r0_branch_coverage"
+  validator: "junit" | "r0_branch_coverage" | "artifact"
 }
 
 type RequirementCommand = {
@@ -261,10 +262,16 @@ type AutomaticEvidencePackage = {
     buildSha: string
     sha256: string
   }
+  provenance: {
+    kind: "executed" | "structural_fixture"
+    worktreeHead: string | null
+  }
   isolation: {
     mode: string
     environment: string[]
-    liveDatabaseAccess: boolean
+    productionDataEnvironmentInherited: boolean
+    hostPermissionIsolation: boolean
+    networkIsolation: string
     playwright: {
       mode: string
       packageVersion: string
@@ -372,7 +379,7 @@ function validateRequirements(value: unknown) {
     ]) ||
     value.schemaVersion !== 1 ||
     value.id !== "agent-company-r0-automatic-evidence-requirements" ||
-    value.version !== "1.2.0" ||
+    value.version !== "1.3.0" ||
     value.gate !== "R0" ||
     !Array.isArray(value.requiredTaskIds) ||
     !value.requiredTaskIds.every((item) => typeof item === "string") ||
@@ -413,7 +420,7 @@ function validateRequirements(value: unknown) {
           isRecord(report) &&
           exactKeys(report, ["path", "validator"]) &&
           confinedRelativePath(report.path) &&
-          ["junit", "r0_branch_coverage"].includes(String(report.validator)),
+          ["junit", "r0_branch_coverage", "artifact"].includes(String(report.validator)),
       )
     ) {
       throw new Error("Automatic evidence command requirements are invalid.")
@@ -524,13 +531,27 @@ function parseTrailingJson(source: string) {
   return null
 }
 
-function stdoutSummary(validator: RequirementCommand["stdoutValidator"], source: string) {
+function stdoutSummary(
+  validator: RequirementCommand["stdoutValidator"],
+  source: string,
+  commandId?: string,
+  buildSha?: string,
+) {
   if (validator === "none") return { valid: true, summary: null }
   const value = parseTrailingJson(source)
   const field = value?.result === "pass" ? "result" : value?.status === "pass" ? "status" : null
+  const candidateShaMatches =
+    commandId !== "seed-grow-real-surfaces" || (typeof buildSha === "string" && value?.candidateSha === buildSha)
   return {
-    valid: Boolean(field),
-    summary: field ? { kind: "json_pass", field, value: "pass" } : { kind: "json_pass", field: null, value: null },
+    valid: Boolean(field) && candidateShaMatches,
+    summary: field
+      ? {
+          kind: "json_pass",
+          field,
+          value: "pass",
+          ...(commandId === "seed-grow-real-surfaces" ? { candidateShaMatches } : {}),
+        }
+      : { kind: "json_pass", field: null, value: null },
   }
 }
 
@@ -539,7 +560,19 @@ function numberAttribute(source: string, attribute: string) {
   return value === undefined ? 0 : Number(value)
 }
 
-function reportSummary(validator: RequirementReport["validator"], source: string) {
+function reportMediaType(report: RequirementReport) {
+  if (report.validator === "junit") return "application/xml"
+  if (report.validator === "r0_branch_coverage" || report.path.endsWith(".json")) return "application/json"
+  if (report.path.endsWith(".png")) return "image/png"
+  return "application/octet-stream"
+}
+
+async function reportSummary(
+  validator: RequirementReport["validator"],
+  bytes: Uint8Array,
+  sourcePath: string,
+) {
+  const source = new TextDecoder().decode(bytes)
   if (validator === "junit") {
     const rootTag = source.match(/<testsuites\b[^>]*>/)?.[0]
     const summary = rootTag
@@ -554,6 +587,38 @@ function reportSummary(validator: RequirementReport["validator"], source: string
     return {
       valid: Boolean(rootTag) && summary.tests > 0 && summary.failures === 0 && summary.errors === 0,
       summary,
+    }
+  }
+  if (validator === "artifact") {
+    if (sourcePath.endsWith(".png")) {
+      const image = await sharp(bytes, { failOn: "error", limitInputPixels: 16_777_216 })
+        .toBuffer({ resolveWithObject: true })
+        .catch(() => null)
+      const summary = {
+        validator,
+        kind: "png",
+        width: image?.info.width ?? null,
+        height: image?.info.height ?? null,
+      }
+      return {
+        valid:
+          image?.info.format === "png" &&
+          typeof image.info.width === "number" &&
+          image.info.width >= 390 &&
+          typeof image.info.height === "number" &&
+          image.info.height >= 720,
+        summary,
+      }
+    }
+    const value = await Promise.resolve()
+      .then(() => JSON.parse(source) as unknown)
+      .catch(() => null)
+    return {
+      valid: isRecord(value),
+      summary: {
+        validator,
+        kind: "json",
+      },
     }
   }
   try {
@@ -1188,14 +1253,18 @@ export async function validateAutomaticEvidencePackage(options: {
   buildSha: string
   runnerSha256: string
   governance?: AutomaticEvidenceGovernance
+  packageSource?: string
+  allowStructuralFixture?: boolean
 }): Promise<AutomaticEvidenceValidation> {
   const errors: string[] = []
   const failures: string[] = []
   const missing: string[] = []
   const file = path.resolve(options.packagePath)
-  const source = await Bun.file(file)
-    .text()
-    .catch(() => null)
+  const source =
+    options.packageSource ??
+    (await Bun.file(file)
+      .text()
+      .catch(() => null))
   if (!source) {
     return {
       status: "incomplete",
@@ -1228,7 +1297,7 @@ export async function validateAutomaticEvidencePackage(options: {
   const governance = options.governance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
   if (
     parsed.schemaVersion !== 1 ||
-    parsed.packageVersion !== "1.2.0" ||
+    parsed.packageVersion !== "1.3.0" ||
     typeof parsed.packageId !== "string" ||
     !/^R0-AUTO-[a-f0-9]{12,40}$/.test(parsed.packageId) ||
     parsed.gate !== "R0" ||
@@ -1265,13 +1334,33 @@ export async function validateAutomaticEvidencePackage(options: {
     errors.push("automatic evidence package: runner binding mismatch")
   }
   if (
+    !isRecord(parsed.provenance) ||
+    !exactKeys(parsed.provenance, ["kind", "worktreeHead"]) ||
+    !["executed", "structural_fixture"].includes(String(parsed.provenance.kind)) ||
+    (parsed.provenance.kind === "executed" && parsed.provenance.worktreeHead !== options.buildSha) ||
+    (parsed.provenance.kind === "structural_fixture" && parsed.provenance.worktreeHead !== null)
+  ) {
+    errors.push("automatic evidence package: execution provenance mismatch")
+  } else if (parsed.provenance.kind === "structural_fixture" && !options.allowStructuralFixture) {
+    errors.push("automatic evidence package: structural fixture is not production evidence")
+  }
+  if (
     !isRecord(parsed.isolation) ||
-    !exactKeys(parsed.isolation, ["mode", "environment", "liveDatabaseAccess", "playwright"]) ||
+    !exactKeys(parsed.isolation, [
+      "mode",
+      "environment",
+      "productionDataEnvironmentInherited",
+      "hostPermissionIsolation",
+      "networkIsolation",
+      "playwright",
+    ]) ||
     parsed.isolation.mode !== governance.requirements.isolation.mode ||
     !Array.isArray(parsed.isolation.environment) ||
     !parsed.isolation.environment.every((item) => typeof item === "string") ||
     !sameValues(parsed.isolation.environment, governance.requirements.isolation.requiredEnvironment) ||
-    parsed.isolation.liveDatabaseAccess !== false ||
+    parsed.isolation.productionDataEnvironmentInherited !== false ||
+    parsed.isolation.hostPermissionIsolation !== false ||
+    parsed.isolation.networkIsolation !== "proxy_environment_only" ||
     !isRecord(parsed.isolation.playwright) ||
     !exactKeys(parsed.isolation.playwright, ["mode", "packageVersion", "browsersJsonSha256", "browserTreeSha256"]) ||
     parsed.isolation.playwright.mode !== "fresh_isolated_install" ||
@@ -1351,7 +1440,12 @@ export async function validateAutomaticEvidencePackage(options: {
       `${requirement.id} stderr`,
       errors,
     )
-    const stdoutResult = stdoutSummary(requirement.stdoutValidator, stdout?.source ?? "")
+    const stdoutResult = stdoutSummary(
+      requirement.stdoutValidator,
+      stdout?.source ?? "",
+      requirement.id,
+      options.buildSha,
+    )
     if (canonicalize(value.stdoutSummary) !== canonicalize(stdoutResult.summary)) {
       errors.push(`automatic evidence ${requirement.id}: stdout summary mismatch`)
     }
@@ -1385,11 +1479,15 @@ export async function validateAutomaticEvidencePackage(options: {
       const reportFile = await validateFileEvidence(
         path.dirname(file),
         report.file,
-        requiredReport.validator === "junit" ? "application/xml" : "application/json",
+        reportMediaType(requiredReport),
         `${requirement.id} report ${requiredReport.path}`,
         errors,
       )
-      const result = reportSummary(requiredReport.validator, reportFile?.source ?? "")
+      const result = await reportSummary(
+        requiredReport.validator,
+        reportFile?.bytes ?? new Uint8Array(),
+        requiredReport.path,
+      )
       if (canonicalize(report.summary) !== canonicalize(result.summary)) {
         errors.push(`${requirement.id}: report summary mismatch ${requiredReport.path}`)
       }
@@ -1679,19 +1777,25 @@ async function runCommand(
     archivedStderrBytes,
     "text/plain",
   )
-  const stdoutResult = stdoutSummary(requirement.stdoutValidator, new TextDecoder().decode(stdoutBytes))
+  const stdoutResult = stdoutSummary(
+    requirement.stdoutValidator,
+    new TextDecoder().decode(stdoutBytes),
+    requirement.id,
+    buildSha,
+  )
   const reports: ReportEvidence[] = []
   let reportsPass = true
   for (const report of requirement.reports) {
     const sourceFile = path.join(worktree, requirement.cwd, report.path)
     const source = await Bun.file(sourceFile)
-      .text()
+      .arrayBuffer()
+      .then((value) => new Uint8Array(value))
       .catch(() => null)
     if (source === null) {
       reportsPass = false
       continue
     }
-    const result = reportSummary(report.validator, source)
+    const result = await reportSummary(report.validator, source, report.path)
     reportsPass = reportsPass && result.valid
     reports.push({
       sourcePath: report.path,
@@ -1700,7 +1804,7 @@ async function runCommand(
         outputDirectory,
         path.posix.join(commandDirectory, "reports", path.basename(report.path)),
         source,
-        report.validator === "junit" ? "application/xml" : "application/json",
+        reportMediaType(report),
       ),
       summary: result.summary,
     })
@@ -2236,11 +2340,15 @@ export async function generateAutomaticEvidence(options: {
         ?.releaseCandidateHR01Stimuli ?? null
     await assertPlaywrightBrowsersUnchanged(playwright)
     await cleanIgnoredRuntimePaths(worktree)
+    const finalHead = runGit(["rev-parse", "HEAD^{commit}"], worktree).trim()
+    if (finalHead !== buildSha) {
+      throw new Error(`Automatic evidence worktree HEAD changed from ${buildSha} to ${finalHead}.`)
+    }
     const worktreeStatus = runGit(["status", "--porcelain", "--untracked-files=all"], worktree).trim()
     if (worktreeStatus) throw new Error(`Automatic evidence exact-commit worktree became dirty:\n${worktreeStatus}`)
     const packageValue: AutomaticEvidencePackage = {
       schemaVersion: 1,
-      packageVersion: "1.2.0",
+      packageVersion: "1.3.0",
       packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
       gate: "R0",
       buildSha,
@@ -2257,10 +2365,16 @@ export async function generateAutomaticEvidence(options: {
         buildSha,
         sha256: sha256(runnerSource),
       },
+      provenance: {
+        kind: "executed",
+        worktreeHead: finalHead,
+      },
       isolation: {
         mode: "detached_exact_commit_worktree",
         environment: governance.requirements.isolation.requiredEnvironment,
-        liveDatabaseAccess: false,
+        productionDataEnvironmentInherited: false,
+        hostPermissionIsolation: false,
+        networkIsolation: "proxy_environment_only",
         playwright: {
           mode: "fresh_isolated_install",
           packageVersion: playwright.packageVersion,
@@ -2308,7 +2422,13 @@ export async function writeStructuralAutomaticEvidenceFixture(
   for (const command of governance.requirements.commands) {
     const commandDirectory = path.posix.join("files", command.id)
     const stdoutSource =
-      command.stdoutValidator === "json_pass" ? `${JSON.stringify({ result: "pass", status: "pass" })}\n` : ""
+      command.stdoutValidator === "json_pass"
+        ? `${JSON.stringify({
+            result: "pass",
+            status: "pass",
+            ...(command.id === "seed-grow-real-surfaces" ? { candidateSha: buildSha } : {}),
+          })}\n`
+        : ""
     const stdout = await writeEvidenceFile(
       directory,
       path.posix.join(commandDirectory, "stdout.log"),
@@ -2318,25 +2438,39 @@ export async function writeStructuralAutomaticEvidenceFixture(
     const stderr = await writeEvidenceFile(directory, path.posix.join(commandDirectory, "stderr.log"), "", "text/plain")
     const reports: ReportEvidence[] = []
     for (const report of command.reports) {
-      const source =
+      const source: string | Uint8Array =
         report.validator === "junit"
           ? '<testsuites tests="1" failures="0" errors="0" skipped="0"></testsuites>\n'
-          : `${JSON.stringify({
-              threshold: 90,
-              results: Array.from({ length: 7 }, (_, index) => ({
-                file: `fixture-${index + 1}.ts`,
-                percent: 100,
-              })),
-            })}\n`
-      const result = reportSummary(report.validator, source)
+          : report.validator === "r0_branch_coverage"
+            ? `${JSON.stringify({
+                threshold: 90,
+                results: Array.from({ length: 7 }, (_, index) => ({
+                  file: `fixture-${index + 1}.ts`,
+                  percent: 100,
+                })),
+              })}\n`
+            : report.path.endsWith(".png")
+              ? await sharp({
+                  create: {
+                    width: 1440,
+                    height: 900,
+                    channels: 4,
+                    background: { r: 24, g: 36, b: 48, alpha: 1 },
+                  },
+                })
+                  .png()
+                  .toBuffer()
+              : `${JSON.stringify({ result: "pass" })}\n`
+      const bytes = typeof source === "string" ? new TextEncoder().encode(source) : source
+      const result = await reportSummary(report.validator, bytes, report.path)
       reports.push({
         sourcePath: report.path,
         validator: report.validator,
         file: await writeEvidenceFile(
           directory,
           path.posix.join(commandDirectory, "reports", path.basename(report.path)),
-          source,
-          report.validator === "junit" ? "application/xml" : "application/json",
+          bytes,
+          reportMediaType(report),
         ),
         summary: result.summary,
       })
@@ -2354,7 +2488,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
       status: "pass",
       stdout,
       stderr,
-      stdoutSummary: stdoutSummary(command.stdoutValidator, stdoutSource).summary,
+      stdoutSummary: stdoutSummary(command.stdoutValidator, stdoutSource, command.id, buildSha).summary,
       reports,
     })
   }
@@ -2484,7 +2618,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
   }
   const packageValue: AutomaticEvidencePackage = {
     schemaVersion: 1,
-    packageVersion: "1.2.0",
+    packageVersion: "1.3.0",
     packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
     gate: "R0",
     buildSha,
@@ -2501,10 +2635,16 @@ export async function writeStructuralAutomaticEvidenceFixture(
       buildSha,
       sha256: runnerSha256,
     },
+    provenance: {
+      kind: "structural_fixture",
+      worktreeHead: null,
+    },
     isolation: {
       mode: "detached_exact_commit_worktree",
       environment: governance.requirements.isolation.requiredEnvironment,
-      liveDatabaseAccess: false,
+      productionDataEnvironmentInherited: false,
+      hostPermissionIsolation: false,
+      networkIsolation: "proxy_environment_only",
       playwright: {
         mode: "fresh_isolated_install",
         packageVersion: "1.59.1",
@@ -2823,8 +2963,15 @@ export async function runAutomaticEvidenceSelfTest() {
       buildSha,
       runnerSha256,
       governance: fixture.governance,
+      allowStructuralFixture: true,
     })
   const valid = await validate(fixture.packagePath)
+  const structuralFixtureRejected = await validateAutomaticEvidencePackage({
+    packagePath: fixture.packagePath,
+    buildSha,
+    runnerSha256,
+    governance: fixture.governance,
+  })
   const unsafeRequirements = structuredClone(fixture.governance.requirements)
   unsafeRequirements.commands[0]!.environment = { AGENTCOMPANY_DB: "/live/database.db" }
   const unsafeRequirementEnvironmentRejected = await Promise.resolve()
@@ -2892,6 +3039,10 @@ export async function runAutomaticEvidenceSelfTest() {
   const dependencyIsolation = await dependencyIsolationSelfTest(directory)
   const playwrightIsolation = await playwrightIsolationSelfTest(directory)
   const assertions = [
+    {
+      name: "structural_fixture_is_rejected_as_production_evidence",
+      passed: structuralFixtureRejected.status === "invalid",
+    },
     {
       name: "valid_complete_package_passes",
       passed:

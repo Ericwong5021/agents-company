@@ -1373,6 +1373,7 @@ async function evaluateR0GateWithDependencies(
     governance?: Awaited<ReturnType<typeof loadGovernance>>
     automaticEvidenceGovernance?: AutomaticEvidenceGovernance
     automaticEvidenceExecuted?: boolean
+    allowStructuralAutomaticFixture?: boolean
     humanAllowedSignersSha256?: string | null
     languageContractSha256?: string
   },
@@ -1407,6 +1408,7 @@ async function evaluateR0GateWithDependencies(
         buildSha: options.buildSha,
         runnerSha256: runner.runnerSha256!,
         governance: dependencies.automaticEvidenceGovernance,
+        allowStructuralFixture: dependencies.allowStructuralAutomaticFixture,
       })
     : {
         status: "incomplete" as const,
@@ -2451,6 +2453,7 @@ export async function runGateSelfTest() {
       verifyCommit: () => buildSha,
       governance,
       automaticEvidenceGovernance: automaticEvidence.governance,
+      allowStructuralAutomaticFixture: true,
       languageContractSha256,
     })
   const evaluateFixture = (options: GateOptions) =>
@@ -2458,6 +2461,7 @@ export async function runGateSelfTest() {
       verifyCommit: () => buildSha,
       governance,
       automaticEvidenceGovernance: automaticEvidence.governance,
+      allowStructuralAutomaticFixture: true,
       humanAllowedSignersSha256: ephemeralAllowedSignersSha256,
       languageContractSha256,
     })
@@ -2467,6 +2471,7 @@ export async function runGateSelfTest() {
       governance,
       automaticEvidenceGovernance: automaticEvidence.governance,
       automaticEvidenceExecuted: true,
+      allowStructuralAutomaticFixture: true,
       humanAllowedSignersSha256: ephemeralAllowedSignersSha256,
       languageContractSha256,
     })

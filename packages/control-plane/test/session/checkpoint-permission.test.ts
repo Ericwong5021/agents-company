@@ -100,7 +100,7 @@ describe("checkpoint writer permission invariants", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const calls: string[] = []
-        const target = path.join(Global.Path.data, "memory", "sessions", "ses_x", "checkpoint.md")
+        const target = path.join(Global.Path.data, "sessions", "ses_x", "checkpoint.md")
         // The askEditUnlessMemory contract is path-based: it short-circuits
         // BEFORE reading any ruleset. We don't need to thread an `edit: ask`
         // ruleset into the call — the function never consults rules for
@@ -124,7 +124,7 @@ describe("checkpoint writer permission invariants", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const calls: string[] = []
-        const target = path.join(Global.Path.data, "memory", "sessions", "ses_x", "checkpoint.md")
+        const target = path.join(Global.Path.data, "sessions", "ses_x", "checkpoint.md")
         yield* askEditUnlessMemory(makeRecordingCtx(calls), target, {
           patterns: ["checkpoint.md"],
           diff: "",

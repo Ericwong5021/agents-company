@@ -30,7 +30,7 @@ describe("lsp.spawn", () => {
             }
           }),
         ),
-      { config: { lsp: true } },
+      { outsideWorkspace: true, config: { lsp: true } },
     ),
   )
 

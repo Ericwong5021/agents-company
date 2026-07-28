@@ -278,7 +278,7 @@ describe("WorkflowRuntime cancel cascade", () => {
           `return await parallel([() => agent("a"), () => agent("b"), () => agent("c")])`,
         ].join("\n")
         const { runID } = yield* runtime.start({ script, sessionID: parent.id, parentActorID: "main", model: ref })
-        yield* Effect.sleep("250 millis") // let the fan-out spawn children
+        yield* llm.wait(1)
         yield* runtime.cancel({ runID })
         const s = yield* runtime.status({ runID })
         expect(s.status).toBe("cancelled")
@@ -292,7 +292,7 @@ describe("WorkflowRuntime cancel cascade", () => {
   )
 
   // MR104 #2 — orphan-on-cancel race. The bug: spawnShared added the child's
-  // actorID to the run's reclaim set (entry.childActorIDs) only AFTER actor.spawn
+  // actorID to the run's reclaim map (entry.childActors) only AFTER actor.spawn
   // RESOLVED across the quickjs Promise bridge. A cancel landing during that gap
   // reclaimed a STALE (empty) set, then interrupted the workflow fiber — but each
   // child runs DETACHED in the actor scope (background:true + forkIn), so the
@@ -300,7 +300,7 @@ describe("WorkflowRuntime cancel cascade", () => {
   // cancels — orphans holding subscriptions/tokens/worktrees. Fix: register the id
   // INSIDE the spawn Effect (onActorID), before the work fiber detaches.
   //
-  // Observable: reclaim graceful-cancels every id in childActorIDs, and
+  // Observable: reclaim graceful-cancels every id in childActors, and
   // Actor.cancel writes lastOutcome="cancelled" on each (registry.test cancel
   // cascade). So immediately after cancel returns, EVERY spawned child must carry
   // lastOutcome="cancelled" — proof that reclaim saw it. Pre-fix the set is empty
@@ -336,8 +336,8 @@ describe("WorkflowRuntime cancel cascade", () => {
           model: ref,
           maxConcurrentAgents: 8,
         })
-        // Let the fan-out register its children, then cancel mid-flight.
-        yield* Effect.sleep("150 millis")
+        // Let the fan-out register its first child, then cancel mid-flight.
+        yield* llm.wait(1)
         yield* runtime.cancel({ runID })
 
         const s = yield* runtime.status({ runID })
@@ -864,11 +864,9 @@ describe("WorkflowRuntime replay journal", () => {
 // null contract — these tests pin both invariants: the script still sees null,
 // AND the bus carries one event per failed agent with the right reason.
 describe("WorkflowRuntime agent failure event (Gap 3)", () => {
-  it.live("a 400 client error → reason='no-deliverable'; success sibling → no event", () =>
-    // The actor outcome is status:"success" (agent finished its turn cleanly),
-    // but the failed-LLM call produced no assistant text → no finalText/structured
-    // to extract → deliverable is null → reason="no-deliverable". This matches the
-    // existing "a failing child yields null" test's mechanism (line 79).
+  it.live("a 400 client error → reason='actor-error'; success sibling → no event", () =>
+    // The failed LLM turn now produces an explicit actor failure, while agent()
+    // still returns the null sentinel and lets the successful sibling complete.
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {
         const runtime = yield* WorkflowRuntime.Service
@@ -897,7 +895,7 @@ describe("WorkflowRuntime agent failure event (Gap 3)", () => {
         // Bus is async; let the publish settle before asserting.
         yield* Effect.sleep("100 millis")
         expect(events.length).toBe(1)
-        expect(events[0].reason).toBe("no-deliverable")
+        expect(events[0].reason).toBe("actor-error")
         expect(events[0].label).toBe("fail-one")
         expect(events[0].phase).toBe("Test")
       }),

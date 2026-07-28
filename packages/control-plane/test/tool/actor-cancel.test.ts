@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect } from "bun:test"
+import { afterAll, afterEach, beforeAll, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { Agent } from "../../src/agent/agent"
 import { Bus } from "../../src/bus"
@@ -59,19 +59,27 @@ function parseOutput(output: string): CancelResponse {
 // test (with fiber interruption) lives in test/actor/spawn.test.ts.
 const cancelled: Array<{ sessionID: SessionID; actorID: string; mode: "graceful" | "forced" }> = []
 let installedRegistry: ActorRegistry.Interface | undefined
+let previousSpawnRef: typeof spawnRef.current
+const cancelActor = {
+  spawn: () => Effect.die("spawn not used in cancel tests"),
+  spawnForDelegation: () => Effect.die("spawnForDelegation not used in cancel tests"),
+  cancel: (sessionID: SessionID, actorID: string, mode: "graceful" | "forced") =>
+    Effect.gen(function* () {
+      cancelled.push({ sessionID, actorID, mode })
+      if (installedRegistry) {
+        yield* installedRegistry.updateStatus(sessionID, actorID, { status: "idle", lastOutcome: "cancelled" }).pipe(Effect.ignore)
+      }
+    }),
+  getForkContext: () => Effect.succeed(undefined),
+} satisfies ActorInterface
+
 beforeAll(() => {
-  spawnRef.current = {
-    spawn: () => Effect.die("spawn not used in cancel tests"),
-    spawnForDelegation: () => Effect.die("spawnForDelegation not used in cancel tests"),
-    cancel: (sessionID, actorID, mode) =>
-      Effect.gen(function* () {
-        cancelled.push({ sessionID, actorID, mode })
-        if (installedRegistry) {
-          yield* installedRegistry.updateStatus(sessionID, actorID, { status: "idle", lastOutcome: "cancelled" }).pipe(Effect.ignore)
-        }
-      }),
-    getForkContext: () => Effect.succeed(undefined),
-  } satisfies ActorInterface
+  previousSpawnRef = spawnRef.current
+  spawnRef.current = cancelActor
+})
+
+afterAll(() => {
+  if (spawnRef.current === cancelActor) spawnRef.current = previousSpawnRef
 })
 
 function ctxFor(sessionID: SessionID) {
