@@ -33,6 +33,18 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       name: "CompanyConnectionState",
       filePath: resolver.resolve("./runtime/app/components/CompanyConnectionState.vue"),
     })
+    addComponent({
+      name: "GoalBriefCard",
+      filePath: resolver.resolve("./runtime/app/components/GoalBriefCard.vue"),
+    })
+    addComponent({
+      name: "OnboardingChoice",
+      filePath: resolver.resolve("./runtime/app/components/OnboardingChoice.vue"),
+    })
+    addComponent({
+      name: "DemoWorkspace",
+      filePath: resolver.resolve("./runtime/app/components/DemoWorkspace.vue"),
+    })
     addImports({
       name: "useCompanySnapshot",
       from: resolver.resolve("./runtime/app/composables/useCompanySnapshot"),
@@ -63,6 +75,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/provider.put"),
     })
     addServerHandler({
+      route: "/api/agent-company/provider/models",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/provider-models.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/projects/:projectID",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/project.get"),
@@ -76,6 +93,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/goal-brief/generate",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/goal-brief-generate.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/goal-brief/:briefID/versions",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/goal-brief-append.post"),
     })
     addServerHandler({
       route: "/api/agent-company/projects/:projectID/artifacts/:artifactID",
@@ -94,6 +116,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
           name: "agent-company-settings",
           path: "/settings",
           file: resolver.resolve("./runtime/app/pages/settings/company.vue"),
+        },
+        {
+          name: "agent-company-welcome",
+          path: "/welcome",
+          file: resolver.resolve("./runtime/app/pages/welcome/company.vue"),
         },
       )
     })
