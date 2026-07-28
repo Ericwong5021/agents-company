@@ -32,20 +32,15 @@ async function writeReport(name: string, value: Record<string, unknown>) {
   )
 }
 
-async function runProbe(database: string, mode: "prepare" | "recover") {
-  const child = Bun.spawn({
+function runProbe(database: string, mode: "prepare" | "recover") {
+  const child = Bun.spawnSync({
     cmd: [process.execPath, "test/company-project/work-facts-recovery-probe.ts", mode],
     cwd: root,
     env: { ...process.env, AGENTCOMPANY_DB: database },
-    stdout: "pipe",
-    stderr: "pipe",
   })
-  const [exitCode, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ])
-  if (exitCode !== 0) throw new Error(stderr || stdout)
+  const stdout = child.stdout.toString()
+  const stderr = child.stderr.toString()
+  if (child.exitCode !== 0) throw new Error(stderr || stdout)
   const line = stdout
     .trim()
     .split(/\r?\n/)
