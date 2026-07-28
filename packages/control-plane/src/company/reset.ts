@@ -22,6 +22,8 @@ const companyTables = [
   "company_work_item_dependency",
   "company_approval_gate",
   "company_worktree_run",
+  "company_work_receipt",
+  "company_work_attempt",
   "company_artifact",
   "company_work_item",
   "company_plan",

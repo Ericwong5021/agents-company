@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agent-company-r0-automatic-evidence-requirements",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "gate": "R0",
   "requiredTaskIds": [
     "FND-01",
@@ -140,6 +140,93 @@
       "stdoutValidator": "none",
       "environment": {},
       "reports": []
+    },
+    {
+      "id": "a1-fresh-db",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/work-facts.test.ts",
+        "-t",
+        "a1-fresh-db",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a1-fresh-db-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a1-fresh-db-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a1/fresh-db.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a1-migrated-db",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/work-facts.test.ts",
+        "-t",
+        "a1-migrated-db",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a1-migrated-db-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a1-migrated-db-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a1/migrated-db.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a1-receipt-recovery",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/work-facts.test.ts",
+        "-t",
+        "a1-receipt-recovery",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a1-receipt-recovery-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a1-receipt-recovery-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a1/receipt-recovery.json",
+          "validator": "artifact"
+        }
+      ]
     },
     {
       "id": "control-plane-r0-unit",
@@ -700,7 +787,12 @@
         },
         {
           "id": "QA-02-MIGRATION-AND-CONCURRENCY",
-          "evidenceRefs": ["command:control-plane-r0-unit"]
+          "evidenceRefs": [
+            "command:control-plane-r0-unit",
+            "command:a1-fresh-db",
+            "command:a1-migrated-db",
+            "command:a1-receipt-recovery"
+          ]
         },
         {
           "id": "QA-02-KEY-BRANCH-COVERAGE",

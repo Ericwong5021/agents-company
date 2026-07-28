@@ -10162,6 +10162,96 @@ export type CompanyProjectGetResponses = {
   200: unknown
 }
 
+export type CompanyProjectAttemptsData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/attempts"
+}
+
+export type CompanyProjectAttemptsResponses = {
+  /**
+   * Work attempts
+   */
+  200: Array<{
+    id: string
+    project_id: string
+    work_item_id: string
+    agent_run_id?: string
+    ordinal: number
+    status: "running" | "completed" | "failed" | "stopped"
+    failure_kind?:
+      | "implementation"
+      | "environment"
+      | "missing_prerequisite"
+      | "dependency"
+      | "permission"
+      | "validator"
+      | "scope"
+      | "unknown"
+    safe_summary?: string
+    started_at: number
+    finished_at?: number
+  }>
+}
+
+export type CompanyProjectAttemptsResponse = CompanyProjectAttemptsResponses[keyof CompanyProjectAttemptsResponses]
+
+export type CompanyProjectReceiptsData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/receipts"
+}
+
+export type CompanyProjectReceiptsResponses = {
+  /**
+   * Work receipts
+   */
+  200: Array<{
+    idempotency_key: string
+    outcome: "completed" | "blocked" | "failed" | "ask"
+    summary: string
+    artifact_ids: Array<string>
+    evidence_refs: Array<{
+      kind: "agent_run" | "artifact" | "project_event"
+      id: string
+    }>
+    confirmed_facts: Array<string>
+    invalidated_assumptions: Array<string>
+    unknowns: Array<string>
+    blockers: Array<string>
+    capability_gaps: Array<string>
+    task_proposals: Array<{
+      [key: string]: unknown
+    }>
+    dependency_proposals: Array<{
+      [key: string]: unknown
+    }>
+    questions: Array<string>
+    id: string
+    project_id: string
+    work_item_id: string
+    attempt_id: string
+    processing_status: "pending" | "processing" | "processed" | "rejected"
+    processed_mutation_id?: string
+    created_at: number
+    processed_at?: number
+  }>
+}
+
+export type CompanyProjectReceiptsResponse = CompanyProjectReceiptsResponses[keyof CompanyProjectReceiptsResponses]
+
 export type CompanyProjectCancelData = {
   body?: {
     reason?: string

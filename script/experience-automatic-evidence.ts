@@ -383,7 +383,7 @@ function validateRequirements(value: unknown) {
     ]) ||
     value.schemaVersion !== 1 ||
     value.id !== "agent-company-r0-automatic-evidence-requirements" ||
-    value.version !== "1.3.0" ||
+    value.version !== "1.4.0" ||
     value.gate !== "R0" ||
     !Array.isArray(value.requiredTaskIds) ||
     !value.requiredTaskIds.every((item) => typeof item === "string") ||
@@ -1301,7 +1301,7 @@ export async function validateAutomaticEvidencePackage(options: {
   const governance = options.governance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
   if (
     parsed.schemaVersion !== 1 ||
-    parsed.packageVersion !== "1.3.0" ||
+    parsed.packageVersion !== "1.4.0" ||
     typeof parsed.packageId !== "string" ||
     !/^R0-AUTO-[a-f0-9]{12,40}$/.test(parsed.packageId) ||
     parsed.gate !== "R0" ||
@@ -2352,7 +2352,7 @@ export async function generateAutomaticEvidence(options: {
     if (worktreeStatus) throw new Error(`Automatic evidence exact-commit worktree became dirty:\n${worktreeStatus}`)
     const packageValue: AutomaticEvidencePackage = {
       schemaVersion: 1,
-      packageVersion: "1.3.0",
+      packageVersion: "1.4.0",
       packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
       gate: "R0",
       buildSha,
@@ -2622,7 +2622,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
   }
   const packageValue: AutomaticEvidencePackage = {
     schemaVersion: 1,
-    packageVersion: "1.3.0",
+    packageVersion: "1.4.0",
     packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
     gate: "R0",
     buildSha,

@@ -478,10 +478,9 @@ export function validateStageContract(
     value.isolation.productionDataAllowed !== false ||
     value.isolation.attempts !== 2 ||
     !Array.isArray(value.implementedStages) ||
-    !sameValues(
-      value.implementedStages.filter((item): item is string => typeof item === "string"),
-      ["A0"],
-    ) ||
+    !value.implementedStages.length ||
+    !value.implementedStages.every((item) => typeof item === "string") ||
+    value.implementedStages.some((item, index) => item !== stageIDs[index]) ||
     !isRecord(value.commandRegistry) ||
     !exactKeys(value.commandRegistry, ["automaticEvidenceCommands", "plannedStageCommands"]) ||
     !Array.isArray(value.commandRegistry.automaticEvidenceCommands) ||
@@ -508,7 +507,10 @@ export function validateStageContract(
   const actualStageIDs = stages.flatMap((stage) =>
     isRecord(stage) && typeof stage.id === "string" ? [stage.id] : [],
   )
-  if (!sameValues(actualStageIDs, [...stageIDs]) || new Set(actualStageIDs).size !== stageIDs.length) {
+  if (
+    actualStageIDs.length !== stageIDs.length ||
+    actualStageIDs.some((item, index) => item !== stageIDs[index])
+  ) {
     throw new Error("Seed-and-Grow stage order must contain exactly A0 through B5.")
   }
   const taskIDs: string[] = []
@@ -549,11 +551,11 @@ export function validateStageContract(
     ) {
       throw new Error(`Seed-and-Grow stage ${String(stageValue.id)} is invalid.`)
     }
-    const allowedCommands = stageValue.id === "A0" ? registeredAutomatic : registeredPlanned
+    const implemented = value.implementedStages.includes(stageValue.id)
+    const allowedCommands = implemented ? registeredAutomatic : registeredPlanned
     if (
       !stageValue.requiredCommandIds.every((id) => allowedCommands.includes(id)) ||
-      new Set(stageValue.requiredCommandIds).size !== stageValue.requiredCommandIds.length ||
-      (stageValue.id === "A0" && !sameValues(stageValue.requiredCommandIds, registeredAutomatic))
+      new Set(stageValue.requiredCommandIds).size !== stageValue.requiredCommandIds.length
     ) {
       throw new Error(`Seed-and-Grow stage ${stageValue.id} command coverage is invalid.`)
     }
@@ -848,7 +850,7 @@ export function normalizeAutomaticPackage(value: unknown, requiredCommandIDs: st
   if (!isRecord(value) || !Array.isArray(value.commands) || !Array.isArray(value.coverage)) {
     throw new Error("Automatic evidence package cannot be normalized.")
   }
-  const commands = value.commands.map((command) => {
+  const allCommands = value.commands.map((command) => {
     if (
       !isRecord(command) ||
       typeof command.id !== "string" ||
@@ -877,6 +879,10 @@ export function normalizeAutomaticPackage(value: unknown, requiredCommandIDs: st
       ),
     }
   })
+  if (new Set(allCommands.map((command) => command.id)).size !== allCommands.length) {
+    throw new Error("Automatic evidence command IDs are duplicated.")
+  }
+  const commands = allCommands.filter((command) => requiredCommandIDs.includes(command.id))
   if (!sameValues(commands.map((command) => command.id), requiredCommandIDs)) {
     throw new Error("Automatic evidence command coverage differs from the stage contract.")
   }

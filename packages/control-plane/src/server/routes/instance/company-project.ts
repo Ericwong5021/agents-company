@@ -2,7 +2,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
 import { Effect } from "effect"
 import z from "zod"
-import { CompanyProject, CompanyProjectExecution } from "@/company-project"
+import { CompanyProject, CompanyProjectExecution, WorkAttempt, WorkReceipt } from "@/company-project"
 import { AgentRun } from "@/agent-run/agent-run"
 import { TokenGovernance } from "@/token-governance/token-governance"
 import { lazy } from "@/util/lazy"
@@ -83,9 +83,22 @@ export const CompanyProjectRoutes = lazy(() =>
           const service = yield* CompanyProject.Service
           const project = yield* service.get(c.req.valid("param").projectID)
           if (!project) return yield* Effect.fail(new Error("Company project not found"))
-          const [plans, work_items, artifacts, gates, charter, worktree_runs, agent_runs, usage] = yield* Effect.all([
+          const [
+            plans,
+            work_items,
+            work_attempts,
+            work_receipts,
+            artifacts,
+            gates,
+            charter,
+            worktree_runs,
+            agent_runs,
+            usage,
+          ] = yield* Effect.all([
             service.listPlans(project.id),
             service.listWorkItems(project.id),
+            service.listWorkAttempts(project.id),
+            service.listWorkReceipts(project.id),
             service.listArtifacts(project.id),
             service.listGates(project.id),
             service.getCharter(project.id),
@@ -93,7 +106,55 @@ export const CompanyProjectRoutes = lazy(() =>
             (yield* AgentRun.Service).list({ companyProjectID: project.id, limit: 500 }),
             (yield* TokenGovernance.Service).companyProject(project.id),
           ])
-          return { project, charter, plans, work_items, worktree_runs, artifacts, gates, agent_runs, usage }
+          return {
+            project,
+            charter,
+            plans,
+            work_items,
+            work_attempts,
+            work_receipts,
+            worktree_runs,
+            artifacts,
+            gates,
+            agent_runs,
+            usage,
+          }
+        }),
+    )
+    .get(
+      "/:projectID/attempts",
+      describeRoute({
+        summary: "List persisted work attempts",
+        operationId: "companyProject.attempts",
+        responses: {
+          200: {
+            description: "Work attempts",
+            content: { "application/json": { schema: resolver(z.array(WorkAttempt)) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.attempts", c, function* () {
+          return yield* (yield* CompanyProject.Service).listWorkAttempts(c.req.valid("param").projectID)
+        }),
+    )
+    .get(
+      "/:projectID/receipts",
+      describeRoute({
+        summary: "List persisted work receipts",
+        operationId: "companyProject.receipts",
+        responses: {
+          200: {
+            description: "Work receipts",
+            content: { "application/json": { schema: resolver(z.array(WorkReceipt)) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.receipts", c, function* () {
+          return yield* (yield* CompanyProject.Service).listWorkReceipts(c.req.valid("param").projectID)
         }),
     )
     .post(

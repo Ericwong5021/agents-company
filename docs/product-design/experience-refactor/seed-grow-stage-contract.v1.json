@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0"],
+  "implementedStages": ["A0", "A1"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -58,6 +58,9 @@
       "sdk-js-typecheck",
       "desktop-typecheck",
       "control-plane-migrations",
+      "a1-fresh-db",
+      "a1-migrated-db",
+      "a1-receipt-recovery",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -77,9 +80,6 @@
       "desktop-e2e"
     ],
     "plannedStageCommands": [
-      "a1-fresh-db",
-      "a1-migrated-db",
-      "a1-receipt-recovery",
       "a2-mutation-policy",
       "a2-concurrency",
       "a2-transaction-recovery",
@@ -271,7 +271,15 @@
       "releaseWindow": "R3",
       "dependsOn": ["A0"],
       "taskIds": ["FACT-01", "FACT-02", "FACT-03", "FACT-04", "FACT-05", "FACT-06", "FACT-07"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test/company-project", "packages/shared", "packages/sdk"],
+      "governedPaths": [
+        "packages/control-plane/src",
+        "packages/control-plane/migration",
+        "packages/control-plane/test/company-project",
+        "packages/shared",
+        "packages/sdk",
+        "script",
+        "docs/product-design/experience-refactor"
+      ],
       "requiredCommandIds": ["a1-fresh-db", "a1-migrated-db", "a1-receipt-recovery"],
       "repeats": 2,
       "criteria": [

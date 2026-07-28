@@ -68,9 +68,11 @@ import type {
   CompanyDeferSetupGoalErrors,
   CompanyDeferSetupGoalResponses,
   CompanyId,
+  CompanyProjectAttemptsResponses,
   CompanyProjectCancelResponses,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
+  CompanyProjectReceiptsResponses,
   CompanyProjectResolveGateResponses,
   CompanyProjectRetryResponses,
   CompanyProjectStartResponses,
@@ -3643,6 +3645,66 @@ export class CompanyProject extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<CompanyProjectGetResponses, unknown, ThrowOnError>({
       url: "/company-project/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List persisted work attempts
+   */
+  public attempts<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectAttemptsResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/attempts",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List persisted work receipts
+   */
+  public receipts<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectReceiptsResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/receipts",
       ...options,
       ...params,
     })

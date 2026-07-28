@@ -30,9 +30,12 @@ import {
   type PlanPhase,
   type ProjectStatus,
   WorkItem,
+  type WorkAttempt,
+  type WorkReceipt,
   WorktreeRun,
   type WorktreeRunStatus,
 } from "./schema"
+import { CompanyWorkFacts } from "./work-facts"
 
 const parseList = (value: string) => JSON.parse(value) as string[]
 const parseRecord = (value: string) => JSON.parse(value) as Record<string, unknown>
@@ -302,6 +305,8 @@ export interface Interface {
     created_by_agent_id?: string
   }) => Effect.Effect<Artifact>
   readonly listArtifacts: (project_id: string) => Effect.Effect<Artifact[]>
+  readonly listWorkAttempts: (project_id: string) => Effect.Effect<WorkAttempt[]>
+  readonly listWorkReceipts: (project_id: string) => Effect.Effect<WorkReceipt[]>
   readonly listEvents: (project_id: string) => Effect.Effect<ProjectEvent[]>
   readonly requestGate: (input: {
     project_id: string
@@ -335,6 +340,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const company = yield* Company.Service
+    const facts = yield* CompanyWorkFacts.Service
     const event = (project_id: string, type: string, data: Record<string, unknown>, actor_id?: string) =>
       Effect.sync(() => {
         Database.use((db) =>
@@ -1108,6 +1114,21 @@ export const layer = Layer.effect(
         )
         if (!artifact) throw new Error(`Work item ${id} cannot complete without an artifact`)
       }
+      if (status === "completed" || status === "blocked") {
+        yield* facts.finalizeWorkItem({
+          project_id: row.project_id,
+          work_item_id: row.id,
+          ordinal: row.attempt,
+          status: status === "completed" ? "completed" : "failed",
+          outcome: status === "completed" ? "completed" : "blocked",
+          summary:
+            status === "completed"
+              ? `Work item ${row.id} completed`
+              : (error ?? `Work item ${row.id} blocked`),
+          failure_kind: status === "blocked" ? "unknown" : undefined,
+          actor_id: row.owner_agent_id ?? undefined,
+        })
+      }
       yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -1125,6 +1146,14 @@ export const layer = Layer.effect(
             .run(),
         ),
       )
+      if (status === "running") {
+        yield* facts.startAttempt({
+          project_id: row.project_id,
+          work_item_id: row.id,
+          ordinal: attempt,
+          actor_id: row.owner_agent_id ?? undefined,
+        })
+      }
       yield* event(row.project_id, `work_item.${status}`, { work_item_id: id, error }, row.owner_agent_id ?? undefined)
       return hydrateWorkItems([
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get())!,
@@ -1732,6 +1761,8 @@ export const layer = Layer.effect(
       mergeWorktreeRun,
       addArtifact,
       listArtifacts,
+      listWorkAttempts: facts.listAttempts,
+      listWorkReceipts: facts.listReceipts,
       listEvents,
       requestGate,
       resolveGate,
@@ -1742,6 +1773,9 @@ export const layer = Layer.effect(
   }),
 )
 
-export const defaultLayer = layer.pipe(Layer.provide(Company.defaultLayer))
+export const defaultLayer = layer.pipe(
+  Layer.provide(Company.defaultLayer),
+  Layer.provide(CompanyWorkFacts.defaultLayer),
+)
 
 export * as CompanyProject from "./company-project"
