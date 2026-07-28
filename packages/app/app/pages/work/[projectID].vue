@@ -141,7 +141,7 @@ const nextActionID = computed(() => work.value?.availability === "available" && 
   ? work.value.summary.nextAction.id
   : undefined);
 
-// DELIV-04 — Gate 决策动作：从投影 allowedActions 中筛出批准/拒绝/请求修改，按真实 enabled/disabledReason 展示。
+// DELIV-04 — 审批决策动作：从投影 allowedActions 中筛出批准/拒绝/请求修改，按真实 enabled/disabledReason 展示。
 // R0 治理契约未解除时这些变更类动作恒为禁用；说明文本由用户填写但在动作可用前不提交。
 const decisionActionIDs = new Set(["approve", "reject", "request_change"]);
 const decisionActions = computed(() => controlActions.value.filter(action => decisionActionIDs.has(action.id)));
@@ -190,7 +190,7 @@ function artifactKindLabel(kind: string) {
   if (kind === "link") return "链接";
   return "成果";
 }
-// DELIV-02 — Work Item / Gate 的原始状态是后端自由字符串，映射为用户可读标签；未知值原样显示，不猜测。
+// DELIV-02 — 步骤与审批的原始状态是后端自由字符串，映射为用户可读标签；未知值原样显示，不猜测。
 function workItemStatusLabel(status: string) {
   const labels: Record<string, string> = {
     pending: "待开始",
@@ -489,23 +489,23 @@ function artifactRoute(projectID: string, artifactID: string) {
               </template>
             </template>
 
-            <!-- Approval / Gate — DELIV-04 决策闭环：Gate 状态可读化 + 按投影如实展示的决策动作 -->
+            <!-- DELIV-04 决策闭环：审批状态可读化 + 按投影如实展示的决策动作 -->
             <template v-else-if="activePanel === 'approval'">
-              <article v-for="gate in detail?.gates ?? []" :key="gate.id" class="ac-inline-item">
-                <h3>{{ gate.title }}</h3>
-                <span class="ac-status-badge" :data-status="gate.status">{{ gateStatusLabel(gate.status) }}</span>
+              <article v-for="approval in detail?.gates ?? []" :key="approval.id" class="ac-inline-item">
+                <h3>{{ approval.title }}</h3>
+                <span class="ac-status-badge" :data-status="approval.status">{{ gateStatusLabel(approval.status) }}</span>
               </article>
 
-              <div v-if="decisionActions.length" class="ac-gate-decision">
-                <label for="gate-decision-note">决策说明（可选）</label>
+              <div v-if="decisionActions.length" class="ac-approval-decision">
+                <label for="approval-decision-note">决策说明（可选）</label>
                 <textarea
-                  id="gate-decision-note"
+                  id="approval-decision-note"
                   v-model="decisionNote"
                   rows="3"
                   maxlength="2000"
                   placeholder="说明批准 / 拒绝 / 请求修改的理由，便于事后追溯。"
                 />
-                <div class="ac-work3__actions" role="group" aria-label="Gate 决策">
+                <div class="ac-work3__actions" role="group" aria-label="审批决策">
                   <button
                     v-for="action in decisionActions"
                     :key="action.id"
@@ -519,7 +519,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                     {{ action.label }}
                   </button>
                 </div>
-                <p class="ac-gate-decision__boundary">
+                <p class="ac-approval-decision__boundary">
                   批准 / 拒绝 / 请求修改需在治理契约解除后开放，当前按投影如实显示禁用原因，不伪装可提交。
                 </p>
               </div>

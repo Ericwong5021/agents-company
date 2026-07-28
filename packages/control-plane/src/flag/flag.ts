@@ -134,6 +134,11 @@ export const Flag = {
   AGENTCOMPANY_EXPERIMENTAL_MARKDOWN: !falsy("AGENTCOMPANY_EXPERIMENTAL_MARKDOWN"),
   AGENTCOMPANY_MODELS_URL: process.env["AGENTCOMPANY_MODELS_URL"],
   AGENTCOMPANY_MODELS_PATH: process.env["AGENTCOMPANY_MODELS_PATH"],
+  get AGENTCOMPANY_SEED_GROW_ORCHESTRATION() {
+    const value = process.env["AGENTCOMPANY_SEED_GROW_ORCHESTRATION"] ?? "off"
+    if (value === "off" || value === "shadow" || value === "active") return value
+    throw new Error("AGENTCOMPANY_SEED_GROW_ORCHESTRATION must be off, shadow, or active.")
+  },
   AGENTCOMPANY_DISABLE_EMBEDDED_WEB_UI: truthy("AGENTCOMPANY_DISABLE_EMBEDDED_WEB_UI"),
   AGENTCOMPANY_DB: process.env["AGENTCOMPANY_DB"],
 

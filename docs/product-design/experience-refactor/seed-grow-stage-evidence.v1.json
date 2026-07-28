@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-company.local/schema/seed-grow-stage-evidence.v1.json",
+  "title": "Agent Company Seed-and-Grow stage evidence package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageVersion",
+    "packageId",
+    "stage",
+    "capabilityPackage",
+    "buildSha",
+    "buildTreeSha",
+    "contractBinding",
+    "schemaBinding",
+    "runnerBinding",
+    "validationProfile",
+    "githubActions",
+    "createdAt",
+    "finishedAt",
+    "attempts",
+    "coverage",
+    "overallStatus",
+    "advisory"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "packageVersion": {
+      "const": "1.0.0"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^SEED-GROW-(A[0-4]|B[0-5])-[a-f0-9]{12,40}-[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "stage": {
+      "enum": ["A0", "A1", "A2", "A3", "A4", "B0", "B1", "B2", "B3", "B4", "B5"]
+    },
+    "capabilityPackage": {
+      "type": "string",
+      "pattern": "^O[0-9](?:-R[34])?$"
+    },
+    "buildSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "buildTreeSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "contractBinding": {
+      "$ref": "#/$defs/sourceBinding"
+    },
+    "schemaBinding": {
+      "$ref": "#/$defs/sourceBinding"
+    },
+    "runnerBinding": {
+      "$ref": "#/$defs/sourceBinding"
+    },
+    "validationProfile": {
+      "const": "local_exact_sha_fallback"
+    },
+    "githubActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "blocking", "replacement", "evidence"],
+      "properties": {
+        "status": {
+          "const": "unavailable"
+        },
+        "blocking": {
+          "const": false
+        },
+        "replacement": {
+          "const": "two_local_exact_sha_runs"
+        },
+        "evidence": {
+          "$ref": "#/$defs/fileBinding"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attempts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "relativeDirectory",
+          "automaticRunnerBinding",
+          "automaticPackage",
+          "normalizedDigest",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^attempt-0[12]$"
+          },
+          "relativeDirectory": {
+            "type": "string",
+            "pattern": "^attempts/attempt-0[12]$"
+          },
+          "automaticRunnerBinding": {
+            "$ref": "#/$defs/fileBinding"
+          },
+          "automaticPackage": {
+            "$ref": "#/$defs/fileBinding"
+          },
+          "normalizedDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "enum": ["pass", "failed", "blocked", "invalid"]
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskIds", "criteria"],
+      "properties": {
+        "taskIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["criterionId", "evidenceRefs"],
+            "properties": {
+              "criterionId": {
+                "type": "string"
+              },
+              "evidenceRefs": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "overallStatus": {
+      "enum": ["pass", "failed", "blocked", "invalid"]
+    },
+    "advisory": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256", "byteLength", "mediaType"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaType": {
+          "enum": ["application/json", "text/plain", "application/xml", "image/png"]
+        }
+      }
+    }
+  }
+}

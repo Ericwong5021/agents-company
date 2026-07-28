@@ -1,0 +1,546 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-seed-grow-stage-contract",
+  "version": "1.0.0",
+  "planBinding": {
+    "path": "docs/AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md"
+  },
+  "orchestrationBinding": {
+    "path": "docs/product-design/experience-refactor/orchestration-contract.v1.json"
+  },
+  "benchmarkBinding": {
+    "path": "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json"
+  },
+  "metricBinding": {
+    "path": "docs/product-design/experience-refactor/metric-contract.v1.json"
+  },
+  "evidenceSchemaBinding": {
+    "path": "docs/product-design/experience-refactor/seed-grow-stage-evidence.v1.json"
+  },
+  "validationProfile": "local_exact_sha_fallback",
+  "githubActions": {
+    "status": "unavailable",
+    "blocking": false,
+    "replacement": "two_local_exact_sha_runs"
+  },
+  "freshness": {
+    "maxAgeMs": 86400000,
+    "futureToleranceMs": 300000
+  },
+  "isolation": {
+    "mode": "detached_exact_commit_worktree",
+    "requiredEnvironment": [
+      "HOME",
+      "USERPROFILE",
+      "AGENTCOMPANY_HOME",
+      "AGENT_COMPANY_WEBUI_DATA_DIR",
+      "XDG_DATA_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_CACHE_HOME",
+      "XDG_STATE_HOME"
+    ],
+    "liveDatabaseAllowed": false,
+    "productionDataAllowed": false,
+    "attempts": 2
+  },
+  "implementedStages": ["A0"],
+  "commandRegistry": {
+    "automaticEvidenceCommands": [
+      "root-lint",
+      "governance-validation",
+      "experience-benchmark-self-test",
+      "experience-automatic-evidence-self-test",
+      "experience-gate-self-test",
+      "seed-grow-stage-self-test",
+      "shared-typecheck",
+      "control-plane-typecheck",
+      "app-typecheck",
+      "sdk-js-typecheck",
+      "desktop-typecheck",
+      "control-plane-migrations",
+      "control-plane-r0-unit",
+      "control-plane-all-unit",
+      "control-plane-r0-branches",
+      "shared-unit",
+      "sdk-js-unit",
+      "sdk-js-build",
+      "sdk-js-generated-diff",
+      "app-unit",
+      "app-r0-config-matrix",
+      "app-r0-shell",
+      "app-r0-candidates",
+      "app-r1-r3",
+      "app-e2e",
+      "app-build",
+      "app-production",
+      "seed-grow-real-surfaces",
+      "desktop-e2e"
+    ],
+    "plannedStageCommands": [
+      "a1-fresh-db",
+      "a1-migrated-db",
+      "a1-receipt-recovery",
+      "a2-mutation-policy",
+      "a2-concurrency",
+      "a2-transaction-recovery",
+      "a2-shadow-zero-write",
+      "a3-prerequisite-repair",
+      "a3-repair-circuit",
+      "a3-validation-policy",
+      "a4-recovery-matrix",
+      "b0-assignment-lifecycle",
+      "b0-selection-constraints",
+      "b0-reassign-recovery",
+      "b1-seed-policy",
+      "b1-benchmark-s13-s15",
+      "b1-flag-fallback",
+      "b2-supervisor-benchmarks",
+      "b2-quiescence",
+      "b3-attention-actions",
+      "b3-recovery-matrix",
+      "b4-real-browser-desktop",
+      "b4-projection-recovery",
+      "b4-accessibility-visual",
+      "b5-shadow-comparison",
+      "b5-two-candidates",
+      "b5-metric-gate",
+      "b5-local-rollback"
+    ]
+  },
+  "stages": [
+    {
+      "id": "A0",
+      "capabilityPackage": "O0",
+      "releaseWindow": "R0_behind_flag_foundation",
+      "dependsOn": [],
+      "taskIds": [
+        "ORCH-00",
+        "ORCH-01",
+        "ORCH-02",
+        "QA-08",
+        "METRIC-01",
+        "QA-AUTO-01",
+        "QA-AUTO-02",
+        "QA-AUTO-03",
+        "QA-AUTO-04",
+        "QA-AUTO-05"
+      ],
+      "governedPaths": [
+        ".gitignore",
+        "docs/README.md",
+        "docs/AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md",
+        "docs/product-design/ADR-Seed-and-Grow-Orchestration-v1.0.md",
+        "docs/product-design/experience-refactor/manifest.v1.json",
+        "docs/product-design/experience-refactor/automatic-evidence-requirements.v1.json",
+        "docs/product-design/experience-refactor/metric-contract.v1.json",
+        "docs/product-design/experience-refactor/orchestration-contract.v1.json",
+        "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json",
+        "docs/product-design/experience-refactor/seed-grow-stage-contract.v1.json",
+        "docs/product-design/experience-refactor/seed-grow-stage-evidence.v1.json",
+        "packages/app/app/assets/css/main.css",
+        "packages/app/app/pages/work/[projectID].vue",
+        "packages/control-plane/src/flag/flag.ts",
+        "script/experience-automatic-evidence.ts",
+        "script/experience-validate.ts",
+        "script/seed-grow-real-surfaces.ts",
+        "script/seed-grow-stage-core.ts",
+        "script/seed-grow-stage-evidence.ts",
+        "script/seed-grow-stage-gate.ts"
+      ],
+      "requiredCommandIds": [
+        "root-lint",
+        "governance-validation",
+        "experience-benchmark-self-test",
+        "experience-automatic-evidence-self-test",
+        "experience-gate-self-test",
+        "seed-grow-stage-self-test",
+        "shared-typecheck",
+        "control-plane-typecheck",
+        "app-typecheck",
+        "sdk-js-typecheck",
+        "desktop-typecheck",
+        "control-plane-migrations",
+        "control-plane-r0-unit",
+        "control-plane-all-unit",
+        "control-plane-r0-branches",
+        "shared-unit",
+        "sdk-js-unit",
+        "sdk-js-build",
+        "sdk-js-generated-diff",
+        "app-unit",
+        "app-r0-config-matrix",
+        "app-r0-shell",
+        "app-r0-candidates",
+        "app-r1-r3",
+        "app-e2e",
+        "app-build",
+        "app-production",
+        "seed-grow-real-surfaces",
+        "desktop-e2e"
+      ],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "A0-CONTRACT-COVERAGE",
+          "statement": "A0-B5 tasks, criteria, commands and evidence references are complete and unique.",
+          "evidenceRefs": ["command:governance-validation", "command:seed-grow-stage-self-test", "contract:coverage"]
+        },
+        {
+          "id": "A0-ANTI-FORGERY",
+          "statement": "Wrong SHA, dirty governed source, missing or duplicate evidence, path escape, tampering, staleness and forged pass are rejected.",
+          "evidenceRefs": [
+            "command:experience-automatic-evidence-self-test",
+            "command:experience-gate-self-test",
+            "command:seed-grow-stage-self-test"
+          ]
+        },
+        {
+          "id": "A0-PACKAGE-GATES",
+          "statement": "Repository lint, package typechecks, migrations and complete package tests pass.",
+          "evidenceRefs": [
+            "command:root-lint",
+            "command:shared-typecheck",
+            "command:control-plane-typecheck",
+            "command:app-typecheck",
+            "command:sdk-js-typecheck",
+            "command:desktop-typecheck",
+            "command:control-plane-migrations",
+            "command:control-plane-r0-unit",
+            "command:control-plane-all-unit",
+            "command:shared-unit",
+            "command:sdk-js-unit",
+            "command:app-unit",
+            "command:app-r0-config-matrix",
+            "command:app-r1-r3",
+            "command:app-e2e"
+          ]
+        },
+        {
+          "id": "A0-R0-REGRESSION",
+          "statement": "Frozen R0 benchmark, branch, shell, candidate and production evidence does not regress.",
+          "evidenceRefs": [
+            "command:experience-benchmark-self-test",
+            "command:control-plane-r0-branches",
+            "command:app-r0-shell",
+            "command:app-r0-candidates",
+            "command:app-production"
+          ]
+        },
+        {
+          "id": "A0-SDK-DRIFT",
+          "statement": "Shared and JavaScript SDK contracts build without generated drift.",
+          "evidenceRefs": [
+            "command:sdk-js-typecheck",
+            "command:sdk-js-unit",
+            "command:sdk-js-build",
+            "command:sdk-js-generated-diff"
+          ]
+        },
+        {
+          "id": "A0-REAL-LOCAL-SURFACES",
+          "statement": "A real local Control Plane, production WebUI and Desktop path pass health, routing, data, restart and cleanup checks.",
+          "evidenceRefs": [
+            "command:app-build",
+            "command:seed-grow-real-surfaces",
+            "command:desktop-e2e"
+          ]
+        },
+        {
+          "id": "A0-LOCAL-REPRODUCIBILITY",
+          "statement": "Two fresh local exact-SHA attempts independently pass and produce one normalized decision digest.",
+          "evidenceRefs": ["runner:two_local_exact_sha_runs"]
+        },
+        {
+          "id": "A0-CI-FALLBACK",
+          "statement": "GitHub Actions unavailability is recorded as non-blocking and never fabricated as a CI success.",
+          "evidenceRefs": ["ci:availability"]
+        }
+      ]
+    },
+    {
+      "id": "A1",
+      "capabilityPackage": "O1",
+      "releaseWindow": "R3",
+      "dependsOn": ["A0"],
+      "taskIds": ["FACT-01", "FACT-02", "FACT-03", "FACT-04", "FACT-05", "FACT-06", "FACT-07"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test/company-project", "packages/shared", "packages/sdk"],
+      "requiredCommandIds": ["a1-fresh-db", "a1-migrated-db", "a1-receipt-recovery"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "A1-ATTEMPT-RECEIPT-FACTS",
+          "statement": "Every terminal Attempt has exactly one valid Receipt and every source reference resolves.",
+          "evidenceRefs": ["command:a1-fresh-db", "command:a1-migrated-db"]
+        },
+        {
+          "id": "A1-IDEMPOTENT-REPLAY",
+          "statement": "AgentRun replay does not duplicate Attempt, Receipt, Artifact or side effects.",
+          "evidenceRefs": ["command:a1-fresh-db"]
+        },
+        {
+          "id": "A1-MIGRATION",
+          "statement": "Fresh and baseline-migrated databases produce the same normalized facts.",
+          "evidenceRefs": ["command:a1-fresh-db", "command:a1-migrated-db"]
+        },
+        {
+          "id": "A1-RECOVERY",
+          "statement": "A committed unprocessed Receipt is processed exactly once after restart.",
+          "evidenceRefs": ["command:a1-receipt-recovery"]
+        }
+      ]
+    },
+    {
+      "id": "A2",
+      "capabilityPackage": "O4",
+      "releaseWindow": "R3",
+      "dependsOn": ["A1"],
+      "taskIds": ["GRAPH-01", "GRAPH-02", "GRAPH-03", "GRAPH-04", "GRAPH-05", "GRAPH-06", "GRAPH-07", "GRAPH-08", "GRAPH-09"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test/company-project"],
+      "requiredCommandIds": ["a2-mutation-policy", "a2-concurrency", "a2-transaction-recovery", "a2-shadow-zero-write"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "A2-MUTATION-POLICY",
+          "statement": "Graph Policy rejects cycles, fact mutation, permission escalation, self review and evidence-free growth.",
+          "evidenceRefs": ["command:a2-mutation-policy"]
+        },
+        {
+          "id": "A2-REVISION-CONCURRENCY",
+          "statement": "Only one old-revision mutation commits and the conflict is recomputed.",
+          "evidenceRefs": ["command:a2-concurrency"]
+        },
+        {
+          "id": "A2-ATOMIC-RECOVERY",
+          "statement": "Every injected transaction boundary recovers to a complete graph without duplicate dispatch.",
+          "evidenceRefs": ["command:a2-transaction-recovery"]
+        },
+        {
+          "id": "A2-SHADOW-ZERO-WRITE",
+          "statement": "Shadow mode produces decisions without business-state writes.",
+          "evidenceRefs": ["command:a2-shadow-zero-write"]
+        }
+      ]
+    },
+    {
+      "id": "A3",
+      "capabilityPackage": "O6",
+      "releaseWindow": "R3",
+      "dependsOn": ["A2"],
+      "taskIds": ["EVAL-01", "EVAL-02", "EVAL-03", "EVAL-04", "EVAL-05", "EVAL-06", "EVAL-07", "EVAL-08", "EVAL-09", "EVAL-10"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/validation", "packages/control-plane/test/company-project"],
+      "requiredCommandIds": ["a3-prerequisite-repair", "a3-repair-circuit", "a3-validation-policy"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "A3-PREREQUISITE-REPAIR",
+          "statement": "S16 blocks downstream work and repairs the graph from unchanged reality anchors.",
+          "evidenceRefs": ["command:a3-prerequisite-repair"]
+        },
+        {
+          "id": "A3-THREE-ROUND-CIRCUIT",
+          "statement": "S22 stops after three failed repair cycles and emits one material Attention.",
+          "evidenceRefs": ["command:a3-repair-circuit"]
+        },
+        {
+          "id": "A3-VALIDATION-POLICY",
+          "statement": "Warning-only, weakened criteria and default Reviewer creation cannot pass.",
+          "evidenceRefs": ["command:a3-validation-policy"]
+        }
+      ]
+    },
+    {
+      "id": "A4",
+      "capabilityPackage": "O7-R3",
+      "releaseWindow": "R3",
+      "dependsOn": ["A3"],
+      "taskIds": ["REC-01", "REC-02", "REC-03", "REC-05A"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/test"],
+      "requiredCommandIds": ["a4-recovery-matrix"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "A4-R3-RECOVERY",
+          "statement": "Receipt, Mutation, Gate, WorkItem and Runtime reconcile before new dispatch at every persisted boundary.",
+          "evidenceRefs": ["command:a4-recovery-matrix"]
+        },
+        {
+          "id": "A4-NO-DUPLICATE-EFFECT",
+          "statement": "Restart creates no duplicate mutation, dispatch or external side effect.",
+          "evidenceRefs": ["command:a4-recovery-matrix"]
+        }
+      ]
+    },
+    {
+      "id": "B0",
+      "capabilityPackage": "O2",
+      "releaseWindow": "R4",
+      "dependsOn": ["A4"],
+      "taskIds": ["TEAM-06", "TEAM-07", "TEAM-08", "TEAM-09", "TEAM-10", "TEAM-11", "TEAM-12", "TEAM-13"],
+      "governedPaths": ["packages/control-plane/src/company-recruitment", "packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test"],
+      "requiredCommandIds": ["b0-assignment-lifecycle", "b0-selection-constraints", "b0-reassign-recovery"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B0-ASSIGNMENT-LIFECYCLE",
+          "statement": "Every project Agent traces through Need, Selection and versioned Assignment without permanent identity mutation.",
+          "evidenceRefs": ["command:b0-assignment-lifecycle"]
+        },
+        {
+          "id": "B0-HARD-CONSTRAINTS",
+          "statement": "Runtime, tool, permission, workspace and independence constraints reject incompatible Candidates.",
+          "evidenceRefs": ["command:b0-selection-constraints"]
+        },
+        {
+          "id": "B0-REASSIGN-RECOVERY",
+          "statement": "Reassign and restart preserve history and maintain one active Assignment per WorkItem.",
+          "evidenceRefs": ["command:b0-reassign-recovery"]
+        }
+      ]
+    },
+    {
+      "id": "B1",
+      "capabilityPackage": "O3",
+      "releaseWindow": "R4",
+      "dependsOn": ["B0"],
+      "taskIds": ["SEED-01", "SEED-02", "SEED-03", "SEED-04", "SEED-05", "SEED-06", "SEED-07", "SEED-08", "SEED-09"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/capability", "packages/control-plane/test", "packages/shared", "packages/sdk"],
+      "requiredCommandIds": ["b1-seed-policy", "b1-benchmark-s13-s15", "b1-flag-fallback"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B1-SEED-POLICY",
+          "statement": "Deterministic rules select direct_single, seed_pair or discovery_first.",
+          "evidenceRefs": ["command:b1-seed-policy"]
+        },
+        {
+          "id": "B1-TWO-AGENT-SEED",
+          "statement": "S13 starts with different Wayfinder and Builder Agents, read-only Wayfinder and no Reviewer.",
+          "evidenceRefs": ["command:b1-benchmark-s13-s15"]
+        },
+        {
+          "id": "B1-SIMPLE-AND-HIGH-RISK",
+          "statement": "S14 stays single-Agent and S15 stops at ApprovalGate without dispatching Builder.",
+          "evidenceRefs": ["command:b1-benchmark-s13-s15"]
+        },
+        {
+          "id": "B1-OFF-FALLBACK",
+          "statement": "Flag off is behaviorally identical to legacy and active projects remain pinned.",
+          "evidenceRefs": ["command:b1-flag-fallback"]
+        }
+      ]
+    },
+    {
+      "id": "B2",
+      "capabilityPackage": "O5",
+      "releaseWindow": "R4",
+      "dependsOn": ["B1", "A2"],
+      "taskIds": ["ORCH-03", "ORCH-04", "ORCH-05", "ORCH-06", "ORCH-07", "ORCH-08", "ORCH-09", "ORCH-10", "ORCH-11"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/test/company-project", "packages/shared", "packages/sdk"],
+      "requiredCommandIds": ["b2-supervisor-benchmarks", "b2-quiescence"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B2-EVIDENCE-GROWTH",
+          "statement": "S13, S17 and S21 grow only from persisted sourceRefs with a one-to-three-node budget.",
+          "evidenceRefs": ["command:b2-supervisor-benchmarks"]
+        },
+        {
+          "id": "B2-EXACTLY-ONCE-PROCESSING",
+          "statement": "Each Receipt produces at most one applied decision and only ready nodes dispatch.",
+          "evidenceRefs": ["command:b2-supervisor-benchmarks"]
+        },
+        {
+          "id": "B2-QUIESCENCE",
+          "statement": "S24 rejects completion while any Receipt, Mutation, Gate, blocker or criterion remains unresolved.",
+          "evidenceRefs": ["command:b2-quiescence"]
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "capabilityPackage": "O7-R4",
+      "releaseWindow": "R4",
+      "dependsOn": ["B2"],
+      "taskIds": ["GOV-01", "GOV-02", "GOV-03", "GOV-04", "GOV-05", "REC-04", "REC-05B"],
+      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/src/server", "packages/control-plane/test"],
+      "requiredCommandIds": ["b3-attention-actions", "b3-recovery-matrix"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B3-MATERIAL-ATTENTION",
+          "statement": "Only permission, scope, external effect and unresolved material risks interrupt the user.",
+          "evidenceRefs": ["command:b3-attention-actions"]
+        },
+        {
+          "id": "B3-REAL-ACTIONS",
+          "statement": "Pause, resume, stop, retry and blocker resolution expose only implemented idempotent handlers.",
+          "evidenceRefs": ["command:b3-attention-actions"]
+        },
+        {
+          "id": "B3-R4-RECOVERY",
+          "statement": "S27 reconciles Assignment, AgentRun, Attention and action handlers before new dispatch.",
+          "evidenceRefs": ["command:b3-recovery-matrix"]
+        }
+      ]
+    },
+    {
+      "id": "B4",
+      "capabilityPackage": "O8",
+      "releaseWindow": "R4",
+      "dependsOn": ["B3"],
+      "taskIds": ["UX-01", "UX-02", "UX-03", "UX-04", "UX-05", "UX-06", "UX-07", "UX-08", "UX-09", "SDK-01", "QA-09"],
+      "governedPaths": ["packages/app", "packages/desktop", "packages/control-plane/src/server", "packages/shared", "packages/sdk"],
+      "requiredCommandIds": ["b4-real-browser-desktop", "b4-projection-recovery", "b4-accessibility-visual"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B4-REAL-SURFACES",
+          "statement": "Browser and Desktop use the real candidate Control Plane and never a production Fixture.",
+          "evidenceRefs": ["command:b4-real-browser-desktop"]
+        },
+        {
+          "id": "B4-PROJECTION-CONVERGENCE",
+          "statement": "SSE reconnect, refresh and restart converge to one source-watermarked projection.",
+          "evidenceRefs": ["command:b4-projection-recovery"]
+        },
+        {
+          "id": "B4-USABILITY-CONTRACT",
+          "statement": "Keyboard, screen reader, loading, empty, error, offline and visual regression checks pass.",
+          "evidenceRefs": ["command:b4-accessibility-visual"]
+        }
+      ]
+    },
+    {
+      "id": "B5",
+      "capabilityPackage": "O9",
+      "releaseWindow": "R4",
+      "dependsOn": ["B4"],
+      "taskIds": ["ROLLOUT-01", "ROLLOUT-02", "ROLLOUT-03", "ROLLOUT-04", "ROLLOUT-05", "LEARN-01"],
+      "governedPaths": ["packages/control-plane", "packages/app", "packages/desktop", "packages/shared", "packages/sdk", "docs/product-design/experience-refactor"],
+      "requiredCommandIds": ["b5-shadow-comparison", "b5-two-candidates", "b5-metric-gate", "b5-local-rollback"],
+      "repeats": 2,
+      "criteria": [
+        {
+          "id": "B5-SHADOW-COMPARISON",
+          "statement": "Matched legacy and seed_and_grow runs produce recomputable quality, cost, Reviewer and growth comparisons.",
+          "evidenceRefs": ["command:b5-shadow-comparison"]
+        },
+        {
+          "id": "B5-TWO-CANDIDATES",
+          "statement": "Two consecutive candidate SHAs each pass two isolated complete benchmark runs.",
+          "evidenceRefs": ["command:b5-two-candidates"]
+        },
+        {
+          "id": "B5-METRIC-GATE",
+          "statement": "Every Pre-Public blocking metric meets its registered sample, window and threshold.",
+          "evidenceRefs": ["command:b5-metric-gate"]
+        },
+        {
+          "id": "B5-LOCAL-ROLLBACK",
+          "statement": "Local rollback restores legacy fallback without data loss, in-flight strategy conversion or destructive retirement.",
+          "evidenceRefs": ["command:b5-local-rollback"]
+        }
+      ]
+    }
+  ]
+}

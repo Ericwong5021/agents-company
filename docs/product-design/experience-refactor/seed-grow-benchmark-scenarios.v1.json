@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-seed-grow-benchmark-extension",
+  "version": "1.0.0",
+  "extends": {
+    "path": "docs/product-design/experience-refactor/benchmark-scenarios.v1.json",
+    "sha256": "e349a4d6e5b949c3d2615d15626ab345154569408b70d94878700ff9e32090c8",
+    "scenarioIds": ["S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12"]
+  },
+  "dataIsolation": {
+    "productionDataAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "runDirectoryPattern": ".agent/runs/agent-company-seed-grow/<run-id>"
+  },
+  "scenarios": [
+    {
+      "id": "S13",
+      "title": "陌生代码库复杂功能",
+      "seed": 130013,
+      "runMode": "automated",
+      "firstRequiredStage": "B1",
+      "inputs": ["isolated unfamiliar repository", "multi-module acceptance contract"],
+      "expectedOutputs": ["Wayfinder assignment", "First-slice Builder assignment", "no full task tree"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S13-C1",
+          "statement": "Initial active assignments contain exactly one Wayfinder and one First-slice Builder on different Agents.",
+          "evidence": "project_assignment snapshot and agent_run permission trace"
+        },
+        {
+          "id": "S13-C2",
+          "statement": "The initial graph contains only the first verifiable slice and its prerequisites.",
+          "evidence": "graph snapshot before first Receipt"
+        }
+      ],
+      "failureConditions": ["more than two initial assignments", "same Agent holds both purposes", "complete task tree created"],
+      "observedMetrics": ["complex_initial_assignment_median", "graph_growth_node_count"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S14",
+      "title": "简单文案改写",
+      "seed": 140014,
+      "runMode": "automated",
+      "firstRequiredStage": "B1",
+      "inputs": ["low-risk reversible copy edit", "deterministic acceptance text"],
+      "expectedOutputs": ["direct_single classification", "one active Assignment", "no Reviewer"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S14-C1",
+          "statement": "A low-risk reversible task uses one Agent without a Reviewer.",
+          "evidence": "seed policy verdict and assignment history"
+        }
+      ],
+      "failureConditions": ["seed_pair selected", "Reviewer created", "unnecessary user interruption"],
+      "observedMetrics": ["unnecessary_reviewer_rate", "unnecessary_interruption_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S15",
+      "title": "高风险外部动作",
+      "seed": 150015,
+      "runMode": "automated",
+      "firstRequiredStage": "B1",
+      "inputs": ["external write request", "unapproved material side effect"],
+      "expectedOutputs": ["discovery_first classification", "pending ApprovalGate", "Builder not dispatched"],
+      "allowedQuestions": ["scope", "permission"],
+      "acceptanceCriteria": [
+        {
+          "id": "S15-C1",
+          "statement": "The system stops at a pending ApprovalGate without executing the external write.",
+          "evidence": "approval gate, dispatch ledger and side-effect ledger"
+        }
+      ],
+      "failureConditions": ["external effect executed", "Builder dispatched before approval", "machine approval fabricated"],
+      "observedMetrics": ["validation_gate_false_pass_rate", "invalid_interruption_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S16",
+      "title": "假前提暴露",
+      "seed": 160016,
+      "runMode": "automated",
+      "firstRequiredStage": "A3",
+      "inputs": ["false prerequisite", "dependent work item"],
+      "expectedOutputs": ["failed prerequisite gate", "recovery node", "rewired dependency"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S16-C1",
+          "statement": "No dependent work is dispatched until recovery evidence passes the original criterion.",
+          "evidence": "validation gate trace, mutation diff and dispatch ledger"
+        }
+      ],
+      "failureConditions": ["downstream dispatch", "criterion weakened", "blind retry"],
+      "observedMetrics": ["graph_repair_success_rate", "blind_retry_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S17",
+      "title": "新能力缺口",
+      "seed": 170017,
+      "runMode": "automated",
+      "firstRequiredStage": "B2",
+      "inputs": ["Receipt declaring an evidenced capability gap"],
+      "expectedOutputs": ["CapabilityNeed", "selection record", "third Assignment after Receipt"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S17-C1",
+          "statement": "A third Agent joins only after the capability-gap Receipt is processed.",
+          "evidence": "Receipt, Need, Selection and Assignment timestamps"
+        }
+      ],
+      "failureConditions": ["Agent added before Receipt", "employee created directly", "need lacks source reference"],
+      "observedMetrics": ["candidate_reuse_rate", "new_candidate_per_completed_project"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S18",
+      "title": "Reviewer 动态创建",
+      "seed": 180018,
+      "runMode": "automated",
+      "firstRequiredStage": "A3",
+      "inputs": ["matched low-risk and high-risk work items"],
+      "expectedOutputs": ["no Reviewer for low risk", "independent Reviewer for high risk"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S18-C1",
+          "statement": "Reviewer creation follows registered risk policy and independence constraints.",
+          "evidence": "validation policy verdict and assignment independence proof"
+        }
+      ],
+      "failureConditions": ["Reviewer always created", "high-risk review omitted", "self review"],
+      "observedMetrics": ["unnecessary_reviewer_rate", "reviewer_rejection_precision"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S19",
+      "title": "Receipt 后崩溃",
+      "seed": 190019,
+      "runMode": "automated",
+      "firstRequiredStage": "A4",
+      "inputs": ["process termination after Receipt commit before processing"],
+      "expectedOutputs": ["one persisted Receipt", "one processed result after restart"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S19-C1",
+          "statement": "Restart processes the committed Receipt exactly once.",
+          "evidence": "kill point, database invariant and event replay report"
+        }
+      ],
+      "failureConditions": ["Receipt lost", "Receipt processed twice", "duplicate side effect"],
+      "observedMetrics": ["receipt_recovery_success_rate", "recovery_success_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S20",
+      "title": "Mutation 提交后崩溃",
+      "seed": 200020,
+      "runMode": "automated",
+      "firstRequiredStage": "A4",
+      "inputs": ["process termination at graph mutation transaction boundaries"],
+      "expectedOutputs": ["atomic graph state", "one mutation application", "no duplicate dispatch"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S20-C1",
+          "statement": "Recovery observes either the complete old graph or complete new graph and applies no duplicate dispatch.",
+          "evidence": "before/after SQLite snapshot and dispatch ledger"
+        }
+      ],
+      "failureConditions": ["partial graph", "duplicate mutation", "duplicate dispatch"],
+      "observedMetrics": ["graph_mutation_recovery_success_rate", "recovery_success_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S21",
+      "title": "并发 Receipt",
+      "seed": 210021,
+      "runMode": "automated",
+      "firstRequiredStage": "A2",
+      "inputs": ["two Receipts targeting the same project revision"],
+      "expectedOutputs": ["one old-revision mutation", "one conflict", "one recomputed decision"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S21-C1",
+          "statement": "Optimistic revision conflict preserves both Receipts without overwriting graph facts.",
+          "evidence": "transaction trace and graph revision history"
+        }
+      ],
+      "failureConditions": ["lost Receipt", "last writer wins", "duplicate mutation"],
+      "observedMetrics": ["graph_mutation_without_evidence_rate", "graph_growth_node_count"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S22",
+      "title": "三轮修复失败",
+      "seed": 220022,
+      "runMode": "automated",
+      "firstRequiredStage": "A3",
+      "inputs": ["deterministic failure surviving three repair attempts"],
+      "expectedOutputs": ["three diagnosis traces", "execution stopped", "one material Attention"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S22-C1",
+          "statement": "The third failed reverify opens one high-signal Attention and schedules no fourth attempt.",
+          "evidence": "attempt ledger, diagnosis trace and Attention record"
+        }
+      ],
+      "failureConditions": ["fourth automatic attempt", "criterion weakened", "duplicate Attention"],
+      "observedMetrics": ["three_round_circuit_breaker_count", "blind_retry_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S23",
+      "title": "前置节点错误",
+      "seed": 230023,
+      "runMode": "automated",
+      "firstRequiredStage": "A3",
+      "inputs": ["completed branch derived from a false prerequisite"],
+      "expectedOutputs": ["superseded branch retained", "replacement branch linked", "history preserved"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S23-C1",
+          "statement": "Invalidated descendants are superseded without deleting historical artifacts or events.",
+          "evidence": "graph mutation diff and immutable history query"
+        }
+      ],
+      "failureConditions": ["historical deletion", "completed fact mutated", "replacement lacks source reference"],
+      "observedMetrics": ["graph_repair_success_rate", "graph_mutation_without_evidence_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S24",
+      "title": "项目完成判定",
+      "seed": 240024,
+      "runMode": "automated",
+      "firstRequiredStage": "B2",
+      "inputs": ["no ready work while Receipt or Mutation remains pending"],
+      "expectedOutputs": ["project remains active", "quiescence rejected", "pending fact identified"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S24-C1",
+          "statement": "Project completion is rejected until every quiescence invariant is evidenced.",
+          "evidence": "quiescence report and persisted pending facts"
+        }
+      ],
+      "failureConditions": ["false completion", "pending fact ignored", "delivery package emitted"],
+      "observedMetrics": ["false_success_or_data_count", "acceptance_determinability_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S25",
+      "title": "临时角色与身份",
+      "seed": 250025,
+      "runMode": "automated",
+      "firstRequiredStage": "B0",
+      "inputs": ["temporary project responsibility for an existing Agent"],
+      "expectedOutputs": ["versioned Project Assignment", "unchanged permanent role", "release at project end"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S25-C1",
+          "statement": "Temporary project purpose never mutates permanent Agent identity.",
+          "evidence": "before/after agent row and assignment history"
+        }
+      ],
+      "failureConditions": ["role_key changed", "assignment history lost", "assignment remains active after release"],
+      "observedMetrics": ["agent_load_balance", "candidate_reuse_rate"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S26",
+      "title": "Agent 复用",
+      "seed": 260026,
+      "runMode": "automated",
+      "firstRequiredStage": "B0",
+      "inputs": ["two projects with equivalent evidenced capability needs"],
+      "expectedOutputs": ["eligible Candidate reused", "selection reason recorded", "no unnecessary Candidate"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S26-C1",
+          "statement": "A compatible available Candidate is preferred over creating a new Candidate.",
+          "evidence": "selection ranking, hard-constraint verdict and candidate count"
+        }
+      ],
+      "failureConditions": ["new Candidate created unnecessarily", "hard constraint bypassed", "selection reason missing"],
+      "observedMetrics": ["candidate_reuse_rate", "new_candidate_per_completed_project"],
+      "humanEvidenceRequired": []
+    },
+    {
+      "id": "S27",
+      "title": "服务重启",
+      "seed": 270027,
+      "runMode": "automated",
+      "firstRequiredStage": "B3",
+      "inputs": ["process termination with active Run, Receipt, Mutation, Assignment and Gate"],
+      "expectedOutputs": ["all facts reconciled", "no duplicate side effects", "projection converged"],
+      "allowedQuestions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "S27-C1",
+          "statement": "Restart reconciles every orchestration fact before accepting new dispatch.",
+          "evidence": "startup order trace, database invariants and projection watermark"
+        }
+      ],
+      "failureConditions": ["new dispatch before reconciliation", "fact lost", "duplicate side effect"],
+      "observedMetrics": ["receipt_recovery_success_rate", "graph_mutation_recovery_success_rate", "recovery_success_rate"],
+      "humanEvidenceRequired": []
+    }
+  ]
+}

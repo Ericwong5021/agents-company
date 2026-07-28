@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-seed-grow-orchestration",
+  "version": "1.0.0",
+  "status": "contract_only",
+  "authority": {
+    "controlPlane": "single_local_control_plane",
+    "database": "single_sqlite_authority",
+    "runtime": "single_agent_runtime",
+    "prohibited": [
+      "second_control_plane",
+      "second_database",
+      "second_agent_runtime",
+      "orca_compatibility_layer",
+      "legacy_agentcompany_compatibility"
+    ]
+  },
+  "projectExecutionStrategy": {
+    "factOwner": "company_project.execution_strategy",
+    "implementationStage": "B1",
+    "values": ["legacy_full_plan", "seed_and_grow"],
+    "default": "legacy_full_plan",
+    "pinnedAt": "project_creation",
+    "mutableWhileActive": false,
+    "legacyProjectsRemainPinned": true
+  },
+  "rolloutFlag": {
+    "factOwner": "AGENTCOMPANY_SEED_GROW_ORCHESTRATION",
+    "values": ["off", "shadow", "active"],
+    "default": "off",
+    "invalidValue": "reject",
+    "modes": {
+      "off": {
+        "allowedStrategies": ["legacy_full_plan"],
+        "seedGrowWritesAllowed": false
+      },
+      "shadow": {
+        "allowedStrategies": ["legacy_full_plan"],
+        "seedGrowWritesAllowed": false
+      },
+      "active": {
+        "allowedStrategies": ["legacy_full_plan", "seed_and_grow"],
+        "seedGrowWritesAllowed": true
+      }
+    }
+  },
+  "seed": {
+    "complex": ["wayfinder", "first_slice_builder"],
+    "simple": ["direct_worker"],
+    "highRisk": ["wayfinder"],
+    "reviewerCreatedByDefault": false
+  },
+  "writeAuthority": {
+    "worker": ["work_attempt", "artifact", "work_receipt"],
+    "graphSupervisor": ["graph_decision", "graph_mutation_proposal", "capability_need"],
+    "deterministicPolicy": ["graph_mutation_verdict", "validation_gate_verdict"],
+    "controlPlane": ["authoritative_state_transition", "dispatch", "recovery"],
+    "user": ["approval_decision", "scope_decision", "external_effect_authorization"]
+  },
+  "runtimeApprovalBoundary": {
+    "preserved": true,
+    "categories": ["permission", "scope", "external_write", "publish", "delete", "irreversible_action"],
+    "expectedBlockedStateCountsAsAutomatedPass": true,
+    "automatedApprovalExecutionAllowed": false
+  },
+  "prePublicStageGate": {
+    "machineEvidenceBlocking": true,
+    "humanEvidenceBlocking": false,
+    "humanEvidenceMode": "advisory_only",
+    "waiverAccepted": false
+  }
+}

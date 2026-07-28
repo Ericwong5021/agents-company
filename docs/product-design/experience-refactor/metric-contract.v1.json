@@ -14,7 +14,7 @@
       "eventType": "string",
       "occurredAt": "ISO-8601 timestamp",
       "buildSha": "40-character git commit",
-      "scenarioId": "S01-S12 or null",
+      "scenarioId": "S01-S27 or null",
       "runId": "string",
       "subjectId": "pseudonymous local identifier",
       "properties": "object"
@@ -75,6 +75,62 @@
     {
       "id": "trust.false_state_detected",
       "requiredProperties": ["surface", "kind"]
+    },
+    {
+      "id": "work_receipt.submitted",
+      "requiredProperties": ["receiptId", "attemptId", "sourceRefCount"]
+    },
+    {
+      "id": "work_receipt.processed",
+      "requiredProperties": ["receiptId", "duplicate", "recovered"]
+    },
+    {
+      "id": "graph_decision.recorded",
+      "requiredProperties": ["decisionId", "kind", "automated", "addedNodeCount"]
+    },
+    {
+      "id": "graph_mutation.evaluated",
+      "requiredProperties": ["mutationId", "evidenceCount", "verdict"]
+    },
+    {
+      "id": "graph_mutation.recovered",
+      "requiredProperties": ["mutationId", "consistent", "duplicateSideEffects"]
+    },
+    {
+      "id": "graph_repair.completed",
+      "requiredProperties": ["repairId", "passedOriginalCriterion", "attemptCount"]
+    },
+    {
+      "id": "validation_gate.evaluated",
+      "requiredProperties": ["gateId", "passed", "anchorPassed", "falsePass"]
+    },
+    {
+      "id": "project_assignment.activated",
+      "requiredProperties": ["assignmentId", "agentId", "purpose", "initial"]
+    },
+    {
+      "id": "project_assignment.released",
+      "requiredProperties": ["assignmentId", "agentId", "durationMs"]
+    },
+    {
+      "id": "candidate.selected",
+      "requiredProperties": ["candidateId", "reused", "createdForNeed"]
+    },
+    {
+      "id": "review.completed",
+      "requiredProperties": ["risk", "invoked", "rejected", "findingConfirmed"]
+    },
+    {
+      "id": "repair.circuit_opened",
+      "requiredProperties": ["workItemId", "attemptCount", "attentionId"]
+    },
+    {
+      "id": "delivery.quality_compared",
+      "requiredProperties": ["risk", "strategy", "legacyScore", "seedGrowScore"]
+    },
+    {
+      "id": "model.cost_recorded",
+      "requiredProperties": ["acceptedDeliveryId", "tokens", "cost"]
     },
     {
       "id": "research.sus_recorded",
@@ -219,6 +275,386 @@
         "gate": "R0",
         "operator": "=",
         "value": 0
+      }
+    },
+    {
+      "id": "complex_initial_assignment_median",
+      "label": "Complex project initial Assignment median",
+      "definition": "Median active Assignment count before the first Receipt for eligible complex projects.",
+      "formula": "median(count(project_assignment.activated where initial = true before first work_receipt.submitted))",
+      "numerator": "initial active Assignment count per eligible complex project",
+      "denominator": "eligible complex projects",
+      "eventSource": ["project_assignment.activated", "work_receipt.submitted"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "assignments",
+      "aggregation": "median",
+      "collectionMode": "automated",
+      "minimumEvidence": ["project_assignment.activated", "work_receipt.submitted", "seed policy verdict"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 2
+      }
+    },
+    {
+      "id": "graph_mutation_without_evidence_rate",
+      "label": "Graph mutation without evidence rate",
+      "definition": "Share of evaluated graph mutations whose evidence set is empty.",
+      "formula": "graph_mutation.evaluated(evidenceCount = 0) / graph_mutation.evaluated",
+      "numerator": "mutations with evidenceCount = 0",
+      "denominator": "evaluated mutations",
+      "eventSource": ["graph_mutation.evaluated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["graph_mutation.evaluated", "sourceRefs"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "receipt_recovery_success_rate",
+      "label": "Receipt recovery success rate",
+      "definition": "Share of injected Receipt-boundary restarts that process the Receipt exactly once.",
+      "formula": "work_receipt.processed(recovered = true AND duplicate = false) / eligible_receipt_restart_injections",
+      "numerator": "successful exactly-once recovered Receipts",
+      "denominator": "eligible Receipt restart injections",
+      "eventSource": ["work_receipt.submitted", "work_receipt.processed", "connection.lost", "connection.recovered"],
+      "timeWindow": "candidate recovery matrix",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["kill-point trace", "work_receipt.processed", "database invariant"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "graph_mutation_recovery_success_rate",
+      "label": "Graph mutation recovery success rate",
+      "definition": "Share of mutation-boundary restarts that recover a consistent graph without duplicate side effects.",
+      "formula": "graph_mutation.recovered(consistent = true AND duplicateSideEffects = 0) / eligible_mutation_restart_injections",
+      "numerator": "consistent mutation recoveries without duplicate side effects",
+      "denominator": "eligible mutation restart injections",
+      "eventSource": ["graph_mutation.recovered", "connection.lost", "connection.recovered"],
+      "timeWindow": "candidate recovery matrix",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["kill-point trace", "graph snapshots", "side-effect ledger"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "graph_repair_success_rate",
+      "label": "Graph repair success rate",
+      "definition": "Share of completed graph repairs that pass the unchanged original criterion.",
+      "formula": "graph_repair.completed(passedOriginalCriterion = true) / graph_repair.completed",
+      "numerator": "repairs passing the original criterion",
+      "denominator": "completed graph repairs",
+      "eventSource": ["graph_repair.completed", "validation_gate.evaluated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["repair trace", "original criterion digest", "validation gate verdict"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "blind_retry_rate",
+      "label": "Blind retry rate",
+      "definition": "Share of retries without a registered diagnosis or changed implementation/environment fact.",
+      "formula": "retries(without diagnosis or changed fact) / retries",
+      "numerator": "blind retries",
+      "denominator": "all retries",
+      "eventSource": ["graph_repair.completed", "repair.circuit_opened"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["attempt ledger", "diagnosis record", "repair diff"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "validation_gate_false_pass_rate",
+      "label": "Validation gate false-pass rate",
+      "definition": "Share of passed validation gates whose registered reality anchor did not pass.",
+      "formula": "validation_gate.evaluated(passed = true AND anchorPassed = false) / validation_gate.evaluated(passed = true)",
+      "numerator": "passed gates with failed anchors",
+      "denominator": "passed validation gates",
+      "eventSource": ["validation_gate.evaluated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["validation_gate.evaluated", "anchor report"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "candidate_reuse_rate",
+      "label": "Candidate reuse rate",
+      "definition": "Share of eligible selections that reuse a compatible Candidate.",
+      "formula": "candidate.selected(reused = true) / candidate.selected",
+      "numerator": "reused Candidate selections",
+      "denominator": "eligible Candidate selections",
+      "eventSource": ["candidate.selected"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["candidate.selected", "selection hard-constraint report"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "new_candidate_per_completed_project",
+      "label": "New Candidate per completed project",
+      "definition": "New Candidates created for Needs divided by completed eligible projects.",
+      "formula": "candidate.selected(createdForNeed = true) / eligible_completed_projects",
+      "numerator": "Candidates created for a Need",
+      "denominator": "eligible completed projects",
+      "eventSource": ["candidate.selected", "benchmark.completed"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "candidates_per_project",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["candidate.selected", "benchmark.completed"],
+      "target": {
+        "gate": "R4",
+        "operator": "<=",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "unnecessary_reviewer_rate",
+      "label": "Unnecessary Reviewer rate",
+      "definition": "Share of low-risk work that invoked a Reviewer without a registered risk trigger.",
+      "formula": "review.completed(risk = low AND invoked = true) / eligible_low_risk_work",
+      "numerator": "low-risk work with Reviewer invocation",
+      "denominator": "eligible low-risk work",
+      "eventSource": ["review.completed"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["review.completed", "validation policy verdict"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "reviewer_rejection_precision",
+      "label": "Reviewer rejection precision",
+      "definition": "Share of Reviewer rejections confirmed by the registered validation anchor.",
+      "formula": "review.completed(rejected = true AND findingConfirmed = true) / review.completed(rejected = true)",
+      "numerator": "confirmed Reviewer rejections",
+      "denominator": "Reviewer rejections",
+      "eventSource": ["review.completed", "validation_gate.evaluated"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 1,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["review.completed", "validation anchor"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 0.8
+      }
+    },
+    {
+      "id": "reviewer_invocation_ratio_vs_legacy",
+      "label": "Reviewer invocation ratio versus legacy",
+      "definition": "Reviewer invocations per eligible work item under seed_and_grow divided by the matched legacy rate.",
+      "formula": "seed_grow_reviewer_invocations_per_work / legacy_reviewer_invocations_per_work",
+      "numerator": "seed_and_grow Reviewer invocations per eligible work item",
+      "denominator": "matched legacy Reviewer invocations per eligible work item",
+      "eventSource": ["review.completed", "benchmark.completed"],
+      "timeWindow": "matched shadow comparison across two candidates",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["shadow comparison", "review.completed", "strategy binding"],
+      "target": {
+        "gate": "R4",
+        "operator": "<",
+        "value": 1
+      }
+    },
+    {
+      "id": "agent_load_balance",
+      "label": "Agent load balance",
+      "definition": "Maximum active Assignment share held by one Agent in eligible concurrent work.",
+      "formula": "max(active_assignments_by_agent) / active_assignments",
+      "numerator": "maximum active Assignment count for one Agent",
+      "denominator": "active Assignments",
+      "eventSource": ["project_assignment.activated", "project_assignment.released"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "max",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Assignment timeline"],
+      "target": {
+        "gate": "R4",
+        "operator": "<=",
+        "value": 0.75
+      }
+    },
+    {
+      "id": "automated_graph_decision_rate",
+      "label": "Automated graph decision rate",
+      "definition": "Share of Graph Decisions resolved without user attention while remaining inside policy.",
+      "formula": "graph_decision.recorded(automated = true) / graph_decision.recorded",
+      "numerator": "automated Graph Decisions",
+      "denominator": "Graph Decisions",
+      "eventSource": ["graph_decision.recorded"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["graph_decision.recorded", "policy verdict"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 0.8
+      }
+    },
+    {
+      "id": "invalid_interruption_rate",
+      "label": "Invalid interruption rate",
+      "definition": "Share of presented interruptions not justified by permission, scope, external effect or unresolved material risk.",
+      "formula": "interruptions(needed = false) / judged_interruptions",
+      "numerator": "invalid interruptions",
+      "denominator": "judged interruptions",
+      "eventSource": ["user.interruption_presented", "user.interruption_judged"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Attention materiality report", "user.interruption_judged"],
+      "target": {
+        "gate": "R4",
+        "operator": "<",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "three_round_circuit_breaker_count",
+      "label": "Three-round circuit breaker count",
+      "definition": "Count of work items stopped after exactly three failed repair cycles.",
+      "formula": "count(repair.circuit_opened where attemptCount = 3)",
+      "numerator": "three-round circuit-open events",
+      "denominator": "eligible benchmark runs",
+      "eventSource": ["repair.circuit_opened"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["repair.circuit_opened", "attempt ledger", "Attention"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "graph_growth_node_count",
+      "label": "Graph growth node count",
+      "definition": "Maximum number of nodes added by one accepted Graph Decision.",
+      "formula": "max(graph_decision.recorded.addedNodeCount)",
+      "numerator": "nodes added by an accepted decision",
+      "denominator": "accepted add-node decisions",
+      "eventSource": ["graph_decision.recorded"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 1,
+      "unit": "nodes",
+      "aggregation": "max",
+      "collectionMode": "automated",
+      "minimumEvidence": ["graph_decision.recorded", "mutation diff"],
+      "target": {
+        "gate": "R4",
+        "operator": "<=",
+        "value": 3
+      }
+    },
+    {
+      "id": "accepted_delivery_cost",
+      "label": "Cost per accepted delivery",
+      "definition": "Total recorded model cost divided by accepted eligible deliveries.",
+      "formula": "sum(model.cost_recorded.cost) / accepted_deliveries",
+      "numerator": "recorded model cost",
+      "denominator": "accepted eligible deliveries",
+      "eventSource": ["model.cost_recorded", "delivery.presented"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "currency_per_delivery",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["model.cost_recorded", "accepted Delivery Package"],
+      "target": {
+        "gate": "R4",
+        "operator": "<=",
+        "value": 100
+      }
+    },
+    {
+      "id": "low_risk_quality_ratio_vs_legacy",
+      "label": "Low-risk quality ratio versus legacy",
+      "definition": "Seed-and-grow deterministic criterion pass rate for matched low-risk work divided by legacy.",
+      "formula": "seed_grow_low_risk_criterion_pass_rate / legacy_low_risk_criterion_pass_rate",
+      "numerator": "seed_and_grow low-risk criterion pass rate",
+      "denominator": "matched legacy low-risk criterion pass rate",
+      "eventSource": ["delivery.quality_compared", "delivery.criterion_evaluated"],
+      "timeWindow": "matched shadow comparison across two candidates",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["delivery.quality_compared", "criterion results", "strategy binding"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 1
       }
     },
     {
@@ -425,9 +861,74 @@
           "metricId": "false_success_or_data_count",
           "operator": "=",
           "value": 0
+        },
+        {
+          "metricId": "graph_mutation_without_evidence_rate",
+          "operator": "=",
+          "value": 0
+        },
+        {
+          "metricId": "complex_initial_assignment_median",
+          "operator": "=",
+          "value": 2
+        },
+        {
+          "metricId": "receipt_recovery_success_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "graph_mutation_recovery_success_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "validation_gate_false_pass_rate",
+          "operator": "=",
+          "value": 0
+        },
+        {
+          "metricId": "blind_retry_rate",
+          "operator": "=",
+          "value": 0
+        },
+        {
+          "metricId": "invalid_interruption_rate",
+          "operator": "<",
+          "value": 0.2
+        },
+        {
+          "metricId": "reviewer_invocation_ratio_vs_legacy",
+          "operator": "<",
+          "value": 1
+        },
+        {
+          "metricId": "candidate_reuse_rate",
+          "operator": ">=",
+          "value": 0.5
+        },
+        {
+          "metricId": "new_candidate_per_completed_project",
+          "operator": "<=",
+          "value": 0.5
+        },
+        {
+          "metricId": "low_risk_quality_ratio_vs_legacy",
+          "operator": ">=",
+          "value": 1
+        },
+        {
+          "metricId": "core_task_completion_rate",
+          "operator": ">=",
+          "value": 0.7
         }
       ],
-      "requiredStructuralEvidence": ["Dynamic organization changes do not regress the R3 benchmark set"]
+      "requiredStructuralEvidence": [
+        "Dynamic organization changes do not regress the R3 benchmark set",
+        "S13-S27 execute from persisted facts with exact-SHA evidence",
+        "Two consecutive candidates each pass two isolated local reproductions",
+        "Local rollback restores the legacy path without data loss"
+      ]
     }
   ],
   "currentCollectionStatus": {

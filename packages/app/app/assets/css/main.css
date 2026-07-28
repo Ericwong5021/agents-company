@@ -1647,7 +1647,7 @@ textarea:focus-visible {
 }
 
 /* DELIV-04 — Gate 决策面：说明输入 + 决策动作 + 契约边界说明 */
-.ac-gate-decision {
+.ac-approval-decision {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1656,12 +1656,12 @@ textarea:focus-visible {
   border-top: 1px solid var(--ac-line);
 }
 
-.ac-gate-decision label {
+.ac-approval-decision label {
   color: var(--ac-ink-muted);
   font-size: var(--ac-text-caption);
 }
 
-.ac-gate-decision textarea {
+.ac-approval-decision textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--ac-line);
@@ -1671,7 +1671,7 @@ textarea:focus-visible {
   resize: vertical;
 }
 
-.ac-gate-decision__boundary {
+.ac-approval-decision__boundary {
   color: var(--ac-ink-dimmed);
   font-size: var(--ac-text-min);
   line-height: 1.5;
@@ -1820,4 +1820,3 @@ textarea:focus-visible {
     display: flex;
   }
 }
-
