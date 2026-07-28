@@ -5,8 +5,60 @@ import {
   companyReconnectDelay,
   transitionCompanyConnection,
 } from "../../shared/connection-state"
+import { classifyGlobalEvent, nextSignalRefreshDelay } from "../../shared/company-events"
 
 const allResources = ["company", "agents", "work", "channels", "messages"] as const
+
+// WORK-06 — 单标签页内共享一条 SSE 订阅：事件只触发只读快照刷新（变更类动作
+// 靠 request_id 幂等，多标签页订阅不会重复执行业务动作）。后端 /event 暂无
+// Last-Event-ID 补发，连接/重连后以一次全量快照校准，不伪造事件回放。
+// SSE 不可用时降级回既有的断线重连轮询 + 手动刷新，不静默停更。
+const SIGNAL_REFRESH_MIN_INTERVAL_MS = 1_000
+
+const sseListeners = new Set<() => void>()
+let sseSource: EventSource | undefined
+let sseLastRefreshAt: number | undefined
+let sseRefreshTimer: ReturnType<typeof setTimeout> | undefined
+
+function notifySseRefresh() {
+  // 快照状态经 useState 共享，只需触发一个存活实例的后台刷新。
+  const listener = sseListeners.values().next().value
+  listener?.()
+}
+
+function scheduleSseRefresh() {
+  if (sseRefreshTimer) return
+  const delay = nextSignalRefreshDelay({
+    now: Date.now(),
+    lastRefreshAt: sseLastRefreshAt,
+    minIntervalMs: SIGNAL_REFRESH_MIN_INTERVAL_MS,
+  })
+  sseRefreshTimer = setTimeout(() => {
+    sseRefreshTimer = undefined
+    sseLastRefreshAt = Date.now()
+    notifySseRefresh()
+  }, delay)
+}
+
+function ensureSseSource() {
+  if (sseSource || typeof EventSource === "undefined") return
+  const source = new EventSource("/api/agent-company/events")
+  source.onmessage = (event) => {
+    const kind = classifyGlobalEvent(String(event.data))
+    // connected（含断线重连成功）与业务事件都收敛到节流后的全量快照校准。
+    if (kind === "connected" || kind === "signal") scheduleSseRefresh()
+  }
+  // 连接错误由 EventSource 自动重试；持续不可用时既有 reconnect 轮询兜底。
+  sseSource = source
+}
+
+function releaseSseSource() {
+  if (sseListeners.size > 0 || !sseSource) return
+  sseSource.close()
+  sseSource = undefined
+  if (sseRefreshTimer) clearTimeout(sseRefreshTimer)
+  sseRefreshTimer = undefined
+}
 
 const loadingSnapshot: CompanySnapshot = {
   connection: "connecting",
@@ -120,7 +172,20 @@ export function useCompanySnapshot() {
 
   onMounted(scheduleReconnect)
 
+  // SSE 订阅与既有重连轮询并存：事件驱动的后台刷新不改写连接态（避免每次
+  // 事件都闪现 recovering），结果到达后由快照 watcher 统一更新状态。
+  const sseRefresh = () => {
+    if (!request.pending.value) void request.refresh()
+  }
+
+  onMounted(() => {
+    sseListeners.add(sseRefresh)
+    ensureSseSource()
+  })
+
   onBeforeUnmount(() => {
+    sseListeners.delete(sseRefresh)
+    releaseSseSource()
     if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
   })
 

@@ -23,6 +23,7 @@ import {
   criterionVerdictLabels,
   deliveryPackageView,
 } from "../../../modules/agent-company/runtime/shared/delivery-package";
+import type { ComposerTarget } from "../../../modules/agent-company/runtime/shared/company-composer";
 
 const route = useRoute();
 const appConfig = useAppConfig();
@@ -67,6 +68,11 @@ const workDiagnostics = computed(() => work.value?.availability === "available"
   : work.value?.availability === "unavailable"
     ? work.value.diagnostics
     : []);
+
+// WORK-04：工作区 Composer 只在项目可用时挂载，发送目标固定为当前项目频道。
+const composerTarget = computed<ComposerTarget | undefined>(() => work.value?.availability === "available"
+  ? { kind: "project", projectId: work.value.summary.workId, title: work.value.summary.title }
+  : undefined);
 
 // 右侧上下文面板只依据真实数据存在与否派生；Thread 明细需后端接线，此处不虚构。
 const panels = computed(() => availableContextPanels({
@@ -404,6 +410,13 @@ function artifactRoute(projectID: string, artifactID: string) {
                 </div>
               </section>
             </div>
+
+            <CompanyComposer
+              v-if="composerTarget"
+              :target="composerTarget"
+              :agents="snapshot.agents"
+              @sent="refresh()"
+            />
           </template>
 
           <template v-else-if="work?.availability === 'unavailable'">

@@ -45,6 +45,10 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       name: "DemoWorkspace",
       filePath: resolver.resolve("./runtime/app/components/DemoWorkspace.vue"),
     })
+    addComponent({
+      name: "CompanyComposer",
+      filePath: resolver.resolve("./runtime/app/components/CompanyComposer.vue"),
+    })
     addImports({
       name: "useCompanySnapshot",
       from: resolver.resolve("./runtime/app/composables/useCompanySnapshot"),
@@ -68,6 +72,16 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/board/decide",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/board-decide.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/messages",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/message.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/events",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/events.get"),
     })
     addServerHandler({
       route: "/api/agent-company/provider",
