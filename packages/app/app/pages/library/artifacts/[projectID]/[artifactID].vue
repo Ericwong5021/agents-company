@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import type { ExperienceArtifactView } from "@agents-company/shared/experience";
+import {
+  dataUrl,
+  downloadFileName,
+  formatByteLength,
+  isOversizedForInline,
+  parseCsvPreview,
+  prettyJson,
+  resolveRenderMode,
+} from "../../../../../modules/agent-company/runtime/shared/artifact-view";
 
 const route = useRoute();
 const projectID = computed(() => Array.isArray(route.params.projectID)
@@ -22,13 +31,27 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
 });
-const artifactURL = computed(() => {
-  if (!artifact.value) return;
-  if (artifact.value.encoding === "base64") {
-    return `data:${artifact.value.mediaType};base64,${artifact.value.content}`;
-  }
-  return `data:${artifact.value.mediaType};charset=utf-8,${encodeURIComponent(artifact.value.content)}`;
+// DELIV-03：按 mediaType/presentation 决定安全预览方式；大文件与不支持格式一律降级为下载而非阻塞页面。
+const renderMode = computed(() => artifact.value ? resolveRenderMode(artifact.value) : "download");
+const oversized = computed(() => !!artifact.value && isOversizedForInline(artifact.value));
+const textModes = new Set(["markdown", "code", "text"]);
+const inlineText = computed(() => {
+  if (!artifact.value || oversized.value) return "";
+  if (renderMode.value === "json") return prettyJson(artifact.value.content);
+  if (textModes.has(renderMode.value)) return artifact.value.content;
+  return "";
 });
+const csv = computed(() => artifact.value && renderMode.value === "csv" && !oversized.value
+  ? parseCsvPreview(artifact.value.content)
+  : undefined);
+const artifactURL = computed(() => artifact.value ? dataUrl(artifact.value) : undefined);
+const downloadName = computed(() => artifact.value ? downloadFileName(artifact.value) : "");
+const copied = ref(false);
+const copyLink = async () => {
+  await navigator.clipboard.writeText(new URL(route.fullPath, location.origin).href);
+  copied.value = true;
+  setTimeout(() => { copied.value = false; }, 2000);
+};
 </script>
 
 <template>
@@ -68,6 +91,17 @@ const artifactURL = computed(() => {
             <span class="ac-status-badge">只读</span>
           </header>
 
+          <div class="ac-artifact-actions">
+            <a class="ac-artifact-action" :href="artifactURL" :download="downloadName">
+              <UIcon name="i-lucide-download" />
+              下载成果
+            </a>
+            <button type="button" class="ac-artifact-action" @click="copyLink">
+              <UIcon :name="copied ? 'i-lucide-check' : 'i-lucide-link'" />
+              {{ copied ? "链接已复制" : "复制链接" }}
+            </button>
+          </div>
+
           <section class="ac-detail-panel">
             <dl class="ac-brief-meta ac-artifact-meta">
               <div>
@@ -76,7 +110,7 @@ const artifactURL = computed(() => {
               </div>
               <div>
                 <dt>大小</dt>
-                <dd>{{ artifact.byteLength.toLocaleString("zh-CN") }} 字节</dd>
+                <dd>{{ formatByteLength(artifact.byteLength) }}</dd>
               </div>
               <div>
                 <dt>形成时间</dt>
@@ -84,25 +118,53 @@ const artifactURL = computed(() => {
               </div>
             </dl>
 
-            <pre
-              v-if="artifact.presentation === 'text'"
-              class="ac-artifact-content"
-            >{{ artifact.content }}</pre>
-            <img
-              v-else-if="artifact.presentation === 'media' && artifact.mediaType.startsWith('image/')"
-              class="ac-artifact-media"
-              :src="artifactURL"
-              :alt="artifact.title"
-            >
-            <a
-              v-else
-              class="ac-artifact-download"
-              :href="artifactURL"
-              :download="artifact.title"
-            >
-              <UIcon name="i-lucide-download" />
-              下载成果文件
-            </a>
+            <p v-if="oversized" class="ac-artifact-notice">
+              成果较大（{{ formatByteLength(artifact.byteLength) }}），为避免阻塞页面不做内联预览，请下载后查看完整内容。
+            </p>
+
+            <template v-else>
+              <pre
+                v-if="inlineText"
+                class="ac-artifact-content"
+                :data-mode="renderMode"
+              >{{ inlineText }}</pre>
+              <div v-else-if="csv" class="ac-artifact-table-wrap">
+                <table class="ac-artifact-table">
+                  <thead>
+                    <tr>
+                      <th v-for="(head, index) in csv.headers" :key="index">{{ head }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, rowIndex) in csv.rows" :key="rowIndex">
+                      <td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p v-if="csv.truncated" class="ac-artifact-notice">仅预览前若干行，完整数据请下载查看。</p>
+              </div>
+              <img
+                v-else-if="renderMode === 'image'"
+                class="ac-artifact-media"
+                :src="artifactURL"
+                :alt="artifact.title"
+              >
+              <iframe
+                v-else-if="renderMode === 'pdf'"
+                class="ac-artifact-pdf"
+                :src="artifactURL"
+                :title="artifact.title"
+              />
+              <a
+                v-else
+                class="ac-artifact-download"
+                :href="artifactURL"
+                :download="downloadName"
+              >
+                <UIcon name="i-lucide-download" />
+                该格式不支持内联预览，下载成果文件
+              </a>
+            </template>
           </section>
         </template>
       </div>

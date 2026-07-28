@@ -11,6 +11,20 @@ import {
   parseGoalBriefFailure,
   type GoalBriefFailureView,
 } from "../../../modules/agent-company/runtime/shared/goal-brief-state";
+import {
+  chooseDemo,
+  chooseReal,
+  onboardingStorageKey,
+  parseOnboardingState,
+  serializeOnboardingState,
+  skipOnboarding,
+  type OnboardingState,
+} from "../../../modules/agent-company/runtime/shared/onboarding";
+import {
+  aggregateAttention,
+  categorySummaries,
+  countByType,
+} from "../../../modules/agent-company/runtime/shared/inbox-attention";
 
 const goalDraftStorageKey = "agent-company:inbox-goal-draft:v1";
 const appConfig = useAppConfig();
@@ -25,19 +39,14 @@ const generationFailure = ref<GoalBriefFailureView>();
 const generationError = ref("");
 const goalDraftInput = ref<HTMLTextAreaElement>();
 const draftStorageAvailable = ref(true);
+const onboarding = ref<OnboardingState>(parseOnboardingState(null));
+const onboardingHydrated = ref(false);
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false);
-const priority = { critical: 0, high: 1, normal: 2 } as const;
 const unavailableWork = computed(() => snapshot.value.work.filter(work => work.availability === "unavailable"));
-const attentionItems = computed(() => snapshot.value.work
-  .filter(work => work.availability === "available")
-  .flatMap(work => work.attentionItems.map(item => ({
-    ...item,
-    workTitle: work.summary.title,
-  })))
-  .sort((left, right) =>
-    priority[left.priority] - priority[right.priority]
-    || Date.parse(right.updatedAt) - Date.parse(left.updatedAt)));
+const attentionItems = computed(() => aggregateAttention(snapshot.value.work));
+const attentionCategories = computed(() => categorySummaries(countByType(attentionItems.value)));
+const totalUnhandled = computed(() => attentionItems.value.length + unavailableWork.value.length);
 const hasLocalDraft = computed(() => Boolean(goalDraft.value.trim()));
 const firstRun = computed(() =>
   available.value
@@ -46,6 +55,9 @@ const firstRun = computed(() =>
   && attentionItems.value.length === 0
   && unavailableWork.value.length === 0);
 const showGoalDraft = computed(() => firstRun.value || (!available.value && hasLocalDraft.value));
+// 首次进入且尚未做出选择时，先呈现“连接真实工作区 / 查看演示”两个清晰选项，而非直接跳到目标输入。
+const welcomeStage = computed(() =>
+  onboardingHydrated.value && firstRun.value && onboarding.value.mode === "unset");
 const canGenerate = computed(() =>
   draftHydrated.value
   && available.value
@@ -71,9 +83,30 @@ onMounted(async () => {
   goalDraft.value = stored.draft;
   generationRequestID.value = stored.request?.requestId ?? "";
   generationRequestGoal.value = stored.request?.goal ?? "";
+  onboarding.value = parseOnboardingState(localStorage.getItem(onboardingStorageKey));
+  onboardingHydrated.value = true;
   await nextTick();
   draftHydrated.value = true;
 });
+
+function persistOnboarding(next: OnboardingState) {
+  onboarding.value = next;
+  if (import.meta.client) localStorage.setItem(onboardingStorageKey, serializeOnboardingState(next));
+}
+
+function chooseRealWorkspace() {
+  persistOnboarding(chooseReal(onboarding.value, new Date().toISOString()));
+  if (snapshot.value.company.providerConfigured === false) navigateTo("/settings");
+}
+
+function chooseDemoWorkspace() {
+  persistOnboarding(chooseDemo(onboarding.value, new Date().toISOString()));
+  navigateTo("/welcome");
+}
+
+function skipOnboardingChoice() {
+  persistOnboarding(skipOnboarding(onboarding.value, new Date().toISOString()));
+}
 
 function currentGenerationRequest() {
   if (!generationRequestID.value || !generationRequestGoal.value) return null;
@@ -191,6 +224,24 @@ async function editGoalDraft() {
           />
         </header>
 
+        <!-- DELIV-01 — 分类计数概览：按真实事项的五类分布展示，count 为 0 的类别不出现 -->
+        <div
+          v-if="available && attentionCategories.length"
+          class="ac-attention-summary"
+          aria-label="待处理事项分类"
+        >
+          <span class="ac-attention-summary__total">{{ totalUnhandled }} 项待处理</span>
+          <span
+            v-for="category in attentionCategories"
+            :key="category.type"
+            class="ac-attention-summary__chip"
+            :data-type="category.type"
+          >
+            {{ category.label }}
+            <strong>{{ category.count }}</strong>
+          </span>
+        </div>
+
         <CompanyConnectionState
           v-if="!available || workUnavailable"
           :connection="snapshot.connection"
@@ -256,8 +307,16 @@ async function editGoalDraft() {
           </NuxtLink>
         </section>
 
+        <OnboardingChoice
+          v-if="welcomeStage"
+          :provider-configured="snapshot.company.providerConfigured !== false"
+          @real="chooseRealWorkspace"
+          @demo="chooseDemoWorkspace"
+          @skip="skipOnboardingChoice"
+        />
+
         <section
-          v-if="showGoalDraft"
+          v-if="showGoalDraft && !welcomeStage"
           class="ac-empty-state"
           :class="{ 'ac-empty-state--with-connection': !available }"
         >
@@ -358,29 +417,14 @@ async function editGoalDraft() {
               class="ac-goal-generation-state ac-goal-generation-state--success"
               aria-live="polite"
             >
-              <div class="ac-goal-generation-state__heading">
-                <div>
-                  <span>Goal Brief</span>
-                  <h3>只读目标摘要</h3>
-                </div>
-                <strong>未立项</strong>
-              </div>
-              <p class="ac-goal-generation-state__goal">{{ generatedBrief.goal }}</p>
-              <dl>
-                <div>
-                  <dt>交付内容</dt>
-                  <dd>{{ generatedBrief.deliverables.length }} 项</dd>
-                </div>
-                <div>
-                  <dt>验收标准</dt>
-                  <dd>{{ generatedBrief.acceptanceCriteria.length }} 项</dd>
-                </div>
-                <div>
-                  <dt>风险</dt>
-                  <dd>{{ generatedBrief.riskLevel }}</dd>
-                </div>
-              </dl>
-              <p>摘要已保存在本地 Control Plane，但没有绑定 Project，也不会开始执行。</p>
+              <GoalBriefCard
+                :brief="generatedBrief"
+                :readonly="!available"
+                @updated="generatedBrief = $event"
+              />
+              <p class="ac-goal-generation-state__boundary">
+                摘要已保存在本地 Control Plane，但没有绑定 Project，也不会开始执行。正式提交将在后续阶段开放。
+              </p>
             </section>
 
             <UButton

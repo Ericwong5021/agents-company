@@ -20,6 +20,13 @@
   --ac-radius-nav: 10px;
   --ac-radius-panel: 14px;
   --ac-radius-dialog: 22px;
+  /* SHELL-04 / FND-04 — 类型标尺与可读下限（五级视觉层级） */
+  /* L1 主标题 clamp(26,38) · L2 区块标题 16-17 · L3 主要内容 15 · L4 正文 13 · L5 元信息 11-12 */
+  /* 关键状态文字不得低于 --ac-text-min；10px 仅限全大写装饰性 eyebrow/kicker，不承载关键状态。 */
+  --ac-text-min: 11px;
+  --ac-text-caption: 12px;
+  --ac-text-body: 13px;
+  --ac-text-lead: 15px;
   --ui-primary: neutral;
   --ui-container: var(--container-3xl);
   --ui-radius: 0.625rem;
@@ -577,6 +584,83 @@ html.dark .shiki span {
   gap: 12px;
 }
 
+/* WORK-01 — Work 列表分组页签与筛选工具栏 */
+.ac-work-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ac-work-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-panel);
+  background: var(--ac-surface);
+}
+
+.ac-work-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: calc(var(--ac-radius-panel) - 3px);
+  color: var(--ac-ink-muted);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ac-work-tab[data-active="true"] {
+  background: var(--ac-ink);
+  color: var(--ac-surface);
+}
+
+.ac-work-tab__count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.ac-work-filters {
+  display: inline-flex;
+  gap: 8px;
+  flex: 1 1 240px;
+  justify-content: flex-end;
+}
+
+.ac-work-search,
+.ac-work-owner {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ac-line);
+  border-radius: calc(var(--ac-radius-panel) - 2px);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  font-size: 13px;
+}
+
+.ac-work-search {
+  flex: 1 1 auto;
+  max-width: 280px;
+}
+
+.ac-work-clear {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--ac-line);
+  border-radius: calc(var(--ac-radius-panel) - 2px);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .ac-work-card,
 .ac-attention-card,
 .ac-library-card,
@@ -605,6 +689,46 @@ html.dark .shiki span {
 
 .ac-attention-card {
   border-left-width: 3px;
+}
+
+/* DELIV-01 — Inbox 分类计数概览条：总计 + 五类事项分布 chip */
+.ac-attention-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.ac-attention-summary__total {
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 640;
+}
+
+.ac-attention-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+}
+
+.ac-attention-summary__chip strong {
+  color: var(--ac-ink);
+  font-weight: 660;
+}
+
+.ac-attention-summary__chip[data-type="approval"] {
+  border-color: #80725b;
+}
+
+.ac-attention-summary__chip[data-type="failure"],
+.ac-attention-summary__chip[data-type="blocked"] {
+  border-color: #8b3f38;
 }
 
 .ac-attention-card[data-priority="high"] {
@@ -999,6 +1123,72 @@ html.dark .shiki span {
   font-weight: 620;
 }
 
+/* DELIV-03 — Artifact 消费动作条与多格式预览 */
+.ac-artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ac-artifact-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ac-line-strong);
+  border-radius: var(--ac-radius-nav);
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--ac-ink);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+
+.ac-artifact-notice {
+  margin-top: 20px;
+  color: var(--ac-ink-dimmed);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ac-artifact-table-wrap {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-nav);
+}
+
+.ac-artifact-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ac-artifact-table th,
+.ac-artifact-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ac-line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ac-artifact-table th {
+  background: var(--ac-canvas);
+  color: var(--ac-ink);
+  font-weight: 620;
+}
+
+.ac-artifact-pdf {
+  display: block;
+  width: 100%;
+  height: 640px;
+  margin-top: 20px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-nav);
+}
+
 .ac-diagnostic-panel summary {
   min-height: 40px;
   cursor: pointer;
@@ -1315,3 +1505,319 @@ textarea:focus-visible {
     animation: none !important;
   }
 }
+
+/* SHELL-04 / FND-04 — 长文本保护：超长 Agent 名 / 路径 / 无空格串不得破坏布局 */
+.ac-workspace-title,
+.ac-workspace-lede,
+.ac-card-heading h2,
+.ac-detail-heading h2,
+.ac-team-card h2,
+.ac-inline-item h3,
+.ac-brief-goal,
+.ac-brief-item,
+.ac-goal-generation-state__goal,
+.ac-card-reason,
+.ac-card-impact,
+.ac-artifact-link strong,
+.ac-artifact-link small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* SHELL-04 — 中间宽度（~1024）内边距收敛，避免边缘拥挤与横向溢出 */
+@media (max-width: 1120px) {
+  .ac-workspace-page {
+    padding-inline: 32px;
+  }
+
+  .ac-shell-workspace .company-settings-page {
+    padding-inline: 32px;
+  }
+}
+
+/* WORK-02 — 三栏高信号工作区：左选工作 / 中高信号工作流 / 右上下文面板，各栏独立滚动 */
+.ac-work3 {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 344px;
+  height: 100%;
+  min-height: 0;
+}
+
+.ac-work3__col {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ac-work3__list {
+  border-right: 1px solid var(--ac-line);
+  padding: 20px 16px 32px;
+}
+
+.ac-work3__list-head {
+  margin-bottom: 14px;
+}
+
+.ac-work3__list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ac-work3__list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--ac-radius-control);
+  color: var(--ac-ink);
+  transition: background 0.15s ease;
+}
+
+.ac-work3__list-item:hover {
+  background: var(--ac-surface);
+}
+
+.ac-work3__list-item[data-active="true"] {
+  background: var(--ac-surface-raised);
+}
+
+.ac-work3__list-title {
+  font-size: var(--ac-text-body);
+  font-weight: 560;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ac-work3__main {
+  padding: 40px 40px 64px;
+}
+
+/* WORK-07 — 运行控制动作条：主动作高亮，禁用态弱化并保留悬停原因 */
+.ac-work3__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.ac-work3__action {
+  padding: 8px 14px;
+  border: 1px solid var(--ac-line-strong);
+  border-radius: var(--ac-radius-control);
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 560;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ac-work3__action:hover:not(:disabled) {
+  background: var(--ac-surface);
+}
+
+.ac-work3__action[data-primary="true"]:not(:disabled) {
+  border-color: var(--ac-ink);
+  background: var(--ac-ink);
+  color: var(--ac-canvas);
+}
+
+.ac-work3__action:disabled {
+  border-style: dashed;
+  color: var(--ac-ink-dimmed);
+  cursor: not-allowed;
+}
+
+/* DELIV-02 — 工作台首屏元信息：负责人 / 下一里程碑 / 需行动标记 */
+.ac-work-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 10px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+}
+
+.ac-work-meta__flag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  font-weight: 600;
+}
+
+/* DELIV-04 — Gate 决策面：说明输入 + 决策动作 + 契约边界说明 */
+.ac-gate-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ac-line);
+}
+
+.ac-gate-decision label {
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+}
+
+.ac-gate-decision textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-control);
+  color: var(--ac-ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.ac-gate-decision__boundary {
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+  line-height: 1.5;
+}
+
+/* DELIV-05 — 交付包验收：Delivered/Accepted 区分 + 验收标准核对清单 */
+.ac-status-badge[data-stage="accepted"] {
+  color: var(--ac-positive, #1a7f47);
+}
+
+.ac-status-badge[data-stage="revision"] {
+  color: var(--ac-warning, #a8600a);
+}
+
+.ac-delivery-hint {
+  margin-top: 12px;
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+  line-height: 1.55;
+}
+
+.ac-acceptance {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ac-line);
+}
+
+.ac-acceptance__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ac-acceptance__item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.ac-acceptance__verdict {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--ac-line-strong);
+  border-radius: var(--ac-radius-nav);
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.ac-acceptance__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ac-acceptance__text small {
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+}
+
+.ac-work3__mobile-bar {
+  display: none;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.ac-work3__mobile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-control);
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+}
+
+.ac-work3__mobile-btn:hover {
+  color: var(--ac-ink);
+  background: var(--ac-surface);
+}
+
+.ac-work3__context {
+  border-left: 1px solid var(--ac-line);
+  display: flex;
+  flex-direction: column;
+}
+
+.ac-work3__tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--ac-line);
+  background: var(--ac-canvas);
+}
+
+.ac-work3__tab {
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+  font-weight: 560;
+  transition: color 0.15s ease;
+}
+
+.ac-work3__tab:hover {
+  color: var(--ac-ink);
+}
+
+.ac-work3__tab[data-active="true"] {
+  color: var(--ac-ink);
+  border-bottom-color: var(--ac-ink);
+}
+
+.ac-work3__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 40px;
+}
+
+/* WORK-02 — 窄屏不压缩三栏，改为按 list → main → context 优先级单栏切换 */
+@media (max-width: 960px) {
+  .ac-work3 {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-work3__col {
+    display: none;
+    border: 0;
+  }
+
+  .ac-work3[data-column="list"] .ac-work3__list,
+  .ac-work3[data-column="main"] .ac-work3__main,
+  .ac-work3[data-column="context"] .ac-work3__context {
+    display: block;
+  }
+
+  .ac-work3__mobile-bar {
+    display: flex;
+  }
+}
+

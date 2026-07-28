@@ -417,6 +417,89 @@
   font-size: 11px;
 }
 
+/* TRUST-03 — Provider 连接向导：预设入口、测试动作与模型选择 */
+.ac-provider-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ac-provider-preset {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-bg-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ac-provider-preset:hover {
+  border-color: var(--ui-border-accented);
+}
+
+.ac-provider-preset[data-active="true"] {
+  border-color: var(--ui-border-inverted);
+  background: var(--ui-bg-elevated);
+}
+
+.ac-provider-preset__label {
+  color: var(--ui-text-highlighted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ac-provider-preset__desc {
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ac-provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ac-provider-models {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ac-provider-model {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-bg-muted);
+  cursor: pointer;
+}
+
+.ac-provider-model[data-active="true"] {
+  border-color: var(--ui-border-inverted);
+  background: var(--ui-bg-elevated);
+}
+
+.ac-provider-model__name {
+  color: var(--ui-text-highlighted);
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.ac-provider-model__id {
+  margin-left: auto;
+  color: var(--ui-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 .company-avatar-stack {
   display: flex;
   padding-right: 6px;
@@ -514,98 +597,6 @@
 
 .company-board-state--error a {
   text-decoration: underline;
-}
-
-.company-charter-card,
-.company-project-decision {
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  background: var(--ui-bg);
-  padding: 16px;
-}
-
-.company-charter-card__heading,
-.company-charter-card__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.company-charter-card__heading span,
-.company-project-decision > span {
-  display: block;
-  color: var(--ui-text-muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.company-charter-card__heading strong,
-.company-project-decision strong {
-  display: block;
-  margin-top: 3px;
-  color: var(--ui-text-highlighted);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.company-charter-card__heading button {
-  color: var(--ui-text-muted);
-  font-size: 18px;
-}
-
-.company-charter-card__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.company-charter-card label {
-  display: grid;
-  gap: 6px;
-  color: var(--ui-text-muted);
-  font-size: 10px;
-}
-
-.company-charter-card__wide {
-  grid-column: 1 / -1;
-}
-
-.company-charter-card input,
-.company-charter-card select,
-.company-charter-card textarea {
-  width: 100%;
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  background: var(--ui-bg-muted);
-  padding: 8px 9px;
-  color: var(--ui-text-highlighted);
-  font-size: 11px;
-  outline: none;
-}
-
-.company-charter-card textarea {
-  resize: vertical;
-}
-
-.company-charter-card__error {
-  margin-top: 12px;
-  color: var(--ui-error);
-  font-size: 11px;
-}
-
-.company-charter-card__footer {
-  margin-top: 16px;
-  color: var(--ui-text-muted);
-  font-size: 10px;
-}
-
-.company-project-decision p {
-  margin-top: 5px;
-  color: var(--ui-text-muted);
-  font-size: 11px;
 }
 
 .company-composer {
@@ -916,5 +907,481 @@
   .company-module-nav__item,
   .company-settings-tabs a {
     transition: none;
+  }
+}
+
+
+/* GOAL-03 — 以结果为中心的 Goal Brief 卡片 */
+.ac-brief {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-panel);
+  background: var(--ac-surface-raised);
+  text-align: left;
+}
+
+.ac-brief__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ac-brief__eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ac-ink-dimmed);
+}
+
+.ac-brief__heading h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.05rem;
+  color: var(--ac-ink);
+}
+
+.ac-brief__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ac-brief .ac-status-badge[data-risk="high"],
+.ac-brief .ac-status-badge[data-risk="critical"] {
+  color: #8a1c1c;
+  border-color: #e3b7b7;
+}
+
+.ac-brief .ac-status-badge[data-autostart="true"] {
+  color: #1f5130;
+  border-color: #b6d6be;
+}
+
+.ac-brief__goal p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ac-ink);
+}
+
+.ac-brief__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.ac-brief__section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ac-ink-muted);
+}
+
+.ac-brief__section ul,
+.ac-brief__section ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ac-brief__section li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ac-brief__section li strong {
+  color: var(--ac-ink);
+  font-weight: 600;
+}
+
+.ac-brief__section li span {
+  color: var(--ac-ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.ac-brief__section li small {
+  color: var(--ac-ink-dimmed);
+  font-size: 0.8rem;
+}
+
+.ac-brief__approval {
+  color: var(--ac-ink-dimmed);
+  font-size: 0.85rem;
+}
+
+.ac-brief__questions li[data-blocking="true"] strong::before {
+  content: "阻塞 · ";
+  color: #8a1c1c;
+}
+
+.ac-brief__blocking {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  color: #8a1c1c;
+}
+
+.ac-brief__full-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--ac-line);
+}
+
+.ac-brief__full-body h5 {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  color: var(--ac-ink-muted);
+}
+
+.ac-brief__full-body ul,
+.ac-brief__full-body ol {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ac-ink-muted);
+  font-size: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.ac-brief__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ac-ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ac-brief__toggle:hover {
+  text-decoration: underline;
+}
+
+.ac-brief__edit-list li {
+  gap: 0.35rem;
+}
+
+.ac-brief textarea,
+.ac-brief input {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-nav);
+  background: var(--ac-surface);
+  color: var(--ac-ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.ac-brief textarea:focus,
+.ac-brief input:focus {
+  outline: 2px solid var(--ac-focus);
+  outline-offset: 1px;
+}
+
+.ac-brief label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ac-ink-muted);
+}
+
+.ac-brief__error {
+  margin: 0;
+  color: #8a1c1c;
+  font-size: 0.88rem;
+}
+
+.ac-brief__actions {
+  display: flex;
+  gap: 0.6rem;
+  padding-top: 0.25rem;
+}
+
+/* TRUST-04 — 首次引导两个清晰选项与显式 Demo Workspace */
+.ac-onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 0;
+}
+
+.ac-onboarding__eyebrow {
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ac-onboarding__intro h2 {
+  margin: 6px 0 4px;
+  color: var(--ui-text-highlighted);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.ac-onboarding__intro p {
+  max-width: 560px;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.ac-onboarding__choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ac-onboarding__choice {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ac-onboarding__choice:hover {
+  border-color: var(--ui-border-inverted);
+  background: var(--ui-bg-elevated);
+}
+
+.ac-onboarding__choice:focus-visible {
+  outline: 2px solid var(--ui-text-highlighted);
+  outline-offset: 2px;
+}
+
+.ac-onboarding__choice-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-highlighted);
+}
+
+.ac-onboarding__choice-title {
+  color: var(--ui-text-highlighted);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ac-onboarding__choice-desc {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ac-onboarding__choice-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-text-highlighted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ac-onboarding__skip {
+  align-self: flex-start;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.ac-onboarding-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 6px 0 8px;
+}
+
+.ac-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ac-demo__banner {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border-accented);
+  border-radius: 10px;
+  background: var(--ui-bg-elevated);
+}
+
+.ac-demo__banner strong {
+  display: block;
+  color: var(--ui-text-highlighted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ac-demo__banner span {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.ac-demo__eyebrow {
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ac-demo__header h1 {
+  margin: 4px 0;
+  color: var(--ui-text-highlighted);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.ac-demo__goal {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+
+.ac-demo__section h2 {
+  margin-bottom: 10px;
+  color: var(--ui-text-highlighted);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ac-demo__employees {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.ac-demo__employee,
+.ac-demo__work,
+.ac-demo__artifact {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-bg-muted);
+}
+
+.ac-demo__employee-top,
+.ac-demo__work-top,
+.ac-demo__artifact-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ac-demo__employee-name {
+  color: var(--ui-text-highlighted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ac-demo__employee-role {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.ac-demo__employee-focus,
+.ac-demo__work-update,
+.ac-demo__artifact p {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ac-demo__presence {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ac-demo__presence[data-presence="online"] {
+  color: #1a7f37;
+}
+
+.ac-demo__presence[data-presence="busy"] {
+  color: #9a6700;
+}
+
+.ac-demo__presence[data-presence="offline"] {
+  color: var(--ui-text-muted);
+}
+
+.ac-demo__work-status,
+.ac-demo__artifact-kind {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-muted);
+  font-size: 11px;
+}
+
+.ac-demo__work h3,
+.ac-demo__artifact h3 {
+  color: var(--ui-text-highlighted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ac-demo__progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  overflow: hidden;
+}
+
+.ac-demo__progress span {
+  display: block;
+  height: 100%;
+  background: var(--ui-text-highlighted);
+}
+
+.ac-demo__work-meta {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.ac-demo__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .ac-onboarding__choices {
+    grid-template-columns: 1fr;
   }
 }
