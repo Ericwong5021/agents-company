@@ -20,6 +20,7 @@ import { CompanyTable } from "@/company/company.sql"
 import {
   CompanyArtifactTable,
   CompanyGraphDecisionTable,
+  CompanyOutcomeSignalCurrentTable,
   CompanyOutcomeSignalTable,
   CompanyPlanTable,
   CompanyProjectTable,
@@ -538,6 +539,18 @@ function chain(db: TxOrDb, run: typeof FounderYellowRunTable.$inferSelect) {
 function validatedOutcome(db: TxOrDb, id: string) {
   const outcome = db.select().from(CompanyOutcomeSignalTable).where(eq(CompanyOutcomeSignalTable.id, id)).get()
   if (!outcome) return
+  const current = db
+    .select()
+    .from(CompanyOutcomeSignalCurrentTable)
+    .where(eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, id))
+    .get()
+  if (
+    current?.current_status !== "validated"
+    || !current.validated_at
+    || outcome.validator_result_kind !== outcome.validator_kind
+    || outcome.validator_result_id !== outcome.validator_id
+  )
+    return
   const sourceRefs = z
     .array(z.object({ kind: z.string(), id: z.string() }).catchall(z.unknown()))
     .parse(JSON.parse(outcome.source_refs_json))
