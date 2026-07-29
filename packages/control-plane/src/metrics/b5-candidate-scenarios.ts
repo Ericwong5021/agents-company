@@ -525,7 +525,7 @@ function stableEntityId(prefix: string, value: string) {
   return `${prefix}_${digest(value).slice(0, 26)}`
 }
 
-const runLocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(function* (
+export const runB5LocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(function* (
   input: B5ScenarioRunInput,
   runtime: B5ScenarioRuntime,
   projectId: string,
@@ -588,7 +588,12 @@ const runLocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(function* (
   })
   if (result.exitCode !== 0 || !/^[a-f0-9]{64}$/.test(stdout))
     throw new Error(`B5 local probe failed for ${projectId}/${workItemId}`)
-  return { runId: run.id, stdoutSha256: digest(stdout) }
+  return {
+    runId: run.id,
+    commandId: "bun-local-project-binding-probe",
+    stdoutSha256: digest(stdout),
+    stderrSha256: digest(stderr),
+  }
 })
 
 const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function* (
@@ -1355,7 +1360,7 @@ const runS18 = Effect.fn("B5CandidateScenarios.S18")(function* (
   if (staffedReviewer.agent.id === staffedWorker.agent.id)
     throw new Error("S18 selected the worker as its own Reviewer")
   yield* runtime.projects.startWorkItem(reviewer.id)
-  const probe = yield* runLocalProbe(
+  const probe = yield* runB5LocalProbe(
     input,
     runtime,
     project.id,

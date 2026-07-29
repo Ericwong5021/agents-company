@@ -1,20 +1,28 @@
 import { createHash } from "node:crypto"
-import { mkdir, readdir, realpath } from "node:fs/promises"
+import { lstat, mkdir, readdir, realpath, rm } from "node:fs/promises"
 import path from "node:path"
+import { MetricContract, PrePublicScenarioMetricIds } from "@agents-company/shared/seed-grow-metrics"
+import { Effect, Layer } from "effect"
 import z from "zod"
 import {
   B5RunBinding,
   B5ScenarioIds,
+  B5StrategyOrder,
   exactB5RunBindings,
   loadB5ScenarioSnapshots,
+  requiredB5ObservationTypes,
+  type B5ScenarioRunResult,
 } from "../src/metrics/b5-candidate-scenarios"
 
 const root = path.resolve(import.meta.dir, "../../..")
 const producerPath = "packages/control-plane/script/produce-seed-grow-candidate-facts.ts"
 const benchmarkPath =
   "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json"
+const metricContractPath =
+  "docs/product-design/experience-refactor/metric-contract.v1.json"
 const CommitSha = z.string().regex(/^[a-f0-9]{40}$/)
 const Digest = z.string().regex(/^[a-f0-9]{64}$/)
+const IsolationId = z.string().regex(/^[a-f0-9]{16}$/)
 const Timestamp = z.number().int().nonnegative()
 const CandidateArgument = z.union([CommitSha, z.literal("HEAD")])
 const AttemptId = z.enum(["automatic", "attempt-01", "attempt-02"])
@@ -57,6 +65,7 @@ export const B5CandidateAttemptSummary = z
       })
       .strict(),
     attemptId: AttemptId,
+    attemptIsolationId: IsolationId,
     producer: z
       .object({
         path: z.literal(producerPath),
@@ -142,8 +151,186 @@ export const B5CandidateAttemptSummary = z
   })
 export type B5CandidateAttemptSummary = z.infer<typeof B5CandidateAttemptSummary>
 
+const RolloutPolicy = z
+  .object({
+    defaultStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
+    seedOptInAllowed: z.boolean(),
+    explicitLegacyFallbackAllowed: z.boolean(),
+  })
+  .strict()
+
+const RolloutStatus = z
+  .object({
+    phase: z.literal("dogfood_default"),
+    executionMode: z.enum(["off", "active"]),
+    newProjectPolicy: RolloutPolicy,
+  })
+  .strict()
+
+export const B5RollbackObservation = z
+  .object({
+    schemaVersion: z.literal(1),
+    kind: z.literal("seed-grow-b5-rollback-observation"),
+    candidateSha: CommitSha,
+    attemptId: AttemptId,
+    attemptIsolationId: IsolationId,
+    target: z.enum(["kill_switch", "legacy_fallback"]),
+    outcome: z.literal("completed"),
+    phaseAtAction: z.literal("dogfood_default"),
+    before: RolloutStatus,
+    after: RolloutStatus,
+    inFlightProject: z
+      .object({
+        id: z.string().trim().min(1),
+        status: z.literal("executing"),
+        strategyBefore: z.literal("seed_and_grow"),
+        strategyAfter: z.literal("seed_and_grow"),
+        businessStateSha256Before: Digest,
+        businessStateSha256After: Digest,
+      })
+      .strict(),
+    process: z
+      .object({
+        pid: z.number().int().positive(),
+        producerPath: z.literal(producerPath),
+        producerSha256: Digest,
+        startedAt: Timestamp,
+      })
+      .strict(),
+    dispatch: z
+      .object({
+        coordinator: z.literal("DispatchCoordinator"),
+        action: z.enum(["kill_switch", "legacy_fallback"]),
+        projectId: z.string().trim().min(1),
+        result: z.record(z.string(), z.unknown()),
+        resultSha256: Digest,
+        observedAt: Timestamp,
+      })
+      .strict(),
+    businessRows: z
+      .object({
+        beforeSha256: Digest,
+        afterSha256: Digest,
+        newProjectId: z.string().trim().min(1),
+        newProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
+        existingProjectId: z.string().trim().min(1),
+        existingProjectStrategyBefore: z.literal("seed_and_grow"),
+        existingProjectStrategyAfter: z.literal("seed_and_grow"),
+      })
+      .strict(),
+    resolvedNewProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
+    resolvedExplicitFallbackStrategy: z.literal("legacy_full_plan"),
+    isolation: z
+      .object({
+        database: z.literal("fresh_local_sqlite"),
+        databasePathSha256: Digest,
+        productionDatabaseInherited: z.literal(false),
+        productionProcessUsed: z.literal(false),
+        networkPortsUsed: z.tuple([]),
+      })
+      .strict(),
+    observedAt: Timestamp,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expectedMode = value.target === "kill_switch" ? "off" : "active"
+    const expectedDefault = value.target === "kill_switch" ? "legacy_full_plan" : "seed_and_grow"
+    if (value.after.executionMode !== expectedMode)
+      context.addIssue({ code: "custom", path: ["after", "executionMode"], message: "Rollback mode mismatch" })
+    if (value.after.newProjectPolicy.defaultStrategy !== expectedDefault)
+      context.addIssue({
+        code: "custom",
+        path: ["after", "newProjectPolicy", "defaultStrategy"],
+        message: "Rollback policy mismatch",
+      })
+    if (
+      value.inFlightProject.businessStateSha256Before !==
+        value.inFlightProject.businessStateSha256After ||
+      value.inFlightProject.strategyBefore !== value.inFlightProject.strategyAfter
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["inFlightProject"],
+        message: "Rollback changed the in-flight project",
+      })
+    if (
+      value.dispatch.action !== value.target ||
+      value.dispatch.projectId !== value.inFlightProject.id ||
+      value.businessRows.existingProjectId !== value.inFlightProject.id ||
+      value.businessRows.existingProjectStrategyBefore !== value.inFlightProject.strategyBefore ||
+      value.businessRows.existingProjectStrategyAfter !== value.inFlightProject.strategyAfter ||
+      value.businessRows.newProjectStrategy !== value.resolvedNewProjectStrategy
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["dispatch"],
+        message: "Rollback observation bindings are inconsistent",
+      })
+  })
+export type B5RollbackObservation = z.infer<typeof B5RollbackObservation>
+
 function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
+}
+
+export function b5AttemptIsolationId(worktree: string, outputDirectory: string) {
+  return IsolationId.parse(
+    sha256(`${path.resolve(worktree)}:${path.resolve(outputDirectory)}`).slice(0, 16),
+  )
+}
+
+export function b5AttemptRunId(input: {
+  attemptId: z.infer<typeof AttemptId>
+  attemptIsolationId: string
+  scenarioId: z.infer<typeof B5RunBinding>["scenarioId"]
+  strategy: z.infer<typeof B5RunBinding>["strategy"]
+  candidateSha: string
+}) {
+  return `b5-${AttemptId.parse(input.attemptId)}-${IsolationId.parse(input.attemptIsolationId)}-${input.scenarioId.toLowerCase()}-${input.strategy}-${CommitSha.parse(input.candidateSha).slice(0, 12)}`
+}
+
+function b5ObservationId(attemptIsolationId: string, runId: string, eventType: string) {
+  return `event_${sha256(`${IsolationId.parse(attemptIsolationId)}:${runId}:${eventType}`).slice(0, 26)}`
+}
+
+export function b5AttemptIdentityPlan(input: {
+  worktree: string
+  outputDirectory: string
+  attemptId: z.infer<typeof AttemptId>
+  candidateSha: string
+}) {
+  const attemptIsolationId = b5AttemptIsolationId(
+    input.worktree,
+    input.outputDirectory,
+  )
+  const runs = B5ScenarioIds.flatMap((scenarioId) =>
+    B5StrategyOrder.map((strategy) => ({
+      scenarioId,
+      strategy,
+      runId: b5AttemptRunId({
+        attemptId: input.attemptId,
+        attemptIsolationId,
+        scenarioId,
+        strategy,
+        candidateSha: input.candidateSha,
+      }),
+    })),
+  )
+  return {
+    attemptIsolationId,
+    runIds: runs.map((run) => run.runId),
+    eventIds: runs.flatMap((run) =>
+      requiredB5ObservationTypes(run.scenarioId, run.strategy).map((eventType) =>
+        b5ObservationId(attemptIsolationId, run.runId, eventType),
+      ),
+    ),
+    sourceIds: runs.flatMap((run) =>
+      requiredB5ObservationTypes(run.scenarioId, run.strategy).map(
+        (eventType) =>
+          `company_gate_observation:${b5ObservationId(attemptIsolationId, run.runId, eventType)}:${run.runId}`,
+      ),
+    ),
+  }
 }
 
 function git(args: string[]) {
@@ -214,10 +401,11 @@ export async function resolveB5CandidateGit(candidateSha: string) {
 
 export async function prepareB5CandidateAttempt(input: B5ProducerArguments) {
   const parsed = B5ProducerArguments.parse(input)
-  const outputDirectory = path.resolve(parsed.outputDirectory)
-  const existing = await readdir(outputDirectory).catch(() => [])
+  const requestedOutputDirectory = path.resolve(parsed.outputDirectory)
+  const existing = await readdir(requestedOutputDirectory).catch(() => [])
   if (existing.length) throw new Error("B5 producer output directory must be empty")
-  await mkdir(outputDirectory, { recursive: true })
+  await mkdir(requestedOutputDirectory, { recursive: true })
+  const outputDirectory = await realpath(requestedOutputDirectory)
   const isolationRoot = path.join(outputDirectory, ".isolation")
   const runtimeHome = path.join(isolationRoot, "runtime-home")
   const databasePath = path.join(isolationRoot, "agent-company.db")
@@ -231,6 +419,7 @@ export async function prepareB5CandidateAttempt(input: B5ProducerArguments) {
   return {
     arguments: parsed,
     git: await resolveB5CandidateGit(parsed.candidateSha),
+    attemptIsolationId: b5AttemptIsolationId(worktree, outputDirectory),
     snapshots,
     paths: {
       worktree,
@@ -253,11 +442,1487 @@ export function environmentPathDigest(target: string) {
   return sha256(path.resolve(target))
 }
 
-export async function produceB5CandidateFacts(input: B5ProducerArguments): Promise<never> {
-  await prepareB5CandidateAttempt(input)
-  throw new Error("B5 producer is blocked until all S13-S27 scenario drivers are implemented")
+function normalized(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalized)
+  if (!value || typeof value !== "object") return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, normalized(item)]),
+  )
 }
 
+function valueSha256(value: unknown) {
+  return sha256(JSON.stringify(normalized(value)))
+}
+
+export function b5NormalizedResultSha256(value: unknown) {
+  return valueSha256(value)
+}
+
+async function writeJSON(target: string, value: unknown) {
+  await mkdir(path.dirname(target), { recursive: true })
+  const source = `${JSON.stringify(value, null, 2)}\n`
+  await Bun.write(target, source)
+  return {
+    path: target,
+    sha256: sha256(source),
+    byteLength: new TextEncoder().encode(source).byteLength,
+  }
+}
+
+async function relativeFile(rootDirectory: string, target: string) {
+  const source = new Uint8Array(await Bun.file(target).arrayBuffer())
+  return RelativeFile.parse({
+    relativePath: path.relative(rootDirectory, target),
+    sha256: sha256(source),
+    byteLength: source.byteLength,
+    mediaType: "application/json",
+  })
+}
+
+async function stateEntries(
+  rootDirectory: string,
+  target = rootDirectory,
+  excludedRelativePaths: ReadonlySet<string> = new Set(),
+): Promise<{ path: string; sha256: string; byteLength: number }[]> {
+  const relative = path.relative(rootDirectory, target) || "."
+  if (excludedRelativePaths.has(relative)) return []
+  const info = await lstat(target).catch(() => null)
+  if (!info) return []
+  if (info.isSymbolicLink()) throw new Error(`B5 state target cannot be a symbolic link: ${target}`)
+  if (info.isFile()) {
+    const source = new Uint8Array(await Bun.file(target).arrayBuffer())
+    return [{ path: relative, sha256: sha256(source), byteLength: source.byteLength }]
+  }
+  if (!info.isDirectory()) throw new Error(`B5 state target must be a regular file or directory: ${target}`)
+  const children = (await readdir(target)).sort()
+  if (!children.length) return [{ path: `${relative}/`, sha256: sha256(""), byteLength: 0 }]
+  return (
+    await Promise.all(
+      children.map((child) =>
+        stateEntries(rootDirectory, path.join(target, child), excludedRelativePaths),
+      ),
+    )
+  ).flat()
+}
+
+async function stateSha256(target: string, excludedRelativePaths: ReadonlySet<string> = new Set()) {
+  return valueSha256(await stateEntries(target, target, excludedRelativePaths))
+}
+
+function stableId(prefix: string, value: string) {
+  return `${prefix}_${valueSha256(value).slice(0, 26)}`
+}
+
+function rolloutStatus(value: {
+  state: { phase: string }
+  executionMode: "off" | "shadow" | "active"
+  newProjectPolicy: {
+    defaultStrategy: "legacy_full_plan" | "seed_and_grow"
+    seedOptInAllowed: boolean
+    explicitLegacyFallbackAllowed: boolean
+  }
+}) {
+  if (value.state.phase !== "dogfood_default")
+    throw new Error(`B5 rollback requires dogfood_default, received ${value.state.phase}`)
+  if (value.executionMode === "shadow")
+    throw new Error("B5 rollback cannot run in shadow execution mode")
+  return {
+    phase: value.state.phase,
+    executionMode: value.executionMode,
+    newProjectPolicy: value.newProjectPolicy,
+  } as const
+}
+
+const reportClass = {
+  "scenario.fixture_checked": "scenario_fixture",
+  "command.probe_checked": "command_probe",
+  "git.blob_checked": "git_blob",
+  "report.file_checked": "fact_report",
+  "terminal.invariant_checked": "terminal_invariant",
+  "receipt.recovery_checked": "receipt_recovery",
+  "graph_mutation.recovery_checked": "graph_mutation_recovery",
+  "delivery.checked": "delivery",
+  "validation_anchor.checked": "validation",
+  "approval_gate.checked": "approval",
+  "quiescence.checked": "quiescence",
+  "interruption.checked": "interruption",
+  "review_presence.checked": "review",
+  "quality_pair.checked": "quality_pair",
+  "benchmark.checked": "benchmark",
+  "shadow_pair.checked": "shadow_pair",
+  "repair.circuit_checked": "repair_circuit",
+  "model.usage_checked": "model_usage",
+} as const
+
+type ScenarioRecord = {
+  result: B5ScenarioRunResult
+  report: {
+    path: string
+    sha256: string
+    byteLength: number
+  }
+  probe: {
+    runId: string
+    commandId: string
+    stdoutSha256: string
+    stderrSha256: string
+  }
+  delivery?: {
+    id: string
+    sha256: string
+  }
+  validationGate?: {
+    id: string
+    status: "pending" | "running" | "passed" | "failed" | "superseded"
+  }
+  approvalGate?: {
+    id: string
+    status: "pending" | "approved" | "rejected"
+  }
+  attention?: {
+    id: string
+    material: boolean
+    interrupts_user: boolean
+  }
+  reviewer?: {
+    workItemId: string
+    assignmentId: string
+    runId: string
+    independent: boolean
+    rejected: boolean
+  }
+  terminal: {
+    passed: boolean
+    falseCompletion: boolean
+    pendingWorkItemCount: number
+    pendingReceiptCount: number
+    pendingMutationCount: number
+    pendingGateCount: number
+  }
+  quiescenceBlockers: { kind: string; id: string }[]
+  recovery?: Record<string, unknown>
+}
+
+export async function produceB5CandidateFacts(input: B5ProducerArguments) {
+  const prepared = await prepareB5CandidateAttempt(input)
+  const startedAt = Date.now()
+  process.env.AGENTCOMPANY_DB = prepared.paths.databasePath
+  process.env.AGENTCOMPANY_HOME = prepared.paths.runtimeHome
+  process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
+  process.env.AGENTCOMPANY_DISABLE_MODELS_FETCH = "true"
+  const [
+    AgentRun,
+    CompanyAgent,
+    CompanyProjectExecution,
+    CompanyProject,
+    CompanyRecruitment,
+    CompanyGraphMutation,
+    CompanyValidationGate,
+    CompanyAttention,
+    GraphSupervisor,
+    CapabilityMaterializer,
+    DispatchCoordinator,
+    QuiescenceService,
+    GateObservation,
+    CompanyRollout,
+    PersistedFactExporter,
+    PersistedFactArtifactReader,
+    SeedGrowMetricReporter,
+    Database,
+    ProjectTables,
+    RecruitmentTables,
+    scenarioModule,
+  ] = await Promise.all([
+    import("../src/agent-run/agent-run"),
+    import("../src/company-agent/company-agent"),
+    import("../src/company-project/execution"),
+    import("../src/company-project/company-project"),
+    import("../src/company-recruitment/company-recruitment"),
+    import("../src/company-project/graph-mutation"),
+    import("../src/company-project/validation-gate"),
+    import("../src/company-project/attention"),
+    import("../src/project-orchestrator/graph-supervisor"),
+    import("../src/project-orchestrator/capability-materializer"),
+    import("../src/project-orchestrator/dispatch"),
+    import("../src/project-orchestrator/quiescence"),
+    import("../src/metrics/gate-observation"),
+    import("../src/company-rollout/company-rollout"),
+    import("../src/metrics/persisted-fact-exporter"),
+    import("../src/metrics/persisted-fact-artifact"),
+    import("../src/metrics/seed-grow-reporter"),
+    import("../src/storage"),
+    import("../src/company-project/company-project.sql"),
+    import("../src/company-recruitment/company-recruitment.sql"),
+    import("../src/metrics/b5-candidate-scenarios"),
+  ])
+  const providerId = process.env.B5_PROVIDER_ID
+  const modelId = process.env.B5_MODEL_ID
+  if (Boolean(providerId) !== Boolean(modelId))
+    throw new Error("B5_PROVIDER_ID and B5_MODEL_ID must be provided together")
+  const layer = Layer.mergeAll(
+    AgentRun.defaultLayer,
+    CompanyAgent.defaultLayer,
+    CompanyProjectExecution.defaultLayer,
+    CompanyProject.defaultLayer,
+    CompanyRecruitment.defaultLayer,
+    CompanyGraphMutation.defaultLayer,
+    GraphSupervisor.defaultLayer,
+    CapabilityMaterializer.defaultLayer,
+    CompanyValidationGate.defaultLayer,
+    CompanyAttention.defaultLayer,
+    DispatchCoordinator.defaultLayer,
+    QuiescenceService.defaultLayer,
+    GateObservation.defaultLayer,
+  )
+  const run = await Effect.runPromise(
+    Effect.gen(function* () {
+      const agentRuns = yield* AgentRun.Service
+      const agents = yield* CompanyAgent.Service
+      const execution = yield* CompanyProjectExecution.Service
+      const projects = yield* CompanyProject.Service
+      const recruitment = yield* CompanyRecruitment.Service
+      const graph = yield* CompanyGraphMutation.Service
+      const supervisor = yield* GraphSupervisor.Service
+      const concurrentSupervisor = yield* Effect.gen(function* () {
+        return yield* GraphSupervisor.Service
+      }).pipe(Effect.provide(GraphSupervisor.defaultLayer))
+      const capabilityMaterializer = yield* CapabilityMaterializer.Service
+      const validation = yield* CompanyValidationGate.Service
+      const attention = yield* CompanyAttention.Service
+      const dispatch = yield* DispatchCoordinator.Service
+      const quiescence = yield* QuiescenceService.Service
+      const observations = yield* GateObservation.Service
+      const runtime = {
+        agentRuns,
+        agents,
+        execution,
+        projects,
+        recruitment,
+        graph,
+        supervisor,
+        concurrentSupervisor,
+        capabilityMaterializer,
+        validation,
+        attention,
+        dispatch,
+        quiescence,
+      }
+      for (const phase of ["shadow", "opt_in", "dogfood_default"] as const)
+        CompanyRollout.transition({
+          idempotencyKey: `b5-${prepared.arguments.attemptId}-${prepared.attemptIsolationId}-${phase}`,
+          to: phase,
+          reason: `B5 isolated candidate automation entered ${phase}`,
+          actorId: "b5-candidate-producer",
+        })
+      CompanyRollout.recordAction({
+        kind: "register_candidate",
+        idempotencyKey: `b5-${prepared.arguments.attemptId}-${prepared.attemptIsolationId}-candidate`,
+        candidate: {
+          id: stableId(
+            "rolloutCandidate",
+            `${prepared.git.headSha}:${prepared.arguments.attemptId}:${prepared.attemptIsolationId}`,
+          ),
+          candidateSha: prepared.git.headSha,
+          targetRef: "refs/heads/main",
+        },
+      })
+
+      const rollbackProbe = Effect.fn("B5CandidateProducer.rollbackProbe")(function* (
+        target: "kill_switch" | "legacy_fallback",
+      ) {
+        process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
+        const before = rolloutStatus(CompanyRollout.status())
+        const existing = yield* projects.create({
+          goal: `Observe ${target} without changing in-flight business facts`,
+          title: `B5 ${target} in-flight rollback probe`,
+          execution_strategy: "seed_and_grow",
+          seed_mode: "direct_single",
+        })
+        yield* projects.transition({ id: existing.id, status: "planning" })
+        yield* projects.transition({ id: existing.id, status: "executing" })
+        const existingBefore = (yield* projects.get(existing.id))!
+        const businessStateSha256Before = CompanyRollout.projectBusinessStateSha256(existing.id)
+        const businessRowsBefore = CompanyRollout.valueSha256({
+          id: existingBefore.id,
+          status: existingBefore.status,
+          strategy: existingBefore.execution_strategy,
+        })
+        if (target === "kill_switch")
+          process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "off"
+        const dispatchResult = yield* dispatch.dispatchReady(existing.id)
+        const observedAt = Date.now()
+        const after = rolloutStatus(CompanyRollout.status())
+        const resolvedNewProjectStrategy = CompanyRollout.resolveNewProjectStrategy(
+          target === "legacy_fallback" ? "legacy_full_plan" : undefined,
+        )
+        const resolvedExplicitFallbackStrategy =
+          CompanyRollout.resolveNewProjectStrategy("legacy_full_plan")
+        const created = yield* projects.create({
+          goal: `Verify ${target} strategy resolution`,
+          title: `B5 ${target} post-action project`,
+          execution_strategy: resolvedNewProjectStrategy,
+          ...(resolvedNewProjectStrategy === "seed_and_grow"
+            ? { seed_mode: "direct_single" as const }
+            : {}),
+        })
+        const existingAfter = (yield* projects.get(existing.id))!
+        const createdAfter = (yield* projects.get(created.id))!
+        const businessStateSha256After = CompanyRollout.projectBusinessStateSha256(existing.id)
+        const result = B5RollbackObservation.parse({
+          schemaVersion: 1,
+          kind: "seed-grow-b5-rollback-observation",
+          candidateSha: prepared.git.headSha,
+          attemptId: prepared.arguments.attemptId,
+          attemptIsolationId: prepared.attemptIsolationId,
+          target,
+          outcome: "completed",
+          phaseAtAction: "dogfood_default",
+          before,
+          after,
+          inFlightProject: {
+            id: existing.id,
+            status: existingBefore.status,
+            strategyBefore: existingBefore.execution_strategy,
+            strategyAfter: existingAfter.execution_strategy,
+            businessStateSha256Before,
+            businessStateSha256After,
+          },
+          process: {
+            pid: process.pid,
+            producerPath,
+            producerSha256: prepared.git.producerSha256,
+            startedAt,
+          },
+          dispatch: {
+            coordinator: "DispatchCoordinator",
+            action: target,
+            projectId: existing.id,
+            result: dispatchResult,
+            resultSha256: CompanyRollout.valueSha256(dispatchResult),
+            observedAt,
+          },
+          businessRows: {
+            beforeSha256: businessRowsBefore,
+            afterSha256: CompanyRollout.valueSha256({
+              existing: {
+                id: existingAfter.id,
+                status: existingAfter.status,
+                strategy: existingAfter.execution_strategy,
+              },
+              created: {
+                id: createdAfter.id,
+                status: createdAfter.status,
+                strategy: createdAfter.execution_strategy,
+              },
+            }),
+            newProjectId: createdAfter.id,
+            newProjectStrategy: createdAfter.execution_strategy,
+            existingProjectId: existingAfter.id,
+            existingProjectStrategyBefore: existingBefore.execution_strategy,
+            existingProjectStrategyAfter: existingAfter.execution_strategy,
+          },
+          resolvedNewProjectStrategy,
+          resolvedExplicitFallbackStrategy,
+          isolation: {
+            database: "fresh_local_sqlite",
+            databasePathSha256: environmentPathDigest(prepared.paths.databasePath),
+            productionDatabaseInherited: false,
+            productionProcessUsed: false,
+            networkPortsUsed: [],
+          },
+          observedAt,
+        })
+        yield* projects.transition({
+          id: existing.id,
+          status: "blocked",
+          reason: `B5 ${target} rollback probe sealed`,
+        })
+        yield* projects.transition({
+          id: created.id,
+          status: "blocked",
+          reason: `B5 ${target} strategy probe sealed`,
+        })
+        process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
+        return result
+      })
+      const rollbackKillSwitch = yield* rollbackProbe("kill_switch")
+      const rollbackLegacyFallback = yield* rollbackProbe("legacy_fallback")
+      yield* Effect.promise(() =>
+        Promise.all([
+          writeJSON(prepared.paths.rollbackKillSwitch, rollbackKillSwitch),
+          writeJSON(prepared.paths.rollbackLegacyFallback, rollbackLegacyFallback),
+        ]),
+      )
+
+      const reviewerChain = Effect.fn("B5CandidateProducer.reviewerChain")(function* (
+        result: B5ScenarioRunResult,
+        runId: string,
+      ) {
+        const items = yield* projects.listWorkItems(result.binding.projectId)
+        const parent = items.find((item) => item.kind !== "reviewer")
+        if (!parent) throw new Error(`${result.binding.scenarioId} legacy review has no parent WorkItem`)
+        const parentAssignment = (yield* recruitment.listAssignments({
+          project_id: result.binding.projectId,
+        })).find((assignment) => assignment.work_item_id === parent.id)
+        if (!parentAssignment)
+          throw new Error(`${result.binding.scenarioId} legacy review has no parent Assignment`)
+        const reviewer = yield* projects.createWorkItem({
+          project_id: result.binding.projectId,
+          plan_id: parent.plan_id,
+          parent_id: parent.id,
+          title: `${result.binding.scenarioId} legacy independent review`,
+          description: "Execute the persisted legacy Reviewer path",
+          kind: "reviewer",
+          work_type: "analysis",
+          role: "legacy independent reviewer",
+          capability_packs: ["independent-review@1"],
+          decision_scope: ["review finding"],
+          resource_scope: parent.resource_scope,
+          expected_outputs: ["Independent review receipt"],
+          validators: ["Reviewer is independent from the worker"],
+          model_group: "standard",
+          risk_level: result.binding.scenarioId === "S14" ? "low" : "high",
+          review_status: "pending",
+          purpose: "verification",
+          origin_kind: "seed",
+          validation_mode: "independent_review",
+          acceptance_criteria: ["Independent Reviewer completed the review"],
+          max_attempts: 1,
+        })
+        const need = yield* recruitment.createNeed({
+          company_id: "cmp_local",
+          project_id: result.binding.projectId,
+          work_item_id: reviewer.id,
+          need_key: `b5-${result.binding.scenarioId.toLowerCase()}-legacy-reviewer`,
+          role: reviewer.role,
+          work_type: reviewer.work_type,
+          capability_packs: reviewer.capability_packs,
+          risk_level: reviewer.risk_level,
+          demand_horizon: "project",
+          allowed_permission_modes: ["read_only"],
+          workspace_scopes: reviewer.resource_scope,
+          independent_from_agent_ids: [parentAssignment.agent_id],
+        })
+        const staffed = yield* recruitment.selectAndAssign({
+          capability_need_id: need.id,
+          exclude_agent_ids: [parentAssignment.agent_id],
+          permission_mode: "read_only",
+        })
+        if (staffed.agent.id === parentAssignment.agent_id)
+          throw new Error(`${result.binding.scenarioId} legacy Reviewer is not independent`)
+        yield* projects.startWorkItem(reviewer.id)
+        const probe = yield* scenarioModule.runB5LocalProbe(
+          {
+            snapshot: prepared.snapshots.find(
+              (snapshot) => snapshot.scenario.id === result.binding.scenarioId,
+            )!,
+            strategy: result.binding.strategy,
+            runId,
+            candidateSha: prepared.git.headSha,
+            databasePath: prepared.paths.databasePath,
+            runtimeHomePath: prepared.paths.runtimeHome,
+            worktreePath: prepared.paths.worktree,
+          },
+          runtime,
+          result.binding.projectId,
+          reviewer.id,
+          staffed.agent.id,
+          `${runId}-reviewer`,
+        )
+        const artifact = yield* projects.addArtifact({
+          project_id: result.binding.projectId,
+          work_item_id: reviewer.id,
+          kind: "review_result",
+          title: `${result.binding.scenarioId} legacy review result`,
+          content: JSON.stringify({ accepted: true, independent: true }),
+          evidence: { agentRunId: probe.runId, independent: true },
+          created_by_agent_id: staffed.agent.id,
+        })
+        yield* projects.completeWorkItemWithReceipt({
+          id: reviewer.id,
+          receipt: {
+            idempotency_key: `b5-${result.binding.scenarioId.toLowerCase()}-legacy-review-${runId}`,
+            outcome: "completed",
+            summary: "Independent legacy Reviewer accepted the persisted evidence",
+            artifact_ids: [artifact.id],
+            evidence_refs: [
+              { kind: "agent_run", id: probe.runId },
+              { kind: "artifact", id: artifact.id },
+            ],
+            confirmed_facts: ["reviewer independent=true", "review accepted=true"],
+            invalidated_assumptions: [],
+            unknowns: [],
+            blockers: [],
+            capability_gaps: [],
+            task_proposals: [],
+            dependency_proposals: [],
+            questions: [],
+          },
+        })
+        yield* projects.setWorkItemReview({ id: parent.id, review_status: "accepted" })
+        return {
+          workItemId: reviewer.id,
+          assignmentId: staffed.assignment.id,
+          runId: probe.runId,
+          independent: true,
+          rejected: false,
+        }
+      })
+
+      const validationGate = Effect.fn("B5CandidateProducer.validationGate")(function* (
+        result: B5ScenarioRunResult,
+        artifactId: string | undefined,
+      ) {
+        const current = yield* validation.list(result.binding.projectId)
+        if (current.length) return current.findLast(() => true)!
+        const item = (yield* projects.listWorkItems(result.binding.projectId)).find(
+          (candidate) => candidate.kind !== "reviewer",
+        )
+        if (!item) throw new Error(`${result.binding.scenarioId} validation has no WorkItem`)
+        const evidenceArtifact =
+          artifactId ??
+          (
+            yield* projects.addArtifact({
+              project_id: result.binding.projectId,
+              work_item_id: item.id,
+              kind: "validation_probe",
+              title: `${result.binding.scenarioId} validation probe`,
+              content: JSON.stringify({ exists: true }),
+            })
+          ).id
+        const gate = yield* validation.create({
+          project_id: result.binding.projectId,
+          work_item_id: item.id,
+          kind: "artifact",
+          criteria: [
+            {
+              id: `b5-${result.binding.scenarioId.toLowerCase()}-artifact-exists`,
+              statement: "The persisted B5 scenario artifact exists",
+              anchor: {
+                kind: "artifact",
+                reference: `artifact:${evidenceArtifact}`,
+              },
+              operator: "exists",
+              expected: true,
+            },
+          ],
+          blocking_work_item_ids: [item.id],
+          evaluator: "fact_match_v1",
+          max_repair_rounds: 3,
+        })
+        const evaluated = yield* validation.evaluate({
+          gate_id: gate.id,
+          evaluator: "fact_match_v1",
+          evidence: [
+            {
+              criterion_id: `b5-${result.binding.scenarioId.toLowerCase()}-artifact-exists`,
+              anchor: "artifact",
+              reference: `artifact:${evidenceArtifact}`,
+              observed: true,
+              evidence_ref: { kind: "artifact", id: evidenceArtifact },
+            },
+          ],
+        })
+        return evaluated.gate
+      })
+
+      const records: ScenarioRecord[] = []
+      const recordByKey = new Map<string, ScenarioRecord>()
+      for (const snapshot of prepared.snapshots) {
+        for (const strategy of B5StrategyOrder) {
+          const runId = b5AttemptRunId({
+            attemptId: prepared.arguments.attemptId,
+            attemptIsolationId: prepared.attemptIsolationId,
+            scenarioId: snapshot.scenario.id,
+            strategy,
+            candidateSha: prepared.git.headSha,
+          })
+          const recoveryOutputDirectory = path.join(
+            prepared.paths.isolationRoot,
+            "recovery",
+            `${snapshot.scenario.id}-${strategy}`,
+          )
+          const driven = yield* scenarioModule.runB5Scenario(
+            {
+              snapshot,
+              strategy,
+              runId,
+              ...(providerId && modelId ? { providerId, modelId } : {}),
+              candidateSha: prepared.git.headSha,
+              databasePath: prepared.paths.databasePath,
+              runtimeHomePath: prepared.paths.runtimeHome,
+              worktreePath: prepared.paths.worktree,
+              recoveryOutputDirectory,
+            },
+            runtime,
+          )
+          const result = scenarioModule.B5ScenarioRunResult.parse({
+            ...driven,
+            binding: {
+              ...driven.binding,
+              runId,
+            },
+          })
+          yield* projects.recordEvent({
+            project_id: result.binding.projectId,
+            type: "local_gate.run_bound",
+            actor_id: "b5-candidate-producer",
+            data: {
+              candidateSha: prepared.git.headSha,
+              projectId: result.binding.projectId,
+              runId,
+              scenarioId: result.binding.scenarioId,
+              strategy: result.binding.strategy,
+              snapshotDigest: result.binding.snapshotDigest,
+            },
+          })
+          const reviewer =
+            strategy === "legacy_full_plan" &&
+            ["S14", "S18"].includes(snapshot.scenario.id)
+              ? yield* reviewerChain(result, runId)
+              : result.oracle.kind === "s18_risk_reviewer"
+                ? {
+                    workItemId: result.oracle.reviewerWorkItemId,
+                    assignmentId: result.oracle.reviewerAssignmentId,
+                    runId: result.oracle.reviewerAgentRunId,
+                    independent: result.oracle.independent,
+                    rejected: result.oracle.rejected,
+                  }
+                : undefined
+          const items = yield* projects.listWorkItems(result.binding.projectId)
+          const s18Oracle =
+            result.oracle.kind === "s18_risk_reviewer" ? result.oracle : undefined
+          const probeItem =
+            s18Oracle
+              ? items.find((item) => item.id === s18Oracle.workerWorkItemId)
+              : items.find((item) => item.kind !== "reviewer")
+          if (!probeItem) throw new Error(`${snapshot.scenario.id} has no command probe WorkItem`)
+          const probe = yield* scenarioModule.runB5LocalProbe(
+            {
+              snapshot,
+              strategy,
+              runId,
+              candidateSha: prepared.git.headSha,
+              databasePath: prepared.paths.databasePath,
+              runtimeHomePath: prepared.paths.runtimeHome,
+              worktreePath: prepared.paths.worktree,
+            },
+            runtime,
+            result.binding.projectId,
+            probeItem.id,
+            probeItem.owner_agent_id ?? stableId("agent", `${runId}:probe`),
+          )
+          const delivery = requiredB5ObservationTypes(
+            snapshot.scenario.id,
+            strategy,
+          ).includes("delivery.checked")
+            ? yield* projects.addArtifact({
+                project_id: result.binding.projectId,
+                work_item_id: probeItem.id,
+                kind: "b5_delivery",
+                title: `${snapshot.scenario.id} ${strategy} consumable delivery`,
+                content: JSON.stringify({
+                  scenarioId: snapshot.scenario.id,
+                  strategy,
+                  terminalDecision: result.terminalDecision,
+                  oracle: result.oracle,
+                }),
+                evidence: {
+                  candidateSha: prepared.git.headSha,
+                  runId,
+                  snapshotDigest: snapshot.snapshotDigest,
+                },
+              })
+            : undefined
+          const deliveryBinding = delivery
+            ? {
+                id: delivery.id,
+                sha256: sha256(delivery.content ?? ""),
+              }
+            : undefined
+          const approvalGate =
+            snapshot.scenario.id === "S15" && strategy === "seed_and_grow"
+              ? (yield* projects.listGates(result.binding.projectId)).find(
+                  (gate) => gate.kind === "risk_approval",
+                )
+              : undefined
+          const validationRequired = requiredB5ObservationTypes(
+            snapshot.scenario.id,
+            strategy,
+          ).includes("validation_anchor.checked")
+          const gate = validationRequired
+            ? yield* validationGate(result, deliveryBinding?.id)
+            : undefined
+          const interruptionRequired = requiredB5ObservationTypes(
+            snapshot.scenario.id,
+            strategy,
+          ).includes("interruption.checked")
+          const scenarioAttention =
+            !interruptionRequired
+              ? undefined
+              : snapshot.scenario.id === "S15"
+                ? (
+                    yield* attention.create({
+                      project_id: result.binding.projectId,
+                      idempotency_key: `b5-s15-external-attention-${runId}`,
+                      issue: {
+                        issue_kind: "external_side_effect",
+                        risk: "high",
+                        materiality: "external_side_effect",
+                      },
+                      title: "S15 external side effect requires approval",
+                      summary: "Dispatch remains paused until the explicit external-side-effect approval is resolved",
+                      required_decision: "Approve or reject the external side effect",
+                      source_refs: [{ kind: "approval_gate", id: approvalGate!.id }],
+                    })
+                  ).record
+                : snapshot.scenario.id === "S22"
+                  ? (yield* attention.list({ project_id: result.binding.projectId })).find(
+                      (candidate) => candidate.material && candidate.interrupts_user,
+                    )
+                  : undefined
+          const quiescenceResult =
+            snapshot.scenario.id === "S24" && strategy === "seed_and_grow"
+              ? yield* quiescence.check(result.binding.projectId)
+              : undefined
+          if (quiescenceResult && (quiescenceResult.status !== "blocked" || quiescenceResult.ready))
+            throw new Error("S24 did not remain blocked by real Quiescence facts")
+          const recovery = ["S19", "S20", "S27"].includes(snapshot.scenario.id) &&
+              strategy === "seed_and_grow"
+            ? yield* Effect.promise(async () => {
+                const files = (await readdir(recoveryOutputDirectory)).filter((file) =>
+                  file.endsWith(".json"),
+                )
+                if (files.length !== 1)
+                  throw new Error(`${snapshot.scenario.id} recovery emitted ${files.length} reports`)
+                return JSON.parse(
+                  await Bun.file(path.join(recoveryOutputDirectory, files[0]!)).text(),
+                ) as Record<string, unknown>
+              })
+            : undefined
+          const terminal = yield* Effect.sync(() =>
+            Database.Database.use((database) => {
+              const project = database
+                .select()
+                .from(ProjectTables.CompanyProjectTable)
+                .where(Database.eq(ProjectTables.CompanyProjectTable.id, result.binding.projectId))
+                .get()!
+              const pendingWorkItemCount = database
+                .select()
+                .from(ProjectTables.CompanyWorkItemTable)
+                .where(Database.eq(ProjectTables.CompanyWorkItemTable.project_id, result.binding.projectId))
+                .all()
+                .filter((item) => !["completed", "superseded", "cancelled"].includes(item.status)).length
+              const pendingReceiptCount = database
+                .select()
+                .from(ProjectTables.CompanyWorkReceiptTable)
+                .where(Database.eq(ProjectTables.CompanyWorkReceiptTable.project_id, result.binding.projectId))
+                .all()
+                .filter((item) => item.processing_status !== "processed").length
+              const pendingMutationCount = database
+                .select()
+                .from(ProjectTables.CompanyGraphMutationTable)
+                .where(Database.eq(ProjectTables.CompanyGraphMutationTable.project_id, result.binding.projectId))
+                .all()
+                .filter((item) => !["applied", "rejected", "superseded"].includes(item.status)).length
+              const pendingGateCount =
+                database
+                  .select()
+                  .from(ProjectTables.CompanyValidationGateTable)
+                  .where(Database.eq(ProjectTables.CompanyValidationGateTable.project_id, result.binding.projectId))
+                  .all()
+                  .filter((item) => ["pending", "running"].includes(item.status)).length +
+                database
+                  .select()
+                  .from(ProjectTables.CompanyApprovalGateTable)
+                  .where(Database.eq(ProjectTables.CompanyApprovalGateTable.project_id, result.binding.projectId))
+                  .all()
+                  .filter((item) => item.status === "pending").length
+              const falseCompletion =
+                project.status === "completed" &&
+                pendingWorkItemCount +
+                  pendingReceiptCount +
+                  pendingMutationCount +
+                  pendingGateCount >
+                  0
+              return {
+                passed: !falseCompletion,
+                falseCompletion,
+                pendingWorkItemCount,
+                pendingReceiptCount,
+                pendingMutationCount,
+                pendingGateCount,
+              }
+            }),
+          )
+          const quiescenceBlockers =
+            snapshot.scenario.id === "S24" && strategy === "seed_and_grow"
+              ? yield* Effect.sync(() =>
+                  Database.Database.use((database) =>
+                    [
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyWorkItemTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyWorkItemTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter(
+                          (item) =>
+                            !["completed", "superseded", "cancelled"].includes(item.status),
+                        )
+                        .map((item) => ({ kind: "work_item", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyWorkAttemptTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyWorkAttemptTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => item.status === "running")
+                        .map((item) => ({ kind: "work_attempt", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyWorkReceiptTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyWorkReceiptTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => item.processing_status !== "processed")
+                        .map((item) => ({ kind: "work_receipt", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyGraphMutationTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyGraphMutationTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => ["proposed", "validated"].includes(item.status))
+                        .map((item) => ({ kind: "graph_mutation", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyValidationGateTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyValidationGateTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => ["pending", "running", "failed"].includes(item.status))
+                        .map((item) => ({ kind: "validation_gate", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyApprovalGateTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyApprovalGateTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => item.status === "pending")
+                        .map((item) => ({ kind: "approval_gate", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyAttentionTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyAttentionTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter(
+                          (item) =>
+                            item.status === "open" && item.material,
+                        )
+                        .map((item) => ({ kind: "attention", id: item.id })),
+                      ...database
+                        .select()
+                        .from(ProjectTables.CompanyProjectActionTable)
+                        .where(
+                          Database.eq(
+                            ProjectTables.CompanyProjectActionTable.project_id,
+                            result.binding.projectId,
+                          ),
+                        )
+                        .all()
+                        .filter((item) => item.status === "claimed")
+                        .map((item) => ({ kind: "project_action", id: item.id })),
+                    ].sort((left, right) =>
+                      `${left.kind}:${left.id}`.localeCompare(`${right.kind}:${right.id}`),
+                    ),
+                  ),
+                )
+              : []
+          const reportPath = path.join(
+            prepared.paths.observationReports,
+            `${snapshot.scenario.id}-${strategy}.json`,
+          )
+          const currentProject = (yield* projects.get(result.binding.projectId))!
+          const report = yield* Effect.promise(() =>
+            writeJSON(reportPath, {
+              schemaVersion: 1,
+              kind: "seed-grow-b5-scenario-observation",
+              candidateSha: prepared.git.headSha,
+              attemptId: prepared.arguments.attemptId,
+              attemptIsolationId: prepared.attemptIsolationId,
+              binding: result.binding,
+              projectStatus: currentProject.status,
+              terminalDecision: result.terminalDecision,
+              oracle: result.oracle,
+              sourceRefs: result.sourceRefs,
+              probe,
+              reviewer,
+              delivery: deliveryBinding,
+              validationGate: gate,
+              approvalGate,
+              attention: scenarioAttention,
+              terminal,
+              quiescence: quiescenceResult,
+              quiescenceBlockers,
+              recovery,
+            }),
+          )
+          const record: ScenarioRecord = {
+            result,
+            report,
+            probe,
+            delivery: deliveryBinding,
+            validationGate: gate,
+            approvalGate,
+            attention: scenarioAttention,
+            reviewer,
+            terminal,
+            quiescenceBlockers,
+            recovery,
+          }
+          records.push(record)
+          recordByKey.set(`${snapshot.scenario.id}:${strategy}`, record)
+          const legacy = recordByKey.get(`${snapshot.scenario.id}:legacy_full_plan`)
+          const external = { kind: "external_report" as const, id: report.path }
+          for (const eventType of requiredB5ObservationTypes(
+            snapshot.scenario.id,
+            strategy,
+          )) {
+            const checkedEventType =
+              GateObservation.GateObservationEventType.parse(eventType)
+            const paired = ["quality_pair.checked", "shadow_pair.checked"].includes(eventType)
+              ? legacy
+              : undefined
+            if (paired && strategy !== "seed_and_grow")
+              throw new Error(`${eventType} cannot bind a legacy run`)
+            const baseRefs = [{ kind: "project" as const, id: result.binding.projectId }]
+            const observation =
+              eventType === "scenario.fixture_checked"
+                ? {
+                    properties: {
+                      scenarioId: snapshot.scenario.id,
+                      snapshotSha256: snapshot.snapshotDigest,
+                    },
+                    sourceRefs: [external],
+                  }
+                : eventType === "command.probe_checked"
+                  ? {
+                      properties: {
+                        agentRunId: probe.runId,
+                        commandId: probe.commandId,
+                        exitCode: 0,
+                        stdoutSha256: probe.stdoutSha256,
+                        stderrSha256: probe.stderrSha256,
+                      },
+                      sourceRefs: [
+                        { kind: "agent_run" as const, id: probe.runId },
+                        external,
+                      ],
+                    }
+                  : eventType === "git.blob_checked"
+                    ? {
+                        properties: {
+                          path: producerPath,
+                          candidateBlobSha256: prepared.git.producerSha256,
+                          runtimeSha256: prepared.git.producerSha256,
+                        },
+                        sourceRefs: [external],
+                      }
+                    : eventType === "report.file_checked"
+                      ? {
+                          properties: {
+                            reportClass: "fact_report",
+                            path: report.path,
+                            sha256: report.sha256,
+                          },
+                          sourceRefs: [external],
+                        }
+                      : eventType === "terminal.invariant_checked"
+                        ? {
+                            properties: {
+                              ...terminal,
+                              invariantReportSha256: report.sha256,
+                            },
+                            sourceRefs: [...baseRefs, external],
+                          }
+                        : eventType === "benchmark.checked"
+                          ? {
+                              properties: { finalDecision: "pass" },
+                              sourceRefs: [...baseRefs, external],
+                            }
+                          : eventType === "model.usage_checked"
+                            ? {
+                                properties: {
+                                  agentRunId: probe.runId,
+                                  purpose:
+                                    probeItem.purpose === "discovery"
+                                      ? "wayfinder"
+                                      : probeItem.purpose === "first_slice"
+                                        ? "builder"
+                                        : "worker",
+                                },
+                                sourceRefs: [
+                                  { kind: "agent_run" as const, id: probe.runId },
+                                  external,
+                                ],
+                              }
+                            : eventType === "delivery.checked"
+                              ? {
+                                  properties: {
+                                    deliveryId: `delivery:${result.binding.projectId}`,
+                                    artifactId: deliveryBinding!.id,
+                                    artifactSha256: deliveryBinding!.sha256,
+                                    criterionId: snapshot.scenario.acceptanceCriteria[0]!.id,
+                                    criterionStatus: "pass",
+                                    risk:
+                                      snapshot.scenario.id === "S14"
+                                        ? "low"
+                                        : snapshot.scenario.id === "S18"
+                                          ? "high"
+                                          : "medium",
+                                    opened: true,
+                                  },
+                                  sourceRefs: [
+                                    { kind: "artifact" as const, id: deliveryBinding!.id },
+                                    external,
+                                  ],
+                                }
+                              : eventType === "receipt.recovery_checked"
+                                ? {
+                                    properties: {
+                                      lostAt: result.oracle.kind === "b5_process_recovery"
+                                        ? result.oracle.lostAt
+                                        : 0,
+                                      recoveredAt: result.oracle.kind === "b5_process_recovery"
+                                        ? result.oracle.recoveredAt
+                                        : 1,
+                                      duplicate: false,
+                                      consistent: true,
+                                    },
+                                    sourceRefs: [
+                                      result.sourceRefs.find(
+                                        (reference) => reference.kind === "work_receipt",
+                                      )!,
+                                      external,
+                                    ],
+                                  }
+                                : eventType === "graph_mutation.recovery_checked"
+                                  ? {
+                                      properties: {
+                                        lostAt: result.oracle.kind === "b5_process_recovery"
+                                          ? result.oracle.lostAt
+                                          : 0,
+                                        recoveredAt: result.oracle.kind === "b5_process_recovery"
+                                          ? result.oracle.recoveredAt
+                                          : 1,
+                                        consistent: true,
+                                        duplicateSideEffects: 0,
+                                      },
+                                      sourceRefs: [
+                                        result.sourceRefs.find(
+                                          (reference) => reference.kind === "graph_mutation",
+                                        )!,
+                                        external,
+                                      ],
+                                    }
+                                  : eventType === "validation_anchor.checked"
+                                    ? {
+                                        properties: {
+                                          gateId: gate!.id,
+                                          passed: gate!.status === "passed",
+                                          anchorPassed: gate!.status === "passed",
+                                        },
+                                        sourceRefs: [
+                                          { kind: "validation_gate" as const, id: gate!.id },
+                                          external,
+                                        ],
+                                      }
+                                    : eventType === "approval_gate.checked"
+                                      ? {
+                                          properties: {
+                                            gateId: approvalGate!.id,
+                                            status: approvalGate!.status,
+                                            dispatchPaused: true,
+                                            anchorPassed: false,
+                                          },
+                                          sourceRefs: [
+                                            { kind: "approval_gate" as const, id: approvalGate!.id },
+                                            external,
+                                          ],
+                                        }
+                                      : eventType === "quiescence.checked"
+                                        ? {
+                                            properties: {
+                                              status: "blocked",
+                                              ready: false,
+                                              criterionId:
+                                                snapshot.scenario.acceptanceCriteria[0]!.id,
+                                              criterionStatus: "fail",
+                                              risk: "medium",
+                                              blockerEntityIds: quiescenceBlockers.map(
+                                                (blocker) => blocker.id,
+                                              ),
+                                            },
+                                            sourceRefs: [
+                                              ...baseRefs,
+                                              ...quiescenceBlockers,
+                                              external,
+                                            ],
+                                          }
+                                        : eventType === "interruption.checked"
+                                          ? {
+                                              properties: {
+                                                attentionId: scenarioAttention?.id ?? null,
+                                                presented: Boolean(scenarioAttention),
+                                                needed: Boolean(scenarioAttention),
+                                              },
+                                              sourceRefs: [
+                                                ...baseRefs,
+                                                ...(scenarioAttention
+                                                  ? [
+                                                      {
+                                                        kind: "attention" as const,
+                                                        id: scenarioAttention.id,
+                                                      },
+                                                    ]
+                                                  : []),
+                                                external,
+                                              ],
+                                            }
+                                          : eventType === "review_presence.checked"
+                                            ? {
+                                                properties: {
+                                                  risk:
+                                                    snapshot.scenario.id === "S14"
+                                                      ? "low"
+                                                      : "high",
+                                                  invoked: Boolean(reviewer),
+                                                  independent:
+                                                    reviewer?.independent ?? false,
+                                                  rejected: reviewer?.rejected ?? false,
+                                                  findingConfirmed: Boolean(reviewer),
+                                                },
+                                                sourceRefs: [
+                                                  ...baseRefs,
+                                                  ...(reviewer
+                                                    ? [
+                                                        {
+                                                          kind: "work_item" as const,
+                                                          id: reviewer.workItemId,
+                                                        },
+                                                        {
+                                                          kind: "project_assignment" as const,
+                                                          id: reviewer.assignmentId,
+                                                        },
+                                                        {
+                                                          kind: "agent_run" as const,
+                                                          id: reviewer.runId,
+                                                        },
+                                                      ]
+                                                    : []),
+                                                  external,
+                                                ],
+                                              }
+                                            : eventType === "quality_pair.checked" ||
+                                                eventType === "shadow_pair.checked"
+                                              ? {
+                                                  properties: {
+                                                    legacyRunId: paired!.result.binding.runId,
+                                                    seedGrowRunId: result.binding.runId,
+                                                  },
+                                                  sourceRefs: [...baseRefs, external],
+                                                }
+                                              : eventType === "repair.circuit_checked"
+                                                ? result.oracle.kind ===
+                                                  "s22_repair_circuit"
+                                                  ? {
+                                                      properties: {
+                                                        workItemId:
+                                                          result.oracle.workItemId,
+                                                        attentionId:
+                                                          result.oracle.attentionId,
+                                                        attemptCount: 3,
+                                                      },
+                                                      sourceRefs: [
+                                                        {
+                                                          kind: "attention" as const,
+                                                          id: result.oracle.attentionId,
+                                                        },
+                                                        {
+                                                          kind: "validation_gate" as const,
+                                                          id: result.oracle.validationGateId,
+                                                        },
+                                                        external,
+                                                      ],
+                                                    }
+                                                  : undefined
+                                                : undefined
+            if (!observation)
+              throw new Error(
+                `No B5 observation producer for ${snapshot.scenario.id}/${strategy}/${eventType}`,
+              )
+            const sourceRefs =
+              GateObservation.GateObservationInput.shape.sourceRefs.parse(
+                observation.sourceRefs,
+              )
+            yield* observations.record({
+              id: b5ObservationId(
+                prepared.attemptIsolationId,
+                runId,
+                checkedEventType,
+              ),
+              projectId: result.binding.projectId,
+              ...(paired
+                ? { pairedProjectId: paired!.result.binding.projectId }
+                : {}),
+              candidateSha: prepared.git.headSha,
+              scenarioId: snapshot.scenario.id,
+              runId,
+              subjectId: `${runId}:${eventType}`,
+              strategy,
+              snapshotSha256: snapshot.snapshotDigest,
+              eventType: checkedEventType,
+              properties: observation.properties,
+              sourceRefs,
+              evidence: {
+                report: {
+                  class: reportClass[checkedEventType],
+                  path: report.path,
+                  sha256: report.sha256,
+                },
+              },
+              producerPath,
+              producerSha256: prepared.git.producerSha256,
+            })
+          }
+        }
+      }
+      return {
+        records,
+        rollbackKillSwitch,
+        rollbackLegacyFallback,
+      }
+    }).pipe(Effect.provide(layer)),
+  )
+  await rm(path.join(prepared.paths.isolationRoot, "recovery"), {
+    recursive: true,
+    force: true,
+  })
+  const metricContract = MetricContract.parse(
+    JSON.parse(await Bun.file(path.join(root, metricContractPath)).text()) as unknown,
+  )
+  const orderedRunBindings = exactB5RunBindings(
+    run.records.map((record) => record.result.binding),
+  )
+  const finishedAt = Date.now()
+  const exported = await PersistedFactExporter.exportPersistedFactArtifact({
+    id: `b5-facts-${prepared.git.headSha.slice(0, 12)}-${prepared.arguments.attemptId}-${prepared.attemptIsolationId}`,
+    candidateSha: prepared.git.headSha,
+    metricContract,
+    window: {
+      id: `b5-window-${prepared.arguments.attemptId}-${prepared.attemptIsolationId}`,
+      startedAt: new Date(startedAt - 1_000).toISOString(),
+      endedAt: new Date(finishedAt + 1_000).toISOString(),
+    },
+    runBindings: orderedRunBindings,
+    outputPath: prepared.paths.facts,
+    evidenceProfile: "b5_real_candidate",
+    isolationRoot: prepared.paths.outputDirectory,
+  })
+  const adapter = await PersistedFactArtifactReader.makePersistedFactArtifactAdapter(
+    exported.reference,
+  )
+  const reports = await Effect.runPromise(
+    Effect.gen(function* () {
+      const reporter = yield* SeedGrowMetricReporter.Service
+      return {
+        metric: yield* reporter.report({
+          contract: metricContract,
+          candidateSha: prepared.git.headSha,
+          metricIds: [...PrePublicScenarioMetricIds],
+          strategy: "seed_and_grow",
+        }),
+        shadow: yield* reporter.compareShadow({
+          contract: metricContract,
+          candidateSha: prepared.git.headSha,
+          comparisonId: `b5-shadow-${prepared.git.headSha.slice(0, 12)}-${prepared.arguments.attemptId}-${prepared.attemptIsolationId}`,
+          scenarioIds: [...B5ScenarioIds],
+        }),
+      }
+    }).pipe(Effect.provide(SeedGrowMetricReporter.makeLayer(adapter))),
+  )
+  await Promise.all([
+    writeJSON(prepared.paths.metricReport, reports.metric),
+    writeJSON(prepared.paths.shadowReport, reports.shadow),
+  ])
+  Database.Database.close()
+  const metricIds = reports.metric.results.map((result) => result.metricId)
+  if (
+    reports.metric.status !== "pass" ||
+    metricIds.length !== PrePublicScenarioMetricIds.length ||
+    PrePublicScenarioMetricIds.some(
+      (metricId) => metricIds.filter((candidate) => candidate === metricId).length !== 1,
+    ) ||
+    reports.metric.results.some((result) => result.status !== "pass")
+  )
+    throw new Error("B5 candidate metric report did not pass the exact 16-metric scenario Gate")
+  if (
+    reports.shadow.status !== "pass" ||
+    reports.shadow.checks.length !== B5ScenarioIds.length ||
+    reports.shadow.checks.some((check) => check.status !== "pass")
+  )
+    throw new Error("B5 candidate shadow report did not pass all 15 matched scenarios")
+  const observationReports = await Promise.all(
+    orderedRunBindings.map((binding) =>
+      relativeFile(
+        prepared.paths.outputDirectory,
+        path.join(
+          prepared.paths.observationReports,
+          `${binding.scenarioId}-${binding.strategy}.json`,
+        ),
+      ),
+    ),
+  )
+  const normalizedResultSha256 = b5NormalizedResultSha256({
+    runs: run.records.map((record) => ({
+      scenarioId: record.result.binding.scenarioId,
+      strategy: record.result.binding.strategy,
+      projectStatus: record.result.projectStatus,
+      terminalDecision: record.result.terminalDecision,
+      oracleKind: record.result.oracle.kind,
+      terminalPassed: record.terminal.passed,
+    })),
+    metrics: reports.metric.results.map((result) => ({
+      metricId: result.metricId,
+      status: result.status,
+      value: result.value,
+    })),
+    shadow: reports.shadow.checks.map((check) => ({
+      id: check.id,
+      status: check.status,
+    })),
+    rollback: [run.rollbackKillSwitch, run.rollbackLegacyFallback].map((observation) => ({
+      target: observation.target,
+      outcome: observation.outcome,
+      executionMode: observation.after.executionMode,
+      defaultStrategy: observation.after.newProjectPolicy.defaultStrategy,
+      newProjectStrategy: observation.businessRows.newProjectStrategy,
+      dispatchStatus: observation.dispatch.result.status,
+    })),
+  })
+  const outputIsolationSha256 = await stateSha256(
+    prepared.paths.outputDirectory,
+    new Set(["summary.json"]),
+  )
+  const summary = B5CandidateAttemptSummary.parse({
+    schemaVersion: 1,
+    kind: "seed-grow-b5-candidate-attempt",
+    candidate: {
+      requestedSha: prepared.git.requestedSha,
+      headSha: prepared.git.headSha,
+      treeSha: prepared.git.treeSha,
+      parentSha: prepared.git.parentSha,
+    },
+    attemptId: prepared.arguments.attemptId,
+    attemptIsolationId: prepared.attemptIsolationId,
+    producer: {
+      path: producerPath,
+      sha256: prepared.git.producerSha256,
+    },
+    environment: {
+      worktree: {
+        absolutePathSha256: environmentPathDigest(prepared.paths.worktree),
+        stateSha256: sha256(prepared.git.treeSha),
+      },
+      runtimeHome: {
+        absolutePathSha256: environmentPathDigest(prepared.paths.runtimeHome),
+        stateSha256: await stateSha256(prepared.paths.runtimeHome),
+      },
+      database: {
+        absolutePathSha256: environmentPathDigest(prepared.paths.databasePath),
+        stateSha256: await stateSha256(prepared.paths.databasePath),
+      },
+      output: {
+        absolutePathSha256: environmentPathDigest(prepared.paths.outputDirectory),
+        stateSha256: outputIsolationSha256,
+      },
+      isolationRoot: {
+        absolutePathSha256: environmentPathDigest(prepared.paths.isolationRoot),
+        stateSha256: await stateSha256(prepared.paths.isolationRoot),
+      },
+      productionDataInherited: false,
+      productionProcessUsed: false,
+      networkPortsUsed: [],
+    },
+    window: {
+      startedAt,
+      finishedAt,
+    },
+    orderedRunBindings,
+    files: {
+      facts: await relativeFile(prepared.paths.outputDirectory, prepared.paths.facts),
+      summary: {
+        relativePath: "summary.json",
+        mediaType: "application/json",
+      },
+      metricReport: await relativeFile(
+        prepared.paths.outputDirectory,
+        prepared.paths.metricReport,
+      ),
+      shadowReport: await relativeFile(
+        prepared.paths.outputDirectory,
+        prepared.paths.shadowReport,
+      ),
+      rollbackKillSwitch: await relativeFile(
+        prepared.paths.outputDirectory,
+        prepared.paths.rollbackKillSwitch,
+      ),
+      rollbackLegacyFallback: await relativeFile(
+        prepared.paths.outputDirectory,
+        prepared.paths.rollbackLegacyFallback,
+      ),
+      observationReports,
+    },
+    normalizedResultSha256,
+    outputIsolationSha256,
+    attemptStatus: "completed",
+    promotionClaimed: false,
+  })
+  await writeJSON(prepared.paths.summary, summary)
+  return summary
+}
 if (import.meta.main) {
   const input = parseB5ProducerArguments(process.argv.slice(2))
   await produceB5CandidateFacts(input)

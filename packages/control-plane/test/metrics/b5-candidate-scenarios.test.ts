@@ -12,8 +12,11 @@ import {
 import { evaluateSeedPolicy } from "../../src/project-orchestrator/seed-policy"
 import {
   B5CandidateAttemptSummary,
+  b5AttemptIdentityPlan,
+  b5NormalizedResultSha256,
   parseB5ProducerArguments,
 } from "../../script/produce-seed-grow-candidate-facts"
+import { tmpdir } from "../fixture/fixture"
 
 const benchmarkPath = path.resolve(
   import.meta.dir,
@@ -114,5 +117,49 @@ describe("B5 candidate scenarios", () => {
         ".artifacts/seed-grow-b5/real-candidate-facts",
       ),
     })
+  })
+
+  test("isolates two automatic attempt identity sets without changing normalized semantics", async () => {
+    const first = await tmpdir()
+    const second = await tmpdir()
+    const input = {
+      worktree: path.resolve(import.meta.dir, "../../../.."),
+      attemptId: "automatic" as const,
+      candidateSha: "a".repeat(40),
+    }
+    const left = b5AttemptIdentityPlan({
+      ...input,
+      outputDirectory: first.path,
+    })
+    const right = b5AttemptIdentityPlan({
+      ...input,
+      outputDirectory: second.path,
+    })
+    expect(left.attemptIsolationId).not.toBe(right.attemptIsolationId)
+    expect(left.runIds).toHaveLength(30)
+    expect(right.runIds).toHaveLength(30)
+    expect(left.runIds.filter((id) => right.runIds.includes(id))).toEqual([])
+    expect(left.eventIds.filter((id) => right.eventIds.includes(id))).toEqual([])
+    expect(left.sourceIds.filter((id) => right.sourceIds.includes(id))).toEqual([])
+    const semantic = (plan: typeof left) => ({
+      runCount: plan.runIds.length,
+      eventCount: plan.eventIds.length,
+      sourceCount: plan.sourceIds.length,
+      runs: B5ScenarioIds.flatMap((scenarioId) =>
+        B5StrategyOrder.map((strategy) => ({
+          scenarioId,
+          strategy,
+          terminalDecision: "in_progress",
+          terminalPassed: true,
+        })),
+      ),
+      metricStatus: "pass",
+      shadowStatus: "pass",
+    })
+    expect(b5NormalizedResultSha256(semantic(left))).toBe(
+      b5NormalizedResultSha256(semantic(right)),
+    )
+    await first[Symbol.asyncDispose]()
+    await second[Symbol.asyncDispose]()
   })
 })
