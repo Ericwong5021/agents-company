@@ -571,6 +571,35 @@ export function makeLayer(hooks: Hooks = {}) {
         return row ? decisionFromRow(row) : undefined
       })
 
+      const recoverAppliedDecision = Effect.fn("GraphSupervisor.recoverAppliedDecision")(function* (
+        receipt_id: string,
+        project_id: string,
+      ) {
+        const finished = yield* latestResolved(receipt_id)
+        if (finished) return finished
+        const mutation = (yield* graph.list(project_id)).find(
+          (candidate) =>
+            candidate.trigger_receipt_id === receipt_id &&
+            candidate.status === "applied" &&
+            candidate.idempotency_key.startsWith("graph-mutation:"),
+        )
+        if (!mutation) return undefined
+        const decision = yield* getDecision(
+          mutation.idempotency_key.slice("graph-mutation:".length),
+        )
+        if (
+          !decision ||
+          decision.receipt_id !== receipt_id ||
+          decision.status !== "recorded"
+        )
+          return undefined
+        return yield* resolveDecision({
+          id: decision.id,
+          status: "applied",
+          mutation_id: mutation.id,
+        })
+      })
+
       const processClaim = Effect.fn("GraphSupervisor.processClaim")(function* (
         claim: ReceiptClaim,
         mode: "shadow" | "active",
@@ -646,7 +675,10 @@ export function makeLayer(hooks: Hooks = {}) {
               const result = yield* graph.shadow(proposal)
               if (result.status === "conflict") {
                 if (result.reason === "receipt_already_processed") {
-                  const finished = yield* latestResolved(claim.receipt.id)
+                  const finished = yield* recoverAppliedDecision(
+                    claim.receipt.id,
+                    project.id,
+                  )
                   if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
                   return {
                     status: "processed" as const,
@@ -684,7 +716,10 @@ export function makeLayer(hooks: Hooks = {}) {
             const result = yield* graph.apply(proposal)
             if (result.status === "conflict") {
               if (result.reason === "receipt_already_processed") {
-                const finished = yield* latestResolved(claim.receipt.id)
+                const finished = yield* recoverAppliedDecision(
+                  claim.receipt.id,
+                  project.id,
+                )
                 if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
                 return {
                   status: "processed" as const,
