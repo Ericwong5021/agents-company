@@ -338,12 +338,18 @@ export function attachPlanningTargetRefs(db: TxOrDb, receiptId: string) {
     ))
     .orderBy(desc(CompanyPatchTargetVersionTable.version)).all()
     .filter((item, index, items) =>
-      item.target_version_ref
-      && items.findIndex((candidate) =>
+      items.findIndex((candidate) =>
         candidate.target_type === item.target_type && candidate.target_id === item.target_id
       ) === index
     )
-  targets.filter((target) => target.target_type === "workflow").forEach((target) => {
+  const referencedTargets = targets.filter((target) => refs.some((reference) =>
+    reference.kind === "learning_target_version"
+    && reference.id === target.id
+    && reference.target_type === target.target_type
+    && reference.target_id === target.target_id
+    && reference.version === target.version
+  ))
+  referencedTargets.filter((target) => target.target_type === "workflow").forEach((target) => {
     const payload = WorkflowTarget.parse(resolveRealTargetPayload(db, "workflow", target.target_version_ref))
     if (
       !refs.some((reference) => reference.id === payload.validator_ref)
@@ -351,7 +357,7 @@ export function attachPlanningTargetRefs(db: TxOrDb, receiptId: string) {
     )
       throw new Error(`Workflow rule ${payload.rule} requires missing persisted validator evidence`)
   })
-  targets.forEach((target) =>
+  referencedTargets.forEach((target) =>
     db.insert(CompanyWorkReceiptLearningTargetRefTable).values({
       receipt_id: receipt.id,
       target_version_id: target.id,

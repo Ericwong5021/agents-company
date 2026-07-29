@@ -826,8 +826,22 @@ export const layer = Layer.effect(
           const diff = json<Record<string, unknown>>(row.proposed_diff_json)
           validatePatchAdapter(db, row.company_id, row.target_type as LearningPatchTargetType, row.target_id, diff)
           const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decision_id)).get()
-          if (!decision || decision.company_id !== row.company_id)
-            throw new Error("Learning Patch approval decision does not belong to the company")
+          const projection = db.select().from(DecisionCurrentProjectionTable)
+            .where(eq(DecisionCurrentProjectionTable.decision_id, input.decision_id)).get()
+          if (
+            !decision ||
+            decision.company_id !== row.company_id ||
+            decision.record_origin !== "live" ||
+            decision.subject !== `learning_patch:${patch_id}` ||
+            decision.decision_maker_id !== input.actor_id ||
+            (input.actor_kind === "human" && decision.decision_maker !== "human") ||
+            (input.actor_kind === "system" && decision.decision_maker !== "policy_engine") ||
+            (input.actor_kind === "agent" && !["ai_founder", "board"].includes(decision.decision_maker)) ||
+            !projection ||
+            !["accepted", "executed"].includes(projection.current_status) ||
+            projection.final_decision !== `approve_learning_patch:${patch_id}`
+          )
+            throw new Error("Learning Patch approval requires a current accepted decision bound to the exact Patch")
           if (row.target_type === "delegation_policy" &&
             (input.actor_kind !== "human" || decision.decision_maker !== "human" || decision.decision_maker_id !== input.actor_id))
             throw new Error("Delegation Policy Patch requires the founder's own human red approval")
@@ -928,6 +942,44 @@ export const layer = Layer.effect(
               .orderBy(desc(CompanyPatchBenchmarkTable.version)).get()
             if (!benchmark || benchmark.result !== "passed" || benchmark.real_sample_count < 1)
               throw new Error("Patch cannot enter canary without a passed real-sample Benchmark")
+            validatePatchAdapter(
+              db,
+              patch.company_id,
+              patch.target_type as LearningPatchTargetType,
+              patch.target_id,
+              json<Record<string, unknown>>(patch.proposed_diff_json),
+            )
+            const currentTarget = db.select().from(CompanyPatchTargetVersionTable).where(and(
+              eq(CompanyPatchTargetVersionTable.company_id, patch.company_id),
+              eq(CompanyPatchTargetVersionTable.target_type, patch.target_type),
+              eq(CompanyPatchTargetVersionTable.target_id, patch.target_id),
+              eq(CompanyPatchTargetVersionTable.status, "active"),
+            )).orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
+            const latestTarget = db.select().from(CompanyPatchTargetVersionTable).where(and(
+              eq(CompanyPatchTargetVersionTable.company_id, patch.company_id),
+              eq(CompanyPatchTargetVersionTable.target_type, patch.target_type),
+              eq(CompanyPatchTargetVersionTable.target_id, patch.target_id),
+            )).orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
+            const expectedPreviousVersionRef = currentTarget?.id ?? `initial:${patch.target_type}:${patch.target_id}`
+            const expectedCandidateVersionRef = `candidate:${patch_id}`
+            if (
+              input.previous_version_ref !== expectedPreviousVersionRef ||
+              input.candidate_version_ref !== expectedCandidateVersionRef
+            )
+              throw new Error("Canary refs must identify the persisted current target and exact Patch candidate")
+            db.insert(CompanyPatchTargetVersionTable).values({
+              id: expectedCandidateVersionRef,
+              patch_id,
+              company_id: patch.company_id,
+              target_type: patch.target_type,
+              target_id: patch.target_id,
+              version: (latestTarget?.version ?? 0) + 1,
+              payload_json: patch.proposed_diff_json,
+              previous_version_ref: currentTarget?.id ?? null,
+              target_version_ref: null,
+              status: "candidate",
+              created_at: Date.now(),
+            }).run()
             const id = Identifier.ascending("patchCanary")
             db.insert(CompanyPatchCanaryTable).values({
               id,
@@ -980,6 +1032,13 @@ export const layer = Layer.effect(
               eq(CompanyPatchCanaryTable.patch_id, patch_id),
             )).get()
             if (!canary || canary.status !== "running") throw new Error("Running Patch canary was not found")
+            const candidate = db.select().from(CompanyPatchTargetVersionTable).where(and(
+              eq(CompanyPatchTargetVersionTable.id, canary.candidate_version_ref),
+              eq(CompanyPatchTargetVersionTable.patch_id, patch_id),
+              eq(CompanyPatchTargetVersionTable.status, "candidate"),
+            )).get()
+            if (!candidate || candidate.payload_json !== patch.proposed_diff_json)
+              throw new Error("Running Canary is not bound to the persisted exact Patch candidate")
             if (input.result === "passed" && !input.metric_evidence_refs.length)
               throw new Error("Canary cannot pass without metric evidence")
             if (input.metric_evidence_refs.some((ref) => !persistedEvidenceRef(db, ref, patch.company_id)))
@@ -1000,32 +1059,35 @@ export const layer = Layer.effect(
               .orderBy(desc(CompanyPatchCanaryTable.started_at)).get()
             if (!canary || canary.status !== "passed" || !json<string[]>(canary.metric_evidence_refs_json).length)
               throw new Error("Patch activation requires a passed Canary with real metric evidence")
+            const candidate = db.select().from(CompanyPatchTargetVersionTable).where(and(
+              eq(CompanyPatchTargetVersionTable.id, canary.candidate_version_ref),
+              eq(CompanyPatchTargetVersionTable.patch_id, patch_id),
+              eq(CompanyPatchTargetVersionTable.status, "candidate"),
+            )).get()
+            if (
+              !candidate ||
+              candidate.payload_json !== patch.proposed_diff_json ||
+              (candidate.previous_version_ref ?? `initial:${patch.target_type}:${patch.target_id}`) !== canary.previous_version_ref
+            )
+              throw new Error("Patch activation requires the persisted candidate validated by this Canary")
             const realTarget = ["governance_asset", "benchmark", "agent_interest", "workflow"].includes(patch.target_type)
               ? activateRealTarget(db, patch, input.actor_id)
               : undefined
-            const latest = db.select().from(CompanyPatchTargetVersionTable).where(and(
+            const current = db.select().from(CompanyPatchTargetVersionTable).where(and(
               eq(CompanyPatchTargetVersionTable.company_id, patch.company_id),
               eq(CompanyPatchTargetVersionTable.target_type, patch.target_type),
               eq(CompanyPatchTargetVersionTable.target_id, patch.target_id),
+              eq(CompanyPatchTargetVersionTable.status, "active"),
             )).orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
-            if (latest)
+            if (current)
               db.update(CompanyPatchTargetVersionTable).set({ status: "superseded" })
-                .where(eq(CompanyPatchTargetVersionTable.id, latest.id)).run()
-            db.insert(CompanyPatchTargetVersionTable).values({
-              id: Identifier.ascending("patchTargetVersion"),
-              patch_id,
-              company_id: patch.company_id,
-              target_type: patch.target_type,
-              target_id: patch.target_id,
-              version: (latest?.version ?? 0) + 1,
-              payload_json: realTarget
-                ? JSON.stringify({ target_version_ref: realTarget.ref })
-                : patch.proposed_diff_json,
-              previous_version_ref: canary.previous_version_ref,
+                .where(eq(CompanyPatchTargetVersionTable.id, current.id)).run()
+            db.update(CompanyPatchTargetVersionTable).set({
+              payload_json: realTarget ? JSON.stringify({ target_version_ref: realTarget.ref }) : patch.proposed_diff_json,
+              previous_version_ref: current?.id ?? null,
               target_version_ref: realTarget?.ref ?? null,
               status: "active",
-              created_at: Date.now(),
-            }).run()
+            }).where(eq(CompanyPatchTargetVersionTable.id, candidate.id)).run()
             if (patch.target_type === "delegation_policy") appendDelegationPolicyVersion(db, patch)
             if (patch.target_type === "skill") {
               db.update(CompanySkillCandidateSnapshotTable).set({ status: "superseded" })
@@ -1059,7 +1121,7 @@ export const layer = Layer.effect(
               eq(CompanyWorkReceiptLearningTargetRefTable.target_type, patch.target_type),
               eq(CompanyWorkReceiptLearningTargetRefTable.target_id, patch.target_id),
             )).get()
-            if (!project || !receipt || !target || !receiptTarget)
+            if (!project || !receipt || receipt.processing_status !== "processed" || !target || !receiptTarget)
               throw new Error("WorkReceipt does not prove that planning read the active target version")
             patchEvent(db, patch_id, "planning_read_confirmed", input.actor_id, {
               project_id: input.project_id,
@@ -1086,7 +1148,7 @@ export const layer = Layer.effect(
             : undefined
           db.update(CompanyPatchTargetVersionTable).set({ status: "rolled_back" })
             .where(eq(CompanyPatchTargetVersionTable.patch_id, patch_id)).run()
-          if (appliedVersion && (!realTarget || realRollback?.ref))
+          if (patch.status === "active" && appliedVersion && (!realTarget || realRollback?.ref))
             db.insert(CompanyPatchTargetVersionTable).values({
               id: Identifier.ascending("patchTargetVersion"),
               patch_id,
@@ -1107,7 +1169,8 @@ export const layer = Layer.effect(
             .where(eq(CompanyPatchCanaryTable.patch_id, patch_id)).run()
           db.update(CompanySkillCandidateSnapshotTable).set({ status: "rolled_back" })
             .where(eq(CompanySkillCandidateSnapshotTable.patch_id, patch_id)).run()
-          if (patch.target_type === "delegation_policy") rollbackDelegationPolicy(db, patch)
+          if (patch.status === "active" && patch.target_type === "delegation_policy")
+            rollbackDelegationPolicy(db, patch)
           db.update(CompanyLearningPatchTable).set({ status: "rolled_back", updated_at: Date.now() })
             .where(eq(CompanyLearningPatchTable.id, patch_id)).run()
           patchEvent(db, patch_id, "rolled_back", input.actor_id, { reason: input.reason })
