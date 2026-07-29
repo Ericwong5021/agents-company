@@ -8,6 +8,7 @@ import {
   CompanyArtifactTable,
   CompanyProjectTable,
 } from "@/company-project/company-project.sql"
+import * as FounderOSMode from "@/founder-os/mode"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import {
@@ -586,7 +587,10 @@ export function makeLayer(options: {
         )
         if (!company)
           throw new Error(`Company not found: ${input.company_id}`)
-        if (company.company_commons_mode === "off")
+        if (FounderOSMode.resolve({
+          founderTwinMode: company.founder_twin_mode,
+          companyCommonsMode: company.company_commons_mode,
+        }).effective.companyCommonsMode === "off")
           throw new Error("Company Commons is disabled")
         if (
           input.privacy_scope === "project" &&
