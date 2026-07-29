@@ -162,6 +162,7 @@ const DeliveryObservation = z
     deliveryId: Identifier,
     artifactId: Identifier,
     artifactSha256: Digest,
+    validationGateId: Identifier,
     criterionId: Identifier,
     criterionStatus: z.enum(["pass", "fail", "not_evaluated"]),
     risk: z.enum(["low", "medium", "high"]),
@@ -217,9 +218,44 @@ const PairObservation = z
   .strict()
 const BenchmarkObservation = z
   .object({
-    finalDecision: z.enum(["pass", "fail"]),
+    terminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked", "in_progress"]),
+    oracleKind: Identifier,
   })
   .strict()
+const ScenarioOracleKinds = {
+  S13: "s13_seed_pair",
+  S14: "s14_direct_single",
+  S15: "s15_approval_stop",
+  S16: "s16_prerequisite_repair",
+  S17: "s17_capability_growth",
+  S18: "s18_risk_reviewer",
+  S19: "b5_process_recovery",
+  S20: "b5_process_recovery",
+  S21: "s21_revision_conflict",
+  S22: "s22_repair_circuit",
+  S23: "s23_supersede_replace",
+  S24: "s24_quiescence_blocked",
+  S25: "s25_assignment_release",
+  S26: "s26_company_pool_reuse",
+  S27: "b5_process_recovery",
+} as const
+const ScenarioTerminalDecisions = {
+  S13: "in_progress",
+  S14: "in_progress",
+  S15: "correctly_stopped",
+  S16: "in_progress",
+  S17: "in_progress",
+  S18: "in_progress",
+  S19: "in_progress",
+  S20: "in_progress",
+  S21: "in_progress",
+  S22: "correctly_stopped",
+  S23: "in_progress",
+  S24: "correctly_blocked",
+  S25: "in_progress",
+  S26: "in_progress",
+  S27: "in_progress",
+} as const
 export const RepairCircuitObservation = z
   .object({
     workItemId: Identifier,
@@ -558,8 +594,37 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
       const artifact = Database.use((database) =>
         database.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, properties.artifactId)).get(),
       )
+      const gate = Database.use((database) =>
+        database
+          .select()
+          .from(CompanyValidationGateTable)
+          .where(eq(CompanyValidationGateTable.id, properties.validationGateId))
+          .get(),
+      )
+      const criteria =
+        gate && Array.isArray(JSON.parse(gate.criteria_json) as unknown)
+          ? (JSON.parse(gate.criteria_json) as Array<Record<string, unknown>>)
+          : []
+      const gateEvidence =
+        gate && Array.isArray(JSON.parse(gate.evidence_refs_json) as unknown)
+          ? (JSON.parse(gate.evidence_refs_json) as Array<Record<string, unknown>>)
+          : []
       if (!artifact || artifact.project_id !== binding.projectId)
         throw new Error(`B5 observation ${observation.id} has no persisted delivery artifact`)
+      if (
+        !gate ||
+        gate.project_id !== binding.projectId ||
+        gate.status !== "passed" ||
+        !criteria.some((criterion) => criterion.id === properties.criterionId) ||
+        !gateEvidence.some(
+          (reference) =>
+            reference.kind === "artifact" &&
+            reference.id === properties.artifactId,
+        ) ||
+        properties.criterionStatus !== "pass" ||
+        !properties.opened
+      )
+        throw new Error(`B5 observation ${observation.id} has no passed acceptance Gate for its delivery`)
       const bytes = artifact.path
         ? new Uint8Array(await Bun.file(artifact.path).arrayBuffer())
         : new TextEncoder().encode(artifact.content ?? "")
@@ -579,6 +644,22 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
         if (!contains(outputDirectory, artifactPath) || !info.isFile() || info.isSymbolicLink())
           throw new Error(`B5 observation ${observation.id} has an unsafe delivery artifact path`)
       }
+    }
+    if (observation.event_type === "benchmark.checked") {
+      const properties = BenchmarkObservation.parse(JSON.parse(observation.properties_json) as unknown)
+      const report = JSON.parse(await Bun.file(reportPath).text()) as unknown
+      if (
+        !report ||
+        typeof report !== "object" ||
+        !("terminalDecision" in report) ||
+        !("oracle" in report) ||
+        report.terminalDecision !== properties.terminalDecision ||
+        !report.oracle ||
+        typeof report.oracle !== "object" ||
+        !("kind" in report.oracle) ||
+        report.oracle.kind !== properties.oracleKind
+      )
+        throw new Error(`B5 observation ${observation.id} has a self-reported scenario verdict`)
     }
     if (observation.event_type === "git.blob_checked") {
       const properties = GitBlobObservation.parse(JSON.parse(observation.properties_json) as unknown)
@@ -831,7 +912,7 @@ const ObservationRequiredSourceKinds = {
   "terminal.invariant_checked": ["project"],
   "receipt.recovery_checked": ["work_receipt"],
   "graph_mutation.recovery_checked": ["graph_mutation"],
-  "delivery.checked": ["artifact"],
+  "delivery.checked": ["artifact", "validation_gate"],
   "validation_anchor.checked": ["validation_gate"],
   "approval_gate.checked": ["approval_gate"],
   "quiescence.checked": ["project"],
@@ -1302,8 +1383,31 @@ function gateObservationFacts(
     if (row.event_type === "delivery.checked") {
       const value = DeliveryObservation.parse(properties)
       const artifactRef = references.find((reference) => reference.kind === "artifact")!
+      const gateRef = references.find((reference) => reference.kind === "validation_gate")!
       const artifact = db.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, artifactRef.id)).get()
-      if (!artifact || artifact.id !== value.artifactId || artifact.project_id !== binding.projectId || !value.opened)
+      const gate = db
+        .select()
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.id, gateRef.id))
+        .get()
+      const criteria = gate ? (JSON.parse(gate.criteria_json) as Array<Record<string, unknown>>) : []
+      const gateReferences = gate ? (JSON.parse(gate.evidence_refs_json) as Array<Record<string, unknown>>) : []
+      if (
+        !artifact ||
+        artifact.id !== value.artifactId ||
+        artifact.project_id !== binding.projectId ||
+        !gate ||
+        gate.id !== value.validationGateId ||
+        gate.project_id !== binding.projectId ||
+        gate.status !== "passed" ||
+        !criteria.some((criterion) => criterion.id === value.criterionId) ||
+        !gateReferences.some(
+          (reference) =>
+            reference.kind === "artifact" && reference.id === artifact.id,
+        ) ||
+        value.criterionStatus !== "pass" ||
+        !value.opened
+      )
         throw new Error(`B5 delivery observation ${row.id} has no consumable persisted artifact`)
       emit(row, "delivery.presented", {
         deliveryId: value.deliveryId,
@@ -1434,11 +1538,31 @@ function gateObservationFacts(
       const terminal = byType("terminal.invariant_checked")
         .map((item) => TerminalInvariantObservation.parse(JSON.parse(item.properties_json) as unknown))
         .find((item) => item.passed)
-      if (!terminal || value.finalDecision !== "pass")
-        throw new Error(`B5 benchmark observation ${row.id} is not backed by a passing invariant audit`)
+      const scenarioId = binding.scenarioId as keyof typeof ScenarioOracleKinds
+      const matched =
+        terminal &&
+        value.oracleKind === ScenarioOracleKinds[scenarioId] &&
+        value.terminalDecision === ScenarioTerminalDecisions[scenarioId]
+      const status = matched
+        ? "pass"
+        : value.oracleKind === "legacy_baseline"
+          ? "blocked"
+          : "fail"
+      emit(
+        row,
+        "scenario.verdict_checked",
+        {
+          scenarioId: binding.scenarioId,
+          status,
+          terminalDecision: value.terminalDecision,
+          oracleKind: value.oracleKind,
+          terminalInvariantPassed: Boolean(terminal),
+        },
+        "verdict",
+      )
       emit(row, "benchmark.completed", {
         scenarioId: binding.scenarioId,
-        finalDecision: value.finalDecision,
+        finalDecision: status === "pass" ? "pass" : "fail",
       })
       return
     }

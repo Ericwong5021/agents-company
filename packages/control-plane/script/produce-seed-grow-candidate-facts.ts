@@ -643,9 +643,8 @@ export const B5ScenarioObservationReport = z
       {
         path: "reviewer",
         required:
-          value.binding.scenarioId === "S18" ||
-          (value.binding.scenarioId === "S14" &&
-            value.binding.strategy === "legacy_full_plan"),
+          value.binding.scenarioId === "S18" &&
+          value.binding.strategy === "seed_and_grow",
         present: Boolean(value.reviewer),
       },
       {
@@ -1626,177 +1625,6 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
         ]),
       )
 
-      const reviewerChain = Effect.fn("B5CandidateProducer.reviewerChain")(function* (
-        result: B5ScenarioRunResult,
-        runId: string,
-      ) {
-        const items = yield* projects.listWorkItems(result.binding.projectId)
-        const parent = items.find((item) => item.kind !== "reviewer")
-        if (!parent) throw new Error(`${result.binding.scenarioId} legacy review has no parent WorkItem`)
-        const parentAssignment = (yield* recruitment.listAssignments({
-          project_id: result.binding.projectId,
-        })).find((assignment) => assignment.work_item_id === parent.id)
-        if (!parentAssignment)
-          throw new Error(`${result.binding.scenarioId} legacy review has no parent Assignment`)
-        const reviewer = yield* projects.createWorkItem({
-          project_id: result.binding.projectId,
-          plan_id: parent.plan_id,
-          parent_id: parent.id,
-          title: `${result.binding.scenarioId} legacy independent review`,
-          description: "Execute the persisted legacy Reviewer path",
-          kind: "reviewer",
-          work_type: "analysis",
-          role: "legacy independent reviewer",
-          capability_packs: ["independent-review@1"],
-          decision_scope: ["review finding"],
-          resource_scope: parent.resource_scope,
-          expected_outputs: ["Independent review receipt"],
-          validators: ["Reviewer is independent from the worker"],
-          model_group: "standard",
-          risk_level: result.binding.scenarioId === "S14" ? "low" : "high",
-          review_status: "pending",
-          purpose: "verification",
-          origin_kind: "seed",
-          validation_mode: "independent_review",
-          acceptance_criteria: ["Independent Reviewer completed the review"],
-          max_attempts: 1,
-        })
-        const need = yield* recruitment.createNeed({
-          project_id: result.binding.projectId,
-          work_item_id: reviewer.id,
-          need_key: `b5-${result.binding.scenarioId.toLowerCase()}-legacy-reviewer`,
-          role: reviewer.role,
-          work_type: reviewer.work_type,
-          capability_packs: reviewer.capability_packs,
-          risk_level: reviewer.risk_level,
-          demand_horizon: "project",
-          allowed_permission_modes: ["read_only"],
-          workspace_scopes: reviewer.resource_scope,
-          independent_from_agent_ids: [parentAssignment.agent_id],
-        })
-        const staffed = yield* recruitment.selectAndAssign({
-          capability_need_id: need.id,
-          exclude_agent_ids: [parentAssignment.agent_id],
-          permission_mode: "read_only",
-        })
-        if (staffed.agent.id === parentAssignment.agent_id)
-          throw new Error(`${result.binding.scenarioId} legacy Reviewer is not independent`)
-        yield* projects.startWorkItem(reviewer.id)
-        const probe = yield* scenarioModule.runB5LocalProbe(
-          {
-            snapshot: prepared.snapshots.find(
-              (snapshot) => snapshot.scenario.id === result.binding.scenarioId,
-            )!,
-            strategy: result.binding.strategy,
-            runId,
-            candidateSha: prepared.git.headSha,
-            databasePath: prepared.paths.databasePath,
-            runtimeHomePath: prepared.paths.runtimeHome,
-            worktreePath: prepared.paths.worktree,
-          },
-          runtime,
-          result.binding.projectId,
-          reviewer.id,
-          staffed.agent.id,
-          `${runId}-reviewer`,
-        )
-        const artifact = yield* projects.addArtifact({
-          project_id: result.binding.projectId,
-          work_item_id: reviewer.id,
-          kind: "review_result",
-          title: `${result.binding.scenarioId} legacy review result`,
-          content: JSON.stringify({ accepted: true, independent: true }),
-          evidence: { agentRunId: probe.runId, independent: true },
-          created_by_agent_id: staffed.agent.id,
-        })
-        yield* projects.completeWorkItemWithReceipt({
-          id: reviewer.id,
-          receipt: {
-            idempotency_key: `b5-${result.binding.scenarioId.toLowerCase()}-legacy-review-${runId}`,
-            outcome: "completed",
-            summary: "Independent legacy Reviewer accepted the persisted evidence",
-            artifact_ids: [artifact.id],
-            evidence_refs: [
-              { kind: "agent_run", id: probe.runId },
-              { kind: "artifact", id: artifact.id },
-            ],
-            confirmed_facts: ["reviewer independent=true", "review accepted=true"],
-            invalidated_assumptions: [],
-            unknowns: [],
-            blockers: [],
-            capability_gaps: [],
-            task_proposals: [],
-            dependency_proposals: [],
-            questions: [],
-          },
-        })
-        yield* projects.setWorkItemReview({ id: parent.id, review_status: "accepted" })
-        return {
-          workItemId: reviewer.id,
-          assignmentId: staffed.assignment.id,
-          runId: probe.runId,
-          independent: true,
-          rejected: false,
-        }
-      })
-
-      const validationGate = Effect.fn("B5CandidateProducer.validationGate")(function* (
-        result: B5ScenarioRunResult,
-        artifactId: string | undefined,
-      ) {
-        const current = yield* validation.list(result.binding.projectId)
-        if (current.length) return current.findLast(() => true)!
-        const item = (yield* projects.listWorkItems(result.binding.projectId)).find(
-          (candidate) => candidate.kind !== "reviewer",
-        )
-        if (!item) throw new Error(`${result.binding.scenarioId} validation has no WorkItem`)
-        const evidenceArtifact =
-          artifactId ??
-          (
-            yield* projects.addArtifact({
-              project_id: result.binding.projectId,
-              work_item_id: item.id,
-              kind: "validation_probe",
-              title: `${result.binding.scenarioId} validation probe`,
-              content: JSON.stringify({ exists: true }),
-            })
-          ).id
-        const gate = yield* validation.create({
-          project_id: result.binding.projectId,
-          work_item_id: item.id,
-          kind: "artifact",
-          criteria: [
-            {
-              id: `b5-${result.binding.scenarioId.toLowerCase()}-artifact-exists`,
-              statement: "The persisted B5 scenario artifact exists",
-              anchor: {
-                kind: "artifact",
-                reference: `artifact:${evidenceArtifact}`,
-              },
-              operator: "exists",
-              expected: true,
-            },
-          ],
-          blocking_work_item_ids: [item.id],
-          evaluator: "artifact_digest_v1",
-          max_repair_rounds: 3,
-        })
-        const evaluated = yield* validation.evaluate({
-          gate_id: gate.id,
-          evaluator: "artifact_digest_v1",
-          evidence: [
-            {
-              criterion_id: `b5-${result.binding.scenarioId.toLowerCase()}-artifact-exists`,
-              anchor: "artifact",
-              reference: `artifact:${evidenceArtifact}`,
-              observed: true,
-              evidence_ref: { kind: "artifact", id: evidenceArtifact },
-            },
-          ],
-        })
-        return evaluated.gate
-      })
-
       const records: ScenarioRecord[] = []
       const recordByKey = new Map<string, ScenarioRecord>()
       for (const snapshot of prepared.snapshots) {
@@ -1848,18 +1676,15 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
             },
           })
           const reviewer =
-            strategy === "legacy_full_plan" &&
-            ["S14", "S18"].includes(snapshot.scenario.id)
-              ? yield* reviewerChain(result, runId)
-              : result.oracle.kind === "s18_risk_reviewer"
-                ? {
-                    workItemId: result.oracle.reviewerWorkItemId,
-                    assignmentId: result.oracle.reviewerAssignmentId,
-                    runId: result.oracle.reviewerAgentRunId,
-                    independent: result.oracle.independent,
-                    rejected: result.oracle.rejected,
-                  }
-                : undefined
+            result.oracle.kind === "s18_risk_reviewer"
+              ? {
+                  workItemId: result.oracle.reviewerWorkItemId,
+                  assignmentId: result.oracle.reviewerAssignmentId,
+                  runId: result.oracle.reviewerAgentRunId,
+                  independent: result.oracle.independent,
+                  rejected: result.oracle.rejected,
+                }
+              : undefined
           const items = yield* projects.listWorkItems(result.binding.projectId)
           const s18Oracle =
             result.oracle.kind === "s18_risk_reviewer" ? result.oracle : undefined
@@ -1883,32 +1708,31 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
             probeItem.id,
             probeItem.owner_agent_id ?? stableId("agent", `${runId}:probe`),
           )
-          const delivery = requiredB5ObservationTypes(
+          const deliveryRequired = requiredB5ObservationTypes(
             snapshot.scenario.id,
             strategy,
           ).includes("delivery.checked")
-            ? yield* projects.addArtifact({
-                project_id: result.binding.projectId,
-                work_item_id: probeItem.id,
-                kind: "b5_delivery",
-                title: `${snapshot.scenario.id} ${strategy} consumable delivery`,
-                content: JSON.stringify({
-                  scenarioId: snapshot.scenario.id,
-                  strategy,
-                  terminalDecision: result.terminalDecision,
-                  oracle: result.oracle,
-                }),
-                evidence: {
-                  candidateSha: prepared.git.headSha,
-                  runId,
-                  snapshotDigest: snapshot.snapshotDigest,
-                },
-              })
+          const referencedArtifactIds = new Set(
+            result.sourceRefs
+              .filter((reference) => reference.kind === "artifact")
+              .map((reference) => reference.id),
+          )
+          const delivery = deliveryRequired
+            ? (yield* projects.listArtifacts(result.binding.projectId)).find(
+                (artifact) => referencedArtifactIds.has(artifact.id),
+              )
             : undefined
-          const deliveryBinding = delivery
+          const deliveryBytes = delivery
+            ? yield* Effect.promise(() =>
+                delivery.path
+                  ? Bun.file(delivery.path).arrayBuffer().then((value) => new Uint8Array(value))
+                  : Promise.resolve(new TextEncoder().encode(delivery.content ?? "")),
+              )
+            : undefined
+          const deliveryBinding = delivery && deliveryBytes?.length
             ? {
                 id: delivery.id,
-                sha256: sha256(delivery.content ?? ""),
+                sha256: sha256(deliveryBytes),
               }
             : undefined
           const approvalGate =
@@ -1917,13 +1741,47 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                   (gate) => gate.kind === "risk_approval",
                 )
               : undefined
+          const gates = yield* validation.list(result.binding.projectId)
           const validationRequired = requiredB5ObservationTypes(
             snapshot.scenario.id,
             strategy,
           ).includes("validation_anchor.checked")
           const gate = validationRequired
-            ? yield* validationGate(result, deliveryBinding?.id)
+            ? gates.findLast((candidate) => candidate.status === "passed")
             : undefined
+          const deliveryCriterion = deliveryBinding
+            ? snapshot.scenario.acceptanceCriteria.find((criterion) =>
+                gates.some(
+                  (candidate) =>
+                    candidate.status === "passed" &&
+                    candidate.criteria.some((item) => item.id === criterion.id) &&
+                    candidate.evidence_refs.some(
+                      (reference) =>
+                        reference.kind === "artifact" &&
+                        reference.id === deliveryBinding.id,
+                    ),
+                ),
+              )
+            : undefined
+          const deliveryGate = deliveryCriterion
+            ? gates.find(
+                (candidate) =>
+                  candidate.status === "passed" &&
+                  candidate.criteria.some((criterion) => criterion.id === deliveryCriterion.id) &&
+                  candidate.evidence_refs.some(
+                    (reference) =>
+                      reference.kind === "artifact" &&
+                      reference.id === deliveryBinding!.id,
+                  ),
+              )
+            : undefined
+          if (
+            deliveryRequired &&
+            (!deliveryBinding || !deliveryCriterion || !deliveryGate)
+          )
+            throw new Error(
+              `${snapshot.scenario.id} ${strategy} has no runtime delivery bound to a passed acceptance Gate`,
+            )
           const interruptionRequired = requiredB5ObservationTypes(
             snapshot.scenario.id,
             strategy,
@@ -2266,7 +2124,10 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                           }
                         : eventType === "benchmark.checked"
                           ? {
-                              properties: { finalDecision: "pass" },
+                              properties: {
+                                terminalDecision: result.terminalDecision,
+                                oracleKind: result.oracle.kind,
+                              },
                               sourceRefs: [...baseRefs, external],
                             }
                           : eventType === "model.usage_checked"
@@ -2291,8 +2152,12 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                                     deliveryId: `delivery:${result.binding.projectId}`,
                                     artifactId: deliveryBinding!.id,
                                     artifactSha256: deliveryBinding!.sha256,
-                                    criterionId: snapshot.scenario.acceptanceCriteria[0]!.id,
-                                    criterionStatus: "pass",
+                                    validationGateId: deliveryGate!.id,
+                                    criterionId: deliveryCriterion!.id,
+                                    criterionStatus:
+                                      deliveryGate!.status === "passed"
+                                        ? "pass"
+                                        : "fail",
                                     risk:
                                       snapshot.scenario.id === "S14"
                                         ? "low"
@@ -2303,6 +2168,10 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                                   },
                                   sourceRefs: [
                                     { kind: "artifact" as const, id: deliveryBinding!.id },
+                                    {
+                                      kind: "validation_gate" as const,
+                                      id: deliveryGate!.id,
+                                    },
                                     external,
                                   ],
                                 }

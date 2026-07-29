@@ -3,6 +3,25 @@ import { randomUUID } from "node:crypto"
 import os from "node:os"
 import path from "node:path"
 import {
+  MetricContract,
+  PrePublicScenarioMetricIds,
+  metricContractDigest,
+} from "@agents-company/shared/seed-grow-metrics"
+import { Effect } from "effect"
+import {
+  PersistedFactArtifact,
+  bindPersistedFactArtifact,
+  makePersistedFactArtifactAdapterFromArtifact,
+} from "../packages/control-plane/src/metrics/persisted-fact-artifact"
+import {
+  B5ScenarioIds,
+  exactB5RunBindings,
+} from "../packages/control-plane/src/metrics/b5-candidate-scenarios"
+import {
+  Service as SeedGrowMetricService,
+  makeLayer as makeSeedGrowMetricLayer,
+} from "../packages/control-plane/src/metrics/seed-grow-reporter"
+import {
   loadAutomaticEvidenceGovernance,
   validateAutomaticEvidencePackage,
   writeStructuralAutomaticEvidenceFixture,
@@ -49,6 +68,12 @@ type GateEvaluation = {
   evidencePackageSha256: string | null
 }
 
+type B5AutomaticAttempt = {
+  id: "attempt-01" | "attempt-02"
+  directory: string
+  value: Record<string, unknown>
+}
+
 const runKeys = [
   "schemaVersion",
   "packageVersion",
@@ -91,6 +116,177 @@ function dateIsFresh(value: string, now: number, governance: SeedGrowGovernance)
     timestamp >= now - governance.contract.freshness.maxAgeMs &&
     timestamp <= now + governance.contract.freshness.futureToleranceMs
   )
+}
+
+async function b5AttemptFacts(attempt: B5AutomaticAttempt, buildSha: string) {
+  const commands = Array.isArray(attempt.value.commands) ? attempt.value.commands : []
+  const command = commands.find(
+    (item) => isRecord(item) && item.id === "b5-candidate-facts",
+  )
+  if (!isRecord(command) || !Array.isArray(command.reports))
+    throw new Error(`${attempt.id}: B5 candidate facts command is unavailable`)
+  const report = command.reports.find(
+    (item) =>
+      isRecord(item) &&
+      item.sourcePath ===
+        ".artifacts/seed-grow-b5/real-candidate-facts/facts.json",
+  )
+  if (!isRecord(report) || !isRecord(report.file))
+    throw new Error(`${attempt.id}: B5 persisted facts report is unavailable`)
+  const relativePath = report.file.relativePath
+  const file =
+    typeof relativePath === "string"
+      ? await resolveConfinedFile(attempt.directory, relativePath)
+      : null
+  if (!file) throw new Error(`${attempt.id}: B5 persisted facts path escaped its package`)
+  const bytes = new Uint8Array(await Bun.file(file).arrayBuffer())
+  if (
+    report.file.sha256 !== sha256(bytes) ||
+    report.file.byteLength !== bytes.byteLength
+  )
+    throw new Error(`${attempt.id}: B5 persisted facts digest mismatch`)
+  const artifact = PersistedFactArtifact.parse(
+    JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+  )
+  const { snapshotDigest, ...core } = artifact
+  if (
+    artifact.candidateSha !== buildSha ||
+    bindPersistedFactArtifact(core).snapshotDigest !== snapshotDigest
+  )
+    throw new Error(`${attempt.id}: B5 persisted facts candidate or snapshot mismatch`)
+  exactB5RunBindings(artifact.runBindings)
+  return artifact
+}
+
+async function evaluateB5AttemptSemantics(
+  attempts: B5AutomaticAttempt[],
+  buildSha: string,
+  metricSource: string,
+): Promise<{ status: StageStatus; reasons: string[] }> {
+  if (
+    attempts.length !== 2 ||
+    attempts[0]?.id !== "attempt-01" ||
+    attempts[1]?.id !== "attempt-02"
+  )
+    return { status: "blocked", reasons: ["B5 semantic attempts are incomplete"] }
+  const artifacts = await Promise.all(
+    attempts.map((attempt) => b5AttemptFacts(attempt, buildSha)),
+  )
+  if (
+    artifacts[0].metricContractDigest !== artifacts[1].metricContractDigest ||
+    artifacts[0].metricQueryVersion !== artifacts[1].metricQueryVersion ||
+    artifacts[0].shadowQueryVersion !== artifacts[1].shadowQueryVersion ||
+    artifacts[0].producer.executableDigest !== artifacts[1].producer.executableDigest
+  )
+    return { status: "invalid", reasons: ["B5 attempt fact contracts differ"] }
+  if (
+    new Set(
+      artifacts.flatMap((artifact) =>
+        artifact.runBindings.map((binding) => binding.runId),
+      ),
+    ).size !== 60 ||
+    new Set(
+      artifacts.flatMap((artifact) =>
+        artifact.events.map((event) => event.eventId),
+      ),
+    ).size !==
+      artifacts[0].events.length + artifacts[1].events.length ||
+    new Set(
+      artifacts.flatMap((artifact) =>
+        artifact.events.map(
+          (event) => `${event.source.kind}:${event.source.id}`,
+        ),
+      ),
+    ).size !==
+      artifacts[0].events.length + artifacts[1].events.length
+  )
+    return {
+      status: "invalid",
+      reasons: ["B5 attempt facts are copied or have colliding identities"],
+    }
+  const contract = MetricContract.parse(JSON.parse(metricSource) as unknown)
+  if (artifacts[0].metricContractDigest !== metricContractDigest(contract))
+    return {
+      status: "invalid",
+      reasons: ["B5 attempt facts use a different metric contract"],
+    }
+  const merged = bindPersistedFactArtifact({
+    schemaVersion: 1,
+    kind: "seed-grow-local-gate-persisted-facts",
+    id: `b5-stage-two-attempts-${buildSha}`,
+    producer: artifacts[0].producer,
+    candidateSha: buildSha,
+    metricContractDigest: artifacts[0].metricContractDigest,
+    metricQueryVersion: artifacts[0].metricQueryVersion,
+    shadowQueryVersion: artifacts[0].shadowQueryVersion,
+    window: {
+      id: `b5-stage-two-attempts-${buildSha}`,
+      startedAt: new Date(
+        Math.min(
+          ...artifacts.map((artifact) => Date.parse(artifact.window.startedAt)),
+        ),
+      ).toISOString(),
+      endedAt: new Date(
+        Math.max(
+          ...artifacts.map((artifact) => Date.parse(artifact.window.endedAt)),
+        ),
+      ).toISOString(),
+    },
+    runBindings: artifacts.flatMap((artifact) => artifact.runBindings),
+    events: artifacts.flatMap((artifact) => artifact.events),
+  })
+  const verdicts = merged.events.filter(
+    (event) => event.eventType === "scenario.verdict_checked",
+  )
+  if (verdicts.length !== 60)
+    return {
+      status: "blocked",
+      reasons: ["B5 scenario verdict coverage is incomplete"],
+    }
+  if (verdicts.some((event) => event.properties.status === "blocked"))
+    return {
+      status: "blocked",
+      reasons: ["B5 contains blocked scenario verdicts"],
+    }
+  if (verdicts.some((event) => event.properties.status !== "pass"))
+    return {
+      status: "failed",
+      reasons: ["B5 contains failed scenario verdicts"],
+    }
+  const adapter = makePersistedFactArtifactAdapterFromArtifact(
+    merged,
+    sha256(canonicalize(merged)),
+  )
+  const reports = await Effect.runPromise(
+    Effect.gen(function* () {
+      const reporter = yield* SeedGrowMetricService
+      return {
+        metric: yield* reporter.report({
+          contract,
+          candidateSha: buildSha,
+          metricIds: [...PrePublicScenarioMetricIds],
+          strategy: "seed_and_grow",
+        }),
+        shadow: yield* reporter.compareShadow({
+          contract,
+          candidateSha: buildSha,
+          comparisonId: `b5-stage-two-attempts-${buildSha}`,
+          scenarioIds: [...B5ScenarioIds],
+        }),
+      }
+    }).pipe(Effect.provide(makeSeedGrowMetricLayer(adapter))),
+  )
+  if (reports.metric.status === "blocked" || reports.shadow.status === "blocked")
+    return {
+      status: "blocked",
+      reasons: ["B5 merged metric or Shadow report is blocked"],
+    }
+  if (reports.metric.status !== "pass" || reports.shadow.status !== "pass")
+    return {
+      status: "failed",
+      reasons: ["B5 merged metric or Shadow report failed"],
+    }
+  return { status: "pass", reasons: [] }
 }
 
 function sourceBindingValid(
@@ -311,6 +507,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
   }
   const statuses: StageStatus[] = []
   const digests: string[] = []
+  const b5AutomaticAttempts: B5AutomaticAttempt[] = []
   for (const attempt of attempts) {
     if (
       !isRecord(attempt) ||
@@ -437,10 +634,45 @@ export async function evaluateSeedGrowStageEvidence(options: {
       if (attempt.normalizedDigest !== digest) errors.push(`${attempt.id}: normalized digest mismatch`)
     }
     await sensitiveLogs(path.dirname(automatic.file), automaticValue, errors, String(attempt.id))
+    if (
+      options.stage === "B5" &&
+      status === "pass" &&
+      isRecord(automaticValue)
+    )
+      b5AutomaticAttempts.push({
+        id: attempt.id as "attempt-01" | "attempt-02",
+        directory: path.dirname(automatic.file),
+        value: automaticValue,
+      })
     if (status === "pass") passed.push(`attempt:${String(attempt.id)}`)
   }
-  const status = recomputedStatus(statuses, digests, missing, errors)
-  if (run.overallStatus !== status) errors.push("run.json contains a forged overall status")
+  const structuralStatus = recomputedStatus(statuses, digests, missing, errors)
+  if (run.overallStatus !== structuralStatus) errors.push("run.json contains a forged overall status")
+  const b5Semantics =
+    options.stage === "B5" && structuralStatus === "pass"
+      ? await evaluateB5AttemptSemantics(
+          b5AutomaticAttempts,
+          options.buildSha,
+          governance.metricSource,
+        ).catch((error) => ({
+          status: "invalid" as const,
+          reasons: [error instanceof Error ? error.message : String(error)],
+        }))
+      : { status: "pass" as const, reasons: [] }
+  if (b5Semantics.status === "blocked")
+    missing.push(...b5Semantics.reasons.map((reason) => `b5-semantic:${reason}`))
+  if (b5Semantics.status === "failed")
+    failures.push(...b5Semantics.reasons.map((reason) => `b5-semantic:${reason}`))
+  if (b5Semantics.status === "invalid")
+    errors.push(...b5Semantics.reasons.map((reason) => `b5-semantic:${reason}`))
+  const status =
+    errors.length || structuralStatus === "invalid" || b5Semantics.status === "invalid"
+      ? "invalid"
+      : failures.length || structuralStatus === "failed" || b5Semantics.status === "failed"
+        ? "failed"
+        : missing.length || structuralStatus === "blocked" || b5Semantics.status === "blocked"
+          ? "blocked"
+          : "pass"
   const finalStatus = errors.length ? "invalid" : status
   if (finalStatus === "pass") {
     passed.push(...stage.criteria.map((criterion) => `criterion:${criterion.id}`), "runner:two_local_exact_sha_runs")
