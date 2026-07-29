@@ -17,6 +17,11 @@
     "FOS-ADR-004",
     "FOS-ADR-005",
     "FOS-ADR-006",
+    "FOS-FLAG-001",
+    "FOS-FLAG-002",
+    "FOS-CONTRACT-001",
+    "FOS-CONTRACT-002",
+    "FOS-CONTRACT-003",
     "FOS-BOUNDARY-001",
     "FOS-BOUNDARY-002",
     "FOS-IA-001",
@@ -31,6 +36,7 @@
     "docs/product-design/founder-os/w0-evidence.v1.json",
     "docs/product-design/founder-os/w0-gate-contract.v1.json",
     "script/founder-os-boundary.ts",
+    "script/founder-os-contract.ts",
     "script/founder-os-evidence.ts",
     "script/founder-os-gate.ts"
   ],
@@ -70,18 +76,177 @@
       "graph-mutation",
       "graph_mutation"
     ],
-    "workerPathFragments": [
-      "/worker/",
-      "/workers/",
-      "/worker.",
-      "-worker.",
-      "_worker."
+    "governedWorkerPaths": [
+      "packages/control-plane/src/agent-run/agent-run.ts",
+      "packages/control-plane/src/company-project/execution.ts",
+      "packages/control-plane/src/company-project/work-facts.ts"
     ],
+    "governedWorkerMinCount": 3,
     "sharedContractPath": "packages/shared/src/founder-os.ts",
     "sharedContractForbiddenSpecifierPrefixes": [
       "@/",
       "packages/control-plane",
       "@agents-company/control-plane"
+    ],
+    "negativeCases": [
+      {
+        "id": "founder-runtime-import",
+        "sourceKind": "founder",
+        "specifier": "@/runtime",
+        "expectedRule": "founder_twin_dependency"
+      },
+      {
+        "id": "founder-tool-import",
+        "sourceKind": "founder",
+        "specifier": "@/tool",
+        "expectedRule": "founder_twin_dependency"
+      },
+      {
+        "id": "founder-recruitment-import",
+        "sourceKind": "founder",
+        "specifier": "@/company-recruitment",
+        "expectedRule": "founder_twin_dependency"
+      },
+      {
+        "id": "founder-graph-mutation-import",
+        "sourceKind": "founder",
+        "specifier": "@/project-orchestrator/graph-mutation",
+        "expectedRule": "founder_twin_dependency"
+      },
+      {
+        "id": "worker-graph-supervisor-import",
+        "sourceKind": "worker",
+        "specifier": "@/project-orchestrator/graph-supervisor",
+        "expectedRule": "worker_graph_supervisor"
+      }
+    ]
+  },
+  "commandRegistry": [
+    {
+      "id": "founder-os-governed-files",
+      "runner": "script/founder-os-contract.ts",
+      "check": "governed-files",
+      "reportPath": "reports/governed-files.json"
+    },
+    {
+      "id": "founder-os-boundary",
+      "runner": "script/founder-os-boundary.ts",
+      "check": "production",
+      "reportPath": "reports/boundary-production.json"
+    },
+    {
+      "id": "founder-os-boundary-negative",
+      "runner": "script/founder-os-boundary.ts",
+      "check": "negative",
+      "reportPath": "reports/boundary-negative.json"
+    },
+    {
+      "id": "founder-os-flag-defaults",
+      "runner": "script/founder-os-contract.ts",
+      "check": "flag-defaults",
+      "reportPath": "reports/flag-defaults.json"
+    },
+    {
+      "id": "founder-os-flag-invalid-values",
+      "runner": "script/founder-os-contract.ts",
+      "check": "flag-invalid-values",
+      "reportPath": "reports/flag-invalid-values.json"
+    },
+    {
+      "id": "founder-os-contract-roundtrip",
+      "runner": "script/founder-os-contract.ts",
+      "check": "contract-roundtrip",
+      "reportPath": "reports/contract-roundtrip.json"
+    },
+    {
+      "id": "founder-os-correction-append-only",
+      "runner": "script/founder-os-contract.ts",
+      "check": "correction-append-only",
+      "reportPath": "reports/correction-append-only.json"
+    },
+    {
+      "id": "founder-os-typed-action-unknown-reject",
+      "runner": "script/founder-os-contract.ts",
+      "check": "typed-action-unknown-reject",
+      "reportPath": "reports/typed-action-unknown-reject.json"
+    },
+    {
+      "id": "founder-os-sdk-consistency",
+      "runner": "script/founder-os-contract.ts",
+      "check": "sdk-consistency",
+      "reportPath": "reports/sdk-consistency.json"
+    }
+  ],
+  "taskEvidence": {
+    "FOS-FND-001": [
+      "founder-os-governed-files"
+    ],
+    "FOS-ADR-001": [
+      "founder-os-boundary",
+      "founder-os-boundary-negative"
+    ],
+    "FOS-ADR-002": [
+      "founder-os-boundary",
+      "founder-os-boundary-negative",
+      "founder-os-typed-action-unknown-reject"
+    ],
+    "FOS-ADR-003": [
+      "founder-os-correction-append-only"
+    ],
+    "FOS-ADR-004": [
+      "founder-os-contract-roundtrip"
+    ],
+    "FOS-ADR-005": [
+      "founder-os-correction-append-only",
+      "founder-os-contract-roundtrip"
+    ],
+    "FOS-ADR-006": [
+      "founder-os-contract-roundtrip"
+    ],
+    "FOS-FLAG-001": [
+      "founder-os-flag-defaults",
+      "founder-os-flag-invalid-values"
+    ],
+    "FOS-FLAG-002": [
+      "founder-os-flag-defaults",
+      "founder-os-flag-invalid-values"
+    ],
+    "FOS-CONTRACT-001": [
+      "founder-os-contract-roundtrip",
+      "founder-os-typed-action-unknown-reject",
+      "founder-os-sdk-consistency"
+    ],
+    "FOS-CONTRACT-002": [
+      "founder-os-contract-roundtrip",
+      "founder-os-correction-append-only",
+      "founder-os-sdk-consistency"
+    ],
+    "FOS-CONTRACT-003": [
+      "founder-os-contract-roundtrip",
+      "founder-os-typed-action-unknown-reject",
+      "founder-os-sdk-consistency"
+    ],
+    "FOS-BOUNDARY-001": [
+      "founder-os-boundary",
+      "founder-os-boundary-negative"
+    ],
+    "FOS-BOUNDARY-002": [
+      "founder-os-boundary",
+      "founder-os-boundary-negative"
+    ],
+    "FOS-IA-001": [
+      "founder-os-governed-files"
+    ],
+    "FOS-QA-001": [
+      "founder-os-governed-files",
+      "founder-os-boundary",
+      "founder-os-boundary-negative",
+      "founder-os-flag-defaults",
+      "founder-os-flag-invalid-values",
+      "founder-os-contract-roundtrip",
+      "founder-os-correction-append-only",
+      "founder-os-typed-action-unknown-reject",
+      "founder-os-sdk-consistency"
     ]
   },
   "exactCommitGate": {

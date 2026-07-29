@@ -1,9 +1,5 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import {
-  normalizedFounderOSBoundaryReport,
-  type BoundaryReport,
-} from "./founder-os-boundary"
 
 const root = path.resolve(import.meta.dir, "..")
 const contractPath = "docs/product-design/founder-os/w0-gate-contract.v1.json"
@@ -15,6 +11,15 @@ type FileBinding = {
   sha256: string
   byteLength: number
   mediaType: "application/json" | "text/plain"
+}
+
+type GateContract = {
+  commandRegistry: {
+    id: string
+    runner: string
+    check: string
+    reportPath: string
+  }[]
 }
 
 function sha256(value: string | Uint8Array) {
@@ -145,62 +150,96 @@ export async function collectFounderOSW0Evidence(options: ReturnType<typeof pars
     )}\n`,
     "application/json",
   )
-  const boundaryPath = path.join(options.outputDirectory, "boundary-report.json")
-  const argv = [
-    "bun",
-    path.join(root, "script/founder-os-boundary.ts"),
-    "--ref",
-    options.candidateSha,
-    "--out",
-    boundaryPath,
-  ]
-  const command = Bun.spawnSync(argv, {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const stdout = await writeArtifact(
-    options.outputDirectory,
-    "commands/founder-os-boundary.stdout.txt",
-    command.stdout.toString(),
-    "text/plain",
-  )
-  const stderr = await writeArtifact(
-    options.outputDirectory,
-    "commands/founder-os-boundary.stderr.txt",
-    command.stderr.toString(),
-    "text/plain",
-  )
-  const reportSource = await Bun.file(boundaryPath).text().catch(() => "")
-  if (!reportSource) throw new Error("Founder OS boundary runner did not produce a report")
-  const report = JSON.parse(reportSource) as BoundaryReport
-  const reportBinding = await writeArtifact(
-    options.outputDirectory,
-    "boundary-report.json",
-    reportSource,
-    "application/json",
-  )
-  const summary = `${report.status}: ${report.scanned.founderFiles.length} founder files, ${report.scanned.workerFiles.length} worker files, ${report.violations.length} violations`
+  const contract = JSON.parse(
+    runGit(["show", `${options.candidateSha}:${contractPath}`]).stdout,
+  ) as GateContract
+  const commands = []
+  for (const registered of contract.commandRegistry) {
+    const reportPath = path.join(options.outputDirectory, registered.reportPath)
+    await fs.mkdir(path.dirname(reportPath), { recursive: true })
+    const argv = [
+      "bun",
+      path.join(root, registered.runner),
+      "--ref",
+      options.candidateSha,
+      "--check",
+      registered.check,
+      "--out",
+      reportPath,
+    ]
+    const command = Bun.spawnSync(argv, {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const stdout = await writeArtifact(
+      options.outputDirectory,
+      `commands/${registered.id}.stdout.txt`,
+      command.stdout.toString(),
+      "text/plain",
+    )
+    const stderr = await writeArtifact(
+      options.outputDirectory,
+      `commands/${registered.id}.stderr.txt`,
+      command.stderr.toString(),
+      "text/plain",
+    )
+    const reportSource = await Bun.file(reportPath).text().catch(() => "")
+    if (!reportSource) throw new Error(`${registered.id} did not produce a report`)
+    const report = JSON.parse(reportSource) as {
+      status: "pass" | "failed"
+      normalizedDigest: string
+      assertions?: unknown[]
+      violations?: unknown[]
+      cases?: unknown[]
+    }
+    const reportBinding = await writeArtifact(
+      options.outputDirectory,
+      registered.reportPath,
+      reportSource,
+      "application/json",
+    )
+    const count = report.assertions?.length ?? report.violations?.length ?? report.cases?.length ?? 0
+    commands.push({
+      id: registered.id,
+      check: registered.check,
+      argv,
+      cwd: ".",
+      exitCode: command.exitCode,
+      summary: `${report.status}: ${count} checks`,
+      normalizedDigest: report.normalizedDigest,
+      stdout,
+      stderr,
+      report: reportBinding,
+    })
+  }
+  const candidateTreeSha = runGit(["rev-parse", `${options.candidateSha}^{tree}`]).stdout.trim()
   const normalizedDigest = sha256(
     JSON.stringify({
       candidateSha: options.candidateSha,
-      candidateTreeSha: runGit(["rev-parse", `${options.candidateSha}^{tree}`]).stdout.trim(),
+      candidateTreeSha,
       baseSha: options.baseSha,
-      command: {
-        id: "founder-os-boundary",
+      commands: commands.map((command) => ({
+        id: command.id,
+        check: command.check,
         exitCode: command.exitCode,
-        summary,
-        report: normalizedFounderOSBoundaryReport(report),
-      },
+        summary: command.summary,
+        normalizedDigest: command.normalizedDigest,
+      })),
       authorization,
     }),
   )
+  const status = commands.every(
+    (command) => command.exitCode === 0 && command.summary.startsWith("pass:"),
+  )
+    ? ("pass" as const)
+    : ("failed" as const)
   const manifest = {
     schemaVersion: 1,
-    packageVersion: "1.0.0",
+    packageVersion: "1.1.0",
     attemptId: options.attemptId,
     candidateSha: options.candidateSha,
-    candidateTreeSha: runGit(["rev-parse", `${options.candidateSha}^{tree}`]).stdout.trim(),
+    candidateTreeSha,
     baseSha: options.baseSha,
     contractBinding: sourceBinding(contractPath),
     schemaBinding: sourceBinding(schemaPath),
@@ -223,20 +262,9 @@ export async function collectFounderOSW0Evidence(options: ReturnType<typeof pars
     },
     startedAt,
     finishedAt: new Date().toISOString(),
-    commands: [
-      {
-        id: "founder-os-boundary",
-        argv,
-        cwd: ".",
-        exitCode: command.exitCode,
-        summary,
-        stdout,
-        stderr,
-        report: reportBinding,
-      },
-    ],
+    commands,
     normalizedDigest,
-    status: command.exitCode === 0 && report.status === "pass" ? ("pass" as const) : ("failed" as const),
+    status,
   }
   await Bun.write(
     path.join(options.outputDirectory, "run-manifest.json"),

@@ -2,19 +2,90 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import {
   evaluateFounderOSBoundary,
+  evaluateFounderOSBoundaryNegative,
+  normalizedFounderOSBoundaryNegativeReport,
   normalizedFounderOSBoundaryReport,
+  type BoundaryNegativeReport,
   type BoundaryReport,
 } from "./founder-os-boundary"
+import {
+  evaluateFounderOSContractCheck,
+  normalizedFounderOSContractCheckReport,
+  type ContractCheckReport,
+  type FounderOSContractCheck,
+} from "./founder-os-contract"
 
 const root = path.resolve(import.meta.dir, "..")
 const contractPath = "docs/product-design/founder-os/w0-gate-contract.v1.json"
 const schemaPath = "docs/product-design/founder-os/w0-evidence.v1.json"
 const evidenceRunnerPath = "script/founder-os-evidence.ts"
 const gateRunnerPath = "script/founder-os-gate.ts"
+const requiredTaskEvidence = {
+  "FOS-FND-001": ["founder-os-governed-files"],
+  "FOS-ADR-001": ["founder-os-boundary", "founder-os-boundary-negative"],
+  "FOS-ADR-002": [
+    "founder-os-boundary",
+    "founder-os-boundary-negative",
+    "founder-os-typed-action-unknown-reject",
+  ],
+  "FOS-ADR-003": ["founder-os-correction-append-only"],
+  "FOS-ADR-004": ["founder-os-contract-roundtrip"],
+  "FOS-ADR-005": ["founder-os-correction-append-only", "founder-os-contract-roundtrip"],
+  "FOS-ADR-006": ["founder-os-contract-roundtrip"],
+  "FOS-FLAG-001": ["founder-os-flag-defaults", "founder-os-flag-invalid-values"],
+  "FOS-FLAG-002": ["founder-os-flag-defaults", "founder-os-flag-invalid-values"],
+  "FOS-CONTRACT-001": [
+    "founder-os-contract-roundtrip",
+    "founder-os-typed-action-unknown-reject",
+    "founder-os-sdk-consistency",
+  ],
+  "FOS-CONTRACT-002": [
+    "founder-os-contract-roundtrip",
+    "founder-os-correction-append-only",
+    "founder-os-sdk-consistency",
+  ],
+  "FOS-CONTRACT-003": [
+    "founder-os-contract-roundtrip",
+    "founder-os-typed-action-unknown-reject",
+    "founder-os-sdk-consistency",
+  ],
+  "FOS-BOUNDARY-001": ["founder-os-boundary", "founder-os-boundary-negative"],
+  "FOS-BOUNDARY-002": ["founder-os-boundary", "founder-os-boundary-negative"],
+  "FOS-IA-001": ["founder-os-governed-files"],
+  "FOS-QA-001": [
+    "founder-os-governed-files",
+    "founder-os-boundary",
+    "founder-os-boundary-negative",
+    "founder-os-flag-defaults",
+    "founder-os-flag-invalid-values",
+    "founder-os-contract-roundtrip",
+    "founder-os-correction-append-only",
+    "founder-os-typed-action-unknown-reject",
+    "founder-os-sdk-consistency",
+  ],
+} as const
+const requiredCommands = [
+  ["founder-os-governed-files", "script/founder-os-contract.ts", "governed-files", "reports/governed-files.json"],
+  ["founder-os-boundary", "script/founder-os-boundary.ts", "production", "reports/boundary-production.json"],
+  ["founder-os-boundary-negative", "script/founder-os-boundary.ts", "negative", "reports/boundary-negative.json"],
+  ["founder-os-flag-defaults", "script/founder-os-contract.ts", "flag-defaults", "reports/flag-defaults.json"],
+  ["founder-os-flag-invalid-values", "script/founder-os-contract.ts", "flag-invalid-values", "reports/flag-invalid-values.json"],
+  ["founder-os-contract-roundtrip", "script/founder-os-contract.ts", "contract-roundtrip", "reports/contract-roundtrip.json"],
+  ["founder-os-correction-append-only", "script/founder-os-contract.ts", "correction-append-only", "reports/correction-append-only.json"],
+  ["founder-os-typed-action-unknown-reject", "script/founder-os-contract.ts", "typed-action-unknown-reject", "reports/typed-action-unknown-reject.json"],
+  ["founder-os-sdk-consistency", "script/founder-os-contract.ts", "sdk-consistency", "reports/sdk-consistency.json"],
+] as const
 
 type SourceBinding = {
   path: string
   sha256: string
+}
+
+type RegisteredCommand = {
+  id: string
+  runner: string
+  check: string
+  reportPath: string
 }
 
 type GateContract = {
@@ -27,6 +98,8 @@ type GateContract = {
   }
   taskIds: string[]
   governedPaths: string[]
+  commandRegistry: RegisteredCommand[]
+  taskEvidence: Record<string, string[]>
   exactCommitGate: {
     attempts: string[]
     isolation: string
@@ -46,14 +119,26 @@ type GateContract = {
   }
 }
 
+type CommandEvaluation = {
+  id: string
+  status: "pass" | "failed" | "invalid"
+  normalizedDigest: string | null
+}
+
 type AttemptEvaluation = {
   id: string
   status: "pass" | "failed" | "blocked" | "invalid"
   normalizedDigest: string | null
   authorizationStatus: string | null
   manifestSha256: string | null
+  commands: CommandEvaluation[]
   errors: string[]
 }
+
+type ExpectedReport =
+  | Awaited<ReturnType<typeof evaluateFounderOSBoundary>>
+  | Awaited<ReturnType<typeof evaluateFounderOSBoundaryNegative>>
+  | Awaited<ReturnType<typeof evaluateFounderOSContractCheck>>
 
 function sha256(value: string | Uint8Array) {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex")
@@ -147,6 +232,41 @@ function validDate(value: unknown) {
   return typeof value === "string" && Number.isFinite(Date.parse(value))
 }
 
+function normalizedReport(command: RegisteredCommand, report: unknown) {
+  if (command.id === "founder-os-boundary") {
+    return normalizedFounderOSBoundaryReport(report as BoundaryReport)
+  }
+  if (command.id === "founder-os-boundary-negative") {
+    return normalizedFounderOSBoundaryNegativeReport(report as BoundaryNegativeReport)
+  }
+  return normalizedFounderOSContractCheckReport(report as ContractCheckReport)
+}
+
+function reportCheckCount(report: unknown) {
+  if (!isRecord(report)) return 0
+  if (Array.isArray(report.assertions)) return report.assertions.length
+  if (Array.isArray(report.violations)) return report.violations.length
+  if (Array.isArray(report.cases)) return report.cases.length
+  return 0
+}
+
+async function expectedReports(candidateSha: string, contract: GateContract) {
+  const reports = new Map<string, ExpectedReport>()
+  for (const command of contract.commandRegistry) {
+    const report =
+      command.id === "founder-os-boundary"
+        ? await evaluateFounderOSBoundary(candidateSha)
+        : command.id === "founder-os-boundary-negative"
+          ? await evaluateFounderOSBoundaryNegative(candidateSha)
+          : await evaluateFounderOSContractCheck(
+              candidateSha,
+              command.check as FounderOSContractCheck,
+            )
+    reports.set(command.id, report)
+  }
+  return reports
+}
+
 async function evaluateAttempt(options: {
   directory: string
   id: string
@@ -157,7 +277,7 @@ async function evaluateAttempt(options: {
   contractBinding: SourceBinding
   schemaBinding: SourceBinding
   runnerBinding: SourceBinding
-  expectedBoundary: Awaited<ReturnType<typeof evaluateFounderOSBoundary>>
+  expectedReports: Map<string, ExpectedReport>
 }) {
   const errors: string[] = []
   const manifestPath = path.join(options.directory, "run-manifest.json")
@@ -171,6 +291,7 @@ async function evaluateAttempt(options: {
       normalizedDigest: null,
       authorizationStatus: null,
       manifestSha256: null,
+      commands: [],
       errors: ["run-manifest.json is missing"],
     } satisfies AttemptEvaluation
   }
@@ -206,12 +327,13 @@ async function evaluateAttempt(options: {
       normalizedDigest: null,
       authorizationStatus: null,
       manifestSha256: sha256(manifestSource),
+      commands: [],
       errors: ["run-manifest.json has invalid JSON or fields"],
     } satisfies AttemptEvaluation
   }
   if (
     manifest.schemaVersion !== 1 ||
-    manifest.packageVersion !== "1.0.0" ||
+    manifest.packageVersion !== "1.1.0" ||
     manifest.attemptId !== options.id ||
     manifest.candidateSha !== options.candidateSha ||
     manifest.candidateTreeSha !== options.candidateTreeSha ||
@@ -309,94 +431,200 @@ async function evaluateAttempt(options: {
     errors.push("authorization-report.json mismatch")
   }
   const commands = Array.isArray(manifest.commands) ? manifest.commands : []
-  if (commands.length !== 1 || !isRecord(commands[0])) errors.push("exactly one boundary command is required")
-  const command = isRecord(commands[0]) ? commands[0] : null
-  if (
-    !command ||
-    !exactKeys(command, ["id", "argv", "cwd", "exitCode", "summary", "stdout", "stderr", "report"]) ||
-    command.id !== "founder-os-boundary" ||
-    !Array.isArray(command.argv) ||
-    !command.argv.every((item) => typeof item === "string") ||
-    command.cwd !== "." ||
-    typeof command.exitCode !== "number" ||
-    typeof command.summary !== "string"
-  ) {
-    errors.push("boundary command record is invalid")
+  if (commands.length !== options.contract.commandRegistry.length) {
+    errors.push("command registry evidence count mismatch")
   }
-  await readBoundFile(
-    options.directory,
-    command?.stdout,
-    "commands/founder-os-boundary.stdout.txt",
-    "text/plain",
-    errors,
-  )
-  await readBoundFile(
-    options.directory,
-    command?.stderr,
-    "commands/founder-os-boundary.stderr.txt",
-    "text/plain",
-    errors,
-  )
-  const reportFile = await readBoundFile(
-    options.directory,
-    command?.report,
-    "boundary-report.json",
-    "application/json",
-    errors,
-  )
-  const report = reportFile
-    ? await Promise.resolve()
-        .then(() => JSON.parse(reportFile.source) as BoundaryReport)
-        .catch(() => null)
-    : null
   if (
-    !report ||
-    JSON.stringify(normalizedFounderOSBoundaryReport(report)) !==
-      JSON.stringify(normalizedFounderOSBoundaryReport(options.expectedBoundary))
+    JSON.stringify(
+      commands.flatMap((command) => (isRecord(command) && typeof command.id === "string" ? [command.id] : [])),
+    ) !== JSON.stringify(options.contract.commandRegistry.map((command) => command.id))
   ) {
-    errors.push("boundary report differs from exact-candidate evaluation")
+    errors.push("command registry evidence order or identity mismatch")
   }
-  const summary = report
-    ? `${report.status}: ${report.scanned.founderFiles.length} founder files, ${report.scanned.workerFiles.length} worker files, ${report.violations.length} violations`
-    : ""
-  if (command?.summary !== summary) errors.push("boundary command summary mismatch")
-  if (
-    command?.exitCode !== (report?.status === "pass" ? 0 : 1) ||
-    manifest.status !== (report?.status === "pass" ? "pass" : "failed")
-  ) {
-    errors.push("boundary command or attempt status was forged")
+  const commandEvaluations: CommandEvaluation[] = []
+  for (const registered of options.contract.commandRegistry) {
+    const value = commands.find(
+      (candidate): candidate is Record<string, unknown> =>
+        isRecord(candidate) && candidate.id === registered.id,
+    )
+    const expected = options.expectedReports.get(registered.id)
+    if (
+      !value ||
+      !expected ||
+      !exactKeys(value, [
+        "id",
+        "check",
+        "argv",
+        "cwd",
+        "exitCode",
+        "summary",
+        "normalizedDigest",
+        "stdout",
+        "stderr",
+        "report",
+      ]) ||
+      value.check !== registered.check ||
+      value.cwd !== "." ||
+      !Array.isArray(value.argv) ||
+      JSON.stringify(value.argv) !==
+        JSON.stringify([
+          "bun",
+          path.join(root, registered.runner),
+          "--ref",
+          options.candidateSha,
+          "--check",
+          registered.check,
+          "--out",
+          path.join(options.directory, registered.reportPath),
+        ])
+    ) {
+      errors.push(`${registered.id}: command record is invalid`)
+      commandEvaluations.push({ id: registered.id, status: "invalid", normalizedDigest: null })
+      continue
+    }
+    await readBoundFile(
+      options.directory,
+      value.stdout,
+      `commands/${registered.id}.stdout.txt`,
+      "text/plain",
+      errors,
+    )
+    await readBoundFile(
+      options.directory,
+      value.stderr,
+      `commands/${registered.id}.stderr.txt`,
+      "text/plain",
+      errors,
+    )
+    const reportFile = await readBoundFile(
+      options.directory,
+      value.report,
+      registered.reportPath,
+      "application/json",
+      errors,
+    )
+    const report = reportFile
+      ? await Promise.resolve()
+          .then(() => JSON.parse(reportFile.source) as unknown)
+          .catch(() => null)
+      : null
+    const reportMatches =
+      report !== null &&
+      JSON.stringify(normalizedReport(registered, report)) ===
+        JSON.stringify(normalizedReport(registered, expected))
+    if (!reportMatches) errors.push(`${registered.id}: report differs from exact-candidate evaluation`)
+    const status =
+      isRecord(report) && report.status === "pass"
+        ? ("pass" as const)
+        : isRecord(report) && report.status === "failed"
+          ? ("failed" as const)
+          : ("invalid" as const)
+    const expectedSummary = `${status === "invalid" ? "failed" : status}: ${reportCheckCount(report)} checks`
+    if (
+      value.exitCode !== (status === "pass" ? 0 : 1) ||
+      value.summary !== expectedSummary ||
+      value.normalizedDigest !== expected.normalizedDigest
+    ) {
+      errors.push(`${registered.id}: command result or digest mismatch`)
+      commandEvaluations.push({ id: registered.id, status: "invalid", normalizedDigest: null })
+      continue
+    }
+    commandEvaluations.push({
+      id: registered.id,
+      status,
+      normalizedDigest: expected.normalizedDigest,
+    })
   }
-  const normalizedDigest = report
-    ? sha256(
-        JSON.stringify({
-          candidateSha: options.candidateSha,
-          candidateTreeSha: options.candidateTreeSha,
-          baseSha: options.baseSha,
-          command: {
-            id: "founder-os-boundary",
-            exitCode: command?.exitCode,
-            summary,
-            report: normalizedFounderOSBoundaryReport(report),
-          },
-          authorization,
-        }),
-      )
-    : null
-  if (!normalizedDigest || manifest.normalizedDigest !== normalizedDigest) {
+  const normalizedDigest = sha256(
+    JSON.stringify({
+      candidateSha: options.candidateSha,
+      candidateTreeSha: options.candidateTreeSha,
+      baseSha: options.baseSha,
+      commands: options.contract.commandRegistry.map((registered) => {
+        const command = commands.find(
+          (candidate) => isRecord(candidate) && candidate.id === registered.id,
+        )
+        return {
+          id: registered.id,
+          check: registered.check,
+          exitCode: isRecord(command) ? command.exitCode : null,
+          summary: isRecord(command) ? command.summary : null,
+          normalizedDigest: isRecord(command) ? command.normalizedDigest : null,
+        }
+      }),
+      authorization,
+    }),
+  )
+  if (manifest.normalizedDigest !== normalizedDigest) {
     errors.push("normalized attempt digest mismatch")
   }
+  const expectedStatus = commandEvaluations.every((command) => command.status === "pass")
+    ? "pass"
+    : "failed"
+  if (manifest.status !== expectedStatus) errors.push("attempt status was forged")
   return {
     id: options.id,
     status: errors.length
       ? "invalid"
-      : manifest.status === "pass"
-        ? "pass"
-        : "failed",
+      : expectedStatus,
     normalizedDigest,
     authorizationStatus: typeof authorization?.status === "string" ? authorization.status : null,
     manifestSha256: sha256(manifestSource),
+    commands: commandEvaluations,
     errors: [...new Set(errors)].sort(),
   } satisfies AttemptEvaluation
+}
+
+function validateContract(contract: GateContract) {
+  const errors: string[] = []
+  const taskIds = Object.keys(contract.taskEvidence)
+  const commandIds = contract.commandRegistry.map((command) => command.id)
+  if (
+    JSON.stringify([...contract.taskIds].sort()) !==
+    JSON.stringify(Object.keys(requiredTaskEvidence).sort())
+  ) {
+    errors.push("required W0 task set is incomplete")
+  }
+  if (JSON.stringify([...taskIds].sort()) !== JSON.stringify([...contract.taskIds].sort())) {
+    errors.push("task evidence mapping does not exactly cover required tasks")
+  }
+  if (
+    contract.taskIds.some((taskId) => {
+      const evidence = contract.taskEvidence[taskId]
+      return !evidence?.length || evidence.some((commandId) => !commandIds.includes(commandId))
+    })
+  ) {
+    errors.push("task evidence mapping is empty or references an unknown command")
+  }
+  if (new Set(commandIds).size !== commandIds.length) {
+    errors.push("command registry contains duplicate IDs")
+  }
+  if (
+    commandIds.some(
+      (commandId) =>
+        !Object.values(contract.taskEvidence).some((evidence) => evidence.includes(commandId)),
+    )
+  ) {
+    errors.push("command registry contains unbound evidence")
+  }
+  const actualCommands = contract.commandRegistry.map((command) => [
+    command.id,
+    command.runner,
+    command.check,
+    command.reportPath,
+  ])
+  if (JSON.stringify(actualCommands) !== JSON.stringify(requiredCommands)) {
+    errors.push("required W0 command registry is incomplete or reordered")
+  }
+  if (
+    Object.entries(requiredTaskEvidence).some(
+      ([taskId, evidence]) =>
+        JSON.stringify(contract.taskEvidence[taskId]) !== JSON.stringify(evidence),
+    )
+  ) {
+    errors.push("required W0 task evidence mapping changed")
+  }
+  return errors
 }
 
 export async function evaluateFounderOSW0Gate(options: {
@@ -406,6 +634,9 @@ export async function evaluateFounderOSW0Gate(options: {
 }) {
   const candidateSha = exactCommit(options.candidateSha, "--ref")
   const baseSha = exactCommit(options.baseSha, "--base")
+  if (runGit(["rev-parse", "HEAD"]).stdout.trim() !== candidateSha) {
+    throw new Error("Gate must run from the exact candidate worktree")
+  }
   if (runGit(["merge-base", "--is-ancestor", baseSha, candidateSha], true).exitCode !== 0) {
     throw new Error("--base must be an ancestor of --ref")
   }
@@ -415,7 +646,7 @@ export async function evaluateFounderOSW0Gate(options: {
     readAtRef(candidateSha, contract.baselineBinding.path),
   ) as Record<string, unknown>
   const candidateTreeSha = runGit(["rev-parse", `${candidateSha}^{tree}`]).stdout.trim()
-  const invalid: string[] = []
+  const invalid = validateContract(contract)
   if (
     baseline.snapshotCommit !== contract.baselineBinding.snapshotCommit ||
     baseline.snapshotTree !==
@@ -431,7 +662,7 @@ export async function evaluateFounderOSW0Gate(options: {
   const contractBinding = sourceBinding(candidateSha, contractPath)
   const schemaBinding = sourceBinding(candidateSha, schemaPath)
   const runnerBinding = sourceBinding(candidateSha, evidenceRunnerPath)
-  const expectedBoundary = await evaluateFounderOSBoundary(candidateSha)
+  const reports = await expectedReports(candidateSha, contract)
   const attempts = await Promise.all(
     contract.exactCommitGate.attempts.map((id) =>
       evaluateAttempt({
@@ -444,7 +675,7 @@ export async function evaluateFounderOSW0Gate(options: {
         contractBinding,
         schemaBinding,
         runnerBinding,
-        expectedBoundary,
+        expectedReports: reports,
       }),
     ),
   )
@@ -453,12 +684,35 @@ export async function evaluateFounderOSW0Gate(options: {
       .filter((attempt) => attempt.status === "invalid")
       .flatMap((attempt) => attempt.errors.map((error) => `${attempt.id}: ${error}`)),
   )
-  const missing = attempts
-    .filter((attempt) => attempt.status === "blocked")
-    .map((attempt) => `${attempt.id}:run-manifest`)
-  const failed = attempts
-    .filter((attempt) => attempt.status === "failed")
-    .map((attempt) => `${attempt.id}:founder-os-boundary`)
+  const taskStatus = contract.taskIds.map((taskId) => {
+    const evidence = contract.taskEvidence[taskId] ?? []
+    if (attempts.some((attempt) => attempt.status === "invalid")) {
+      return { taskId, status: "invalid" as const }
+    }
+    if (attempts.some((attempt) => attempt.status === "blocked")) {
+      return { taskId, status: "blocked" as const }
+    }
+    const statuses = attempts.flatMap((attempt) =>
+      evidence.map(
+        (commandId) =>
+          attempt.commands.find((command) => command.id === commandId)?.status ??
+          (attempt.status === "blocked" ? "blocked" : "invalid"),
+      ),
+    )
+    return {
+      taskId,
+      status: statuses.includes("invalid")
+        ? ("invalid" as const)
+        : statuses.includes("failed")
+          ? ("failed" as const)
+          : statuses.includes("blocked")
+            ? ("blocked" as const)
+            : statuses.length === evidence.length * attempts.length &&
+                statuses.every((status) => status === "pass")
+              ? ("pass" as const)
+              : ("invalid" as const),
+    }
+  })
   const digests = attempts.flatMap((attempt) =>
     attempt.normalizedDigest ? [attempt.normalizedDigest] : [],
   )
@@ -469,29 +723,28 @@ export async function evaluateFounderOSW0Gate(options: {
   ) {
     invalid.push("isolated attempt normalized digests differ")
   }
+  const passed = taskStatus.filter((task) => task.status === "pass").map((task) => task.taskId)
+  const failed = taskStatus.filter((task) => task.status === "failed").map((task) => task.taskId)
+  const missing = taskStatus.filter((task) => task.status === "blocked").map((task) => task.taskId)
+  invalid.push(
+    ...taskStatus
+      .filter((task) => task.status === "invalid")
+      .map((task) => `${task.taskId}: task evidence is invalid`),
+  )
   const status = invalid.length
     ? ("invalid" as const)
     : failed.length
       ? ("failed" as const)
       : missing.length
         ? ("blocked" as const)
-        : attempts.every((attempt) => attempt.status === "pass") &&
+        : passed.length === contract.taskIds.length &&
             digests.length === attempts.length &&
             new Set(digests).size === 1
           ? ("pass" as const)
           : ("invalid" as const)
-  const passed =
-    status === "pass"
-      ? [
-          ...contract.taskIds,
-          "boundary:founder_twin_dependency",
-          "boundary:worker_graph_supervisor",
-          "evidence:two_local_exact_sha_runs",
-        ]
-      : []
   return {
     schemaVersion: 1,
-    decisionVersion: "1.0.0",
+    decisionVersion: "1.1.0",
     decisionId: `FOUNDER-OS-W0-${candidateSha.slice(0, 16)}`,
     stage: "W0",
     candidateSha,
@@ -534,6 +787,7 @@ export async function evaluateFounderOSW0Gate(options: {
           status: attempt.status,
           normalizedDigest: attempt.normalizedDigest,
           manifestSha256: attempt.manifestSha256,
+          commands: attempt.commands,
         })),
       }),
     ),
