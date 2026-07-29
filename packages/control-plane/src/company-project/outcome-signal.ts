@@ -109,6 +109,66 @@ function currentFor(db: TxOrDb, outcome_signal_id: string) {
   return current
 }
 
+function recoverCurrentProjection(db: TxOrDb, row: typeof CompanyOutcomeSignalTable.$inferSelect) {
+  const transitions = db
+    .select()
+    .from(CompanyOutcomeSignalTransitionTable)
+    .where(eq(CompanyOutcomeSignalTransitionTable.outcome_signal_id, row.id))
+    .orderBy(asc(CompanyOutcomeSignalTransitionTable.sequence))
+    .all()
+  if (
+    !transitions.length ||
+    transitions.some((transition, index) => transition.sequence !== index + 1) ||
+    transitions[0]?.from_status !== null ||
+    transitions[0]?.to_status !== "observed"
+  )
+    throw new Error(`Outcome Signal transition history is corrupt: ${row.id}`)
+  transitions.forEach((transition, index) => {
+    const previous = transitions[index - 1]
+    if (
+      (index > 0 && transition.from_status !== previous?.to_status) ||
+      (index > 0 &&
+        !(
+          (previous?.to_status === "observed" &&
+            ["validated", "invalidated"].includes(transition.to_status)) ||
+          (previous?.to_status === "validated" && transition.to_status === "invalidated")
+        )) ||
+      transition.validator_result_kind !== row.validator_result_kind ||
+      transition.validator_result_id !== row.validator_result_id
+    )
+      throw new Error(`Outcome Signal transition history is corrupt: ${row.id}`)
+  })
+  const latest = transitions.at(-1)!
+  const current = db
+    .select()
+    .from(CompanyOutcomeSignalCurrentTable)
+    .where(eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, row.id))
+    .get()
+  const projection = {
+    current_status: latest.to_status,
+    latest_transition_id: latest.id,
+    transition_count: transitions.length,
+    validated_at: latest.to_status === "validated" ? latest.occurred_at : null,
+    updated_at: latest.created_at,
+  }
+  if (!current)
+    db.insert(CompanyOutcomeSignalCurrentTable)
+      .values({ outcome_signal_id: row.id, ...projection })
+      .run()
+  if (
+    current &&
+    (current.current_status !== projection.current_status ||
+      current.latest_transition_id !== projection.latest_transition_id ||
+      current.transition_count !== projection.transition_count ||
+      current.validated_at !== projection.validated_at)
+  )
+    db.update(CompanyOutcomeSignalCurrentTable)
+      .set(projection)
+      .where(eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, row.id))
+      .run()
+  return signalFromRow(row, currentFor(db, row.id))
+}
+
 function sameSubmission(
   row: typeof CompanyOutcomeSignalTable.$inferSelect,
   input: OutcomeSignalSubmissionValue,
@@ -465,8 +525,11 @@ export const layer = Layer.effect(
             }
             const current = currentFor(db, row.id)
             if (
-              (input.status === "validated" && current.current_status !== "observed") ||
-              current.current_status === "invalidated"
+              !(
+                (current.current_status === "observed" &&
+                  ["validated", "invalidated"].includes(input.status)) ||
+                (current.current_status === "validated" && input.status === "invalidated")
+              )
             )
               throw new Error(`Outcome Signal cannot transition from ${current.current_status}`)
             if (
@@ -522,25 +585,27 @@ export const layer = Layer.effect(
     })
 
     const recover = Effect.fn("CompanyOutcomeSignal.recover")(function* () {
-      return yield* Effect.sync(() => ({
-        signal_ids: Database.use((db) =>
-          db
+      return yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => ({
+            signal_ids: db
             .select()
             .from(CompanyOutcomeSignalTable)
             .orderBy(asc(CompanyOutcomeSignalTable.created_at), asc(CompanyOutcomeSignalTable.id))
             .all()
             .map((row) => {
-              const current = currentFor(db, row.id)
-              const signal = signalFromRow(row, current)
+              const signal = recoverCurrentProjection(db, row)
               validateDecisionReference(db, signal.project_id, signal.decision_id)
               signal.source_refs.forEach((reference) => validateSourceReference(db, signal.project_id, reference))
-              if (current.current_status === "validated")
+              if (signal.current_status === "validated")
                 validateValidator(db, signal.project_id, signal.validator_result_ref)
               linkDecisionOutcome(db, signal.decision_id, signal.id)
               return signal.id
             }),
+          }),
+          { behavior: "immediate" },
         ),
-      }))
+      )
     })
 
     return Service.of({ submit, get, list, transition, listTransitions, recover })
