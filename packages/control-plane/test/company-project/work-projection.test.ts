@@ -118,6 +118,25 @@ describe.serial("Work Projection", () => {
     ])
   })
 
+  test.serial("removes superseded work from current progress without losing its event history", () => {
+    const result = available(
+      project(seed("executing"), [
+        event("event-1", "work_item.created", 200, { work_item_id: "item-old", title: "旧工作" }),
+        event("event-2", "work_item.created", 210, { work_item_id: "item-current", title: "当前工作" }),
+        event("event-3", "graph_mutation.applied", 220, { mutation_id: "mutation-1" }),
+        event("event-4", "work_item.superseded", 230, {
+          work_item_id: "item-old",
+          replacement_id: "item-current",
+          reason: "新证据替代旧路径",
+        }),
+      ]),
+    )
+
+    expect(result.progress).toMatchObject({ completedItems: 0, totalItems: 1, percent: 0 })
+    expect(result.summary.nextMilestone).toMatchObject({ id: "item-current", title: "当前工作" })
+    expect(result.diagnostics.filter((item) => item.code === "unknown_event")).toEqual([])
+  })
+
   test.serial("deduplicates attention and resolves approval facts deterministically", () => {
     const events = [
       event("event-1", "gate.requested", 300, { gate_id: "gate-1" }),
