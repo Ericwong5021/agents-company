@@ -46,7 +46,7 @@ const actionsByRoute = {
   graph_mutation_policy: [],
   automatic_recovery: ["retry"],
   approval_gate: ["resolve_blocker", "stop_work"],
-  project_dri: ["resolve_blocker", "stop_work"],
+  project_dri: ["resolve_blocker", "adjust_brief", "stop_work"],
   user: ["resolve_blocker", "stop_work"],
   company_governance: [],
 } as const satisfies Record<AttentionRoute, readonly ProjectActionKind[]>

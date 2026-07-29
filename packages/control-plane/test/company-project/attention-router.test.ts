@@ -64,14 +64,14 @@ describe("AttentionRouter", () => {
         route: "project_dri",
         material: true,
         interrupts_user: true,
-        allowed_actions: ["resolve_blocker", "stop_work"],
+        allowed_actions: ["resolve_blocker", "adjust_brief", "stop_work"],
       },
       {
         input: { issue_kind: "acceptance_change", risk: "medium", materiality: "acceptance" },
         route: "project_dri",
         material: true,
         interrupts_user: true,
-        allowed_actions: ["resolve_blocker", "stop_work"],
+        allowed_actions: ["resolve_blocker", "adjust_brief", "stop_work"],
       },
       {
         input: { issue_kind: "budget_change", risk: "medium", materiality: "budget" },

@@ -16,6 +16,7 @@ import {
   AttentionCreate,
   AttentionRecord,
   AttentionStatus,
+  ProjectActionKind,
   ProjectActionRecord,
   ProjectActionRequest,
   type AttentionCreate as AttentionCreateValue,
@@ -76,7 +77,7 @@ function attentionFromRow(row: typeof CompanyAttentionTable.$inferSelect) {
   })
 }
 
-function actionFromRow(row: typeof CompanyProjectActionTable.$inferSelect) {
+export function actionFromRow(row: typeof CompanyProjectActionTable.$inferSelect) {
   return ProjectActionRecord.parse({
     id: row.id,
     project_id: row.project_id,
@@ -313,20 +314,27 @@ export const layer = Layer.succeed(
           (db) => {
             if (!db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.project_id)).get())
               throw new Error(`Company project not found: ${input.project_id}`)
-            if (
-              input.attention_id &&
-              !db
-                .select()
-                .from(CompanyAttentionTable)
-                .where(
-                  and(
-                    eq(CompanyAttentionTable.id, input.attention_id),
-                    eq(CompanyAttentionTable.project_id, input.project_id),
-                  ),
-                )
-                .get()
-            )
+            const attention = input.attention_id
+              ? db
+                  .select()
+                  .from(CompanyAttentionTable)
+                  .where(
+                    and(
+                      eq(CompanyAttentionTable.id, input.attention_id),
+                      eq(CompanyAttentionTable.project_id, input.project_id),
+                    ),
+                  )
+                  .get()
+              : undefined
+            if (input.attention_id && !attention)
               throw new Error(`Attention ${input.attention_id} does not belong to project ${input.project_id}`)
+            if (attention?.status !== undefined && attention.status !== "open")
+              throw new Error(`Attention ${attention.id} is not open`)
+            if (
+              attention &&
+              !z.array(ProjectActionKind).parse(JSON.parse(attention.allowed_actions_json)).includes(input.action)
+            )
+              throw new Error(`Action ${input.action} is not allowed for Attention ${attention.id}`)
             const existing = db
               .select()
               .from(CompanyProjectActionTable)
@@ -405,6 +413,10 @@ export const layer = Layer.succeed(
               db.update(CompanyProjectActionTable)
                 .set({
                   status: "rejected",
+                  result_json: canonical({
+                    expected_revision: existing.expected_revision,
+                    current_revision: project.graph_revision,
+                  }),
                   error: "project_revision_conflict",
                   updated_at: now,
                   finished_at: now,

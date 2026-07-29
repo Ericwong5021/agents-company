@@ -355,48 +355,53 @@ export type AppendResult =
   | { ok: false; reason: "not_found" }
   | { ok: false; reason: "version_conflict"; currentVersion: number }
 
-export function append(briefID: string, raw: unknown): AppendResult {
+export function appendWithDatabase(
+  db: Database.TxOrDb,
+  briefID: string,
+  raw: unknown,
+  now = Date.now(),
+): AppendResult {
   const input = GoalBriefAppendRequest.parse(raw)
-  return Database.transaction(
-    (db) => {
-      const root = db.select().from(GoalBriefTable).where(eq(GoalBriefTable.id, briefID)).get()
-      if (!root) return { ok: false as const, reason: "not_found" as const }
-      const current = db
-        .select()
-        .from(GoalBriefVersionTable)
-        .where(eq(GoalBriefVersionTable.brief_id, briefID))
-        .orderBy(desc(GoalBriefVersionTable.version))
-        .get()
-      if (!current) return { ok: false as const, reason: "not_found" as const }
-      if (current.version !== input.expectedVersion)
-        return { ok: false as const, reason: "version_conflict" as const, currentVersion: current.version }
-      const now = Date.now()
-      const version = current.version + 1
-      const row = versionValues(briefID, version, input.brief, input.source, now)
-      db.insert(GoalBriefVersionTable).values(row).run()
-      db.update(GoalBriefTable).set({ updated_at: now }).where(eq(GoalBriefTable.id, briefID)).run()
-      if (root.project_id)
-        db.insert(CompanyProjectEventTable)
-          .values(
-            projectEventValues(
-              root.project_id,
-              "goal_brief.versioned",
-              briefID,
-              version,
-              input.source,
-              input.brief.openQuestions.length,
-              input.brief.openQuestions.filter((question) => question.blocking).length,
-              now,
-            ),
-          )
-          .run()
-      return {
-        ok: true as const,
-        brief: versionFromRow(rootFromRow(root), row),
-      }
-    },
-    { behavior: "immediate" },
-  )
+  const root = db.select().from(GoalBriefTable).where(eq(GoalBriefTable.id, briefID)).get()
+  if (!root) return { ok: false as const, reason: "not_found" as const }
+  const current = db
+    .select()
+    .from(GoalBriefVersionTable)
+    .where(eq(GoalBriefVersionTable.brief_id, briefID))
+    .orderBy(desc(GoalBriefVersionTable.version))
+    .get()
+  if (!current) return { ok: false as const, reason: "not_found" as const }
+  if (current.version !== input.expectedVersion)
+    return { ok: false as const, reason: "version_conflict" as const, currentVersion: current.version }
+  const version = current.version + 1
+  const row = versionValues(briefID, version, input.brief, input.source, now)
+  db.insert(GoalBriefVersionTable).values(row).run()
+  db.update(GoalBriefTable).set({ updated_at: now }).where(eq(GoalBriefTable.id, briefID)).run()
+  if (root.project_id)
+    db.insert(CompanyProjectEventTable)
+      .values(
+        projectEventValues(
+          root.project_id,
+          "goal_brief.versioned",
+          briefID,
+          version,
+          input.source,
+          input.brief.openQuestions.length,
+          input.brief.openQuestions.filter((question) => question.blocking).length,
+          now,
+        ),
+      )
+      .run()
+  return {
+    ok: true as const,
+    brief: versionFromRow(rootFromRow(root), row),
+  }
+}
+
+export function append(briefID: string, raw: unknown): AppendResult {
+  return Database.transaction((db) => appendWithDatabase(db, briefID, raw), {
+    behavior: "immediate",
+  })
 }
 
 export function get(briefID: string, version?: number): GoalBriefValue | undefined {
