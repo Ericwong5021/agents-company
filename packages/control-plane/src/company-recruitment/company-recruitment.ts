@@ -865,7 +865,6 @@ export const layer = Layer.effect(
           { behavior: "immediate" },
         ),
       )
-      yield* agents.assign(CompanyAgentID.make(assignment.agent_id))
       return assignmentFromRow(assignment)
     })
 
