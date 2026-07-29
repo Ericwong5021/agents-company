@@ -1,5 +1,6 @@
 export * from "./client.js"
 export * from "./server.js"
+export * as founderOS from "./founder-os.js"
 
 import { createControlPlaneClient } from "./client.js"
 import { createControlPlaneServer } from "./server.js"

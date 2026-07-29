@@ -1,4 +1,5 @@
 import { NamedError } from "@agents-company/shared/util/error"
+import { FounderOSModeSettings } from "@agents-company/shared/founder-os"
 import { ModelID, ProviderID } from "@/provider/schema"
 import z from "zod"
 
@@ -13,6 +14,9 @@ export const ApprovalPolicyUpdateInput = z
   .strict()
   .meta({ ref: "ApprovalPolicyUpdateInput" })
 export type ApprovalPolicyUpdateInput = z.infer<typeof ApprovalPolicyUpdateInput>
+
+export const FounderOSModeUpdateInput = FounderOSModeSettings.meta({ ref: "FounderOSModeUpdateInput" })
+export type FounderOSModeUpdateInput = z.infer<typeof FounderOSModeUpdateInput>
 
 export const AgentLifecycle = z.enum(["candidate", "assigned", "employee", "archived"])
 export type AgentLifecycle = z.infer<typeof AgentLifecycle>

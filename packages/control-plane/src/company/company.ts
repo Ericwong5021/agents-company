@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { FounderOSModeState } from "@agents-company/shared/founder-os"
 import { Context, Effect, Layer } from "effect"
 import { eq } from "@/storage"
 import * as Database from "@/storage/db"
@@ -12,6 +13,7 @@ import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Flag } from "@/flag/flag"
+import { FounderOSMode } from "@/founder-os"
 import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanySetupGoalTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
@@ -31,6 +33,7 @@ import {
   CompanyReadyState,
   CompanyRepositoryNotGit,
   CompanySetupGoalInput,
+  FounderOSModeUpdateInput,
   type RepositoryCandidate,
 } from "./schema"
 
@@ -227,6 +230,15 @@ function readyRecord(db: TxOrDb): ReadyRecord | undefined {
   return { state, row }
 }
 
+function founderOSModes(db: TxOrDb) {
+  const company = db.select().from(CompanyTable).all()
+  if (company.length !== 1 || company[0]?.id !== COMPANY_ID) return corrupt()
+  return FounderOSMode.resolve({
+    founderTwinMode: company[0].founder_twin_mode,
+    companyCommonsMode: company[0].company_commons_mode,
+  })
+}
+
 function sameBusiness(record: ReadyRecord, input: BootstrapInputType) {
   const provider = record.state.company.provider
   if (!provider) return false
@@ -263,8 +275,10 @@ function database<A>(fn: () => A) {
 
 export interface Interface {
   readonly current: () => Effect.Effect<CompanyState, unknown>
+  readonly founderOSModes: () => Effect.Effect<FounderOSModeState, unknown>
   readonly bindProvider: (input: CompanyProviderBindingInputType) => Effect.Effect<CompanyReadyState, unknown>
   readonly updateApprovalPolicy: (input: ApprovalPolicyUpdateInput) => Effect.Effect<CompanyReadyState, unknown>
+  readonly updateFounderOSModes: (input: FounderOSModeUpdateInput) => Effect.Effect<FounderOSModeState, unknown>
   readonly inspectRepository: (path: string) => Effect.Effect<RepositoryCandidate, unknown, Git.Service | Project.Service>
   readonly ensureManagedRepository: () => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
   readonly bootstrap: (input: BootstrapInputType) => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
@@ -376,6 +390,33 @@ export const layer = Layer.effect(
           const state = current(tx)
           if (state.state !== "ready") return corrupt()
           return state
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const getFounderOSModes = Effect.fn("Company.founderOSModes")(function* () {
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          ensureDefaultCompany(tx as Database.Transaction)
+          return founderOSModes(tx)
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const updateFounderOSModes = Effect.fn("Company.updateFounderOSModes")(function* (raw: FounderOSModeUpdateInput) {
+      const input = FounderOSModeUpdateInput.parse(raw)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          ensureDefaultCompany(tx as Database.Transaction)
+          tx.update(CompanyTable)
+            .set({
+              founder_twin_mode: input.founderTwinMode,
+              company_commons_mode: input.companyCommonsMode,
+              time_updated: Date.now(),
+            })
+            .where(eq(CompanyTable.id, COMPANY_ID))
+            .run()
+          return founderOSModes(tx)
         }, { behavior: "immediate" }),
       )
     })
@@ -510,8 +551,10 @@ export const layer = Layer.effect(
 
     return Service.of({
       current: getCurrent,
+      founderOSModes: getFounderOSModes,
       bindProvider,
       updateApprovalPolicy,
+      updateFounderOSModes,
       inspectRepository,
       ensureManagedRepository,
       bootstrap,

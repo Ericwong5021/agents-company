@@ -3,6 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Cause, Effect, Exit } from "effect"
 import { eq } from "drizzle-orm"
 import z from "zod"
+import { FounderOSModeState } from "@agents-company/shared/founder-os"
 import { Auth } from "@/auth"
 import { Company, CompanyReset, CompanySetupInstance } from "@/company"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
@@ -29,6 +30,7 @@ import {
   CompanyRepositoryNotGit,
   CompanySetupGoalInput,
   CompanyState,
+  FounderOSModeUpdateInput,
   ProviderConnection,
   RepositoryCandidate,
 } from "@/company/schema"
@@ -354,6 +356,45 @@ export const CompanyRoutes = lazy(() =>
         c.json(
           await AppRuntime.runPromise(
             Company.Service.use((service) => service.updateApprovalPolicy(c.req.valid("json"))),
+          ),
+        ),
+    )
+    .get(
+      "/founder-os-modes",
+      describeRoute({
+        operationId: "company.founderOSModes",
+        summary: "Get Founder OS global maximum, company modes, and effective modes",
+        responses: {
+          200: {
+            description: "Current Founder OS modes",
+            content: { "application/json": { schema: resolver(FounderOSModeState) } },
+          },
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      async (c) => c.json(await AppRuntime.runPromise(Company.Service.use((service) => service.founderOSModes()))),
+    )
+    .put(
+      "/founder-os-modes",
+      describeRoute({
+        operationId: "company.founderOSModesUpdate",
+        summary: "Persist Founder OS company modes",
+        responses: {
+          200: {
+            description: "Updated Founder OS modes",
+            content: { "application/json": { schema: resolver(FounderOSModeState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderOSModeUpdateInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            Company.Service.use((service) => service.updateFounderOSModes(c.req.valid("json"))),
           ),
         ),
     )

@@ -1,4 +1,6 @@
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import type { CompanyCommonsMode, FounderTwinMode } from "@agents-company/shared/founder-os"
+import { sql } from "drizzle-orm"
+import { check, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import type { ModelID, ProviderID } from "@/provider/schema"
 import type { ProjectID } from "@/project/schema"
 import { ProjectTable } from "@/project/project.sql"
@@ -15,9 +17,21 @@ export const CompanyTable = sqliteTable(
     default_model_id: text().$type<ModelID>().notNull(),
     bootstrap_request_id: text().notNull(),
     bootstrap_input_path: text().notNull(),
+    founder_twin_mode: text().$type<FounderTwinMode>().notNull().default("off"),
+    company_commons_mode: text().$type<CompanyCommonsMode>().notNull().default("off"),
     ...Timestamps,
   },
-  (table) => [uniqueIndex("company_bootstrap_request_idx").on(table.bootstrap_request_id)],
+  (table) => [
+    uniqueIndex("company_bootstrap_request_idx").on(table.bootstrap_request_id),
+    check(
+      "company_founder_twin_mode_check",
+      sql`${table.founder_twin_mode} IN ('off', 'shadow', 'advisor', 'green-delegated', 'yellow-delegated')`,
+    ),
+    check(
+      "company_commons_mode_check",
+      sql`${table.company_commons_mode} IN ('off', 'ingest-only', 'reading', 'belief-loop')`,
+    ),
+  ],
 )
 
 export const ApprovalPolicyTable = sqliteTable("approval_policy", {

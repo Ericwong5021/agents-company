@@ -23,6 +23,12 @@ function seedGrowExecutionMode() {
   throw new Error("AGENTCOMPANY_SEED_GROW_ORCHESTRATION must be off, shadow, or active.")
 }
 
+function option<const T extends string>(key: string, values: readonly T[], fallback: T) {
+  const value = process.env[key] ?? fallback
+  if (values.includes(value as T)) return value as T
+  throw new Error(`${key} must be one of: ${values.join(", ")}.`)
+}
+
 const AGENTCOMPANY_EXPERIMENTAL = truthy("AGENTCOMPANY_EXPERIMENTAL")
 
 // Defaults to false. When enabled, agentcompany runs in agents-only mode:
@@ -152,6 +158,20 @@ export const Flag = {
   },
   get AGENTCOMPANY_SEED_GROW_ORCHESTRATION() {
     return seedGrowExecutionMode() ?? "off"
+  },
+  get AGENTCOMPANY_FOUNDER_TWIN_MODE() {
+    return option(
+      "AGENTCOMPANY_FOUNDER_TWIN_MODE",
+      ["off", "shadow", "advisor", "green-delegated", "yellow-delegated"] as const,
+      "off",
+    )
+  },
+  get AGENTCOMPANY_COMPANY_COMMONS_MODE() {
+    return option(
+      "AGENTCOMPANY_COMPANY_COMMONS_MODE",
+      ["off", "ingest-only", "reading", "belief-loop"] as const,
+      "off",
+    )
   },
   AGENTCOMPANY_DISABLE_EMBEDDED_WEB_UI: truthy("AGENTCOMPANY_DISABLE_EMBEDDED_WEB_UI"),
   AGENTCOMPANY_DB: process.env["AGENTCOMPANY_DB"],
