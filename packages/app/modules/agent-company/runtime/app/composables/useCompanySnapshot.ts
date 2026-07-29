@@ -5,7 +5,7 @@ import {
   companyReconnectDelay,
   transitionCompanyConnection,
 } from "../../shared/connection-state"
-import { classifyGlobalEvent, nextSignalRefreshDelay } from "../../shared/company-events"
+import { classifyGlobalEvent, nextSignalRefreshDelay, streamStalled } from "../../shared/company-events"
 
 const allResources = ["company", "agents", "work", "channels", "messages"] as const
 
@@ -14,11 +14,14 @@ const allResources = ["company", "agents", "work", "channels", "messages"] as co
 // Last-Event-ID 补发，连接/重连后以一次全量快照校准，不伪造事件回放。
 // SSE 不可用时降级回既有的断线重连轮询 + 手动刷新，不静默停更。
 const SIGNAL_REFRESH_MIN_INTERVAL_MS = 1_000
+const SSE_HEARTBEAT_INTERVAL_MS = 10_000
 
 const sseListeners = new Set<() => void>()
 let sseSource: EventSource | undefined
+let sseLastEventAt: number | undefined
 let sseLastRefreshAt: number | undefined
 let sseRefreshTimer: ReturnType<typeof setTimeout> | undefined
+let sseStallTimer: ReturnType<typeof setInterval> | undefined
 
 function notifySseRefresh() {
   // 快照状态经 useState 共享，只需触发一个存活实例的后台刷新。
@@ -43,21 +46,44 @@ function scheduleSseRefresh() {
 function ensureSseSource() {
   if (sseSource || typeof EventSource === "undefined") return
   const source = new EventSource("/api/agent-company/events")
+  sseLastEventAt = Date.now()
   source.onmessage = (event) => {
+    sseLastEventAt = Date.now()
     const kind = classifyGlobalEvent(String(event.data))
     // connected（含断线重连成功）与业务事件都收敛到节流后的全量快照校准。
     if (kind === "connected" || kind === "signal") scheduleSseRefresh()
   }
+  source.onerror = () => scheduleSseRefresh()
   // 连接错误由 EventSource 自动重试；持续不可用时既有 reconnect 轮询兜底。
   sseSource = source
+  sseStallTimer ??= setInterval(() => {
+    if (
+      sseLastEventAt === undefined ||
+      !streamStalled({
+        now: Date.now(),
+        lastEventAt: sseLastEventAt,
+        heartbeatIntervalMs: SSE_HEARTBEAT_INTERVAL_MS,
+      })
+    )
+      return
+    sseLastEventAt = Date.now()
+    scheduleSseRefresh()
+    sseSource?.close()
+    sseSource = undefined
+    ensureSseSource()
+  }, SSE_HEARTBEAT_INTERVAL_MS)
 }
 
 function releaseSseSource() {
-  if (sseListeners.size > 0 || !sseSource) return
-  sseSource.close()
+  if (sseListeners.size > 0) return
+  sseSource?.close()
   sseSource = undefined
   if (sseRefreshTimer) clearTimeout(sseRefreshTimer)
+  if (sseStallTimer) clearInterval(sseStallTimer)
   sseRefreshTimer = undefined
+  sseStallTimer = undefined
+  sseLastEventAt = undefined
+  sseLastRefreshAt = undefined
 }
 
 const loadingSnapshot: CompanySnapshot = {

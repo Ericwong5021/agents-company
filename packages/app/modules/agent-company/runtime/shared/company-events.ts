@@ -21,9 +21,16 @@ function safeParse(raw: string): unknown {
 // signal（任何业务事件，触发节流刷新）、unknown（无法识别，不驱动界面）。
 export function classifyGlobalEvent(raw: string): GlobalEventKind {
   const parsed = safeParse(raw)
-  if (!record(parsed) || !record(parsed.payload) || typeof parsed.payload.type !== "string") return "unknown"
-  if (parsed.payload.type === "server.connected") return "connected"
-  if (parsed.payload.type === "server.heartbeat") return "heartbeat"
+  if (!record(parsed)) return "unknown"
+  const type =
+    typeof parsed.type === "string"
+      ? parsed.type
+      : record(parsed.payload) && typeof parsed.payload.type === "string"
+        ? parsed.payload.type
+        : undefined
+  if (!type) return "unknown"
+  if (type === "server.connected") return "connected"
+  if (type === "server.heartbeat") return "heartbeat"
   return "signal"
 }
 

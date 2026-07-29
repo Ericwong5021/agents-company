@@ -8,25 +8,25 @@ import {
 // WORK-06 — SSE 事件流纯逻辑：分类、刷新节流与停滞判定。
 // 后端 /event 无 Last-Event-ID 补发，重连后以全量快照校准，不伪造事件回放。
 
-function raw(payload: unknown): string {
+function globalRaw(payload: unknown): string {
   return JSON.stringify({ directory: "/tmp/company", payload })
 }
 
 describe("classifyGlobalEvent", () => {
-  test("server.connected → connected（连接/重连后需全量校准）", () => {
-    expect(classifyGlobalEvent(raw({ type: "server.connected" }))).toBe("connected")
+  test("实例 server.connected → connected（连接/重连后需全量校准）", () => {
+    expect(classifyGlobalEvent(JSON.stringify({ type: "server.connected", properties: {} }))).toBe("connected")
   })
 
-  test("server.heartbeat → heartbeat（仅保活，不驱动刷新）", () => {
-    expect(classifyGlobalEvent(raw({ type: "server.heartbeat" }))).toBe("heartbeat")
+  test("实例 server.heartbeat → heartbeat（仅保活，不驱动刷新）", () => {
+    expect(classifyGlobalEvent(JSON.stringify({ type: "server.heartbeat", properties: {} }))).toBe("heartbeat")
   })
 
-  test("任何带 type 的业务事件 → signal", () => {
-    expect(classifyGlobalEvent(raw({ type: "message.created", properties: {} }))).toBe("signal")
-    expect(classifyGlobalEvent(raw({ type: "project.updated" }))).toBe("signal")
+  test("实例业务事件与全局事件信封均 → signal", () => {
+    expect(classifyGlobalEvent(JSON.stringify({ type: "message.created", properties: {} }))).toBe("signal")
+    expect(classifyGlobalEvent(globalRaw({ type: "project.updated" }))).toBe("signal")
   })
 
-  test("畸形 JSON 或缺失 payload.type 不抛异常，归为 unknown", () => {
+  test("畸形 JSON 或缺失 type 不抛异常，归为 unknown", () => {
     expect(classifyGlobalEvent("not-json")).toBe("unknown")
     expect(classifyGlobalEvent("{broken")).toBe("unknown")
     expect(classifyGlobalEvent(JSON.stringify({ payload: {} }))).toBe("unknown")
