@@ -574,6 +574,7 @@ export type B5ScenarioRuntime = {
   recruitment: CompanyRecruitmentInterface
   graph: CompanyGraphMutationInterface
   supervisor: GraphSupervisorInterface
+  shadowSupervisor: GraphSupervisorInterface
   concurrentSupervisor: GraphSupervisorInterface
   capabilityMaterializer: CapabilityMaterializerInterface
   validation: CompanyValidationGateInterface
@@ -974,7 +975,7 @@ const runS16 = Effect.fn("B5CandidateScenarios.S16")(function* (
     (candidate) => candidate.work_item_id === source.id,
   )
   if (!receipt) throw new Error("S16 failed prerequisite produced no Work Receipt")
-  const processedReceipt = yield* runtime.supervisor.processReceipt(receipt.id)
+  const processedReceipt = yield* runtime.shadowSupervisor.processReceipt(receipt.id)
   if (
     processedReceipt.status !== "processed" ||
     processedReceipt.decision.kind !== "retry"
@@ -1044,7 +1045,8 @@ const runS16 = Effect.fn("B5CandidateScenarios.S16")(function* (
     orchestrator_version: 1,
   })
   const mutation = yield* runtime.graph.apply(proposal)
-  if (mutation.status !== "applied") throw new Error("S16 prerequisite repair mutation was not applied")
+  if (mutation.status !== "applied")
+    throw new Error(`S16 prerequisite repair mutation was not applied: ${mutation.status}`)
   yield* runtime.projects.startWorkItem(recovery.id)
   const repairedArtifact = yield* runtime.projects.addArtifact({
     project_id: project.id,

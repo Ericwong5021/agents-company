@@ -1334,6 +1334,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     CompanyAgent,
     CompanyProjectExecution,
     CompanyProject,
+    CompanyWorkFacts,
     CompanyRecruitment,
     CompanyGraphMutation,
     CompanyValidationGate,
@@ -1355,6 +1356,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     import("../src/company-agent/company-agent"),
     import("../src/company-project/execution"),
     import("../src/company-project/company-project"),
+    import("../src/company-project/work-facts"),
     import("../src/company-recruitment/company-recruitment"),
     import("../src/company-project/graph-mutation"),
     import("../src/company-project/validation-gate"),
@@ -1404,6 +1406,17 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
       const recruitment = yield* CompanyRecruitment.Service
       const graph = yield* CompanyGraphMutation.Service
       const supervisor = yield* GraphSupervisor.Service
+      const shadowSupervisor = yield* Effect.gen(function* () {
+        return yield* GraphSupervisor.Service
+      }).pipe(
+        Effect.provide(
+          GraphSupervisor.makeLayer({ mode: "shadow" }).pipe(
+            Layer.provide(CompanyProject.defaultLayer),
+            Layer.provide(CompanyWorkFacts.makeLayer({ recoverOnStart: false })),
+            Layer.provide(CompanyGraphMutation.defaultLayer),
+          ),
+        ),
+      )
       const concurrentSupervisor = yield* Effect.gen(function* () {
         return yield* GraphSupervisor.Service
       }).pipe(Effect.provide(GraphSupervisor.defaultLayer))
@@ -1421,6 +1434,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
         recruitment,
         graph,
         supervisor,
+        shadowSupervisor,
         concurrentSupervisor,
         capabilityMaterializer,
         validation,
