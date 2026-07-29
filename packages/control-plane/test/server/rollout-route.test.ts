@@ -122,17 +122,21 @@ describe.serial("/rollout", () => {
   })
 
   test.serial(
-    "publishes concrete OpenAPI request and response schemas",
+    "publishes concrete OpenAPI request and response schemas without a caller-attested promotion endpoint",
     async () => {
       const spec = await Server.openapi()
       const operations = [
         { method: "get", path: "/rollout", request: false, statuses: ["200", "500"] },
         { method: "post", path: "/rollout/transitions", request: true, statuses: ["200", "409", "500"] },
         { method: "post", path: "/rollout/actions", request: true, statuses: ["200", "409", "500"] },
-        { method: "post", path: "/rollout/promotion-evaluations", request: true, statuses: ["200", "409", "500"] },
         { method: "get", path: "/rollout/journal", request: false, statuses: ["200", "500"] },
         { method: "get", path: "/rollout/evidence", request: false, statuses: ["200", "500"] },
       ] as const
+
+      expect(spec.paths?.["/rollout/promotion-evaluations"]).toBeUndefined()
+      expect(
+        (await Server.Default().app.request("/rollout/promotion-evaluations", { method: "POST", body: "{}" })).status,
+      ).toBe(404)
 
       for (const item of operations) {
         const operation = spec.paths?.[item.path]?.[item.method]

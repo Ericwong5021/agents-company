@@ -8,8 +8,6 @@ import {
   RolloutApiError,
   RolloutEvidence,
   RolloutJournal,
-  RolloutPromotionDecision,
-  RolloutPromotionEvaluationRequest,
   RolloutStatus,
   RolloutTransitionRequest,
   RolloutTransitionResult,
@@ -131,41 +129,6 @@ export const RolloutRoutes = () =>
         )
         if (!result.ok) return errorResponse(c, result.error)
         return c.json(RolloutActionResult.parse(result.value))
-      },
-    )
-    .post(
-      "/promotion-evaluations",
-      describeRoute({
-        summary: "Evaluate persisted evidence for the Pre-Public default",
-        operationId: "rollout.evaluatePromotion",
-        requestBody: {
-          required: true,
-          content: { "application/json": {} },
-        },
-        responses: {
-          200: {
-            description: "Persisted deterministic promotion decision",
-            content: { "application/json": { schema: resolver(RolloutPromotionDecision) } },
-          },
-          409: {
-            description: "Promotion evaluation conflict",
-            content: { "application/json": { schema: resolver(RolloutApiError) } },
-          },
-          500: {
-            description: "Persisted rollout facts are invalid",
-            content: { "application/json": { schema: resolver(RolloutApiError) } },
-          },
-        },
-      }),
-      validator("json", RolloutPromotionEvaluationRequest),
-      async (c) => {
-        const result = await runRequest(
-          "RolloutRoutes.evaluatePromotion",
-          c,
-          execute(() => CompanyRollout.evaluatePrePublicPromotion(c.req.valid("json"))),
-        )
-        if (!result.ok) return errorResponse(c, result.error)
-        return c.json(RolloutPromotionDecision.parse(result.value))
       },
     )
     .get(
