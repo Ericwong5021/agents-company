@@ -215,6 +215,11 @@ test("@r0-shell rejects same-site cross-origin writes and allows same-origin bro
 })
 
 test("@r0-shell exposes one stable, branded navigation model", async ({ page, request }, testInfo) => {
+  const hydrationErrors: string[] = []
+  page.on("console", (message) => {
+    if (/hydration (?:text content |node )?mismatch|hydration completed but contains mismatches/i.test(message.text()))
+      hydrationErrors.push(message.text())
+  })
   await enterWorkspace(page)
 
   const primaryNav = page.getByRole("navigation", { name: "主导航" })
@@ -230,6 +235,12 @@ test("@r0-shell exposes one stable, branded navigation model", async ({ page, re
     await expect(link).toHaveAttribute("aria-current", "page")
     await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
   }
+
+  for (const item of navigation) {
+    await page.goto(item.path)
+    await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+  }
+  expect(hydrationErrors).toEqual([])
 
   const body = page.locator("body")
   for (const identity of ["Eve", "Slack", "iMessage", "Linear", "Source Protection"]) {

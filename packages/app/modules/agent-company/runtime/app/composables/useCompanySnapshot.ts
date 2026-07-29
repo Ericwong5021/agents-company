@@ -153,11 +153,13 @@ function failedSnapshot(): CompanySnapshot {
 export function useCompanySnapshot() {
   const request = useFetch<CompanySnapshot>("/api/agent-company/snapshot", {
     key: "agent-company-snapshot",
+    default: () => loadingSnapshot,
   })
   const snapshot = useState<CompanySnapshot>("agent-company-snapshot-value", () => loadingSnapshot)
   const connection = useState("agent-company-connection", () => snapshot.value.connection)
   const reconnectAttempt = useState("agent-company-reconnect-attempt", () => 0)
   const signalVersion = useState("agent-company-signal-version", () => 0)
+  const mounted = ref(false)
   const reconnectTimer = ref<ReturnType<typeof setTimeout>>()
   const snapshotRefreshRunning = ref(false)
   const snapshotRefreshDirty = ref(false)
@@ -238,7 +240,10 @@ export function useCompanySnapshot() {
     { immediate: true },
   )
 
-  onMounted(scheduleReconnect)
+  onMounted(() => {
+    mounted.value = true
+    scheduleReconnect()
+  })
 
   // SSE 订阅与既有重连轮询并存：事件驱动的后台刷新不改写连接态（避免每次
   // 事件都闪现 recovering），结果到达后由快照 watcher 统一更新状态。
@@ -263,8 +268,8 @@ export function useCompanySnapshot() {
     refresh,
     signalVersion,
     data: computed(() => ({
-      ...snapshot.value,
-      connection: connection.value,
+      ...(mounted.value ? snapshot.value : request.data.value),
+      connection: mounted.value ? connection.value : request.data.value.connection,
     })),
   }
 }
