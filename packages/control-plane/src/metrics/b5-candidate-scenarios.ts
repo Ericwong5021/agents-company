@@ -901,6 +901,12 @@ const runS16 = Effect.fn("B5CandidateScenarios.S16")(function* (
     (candidate) => candidate.work_item_id === source.id,
   )
   if (!receipt) throw new Error("S16 failed prerequisite produced no Work Receipt")
+  const processedReceipt = yield* runtime.supervisor.processReceipt(receipt.id)
+  if (
+    processedReceipt.status !== "processed" ||
+    processedReceipt.decision.kind !== "retry"
+  )
+    throw new Error("S16 failed prerequisite Receipt was not processed as a retry")
   const gate = yield* runtime.validation.create({
     project_id: project.id,
     work_item_id: source.id,
