@@ -153,7 +153,6 @@ function failedSnapshot(): CompanySnapshot {
 export function useCompanySnapshot() {
   const request = useFetch<CompanySnapshot>("/api/agent-company/snapshot", {
     key: "agent-company-snapshot",
-    default: () => loadingSnapshot,
   })
   const snapshot = useState<CompanySnapshot>("agent-company-snapshot-value", () => loadingSnapshot)
   const connection = useState("agent-company-connection", () => snapshot.value.connection)
@@ -164,28 +163,29 @@ export function useCompanySnapshot() {
   const snapshotRefreshRunning = ref(false)
   const snapshotRefreshDirty = ref(false)
 
-  watch(
-    [request.data, request.error],
-    ([value, error]) => {
-      if (error) {
-        snapshot.value = failedSnapshot()
-        connection.value = transitionCompanyConnection(connection.value, { type: "request_failed" })
-        return
-      }
-      if (!value) return
-      snapshot.value = value
-      connection.value = transitionCompanyConnection(connection.value, {
-        type: "snapshot_received",
-        connection: value.connection === "recovering" || value.connection === "connecting"
+  function syncSnapshot() {
+    if (request.error.value) {
+      snapshot.value = failedSnapshot()
+      connection.value = transitionCompanyConnection(connection.value, { type: "request_failed" })
+      return
+    }
+    if (!request.data.value) return
+    snapshot.value = request.data.value
+    connection.value = transitionCompanyConnection(connection.value, {
+      type: "snapshot_received",
+      connection:
+        request.data.value.connection === "recovering" || request.data.value.connection === "connecting"
           ? "disconnected"
-          : value.connection,
-      })
-      if (value.connection === "ready" || (value.connection === "degraded" && !value.issue?.retryable)) {
-        reconnectAttempt.value = 0
-      }
-    },
-    { immediate: true },
-  )
+          : request.data.value.connection,
+    })
+    if (
+      request.data.value.connection === "ready"
+      || (request.data.value.connection === "degraded" && !request.data.value.issue?.retryable)
+    )
+      reconnectAttempt.value = 0
+  }
+
+  watch([request.data, request.error], syncSnapshot, { immediate: true })
 
   async function refreshSnapshot(updateConnection: boolean) {
     if (snapshotRefreshRunning.value || request.pending.value) {
@@ -241,6 +241,7 @@ export function useCompanySnapshot() {
   )
 
   onMounted(() => {
+    syncSnapshot()
     mounted.value = true
     scheduleReconnect()
   })
@@ -268,8 +269,10 @@ export function useCompanySnapshot() {
     refresh,
     signalVersion,
     data: computed(() => ({
-      ...(mounted.value ? snapshot.value : request.data.value),
-      connection: mounted.value ? connection.value : request.data.value.connection,
+      ...(mounted.value ? snapshot.value : request.data.value ?? loadingSnapshot),
+      connection: mounted.value
+        ? connection.value
+        : request.data.value?.connection ?? loadingSnapshot.connection,
     })),
   }
 }

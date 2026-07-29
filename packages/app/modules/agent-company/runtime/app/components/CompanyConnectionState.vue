@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 import type { CompanyConnection, CompanyConnectionIssue } from "../../shared/company-contract"
 
 const props = defineProps<{
@@ -15,6 +15,7 @@ defineEmits<{
 
 const copyStatus = ref<"idle" | "copied" | "failed">("idle")
 const startupVisible = ref(false)
+const hydrated = ref(false)
 const showStartup = computed(() =>
   props.issue?.kind === "service_unreachable" || props.issue?.kind === "invalid_configuration")
 const icon = computed(() => {
@@ -23,6 +24,10 @@ const icon = computed(() => {
   if (props.issue?.kind === "migration_required") return "i-lucide-database-zap"
   if (props.connection === "degraded") return "i-lucide-triangle-alert"
   return "i-lucide-unplug"
+})
+
+onMounted(() => {
+  hydrated.value = true
 })
 
 async function copyDiagnostic() {
@@ -72,7 +77,7 @@ function toggleStartup() {
       <UButton
         color="neutral"
         :loading="pending || connection === 'connecting' || connection === 'recovering'"
-        :disabled="issue?.retryable === false"
+        :disabled="!hydrated || issue?.retryable === false"
         @click="$emit('retry')"
       >
         重新连接
@@ -81,6 +86,7 @@ function toggleStartup() {
         v-if="issue"
         color="neutral"
         variant="ghost"
+        :disabled="!hydrated"
         @click="copyDiagnostic"
       >
         {{ copyStatus === "copied" ? "已复制诊断" : copyStatus === "failed" ? "复制失败" : "复制诊断" }}
@@ -91,6 +97,7 @@ function toggleStartup() {
         variant="ghost"
         aria-controls="company-startup-instructions"
         :aria-expanded="startupVisible"
+        :disabled="!hydrated"
         @click="toggleStartup"
       >
         {{ startupVisible ? "收起启动说明" : "查看启动说明" }}

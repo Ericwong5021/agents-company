@@ -182,8 +182,14 @@ const panels = computed(() =>
 const viewStore = useState<Record<string, WorkspaceViewState>>("work-workspace-view", () => ({}))
 const column = ref<WorkspaceColumn>("main")
 const activePanel = ref<ContextPanelKind>()
+const hydrated = ref(false)
 const selectedArtifactID = ref<string>()
 const selectedAgentID = ref<string>()
+const renderedActivePanel = computed(() => hydrated.value ? activePanel.value : panels.value[0])
+
+onMounted(() => {
+  hydrated.value = true
+})
 
 watch(
   [workID, panels, detail],
@@ -801,10 +807,11 @@ function artifactRoute(projectID: string, artifactID: string) {
               class="ac-work3__tab"
               :id="`work-context-tab-${kind}`"
               :data-context-panel="kind"
-              :data-active="kind === activePanel"
-              :aria-selected="kind === activePanel"
+              :data-active="kind === renderedActivePanel"
+              :aria-selected="kind === renderedActivePanel"
               aria-controls="work-context-panel"
-              :tabindex="kind === activePanel ? 0 : -1"
+              :tabindex="kind === renderedActivePanel ? 0 : -1"
+              :disabled="!hydrated"
               @click="selectPanel(kind)"
               @keydown="navigatePanel($event, kind)"
             >
@@ -816,11 +823,11 @@ function artifactRoute(projectID: string, artifactID: string) {
             class="ac-work3__panel"
             role="tabpanel"
             id="work-context-panel"
-            :aria-labelledby="activePanel ? `work-context-tab-${activePanel}` : undefined"
+            :aria-labelledby="renderedActivePanel ? `work-context-tab-${renderedActivePanel}` : undefined"
             tabindex="0"
           >
             <!-- Goal Brief -->
-            <template v-if="activePanel === 'goal_brief'">
+            <template v-if="renderedActivePanel === 'goal_brief'">
               <div v-if="goalBriefStatus === 'pending'" class="ac-brief-state">正在读取目标摘要…</div>
               <div v-else-if="goalBriefError" class="ac-brief-state ac-brief-state--error">
                 <h3>目标摘要暂时不可用</h3>
@@ -849,7 +856,7 @@ function artifactRoute(projectID: string, artifactID: string) {
             </template>
 
             <!-- DELIV-04 决策闭环：审批状态可读化 + 按投影如实展示的决策动作 -->
-            <template v-else-if="activePanel === 'approval'">
+            <template v-else-if="renderedActivePanel === 'approval'">
               <article v-for="approval in detail?.gates ?? []" :key="approval.id" class="ac-inline-item">
                 <h3>{{ approval.title }}</h3>
                 <span class="ac-status-badge" :data-status="approval.status">{{
@@ -887,7 +894,7 @@ function artifactRoute(projectID: string, artifactID: string) {
             </template>
 
             <!-- Artifact -->
-            <template v-else-if="activePanel === 'artifact'">
+            <template v-else-if="renderedActivePanel === 'artifact'">
               <div class="ac-artifact-list">
                 <button
                   v-for="artifact in detail?.artifacts ?? []"
@@ -913,14 +920,14 @@ function artifactRoute(projectID: string, artifactID: string) {
             </template>
 
             <!-- Agent -->
-            <template v-else-if="activePanel === 'agent'">
+            <template v-else-if="renderedActivePanel === 'agent'">
               <article v-for="agent in detail?.recruitment.candidates ?? []" :key="agent.id" class="ac-inline-item">
                 <h3>{{ agent.name }}</h3>
                 <span>{{ agent.lifecycle }}</span>
               </article>
             </template>
 
-            <template v-else-if="activePanel === 'thread'">
+            <template v-else-if="renderedActivePanel === 'thread'">
               <p v-if="projectMessagesStatus === 'pending'" class="ac-brief-state" role="status">
                 正在读取项目讨论…
               </p>
@@ -954,7 +961,7 @@ function artifactRoute(projectID: string, artifactID: string) {
             </template>
 
             <!-- Diagnostics -->
-            <template v-else-if="activePanel === 'diagnostics'">
+            <template v-else-if="renderedActivePanel === 'diagnostics'">
               <SeedGrowDiagnostics
                 v-if="seedProject"
                 :graph="seedGrow?.graph"
