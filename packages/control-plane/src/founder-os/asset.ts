@@ -15,6 +15,7 @@ import {
   type GovernanceAssetScope,
 } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import {
@@ -43,7 +44,7 @@ function parseJSON<T>(value: string, schema: { parse: (input: unknown) => T }) {
 }
 
 function ensureCompany(companyId: string) {
-  if (!Database.use((db) => db.select({ id: CompanyTable.id }).from(CompanyTable).where(eq(CompanyTable.id, companyId)).get()))
+  if (!Database.use((db) => db.select({ id: CompanyTable.id }).from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(companyId))).get()))
     throw new Error("Company was not found")
 }
 

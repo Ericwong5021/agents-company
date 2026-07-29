@@ -256,6 +256,8 @@ export function createFounderStudioClient(config: FounderStudioClientConfig) {
       })
     },
   }
+}
+
 export type DecisionScope =
   | { type: "company"; companyId: string }
   | { type: "project"; companyId: string; projectId: string }
