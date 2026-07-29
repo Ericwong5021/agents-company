@@ -619,7 +619,7 @@ function validatedOutcome(db: TxOrDb, id: string) {
     if (
       !gate
       || gate.project_id !== outcome.project_id
-      || !["passed", "failed"].includes(gate.status)
+      || gate.status !== "passed"
       || !gate.evaluated_at
       || !z.array(z.unknown()).parse(JSON.parse(gate.evidence_refs_json)).length
     )
@@ -1460,6 +1460,9 @@ export const layer = Layer.effect(
           && decision.scope.projectId === input.projectId
           ? []
           : ["Decision is outside the requested project scope."]),
+        ...(decision.source?.boardThreadId === input.boardThreadId
+          ? []
+          : ["Decision is not bound to the requested Board Thread."]),
         ...(decision.decisionMaker === "ai_founder" && decision.decisionMakerId === "board-ceo"
           ? []
           : ["Yellow delegation requires a board-ceo AI Founder decision."]),

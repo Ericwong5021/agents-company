@@ -43,6 +43,7 @@ import {
 } from "@/founder-os/decision-ledger.sql"
 import {
   CompanyArtifactTable,
+  CompanyApprovalGateTable,
   CompanyOutcomeSignalCurrentTable,
   CompanyOutcomeSignalTable,
   CompanyProjectTable,
@@ -744,9 +745,49 @@ export const layer = Layer.effect(
               eq(FounderGovernanceEventTable.actor_id, input.actor.id),
             ))
             .get()
-          if (!authorization || authorization.type !== "approval_gate.resolved")
+          if (
+            !authorization ||
+            authorization.type !== "approval_gate.resolved" ||
+            authorization.scope_type !== "company" ||
+            authorization.scope_key !== "company" ||
+            !authorization.gate_id
+          )
             throw new Error("Belief Loop activation requires a persisted human authorization event")
-          z.object({ decision: z.literal("approve") }).catchall(z.unknown()).parse(JSON.parse(authorization.data_json))
+          z
+            .object({
+              decision: z.literal("approve"),
+              actionType: z.literal("company.commons.belief_loop.activate"),
+            })
+            .catchall(z.unknown())
+            .parse(JSON.parse(authorization.data_json))
+          const gate = tx
+            .select()
+            .from(CompanyApprovalGateTable)
+            .where(eq(CompanyApprovalGateTable.id, authorization.gate_id))
+            .get()
+          const decision = tx
+            .select()
+            .from(DecisionRecordTable)
+            .innerJoin(
+              DecisionCurrentProjectionTable,
+              eq(DecisionCurrentProjectionTable.decision_id, DecisionRecordTable.id),
+            )
+            .where(eq(DecisionRecordTable.id, authorization.decision_id))
+            .get()
+          if (
+            !gate ||
+            gate.company_id !== input.company_id ||
+            gate.scope_type !== "company" ||
+            gate.kind !== "founder_red" ||
+            gate.status !== "approved" ||
+            gate.decision_id !== authorization.decision_id ||
+            !decision ||
+            decision.founder_decision_record.company_id !== input.company_id ||
+            decision.founder_decision_record.scope_type !== "company" ||
+            decision.founder_decision_record.record_origin !== "live" ||
+            decision.founder_decision_current.current_status !== "accepted"
+          )
+            throw new Error("Belief Loop activation authorization is not bound to its approved company Decision")
           requireBeliefLoopFacts(tx, input.company_id)
           tx.update(CompanyTable)
             .set({ company_commons_mode: "belief-loop", time_updated: Date.now() })

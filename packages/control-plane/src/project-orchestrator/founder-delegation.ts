@@ -729,6 +729,7 @@ export const layer = Layer.effect(
         decision.scope.type !== "project"
         || decision.scope.companyId !== input.companyId
         || decision.scope.projectId !== input.projectId
+        || decision.source?.boardThreadId !== input.boardThreadId
         || decision.recordOrigin !== "live"
         || decision.decisionMaker !== "ai_founder"
         || decision.decisionMakerId !== "board-ceo"
@@ -744,7 +745,7 @@ export const layer = Layer.effect(
           authority: null,
           gate: null,
           governanceRef: null,
-          reasons: ["Delegation requires a project-scoped board-ceo AI Founder DecisionRecord."],
+          reasons: ["Delegation requires a project-scoped board-ceo AI Founder DecisionRecord bound to the same Board Thread."],
         })
       if (!receipt || receipt.project_id !== input.projectId)
         return save({

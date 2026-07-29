@@ -216,13 +216,18 @@ function validateSourceReference(db: TxOrDb, project_id: string, reference: Outc
     throw new Error(`Outcome Signal references an unavailable Artifact: ${reference.id}`)
 }
 
-function validateValidator(db: TxOrDb, project_id: string, validator: OutcomeSignalValidatorRef) {
+function validateValidator(
+  db: TxOrDb,
+  project_id: string,
+  validator: OutcomeSignalValidatorRef,
+  requirePassed = false,
+) {
   if (validator.kind === "validation_gate") {
     const gate = db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, validator.id)).get()
     if (
       !gate ||
       gate.project_id !== project_id ||
-      !["passed", "failed"].includes(gate.status) ||
+      (requirePassed ? gate.status !== "passed" : !["passed", "failed"].includes(gate.status)) ||
       !gate.evaluated_at ||
       !WorkReceiptEvidenceRef.array().parse(JSON.parse(gate.evidence_refs_json)).length
     )
@@ -368,6 +373,8 @@ export const layer = Layer.effect(
         input.validator_ref.id !== input.validator_result_ref.id
       )
         throw new Error("Outcome Signal validator result must identify the independent validator")
+      if (input.result === "succeeded" && input.validator_ref.kind !== "validation_gate")
+        throw new Error("Successful Outcome Signals require a passed Validation Gate")
       if (
         input.work_receipt_id &&
         !source_refs.some((reference) => reference.kind === "work_receipt" && reference.id === input.work_receipt_id)
@@ -395,7 +402,7 @@ export const layer = Layer.effect(
               return { signal: signalFromRow(existing, currentFor(db, existing.id)), replayed: true }
             }
             source_refs.forEach((reference) => validateSourceReference(db, project_id, reference))
-            validateValidator(db, project_id, input.validator_ref)
+            validateValidator(db, project_id, input.validator_ref, input.result === "succeeded")
             const now = Date.now()
             const id = Identifier.ascending("outcomeSignal")
             const transition_id = Identifier.ascending("outcomeTransition")
@@ -537,7 +544,9 @@ export const layer = Layer.effect(
               row.validator_result_id !== input.validator_result_ref.id
             )
               throw new Error("Outcome transition validator result differs from the observed contract")
-            validateValidator(db, row.project_id, input.validator_result_ref)
+            if (row.result === "succeeded" && input.validator_result_ref.kind !== "validation_gate")
+              throw new Error("Successful Outcome Signals require a passed Validation Gate")
+            validateValidator(db, row.project_id, input.validator_result_ref, input.status === "validated")
             const now = Date.now()
             const transition_id = Identifier.ascending("outcomeTransition")
             db.insert(CompanyOutcomeSignalTransitionTable)
@@ -597,8 +606,10 @@ export const layer = Layer.effect(
               const signal = recoverCurrentProjection(db, row)
               validateDecisionReference(db, signal.project_id, signal.decision_id)
               signal.source_refs.forEach((reference) => validateSourceReference(db, signal.project_id, reference))
-              if (signal.current_status === "validated")
-                validateValidator(db, signal.project_id, signal.validator_result_ref)
+              if (signal.result === "succeeded" && signal.validator_result_ref.kind !== "validation_gate")
+                throw new Error("Successful Outcome Signals require a passed Validation Gate")
+              if (signal.current_status === "validated" || signal.result === "succeeded")
+                validateValidator(db, signal.project_id, signal.validator_result_ref, true)
               linkDecisionOutcome(db, signal.decision_id, signal.id)
               return signal.id
             }),
