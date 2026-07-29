@@ -165,6 +165,14 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "work_item_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source_receipt_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "need_key": {
                     "type": "string",
                     "minLength": 1,
@@ -217,11 +225,74 @@
                     "minLength": 1,
                     "maxLength": 100,
                     "pattern": "^[a-z0-9][a-z0-9._-]*$"
+                  },
+                  "required_runtime_capabilities": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "resume",
+                        "interrupt",
+                        "liveInput",
+                        "structuredEvents",
+                        "toolCalls",
+                        "structuredOutput",
+                        "workspaceRead",
+                        "workspaceWrite",
+                        "approvals",
+                        "reasoningEffort",
+                        "subagents",
+                        "usageAccounting",
+                        "dynamicSkills",
+                        "governanceSignals"
+                      ]
+                    }
+                  },
+                  "required_tools": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "allowed_permission_modes": {
+                    "default": [
+                      "read_only",
+                      "workspace_write"
+                    ],
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "read_only",
+                        "workspace_write",
+                        "full_access"
+                      ]
+                    }
+                  },
+                  "workspace_scopes": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "independent_from_agent_ids": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   }
                 },
                 "required": [
-                  "company_id",
                   "project_id",
+                  "work_item_id",
                   "need_key",
                   "role",
                   "work_type",
@@ -273,6 +344,10 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "required_agent_id": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "additionalProperties": false

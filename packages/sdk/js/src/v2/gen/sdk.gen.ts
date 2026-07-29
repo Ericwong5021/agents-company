@@ -759,6 +759,8 @@ export class Need extends HeyApiClient {
     parameters?: {
       company_id?: CompanyId
       project_id?: string
+      work_item_id?: string
+      source_receipt_id?: string
       need_key?: string
       role?: string
       work_type?: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
@@ -766,6 +768,26 @@ export class Need extends HeyApiClient {
       risk_level?: "low" | "medium" | "high"
       demand_horizon?: "project" | "recurring"
       department_key?: string
+      required_runtime_capabilities?: Array<
+        | "resume"
+        | "interrupt"
+        | "liveInput"
+        | "structuredEvents"
+        | "toolCalls"
+        | "structuredOutput"
+        | "workspaceRead"
+        | "workspaceWrite"
+        | "approvals"
+        | "reasoningEffort"
+        | "subagents"
+        | "usageAccounting"
+        | "dynamicSkills"
+        | "governanceSignals"
+      >
+      required_tools?: Array<string>
+      allowed_permission_modes?: Array<"read_only" | "workspace_write" | "full_access">
+      workspace_scopes?: Array<string>
+      independent_from_agent_ids?: Array<string>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -776,6 +798,8 @@ export class Need extends HeyApiClient {
           args: [
             { in: "body", key: "company_id" },
             { in: "body", key: "project_id" },
+            { in: "body", key: "work_item_id" },
+            { in: "body", key: "source_receipt_id" },
             { in: "body", key: "need_key" },
             { in: "body", key: "role" },
             { in: "body", key: "work_type" },
@@ -783,6 +807,11 @@ export class Need extends HeyApiClient {
             { in: "body", key: "risk_level" },
             { in: "body", key: "demand_horizon" },
             { in: "body", key: "department_key" },
+            { in: "body", key: "required_runtime_capabilities" },
+            { in: "body", key: "required_tools" },
+            { in: "body", key: "allowed_permission_modes" },
+            { in: "body", key: "workspace_scopes" },
+            { in: "body", key: "independent_from_agent_ids" },
           ],
         },
       ],
@@ -806,6 +835,7 @@ export class Need extends HeyApiClient {
     parameters: {
       needID: string
       exclude_agent_ids?: Array<string>
+      required_agent_id?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -816,6 +846,7 @@ export class Need extends HeyApiClient {
           args: [
             { in: "path", key: "needID" },
             { in: "body", key: "exclude_agent_ids" },
+            { in: "body", key: "required_agent_id" },
           ],
         },
       ],

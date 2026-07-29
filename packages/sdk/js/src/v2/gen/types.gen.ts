@@ -4226,8 +4226,10 @@ export type CompanyRecruitmentSnapshotResponses = {
 
 export type CompanyRecruitmentNeedCreateData = {
   body?: {
-    company_id: CompanyId
+    company_id?: CompanyId
     project_id: string
+    work_item_id: string
+    source_receipt_id?: string
     need_key: string
     role: string
     work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
@@ -4235,6 +4237,26 @@ export type CompanyRecruitmentNeedCreateData = {
     risk_level?: "low" | "medium" | "high"
     demand_horizon?: "project" | "recurring"
     department_key?: string
+    required_runtime_capabilities?: Array<
+      | "resume"
+      | "interrupt"
+      | "liveInput"
+      | "structuredEvents"
+      | "toolCalls"
+      | "structuredOutput"
+      | "workspaceRead"
+      | "workspaceWrite"
+      | "approvals"
+      | "reasoningEffort"
+      | "subagents"
+      | "usageAccounting"
+      | "dynamicSkills"
+      | "governanceSignals"
+    >
+    required_tools?: Array<string>
+    allowed_permission_modes?: Array<"read_only" | "workspace_write" | "full_access">
+    workspace_scopes?: Array<string>
+    independent_from_agent_ids?: Array<string>
   }
   path?: never
   query?: never
@@ -4251,6 +4273,7 @@ export type CompanyRecruitmentNeedCreateResponses = {
 export type CompanyRecruitmentNeedSelectData = {
   body?: {
     exclude_agent_ids?: Array<string>
+    required_agent_id?: string
   }
   path: {
     needID: string
