@@ -24,6 +24,7 @@ import {
   type WorkReceipt,
 } from "@/company-project/schema"
 import { CompanyWorkFacts, type ReceiptClaim } from "@/company-project/work-facts"
+import { Flag } from "@/flag/flag"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"

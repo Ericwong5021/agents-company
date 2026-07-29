@@ -1451,13 +1451,29 @@ async function validateB5Attempt(
     PrePublicScenarioMetricIds,
     persistedShadow.comparisonId,
   )
+  const deferredMetricResults = persistedMetric.results.filter(
+    (result) => result.metricId === summary.singleAttemptMetricGate.deferredMetricIds[0],
+  )
+  const unexpectedMetricResults = persistedMetric.results.filter(
+    (result) =>
+      result.metricId !== summary.singleAttemptMetricGate.deferredMetricIds[0] && result.status !== "pass",
+  )
   if (
     !same(persistedMetric, recomputed.metric) ||
     !same(persistedShadow, recomputed.shadow) ||
-    persistedMetric.status !== "pass" ||
-    persistedShadow.status !== "pass"
+    persistedMetric.status !== "blocked" ||
+    deferredMetricResults.length !== 1 ||
+    deferredMetricResults[0]?.metricId !== "complex_initial_assignment_median" ||
+    deferredMetricResults[0].status !== "blocked" ||
+    deferredMetricResults[0].sampleSize !== 1 ||
+    !same(deferredMetricResults[0].blockedReasons, ["insufficient_sample"]) ||
+    unexpectedMetricResults.length !== 0 ||
+    summary.singleAttemptMetricGate.unexpectedMetricIds.length !== 0 ||
+    persistedShadow.status !== "blocked" ||
+    !same(persistedShadow.blockedReasons, summary.singleAttemptShadowGate.blockedReasons) ||
+    persistedShadow.checks.some((check) => check.status !== "blocked" || check.value !== null)
   )
-    fail("invalid", `${label} B5 reports differ from trusted fact recomputation`)
+    fail("invalid", `${label} B5 reports differ from the trusted single-attempt deferred gate`)
   const rollbackValues = [
     await parsedJSON(
       report("rollback-kill-switch.json").source,
