@@ -323,6 +323,46 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       method: "get",
       handler: resolver.resolve("./runtime/server/api/learning.get"),
     })
+    addServerHandler({
+      route: "/api/agent-company/learning/beliefs",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-beliefs.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/beliefs/compare",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-beliefs-compare.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/beliefs/:beliefID/evidence",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-belief-evidence.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/beliefs/:beliefID/adopt",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-belief-adopt.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/experiments",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-experiments.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/experiments/:experimentID/actions",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-experiment-action.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/patches",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-patches.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/learning/patches/:patchID/actions",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/learning-patch-action.post"),
+    })
 
     extendPages((pages) => {
       pages.push(

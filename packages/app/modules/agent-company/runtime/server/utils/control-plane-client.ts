@@ -122,3 +122,23 @@ export async function requestControlPlane<T>(
     (error: unknown) => ({ ok: false as const, failure: classifyControlPlaneFailure(error) }),
   )
 }
+
+export async function writeControlPlane<T>(
+  baseURL: string,
+  path: string,
+  body: unknown,
+  authorization?: string,
+): Promise<ControlPlaneResult<T>> {
+  const target = controlPlaneRequestURL(baseURL, path)
+  if (!target) return { ok: false, failure: { kind: "invalid_configuration" } }
+  return ofetch<T>(target.toString(), {
+    method: "POST",
+    headers: authorization ? { authorization } : undefined,
+    body,
+    retry: 0,
+    timeout: 5_000,
+  }).then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, failure: classifyControlPlaneFailure(error) }),
+  )
+}

@@ -28,7 +28,7 @@ type Experiment = {
   id: string;
   belief_id: string;
   hypothesis: string;
-  status: string;
+  status: "proposed" | "authorized" | "running" | "completed" | "evaluated" | "rejected" | "stopped";
   verdict: "pending" | "supported" | "refuted" | "inconclusive";
   authority_class: "green" | "yellow" | "red";
   approval_gate_id: string | null;
@@ -67,6 +67,81 @@ const experimentsByBelief = computed(() => new Map(learning.value.beliefs.map(be
   belief.id,
   learning.value.experiments.filter(experiment => experiment.belief_id === belief.id),
 ])));
+type BeliefActionDraft = {
+  position: "supporting" | "counter";
+  source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external";
+  source_ref: string;
+  summary: string;
+  board_decision_id: string;
+};
+const beliefDrafts = reactive<Record<string, BeliefActionDraft>>({});
+const outcomeDrafts = reactive<Record<string, string>>({});
+const actionPending = ref("");
+const actionFeedback = ref("");
+const actionFailed = ref(false);
+const beliefDraft = (beliefID: string) => beliefDrafts[beliefID] ??= {
+  position: "supporting",
+  source_kind: "external",
+  source_ref: "",
+  summary: "",
+  board_decision_id: "",
+};
+async function mutate(path: string, body: Record<string, unknown>, pendingKey: string, success: string) {
+  actionPending.value = pendingKey;
+  actionFeedback.value = "";
+  actionFailed.value = false;
+  const written = await $fetch(path, { method: "POST", body }).then(
+    () => true,
+    () => false,
+  );
+  actionPending.value = "";
+  actionFailed.value = !written;
+  actionFeedback.value = written ? success : "操作未写入。请核对真实引用、当前状态与权限后重试。";
+  if (written) await refresh();
+}
+async function appendEvidence(beliefID: string) {
+  const draft = beliefDraft(beliefID);
+  if (!draft.source_ref.trim() || !draft.summary.trim()) {
+    actionFailed.value = true;
+    actionFeedback.value = "追加证据需要真实来源引用和摘要。";
+    return;
+  }
+  await mutate(`/api/agent-company/learning/beliefs/${encodeURIComponent(beliefID)}/evidence`, {
+    position: draft.position,
+    source_kind: draft.source_kind,
+    source_ref: draft.source_ref.trim(),
+    summary: draft.summary.trim(),
+  }, `belief-evidence:${beliefID}`, "证据已追加。");
+  if (!actionFailed.value) {
+    draft.source_ref = "";
+    draft.summary = "";
+  }
+}
+async function adoptBelief(beliefID: string) {
+  const draft = beliefDraft(beliefID);
+  if (!draft.board_decision_id.trim()) {
+    actionFailed.value = true;
+    actionFeedback.value = "采纳需要与该 Belief 完全一致的已接受 Board Decision。";
+    return;
+  }
+  await mutate(`/api/agent-company/learning/beliefs/${encodeURIComponent(beliefID)}/adopt`, {
+    board_decision_id: draft.board_decision_id.trim(),
+  }, `belief-adopt:${beliefID}`, "Belief 已按 Board 决定采纳。");
+}
+async function actOnExperiment(experiment: Experiment, action: "refresh_authority" | "start" | "complete" | "stop" | "attach_outcome") {
+  const outcomeSignalID = outcomeDrafts[experiment.id]?.trim();
+  if (action === "attach_outcome" && !outcomeSignalID) {
+    actionFailed.value = true;
+    actionFeedback.value = "评估需要真实且已验证的 Outcome Signal。";
+    return;
+  }
+  await mutate(`/api/agent-company/learning/experiments/${encodeURIComponent(experiment.id)}/actions`, {
+    action,
+    ...(action === "refresh_authority" ? { idempotency_key: crypto.randomUUID() } : {}),
+    ...(action === "attach_outcome" ? { outcome_signal_id: outcomeSignalID } : {}),
+  }, `experiment:${experiment.id}`, `Experiment 已执行 ${action}。`);
+  if (!actionFailed.value && action === "attach_outcome") outcomeDrafts[experiment.id] = "";
+}
 </script>
 
 <template>
@@ -179,16 +254,111 @@ const experimentsByBelief = computed(() => new Map(learning.value.beliefs.map(be
                 <span>{{ dateTime.format(belief.updated_at) }}</span>
               </div>
               <div v-if="experimentsByBelief.get(belief.id)?.length" class="ac-belief-experiments">
-                <span
-                  v-for="experiment in experimentsByBelief.get(belief.id)"
-                  :key="experiment.id"
-                  :data-verdict="experiment.verdict"
-                >
-                  {{ experiment.status }} · {{ experiment.verdict }}
-                </span>
+                <div v-for="experiment in experimentsByBelief.get(belief.id)" :key="experiment.id">
+                  <span :data-verdict="experiment.verdict">
+                    {{ experiment.status }} · {{ experiment.verdict }}
+                  </span>
+                  <UButton
+                    v-if="experiment.status === 'proposed'"
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :loading="actionPending === `experiment:${experiment.id}`"
+                    @click="actOnExperiment(experiment, 'refresh_authority')"
+                  >
+                    刷新权限
+                  </UButton>
+                  <template v-if="experiment.status === 'authorized'">
+                    <UButton
+                      size="xs"
+                      color="neutral"
+                      variant="ghost"
+                      :loading="actionPending === `experiment:${experiment.id}`"
+                      @click="actOnExperiment(experiment, 'start')"
+                    >
+                      开始
+                    </UButton>
+                    <UButton size="xs" color="neutral" variant="ghost" @click="actOnExperiment(experiment, 'stop')">
+                      停止
+                    </UButton>
+                  </template>
+                  <template v-if="experiment.status === 'running'">
+                    <UButton
+                      size="xs"
+                      color="neutral"
+                      variant="ghost"
+                      :loading="actionPending === `experiment:${experiment.id}`"
+                      @click="actOnExperiment(experiment, 'complete')"
+                    >
+                      记录完成
+                    </UButton>
+                    <UButton size="xs" color="neutral" variant="ghost" @click="actOnExperiment(experiment, 'stop')">
+                      停止
+                    </UButton>
+                  </template>
+                  <form v-if="experiment.status === 'completed'" class="ac-learning-inline-action" @submit.prevent="actOnExperiment(experiment, 'attach_outcome')">
+                    <input v-model="outcomeDrafts[experiment.id]" required placeholder="真实 Outcome Signal ID">
+                    <UButton type="submit" size="xs" color="neutral" variant="outline" :loading="actionPending === `experiment:${experiment.id}`">
+                      连接结果
+                    </UButton>
+                  </form>
+                </div>
               </div>
               <span v-else>未连接 Experiment</span>
             </footer>
+
+            <details class="ac-settings-disclosure">
+              <summary>追加证据或按 Board 决定采纳</summary>
+              <form class="company-provider-form company-provider-form__grid" @submit.prevent="appendEvidence(belief.id)">
+                <label>
+                  <span>证据方向</span>
+                  <select v-model="beliefDraft(belief.id).position">
+                    <option value="supporting">支持</option>
+                    <option value="counter">反证</option>
+                  </select>
+                </label>
+                <label>
+                  <span>来源类型</span>
+                  <select v-model="beliefDraft(belief.id).source_kind">
+                    <option value="interpretation">Interpretation</option>
+                    <option value="outcome_signal">Outcome Signal</option>
+                    <option value="artifact">Artifact</option>
+                    <option value="decision">Decision</option>
+                    <option value="external">External</option>
+                  </select>
+                </label>
+                <label class="company-provider-form__wide">
+                  <span>真实来源引用</span>
+                  <input v-model="beliefDraft(belief.id).source_ref" required placeholder="已持久化记录或可核验来源 ID">
+                </label>
+                <label class="company-provider-form__wide">
+                  <span>证据摘要</span>
+                  <textarea v-model="beliefDraft(belief.id).summary" required rows="2" />
+                </label>
+                <div class="company-provider-form__actions company-provider-form__wide">
+                  <small>追加证据不会自动改变 Belief 结论。</small>
+                  <UButton type="submit" color="neutral" variant="outline" :loading="actionPending === `belief-evidence:${belief.id}`">
+                    追加证据
+                  </UButton>
+                </div>
+              </form>
+              <form
+                v-if="belief.status !== 'adopted'"
+                class="company-provider-form ac-learning-adopt"
+                @submit.prevent="adoptBelief(belief.id)"
+              >
+                <label>
+                  <span>已接受 Board Decision ID</span>
+                  <input v-model="beliefDraft(belief.id).board_decision_id" required placeholder="最终决定必须与 Belief 陈述完全一致">
+                </label>
+                <div class="company-provider-form__actions">
+                  <small>采纳仍由 Control Plane 校验真实终态和精确陈述。</small>
+                  <UButton type="submit" color="neutral" :loading="actionPending === `belief-adopt:${belief.id}`">
+                    采纳 Belief
+                  </UButton>
+                </div>
+              </form>
+            </details>
           </article>
         </section>
         <section v-else class="ac-empty-state">
@@ -198,6 +368,14 @@ const experimentsByBelief = computed(() => new Map(learning.value.beliefs.map(be
             <p>同源资料至少需要支持与反方 Interpretation；候选只会进入 proposal，不会按多数票自动采纳。</p>
           </div>
         </section>
+        <p
+          v-if="actionFeedback"
+          class="company-provider-form__message"
+          :class="{ 'company-provider-form__message--error': actionFailed }"
+          role="status"
+        >
+          {{ actionFeedback }}
+        </p>
       </div>
     </template>
   </UDashboardPanel>

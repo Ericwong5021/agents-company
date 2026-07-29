@@ -1131,6 +1131,41 @@ html.dark .shiki span {
   border-color: color-mix(in srgb, #8b3f38 44%, var(--ac-line));
 }
 
+.ac-belief-experiments > div,
+.ac-learning-inline-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ac-learning-inline-action {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+
+.ac-learning-inline-action input {
+  min-width: 180px;
+  flex: 1;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-control);
+  background: var(--ac-canvas);
+  padding: 7px 9px;
+  color: var(--ac-ink);
+  font-size: 11px;
+  outline: none;
+}
+
+.ac-learning-inline-action input:focus {
+  border-color: var(--ac-line-strong);
+}
+
+.ac-learning-adopt {
+  margin-top: 18px;
+  border-top: 1px solid var(--ac-line);
+  padding-top: 16px;
+}
+
 .ac-patch-gate-strip {
   display: flex;
   overflow-x: auto;
