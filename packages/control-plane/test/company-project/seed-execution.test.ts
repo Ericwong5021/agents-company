@@ -4,6 +4,7 @@ import { AgentRun } from "../../src/agent-run/agent-run"
 import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
 import { CompanyProject, CompanyProjectExecution } from "../../src/company-project"
 import { CompanyRecruitment } from "../../src/company-recruitment"
+import * as CompanyRollout from "../../src/company-rollout/company-rollout"
 import { CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { Conversation } from "../../src/conversation"
@@ -68,11 +69,29 @@ const seedPolicy = (overrides: Partial<SeedPolicyFactsValue> = {}): SeedPolicyFa
   ...overrides,
 })
 
+const enableSeedOptIn = () => {
+  const initial = CompanyRollout.status().state.phase
+  if (initial === "off")
+    CompanyRollout.transition({
+      idempotencyKey: "seed-execution-shadow",
+      to: "shadow",
+      reason: "prepare seed execution tests",
+    })
+  const current = CompanyRollout.status().state.phase
+  if (current === "shadow")
+    CompanyRollout.transition({
+      idempotencyKey: "seed-execution-opt-in",
+      to: "opt_in",
+      reason: "enable seed execution tests",
+    })
+}
+
 const withSeedFlag = <A, E, R>(value: "off" | "shadow" | "active", effect: Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
     Effect.sync(() => {
       const previous = process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
       process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = value
+      if (value === "active") enableSeedOptIn()
       return previous
     }),
     () => effect,
@@ -512,6 +531,7 @@ describe.serial("Seed-and-Grow project execution", () => {
               yield* execution.cancel({ project_id: legacy.project.id })
 
               process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
+              enableSeedOptIn()
               const companyID = CompanyID.parse("cmp_local")
               yield* seedCompany(companyID)
               const input = {

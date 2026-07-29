@@ -45,6 +45,13 @@ export {
 } from "../company-project/company-project.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {
+  CompanyRolloutStateTable,
+  CompanyRolloutJournalTable,
+  CompanyRolloutCandidateTable,
+  CompanyRolloutLocalRepeatTable,
+  CompanyRolloutRollbackTable,
+} from "../company-rollout/company-rollout.sql"
+export {
   GoalBriefGenerationRequestTable,
   GoalBriefTable,
   GoalBriefVersionTable,

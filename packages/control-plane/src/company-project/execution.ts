@@ -4,6 +4,7 @@ import { CapabilityCatalog } from "@/capability/catalog"
 import { CompanyAgent } from "@/company-agent"
 import { CompanyAgentID } from "@/company-agent/schema"
 import { CompanyRecruitment, stableLogicalKey } from "@/company-recruitment"
+import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { CompanyID } from "@/company/schema"
 import { Conversation } from "@/conversation"
 import { ConversationThreadID } from "@/conversation/schema"
@@ -19,7 +20,6 @@ import * as WorkType from "@/work-type/work-type"
 import type { WorkTypeID } from "@/work-type/schema"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import {
-  ProjectExecutionStrategy,
   SeedPolicyFacts,
   type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
   type SeedPolicyFacts as SeedPolicyFactsValue,
@@ -543,9 +543,8 @@ export const layer = Layer.effect(
       seed_policy?: SeedPolicyFactsValue
       verdict?: SeedPolicyVerdict
     } => {
-      const rollout = Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
-      const requested = ProjectExecutionStrategy.parse(input.execution_strategy ?? "legacy_full_plan")
-      if (requested !== "seed_and_grow" || rollout !== "active")
+      const strategy = CompanyRollout.resolveNewProjectStrategy(input.execution_strategy)
+      if (strategy !== "seed_and_grow")
         return { execution_strategy: "legacy_full_plan" as const }
       const seed_policy = SeedPolicyFacts.parse(input.seed_policy)
       return {
