@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import {
   CompanyCapabilityNeedTable,
+  CompanyProjectAssignmentTable,
   CompanyTeamSelectionTable,
 } from "../../src/company-recruitment/company-recruitment.sql"
 import { CompanyProject } from "../../src/company-project"
@@ -93,6 +94,7 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
             company_id: companyID,
             lifecycle: "assigned",
             name: "Original Worker",
+            responsibilities: JSON.stringify(["replacement analyst", "analysis"]),
             time_created: now,
             time_updated: now,
           },
@@ -101,6 +103,7 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
             company_id: companyID,
             lifecycle: "assigned",
             name: "Replacement Worker",
+            responsibilities: JSON.stringify(["replacement analyst", "analysis"]),
             time_created: now,
             time_updated: now,
           },
@@ -117,6 +120,7 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
             company_id: companyID,
             lifecycle: "assigned",
             name: "Unselected Worker",
+            responsibilities: JSON.stringify(["unrelated work"]),
             time_created: now,
             time_updated: now,
           },
@@ -135,6 +139,7 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
           id: "need-route-replacement",
           company_id: companyID,
           project_id: setup.project.id,
+          work_item_id: setup.worker.id,
           need_key: "replacement-analysis",
           role: "replacement analyst",
           work_type: "analysis",
@@ -152,15 +157,50 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
           company_id: companyID,
           project_id: setup.project.id,
           capability_need_id: "need-route-replacement",
-          agent_id: "route-replacement-worker",
+          agent_id: "route-original-worker",
           decision: "selected",
           source: "company_pool",
           lifecycle_at_selection: "assigned",
-          reason: "Selected as the independent replacement",
-          score_json: "{}",
+          reason: "Selected as the original project owner",
+          score_json: JSON.stringify({
+            capability_match: 2,
+            availability: 100,
+            historical_quality: 50,
+            historical_reliability: 50,
+            cost_efficiency: 50,
+            speed: 50,
+            risk_fit: 80,
+            reuse_value: 40,
+            total: 200,
+          }),
           time_released: null,
           time_created: now,
           time_updated: now,
+        })
+        .run()
+      db.insert(CompanyProjectAssignmentTable)
+        .values({
+          id: "assignment-route-original",
+          company_id: companyID,
+          project_id: setup.project.id,
+          work_item_id: setup.worker.id,
+          capability_need_id: "need-route-replacement",
+          selection_id: "selection-route-replacement",
+          agent_id: "route-original-worker",
+          version: 1,
+          idempotency_key: "route-original",
+          supersedes_assignment_id: null,
+          temporary_role: "replacement analyst",
+          responsibility: "Produce independently reviewable evidence",
+          decision_scope_json: "[]",
+          resource_scope_json: "[]",
+          permission_mode: "read_only",
+          source_receipt_id: null,
+          status: "active",
+          assigned_at: now,
+          started_at: now,
+          released_at: null,
+          release_reason: null,
         })
         .run()
     })
@@ -239,12 +279,12 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
       status: "blocked",
     })
     const events = Database.use((db) => db.select().from(CompanyProjectEventTable).all()).filter(
-      (item) => item.type === "work_item.reassigned" && item.project_id === setup.project.id,
+      (item) => item.type === "project_assignment.reassigned" && item.project_id === setup.project.id,
     )
     expect(events).toHaveLength(1)
     expect(JSON.parse(events[0]!.data_json)).toMatchObject({
-      from_agent_id: "route-original-worker",
-      to_agent_id: "route-replacement-worker",
+      agent_id: "route-replacement-worker",
+      supersedes_assignment_id: "assignment-route-original",
       reason: "Reviewer identified invalid personnel reuse",
     })
   })

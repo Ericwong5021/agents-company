@@ -2,6 +2,7 @@ import { NamedError } from "@agents-company/shared/util/error"
 import z from "zod"
 import { ProjectStatus } from "@/company-project/schema"
 import { CompanyID } from "@/company/schema"
+import { RuntimeCapabilities, RuntimePermissionMode } from "@/runtime"
 
 export const WorkType = z.enum(["coding", "decision", "research", "writing", "design", "analysis"])
 export const RiskLevel = z.enum(["low", "medium", "high"])
@@ -10,8 +11,10 @@ export const AgentLifecycle = z.enum(["candidate", "assigned", "employee", "arch
 
 export const CapabilityNeed = z.object({
   id: z.string(),
-  company_id: CompanyID,
+  company_id: CompanyID.optional(),
   project_id: z.string(),
+  work_item_id: z.string().optional(),
+  source_receipt_id: z.string().optional(),
   need_key: z.string(),
   role: z.string(),
   work_type: WorkType,
@@ -19,6 +22,11 @@ export const CapabilityNeed = z.object({
   risk_level: RiskLevel,
   demand_horizon: DemandHorizon,
   department_key: z.string().optional(),
+  required_runtime_capabilities: z.array(z.keyof(RuntimeCapabilities)),
+  required_tools: z.array(z.string()),
+  allowed_permission_modes: z.array(RuntimePermissionMode),
+  workspace_scopes: z.array(z.string()),
+  independent_from_agent_ids: z.array(z.string()),
   time_created: z.number().int(),
   time_updated: z.number().int(),
 })
@@ -26,8 +34,10 @@ export type CapabilityNeed = z.infer<typeof CapabilityNeed>
 
 export const CreateCapabilityNeedInput = z
   .object({
-    company_id: CompanyID,
+    company_id: CompanyID.optional(),
     project_id: z.string().min(1),
+    work_item_id: z.string().min(1),
+    source_receipt_id: z.string().min(1).optional(),
     need_key: z
       .string()
       .min(1)
@@ -44,9 +54,14 @@ export const CreateCapabilityNeedInput = z
       .max(100)
       .regex(/^[a-z0-9][a-z0-9._-]*$/)
       .optional(),
+    required_runtime_capabilities: z.array(z.keyof(RuntimeCapabilities)).default([]),
+    required_tools: z.array(z.string().min(1)).default([]),
+    allowed_permission_modes: z.array(RuntimePermissionMode).min(1).default(["read_only", "workspace_write"]),
+    workspace_scopes: z.array(z.string().min(1)).default([]),
+    independent_from_agent_ids: z.array(z.string().min(1)).default([]),
   })
   .strict()
-export type CreateCapabilityNeedInput = z.infer<typeof CreateCapabilityNeedInput>
+export type CreateCapabilityNeedInput = z.input<typeof CreateCapabilityNeedInput>
 
 export const SelectionScore = z.object({
   capability_match: z.number().int().nonnegative(),
@@ -63,15 +78,23 @@ export type SelectionScore = z.infer<typeof SelectionScore>
 
 export const TeamSelection = z.object({
   id: z.string(),
-  company_id: CompanyID,
+  company_id: CompanyID.optional(),
   project_id: z.string(),
   capability_need_id: z.string(),
+  selection_round: z.number().int().positive(),
   agent_id: z.string(),
   decision: z.enum(["selected", "rejected"]),
   source: z.enum(["company_pool", "new_candidate"]),
   lifecycle_at_selection: AgentLifecycle,
   reason: z.string(),
   score: SelectionScore,
+  constraint_results: z.array(
+    z.object({
+      kind: z.enum(["runtime", "tool", "permission", "workspace", "independence"]),
+      passed: z.boolean(),
+      reason: z.string(),
+    }),
+  ),
   time_released: z.number().int().optional(),
   time_created: z.number().int(),
   time_updated: z.number().int(),
@@ -82,9 +105,51 @@ export const SelectForNeedInput = z
   .object({
     capability_need_id: z.string().min(1),
     exclude_agent_ids: z.array(z.string().min(1)).default([]),
+    required_agent_id: z.string().min(1).optional(),
   })
   .strict()
-export type SelectForNeedInput = z.infer<typeof SelectForNeedInput>
+export type SelectForNeedInput = z.input<typeof SelectForNeedInput>
+
+export const ProjectAssignment = z.object({
+  id: z.string(),
+  company_id: CompanyID.optional(),
+  project_id: z.string(),
+  work_item_id: z.string(),
+  capability_need_id: z.string(),
+  selection_id: z.string(),
+  agent_id: z.string(),
+  version: z.number().int().positive(),
+  idempotency_key: z.string(),
+  supersedes_assignment_id: z.string().optional(),
+  temporary_role: z.string(),
+  responsibility: z.string(),
+  decision_scope: z.array(z.string()),
+  resource_scope: z.array(z.string()),
+  permission_mode: RuntimePermissionMode,
+  source_receipt_id: z.string().optional(),
+  status: z.enum(["assigned", "active", "released"]),
+  assigned_at: z.number().int(),
+  started_at: z.number().int().optional(),
+  released_at: z.number().int().optional(),
+  release_reason: z.string().optional(),
+})
+export type ProjectAssignment = z.infer<typeof ProjectAssignment>
+
+export const SelectAndAssignInput = SelectForNeedInput.extend({
+  permission_mode: RuntimePermissionMode.optional(),
+}).strict()
+export type SelectAndAssignInput = z.input<typeof SelectAndAssignInput>
+
+export const ReassignProjectAssignmentInput = z
+  .object({
+    work_item_id: z.string().min(1),
+    owner_agent_id: z.string().min(1),
+    reason: z.string().trim().min(1).max(4_000),
+    expected_assignment_id: z.string().min(1).optional(),
+    idempotency_key: z.string().min(1).max(240).optional(),
+  })
+  .strict()
+export type ReassignProjectAssignmentInput = z.infer<typeof ReassignProjectAssignmentInput>
 
 export const AgentPerformance = z.object({
   id: z.string(),

@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0", "A1", "A2", "A3", "A4"],
+  "implementedStages": ["A0", "A1", "A2", "A3", "A4", "B0"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -69,6 +69,9 @@
       "a3-repair-circuit",
       "a3-validation-policy",
       "a4-recovery-matrix",
+      "b0-assignment-lifecycle",
+      "b0-selection-constraints",
+      "b0-reassign-recovery",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -88,9 +91,6 @@
       "desktop-e2e"
     ],
     "plannedStageCommands": [
-      "b0-assignment-lifecycle",
-      "b0-selection-constraints",
-      "b0-reassign-recovery",
       "b1-seed-policy",
       "b1-benchmark-s13-s15",
       "b1-flag-fallback",
@@ -402,7 +402,7 @@
       "releaseWindow": "R4",
       "dependsOn": ["A4"],
       "taskIds": ["TEAM-06", "TEAM-07", "TEAM-08", "TEAM-09", "TEAM-10", "TEAM-11", "TEAM-12", "TEAM-13"],
-      "governedPaths": ["packages/control-plane/src/company-recruitment", "packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test"],
+      "governedPaths": ["packages/control-plane/src/company-recruitment", "packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/src/capability", "packages/control-plane/src/server", "packages/control-plane/src/storage", "packages/control-plane/src/id", "packages/control-plane/migration", "packages/control-plane/test"],
       "requiredCommandIds": ["b0-assignment-lifecycle", "b0-selection-constraints", "b0-reassign-recovery"],
       "repeats": 2,
       "criteria": [

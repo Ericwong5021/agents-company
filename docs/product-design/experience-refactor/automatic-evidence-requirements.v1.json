@@ -461,6 +461,93 @@
       ]
     },
     {
+      "id": "b0-assignment-lifecycle",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-recruitment/b0-assignment-lifecycle.test.ts",
+        "-t",
+        "b0-assignment-lifecycle",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b0-assignment-lifecycle-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b0-assignment-lifecycle-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-b0/assignment-lifecycle.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b0-selection-constraints",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-recruitment/b0-selection-constraints.test.ts",
+        "-t",
+        "b0-selection-constraints",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b0-selection-constraints-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b0-selection-constraints-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-b0/selection-constraints.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b0-reassign-recovery",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-recruitment/b0-reassign-recovery.test.ts",
+        "-t",
+        "b0-reassign-recovery",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b0-reassign-recovery-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b0-reassign-recovery-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-b0/reassign-recovery.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -1042,6 +1129,14 @@
         {
           "id": "QA-02-STARTUP-RECOVERY-SAFETY",
           "evidenceRefs": ["command:a4-recovery-matrix"]
+        },
+        {
+          "id": "QA-02-ASSIGNMENT-AND-SELECTION-SAFETY",
+          "evidenceRefs": [
+            "command:b0-assignment-lifecycle",
+            "command:b0-selection-constraints",
+            "command:b0-reassign-recovery"
+          ]
         },
         {
           "id": "QA-02-KEY-BRANCH-COVERAGE",

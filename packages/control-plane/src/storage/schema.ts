@@ -4,6 +4,7 @@ export { CompanyAgentTable } from "../company-agent/company-agent.sql"
 export {
   CompanyCapabilityNeedTable,
   CompanyTeamSelectionTable,
+  CompanyProjectAssignmentTable,
   CompanyAgentPerformanceTable,
   CompanyEmploymentReviewTable,
   CompanyDepartmentTable,

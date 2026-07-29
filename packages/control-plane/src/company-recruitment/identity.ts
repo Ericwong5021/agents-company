@@ -29,7 +29,7 @@ export const stableLogicalKey = (value: string) => {
 }
 
 export const stableCandidateAgentID = (input: {
-  company_id: string
+  company_id?: string
   project_id: string
   need_key: string
   role: string
@@ -37,7 +37,7 @@ export const stableCandidateAgentID = (input: {
   CompanyAgentID.make(
     withHash(
       `project-${fragment(input.project_id.slice(-12))}-${fragment(input.need_key)}-${fragment(input.role)}`,
-      JSON.stringify([input.company_id, input.project_id, input.need_key, input.role]),
+      JSON.stringify([input.company_id ?? "standalone", input.project_id, input.need_key, input.role]),
       72,
     ),
   )

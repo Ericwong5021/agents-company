@@ -7,6 +7,7 @@ import { Global } from "@/global"
 import { Identifier } from "@/id/id"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
 import { Company } from "@/company"
+import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import {
   CompanyApprovalGateTable,
   CompanyArtifactTable,
@@ -1180,7 +1181,7 @@ export const layer = Layer.effect(
         })
       }
       yield* Effect.sync(() =>
-        Database.use((db) =>
+        Database.transaction((db) => {
           db
             .update(CompanyWorkItemTable)
             .set({
@@ -1193,8 +1194,19 @@ export const layer = Layer.effect(
               updated_at: now,
             })
             .where(eq(CompanyWorkItemTable.id, id))
-            .run(),
-        ),
+            .run()
+          if (status === "running")
+            db
+              .update(CompanyProjectAssignmentTable)
+              .set({ status: "active", started_at: now })
+              .where(
+                and(
+                  eq(CompanyProjectAssignmentTable.work_item_id, id),
+                  eq(CompanyProjectAssignmentTable.status, "assigned"),
+                ),
+              )
+              .run()
+        }),
       )
       if (status === "running") {
         yield* facts.startAttempt({

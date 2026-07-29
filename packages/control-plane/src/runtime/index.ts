@@ -1,4 +1,5 @@
 export * from "./interface"
+export * from "./capabilities"
 export * from "./agent-execution"
 export * from "./cli-adapter"
 export * from "./registry"

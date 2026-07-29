@@ -42,6 +42,7 @@ const prefixes = {
   skillSnapshot: "ssnap",
   capabilityNeed: "cneed",
   teamSelection: "tsel",
+  projectAssignment: "pasn",
   agentPerformance: "aperf",
   employmentReview: "erev",
   department: "dept",

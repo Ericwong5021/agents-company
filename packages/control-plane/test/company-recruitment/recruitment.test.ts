@@ -3,7 +3,11 @@ import { eq } from "drizzle-orm"
 import { Effect } from "effect"
 import { CompanyAgent } from "../../src/company-agent"
 import { CompanyAgentID } from "../../src/company-agent/schema"
-import { CompanyProjectTable } from "../../src/company-project/company-project.sql"
+import {
+  CompanyPlanTable,
+  CompanyProjectTable,
+  CompanyWorkItemTable,
+} from "../../src/company-project/company-project.sql"
 import {
   CompanyRecruitment,
   DepartmentRecurringDemandNotProven,
@@ -53,6 +57,65 @@ function seed(companyID: CompanyID, projectIDs: string[]) {
           title: id,
           status: "planning",
           output_dir: `/tmp/${id}`,
+          created_at: now,
+          updated_at: now,
+        })),
+      )
+      .run()
+    db.insert(CompanyPlanTable)
+      .values(
+        projectIDs.map((id) => ({
+          id: `${id}-plan`,
+          project_id: id,
+          version: 1,
+          phase: "planning",
+          status: "active",
+          summary: "Recruitment test plan",
+          assumptions_json: "[]",
+          acceptance_criteria_json: "[]",
+          change_reason: null,
+          created_at: now,
+        })),
+      )
+      .run()
+    db.insert(CompanyWorkItemTable)
+      .values(
+        projectIDs.map((id) => ({
+          id: `${id}-work-item`,
+          project_id: id,
+          plan_id: `${id}-plan`,
+          source_task_key: "recruitment",
+          parent_id: null,
+          title: "Recruitment work item",
+          description: "Recruit and assign one agent",
+          kind: "worker",
+          work_type: "analysis",
+          role: "analyst",
+          capability_packs_json: JSON.stringify(["research-analysis@1"]),
+          decision_scope_json: "[]",
+          resource_scope_json: JSON.stringify([`artifacts/${id}`]),
+          inputs_json: "[]",
+          expected_outputs_json: "[]",
+          validators_json: "[]",
+          disposition: "retain",
+          model_group: "standard",
+          risk_level: "medium",
+          review_status: "pending",
+          status: "pending",
+          purpose: "delivery",
+          origin_kind: "legacy",
+          origin_ref_id: null,
+          graph_revision_created: 0,
+          validation_mode: "independent_review",
+          superseded_by_id: null,
+          owner_agent_id: null,
+          workflow_run_id: null,
+          acceptance_criteria_json: "[]",
+          attempt: 0,
+          max_attempts: 3,
+          error: null,
+          started_at: null,
+          completed_at: null,
           created_at: now,
           updated_at: now,
         })),
@@ -129,10 +192,11 @@ describe("company recruitment", () => {
         const input = {
           company_id: companyID,
           project_id: "cprj_recruitment_identity",
+          work_item_id: "cprj_recruitment_identity-work-item",
           need_key: workerKey,
           role: "opaque delivery worker",
           work_type: "analysis" as const,
-          capability_packs: ["zeta-capability@1", "alpha-capability@1", "zeta-capability@1"],
+          capability_packs: ["research-analysis@1", "independent-review@1", "research-analysis@1"],
           risk_level: "medium" as const,
           demand_horizon: "project" as const,
         }
@@ -141,11 +205,11 @@ describe("company recruitment", () => {
         )
 
         expect(new Set(concurrent.map((need) => need.id)).size).toBe(1)
-        expect(concurrent[0]?.capability_packs).toEqual(["alpha-capability@1", "zeta-capability@1"])
+        expect(concurrent[0]?.capability_packs).toEqual(["independent-review@1", "research-analysis@1"])
         const repeated = await runRecruitment((service) =>
           service.createNeed({
             ...input,
-            capability_packs: ["alpha-capability@1", "zeta-capability@1"],
+            capability_packs: ["independent-review@1", "research-analysis@1"],
           }),
         )
         expect(repeated.id).toBe(concurrent[0]?.id)
@@ -218,10 +282,11 @@ describe("company recruitment", () => {
           service.createNeed({
             company_id: companyID,
             project_id: "cprj_recruitment_one",
+            work_item_id: "cprj_recruitment_one-work-item",
             need_key: "evidence-analysis",
             role: "evidence analyst",
             work_type: "analysis",
-            capability_packs: ["evidence-synthesis"],
+            capability_packs: ["research-analysis@1"],
             risk_level: "medium",
             demand_horizon: "project",
           }),
@@ -233,9 +298,9 @@ describe("company recruitment", () => {
         expect(result.agent).toMatchObject({
           id: "evidence-analyst",
           company_id: companyID,
-          lifecycle: "assigned",
-          role_key: "evidence analyst",
+          lifecycle: "candidate",
         })
+        expect(result.agent.role_key).toBeUndefined()
         expect(result.selections.map((item) => item.decision)).toEqual(["selected", "rejected"])
         expect(result.selections.every((item) => item.reason.length > 10)).toBe(true)
         expect(result.selections.find((item) => item.decision === "rejected")?.reason).toContain("未入选")
@@ -250,19 +315,17 @@ describe("company recruitment", () => {
         )
         expect(reselected.agent).toMatchObject({
           id: "evidence-analyst",
-          lifecycle: "assigned",
-          role_key: "evidence analyst",
+          lifecycle: "candidate",
         })
-        expect(reselected.selections.find((item) => item.decision === "selected")).toMatchObject({
-          id: released.find((item) => item.decision === "selected")?.id,
-          time_released: undefined,
-        })
+        expect(reselected.selections.filter((item) => item.decision === "selected")).toHaveLength(2)
+        expect(reselected.selections.find((item) => item.decision === "selected" && !item.time_released)?.id).not.toBe(
+          released.find((item) => item.decision === "selected")?.id,
+        )
         await runRecruitment((service) =>
           service.releaseProject({ company_id: companyID, project_id: "cprj_recruitment_one" }),
         )
         expect(await runAgents((service) => service.get(CompanyAgentID.make("evidence-analyst")))).toMatchObject({
           lifecycle: "candidate",
-          role_key: "evidence analyst",
         })
       },
     })
@@ -279,10 +342,11 @@ describe("company recruitment", () => {
           service.createNeed({
             company_id: companyID,
             project_id: "cprj_recruitment_alpha",
+            work_item_id: "cprj_recruitment_alpha-work-item",
             need_key: "research",
             role: "research analyst",
             work_type: "research",
-            capability_packs: ["source-validation"],
+            capability_packs: ["research-analysis@1"],
             risk_level: "medium",
             demand_horizon: "recurring",
             department_key: "research",
@@ -291,7 +355,7 @@ describe("company recruitment", () => {
         const first = await runRecruitment((service) =>
           service.selectForNeed({ capability_need_id: firstNeed.id, exclude_agent_ids: [] }),
         )
-        expect(first.agent.role_key).toBe("research analyst")
+        expect(first.agent.role_key).toBeUndefined()
         const firstSelection = first.selections.find((item) => item.decision === "selected")!
         setProjectStatus("cprj_recruitment_alpha", "completed")
         await runRecruitment((service) =>
@@ -332,10 +396,11 @@ describe("company recruitment", () => {
           service.createNeed({
             company_id: companyID,
             project_id: "cprj_recruitment_beta",
+            work_item_id: "cprj_recruitment_beta-work-item",
             need_key: "research",
             role: "research analyst",
             work_type: "research",
-            capability_packs: ["source-validation"],
+            capability_packs: ["research-analysis@1"],
             risk_level: "medium",
             demand_horizon: "recurring",
             department_key: "research",
@@ -403,7 +468,7 @@ describe("company recruitment", () => {
           },
         })
         expect(await runAgents((service) => service.get(second.agent.id))).toMatchObject({
-          lifecycle: "assigned",
+          lifecycle: "candidate",
         })
 
         setProjectStatus("cprj_recruitment_beta", "completed")
@@ -464,7 +529,6 @@ describe("company recruitment", () => {
               id: second.agent.id,
               lifecycle: "employee",
               department: "research",
-              role: "research analyst",
             }),
           }),
         ])

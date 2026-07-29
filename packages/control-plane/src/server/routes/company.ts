@@ -1,13 +1,13 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import { Effect } from "effect"
-import { and, eq } from "drizzle-orm"
+import { Cause, Effect, Exit } from "effect"
+import { eq } from "drizzle-orm"
 import z from "zod"
 import { Auth } from "@/auth"
 import { Company, CompanyReset, CompanySetupInstance } from "@/company"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyProject } from "@/company-project"
-import { CompanyTeamSelectionTable } from "@/company-recruitment/company-recruitment.sql"
+import { CompanyRecruitment } from "@/company-recruitment"
 import * as CompanyActivity from "@/company/activity"
 import {
   ApprovalPolicyUpdateInput,
@@ -659,6 +659,7 @@ export const CompanyRoutes = lazy(() =>
         const result = await AppRuntime.runPromise(
           Effect.gen(function* () {
             const service = yield* CompanyProject.Service
+            const recruitment = yield* CompanyRecruitment.Service
             const project = yield* service.get(param.projectID)
             if (!project)
               return {
@@ -722,35 +723,39 @@ export const CompanyRoutes = lazy(() =>
                   message: `Agent ${input.owner_agent_id} is the reviewer for work item ${worker.id}`,
                 },
               }
-            const selected = yield* Effect.sync(() =>
-              Database.use((db) =>
-                db
-                  .select({ id: CompanyTeamSelectionTable.id })
-                  .from(CompanyTeamSelectionTable)
-                  .where(
-                    and(
-                      eq(CompanyTeamSelectionTable.project_id, project.id),
-                      eq(CompanyTeamSelectionTable.agent_id, input.owner_agent_id),
-                      eq(CompanyTeamSelectionTable.decision, "selected"),
-                    ),
-                  )
-                  .get(),
-              ),
-            )
-            if (!selected)
-              return {
-                error: {
-                  reason: "owner_not_selected" as const,
-                  message: `Agent ${input.owner_agent_id} has no selected recruitment decision for project ${project.id}`,
-                },
-              }
-            return {
-              work_item: yield* service.assignWorkItem({
-                id: worker.id,
+            const reassigned = yield* recruitment
+              .reassign({
+                work_item_id: worker.id,
                 owner_agent_id: input.owner_agent_id,
                 reason: input.reason,
-              }),
+              })
+              .pipe(Effect.exit)
+            if (Exit.isFailure(reassigned)) {
+              const error = Cause.squash(reassigned.cause)
+              const message = error instanceof Error ? error.message : String(error)
+              if (message.includes("is already assigned to"))
+                return {
+                  error: {
+                    reason: "owner_unchanged" as const,
+                    message,
+                  },
+                }
+              if (
+                message.includes("has no current assignment") ||
+                message.includes("does not satisfy capability need") ||
+                message.includes("was not selected for work item")
+              )
+                return {
+                  error: {
+                    reason: "owner_not_selected" as const,
+                    message,
+                  },
+                }
+              throw error
             }
+            const workItem = (yield* service.listWorkItems(project.id)).find((item) => item.id === worker.id)
+            if (!workItem) throw new Error(`Work item ${worker.id} was not found after reassignment`)
+            return { work_item: workItem }
           }),
         )
         if ("error" in result)

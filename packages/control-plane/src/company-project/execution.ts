@@ -1,10 +1,9 @@
 import z from "zod"
 import { Context, Effect, Layer, Scope } from "effect"
-import { AgentRun } from "@/agent-run/agent-run"
 import { CapabilityCatalog } from "@/capability/catalog"
 import { CompanyAgent } from "@/company-agent"
 import { CompanyAgentID } from "@/company-agent/schema"
-import { CompanyRecruitment, stableCandidateAgentID, stableLogicalKey } from "@/company-recruitment"
+import { CompanyRecruitment, stableLogicalKey } from "@/company-recruitment"
 import { CompanyID } from "@/company/schema"
 import { Conversation } from "@/conversation"
 import { ConversationThreadID } from "@/conversation/schema"
@@ -128,13 +127,6 @@ const json = (value: unknown) => JSON.stringify(value)
 const workflow = (name: string, body: string) =>
   [`export const meta = ${json({ name, description: `AgentCompany adaptive project node: ${name}` })}`, body].join("\n")
 
-const slug = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32) || "agent"
-
 const stableBoardCloseoutRequestID = (projectID: string, workItemID: string, artifactID: string) => {
   const hash = new Bun.CryptoHasher("sha256")
     .update(["board-closeout-v1", projectID, workItemID, artifactID].join("\0"))
@@ -167,7 +159,7 @@ const projectionFactsMatch = (
     model_group: "ultra" | "standard" | "lite"
     risk_level: "low" | "medium" | "high"
     review_status: "pending" | "not_required"
-    owner_agent_id: string
+    owner_agent_id?: string
     acceptance_criteria: string[]
     max_attempts: number
     depends_on: string[]
@@ -218,15 +210,6 @@ const projectionFactsMatch = (
     depends_on: [...new Set(input.depends_on)].sort(),
   })
 
-const terms = (value: string) =>
-  new Set(
-    value
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 1),
-  )
-
 const inferWorkType = (task: SubTask): (typeof workTypes)[number] => {
   if (task.workType) return task.workType
   const text = `${task.summary} ${task.acceptanceCriteria}`.toLowerCase()
@@ -246,15 +229,29 @@ const capabilityPacks = (workType: (typeof workTypes)[number]) => {
   return ["research-analysis@1"]
 }
 
-const executableCapabilityPacks = (
-  values: string[],
-  workType: (typeof workTypes)[number],
-) => {
+const executableCapabilityPacks = (values: string[], workType: (typeof workTypes)[number]) => {
   const available = new Set(CapabilityCatalog.list().map((pack) => `${pack.id}@${pack.version}`))
   const valid = values.filter((value) => available.has(value))
-  return valid.length === values.length && valid.length
-    ? valid
-    : [...new Set([...valid, ...capabilityPacks(workType)])]
+  return valid.length === values.length && valid.length ? valid : [...new Set([...valid, ...capabilityPacks(workType)])]
+}
+
+const permissionRank = {
+  read_only: 0,
+  workspace_write: 1,
+  full_access: 2,
+}
+
+const assignmentConstraints = (references: string[]) => {
+  const packs = references.map((reference) => CapabilityCatalog.resolve(reference))
+  const permissionMode =
+    packs
+      .map((pack) => pack.permissionMode)
+      .toSorted((left, right) => permissionRank[right] - permissionRank[left])[0] ?? "read_only"
+  return {
+    required_runtime_capabilities: [...new Set(packs.flatMap((pack) => pack.requiredRuntimeCapabilities))],
+    required_tools: [...new Set(packs.flatMap((pack) => pack.tools))],
+    allowed_permission_modes: [permissionMode],
+  }
 }
 
 const plannerScript = (goal: string, agentID: string, modelRef: string) =>
@@ -496,7 +493,6 @@ export const layer = Layer.effect(
     const conversation = yield* Conversation.Service
     const delegation = yield* Delegation.Service
     const reputation = yield* Reputation.Service
-    const runs = yield* AgentRun.Service
     const sessions = yield* Session.Service
     const runtime = yield* WorkflowRuntime.Service
     const workType = yield* WorkType.Service
@@ -538,8 +534,7 @@ export const layer = Layer.effect(
       const currentNeedIDs = new Set(currentNeeds.map((need) => need.id))
       const teamSelections =
         organization?.selections.filter(
-          (selection) =>
-            selection.project_id === project.id && currentNeedIDs.has(selection.capability_need_id),
+          (selection) => selection.project_id === project.id && currentNeedIDs.has(selection.capability_need_id),
         ) ?? []
       const selectedAgentIDs = new Set(
         teamSelections.filter((selection) => selection.decision === "selected").map((selection) => selection.agent_id),
@@ -557,9 +552,7 @@ export const layer = Layer.effect(
           .filter((selection) => selection.decision === "selected")
           .map((selection) => selection.id),
       )
-      const selectedAgents = yield* Effect.forEach([...selectedAgentIDs], (id) =>
-        agents.get(CompanyAgentID.make(id)),
-      )
+      const selectedAgents = yield* Effect.forEach([...selectedAgentIDs], (id) => agents.get(CompanyAgentID.make(id)))
       const board =
         project.company_id && project.source_thread_id
           ? yield* Effect.gen(function* () {
@@ -743,9 +736,7 @@ export const layer = Layer.effect(
         input.artifact.content!,
       ].join("\n")
       if (body.length > 20_000)
-        throw new Error(
-          `Board closeout record for artifact ${input.artifact.id} exceeds the 20000 character limit`,
-        )
+        throw new Error(`Board closeout record for artifact ${input.artifact.id} exceeds the 20000 character limit`)
       const requestID = stableBoardCloseoutRequestID(input.project.id, input.item.id, input.artifact.id)
       const existing = (yield* projects.listEvents(input.project.id)).find(
         (event) => event.type === "board_closeout.recorded" && event.data.artifact_id === input.artifact.id,
@@ -774,118 +765,68 @@ export const layer = Layer.effect(
       })
     })
 
-    const createPlanner = Effect.fn("CompanyProjectExecution.createPlanner")(function* (project: Project) {
-      const id = `project-${slug(project.id.slice(-12))}-planner`
-      const existing = yield* agents.get(id as CompanyAgentID)
-      if (existing) return existing
-      return yield* agents.create({
-        id,
-        name: `${project.title} · 规划者`,
-        lifecycle: "employee",
-        description: "为当前项目创建 Charter、任务边界与动态角色，不执行叶子交付。",
-        system_prompt: "你是临时项目规划者。你只规划、分解和重规划，不实现叶子任务。",
-        model: "ultra",
-        org_layer: "project",
-        department: project.title,
-        reports_to: "assistant",
-        responsibilities: ["Project Charter", "任务分解", "决策边界", "动态组队"],
-      })
-    })
-
-    const selectAgent = Effect.fn("CompanyProjectExecution.selectAgent")(function* (input: {
+    const staffWorkItem = Effect.fn("CompanyProjectExecution.staffWorkItem")(function* (input: {
       project: Project
+      item: WorkItem
       key: string
       need_key: string
-      role: string
-      work_type: (typeof workTypes)[number]
-      capability_packs: string[]
-      risk_level: "low" | "medium" | "high"
-      model_group: "ultra" | "standard" | "lite"
       exclude?: string[]
     }) {
-      if (input.project.company_id) {
-        const need = yield* recruitment.createNeed({
-          company_id: CompanyID.parse(input.project.company_id),
-          project_id: input.project.id,
-          need_key: input.need_key,
-          role: input.role,
-          work_type: input.work_type,
-          capability_packs: input.capability_packs,
-          risk_level: input.risk_level,
-          demand_horizon: "project",
-        })
-        const result = yield* recruitment.selectForNeed({
-          capability_need_id: need.id,
-          exclude_agent_ids: input.exclude ?? [],
-        })
-        const selected = result.selections.find((selection) => selection.decision === "selected")
-        yield* projects.recordEvent({
-          project_id: input.project.id,
-          type: "work_item.agent_selected",
-          actor_id: result.agent.id,
-          data: {
-            key: input.key,
-            role: input.role,
-            score: selected?.score.total ?? 0,
-            source: selected?.source ?? "company_pool",
-            capability_need_id: need.id,
-            selection_id: selected?.id,
-            rejected_count: result.selections.filter((selection) => selection.decision === "rejected").length,
-          },
-        })
-        return result.agent
-      }
-      const wanted = terms(`${input.role} ${input.work_type}`)
-      const active = yield* runs.list({ companyProjectID: input.project.id, limit: 500 })
-      const candidates = (yield* agents.list()).filter((agent) => !(input.exclude ?? []).includes(agent.id))
-      const scored = yield* Effect.forEach(candidates, (agent) =>
-        Effect.gen(function* () {
-          const profile = terms(
-            [agent.name, agent.description, ...(agent.skills ?? []), ...(agent.responsibilities ?? [])].join(" "),
-          )
-          const matches = [...wanted].filter((term) => profile.has(term)).length
-          const load = active.filter(
-            (run) => run.agentID === agent.id && ["queued", "starting", "running", "interrupting"].includes(run.state),
-          ).length
-          return { agent, score: matches * 20 + (yield* reputation.get(agent.id)).score - load * 10 }
-        }),
-      )
-      const selected = scored.sort((left, right) => right.score - left.score)[0]
-      if (selected && selected.score > 0) {
-        yield* projects.recordEvent({
-          project_id: input.project.id,
-          type: "work_item.agent_selected",
-          actor_id: selected.agent.id,
-          data: { key: input.key, role: input.role, score: selected.score, source: "company_pool" },
-        })
-        return selected.agent
-      }
-      const id = stableCandidateAgentID({
-        company_id: input.project.company_id ?? "standalone",
+      const assignments = yield* recruitment.listAssignments({
         project_id: input.project.id,
+        work_item_id: input.item.id,
+      })
+      const previous = assignments.at(-1)
+      if (
+        input.item.owner_agent_id &&
+        previous &&
+        (previous.status !== "released" || ["completed", "rejected"].includes(input.project.status))
+      ) {
+        if (previous.agent_id !== input.item.owner_agent_id)
+          throw new Error(`Work item ${input.item.id} owner differs from its latest Assignment`)
+        return input.item
+      }
+      const need = yield* recruitment.createNeed({
+        ...(input.project.company_id ? { company_id: CompanyID.parse(input.project.company_id) } : {}),
+        project_id: input.project.id,
+        work_item_id: input.item.id,
+        ...(input.item.origin_kind === "receipt" && input.item.origin_ref_id
+          ? { source_receipt_id: input.item.origin_ref_id }
+          : {}),
         need_key: input.need_key,
-        role: input.role,
+        role: input.item.role,
+        work_type: input.item.work_type,
+        capability_packs: input.item.capability_packs,
+        risk_level: input.item.risk_level,
+        demand_horizon: "project",
+        ...assignmentConstraints(input.item.capability_packs),
+        workspace_scopes: input.item.resource_scope.length ? input.item.resource_scope : [input.project.output_dir],
+        independent_from_agent_ids: input.exclude ?? [],
       })
-      const existing = yield* agents.get(id as CompanyAgentID)
-      if (existing) return existing
-      const created = yield* agents.create({
-        id,
-        name: input.role,
-        lifecycle: "employee",
-        description: `为“${input.project.title}”动态创建的 ${input.work_type} 角色。`,
-        system_prompt: `你在当前项目中担任“${input.role}”。只完成被分配的叶子任务，不越过决策和资源边界。`,
-        model: input.model_group,
-        org_layer: "execution",
-        department: input.project.title,
-        responsibilities: [input.role, input.work_type],
+      const result = yield* recruitment.selectAndAssign({
+        capability_need_id: need.id,
+        exclude_agent_ids: input.exclude ?? [],
       })
+      const selected = result.selections.find((selection) => selection.id === result.assignment.selection_id)
       yield* projects.recordEvent({
         project_id: input.project.id,
         type: "work_item.agent_selected",
-        actor_id: created.id,
-        data: { key: input.key, role: input.role, score: 0, source: "dynamic_hire" },
+        actor_id: result.agent.id,
+        data: {
+          key: input.key,
+          role: input.item.role,
+          score: selected?.score.total ?? 0,
+          source: selected?.source ?? "company_pool",
+          capability_need_id: need.id,
+          selection_id: result.assignment.selection_id,
+          assignment_id: result.assignment.id,
+          rejected_count: result.selections.filter((selection) => selection.decision === "rejected").length,
+        },
       })
-      return created
+      const item = (yield* projects.listWorkItems(input.project.id)).find((item) => item.id === input.item.id)
+      if (!item?.owner_agent_id || item.owner_agent_id !== result.agent.id)
+        throw new Error(`Assignment did not update work item ${input.item.id} owner`)
+      return item
     })
 
     const blockProject = (project_id: string, error: string) =>
@@ -1010,17 +951,13 @@ export const layer = Layer.effect(
         }
         if (
           items.every(
-            (item) =>
-              item.status === "completed" ||
-              item.status === "superseded" ||
-              item.status === "cancelled",
+            (item) => item.status === "completed" || item.status === "superseded" || item.status === "cancelled",
           )
         ) {
-          if (project.company_id)
-            yield* recruitment.releaseProject({
-              company_id: CompanyID.parse(project.company_id),
-              project_id: project.id,
-            })
+          yield* recruitment.releaseProject({
+            ...(project.company_id ? { company_id: CompanyID.parse(project.company_id) } : {}),
+            project_id: project.id,
+          })
           yield* projects.transition({
             id: project_id,
             status: "completed",
@@ -1401,8 +1338,7 @@ export const layer = Layer.effect(
         ].filter((value, position, values) => values.indexOf(value) === position)
         const parentID = task.parentKey ? created.get(task.parentKey)!.worker.id : input.item.id
         const keyedWorker = existingItems.find(
-          (item) =>
-            item.plan_id === plan.id && item.kind === "worker" && item.source_task_key === sourceKey,
+          (item) => item.plan_id === plan.id && item.kind === "worker" && item.source_task_key === sourceKey,
         )
         const legacyWorkers = keyedWorker
           ? []
@@ -1417,20 +1353,6 @@ export const layer = Layer.effect(
             )
         if (legacyWorkers.length > 1) throw new Error(`Ambiguous legacy worker projection for ${key}`)
         const existingWorker = keyedWorker ?? legacyWorkers[0]
-        const ownerID =
-          existingWorker?.owner_agent_id ??
-          (
-            yield* selectAgent({
-              project: input.project,
-              key,
-              need_key: needKeys[index]!.worker,
-              role,
-              work_type: type,
-              capability_packs: packs,
-              risk_level: risk,
-              model_group: group,
-            })
-          ).id
         const workerInput = {
           project_id: input.project.id,
           plan_id: plan.id,
@@ -1451,7 +1373,7 @@ export const layer = Layer.effect(
           model_group: group,
           risk_level: risk,
           review_status: "pending" as const,
-          owner_agent_id: ownerID,
+          owner_agent_id: existingWorker?.owner_agent_id,
           acceptance_criteria: [task.acceptanceCriteria],
           max_attempts: 2,
           depends_on: dependencies,
@@ -1466,12 +1388,18 @@ export const layer = Layer.effect(
             throw new Error(`Legacy worker projection differs from saved task ${key}`)
           yield* projects.setWorkItemSourceTaskKey({ id: legacyWorkers[0].id, source_task_key: sourceKey })
         }
-        const worker = yield* projects.createWorkItem(workerInput)
+        const worker = yield* staffWorkItem({
+          project: input.project,
+          item: yield* projects.createWorkItem(workerInput),
+          key,
+          need_key: needKeys[index]!.worker,
+        })
+        if (!worker.owner_agent_id) throw new Error(`Worker ${worker.id} has no current Assignment`)
+        const ownerID = worker.owner_agent_id
         const reviewerRole = `${role} independent reviewer`
         const reviewerGroup = task.riskLevel === "high" ? "ultra" : "standard"
         const keyedReviewer = existingItems.find(
-          (item) =>
-            item.plan_id === plan.id && item.kind === "reviewer" && item.source_task_key === sourceKey,
+          (item) => item.plan_id === plan.id && item.kind === "reviewer" && item.source_task_key === sourceKey,
         )
         const legacyReviewers = keyedReviewer
           ? []
@@ -1485,21 +1413,6 @@ export const layer = Layer.effect(
             )
         if (legacyReviewers.length > 1) throw new Error(`Ambiguous legacy reviewer projection for ${key}`)
         const existingReviewer = keyedReviewer ?? legacyReviewers[0]
-        const reviewerID =
-          existingReviewer?.owner_agent_id ??
-          (
-            yield* selectAgent({
-              project: input.project,
-              key: `${key}-review`,
-              need_key: needKeys[index]!.reviewer,
-              role: reviewerRole,
-              work_type: type,
-              capability_packs: ["independent-review@1"],
-              risk_level: risk,
-              model_group: reviewerGroup,
-              exclude: [ownerID],
-            })
-          ).id
         const reviewerInput = {
           project_id: input.project.id,
           plan_id: plan.id,
@@ -1520,7 +1433,7 @@ export const layer = Layer.effect(
           model_group: reviewerGroup as "ultra" | "standard",
           risk_level: risk,
           review_status: "not_required" as const,
-          owner_agent_id: reviewerID,
+          owner_agent_id: existingReviewer?.owner_agent_id,
           acceptance_criteria: worker.acceptance_criteria,
           max_attempts: 2,
           depends_on: [worker.id],
@@ -1535,9 +1448,17 @@ export const layer = Layer.effect(
             throw new Error(`Legacy reviewer projection differs from saved task ${key}`)
           yield* projects.setWorkItemSourceTaskKey({ id: legacyReviewers[0].id, source_task_key: sourceKey })
         }
+        const reviewer = yield* staffWorkItem({
+          project: input.project,
+          item: yield* projects.createWorkItem(reviewerInput),
+          key: `${key}-review`,
+          need_key: needKeys[index]!.reviewer,
+          exclude: [ownerID],
+        })
+        if (!reviewer.owner_agent_id) throw new Error(`Reviewer ${reviewer.id} has no current Assignment`)
         created.set(key, {
           worker,
-          reviewer: yield* projects.createWorkItem(reviewerInput),
+          reviewer,
         })
       }
       yield* projects.completeWorkItem(input.item.id)
@@ -1569,12 +1490,8 @@ export const layer = Layer.effect(
         )
         const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
         if (current?.status === "completed")
-          yield* startReadyWave(project.id).pipe(
-            Effect.catchCause((cause) => blockProject(project.id, String(cause))),
-          )
-      }).pipe(
-        Effect.forkIn(scope),
-      )
+          yield* startReadyWave(project.id).pipe(Effect.catchCause((cause) => blockProject(project.id, String(cause))))
+      }).pipe(Effect.forkIn(scope))
       return runID
     })
 
@@ -1613,12 +1530,8 @@ export const layer = Layer.effect(
         )
         const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
         if (current?.status === "completed")
-          yield* startReadyWave(project.id).pipe(
-            Effect.catchCause((cause) => blockProject(project.id, String(cause))),
-          )
-      }).pipe(
-        Effect.forkIn(scope),
-      )
+          yield* startReadyWave(project.id).pipe(Effect.catchCause((cause) => blockProject(project.id, String(cause))))
+      }).pipe(Effect.forkIn(scope))
       return runID
     })
 
@@ -1701,46 +1614,38 @@ export const layer = Layer.effect(
           ],
         }))
       const existingWorkItem = (yield* projects.listWorkItems(project.id)).find((item) => item.kind === "planner")
-      const planner = existingWorkItem
-        ? undefined
-        : yield* selectAgent({
-            project,
-            key: "project-planner",
-            need_key: stableLogicalKey("project-planner"),
-            role: "project-planner",
+      const workItem = yield* staffWorkItem({
+        project,
+        key: "project-planner",
+        need_key: stableLogicalKey("project-planner"),
+        item:
+          existingWorkItem ??
+          (yield* projects.createWorkItem({
+            project_id: project.id,
+            plan_id: plan.id,
+            title: "拆解已批准 Charter",
+            description: "保持董事会批准的范围与验收不变，将 Charter 拆成依赖有序的执行与独立复核任务。",
+            kind: "planner",
             work_type: "decision",
+            role: "project-planner",
             capability_packs: ["product-charter@1"],
-            risk_level: "medium",
+            decision_scope: ["Work Item 边界", "初始依赖关系", "临时责任"],
+            resource_scope: charterInput.resources.map((resource) => resource.scope),
+            inputs: [
+              `Root Need ${input.root_need_id}`,
+              `Board Thread ${input.source_thread_id}`,
+              "已批准 Project Charter",
+            ],
+            expected_outputs: ["依赖有序的 worker/reviewer Work Items"],
+            validators: ["每个叶子任务可独立验收", "每个正式责任只有一个 owner", "独立复核者与执行者不同"],
+            disposition: "retain",
             model_group: "ultra",
-          })
-      const workItem =
-        existingWorkItem ??
-        (yield* projects.createWorkItem({
-          project_id: project.id,
-          plan_id: plan.id,
-          title: "拆解已批准 Charter",
-          description: "保持董事会批准的范围与验收不变，将 Charter 拆成依赖有序的执行与独立复核任务。",
-          kind: "planner",
-          work_type: "decision",
-          role: "project-planner",
-          capability_packs: ["product-charter@1"],
-          decision_scope: ["Work Item 边界", "初始依赖关系", "临时责任"],
-          resource_scope: charterInput.resources.map((resource) => resource.scope),
-          inputs: [
-            `Root Need ${input.root_need_id}`,
-            `Board Thread ${input.source_thread_id}`,
-            "已批准 Project Charter",
-          ],
-          expected_outputs: ["依赖有序的 worker/reviewer Work Items"],
-          validators: ["每个叶子任务可独立验收", "每个正式责任只有一个 owner", "独立复核者与执行者不同"],
-          disposition: "retain",
-          model_group: "ultra",
-          risk_level: "medium",
-          review_status: "not_required",
-          owner_agent_id: planner!.id,
-          acceptance_criteria: ["任务树有界且所有叶子任务满足 Execution Ready"],
-          max_attempts: 2,
-        }))
+            risk_level: "medium",
+            review_status: "not_required",
+            acceptance_criteria: ["任务树有界且所有叶子任务满足 Execution Ready"],
+            max_attempts: 2,
+          })),
+      })
       const planning =
         project.status === "intake"
           ? yield* projects.transition({ id: project.id, status: "planning", actor_id: charterInput.dri_agent_id })
@@ -1781,7 +1686,6 @@ export const layer = Layer.effect(
         provider_id: selectedModel?.providerID,
         model_id: selectedModel?.modelID,
       })
-      const planner = yield* createPlanner(project)
       const plan = yield* projects.createPlan({
         project_id: project.id,
         phase: "planning",
@@ -1806,12 +1710,21 @@ export const layer = Layer.effect(
         model_group: "ultra",
         risk_level: "medium",
         review_status: "not_required",
-        owner_agent_id: planner.id,
         acceptance_criteria: ["Charter 完整", "任务树领域中立", "每个叶子任务有角色、模型组和验收条件"],
         max_attempts: 2,
       })
-      const planning = yield* projects.transition({ id: project.id, status: "planning", actor_id: planner.id })
-      return { project: planning, run_id: yield* launchPlanner(planning, item) }
+      const planner = yield* staffWorkItem({
+        project,
+        item,
+        key: "project-planner",
+        need_key: stableLogicalKey("project-planner"),
+      })
+      const planning = yield* projects.transition({
+        id: project.id,
+        status: "planning",
+        actor_id: planner.owner_agent_id,
+      })
+      return { project: planning, run_id: yield* launchPlanner(planning, planner) }
     })
 
     const cancel = Effect.fn("CompanyProjectExecution.cancel")(function* (input: {
@@ -1851,21 +1764,16 @@ export const layer = Layer.effect(
         model_id: selectedModel?.modelID,
       })
       const items = yield* projects.listWorkItems(project.id)
-      const blocked = items.filter(
-        (item) => item.status === "blocked" || item.status === "failed",
-      )
+      const blocked = items.filter((item) => item.status === "blocked" || item.status === "failed")
       if (!blocked.length) throw new Error(`Company project ${project.id} has no retryable work items`)
       const rejectedReviewers = blocked.flatMap((reviewer) => {
         if (reviewer.kind !== "reviewer" || !reviewer.parent_id) return []
         const worker = items.find((item) => item.id === reviewer.parent_id)
-        return worker?.status === "completed" && worker.review_status === "rejected"
-          ? [{ worker, reviewer }]
-          : []
+        return worker?.status === "completed" && worker.review_status === "rejected" ? [{ worker, reviewer }] : []
       })
       yield* Effect.forEach(
         rejectedReviewers,
-        ({ worker, reviewer }) =>
-          projects.reworkRejectedReview({ worker_id: worker.id, reviewer_id: reviewer.id }),
+        ({ worker, reviewer }) => projects.reworkRejectedReview({ worker_id: worker.id, reviewer_id: reviewer.id }),
         { discard: true },
       )
       const reworkedReviewers = new Set(rejectedReviewers.map(({ reviewer }) => reviewer.id))
@@ -1903,8 +1811,13 @@ export const layer = Layer.effect(
       const project = yield* projects.get(gate.project_id)
       if (!project) throw new Error(`Company project not found: ${gate.project_id}`)
       if (input.decision === "reject") {
-        if (gate.kind === "merge_approval")
+        if (gate.kind === "merge_approval") {
+          yield* recruitment.releaseProject({
+            ...(project.company_id ? { company_id: CompanyID.parse(project.company_id) } : {}),
+            project_id: project.id,
+          })
           yield* projects.transition({ id: project.id, status: "rejected", actor_id: "user", reason: input.note })
+        }
         return { gate }
       }
       if (gate.kind === "risk_approval") {
@@ -1940,7 +1853,6 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Delegation.defaultLayer),
   Layer.provide(Provider.defaultLayer),
   Layer.provide(Reputation.defaultLayer),
-  Layer.provide(AgentRun.defaultLayer),
   Layer.provide(Session.defaultLayer),
   Layer.provide(WorkType.defaultLayer),
   Layer.provide(WorkflowRuntime.defaultLayer),

@@ -455,9 +455,29 @@ describe.serial("CompanyProject adaptive execution", () => {
                 goal: "完成上一项目的交付证据复核",
                 title: "上一项目",
               })
+              const historyPlan = yield* projects.createPlan({
+                project_id: historyProject.id,
+                phase: "execution",
+                summary: "上一项目招聘证据",
+                acceptance_criteria: ["候选交付有绩效记录"],
+              })
+              const historyWorkItem = yield* projects.createWorkItem({
+                project_id: historyProject.id,
+                plan_id: historyPlan.id,
+                title: "上一项目交付证据",
+                description: "完成上一项目的交付证据复核。",
+                kind: "worker",
+                work_type: "analysis",
+                role: "delivery evidence auditor",
+                capability_packs: ["research-analysis@1"],
+                model_group: "standard",
+                owner_agent_id: "board-cto",
+                acceptance_criteria: ["候选交付有绩效记录"],
+              })
               const historyNeed = yield* recruitment.createNeed({
                 company_id: companyID,
                 project_id: historyProject.id,
+                work_item_id: historyWorkItem.id,
                 need_key: "delivery-evidence-history",
                 role: "delivery evidence auditor",
                 work_type: "analysis",
@@ -521,25 +541,6 @@ describe.serial("CompanyProject adaptive execution", () => {
                 summary: "执行候选复用证据核验",
                 acceptance_criteria: ["改派与跨项目历史可复核"],
               })
-              const currentNeed = yield* recruitment.createNeed({
-                company_id: companyID,
-                project_id: project.id,
-                need_key: "delivery-evidence-current",
-                role: historyNeed.role,
-                work_type: historyNeed.work_type,
-                capability_packs: historyNeed.capability_packs,
-                risk_level: historyNeed.risk_level,
-                demand_horizon: "recurring",
-                department_key: "delivery-assurance",
-              })
-              const currentSelectionResult = yield* recruitment.selectForNeed({
-                capability_need_id: currentNeed.id,
-                exclude_agent_ids: [],
-              })
-              const currentSelection = currentSelectionResult.selections.find(
-                (selection) => selection.decision === "selected",
-              )!
-              expect(currentSelection.agent_id).toBe(historySelection.agent_id)
               const wrongAgent = yield* companyAgents.create({
                 id: "wrong-evidence-agent",
                 company_id: companyID,
@@ -583,6 +584,26 @@ describe.serial("CompanyProject adaptive execution", () => {
                 acceptance_criteria: ["from/to/reason、当前 owner 与跨项目复用历史完整"],
                 max_attempts: 2,
               })
+              const currentNeed = yield* recruitment.createNeed({
+                company_id: companyID,
+                project_id: project.id,
+                work_item_id: worker.id,
+                need_key: "delivery-evidence-current",
+                role: historyNeed.role,
+                work_type: historyNeed.work_type,
+                capability_packs: historyNeed.capability_packs,
+                risk_level: historyNeed.risk_level,
+                demand_horizon: "recurring",
+                department_key: "delivery-assurance",
+              })
+              const currentSelectionResult = yield* recruitment.selectForNeed({
+                capability_need_id: currentNeed.id,
+                exclude_agent_ids: [],
+              })
+              const currentSelection = currentSelectionResult.selections.find(
+                (selection) => selection.decision === "selected",
+              )!
+              expect(currentSelection.agent_id).toBe(historySelection.agent_id)
               const reviewer = yield* projects.createWorkItem({
                 project_id: project.id,
                 plan_id: plan.id,
@@ -698,7 +719,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 expect(containsText(request.body, historyNeed.id)).toBe(true)
                 expect(containsText(request.body, currentNeed.id)).toBe(true)
                 expect(containsText(request.body, performanceSummary)).toBe(true)
-                expect(containsText(request.body, `"lifecycle":"assigned"`)).toBe(true)
+                expect(containsText(request.body, `"lifecycle":"candidate"`)).toBe(true)
                 expect(containsText(request.body, '"type":"project.created"')).toBe(false)
               })
               const events = yield* projects.listEvents(project.id)
