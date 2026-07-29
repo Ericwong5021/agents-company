@@ -393,3 +393,281 @@ export type DelegationPolicy = {
   scope: DecisionScope
   createdAt: number
 }
+
+export type FounderShadowEvidenceRef = {
+  kind: "artifact" | "decision" | "outcome" | "conversation" | "fact"
+  id: string
+  version?: number
+  validity: "verified" | "missing" | "forbidden"
+}
+
+export type FounderContextInput = {
+  companyId: string
+  scope: GovernanceAssetScope
+  currentGoal: string
+  discussion: string
+  authorizationBoundary: string
+  currentFacts: string[]
+  evidenceRefs: FounderShadowEvidenceRef[]
+  limits?: {
+    principles: number
+    decisionCases: number
+    tasteExamples: number
+    rubrics: number
+  }
+}
+
+export type FounderContextProjection = {
+  schemaVersion: 1
+  status: "ready" | "blocked"
+  companyId: string
+  scope: GovernanceAssetScope
+  currentGoal: string
+  discussion: string
+  authorizationBoundary: string
+  currentFacts: string[]
+  evidenceRefs: FounderShadowEvidenceRef[]
+  snapshotId?: string
+  snapshotChecksum?: string
+  principles: GovernanceAsset[]
+  decisionCases: GovernanceAsset[]
+  tasteExamples: GovernanceAsset[]
+  rubrics: GovernanceAsset[]
+  missingInformation: string[]
+  blockReasons: Array<
+    | "snapshot_missing"
+    | "snapshot_checksum_invalid"
+    | "context_insufficient"
+    | "asset_reference_missing"
+    | "asset_scope_forbidden"
+    | "evidence_reference_invalid"
+  >
+}
+
+export type FounderShadowDecision = {
+  id: string
+  companyId: string
+  status: "suggested" | "blocked"
+  blockReasons: Array<FounderContextProjection["blockReasons"][number] | "model_unavailable" | "model_output_missing">
+  scope: GovernanceAssetScope
+  snapshotId?: string
+  snapshotChecksum?: string
+  modelConfigRef: string
+  recommendation?: string
+  alternatives: string[]
+  authorityClass?: FounderAuthorityClass
+  confidence?: number
+  principleRefs: FounderAssetReference[]
+  decisionCaseRefs: FounderAssetReference[]
+  tasteExampleRefs: FounderAssetReference[]
+  rubricRefs: FounderAssetReference[]
+  evidenceRefs: FounderShadowEvidenceRef[]
+  missingInformation: string[]
+  createsGate: false
+  canSpeak: false
+  canExecute: false
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderShadowComparison = {
+  id: string
+  companyId: string
+  shadowDecisionId: string
+  actualDecision: string
+  actualDecisionRef: FounderShadowEvidenceRef
+  alignment: "match" | "partial" | "mismatch"
+  rationale: string
+  verificationStatus: "not_confirmed" | "human_confirmed"
+  confirmedBy?: string
+  confirmationEventId?: string
+  comparedBy: string
+  createdAt: number
+}
+
+export type FounderCalibrationItem = {
+  id: string
+  companyId: string
+  kind: "ab" | "accept" | "reject"
+  scope: GovernanceAssetScope
+  prompt: string
+  candidates: Array<{ artifactId: string; label: string }>
+  status: "pending" | "responded"
+  response?: "accept" | "reject" | "prefer_first" | "prefer_second"
+  reason?: string
+  confirmationEventId?: string
+  confirmedBy?: string
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderBenchmarkReport = {
+  id: string
+  companyId: string
+  benchmarkType: "founder_decision" | "taste"
+  datasetVersion: string
+  snapshotId: string
+  status: "pass" | "fail" | "blocked"
+  blockReasons: Array<"holdout_empty" | "prediction_set_incomplete" | "training_holdout_leakage" | "snapshot_missing">
+  metrics: {
+    caseCount: number
+    redRecall: number | null
+    traceabilityRate: number | null
+    agreementRate: number | null
+  }
+  authorization: { status: "not_confirmed"; blocking: false; confirmedSampleCount: number }
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderBoardShadowProjection = {
+  schemaVersion: 1
+  companyId: string
+  readOnly: true
+  chatIntegrated: false
+  createsGate: false
+  decisions: FounderShadowDecision[]
+  comparisons: FounderShadowComparison[]
+  calibrationQueue: FounderCalibrationItem[]
+  authorization: { status: "not_confirmed"; blocking: false }
+}
+
+export function createFounderShadowClient(config: FounderStudioClientConfig) {
+  const request = async <T>(path: string, init?: RequestInit) => {
+    const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+    })
+    if (!response.ok) throw new Error(`Founder Shadow request failed with HTTP ${response.status}`)
+    return response.json() as Promise<T>
+  }
+  const post = <T>(path: string, input: unknown) =>
+    request<T>(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+  return {
+    buildContext(input: FounderContextInput) {
+      return post<FounderContextProjection>("/company/founder-shadow/context", input)
+    },
+    run(input: {
+      context: FounderContextInput
+      model: { status: "available" | "unavailable"; configRef: string }
+      output?: {
+        recommendation: string
+        alternatives: string[]
+        authorityClass: FounderAuthorityClass
+        confidence: number
+        missingInformation: string[]
+      }
+      createdBy: string
+    }) {
+      return post<FounderShadowDecision>("/company/founder-shadow/runs", input)
+    },
+    compare(input: {
+      companyId: string
+      shadowDecisionId: string
+      actualDecision: string
+      actualDecisionRef: FounderShadowEvidenceRef
+      alignment: "match" | "partial" | "mismatch"
+      rationale: string
+      comparedBy: string
+      confirmation?: { eventId: string; confirmedBy: string }
+    }) {
+      return post<FounderShadowComparison>("/company/founder-shadow/comparisons", input)
+    },
+    audit(companyId: string) {
+      return request<FounderBoardShadowProjection>(`/company/founder-shadow/audit?${new URLSearchParams({ company_id: companyId })}`)
+    },
+    importCase(input: {
+      companyId: string
+      kind: "decision_case" | "taste_reference" | "taste_anti_reference" | "rubric"
+      scope: GovernanceAssetScope
+      content: string
+      rationale: string
+      dimensions: string[]
+      sourceRefs: GovernanceAsset["sourceRefs"]
+      authority: "ai_proposed" | "external_source"
+      createdBy: string
+    }) {
+      return post<GovernanceAsset>("/company/founder-studio/cases", input)
+    },
+    enqueueCalibration(input: {
+      companyId: string
+      kind: "ab" | "accept" | "reject"
+      scope: GovernanceAssetScope
+      prompt: string
+      candidates: Array<{ artifactId: string; label: string }>
+      createdBy: string
+    }) {
+      return post<FounderCalibrationItem>("/company/founder-studio/calibrations", input)
+    },
+    respondCalibration(input: {
+      companyId: string
+      requestId: string
+      response: "accept" | "reject" | "prefer_first" | "prefer_second"
+      reason: string
+      actorKind: "human"
+      confirmationEventId: string
+      confirmedBy: string
+    }) {
+      return post<FounderCalibrationItem>("/company/founder-studio/calibration-responses", input)
+    },
+    validateRubric(input: {
+      companyId: string
+      rubric: FounderAssetReference
+      scores: Array<{ dimension: string; score: number }>
+    }) {
+      return post<{
+        status: "valid" | "blocked"
+        rubric: FounderAssetReference
+        rubricAuthority?: GovernanceAssetAuthority
+        scores: Array<{ dimension: string; score: number }>
+        aggregate?: number
+        blockReasons: Array<"rubric_missing" | "rubric_inactive" | "dimension_mismatch">
+      }>("/company/founder-studio/rubric-validations", input)
+    },
+    registerBenchmarkCase(input: {
+      companyId: string
+      benchmarkType: "founder_decision" | "taste"
+      datasetVersion: string
+      split: "training" | "holdout"
+      sourceAsset: FounderAssetReference
+      expected: { authorityClass?: FounderAuthorityClass; decision?: string; preference?: "accept" | "reject" | "first" | "second" }
+      confirmationEventId: string
+      confirmedBy: string
+    }) {
+      return post<{
+        id: string
+        companyId: string
+        benchmarkType: "founder_decision" | "taste"
+        datasetVersion: string
+        split: "training" | "holdout"
+        sourceAsset: FounderAssetReference
+        expected: { authorityClass?: FounderAuthorityClass; decision?: string; preference?: "accept" | "reject" | "first" | "second" }
+        confirmationEventId: string
+        confirmedBy: string
+        createdAt: number
+      }>("/company/founder-benchmarks/cases", input)
+    },
+    runBenchmark(input: {
+      companyId: string
+      benchmarkType: "founder_decision" | "taste"
+      datasetVersion: string
+      snapshotId: string
+      predictions: Array<{
+        caseId: string
+        authorityClass?: FounderAuthorityClass
+        decision?: string
+        preference?: "accept" | "reject" | "first" | "second"
+        principleRefs: FounderAssetReference[]
+        evidenceRefs: FounderShadowEvidenceRef[]
+        decisionCaseRefs: FounderAssetReference[]
+      }>
+      createdBy: string
+    }) {
+      return post<FounderBenchmarkReport>("/company/founder-benchmarks/runs", input)
+    },
+  }
+}

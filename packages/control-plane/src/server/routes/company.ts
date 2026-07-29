@@ -4,7 +4,24 @@ import { Cause, Effect, Exit } from "effect"
 import { eq } from "drizzle-orm"
 import z from "zod"
 import {
+  FounderBenchmarkCase,
+  FounderBenchmarkCaseInput,
+  FounderBenchmarkReport,
+  FounderBenchmarkRunInput,
+  FounderBoardShadowProjection,
+  FounderCalibrationItem,
+  FounderCalibrationRequestInput,
+  FounderCalibrationResponseInput,
+  FounderCaseImportInput,
+  FounderContextBuildInput,
+  FounderContextProjection,
   FounderOSModeState,
+  FounderRubricValidation,
+  FounderRubricValidationInput,
+  FounderShadowComparison,
+  FounderShadowComparisonInput,
+  FounderShadowDecision,
+  FounderShadowRunInput,
   FounderSnapshotCompileInput,
   FounderSnapshotSelectInput,
   FounderStudioProjection,
@@ -46,7 +63,7 @@ import {
 } from "@/company/schema"
 import { Config } from "@/config"
 import { AppRuntime } from "@/effect/app-runtime"
-import { FounderOSAsset } from "@/founder-os"
+import { FounderOSAsset, FounderOSBenchmark, FounderOSShadow, FounderOSTaste } from "@/founder-os"
 import { FounderOSRoutes } from "@/founder-os/routes"
 import { Provider, ProviderAuth, ModelsDev } from "@/provider"
 import { ProviderID } from "@/provider/schema"
@@ -518,6 +535,186 @@ export const CompanyRoutes = lazy(() =>
       }),
       validator("json", FounderSnapshotSelectInput, productValidationHook),
       (c) => c.json(FounderOSAsset.selectSnapshot(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-shadow/context",
+      describeRoute({
+        operationId: "company.founderShadowContext",
+        summary: "Build a bounded and scope-filtered Founder Shadow context",
+        responses: {
+          200: {
+            description: "Bounded Founder Shadow context or fail-closed projection",
+            content: { "application/json": { schema: resolver(FounderContextProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderContextBuildInput, productValidationHook),
+      (c) => c.json(FounderOSShadow.buildContext(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-shadow/runs",
+      describeRoute({
+        operationId: "company.founderShadowRun",
+        summary: "Record a non-speaking and non-executing Founder Shadow suggestion",
+        responses: {
+          200: {
+            description: "Persisted Shadow suggestion or fail-closed attempt",
+            content: { "application/json": { schema: resolver(FounderShadowDecision) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderShadowRunInput, productValidationHook),
+      (c) => c.json(FounderOSShadow.runShadow(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-shadow/comparisons",
+      describeRoute({
+        operationId: "company.founderShadowComparison",
+        summary: "Compare a Shadow suggestion with a separately sourced real decision",
+        responses: {
+          200: {
+            description: "Append-only Shadow comparison",
+            content: { "application/json": { schema: resolver(FounderShadowComparison) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderShadowComparisonInput, productValidationHook),
+      (c) => c.json(FounderOSShadow.compare(c.req.valid("json"))),
+    )
+    .get(
+      "/founder-shadow/audit",
+      describeRoute({
+        operationId: "company.founderShadowAudit",
+        summary: "Read the isolated Founder Shadow audit projection",
+        responses: {
+          200: {
+            description: "Read-only projection that is not part of Board chat",
+            content: { "application/json": { schema: resolver(FounderBoardShadowProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("query", CompanyAgentsQuery, productValidationHook),
+      (c) => c.json(FounderOSShadow.boardProjection(c.req.valid("query").company_id)),
+    )
+    .post(
+      "/founder-studio/cases",
+      describeRoute({
+        operationId: "company.founderStudioCaseImport",
+        summary: "Import a sourced decision, taste, or rubric case as a non-human draft",
+        responses: {
+          200: {
+            description: "Governance Asset draft with source and authority",
+            content: { "application/json": { schema: resolver(GovernanceAsset) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderCaseImportInput, productValidationHook),
+      (c) => c.json(FounderOSTaste.importCase(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/calibrations",
+      describeRoute({
+        operationId: "company.founderStudioCalibrationCreate",
+        summary: "Append an A/B, accept, or reject calibration request",
+        responses: {
+          200: {
+            description: "Pending calibration item",
+            content: { "application/json": { schema: resolver(FounderCalibrationItem) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderCalibrationRequestInput, productValidationHook),
+      (c) => c.json(FounderOSTaste.enqueueCalibration(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/calibration-responses",
+      describeRoute({
+        operationId: "company.founderStudioCalibrationRespond",
+        summary: "Append a human-confirmed calibration response",
+        responses: {
+          200: {
+            description: "Responded calibration item with confirmation event",
+            content: { "application/json": { schema: resolver(FounderCalibrationItem) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderCalibrationResponseInput, productValidationHook),
+      (c) => c.json(FounderOSTaste.respondCalibration(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/rubric-validations",
+      describeRoute({
+        operationId: "company.founderStudioRubricValidate",
+        summary: "Validate scores against a referenced active human-authority Rubric",
+        responses: {
+          200: {
+            description: "Rubric validation with exact asset version reference",
+            content: { "application/json": { schema: resolver(FounderRubricValidation) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderRubricValidationInput, productValidationHook),
+      (c) => c.json(FounderOSTaste.validateRubric(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-benchmarks/cases",
+      describeRoute({
+        operationId: "company.founderBenchmarkCaseCreate",
+        summary: "Register a human-authority training or frozen holdout case",
+        responses: {
+          200: {
+            description: "Immutable benchmark case",
+            content: { "application/json": { schema: resolver(FounderBenchmarkCase) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderBenchmarkCaseInput, productValidationHook),
+      (c) => c.json(FounderOSBenchmark.registerCase(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-benchmarks/runs",
+      describeRoute({
+        operationId: "company.founderBenchmarkRun",
+        summary: "Recompute a Founder Decision or Taste holdout report",
+        responses: {
+          200: {
+            description: "Deterministic benchmark report",
+            content: { "application/json": { schema: resolver(FounderBenchmarkReport) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderBenchmarkRunInput, productValidationHook),
+      (c) => c.json(FounderOSBenchmark.run(c.req.valid("json"))),
     )
     .put(
       "/setup-goal",

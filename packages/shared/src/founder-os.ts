@@ -552,3 +552,399 @@ export const DelegationPolicy = z
   .strict()
   .meta({ ref: "DelegationPolicy" })
 export type DelegationPolicy = z.infer<typeof DelegationPolicy>
+
+export const FounderShadowEvidenceRef = z
+  .object({
+    kind: z.enum(["artifact", "decision", "outcome", "conversation", "fact"]),
+    id: Identifier,
+    version: z.number().int().positive().optional(),
+    validity: z.enum(["verified", "missing", "forbidden"]),
+  })
+  .strict()
+  .meta({ ref: "FounderShadowEvidenceRef" })
+export type FounderShadowEvidenceRef = z.infer<typeof FounderShadowEvidenceRef>
+
+export const FounderContextBuildInput = z
+  .object({
+    companyId: Identifier,
+    scope: GovernanceAssetScope,
+    currentGoal: z.string().trim().min(1).max(4_000),
+    discussion: z.string().trim().min(1).max(12_000),
+    authorizationBoundary: z.string().trim().min(1).max(2_000),
+    currentFacts: z.array(ShortText).max(30),
+    evidenceRefs: z.array(FounderShadowEvidenceRef).max(30),
+    limits: z
+      .object({
+        principles: z.number().int().min(1).max(12).default(8),
+        decisionCases: z.number().int().min(1).max(10).default(6),
+        tasteExamples: z.number().int().min(1).max(10).default(6),
+        rubrics: z.number().int().min(1).max(6).default(3),
+      })
+      .strict()
+      .default({ principles: 8, decisionCases: 6, tasteExamples: 6, rubrics: 3 }),
+  })
+  .strict()
+  .meta({ ref: "FounderContextBuildInput" })
+export type FounderContextBuildInput = z.infer<typeof FounderContextBuildInput>
+
+export const FounderContextBlockReason = z.enum([
+  "snapshot_missing",
+  "snapshot_checksum_invalid",
+  "context_insufficient",
+  "asset_reference_missing",
+  "asset_scope_forbidden",
+  "evidence_reference_invalid",
+])
+export type FounderContextBlockReason = z.infer<typeof FounderContextBlockReason>
+
+export const FounderContextProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    status: z.enum(["ready", "blocked"]),
+    companyId: Identifier,
+    scope: GovernanceAssetScope,
+    currentGoal: z.string().max(4_000),
+    discussion: z.string().max(12_000),
+    authorizationBoundary: z.string().max(2_000),
+    currentFacts: z.array(ShortText).max(30),
+    evidenceRefs: z.array(FounderShadowEvidenceRef).max(30),
+    snapshotId: Identifier.optional(),
+    snapshotChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    principles: z.array(GovernanceAsset).max(12),
+    decisionCases: z.array(GovernanceAsset).max(10),
+    tasteExamples: z.array(GovernanceAsset).max(10),
+    rubrics: z.array(GovernanceAsset).max(6),
+    missingInformation: z.array(ShortText).max(30),
+    blockReasons: z.array(FounderContextBlockReason),
+  })
+  .strict()
+  .meta({ ref: "FounderContextProjection" })
+export type FounderContextProjection = z.infer<typeof FounderContextProjection>
+
+export const FounderShadowModelOutput = z
+  .object({
+    recommendation: LongText,
+    alternatives: z.array(LongText).max(20),
+    authorityClass: FounderAuthorityClass,
+    confidence: z.number().min(0).max(1),
+    missingInformation: z.array(ShortText).max(30),
+  })
+  .strict()
+  .meta({ ref: "FounderShadowModelOutput" })
+export type FounderShadowModelOutput = z.infer<typeof FounderShadowModelOutput>
+
+export const FounderShadowRunInput = z
+  .object({
+    context: FounderContextBuildInput,
+    model: z
+      .object({
+        status: z.enum(["available", "unavailable"]),
+        configRef: Identifier,
+      })
+      .strict(),
+    output: FounderShadowModelOutput.optional(),
+    createdBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderShadowRunInput" })
+export type FounderShadowRunInput = z.infer<typeof FounderShadowRunInput>
+
+export const FounderShadowDecision = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    status: z.enum(["suggested", "blocked"]),
+    blockReasons: z.array(z.union([FounderContextBlockReason, z.enum(["model_unavailable", "model_output_missing"])])),
+    scope: GovernanceAssetScope,
+    snapshotId: Identifier.optional(),
+    snapshotChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    modelConfigRef: Identifier,
+    recommendation: LongText.optional(),
+    alternatives: z.array(LongText).max(20),
+    authorityClass: FounderAuthorityClass.optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    principleRefs: z.array(FounderAssetReference).max(12),
+    decisionCaseRefs: z.array(FounderAssetReference).max(10),
+    tasteExampleRefs: z.array(FounderAssetReference).max(10),
+    rubricRefs: z.array(FounderAssetReference).max(6),
+    evidenceRefs: z.array(FounderShadowEvidenceRef).max(30),
+    missingInformation: z.array(ShortText).max(30),
+    createsGate: z.literal(false),
+    canSpeak: z.literal(false),
+    canExecute: z.literal(false),
+    createdBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderShadowDecision" })
+export type FounderShadowDecision = z.infer<typeof FounderShadowDecision>
+
+export const FounderShadowComparisonInput = z
+  .object({
+    companyId: Identifier,
+    shadowDecisionId: Identifier,
+    actualDecision: LongText,
+    actualDecisionRef: FounderShadowEvidenceRef.refine((reference) =>
+      reference.kind === "decision" && reference.validity === "verified"),
+    alignment: z.enum(["match", "partial", "mismatch"]),
+    rationale: LongText,
+    comparedBy: Identifier,
+    confirmation: z
+      .object({
+        eventId: Identifier,
+        confirmedBy: Identifier,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .meta({ ref: "FounderShadowComparisonInput" })
+export type FounderShadowComparisonInput = z.infer<typeof FounderShadowComparisonInput>
+
+export const FounderShadowComparison = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    shadowDecisionId: Identifier,
+    actualDecision: LongText,
+    actualDecisionRef: FounderShadowEvidenceRef,
+    alignment: z.enum(["match", "partial", "mismatch"]),
+    rationale: LongText,
+    verificationStatus: z.enum(["not_confirmed", "human_confirmed"]),
+    confirmedBy: Identifier.optional(),
+    confirmationEventId: Identifier.optional(),
+    comparedBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderShadowComparison" })
+export type FounderShadowComparison = z.infer<typeof FounderShadowComparison>
+
+export const FounderCaseImportInput = z
+  .object({
+    companyId: Identifier,
+    kind: z.enum(["decision_case", "taste_reference", "taste_anti_reference", "rubric"]),
+    scope: GovernanceAssetScope,
+    content: LongText,
+    rationale: LongText,
+    dimensions: z.array(ShortText).min(1).max(30),
+    sourceRefs: z.array(GovernanceAssetSourceRef).min(1).max(100),
+    authority: z.enum(["ai_proposed", "external_source"]),
+    createdBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderCaseImportInput" })
+export type FounderCaseImportInput = z.infer<typeof FounderCaseImportInput>
+
+export const FounderCalibrationRequestInput = z
+  .object({
+    companyId: Identifier,
+    kind: z.enum(["ab", "accept", "reject"]),
+    scope: GovernanceAssetScope,
+    prompt: LongText,
+    candidates: z
+      .array(
+        z
+          .object({
+            artifactId: Identifier,
+            label: ShortText,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(2),
+    createdBy: Identifier,
+  })
+  .strict()
+  .refine((input) => input.kind !== "ab" || input.candidates.length === 2)
+  .meta({ ref: "FounderCalibrationRequestInput" })
+export type FounderCalibrationRequestInput = z.infer<typeof FounderCalibrationRequestInput>
+
+export const FounderCalibrationResponseInput = z
+  .object({
+    companyId: Identifier,
+    requestId: Identifier,
+    response: z.enum(["accept", "reject", "prefer_first", "prefer_second"]),
+    reason: LongText,
+    actorKind: z.literal("human"),
+    confirmationEventId: Identifier,
+    confirmedBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderCalibrationResponseInput" })
+export type FounderCalibrationResponseInput = z.infer<typeof FounderCalibrationResponseInput>
+
+export const FounderCalibrationItem = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    kind: z.enum(["ab", "accept", "reject"]),
+    scope: GovernanceAssetScope,
+    prompt: LongText,
+    candidates: z.array(z.object({ artifactId: Identifier, label: ShortText }).strict()).min(1).max(2),
+    status: z.enum(["pending", "responded"]),
+    response: z.enum(["accept", "reject", "prefer_first", "prefer_second"]).optional(),
+    reason: LongText.optional(),
+    confirmationEventId: Identifier.optional(),
+    confirmedBy: Identifier.optional(),
+    createdBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderCalibrationItem" })
+export type FounderCalibrationItem = z.infer<typeof FounderCalibrationItem>
+
+export const FounderRubricValidationInput = z
+  .object({
+    companyId: Identifier,
+    rubric: FounderAssetReference,
+    scores: z.array(z.object({ dimension: ShortText, score: z.number().min(0).max(1) }).strict()).min(1).max(30),
+  })
+  .strict()
+  .meta({ ref: "FounderRubricValidationInput" })
+export type FounderRubricValidationInput = z.infer<typeof FounderRubricValidationInput>
+
+export const FounderRubricValidation = z
+  .object({
+    status: z.enum(["valid", "blocked"]),
+    rubric: FounderAssetReference,
+    rubricAuthority: GovernanceAssetAuthority.optional(),
+    scores: z.array(z.object({ dimension: ShortText, score: z.number().min(0).max(1) }).strict()).max(30),
+    aggregate: z.number().min(0).max(1).optional(),
+    blockReasons: z.array(z.enum(["rubric_missing", "rubric_inactive", "dimension_mismatch"])),
+  })
+  .strict()
+  .meta({ ref: "FounderRubricValidation" })
+export type FounderRubricValidation = z.infer<typeof FounderRubricValidation>
+
+export const FounderBenchmarkCaseInput = z
+  .object({
+    companyId: Identifier,
+    benchmarkType: z.enum(["founder_decision", "taste"]),
+    datasetVersion: Identifier,
+    split: z.enum(["training", "holdout"]),
+    sourceAsset: FounderAssetReference,
+    expected: z
+      .object({
+        authorityClass: FounderAuthorityClass.optional(),
+        decision: LongText.optional(),
+        preference: z.enum(["accept", "reject", "first", "second"]).optional(),
+      })
+      .strict(),
+    confirmationEventId: Identifier,
+    confirmedBy: Identifier,
+  })
+  .strict()
+  .refine((input) =>
+    input.benchmarkType === "founder_decision"
+      ? input.expected.authorityClass !== undefined && input.expected.decision !== undefined
+      : input.expected.preference !== undefined)
+  .meta({ ref: "FounderBenchmarkCaseInput" })
+export type FounderBenchmarkCaseInput = z.infer<typeof FounderBenchmarkCaseInput>
+
+export const FounderBenchmarkCase = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    benchmarkType: z.enum(["founder_decision", "taste"]),
+    datasetVersion: Identifier,
+    split: z.enum(["training", "holdout"]),
+    sourceAsset: FounderAssetReference,
+    expected: z
+      .object({
+        authorityClass: FounderAuthorityClass.optional(),
+        decision: LongText.optional(),
+        preference: z.enum(["accept", "reject", "first", "second"]).optional(),
+      })
+      .strict(),
+    confirmationEventId: Identifier,
+    confirmedBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderBenchmarkCase" })
+export type FounderBenchmarkCase = z.infer<typeof FounderBenchmarkCase>
+
+export const FounderBenchmarkPrediction = z
+  .object({
+    caseId: Identifier,
+    authorityClass: FounderAuthorityClass.optional(),
+    decision: LongText.optional(),
+    preference: z.enum(["accept", "reject", "first", "second"]).optional(),
+    principleRefs: z.array(FounderAssetReference).max(12),
+    evidenceRefs: z.array(FounderShadowEvidenceRef).max(30),
+    decisionCaseRefs: z.array(FounderAssetReference).max(10),
+  })
+  .strict()
+  .meta({ ref: "FounderBenchmarkPrediction" })
+export type FounderBenchmarkPrediction = z.infer<typeof FounderBenchmarkPrediction>
+
+export const FounderBenchmarkRunInput = z
+  .object({
+    companyId: Identifier,
+    benchmarkType: z.enum(["founder_decision", "taste"]),
+    datasetVersion: Identifier,
+    snapshotId: Identifier,
+    predictions: z.array(FounderBenchmarkPrediction).max(500),
+    createdBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderBenchmarkRunInput" })
+export type FounderBenchmarkRunInput = z.infer<typeof FounderBenchmarkRunInput>
+
+export const FounderBenchmarkReport = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    benchmarkType: z.enum(["founder_decision", "taste"]),
+    datasetVersion: Identifier,
+    snapshotId: Identifier,
+    status: z.enum(["pass", "fail", "blocked"]),
+    blockReasons: z.array(z.enum([
+      "holdout_empty",
+      "prediction_set_incomplete",
+      "training_holdout_leakage",
+      "snapshot_missing",
+    ])),
+    metrics: z
+      .object({
+        caseCount: z.number().int().nonnegative(),
+        redRecall: z.number().min(0).max(1).nullable(),
+        traceabilityRate: z.number().min(0).max(1).nullable(),
+        agreementRate: z.number().min(0).max(1).nullable(),
+      })
+      .strict(),
+    authorization: z
+      .object({
+        status: z.literal("not_confirmed"),
+        blocking: z.literal(false),
+        confirmedSampleCount: z.number().int().nonnegative(),
+      })
+      .strict(),
+    createdBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderBenchmarkReport" })
+export type FounderBenchmarkReport = z.infer<typeof FounderBenchmarkReport>
+
+export const FounderBoardShadowProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    readOnly: z.literal(true),
+    chatIntegrated: z.literal(false),
+    createsGate: z.literal(false),
+    decisions: z.array(FounderShadowDecision),
+    comparisons: z.array(FounderShadowComparison),
+    calibrationQueue: z.array(FounderCalibrationItem),
+    authorization: z
+      .object({
+        status: z.literal("not_confirmed"),
+        blocking: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderBoardShadowProjection" })
+export type FounderBoardShadowProjection = z.infer<typeof FounderBoardShadowProjection>
