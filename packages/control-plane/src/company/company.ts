@@ -25,7 +25,9 @@ import {
   CompanyLearningPatchTable,
   CompanyPatchBenchmarkTable,
   CompanyPatchCanaryTable,
+  CompanyPatchEventTable,
   CompanyPatchTargetVersionTable,
+  CompanyWorkReceiptLearningTargetRefTable,
 } from "@/company-learning/company-learning.sql"
 import {
   CompanyInterpretationEvidenceTable,
@@ -434,6 +436,39 @@ function requireBeliefLoopFacts(db: TxOrDb, companyId: string) {
       ),
     )
     .get()
+  const target = db
+    .select()
+    .from(CompanyPatchTargetVersionTable)
+    .where(
+      and(
+        eq(CompanyPatchTargetVersionTable.patch_id, patch.id),
+        eq(CompanyPatchTargetVersionTable.status, "active"),
+      ),
+    )
+    .get()
+  const planningRead = target
+    ? db
+        .select({ data: CompanyPatchEventTable.data_json })
+        .from(CompanyPatchEventTable)
+        .where(
+          and(
+            eq(CompanyPatchEventTable.patch_id, patch.id),
+            eq(CompanyPatchEventTable.type, "planning_read_confirmed"),
+          ),
+        )
+        .all()
+        .map((event) =>
+          z
+            .object({
+              project_id: z.string(),
+              work_receipt_id: z.string(),
+              target_version_id: z.literal(target.id),
+            })
+            .strict()
+            .safeParse(JSON.parse(event.data)),
+        )
+        .find((event) => event.success)?.data
+    : undefined
   if (
     !positions.some((item) => item.position === "supporting") ||
     !positions.some((item) => item.position === "counter") ||
@@ -460,13 +495,17 @@ function requireBeliefLoopFacts(db: TxOrDb, companyId: string) {
     !benchmark ||
     benchmark.real_sample_count < 1 ||
     !canary ||
+    !target ||
+    !planningRead ||
     !db
       .select()
-      .from(CompanyPatchTargetVersionTable)
+      .from(CompanyWorkReceiptLearningTargetRefTable)
       .where(
         and(
-          eq(CompanyPatchTargetVersionTable.patch_id, patch.id),
-          eq(CompanyPatchTargetVersionTable.status, "active"),
+          eq(CompanyWorkReceiptLearningTargetRefTable.receipt_id, planningRead.work_receipt_id),
+          eq(CompanyWorkReceiptLearningTargetRefTable.target_version_id, target.id),
+          eq(CompanyWorkReceiptLearningTargetRefTable.target_type, target.target_type),
+          eq(CompanyWorkReceiptLearningTargetRefTable.target_id, target.target_id),
         ),
       )
       .get()
