@@ -145,6 +145,25 @@ function selectPanel(kind: ContextPanelKind) {
   persist();
 }
 
+async function navigatePanel(event: KeyboardEvent, kind: ContextPanelKind) {
+  const index = panels.value.indexOf(kind);
+  const target =
+    event.key === "Home"
+      ? panels.value[0]
+      : event.key === "End"
+        ? panels.value.at(-1)
+        : event.key === "ArrowRight"
+          ? panels.value[(index + 1) % panels.value.length]
+          : event.key === "ArrowLeft"
+            ? panels.value[(index - 1 + panels.value.length) % panels.value.length]
+            : undefined;
+  if (!target) return;
+  event.preventDefault();
+  selectPanel(target);
+  await nextTick();
+  document.querySelector<HTMLElement>(`[data-context-panel="${target}"]`)?.focus();
+}
+
 function goColumn(direction: "next" | "prev") {
   column.value = direction === "next" ? nextColumn(column.value) : prevColumn(column.value);
   persist();
@@ -484,15 +503,24 @@ function artifactRoute(projectID: string, artifactID: string) {
               type="button"
               role="tab"
               class="ac-work3__tab"
+              :data-context-panel="kind"
               :data-active="kind === activePanel"
               :aria-selected="kind === activePanel"
+              :aria-controls="`context-panel-${kind}`"
+              :tabindex="kind === activePanel ? 0 : -1"
               @click="selectPanel(kind)"
+              @keydown="navigatePanel($event, kind)"
             >
               {{ contextPanelLabels[kind] }}
             </button>
           </div>
 
-          <div class="ac-work3__panel">
+          <div
+            class="ac-work3__panel"
+            role="tabpanel"
+            :id="activePanel ? `context-panel-${activePanel}` : undefined"
+            tabindex="0"
+          >
             <!-- Goal Brief -->
             <template v-if="activePanel === 'goal_brief'">
               <div v-if="goalBriefStatus === 'pending'" class="ac-brief-state">正在读取目标摘要…</div>

@@ -2175,6 +2175,7 @@ textarea:focus-visible {
 }
 
 .ac-work3__action {
+  min-height: 40px;
   padding: 8px 14px;
   border: 1px solid var(--ac-line-strong);
   border-radius: var(--ac-radius-control);
@@ -2347,6 +2348,7 @@ textarea:focus-visible {
 }
 
 .ac-work3__tab {
+  min-height: 40px;
   padding: 8px 12px;
   border-bottom: 2px solid transparent;
   color: var(--ac-ink-muted);
