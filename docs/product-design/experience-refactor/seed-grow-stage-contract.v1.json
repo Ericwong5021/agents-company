@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0", "A1", "A2", "A3", "A4", "B0", "B1", "B2"],
+  "implementedStages": ["A0", "A1", "A2", "A3", "A4", "B0", "B1", "B2", "B3", "B4", "B5"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -77,6 +77,8 @@
       "b1-flag-fallback",
       "b2-supervisor-benchmarks",
       "b2-quiescence",
+      "b3-attention-actions",
+      "b3-recovery-matrix",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -93,19 +95,16 @@
       "app-build",
       "app-production",
       "seed-grow-real-surfaces",
-      "desktop-e2e"
-    ],
-    "plannedStageCommands": [
-      "b3-attention-actions",
-      "b3-recovery-matrix",
       "b4-real-browser-desktop",
       "b4-projection-recovery",
       "b4-accessibility-visual",
       "b5-shadow-comparison",
       "b5-two-candidates",
       "b5-metric-gate",
-      "b5-local-rollback"
-    ]
+      "b5-local-rollback",
+      "desktop-e2e"
+    ],
+    "plannedStageCommands": []
   },
   "stages": [
     {

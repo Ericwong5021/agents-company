@@ -678,6 +678,59 @@
       ]
     },
     {
+      "id": "b3-attention-actions",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-project/attention.test.ts",
+        "test/project-orchestrator/project-action-executor.test.ts",
+        "test/server/experience-route.test.ts",
+        "test/company-project/work-projection.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b3-attention-actions-junit.xml"
+      ],
+      "timeoutMs": 300000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b3-attention-actions-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b3-recovery-matrix",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/project-orchestrator/project-action-executor.test.ts",
+        "test/project-orchestrator/recovery.test.ts",
+        "test/project-orchestrator/quiescence.test.ts",
+        "--test-name-pattern",
+        "recovers request|reconciles Assignment|b2-supervisor-benchmarks|b2-quiescence",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b3-recovery-matrix-junit.xml"
+      ],
+      "timeoutMs": 180000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b3-recovery-matrix-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -927,39 +980,172 @@
       "environment": {},
       "reports": [
         {
-          "path": "packages/app/.artifacts/visual-qa/inbox-desktop.png",
+          "path": "packages/app/.artifacts/seed-grow-b4/work-before-restart.png",
           "validator": "artifact"
         },
         {
-          "path": "packages/app/.artifacts/visual-qa/work-desktop.png",
+          "path": "packages/app/.artifacts/seed-grow-b4/work-after-restart.png",
           "validator": "artifact"
         },
         {
-          "path": "packages/app/.artifacts/visual-qa/team-desktop.png",
+          "path": "packages/app/.artifacts/seed-grow-b4/result.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b4-real-browser-desktop",
+      "cwd": ".",
+      "argv": ["bun", "script/validate-seed-grow-b4-artifacts.ts"],
+      "timeoutMs": 120000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": [
+        {
+          "path": "packages/app/.artifacts/seed-grow-b4/result.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b4-projection-recovery",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-project/work-projection.test.ts",
+        "test/server/experience-route.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b4-projection-recovery-junit.xml"
+      ],
+      "timeoutMs": 300000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b4-projection-recovery-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b4-accessibility-visual",
+      "cwd": ".",
+      "argv": ["bun", "script/validate-seed-grow-b4-artifacts.ts"],
+      "timeoutMs": 120000,
+      "stdoutValidator": "json_pass",
+      "environment": {},
+      "reports": [
+        {
+          "path": "packages/app/.artifacts/seed-grow-b4/work-before-restart.png",
           "validator": "artifact"
         },
         {
-          "path": "packages/app/.artifacts/visual-qa/settings-desktop.png",
+          "path": "packages/app/.artifacts/seed-grow-b4/work-after-restart.png",
           "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b5-shadow-comparison",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/metrics/seed-grow-reporter.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b5-shadow-comparison-junit.xml"
+      ],
+      "timeoutMs": 180000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b5-shadow-comparison-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b5-two-candidates",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-rollout/company-rollout.test.ts",
+        "--test-name-pattern",
+        "promotes only the latest two reproducible candidates",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b5-two-candidates-junit.xml"
+      ],
+      "timeoutMs": 180000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b5-two-candidates-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b5-metric-gate",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/metrics/persisted-fact-exporter.test.ts",
+        "test/metrics/seed-grow-reporter.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b5-metric-gate-junit.xml"
+      ],
+      "timeoutMs": 300000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b5-metric-gate-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b5-local-rollback",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/project-orchestrator/dispatch-barrier.test.ts",
+        "--test-name-pattern",
+        "b5-local-rollback",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b5-local-rollback-junit.xml"
+      ],
+      "timeoutMs": 180000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b5-local-rollback-junit.xml",
+          "validator": "junit"
         },
         {
-          "path": "packages/app/.artifacts/visual-qa/inbox-mobile.png",
-          "validator": "artifact"
-        },
-        {
-          "path": "packages/app/.artifacts/visual-qa/work-mobile.png",
-          "validator": "artifact"
-        },
-        {
-          "path": "packages/app/.artifacts/visual-qa/team-mobile.png",
-          "validator": "artifact"
-        },
-        {
-          "path": "packages/app/.artifacts/visual-qa/settings-mobile.png",
-          "validator": "artifact"
-        },
-        {
-          "path": "packages/app/.artifacts/visual-qa/metrics.json",
+          "path": ".artifacts/seed-grow-b5/local-rollback.json",
           "validator": "artifact"
         }
       ]
@@ -1281,6 +1467,30 @@
           "evidenceRefs": [
             "command:b2-supervisor-benchmarks",
             "command:b2-quiescence"
+          ]
+        },
+        {
+          "id": "QA-02-ATTENTION-ACTION-AND-RECOVERY-SAFETY",
+          "evidenceRefs": [
+            "command:b3-attention-actions",
+            "command:b3-recovery-matrix"
+          ]
+        },
+        {
+          "id": "QA-02-REAL-SURFACE-AND-PROJECTION-SAFETY",
+          "evidenceRefs": [
+            "command:b4-real-browser-desktop",
+            "command:b4-projection-recovery",
+            "command:b4-accessibility-visual"
+          ]
+        },
+        {
+          "id": "QA-02-PRE-PUBLIC-ROLLOUT-SAFETY",
+          "evidenceRefs": [
+            "command:b5-shadow-comparison",
+            "command:b5-two-candidates",
+            "command:b5-metric-gate",
+            "command:b5-local-rollback"
           ]
         },
         {
