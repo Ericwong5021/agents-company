@@ -95,6 +95,73 @@ export const DecisionCurrentProjectionTable = sqliteTable("founder_decision_curr
   updated_at: integer().notNull(),
 })
 
+export const DecisionDispatchOutboxTable = sqliteTable(
+  "founder_decision_dispatch_outbox",
+  {
+    id: text().primaryKey(),
+    company_id: text()
+      .notNull()
+      .references(() => CompanyTable.id, { onDelete: "cascade" }),
+    decision_id: text()
+      .notNull()
+      .references(() => DecisionRecordTable.id, { onDelete: "cascade" }),
+    transition_id: text().references(() => DecisionTransitionTable.id, { onDelete: "restrict" }),
+    consumer: text().notNull(),
+    action_type: text().notNull(),
+    payload_json: text().notNull(),
+    idempotency_key: text().notNull(),
+    input_sha256: text().notNull(),
+    execution_key: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_decision_dispatch_outbox_idempotency_idx").on(table.decision_id, table.idempotency_key),
+    uniqueIndex("founder_decision_dispatch_outbox_execution_idx").on(table.execution_key),
+    index("founder_decision_dispatch_outbox_consumer_idx").on(table.consumer, table.created_at),
+  ],
+)
+
+export const DecisionDispatchEventTable = sqliteTable(
+  "founder_decision_dispatch_event",
+  {
+    id: text().primaryKey(),
+    outbox_id: text()
+      .notNull()
+      .references(() => DecisionDispatchOutboxTable.id, { onDelete: "cascade" }),
+    sequence: integer().notNull(),
+    idempotency_key: text().notNull(),
+    status: text().notNull(),
+    consumer_id: text(),
+    lease_token: text(),
+    lease_expires_at: integer(),
+    execution_receipt: text(),
+    error: text(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_decision_dispatch_event_sequence_idx").on(table.outbox_id, table.sequence),
+    uniqueIndex("founder_decision_dispatch_event_idempotency_idx").on(table.outbox_id, table.idempotency_key),
+    index("founder_decision_dispatch_event_status_idx").on(table.status, table.created_at),
+  ],
+)
+
+export const DecisionDispatchCurrentTable = sqliteTable("founder_decision_dispatch_current", {
+  outbox_id: text()
+    .primaryKey()
+    .references(() => DecisionDispatchOutboxTable.id, { onDelete: "cascade" }),
+  current_status: text().notNull(),
+  latest_event_id: text()
+    .notNull()
+    .references(() => DecisionDispatchEventTable.id, { onDelete: "restrict" }),
+  event_count: integer().notNull(),
+  consumer_id: text(),
+  lease_token: text(),
+  lease_expires_at: integer(),
+  execution_receipt: text(),
+  last_error: text(),
+  updated_at: integer().notNull(),
+})
+
 export const DecisionSourceMappingTable = sqliteTable(
   "founder_decision_source",
   {

@@ -587,6 +587,88 @@ export const DecisionTransition = z
   .meta({ ref: "DecisionTransition" })
 export type DecisionTransition = z.infer<typeof DecisionTransition>
 
+export const DecisionDispatchStatus = z.enum(["committed", "claimed", "completed", "failed"])
+export type DecisionDispatchStatus = z.infer<typeof DecisionDispatchStatus>
+
+export const DecisionDispatchOutbox = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: Identifier,
+    companyId: Identifier,
+    decisionId: Identifier,
+    transitionId: Identifier.nullable(),
+    consumer: Identifier,
+    actionType: Identifier,
+    payload: z.record(z.string(), z.unknown()),
+    idempotencyKey: Identifier,
+    executionKey: Identifier,
+    currentStatus: DecisionDispatchStatus,
+    eventCount: z.number().int().positive(),
+    consumerId: Identifier.nullable(),
+    leaseToken: Identifier.nullable(),
+    leaseExpiresAt: z.number().int().nonnegative().nullable(),
+    executionReceipt: Identifier.nullable(),
+    lastError: LongText.nullable(),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "DecisionDispatchOutbox" })
+export type DecisionDispatchOutbox = z.infer<typeof DecisionDispatchOutbox>
+
+export const DecisionDispatchEvent = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: Identifier,
+    outboxId: Identifier,
+    sequence: z.number().int().positive(),
+    status: DecisionDispatchStatus,
+    consumerId: Identifier.nullable(),
+    leaseToken: Identifier.nullable(),
+    leaseExpiresAt: z.number().int().nonnegative().nullable(),
+    executionReceipt: Identifier.nullable(),
+    error: LongText.nullable(),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "DecisionDispatchEvent" })
+export type DecisionDispatchEvent = z.infer<typeof DecisionDispatchEvent>
+
+export const DecisionDispatchAuthorizeInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    idempotencyKey: Identifier,
+    consumer: Identifier,
+    actionType: Identifier,
+    payload: z.record(z.string(), z.unknown()),
+    reason: LongText,
+    actorId: Identifier,
+  })
+  .strict()
+  .meta({ ref: "DecisionDispatchAuthorizeInput" })
+export type DecisionDispatchAuthorizeInput = z.infer<typeof DecisionDispatchAuthorizeInput>
+
+export const DecisionDispatchClaimInput = z
+  .object({
+    consumer: Identifier,
+    consumerId: Identifier,
+    leaseDurationMs: z.number().int().min(1_000).max(300_000),
+  })
+  .strict()
+  .meta({ ref: "DecisionDispatchClaimInput" })
+export type DecisionDispatchClaimInput = z.infer<typeof DecisionDispatchClaimInput>
+
+export const DecisionDispatchResolveInput = z
+  .object({
+    consumerId: Identifier,
+    leaseToken: Identifier,
+    executionReceipt: Identifier.optional(),
+    error: LongText.optional(),
+  })
+  .strict()
+  .meta({ ref: "DecisionDispatchResolveInput" })
+export type DecisionDispatchResolveInput = z.infer<typeof DecisionDispatchResolveInput>
+
 export const DelegationPolicy = z
   .object({
     schemaVersion: z.literal(1),

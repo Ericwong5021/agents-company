@@ -1,9 +1,13 @@
+import { createHash } from "node:crypto"
 import { Context, Effect, Layer } from "effect"
 import z from "zod"
 import { DecisionRiskLevel, FounderEvidenceReference } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
-import { appendBoardDecisionInTransaction } from "@/founder-os/decision-ledger"
+import {
+  appendBoardDecisionInTransaction,
+  reconcileBoardDecisionProjectionsInTransaction,
+} from "@/founder-os/decision-ledger"
 import { Identifier } from "@/id/id"
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
@@ -1201,7 +1205,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (!visible) {
         return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
       }
-      const result = yield* Effect.sync(() =>
+      const prepared = yield* Effect.sync(() =>
         Database.transaction(
           (db) => {
             const thread = db
@@ -1260,10 +1264,13 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                 appendBoardDecisionInTransaction(db, {
                   companyId: input.companyID,
                   projectId: input.projectScopeID,
+                  channelId: channel.id,
                   channelMessageId: existing.id,
                   boardThreadId: thread.id,
                   boardRunId: sourceRun?.id,
                   runtimeId: sourceRun?.runtime_id ?? undefined,
+                  rootNeedId: thread.root_need_id,
+                  requestId: input.requestID,
                   decisionMakerId: input.driAgentID,
                   subject: input.ledger?.subject,
                   context: input.ledger?.context,
@@ -1272,72 +1279,28 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                   evidenceRefs: input.ledger?.evidenceRefs,
                   createdAt: existing.time_created,
                 })
-              return same ? { type: "accepted" as const, message: existing } : { type: "conflict" as const }
+              return same
+                ? { type: "prepared" as const, messageID: existing.id }
+                : { type: "conflict" as const }
             }
 
             const now = Date.now()
-            const messageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
-            const projectionID = SignalProjectionID.parse(Identifier.ascending("signalProjection"))
-            const message = {
-              id: messageID,
-              channel_id: channel.id,
-              root_need_id: thread.root_need_id,
-              source_thread_id: thread.id,
-              reply_to_id: null,
-              request_id: input.requestID,
-              author_kind: "agent" as const,
-              author_id: input.driAgentID,
-              body: input.body,
-              signal_type: "decision" as const,
-              dri_principal_kind: "agent" as const,
-              dri_principal_id: input.driAgentID,
-              visibility: "company" as const,
-              mentions: [],
-              time_created: now,
-              time_updated: now,
-            }
-            db.update(ConversationThreadTable)
-              .set({
-                project_scope_id: input.projectScopeID,
-                status: "completed",
-                time_updated: now,
-              })
-              .where(eq(ConversationThreadTable.id, thread.id))
-              .run()
-            db.update(RootNeedTable)
-              .set({ status: "in_progress", time_updated: now })
-              .where(eq(RootNeedTable.id, thread.root_need_id))
-              .run()
-            db.insert(ChannelMessageTable).values(message).run()
-            db.insert(SignalProjectionTable)
-              .values({
-                id: projectionID,
-                channel_message_id: messageID,
-                conversation_thread_id: thread.id,
-                conversation_run_id: latestRun?.id ?? null,
-                projector_version: 2,
-                source_watermark: `decision:${input.projectScopeID}:${input.requestID}`,
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-            db.insert(SignalProjectionSourceTable)
-              .values({
-                signal_projection_id: projectionID,
-                ordinal: 0,
-                source_kind: "decision",
-                source_id: input.projectScopeID,
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
+            const messageID = ChannelMessageID.parse(
+              `cmsg_${createHash("sha256")
+                .update(`${input.companyID}:${thread.id}:${input.requestID}`)
+                .digest("hex")
+                .slice(0, 26)}`,
+            )
             appendBoardDecisionInTransaction(db, {
               companyId: input.companyID,
               projectId: input.projectScopeID,
-              channelMessageId: message.id,
+              channelId: channel.id,
+              channelMessageId: messageID,
               boardThreadId: thread.id,
               boardRunId: latestRun?.id,
               runtimeId: latestRun?.runtime_id ?? undefined,
+              rootNeedId: thread.root_need_id,
+              requestId: input.requestID,
               decisionMakerId: input.driAgentID,
               subject: input.ledger?.subject,
               context: input.ledger?.context,
@@ -1346,16 +1309,26 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               evidenceRefs: input.ledger?.evidenceRefs,
               createdAt: now,
             })
-            db.update(ChannelTable).set({ time_updated: now }).where(eq(ChannelTable.id, channel.id)).run()
-            return { type: "accepted" as const, message }
+            return { type: "prepared" as const, messageID }
           },
           { behavior: "immediate" },
         ),
       )
-      if (result.type === "accepted") return messageFromRow(result.message)
-      if (result.type === "conflict") {
+      if (prepared.type === "conflict") {
         return yield* Effect.fail(new RequestConflict({ channel_id: visible.channel_id, request_id: input.requestID }))
       }
+      if (prepared.type === "not_found")
+        return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
+      const message = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            reconcileBoardDecisionProjectionsInTransaction(db)
+            return db.select().from(ChannelMessageTable).where(eq(ChannelMessageTable.id, prepared.messageID)).get()
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      if (message) return messageFromRow(message)
       return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
     })
 

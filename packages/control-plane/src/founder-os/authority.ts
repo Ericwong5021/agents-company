@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import {
   DecisionAuthorityEvaluation,
   DecisionAuthorityInput,
@@ -35,12 +34,16 @@ import type { TxOrDb } from "@/storage/db"
 import {
   DecisionCurrentProjectionTable,
   DecisionRecordTable,
-  DecisionTransitionTable,
   DelegationPolicyTable,
   FounderCorrectionTable,
   FounderGovernanceEventTable,
 } from "./decision-ledger.sql"
-import { ensureDefaultPolicies, recordFromRow } from "./decision-ledger"
+import {
+  appendDecisionDispatchInTransaction,
+  appendDecisionTransitionInTransaction,
+  ensureDefaultPolicies,
+  recordFromRow,
+} from "./decision-ledger"
 import { GovernanceAssetSelectionTable, GovernanceAssetTable } from "./asset.sql"
 import * as FounderOSMode from "./mode"
 import * as FounderOSAsset from "./asset"
@@ -50,16 +53,6 @@ import { FounderYellowEventTable, FounderYellowRunTable } from "./yellow.sql"
 const authorityRank = { green: 0, yellow: 1, red: 2 } as const
 const modeRank = { off: -1, shadow: -1, advisor: -1, "green-delegated": 0, "yellow-delegated": 1 } as const
 const allowedModeRank = { advisor: -1, green_delegated: 0, yellow_delegated: 1, none: 2 } as const
-const allowedTransitions = {
-  unknown: ["awaiting_approval", "accepted", "failed"],
-  proposed: ["awaiting_approval", "accepted", "overridden", "failed"],
-  awaiting_approval: ["accepted", "overridden", "failed"],
-  accepted: ["executed", "overridden", "failed"],
-  executed: ["overridden", "failed", "rolled_back"],
-  overridden: ["rolled_back"],
-  failed: [],
-  rolled_back: [],
-} as const
 const hardRedActions = new Set([
   "external.communication.propose",
   "external.payment.propose",
@@ -319,64 +312,6 @@ function gateFromRow(row: typeof CompanyApprovalGateTable.$inferSelect) {
   })
 }
 
-function transition(
-  db: TxOrDb,
-  input: {
-    decisionId: string
-    idempotencyKey: string
-    toStatus: "awaiting_approval" | "accepted" | "failed" | "overridden" | "rolled_back"
-    kind: "submitted_for_approval" | "accepted" | "failed" | "overridden" | "rolled_back"
-    reason: string
-    actorId: string
-  },
-) {
-  const projection = db
-    .select()
-    .from(DecisionCurrentProjectionTable)
-    .where(eq(DecisionCurrentProjectionTable.decision_id, input.decisionId))
-    .get()
-  if (!projection) throw new Error("Decision projection was not found")
-  const existing = db
-    .select()
-    .from(DecisionTransitionTable)
-    .where(
-      and(
-        eq(DecisionTransitionTable.decision_id, input.decisionId),
-        eq(DecisionTransitionTable.idempotency_key, input.idempotencyKey),
-      ),
-    )
-    .get()
-  if (existing) return
-  if (!(allowedTransitions[projection.current_status as keyof typeof allowedTransitions] ?? []).includes(input.toStatus as never))
-    throw new Error(`Illegal decision transition from ${projection.current_status} to ${input.toStatus}`)
-  const id = Identifier.ascending("founderDecisionTransition")
-  const now = Date.now()
-  db.insert(DecisionTransitionTable)
-    .values({
-      id,
-      decision_id: input.decisionId,
-      sequence: projection.transition_count + 1,
-      idempotency_key: input.idempotencyKey,
-      input_sha256: createHash("sha256").update(JSON.stringify(input)).digest("hex"),
-      from_status: projection.current_status,
-      to_status: input.toStatus,
-      kind: input.kind,
-      reason: input.reason,
-      actor_id: input.actorId,
-      created_at: now,
-    })
-    .run()
-  db.update(DecisionCurrentProjectionTable)
-    .set({
-      current_status: input.toStatus,
-      latest_transition_id: id,
-      transition_count: projection.transition_count + 1,
-      updated_at: now,
-    })
-    .where(eq(DecisionCurrentProjectionTable.decision_id, input.decisionId))
-    .run()
-}
-
 function correctionFromRow(row: typeof FounderCorrectionTable.$inferSelect) {
   return FounderCorrectionRecord.parse({
     schemaVersion: 1,
@@ -598,8 +533,8 @@ export function submitGovernanceInTransaction(db: TxOrDb, raw: GovernanceRequest
       },
     })
     if (decision.currentStatus === "proposed")
-      transition(db, {
-        decisionId: decision.id,
+      appendDecisionTransitionInTransaction(db, decision.id, {
+        schemaVersion: 1,
         idempotencyKey: `${input.idempotencyKey}:awaiting`,
         toStatus: "awaiting_approval",
         kind: "submitted_for_approval",
@@ -687,14 +622,35 @@ export const governanceLayer = Layer.succeed(
                 .where(eq(ApprovalPolicyTable.company_id, before.scope.companyId))
                 .get()
               if (!company || !preset) throw new Error("Company governance settings were not found")
-              if (input.decision === "reject" || before.currentStatus !== "accepted")
-                transition(db, {
-                  decisionId: gate.decision_id,
+              const authorizationTransition =
+                input.decision === "reject" || before.currentStatus !== "accepted"
+                  ? appendDecisionTransitionInTransaction(db, gate.decision_id, {
+                  schemaVersion: 1,
                   idempotencyKey: `founder-gate:${gate.id}:${input.decision}`,
                   toStatus: input.decision === "approve" ? "accepted" : "failed",
                   kind: input.decision === "approve" ? "accepted" : "failed",
                   reason: input.note,
                   actorId: input.actor.id,
+                })
+                  : null
+              if (input.decision === "approve")
+                appendDecisionDispatchInTransaction(db, {
+                  companyId: before.scope.companyId,
+                  decisionId: before.id,
+                  transitionId:
+                    authorizationTransition?.id ??
+                    db
+                      .select()
+                      .from(DecisionCurrentProjectionTable)
+                      .where(eq(DecisionCurrentProjectionTable.decision_id, before.id))
+                      .get()!.latest_transition_id,
+                  consumer: "governance_dispatch",
+                  actionType: requestFacts.data.actionType,
+                  payload: {
+                    gateId: gate.id,
+                    requestedBy: input.actor,
+                  },
+                  idempotencyKey: `founder-gate:${gate.id}:dispatch`,
                 })
               governanceEvent(db, {
                 scope: before.scope,
@@ -802,8 +758,8 @@ export const founderCorrectionLayer = Layer.succeed(
                 proposals: input.proposedAssetUpdates,
               })
               if (input.kind === "override")
-                transition(db, {
-                  decisionId: decision.id,
+                appendDecisionTransitionInTransaction(db, decision.id, {
+                  schemaVersion: 1,
                   idempotencyKey: `${input.idempotencyKey}:override`,
                   toStatus: "overridden",
                   kind: "overridden",
@@ -890,14 +846,24 @@ export const decisionCenterLayer = Layer.succeed(
                 if (!gate) throw new Error("Red decisions require an approved ApprovalGate")
               }
               const target = input.action === "accept" ? "accepted" : input.action === "reject" ? "failed" : "rolled_back"
-              transition(db, {
-                decisionId,
+              const transition = appendDecisionTransitionInTransaction(db, decisionId, {
+                schemaVersion: 1,
                 idempotencyKey: input.idempotencyKey,
                 toStatus: target,
                 kind: target,
                 reason: input.reason,
                 actorId: input.actorId,
               })
+              if (input.action === "accept")
+                appendDecisionDispatchInTransaction(db, {
+                  companyId: decision.company_id,
+                  decisionId,
+                  transitionId: transition.id,
+                  consumer: "decision_center_dispatch",
+                  actionType: "decision.accepted",
+                  payload: { acceptedBy: input.actorId },
+                  idempotencyKey: `${input.idempotencyKey}:dispatch`,
+                })
               return decisionCenterProjection(db, decision.company_id)
             },
             { behavior: "immediate" },

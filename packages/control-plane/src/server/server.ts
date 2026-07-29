@@ -39,6 +39,7 @@ import { CompanyReading } from "@/company-reading"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { FounderYellowDelegation } from "@/founder-os"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
+import { DecisionLedger } from "@/founder-os"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -168,6 +169,7 @@ function listenAuth(opts: ListenOptions): AuthMode {
 export async function listen(opts: ListenOptions): Promise<Listener> {
   const auth = listenAuth(opts)
   const built = create({ cors: opts.cors, auth })
+  await AppRuntime.runPromise(DecisionLedger.Service.use((ledger) => ledger.recover()))
   await AppRuntime.runPromise(ConversationRuntime.Service.use((runtime) => runtime.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(AgentRunSupervisor.Service.use((supervisor) => supervisor.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(CompanyProjectRecovery.Service.use((recovery) => recovery.recover()))

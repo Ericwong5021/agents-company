@@ -790,15 +790,6 @@ export const layer = Layer.effect(
           governanceRef,
           reasons: governanceRef ? reasons : [...reasons, "Governance produced no auditable reference."],
         })
-      if (verdict.decision.currentStatus === "proposed")
-        yield* ledger.appendTransition(input.decisionId, {
-          schemaVersion: 1,
-          idempotencyKey: `fgdel_${inputSha256}_accepted`,
-          toStatus: "accepted",
-          kind: "accepted",
-          reason: "Deterministic Green delegation authorization accepted.",
-          actorId: "board-ceo",
-        })
       if (!["proposed", "accepted"].includes(verdict.decision.currentStatus))
         return save({
           id,
@@ -813,19 +804,44 @@ export const layer = Layer.effect(
           governanceRef,
           reasons: [`Decision status ${verdict.decision.currentStatus} cannot enter Green dispatch.`],
         })
-      save({
-        id,
-        request: input,
-        inputSha256,
-        status: "authorized",
-        readiness: currentReadiness.value,
-        readinessId: currentReadiness.id,
-        mode: currentMode,
-        authority: verdict.authority,
-        gate: verdict.gate,
-        governanceRef,
-        reasons: [],
+      const dispatchOutbox = yield* ledger.authorizeDispatch(input.decisionId, {
+        schemaVersion: 1,
+        idempotencyKey: `fgdel_${inputSha256}_dispatch`,
+        consumer: `founder_green_delegation:${inputSha256}`,
+        actionType: input.actionType,
+        payload: {
+          companyId: input.companyId,
+          projectId: input.projectId,
+          boardThreadId: input.boardThreadId,
+          receiptId: input.receiptId,
+          governanceRef,
+        },
+        reason: "Deterministic Green delegation authorization accepted.",
+        actorId: "board-ceo",
       })
+      if (dispatchOutbox.currentStatus === "completed") {
+        yield* ledger.appendTransition(input.decisionId, {
+          schemaVersion: 1,
+          idempotencyKey: `fgdel_${inputSha256}_executed`,
+          toStatus: "executed",
+          kind: "executed",
+          reason: "Recovered completed Green delegation dispatch from the durable outbox.",
+          actorId: "board-ceo",
+        })
+        return save({
+          id,
+          request: input,
+          inputSha256,
+          status: "outcome_pending",
+          readiness: currentReadiness.value,
+          readinessId: currentReadiness.id,
+          mode: currentMode,
+          authority: verdict.authority,
+          gate: verdict.gate,
+          governanceRef,
+          reasons: ["Recovered committed execution receipt; OutcomeSignal remains pending."],
+        })
+      }
       if (fenced(input.companyId, input.boardThreadId))
         return save({
           id,
@@ -840,8 +856,32 @@ export const layer = Layer.effect(
           governanceRef,
           reasons: ["Human intervention fence became active before dispatch."],
         })
+      const claimed = yield* ledger.claimDispatch({
+        consumer: dispatchOutbox.consumer,
+        consumerId: `fgdel_${inputSha256}`,
+        leaseDurationMs: 300_000,
+      })
+      if (!claimed || claimed.id !== dispatchOutbox.id || !claimed.leaseToken)
+        return save({
+          id,
+          request: input,
+          inputSha256,
+          status: "failed",
+          readiness: currentReadiness.value,
+          readinessId: currentReadiness.id,
+          mode: currentMode,
+          authority: verdict.authority,
+          gate: verdict.gate,
+          governanceRef,
+          reasons: ["Committed dispatch outbox could not be claimed."],
+        })
       const outcome = yield* Effect.exit(orchestrator.processReceipt(input.receiptId))
-      if (Exit.isFailure(outcome))
+      if (Exit.isFailure(outcome)) {
+        yield* ledger.failDispatch(claimed.id, {
+          consumerId: `fgdel_${inputSha256}`,
+          leaseToken: claimed.leaseToken,
+          error: String(Cause.squash(outcome.cause)),
+        })
         return save({
           id,
           request: input,
@@ -856,7 +896,13 @@ export const layer = Layer.effect(
           reasons: ["Project Orchestrator failed."],
           error: String(Cause.squash(outcome.cause)),
         })
-      if (outcome.value.processing.status === "disabled")
+      }
+      if (outcome.value.processing.status === "disabled") {
+        yield* ledger.failDispatch(claimed.id, {
+          consumerId: `fgdel_${inputSha256}`,
+          leaseToken: claimed.leaseToken,
+          error: "Graph Supervisor execution is disabled.",
+        })
         return save({
           id,
           request: input,
@@ -870,7 +916,23 @@ export const layer = Layer.effect(
           governanceRef,
           reasons: ["Graph Supervisor execution is disabled."],
         })
+      }
       const applied = outcome.value.processing.decision.status === "applied"
+      yield* (
+        applied
+          ? ledger.completeDispatch(claimed.id, {
+              consumerId: `fgdel_${inputSha256}`,
+              leaseToken: claimed.leaseToken,
+              executionReceipt:
+                outcome.value.processing.mutation_id ??
+                outcome.value.processing.decision.id,
+            })
+          : ledger.failDispatch(claimed.id, {
+              consumerId: `fgdel_${inputSha256}`,
+              leaseToken: claimed.leaseToken,
+              error: "Graph Supervisor rejected the delegated mutation.",
+            })
+      )
       yield* ledger.appendTransition(input.decisionId, {
         schemaVersion: 1,
         idempotencyKey: `fgdel_${inputSha256}_${applied ? "executed" : "failed"}`,

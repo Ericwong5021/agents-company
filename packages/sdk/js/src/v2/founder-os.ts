@@ -416,6 +416,67 @@ export type DecisionTransition = {
   createdAt: number
 }
 
+export type DecisionDispatchStatus = "committed" | "claimed" | "completed" | "failed"
+
+export type DecisionDispatchOutbox = {
+  schemaVersion: 1
+  id: string
+  companyId: string
+  decisionId: string
+  transitionId: string | null
+  consumer: string
+  actionType: string
+  payload: Record<string, unknown>
+  idempotencyKey: string
+  executionKey: string
+  currentStatus: DecisionDispatchStatus
+  eventCount: number
+  consumerId: string | null
+  leaseToken: string | null
+  leaseExpiresAt: number | null
+  executionReceipt: string | null
+  lastError: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type DecisionDispatchEvent = {
+  schemaVersion: 1
+  id: string
+  outboxId: string
+  sequence: number
+  status: DecisionDispatchStatus
+  consumerId: string | null
+  leaseToken: string | null
+  leaseExpiresAt: number | null
+  executionReceipt: string | null
+  error: string | null
+  createdAt: number
+}
+
+export type DecisionDispatchAuthorizeInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  consumer: string
+  actionType: string
+  payload: Record<string, unknown>
+  reason: string
+  actorId: string
+}
+
+export type DecisionDispatchClaimInput = {
+  consumer: string
+  consumerId: string
+  leaseDurationMs: number
+}
+
+export type DecisionDispatchResolveInput = {
+  consumerId: string
+  leaseToken: string
+  executionReceipt?: string
+  error?: string
+}
+
 export type DelegationPolicy = {
   schemaVersion: 1
   id: string

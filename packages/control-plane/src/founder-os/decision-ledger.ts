@@ -2,6 +2,11 @@ import { createHash } from "node:crypto"
 import {
   DecisionRecord,
   DecisionRecordAppendInput,
+  DecisionDispatchAuthorizeInput,
+  DecisionDispatchClaimInput,
+  DecisionDispatchEvent,
+  DecisionDispatchOutbox,
+  DecisionDispatchResolveInput,
   DecisionScope,
   DecisionSourceMapping,
   DecisionStatus,
@@ -25,20 +30,33 @@ import {
 } from "@agents-company/shared/founder-os"
 import { NamedError } from "@agents-company/shared/util/error"
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, lte, or } from "drizzle-orm"
 import z from "zod"
 import {
   ChannelMessageTable,
   ChannelTable,
   ConversationRunTable,
   ConversationThreadTable,
+  RootNeedTable,
+  SignalProjectionSourceTable,
   SignalProjectionTable,
 } from "@/conversation/conversation.sql"
+import {
+  ChannelID,
+  ChannelMessageID,
+  ConversationRunID,
+  ConversationThreadID,
+  RootNeedID,
+  SignalProjectionID,
+} from "@/conversation/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
 import {
   DecisionCurrentProjectionTable,
+  DecisionDispatchCurrentTable,
+  DecisionDispatchEventTable,
+  DecisionDispatchOutboxTable,
   DecisionRecordTable,
   DecisionSourceMappingTable,
   DecisionTransitionTable,
@@ -105,10 +123,13 @@ type BoardDecisionInput = {
   companyId: string
   projectId: string
   preProjectId?: string
+  channelId: string
   channelMessageId: string
   boardThreadId: string
   boardRunId?: string
   runtimeId?: string
+  rootNeedId: string
+  requestId: string
   decisionMakerId: string
   subject?: string
   context?: string
@@ -118,7 +139,7 @@ type BoardDecisionInput = {
   createdAt: number
 }
 
-const transitions: Record<DecisionStatusValue, readonly DecisionStatusValue[]> = {
+export const decisionTransitions: Record<DecisionStatusValue, readonly DecisionStatusValue[]> = {
   unknown: ["proposed", "awaiting_approval", "accepted", "failed"],
   proposed: ["awaiting_approval", "accepted", "overridden", "failed"],
   awaiting_approval: ["accepted", "overridden", "failed"],
@@ -129,7 +150,7 @@ const transitions: Record<DecisionStatusValue, readonly DecisionStatusValue[]> =
   rolled_back: [],
 }
 
-const transitionStatus = {
+export const decisionTransitionStatus = {
   submitted_for_approval: "awaiting_approval",
   accepted: "accepted",
   executed: "executed",
@@ -302,6 +323,275 @@ function transitionFromRow(row: typeof DecisionTransitionTable.$inferSelect) {
   })
 }
 
+function dispatchFromRow(db: TxOrDb, row: typeof DecisionDispatchOutboxTable.$inferSelect) {
+  const current = db
+    .select()
+    .from(DecisionDispatchCurrentTable)
+    .where(eq(DecisionDispatchCurrentTable.outbox_id, row.id))
+    .get()
+  if (!current) throw new DecisionLedgerCorrupt({ decision_id: row.decision_id })
+  return DecisionDispatchOutbox.parse({
+    schemaVersion: 1,
+    id: row.id,
+    companyId: row.company_id,
+    decisionId: row.decision_id,
+    transitionId: row.transition_id,
+    consumer: row.consumer,
+    actionType: row.action_type,
+    payload: JSON.parse(row.payload_json),
+    idempotencyKey: row.idempotency_key,
+    executionKey: row.execution_key,
+    currentStatus: current.current_status,
+    eventCount: current.event_count,
+    consumerId: current.consumer_id,
+    leaseToken: current.lease_token,
+    leaseExpiresAt: current.lease_expires_at,
+    executionReceipt: current.execution_receipt,
+    lastError: current.last_error,
+    createdAt: row.created_at,
+    updatedAt: current.updated_at,
+  })
+}
+
+function dispatchEventFromRow(row: typeof DecisionDispatchEventTable.$inferSelect) {
+  return DecisionDispatchEvent.parse({
+    schemaVersion: 1,
+    id: row.id,
+    outboxId: row.outbox_id,
+    sequence: row.sequence,
+    status: row.status,
+    consumerId: row.consumer_id,
+    leaseToken: row.lease_token,
+    leaseExpiresAt: row.lease_expires_at,
+    executionReceipt: row.execution_receipt,
+    error: row.error,
+    createdAt: row.created_at,
+  })
+}
+
+export function appendDecisionTransitionInTransaction(
+  db: TxOrDb,
+  decisionId: string,
+  raw: z.input<typeof DecisionTransitionAppendInput>,
+) {
+  const input = DecisionTransitionAppendInput.parse(raw)
+  const record = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
+  if (!record) throw new DecisionLedgerNotFound({ decision_id: decisionId })
+  const projection = db
+    .select()
+    .from(DecisionCurrentProjectionTable)
+    .where(eq(DecisionCurrentProjectionTable.decision_id, decisionId))
+    .get()
+  if (!projection) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
+  const inputSha256 = sha256(input)
+  const existing = db
+    .select()
+    .from(DecisionTransitionTable)
+    .where(
+      and(
+        eq(DecisionTransitionTable.decision_id, decisionId),
+        eq(DecisionTransitionTable.idempotency_key, input.idempotencyKey),
+      ),
+    )
+    .get()
+  if (existing) {
+    if (existing.input_sha256 === inputSha256) return transitionFromRow(existing)
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
+  }
+  const fromStatus = DecisionStatus.parse(projection.current_status)
+  if (
+    decisionTransitionStatus[input.kind] !== input.toStatus ||
+    !decisionTransitions[fromStatus].includes(input.toStatus)
+  )
+    throw new DecisionLedgerIllegalTransition({
+      decision_id: decisionId,
+      from_status: fromStatus,
+      to_status: input.toStatus,
+    })
+  const id = Identifier.ascending("founderDecisionTransition")
+  const createdAt = Date.now()
+  db.insert(DecisionTransitionTable)
+    .values({
+      id,
+      decision_id: decisionId,
+      sequence: projection.transition_count + 1,
+      idempotency_key: input.idempotencyKey,
+      input_sha256: inputSha256,
+      from_status: fromStatus,
+      to_status: input.toStatus,
+      kind: input.kind,
+      reason: input.reason,
+      actor_id: input.actorId,
+      created_at: createdAt,
+    })
+    .run()
+  const updated = db
+    .update(DecisionCurrentProjectionTable)
+    .set({
+      current_status: input.toStatus,
+      latest_transition_id: id,
+      transition_count: projection.transition_count + 1,
+      updated_at: createdAt,
+    })
+    .where(
+      and(
+        eq(DecisionCurrentProjectionTable.decision_id, decisionId),
+        eq(DecisionCurrentProjectionTable.latest_transition_id, projection.latest_transition_id),
+      ),
+    )
+    .run()
+  if (updated.changes !== 1) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
+  const transition = db.select().from(DecisionTransitionTable).where(eq(DecisionTransitionTable.id, id)).get()
+  if (!transition) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
+  return transitionFromRow(transition)
+}
+
+function appendDispatchEvent(
+  db: TxOrDb,
+  input: {
+    outboxId: string
+    idempotencyKey: string
+    status: "committed" | "claimed" | "completed" | "failed"
+    consumerId?: string | null
+    leaseToken?: string | null
+    leaseExpiresAt?: number | null
+    executionReceipt?: string | null
+    error?: string | null
+  },
+) {
+  const current = db
+    .select()
+    .from(DecisionDispatchCurrentTable)
+    .where(eq(DecisionDispatchCurrentTable.outbox_id, input.outboxId))
+    .get()
+  const existing = db
+    .select()
+    .from(DecisionDispatchEventTable)
+    .where(
+      and(
+        eq(DecisionDispatchEventTable.outbox_id, input.outboxId),
+        eq(DecisionDispatchEventTable.idempotency_key, input.idempotencyKey),
+      ),
+    )
+    .get()
+  if (existing) {
+    if (
+      existing.status === input.status &&
+      existing.consumer_id === (input.consumerId ?? null) &&
+      existing.lease_token === (input.leaseToken ?? null) &&
+      existing.lease_expires_at === (input.leaseExpiresAt ?? null) &&
+      existing.execution_receipt === (input.executionReceipt ?? null) &&
+      existing.error === (input.error ?? null)
+    )
+      return existing
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
+  }
+  const id = `fdoe_${Identifier.ascending("event")}`
+  const createdAt = Date.now()
+  const sequence = (current?.event_count ?? 0) + 1
+  db.insert(DecisionDispatchEventTable)
+    .values({
+      id,
+      outbox_id: input.outboxId,
+      sequence,
+      idempotency_key: input.idempotencyKey,
+      status: input.status,
+      consumer_id: input.consumerId ?? null,
+      lease_token: input.leaseToken ?? null,
+      lease_expires_at: input.leaseExpiresAt ?? null,
+      execution_receipt: input.executionReceipt ?? null,
+      error: input.error ?? null,
+      created_at: createdAt,
+    })
+    .run()
+  const values = {
+    current_status: input.status,
+    latest_event_id: id,
+    event_count: sequence,
+    consumer_id: input.consumerId ?? null,
+    lease_token: input.leaseToken ?? null,
+    lease_expires_at: input.leaseExpiresAt ?? null,
+    execution_receipt: input.executionReceipt ?? current?.execution_receipt ?? null,
+    last_error: input.error ?? null,
+    updated_at: createdAt,
+  }
+  if (!current) db.insert(DecisionDispatchCurrentTable).values({ outbox_id: input.outboxId, ...values }).run()
+  if (current) {
+    const updated = db
+      .update(DecisionDispatchCurrentTable)
+      .set(values)
+      .where(
+        and(
+          eq(DecisionDispatchCurrentTable.outbox_id, input.outboxId),
+          eq(DecisionDispatchCurrentTable.latest_event_id, current.latest_event_id),
+        ),
+      )
+      .run()
+    if (updated.changes !== 1)
+      throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
+  }
+  return db.select().from(DecisionDispatchEventTable).where(eq(DecisionDispatchEventTable.id, id)).get()!
+}
+
+export function appendDecisionDispatchInTransaction(
+  db: TxOrDb,
+  input: {
+    companyId: string
+    decisionId: string
+    transitionId: string | null
+    consumer: string
+    actionType: string
+    payload: Record<string, unknown>
+    idempotencyKey: string
+  },
+) {
+  const normalized = {
+    ...input,
+    payload: z.record(z.string(), z.unknown()).parse(input.payload),
+  }
+  const inputSha256 = sha256(normalized)
+  const existing = db
+    .select()
+    .from(DecisionDispatchOutboxTable)
+    .where(
+      and(
+        eq(DecisionDispatchOutboxTable.decision_id, input.decisionId),
+        eq(DecisionDispatchOutboxTable.idempotency_key, input.idempotencyKey),
+      ),
+    )
+    .get()
+  if (existing) {
+    if (existing.input_sha256 === inputSha256) return dispatchFromRow(db, existing)
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
+  }
+  const id = `fdob_${Identifier.ascending("event")}`
+  const createdAt = Date.now()
+  db.insert(DecisionDispatchOutboxTable)
+    .values({
+      id,
+      company_id: input.companyId,
+      decision_id: input.decisionId,
+      transition_id: input.transitionId,
+      consumer: input.consumer,
+      action_type: input.actionType,
+      payload_json: JSON.stringify(normalized.payload),
+      idempotency_key: input.idempotencyKey,
+      input_sha256: inputSha256,
+      execution_key: `founder-dispatch:${input.decisionId}:${input.idempotencyKey}`,
+      created_at: createdAt,
+    })
+    .run()
+  appendDispatchEvent(db, {
+    outboxId: id,
+    idempotencyKey: `${input.idempotencyKey}:committed`,
+    status: "committed",
+  })
+  return dispatchFromRow(
+    db,
+    db.select().from(DecisionDispatchOutboxTable).where(eq(DecisionDispatchOutboxTable.id, id)).get()!,
+  )
+}
+
 function mappedDecision(db: TxOrDb, channelMessageId: string) {
   const mapping = db
     .select()
@@ -430,7 +720,7 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
 }
 
 export function appendBoardDecisionInTransaction(db: TxOrDb, input: BoardDecisionInput) {
-  return appendDecisionInTransaction(db, {
+  const decision = appendDecisionInTransaction(db, {
     idempotencyKey: `board-channel-message:${input.channelMessageId}`,
     scope: input.preProjectId
       ? { type: "pre_project", companyId: input.companyId, preProjectId: input.preProjectId }
@@ -466,6 +756,160 @@ export function appendBoardDecisionInTransaction(db: TxOrDb, input: BoardDecisio
     createdAt: input.createdAt,
     decidedAt: input.createdAt,
   })
+  appendDecisionDispatchInTransaction(db, {
+    companyId: input.companyId,
+    decisionId: decision.id,
+    transitionId: db
+      .select()
+      .from(DecisionCurrentProjectionTable)
+      .where(eq(DecisionCurrentProjectionTable.decision_id, decision.id))
+      .get()!.latest_transition_id,
+    consumer: "board_projection",
+    actionType: "board.decision.project",
+    payload: {
+      channelId: input.channelId,
+      channelMessageId: input.channelMessageId,
+      boardThreadId: input.boardThreadId,
+      boardRunId: input.boardRunId ?? null,
+      rootNeedId: input.rootNeedId,
+      projectId: input.projectId,
+      requestId: input.requestId,
+      decisionMakerId: input.decisionMakerId,
+      body: input.finalDecision,
+      createdAt: decision.createdAt,
+    },
+    idempotencyKey: `board-projection:${input.channelMessageId}`,
+  })
+  return decision
+}
+
+const BoardProjectionPayload = z
+  .object({
+    channelId: z.string().min(1),
+    channelMessageId: z.string().min(1),
+    boardThreadId: z.string().min(1),
+    boardRunId: z.string().nullable(),
+    rootNeedId: z.string().min(1),
+    projectId: z.string().min(1),
+    requestId: z.string().min(1),
+    decisionMakerId: z.string().min(1),
+    body: z.string().min(1),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+
+export function reconcileBoardDecisionProjectionsInTransaction(db: TxOrDb) {
+  return db
+    .select()
+    .from(DecisionDispatchOutboxTable)
+    .innerJoin(
+      DecisionDispatchCurrentTable,
+      eq(DecisionDispatchCurrentTable.outbox_id, DecisionDispatchOutboxTable.id),
+    )
+    .where(
+      and(
+        eq(DecisionDispatchOutboxTable.consumer, "board_projection"),
+        or(
+          eq(DecisionDispatchCurrentTable.current_status, "committed"),
+          eq(DecisionDispatchCurrentTable.current_status, "failed"),
+        ),
+      ),
+    )
+    .orderBy(asc(DecisionDispatchOutboxTable.created_at), asc(DecisionDispatchOutboxTable.id))
+    .all()
+    .map((joined) => {
+      const outbox = joined.founder_decision_dispatch_outbox
+      const input = BoardProjectionPayload.parse(JSON.parse(outbox.payload_json))
+      const messageID = ChannelMessageID.parse(input.channelMessageId)
+      const channelID = ChannelID.parse(input.channelId)
+      const threadID = ConversationThreadID.parse(input.boardThreadId)
+      const rootNeedID = RootNeedID.parse(input.rootNeedId)
+      const runID = input.boardRunId ? ConversationRunID.parse(input.boardRunId) : null
+      const existing = db.select().from(ChannelMessageTable).where(eq(ChannelMessageTable.id, messageID)).get()
+      if (
+        existing &&
+        (
+          existing.channel_id !== input.channelId ||
+          existing.source_thread_id !== input.boardThreadId ||
+          existing.root_need_id !== input.rootNeedId ||
+          existing.request_id !== input.requestId ||
+          existing.body !== input.body ||
+          existing.signal_type !== "decision"
+        )
+      )
+        throw new DecisionLedgerIdempotencyConflict({ idempotency_key: outbox.idempotency_key })
+      const now = Date.now()
+      if (!existing)
+        db.insert(ChannelMessageTable)
+          .values({
+            id: messageID,
+            channel_id: channelID,
+            root_need_id: rootNeedID,
+            source_thread_id: threadID,
+            reply_to_id: null,
+            request_id: input.requestId,
+            author_kind: "agent",
+            author_id: input.decisionMakerId,
+            body: input.body,
+            signal_type: "decision",
+            dri_principal_kind: "agent",
+            dri_principal_id: input.decisionMakerId,
+            visibility: "company",
+            mentions: [],
+            time_created: input.createdAt,
+            time_updated: input.createdAt,
+          })
+          .run()
+      const existingProjection = db
+        .select()
+        .from(SignalProjectionTable)
+        .where(eq(SignalProjectionTable.channel_message_id, messageID))
+        .get()
+      const projectionID =
+        existingProjection?.id ??
+        SignalProjectionID.parse(`spr_${sha256(outbox.execution_key).slice(0, 26)}`)
+      if (!existingProjection) {
+        db.insert(SignalProjectionTable)
+          .values({
+            id: projectionID,
+            channel_message_id: messageID,
+            conversation_thread_id: threadID,
+            conversation_run_id: runID,
+            projector_version: 3,
+            source_watermark: `decision-ledger:${outbox.decision_id}`,
+            time_created: input.createdAt,
+            time_updated: input.createdAt,
+          })
+          .run()
+        db.insert(SignalProjectionSourceTable)
+          .values({
+            signal_projection_id: projectionID,
+            ordinal: 0,
+            source_kind: "decision",
+            source_id: outbox.decision_id,
+            time_created: input.createdAt,
+            time_updated: input.createdAt,
+          })
+          .run()
+      }
+      db.update(ConversationThreadTable)
+        .set({ project_scope_id: input.projectId, status: "completed", time_updated: now })
+        .where(eq(ConversationThreadTable.id, threadID))
+        .run()
+      db.update(RootNeedTable)
+        .set({ status: "in_progress", time_updated: now })
+        .where(eq(RootNeedTable.id, rootNeedID))
+        .run()
+      db.update(ChannelTable).set({ time_updated: now }).where(eq(ChannelTable.id, channelID)).run()
+      appendDispatchEvent(db, {
+        outboxId: outbox.id,
+        idempotencyKey: `projection:${outbox.execution_key}:completed`,
+        status: "completed",
+        consumerId: "decision-projection-reconciler",
+        executionReceipt: `projection:${projectionID}`,
+      })
+      return messageID
+    })
 }
 
 function recoverHistoricalBoardDecisions(db: TxOrDb) {
@@ -592,6 +1036,104 @@ function database<A>(fn: () => A) {
   return Effect.try({ try: fn, catch: (error) => error })
 }
 
+export function claimDecisionDispatchInTransaction(
+  db: TxOrDb,
+  raw: z.input<typeof DecisionDispatchClaimInput>,
+) {
+  const input = DecisionDispatchClaimInput.parse(raw)
+  const now = Date.now()
+  const held = db
+    .select()
+    .from(DecisionDispatchOutboxTable)
+    .innerJoin(
+      DecisionDispatchCurrentTable,
+      eq(DecisionDispatchCurrentTable.outbox_id, DecisionDispatchOutboxTable.id),
+    )
+    .where(
+      and(
+        eq(DecisionDispatchOutboxTable.consumer, input.consumer),
+        eq(DecisionDispatchCurrentTable.current_status, "claimed"),
+        eq(DecisionDispatchCurrentTable.consumer_id, input.consumerId),
+      ),
+    )
+    .get()
+  if (held && (held.founder_decision_dispatch_current.lease_expires_at ?? 0) > now)
+    return dispatchFromRow(db, held.founder_decision_dispatch_outbox)
+  const row = db
+    .select()
+    .from(DecisionDispatchOutboxTable)
+    .innerJoin(
+      DecisionDispatchCurrentTable,
+      eq(DecisionDispatchCurrentTable.outbox_id, DecisionDispatchOutboxTable.id),
+    )
+    .where(
+      and(
+        eq(DecisionDispatchOutboxTable.consumer, input.consumer),
+        or(
+          eq(DecisionDispatchCurrentTable.current_status, "committed"),
+          eq(DecisionDispatchCurrentTable.current_status, "failed"),
+          and(
+            eq(DecisionDispatchCurrentTable.current_status, "claimed"),
+            lte(DecisionDispatchCurrentTable.lease_expires_at, now),
+          ),
+        ),
+      ),
+    )
+    .orderBy(asc(DecisionDispatchOutboxTable.created_at), asc(DecisionDispatchOutboxTable.id))
+    .get()
+  if (!row) return null
+  const leaseToken = `fdlease_${Identifier.ascending("event")}`
+  appendDispatchEvent(db, {
+    outboxId: row.founder_decision_dispatch_outbox.id,
+    idempotencyKey: `claim:${leaseToken}`,
+    status: "claimed",
+    consumerId: input.consumerId,
+    leaseToken,
+    leaseExpiresAt: now + input.leaseDurationMs,
+  })
+  return dispatchFromRow(db, row.founder_decision_dispatch_outbox)
+}
+
+export function resolveDecisionDispatchInTransaction(
+  db: TxOrDb,
+  outboxId: string,
+  status: "completed" | "failed",
+  raw: z.input<typeof DecisionDispatchResolveInput>,
+) {
+  const input = DecisionDispatchResolveInput.parse(raw)
+  const row = db.select().from(DecisionDispatchOutboxTable).where(eq(DecisionDispatchOutboxTable.id, outboxId)).get()
+  if (!row) throw new DecisionLedgerNotFound({ decision_id: outboxId })
+  const current = db
+    .select()
+    .from(DecisionDispatchCurrentTable)
+    .where(eq(DecisionDispatchCurrentTable.outbox_id, outboxId))
+    .get()
+  if (!current) throw new DecisionLedgerCorrupt({ decision_id: row.decision_id })
+  if (current.current_status === "completed") {
+    if (status === "completed" && current.execution_receipt === input.executionReceipt) return dispatchFromRow(db, row)
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.executionReceipt ?? input.leaseToken })
+  }
+  if (
+    current.current_status !== "claimed" ||
+    current.consumer_id !== input.consumerId ||
+    current.lease_token !== input.leaseToken
+  )
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.leaseToken })
+  if (status === "completed" && !input.executionReceipt)
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.leaseToken })
+  if (status === "failed" && !input.error)
+    throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.leaseToken })
+  appendDispatchEvent(db, {
+    outboxId,
+    idempotencyKey: `${status}:${input.executionReceipt ?? input.leaseToken}`,
+    status,
+    consumerId: input.consumerId,
+    executionReceipt: input.executionReceipt ?? null,
+    error: input.error ?? null,
+  })
+  return dispatchFromRow(db, row)
+}
+
 export interface Interface {
   readonly append: (input: z.input<typeof DecisionRecordAppendInput>) => Effect.Effect<DecisionRecord, unknown>
   readonly appendTransition: (
@@ -606,6 +1148,23 @@ export interface Interface {
     preProjectId?: string
   }) => Effect.Effect<DecisionRecord[], unknown>
   readonly transitions: (decisionId: string) => Effect.Effect<DecisionTransition[], unknown>
+  readonly authorizeDispatch: (
+    decisionId: string,
+    input: z.input<typeof DecisionDispatchAuthorizeInput>,
+  ) => Effect.Effect<DecisionDispatchOutbox, unknown>
+  readonly claimDispatch: (
+    input: z.input<typeof DecisionDispatchClaimInput>,
+  ) => Effect.Effect<DecisionDispatchOutbox | null, unknown>
+  readonly completeDispatch: (
+    outboxId: string,
+    input: z.input<typeof DecisionDispatchResolveInput>,
+  ) => Effect.Effect<DecisionDispatchOutbox, unknown>
+  readonly failDispatch: (
+    outboxId: string,
+    input: z.input<typeof DecisionDispatchResolveInput>,
+  ) => Effect.Effect<DecisionDispatchOutbox, unknown>
+  readonly dispatches: (decisionId: string) => Effect.Effect<DecisionDispatchOutbox[], unknown>
+  readonly dispatchEvents: (outboxId: string) => Effect.Effect<DecisionDispatchEvent[], unknown>
   readonly policies: (companyId: string) => Effect.Effect<DelegationPolicy[], unknown>
   readonly recover: () => Effect.Effect<void, unknown>
 }
@@ -658,80 +1217,103 @@ export const layer = Layer.succeed(
       }),
     appendTransition: (decisionId, raw) =>
       database(() => {
-        const input = DecisionTransitionAppendInput.parse(raw)
+        if (raw.toStatus === "accepted")
+          throw new DecisionLedgerIllegalTransition({
+            decision_id: decisionId,
+            from_status: "proposed",
+            to_status: "accepted",
+          })
         return Database.transaction(
-          (db) => {
-            const record = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
-            if (!record) throw new DecisionLedgerNotFound({ decision_id: decisionId })
-            const projection = db
-              .select()
-              .from(DecisionCurrentProjectionTable)
-              .where(eq(DecisionCurrentProjectionTable.decision_id, decisionId))
-              .get()
-            if (!projection) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
-            const inputSha256 = sha256(input)
-            const existing = db
-              .select()
-              .from(DecisionTransitionTable)
-              .where(
-                and(
-                  eq(DecisionTransitionTable.decision_id, decisionId),
-                  eq(DecisionTransitionTable.idempotency_key, input.idempotencyKey),
-                ),
-              )
-              .get()
-            if (existing) {
-              if (existing.input_sha256 === inputSha256) return transitionFromRow(existing)
-              throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
-            }
-            const fromStatus = DecisionStatus.parse(projection.current_status)
-            if (
-              transitionStatus[input.kind] !== input.toStatus ||
-              !transitions[fromStatus].includes(input.toStatus)
-            )
-              throw new DecisionLedgerIllegalTransition({
-                decision_id: decisionId,
-                from_status: fromStatus,
-                to_status: input.toStatus,
-              })
-            const id = Identifier.ascending("founderDecisionTransition")
-            const createdAt = Date.now()
-            db.insert(DecisionTransitionTable)
-              .values({
-                id,
-                decision_id: decisionId,
-                sequence: projection.transition_count + 1,
-                idempotency_key: input.idempotencyKey,
-                input_sha256: inputSha256,
-                from_status: fromStatus,
-                to_status: input.toStatus,
-                kind: input.kind,
-                reason: input.reason,
-                actor_id: input.actorId,
-                created_at: createdAt,
-              })
-              .run()
-            db.update(DecisionCurrentProjectionTable)
-              .set({
-                current_status: input.toStatus,
-                latest_transition_id: id,
-                transition_count: projection.transition_count + 1,
-                updated_at: createdAt,
-              })
-              .where(
-                and(
-                  eq(DecisionCurrentProjectionTable.decision_id, decisionId),
-                  eq(DecisionCurrentProjectionTable.latest_transition_id, projection.latest_transition_id),
-                ),
-              )
-              .run()
-            const transition = db.select().from(DecisionTransitionTable).where(eq(DecisionTransitionTable.id, id)).get()
-            if (!transition) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
-            return transitionFromRow(transition)
-          },
+          (db) => appendDecisionTransitionInTransaction(db, decisionId, raw),
           { behavior: "immediate" },
         )
       }),
+    authorizeDispatch: (decisionId, raw) =>
+      database(() =>
+        Database.transaction(
+          (db) => {
+            const input = DecisionDispatchAuthorizeInput.parse(raw)
+            const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
+            if (!row) throw new DecisionLedgerNotFound({ decision_id: decisionId })
+            const decision = recordFromRow(db, row)
+            const transition =
+              decision.currentStatus === "proposed"
+                ? appendDecisionTransitionInTransaction(db, decisionId, {
+                    schemaVersion: 1,
+                    idempotencyKey: `${input.idempotencyKey}:accepted`,
+                    toStatus: "accepted",
+                    kind: "accepted",
+                    reason: input.reason,
+                    actorId: input.actorId,
+                  })
+                : null
+            if (!["proposed", "accepted"].includes(decision.currentStatus))
+              throw new DecisionLedgerIllegalTransition({
+                decision_id: decisionId,
+                from_status: decision.currentStatus,
+                to_status: "accepted",
+              })
+            return appendDecisionDispatchInTransaction(db, {
+              companyId: decision.scope.companyId,
+              decisionId,
+              transitionId:
+                transition?.id ??
+                db
+                  .select()
+                  .from(DecisionCurrentProjectionTable)
+                  .where(eq(DecisionCurrentProjectionTable.decision_id, decisionId))
+                  .get()!.latest_transition_id,
+              consumer: input.consumer,
+              actionType: input.actionType,
+              payload: input.payload,
+              idempotencyKey: input.idempotencyKey,
+            })
+          },
+          { behavior: "immediate" },
+        ),
+      ),
+    claimDispatch: (input) =>
+      database(() =>
+        Database.transaction((db) => claimDecisionDispatchInTransaction(db, input), { behavior: "immediate" }),
+      ),
+    completeDispatch: (outboxId, input) =>
+      database(() =>
+        Database.transaction(
+          (db) => resolveDecisionDispatchInTransaction(db, outboxId, "completed", input),
+          { behavior: "immediate" },
+        ),
+      ),
+    failDispatch: (outboxId, input) =>
+      database(() =>
+        Database.transaction(
+          (db) => resolveDecisionDispatchInTransaction(db, outboxId, "failed", input),
+          { behavior: "immediate" },
+        ),
+      ),
+    dispatches: (decisionId) =>
+      database(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(DecisionDispatchOutboxTable)
+            .where(eq(DecisionDispatchOutboxTable.decision_id, decisionId))
+            .orderBy(asc(DecisionDispatchOutboxTable.created_at), asc(DecisionDispatchOutboxTable.id))
+            .all()
+            .map((row) => dispatchFromRow(db, row)),
+        ),
+      ),
+    dispatchEvents: (outboxId) =>
+      database(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(DecisionDispatchEventTable)
+            .where(eq(DecisionDispatchEventTable.outbox_id, outboxId))
+            .orderBy(asc(DecisionDispatchEventTable.sequence))
+            .all()
+            .map(dispatchEventFromRow),
+        ),
+      ),
     get: (decisionId) =>
       database(() =>
         Database.transaction(
@@ -801,6 +1383,7 @@ export const layer = Layer.succeed(
         Database.transaction(
           (db) => {
             recoverHistoricalBoardDecisions(db)
+            reconcileBoardDecisionProjectionsInTransaction(db)
           },
           { behavior: "immediate" },
         ),
