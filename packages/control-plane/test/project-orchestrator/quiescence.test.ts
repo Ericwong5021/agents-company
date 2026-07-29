@@ -128,14 +128,31 @@ describe("B2 quiescence", () => {
           code: "acceptance_evidence_missing",
           entity_ids: ["criterion-b"],
         })
+        const gated = yield* projects.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "Criterion B",
+          description: "Record the bounded limitation for criterion B",
+          kind: "worker",
+          work_type: "analysis",
+          role: "analyst",
+          decision_scope: ["project"],
+          resource_scope: ["workspace"],
+          model_group: "standard",
+          review_status: "not_required",
+          acceptance_criteria: ["criterion-b"],
+        })
         const gate = yield* projects.requestGate({
           project_id: project.id,
           kind: "risk_approval",
           title: "Pending closeout",
           summary: "Quiescence must wait",
+          work_item_id: gated.id,
+          resource_scope: gated.resource_scope,
         })
         yield* projects.addArtifact({
           project_id: project.id,
+          work_item_id: gated.id,
           kind: "acceptance_limitation",
           title: "Criterion B limitation",
           evidence: {
@@ -145,6 +162,14 @@ describe("B2 quiescence", () => {
         })
         expect((yield* quiescence.check(project.id)).blocker_codes).toContain("pending_approval_gates")
         yield* projects.resolveGate({ id: gate.id, decision: "approve" })
+        yield* projects.startWorkItem(gated.id)
+        yield* projects.completeWorkItem(gated.id)
+        const gatedReceipt = (yield* projects.listWorkReceipts(project.id)).find(
+          (receipt) => receipt.work_item_id === gated.id,
+        )
+        if (!gatedReceipt) throw new Error("Criterion B receipt was not persisted")
+        const gatedProcessed = yield* supervisor.processReceipt(gatedReceipt.id)
+        if (gatedProcessed.status !== "processed") throw new Error("Criterion B receipt was not processed")
         const opened = yield* attention.create({
           project_id: project.id,
           idempotency_key: "b3-quiescence-attention",
@@ -184,7 +209,7 @@ describe("B2 quiescence", () => {
           status: "completed",
           ready: true,
           replayed: false,
-          quiesce_decision_id: processed.decision.id,
+          quiesce_decision_id: gatedProcessed.decision.id,
         })
         expect(replayed).toMatchObject({
           status: "completed",

@@ -75,6 +75,7 @@ function seed(label: string) {
         output_dir: `/tmp/${project_id}`,
         active_plan_version: 1,
         graph_revision: 4,
+        dispatch_paused: true,
         created_at: now,
         updated_at: now,
       })
@@ -188,7 +189,7 @@ describe.serial("CompanyProjectDirection", () => {
     expect(project).toMatchObject({
       goal: "Goal adjusted-atomic",
       active_plan_version: 2,
-      graph_revision: 4,
+      graph_revision: 5,
     })
     expect(
       Database.use((db) =>

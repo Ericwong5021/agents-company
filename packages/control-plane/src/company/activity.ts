@@ -4,6 +4,7 @@ import * as Database from "@/storage/db"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyWorkItemTable } from "@/company-project/company-project.sql"
+import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { ChannelTable, ConversationThreadTable } from "@/conversation/conversation.sql"
 import { ConversationThreadID } from "@/conversation/schema"
 import { CompanyID } from "./schema"
@@ -125,22 +126,35 @@ function state(state: string) {
 }
 
 export function list(companyID: CompanyID): AgentActivityProjection[] {
-  return Database.use((db) =>
-    db
+  return Database.use((db) => {
+    const assignedAgentIDs = new Set(
+      db
+        .select({ agent_id: CompanyProjectAssignmentTable.agent_id })
+        .from(CompanyProjectAssignmentTable)
+        .where(
+          and(
+            eq(CompanyProjectAssignmentTable.company_id, companyID),
+            inArray(CompanyProjectAssignmentTable.status, ["assigned", "active"]),
+          ),
+        )
+        .all()
+        .map((item) => item.agent_id),
+    )
+    return db
       .select()
       .from(CompanyAgentTable)
       .where(eq(CompanyAgentTable.company_id, companyID))
       .orderBy(asc(CompanyAgentTable.id))
       .all()
       // TEAM-01：在岗临时实例（assigned）也进入团队视图，与正式员工用 employment 区分。
-      .filter((agent) => agent.lifecycle === "employee" || agent.lifecycle === "assigned")
+      .filter((agent) => agent.lifecycle === "employee" || assignedAgentIDs.has(agent.id))
       .map((agent) => {
         const projectionAgent = {
           id: agent.id,
           name: agent.name,
           ...(agent.role_key ? { role: agent.role_key } : {}),
           ...(agent.description ? { description: agent.description } : {}),
-          lifecycle: agent.lifecycle,
+          lifecycle: agent.lifecycle === "employee" ? "employee" : "assigned",
           ...(agent.department ? { department: agent.department } : {}),
           responsibilities: responsibilities(agent.responsibilities),
         }
@@ -225,6 +239,6 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
             timeUpdated: run.time_updated,
           },
         })
-      }),
-  )
+      })
+  })
 }

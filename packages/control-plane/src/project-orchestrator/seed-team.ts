@@ -204,7 +204,7 @@ export const startSeedProject = Effect.fn("ProjectOrchestrator.startSeedProject"
       review_status: "not_required",
       purpose: "first_slice",
       origin_kind: "seed",
-      validation_mode: input.verdict.mode === "discovery_first" ? "review_and_user_gate" : "machine",
+      validation_mode: "machine",
       acceptance_criteria: input.verdict.first_slice.acceptance_criteria,
       max_attempts: 3,
     }))

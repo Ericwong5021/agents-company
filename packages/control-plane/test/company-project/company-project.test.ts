@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Layer } from "effect"
 import { eq } from "drizzle-orm"
 import path from "path"
 import { CompanyProject } from "../../src/company-project"
+import { CompanyRecruitment } from "../../src/company-recruitment"
 import {
   CompanyProjectEventTable,
   CompanyWorkItemTable,
@@ -18,7 +19,14 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
-const it = testEffect(Layer.mergeAll(CompanyProject.defaultLayer, Company.defaultLayer, CrossSpawnSpawner.defaultLayer))
+const it = testEffect(
+  Layer.mergeAll(
+    CompanyProject.defaultLayer,
+    CompanyRecruitment.defaultLayer,
+    Company.defaultLayer,
+    CrossSpawnSpawner.defaultLayer,
+  ),
+)
 
 describe("CompanyProject adaptive execution state", () => {
   it.live("inherits the current company approval preset in a new Project Charter", () =>
@@ -48,6 +56,7 @@ describe("CompanyProject adaptive execution state", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const service = yield* CompanyProject.Service
+        const recruitment = yield* CompanyRecruitment.Service
         const project = yield* service.create({ goal: "Analyze evidence and produce a verified local delivery" })
         yield* service.createCharter({
           project_id: project.id,
@@ -92,11 +101,27 @@ describe("CompanyProject adaptive execution state", () => {
           role: "delivery engineer",
           capability_packs: ["software-implementation@1"],
           decision_scope: ["Implementation details"],
-          resource_scope: ["repo"],
+          resource_scope: ["."],
           model_group: "standard",
           risk_level: "high",
           acceptance_criteria: ["Host command passes"],
           depends_on: [planner.id],
+        })
+        const need = yield* recruitment.createNeed({
+          project_id: project.id,
+          work_item_id: worker.id,
+          need_key: "delivery-engineer",
+          role: worker.role,
+          work_type: worker.work_type,
+          capability_packs: worker.capability_packs,
+          risk_level: worker.risk_level,
+          demand_horizon: "project",
+          workspace_scopes: worker.resource_scope,
+        })
+        yield* recruitment.selectAndAssign({
+          capability_need_id: need.id,
+          exclude_agent_ids: [],
+          permission_mode: "workspace_write",
         })
         const reviewer = yield* service.createWorkItem({
           project_id: project.id,
@@ -486,11 +511,31 @@ describe("CompanyProject adaptive execution state", () => {
         const service = yield* CompanyProject.Service
         const project = yield* service.create({ goal: "Perform a material external action" })
         yield* service.transition({ id: project.id, status: "planning" })
+        const plan = yield* service.createPlan({
+          project_id: project.id,
+          phase: "planning",
+          summary: "Bounded material action",
+          acceptance_criteria: ["The action remains within its approved resource scope"],
+        })
+        const item = yield* service.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "Perform material action",
+          description: "Perform one bounded external action",
+          kind: "worker",
+          work_type: "analysis",
+          role: "operator",
+          resource_scope: ["external-system"],
+          model_group: "standard",
+          acceptance_criteria: ["The action remains within its approved resource scope"],
+        })
         const gate = yield* service.requestGate({
           project_id: project.id,
           kind: "risk_approval",
           title: "Approve material action",
           summary: "The next action is irreversible",
+          work_item_id: item.id,
+          resource_scope: item.resource_scope,
         })
         expect((yield* service.get(project.id))?.status).toBe("awaiting_approval")
         yield* service.resolveGate({ id: gate.id, decision: "reject", note: "Do not take this action" })

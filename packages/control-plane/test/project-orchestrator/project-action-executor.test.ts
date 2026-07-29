@@ -320,6 +320,7 @@ afterEach(resetDatabase)
 describe.serial("ProjectActionExecutor", () => {
   test.serial("executes pause, resume, and resolve_blocker through durable intents", async () => {
     const project_id = seedProject("action-controls")
+    const work_item_id = seedWorkItem(project_id, "work-action-controls", { status: "pending" })
     expect(
       await execute({
         project_id,
@@ -367,6 +368,8 @@ describe.serial("ProjectActionExecutor", () => {
           status: "pending",
           title: "Permission",
           summary: "Approve",
+          work_item_id,
+          resource_scope_json: "[]",
           requested_at: Date.now(),
         })
         .run(),

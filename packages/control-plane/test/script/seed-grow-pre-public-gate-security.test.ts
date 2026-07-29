@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Database as SQLiteDatabase } from "bun:sqlite"
@@ -580,6 +580,15 @@ async function runBun(args: string[], cwd: string, env = process.env) {
   return { stdout, stderr, exitCode }
 }
 
+async function linkNodeModules(worktree: string) {
+  const source = path.join(root, "packages/control-plane/node_modules")
+  const destination = path.join(worktree, "packages/control-plane/node_modules")
+  await mkdir(destination, { recursive: true })
+  await Promise.all(
+    (await readdir(source)).map((entry) => symlink(path.join(source, entry), path.join(destination, entry))),
+  )
+}
+
 describe.serial("Seed-and-Grow Pre-Public gate security", () => {
   test("rejects a dirty side-loaded verifier before consuming candidate evidence", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "seed-grow-dirty-verifier-"))
@@ -592,12 +601,7 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     })
     if (added.exitCode !== 0) throw new Error(added.stderr.toString())
     worktrees.push(worktree)
-    await symlink(path.join(root, "node_modules"), path.join(worktree, "node_modules"), "dir")
-    await symlink(
-      path.join(root, "packages/control-plane/node_modules"),
-      path.join(worktree, "packages/control-plane/node_modules"),
-      "dir",
-    )
+    await linkNodeModules(worktree)
     const verifier = path.join(worktree, "script/experience-automatic-evidence.ts")
     await writeFile(verifier, `${await readFile(verifier, "utf8")}\n`)
     const requestPath = path.join(directory, "request.json")
@@ -645,6 +649,7 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     })
     if (added.exitCode !== 0) throw new Error(added.stderr.toString())
     worktrees.push(worktree)
+    await linkNodeModules(worktree)
     const manifest = path.join(worktree, "packages/control-plane/package.json")
     await writeFile(manifest, `${await readFile(manifest, "utf8")}\n`)
     const staged = Bun.spawnSync(["git", "add", "packages/control-plane/package.json"], {
@@ -667,6 +672,12 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
       "-m",
       "tamper acceptance suite",
     )
+    const reset = Bun.spawnSync(["git", "reset", "--hard", verifierSha], {
+      cwd: worktree,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    if (reset.exitCode !== 0) throw new Error(reset.stderr.toString())
     const requestPath = path.join(directory, "request.json")
     await writeFile(
       requestPath,
@@ -683,7 +694,7 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     )
     const result = await runBun(
       ["script/seed-grow-pre-public-gate.ts", requestPath],
-      path.join(root, "packages/control-plane"),
+      path.join(worktree, "packages/control-plane"),
       {
         ...process.env,
         AGENTCOMPANY_TRUSTED_VERIFIER_SHA: verifierSha,

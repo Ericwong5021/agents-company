@@ -308,8 +308,8 @@ describe("company recruitment", () => {
         expect(result.agent).toMatchObject({
           id: "evidence-analyst",
           company_id: companyID,
-          lifecycle: "assigned",
-          role_key: "evidence analyst",
+          lifecycle: "candidate",
+          role_key: undefined,
         })
         expect(result.selections.map((item) => item.decision)).toEqual(["selected", "rejected", "rejected"])
         expect(result.selections.every((item) => item.reason.length > 10)).toBe(true)
@@ -381,7 +381,8 @@ describe("company recruitment", () => {
         const first = await runRecruitment((service) =>
           service.selectAndAssign({ capability_need_id: firstNeed.id, exclude_agent_ids: [] }),
         )
-        expect(first.agent.role_key).toBe("research analyst")
+        expect(first.agent.lifecycle).toBe("candidate")
+        expect(first.assignment.temporary_role).toBe("research analyst")
         const firstSelection = first.selections.find((item) => item.decision === "selected")!
         setProjectStatus("cprj_recruitment_alpha", "completed")
         await runRecruitment((service) =>
@@ -494,7 +495,7 @@ describe("company recruitment", () => {
           },
         })
         expect(await runAgents((service) => service.get(second.agent.id))).toMatchObject({
-          lifecycle: "assigned",
+          lifecycle: "candidate",
         })
 
         setProjectStatus("cprj_recruitment_beta", "completed")

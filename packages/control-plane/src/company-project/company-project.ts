@@ -1727,7 +1727,7 @@ export const layer = Layer.effect(
                   "(allow signal (target self))",
                   "(allow sysctl-read)",
                   "(allow mach-lookup)",
-                  `(allow file-read* (subpath "${sandboxPath(cwd)}") (subpath "/System") (subpath "/Library") (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "${sandboxPath(path.dirname(process.execPath))}"))`,
+                  `(allow file-read* (literal "/") (subpath "${sandboxPath(cwd)}") (subpath "/System") (subpath "/Library") (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "${sandboxPath(path.dirname(process.execPath))}"))`,
                   `(allow file-write* (subpath "${sandboxPath(root)}"))`,
                   ...writablePaths.flatMap((target) => [
                     `(allow file-write* (literal "${sandboxPath(target)}"))`,
