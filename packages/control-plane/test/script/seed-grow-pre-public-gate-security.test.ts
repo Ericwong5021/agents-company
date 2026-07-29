@@ -6,7 +6,7 @@ import path from "node:path"
 import { RolloutPromotionEvaluationRequest } from "@agents-company/shared/rollout"
 import {
   MetricContract,
-  PrePublicBlockingMetricIds,
+  PrePublicCandidateMetricIds,
   PrePublicMetricContractSha256,
 } from "@agents-company/shared/seed-grow-metrics"
 import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
@@ -74,7 +74,7 @@ function metricReport(candidateSha: string) {
     inputDigest: "1".repeat(64),
     runIds,
     status: "pass" as const,
-    results: PrePublicBlockingMetricIds.map((metricId) => {
+    results: PrePublicCandidateMetricIds.map((metricId) => {
       const metric = metricContract.metrics.find((item) => item.id === metricId)
       if (!metric || metric.target.value === null) throw new Error(`Missing blocking metric ${metricId}`)
       const value = passingValue(metric.target.operator, metric.target.value)
@@ -476,10 +476,10 @@ for (const [index, candidateSha] of [request.ancestry.previousCandidateSha, requ
         ordinal,
         outcome: "completed",
         environmentSha256: String(index * 2 + ordinal).repeat(64),
-        evidenceSha256: String(ordinal + 2).repeat(64),
+        evidenceSha256: String(index * 2 + ordinal + 4).repeat(64),
         normalizedResultSha256: String(index + 5).repeat(64),
-        startedAt: ordinal * 100,
-        finishedAt: ordinal * 100 + 50,
+        startedAt: (index * 2 + ordinal) * 100,
+        finishedAt: (index * 2 + ordinal) * 100 + 50,
       },
     })
 }
