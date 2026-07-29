@@ -96,10 +96,7 @@
       "app-production",
       "seed-grow-real-surfaces",
       "b4-projection-recovery",
-      "b5-shadow-comparison",
-      "b5-two-candidates",
-      "b5-metric-gate",
-      "b5-local-rollback",
+      "b5-candidate-facts",
       "desktop-e2e"
     ],
     "plannedStageCommands": []
@@ -604,28 +601,28 @@
         "packages/sdk",
         "docs/product-design/experience-refactor"
       ],
-      "requiredCommandIds": ["b5-shadow-comparison", "b5-two-candidates", "b5-metric-gate", "b5-local-rollback"],
+      "requiredCommandIds": ["b5-candidate-facts"],
       "repeats": 2,
       "criteria": [
         {
           "id": "B5-SHADOW-COMPARISON",
           "statement": "Matched legacy and seed_and_grow runs produce recomputable quality, cost, Reviewer and growth comparisons.",
-          "evidenceRefs": ["command:b5-shadow-comparison"]
+          "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
           "id": "B5-TWO-CANDIDATES",
-          "statement": "Two consecutive candidate SHAs each pass two isolated complete benchmark runs.",
-          "evidenceRefs": ["command:b5-two-candidates"]
+          "statement": "The current exact-SHA candidate produces one complete isolated S13-S27 legacy and seed_and_grow fact package in each of two automatic attempts; consecutive-candidate promotion remains a separate Pre-Public decision.",
+          "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
           "id": "B5-METRIC-GATE",
-          "statement": "Every Pre-Public blocking metric meets its registered sample, window and threshold.",
-          "evidenceRefs": ["command:b5-metric-gate"]
+          "statement": "Every candidate-level Pre-Public metric is recomputed from the exact-SHA persisted facts and meets its registered sample, window and threshold.",
+          "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
           "id": "B5-LOCAL-ROLLBACK",
           "statement": "Local rollback restores legacy fallback without data loss, in-flight strategy conversion or destructive retirement.",
-          "evidenceRefs": ["command:b5-local-rollback"]
+          "evidenceRefs": ["command:b5-candidate-facts"]
         }
       ]
     }

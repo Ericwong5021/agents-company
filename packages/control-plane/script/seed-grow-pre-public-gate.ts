@@ -47,6 +47,8 @@ const runtimeBindingPaths = [
   "script/seed-grow-stage-gate.ts",
   "script/seed-grow-stage-core.ts",
   "packages/control-plane/script/produce-seed-grow-candidate-facts.ts",
+  "packages/control-plane/script/b5-candidate-recovery-child.ts",
+  "packages/control-plane/src/metrics/b5-candidate-recovery.ts",
   "packages/control-plane/src/metrics/b5-candidate-scenarios.ts",
   "packages/control-plane/src/metrics/persisted-fact-artifact.ts",
   "packages/control-plane/src/metrics/persisted-fact-exporter.ts",

@@ -998,102 +998,164 @@
       ]
     },
     {
-      "id": "b5-shadow-comparison",
+      "id": "b5-candidate-facts",
       "cwd": "packages/control-plane",
       "argv": [
         "bun",
-        "test",
-        "--max-concurrency=1",
-        "--timeout",
-        "60000",
-        "test/metrics/seed-grow-reporter.test.ts",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/b5-shadow-comparison-junit.xml"
+        "script/produce-seed-grow-candidate-facts.ts",
+        "--candidate-sha",
+        "HEAD",
+        "--attempt-id",
+        "automatic",
+        "--out",
+        ".artifacts/seed-grow-b5/real-candidate-facts"
       ],
-      "timeoutMs": 180000,
+      "timeoutMs": 1200000,
       "stdoutValidator": "none",
       "environment": {},
       "reports": [
         {
-          "path": ".artifacts/automatic-evidence/b5-shadow-comparison-junit.xml",
-          "validator": "junit"
-        }
-      ]
-    },
-    {
-      "id": "b5-two-candidates",
-      "cwd": "packages/control-plane",
-      "argv": [
-        "bun",
-        "test",
-        "--max-concurrency=1",
-        "--timeout",
-        "60000",
-        "test/company-rollout/company-rollout.test.ts",
-        "--test-name-pattern",
-        "promotes only the latest two reproducible candidates",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/b5-two-candidates-junit.xml"
-      ],
-      "timeoutMs": 180000,
-      "stdoutValidator": "none",
-      "environment": {},
-      "reports": [
-        {
-          "path": ".artifacts/automatic-evidence/b5-two-candidates-junit.xml",
-          "validator": "junit"
-        }
-      ]
-    },
-    {
-      "id": "b5-metric-gate",
-      "cwd": "packages/control-plane",
-      "argv": [
-        "bun",
-        "test",
-        "--max-concurrency=1",
-        "--timeout",
-        "60000",
-        "test/metrics/persisted-fact-exporter.test.ts",
-        "test/metrics/seed-grow-reporter.test.ts",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/b5-metric-gate-junit.xml"
-      ],
-      "timeoutMs": 300000,
-      "stdoutValidator": "none",
-      "environment": {},
-      "reports": [
-        {
-          "path": ".artifacts/automatic-evidence/b5-metric-gate-junit.xml",
-          "validator": "junit"
-        }
-      ]
-    },
-    {
-      "id": "b5-local-rollback",
-      "cwd": "packages/control-plane",
-      "argv": [
-        "bun",
-        "test",
-        "--max-concurrency=1",
-        "--timeout",
-        "60000",
-        "test/project-orchestrator/dispatch-barrier.test.ts",
-        "--test-name-pattern",
-        "b5-local-rollback",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/b5-local-rollback-junit.xml"
-      ],
-      "timeoutMs": 180000,
-      "stdoutValidator": "none",
-      "environment": {},
-      "reports": [
-        {
-          "path": ".artifacts/automatic-evidence/b5-local-rollback-junit.xml",
-          "validator": "junit"
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/facts.json",
+          "validator": "artifact"
         },
         {
-          "path": ".artifacts/seed-grow-b5/local-rollback.json",
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/summary.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/metric-report.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/shadow-report.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/rollback-kill-switch.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/rollback-legacy-fallback.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S13-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S13-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S14-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S14-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S15-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S15-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S16-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S16-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S17-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S17-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S18-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S18-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S19-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S19-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S20-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S20-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S21-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S21-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S22-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S22-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S23-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S23-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S24-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S24-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S25-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S25-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S26-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S26-seed_and_grow.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S27-legacy_full_plan.json",
+          "validator": "artifact"
+        },
+        {
+          "path": ".artifacts/seed-grow-b5/real-candidate-facts/reports/S27-seed_and_grow.json",
           "validator": "artifact"
         }
       ]
@@ -1420,12 +1482,7 @@
         },
         {
           "id": "QA-02-PRE-PUBLIC-ROLLOUT-SAFETY",
-          "evidenceRefs": [
-            "command:b5-shadow-comparison",
-            "command:b5-two-candidates",
-            "command:b5-metric-gate",
-            "command:b5-local-rollback"
-          ]
+          "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
           "id": "QA-02-KEY-BRANCH-COVERAGE",
