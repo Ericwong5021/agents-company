@@ -11655,6 +11655,109 @@ export type CompanyCommonsSearchResponses = {
   }>
 }
 
+export type ReadingEvidenceRefRecord = {
+  chunk_id: string
+  start_offset: number
+  end_offset: number
+  claim: string
+}
+
+export type ReadingProjectConnectionRecord = {
+  project_id: string
+  impact: string
+}
+
+export type InterpretationRecord = {
+  id: string
+  source_id: string
+  reader_agent_id: string
+  reader_agent_name?: string
+  reader_role: string
+  work_item_id?: string
+  core_thesis: string
+  important_claims: Array<string>
+  company_relevance: string
+  project_connections: Array<ReadingProjectConnectionRecord>
+  agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+  conflicts: Array<string>
+  counter_arguments: Array<string>
+  inspiration: Array<string>
+  experiment_ideas: Array<string>
+  disposition: "archive" | "candidate" | "reject"
+  confidence: number
+  evidence_refs: Array<ReadingEvidenceRefRecord>
+  created_at: number
+}
+
+export type AgentInterestProfileRecord = {
+  company_id: string
+  agent_id: string
+  topics: Array<string>
+  preferred_lenses: Array<string>
+  excluded_topics: Array<string>
+  novelty_threshold: number
+  weekly_reading_budget: number
+  max_concurrency: number
+  privacy_scopes: Array<"company" | "project" | "private">
+  updated_at: number
+}
+
+export type ReadingAssignmentRecord = {
+  id: string
+  source_id: string
+  company_id: string
+  agent_id: string
+  project_id: string
+  linked_project_ids: Array<string>
+  work_item_id?: string
+  idempotency_key: string
+  status: "scheduling" | "scheduled" | "running" | "completed" | "failed" | "stopped"
+  relevance_score: number
+  novelty_score: number
+  gap_score: number
+  budget_score: number
+  total_score: number
+  budget_week: string
+  budget_reserved: boolean
+  error?: string
+  created_at: number
+  updated_at: number
+  stopped_at?: number
+}
+
+export type CompanyReadingInterpretationsResponses = {
+  200: Array<InterpretationRecord>
+}
+
+export type CompanyReadingCreateInterpretationResponses = {
+  200: InterpretationRecord
+}
+
+export type CompanyReadingProfilesResponses = {
+  200: Array<AgentInterestProfileRecord>
+}
+
+export type CompanyReadingUpsertProfileResponses = {
+  200: AgentInterestProfileRecord
+}
+
+export type CompanyReadingAssignmentsResponses = {
+  200: Array<ReadingAssignmentRecord>
+}
+
+export type CompanyReadingScheduleResponses = {
+  200: {
+    source_id: string
+    project_id: string
+    assignments: Array<ReadingAssignmentRecord>
+    eligible_agent_count: number
+  }
+}
+
+export type CompanyReadingStopResponses = {
+  200: ReadingAssignmentRecord
+}
+
 export type CompanyProjectListData = {
   body?: never
   path?: never

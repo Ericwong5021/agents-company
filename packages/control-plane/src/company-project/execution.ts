@@ -44,7 +44,7 @@ import {
   type WorktreeRun,
 } from "./schema"
 
-const workTypes = ["coding", "decision", "research", "writing", "design", "analysis"] as const
+const workTypes = ["coding", "decision", "research", "writing", "design", "analysis", "knowledge_reading"] as const
 const modelGroups = ["standard", "lite"] as const
 
 function defaultSeedPolicy(input: { goal: string; charter?: BoardProjectCharter }) {

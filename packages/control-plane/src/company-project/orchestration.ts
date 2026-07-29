@@ -8,7 +8,7 @@ export const verificationStrengths = ["self_check", "auto_verify", "independent_
 export type VerificationStrength = (typeof verificationStrengths)[number]
 
 export type OrchestrationInput = {
-  work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+  work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis" | "knowledge_reading"
   declared_risk?: "low" | "medium" | "high"
   approval_preset: string
 }

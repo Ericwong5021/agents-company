@@ -57,6 +57,12 @@ export {
   CompanyCommonsSourceTable,
   CompanyCommonsChunkTable,
 } from "../company-commons/company-commons.sql"
+export {
+  CompanyInterpretationTable,
+  CompanyAgentInterestProfileTable,
+  CompanyReadingAssignmentTable,
+  CompanyInterpretationEvidenceTable,
+} from "../company-reading/company-reading.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {
   CompanyRolloutStateTable,

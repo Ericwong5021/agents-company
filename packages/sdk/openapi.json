@@ -21744,6 +21744,205 @@
         }
       }
     },
+    "/company-reading/interpretations": {
+      "get": {
+        "operationId": "companyReading.interpretations",
+        "parameters": [
+          { "in": "query", "name": "company_id", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "project_ids", "schema": { "type": "string", "default": "" } },
+          { "in": "query", "name": "private_owner_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "project_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "List privacy-filtered Commons Interpretations",
+        "responses": {
+          "200": {
+            "description": "Interpretations",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "object" } } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "companyReading.createInterpretation",
+        "parameters": [
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "Persist a cited KNOWLEDGE_READING Interpretation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "access": { "type": "object" },
+                  "receipt": { "type": "object" }
+                },
+                "required": ["access", "receipt"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Interpretation",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
+    "/company-reading/profiles": {
+      "get": {
+        "operationId": "companyReading.profiles",
+        "parameters": [
+          { "in": "query", "name": "company_id", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "List Agent Interest Profiles",
+        "responses": {
+          "200": {
+            "description": "Profiles",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "object" } } } }
+          }
+        }
+      }
+    },
+    "/company-reading/profiles/{agentID}": {
+      "put": {
+        "operationId": "companyReading.upsertProfile",
+        "parameters": [
+          { "in": "path", "name": "agentID", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "Create or replace an Agent Interest Profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "company_id": { "type": "string" },
+                  "topics": { "type": "array", "items": { "type": "string" } },
+                  "preferred_lenses": { "type": "array", "items": { "type": "string" } },
+                  "excluded_topics": { "type": "array", "items": { "type": "string" } },
+                  "novelty_threshold": { "type": "number" },
+                  "weekly_reading_budget": { "type": "integer" },
+                  "max_concurrency": { "type": "integer" },
+                  "privacy_scopes": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": [
+                  "company_id",
+                  "topics",
+                  "preferred_lenses",
+                  "excluded_topics",
+                  "novelty_threshold",
+                  "weekly_reading_budget",
+                  "max_concurrency",
+                  "privacy_scopes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
+    "/company-reading/assignments": {
+      "get": {
+        "operationId": "companyReading.assignments",
+        "parameters": [
+          { "in": "query", "name": "company_id", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "project_ids", "schema": { "type": "string", "default": "" } },
+          { "in": "query", "name": "private_owner_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "List privacy-filtered reading assignments",
+        "responses": {
+          "200": {
+            "description": "Assignments",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "object" } } } }
+          }
+        }
+      }
+    },
+    "/company-reading/schedule": {
+      "post": {
+        "operationId": "companyReading.schedule",
+        "parameters": [
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "Score and schedule bounded Commons reading through the Orchestrator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "company_id": { "type": "string" },
+                  "project_ids": { "type": "array", "items": { "type": "string" } },
+                  "private_owner_id": { "type": "string" },
+                  "source_id": { "type": "string" },
+                  "project_id": { "type": "string" }
+                },
+                "required": ["company_id", "source_id", "project_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule result",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
+    "/company-reading/assignments/{assignmentID}/stop": {
+      "post": {
+        "operationId": "companyReading.stop",
+        "parameters": [
+          { "in": "path", "name": "assignmentID", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "directory", "schema": { "type": "string" } },
+          { "in": "query", "name": "workspace", "schema": { "type": "string" } }
+        ],
+        "summary": "Stop a reading assignment through the Orchestrator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "company_id": { "type": "string" },
+                  "project_ids": { "type": "array", "items": { "type": "string" } },
+                  "private_owner_id": { "type": "string" }
+                },
+                "required": ["company_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stopped assignment",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
     "/company-project": {
       "get": {
         "operationId": "companyProject.list",

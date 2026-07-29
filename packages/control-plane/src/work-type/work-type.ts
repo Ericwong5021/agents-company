@@ -1,4 +1,5 @@
 import { Context, Effect, Layer } from "effect"
+import { KnowledgeReadingReceipt } from "@/company-reading/schema"
 import type { WorkTypeID, WorkTypeDef, ArtifactType, VerifyResult } from "./schema"
 
 // ---------------------------------------------------------------------------
@@ -353,11 +354,40 @@ const analysis = makeWorkType(
   analysisVerify,
 )
 
+const knowledgeReadingVerify: VerifyFn = (input) =>
+  Effect.succeed(
+    KnowledgeReadingReceipt.safeParse(input.submission).success
+      ? { passed: true, findings: [] }
+      : {
+          passed: false,
+          findings: [
+            "Knowledge reading receipt must include every structured interpretation field and source chunk span evidence",
+          ],
+        },
+  )
+
+const knowledgeReading = makeWorkType(
+  "knowledge_reading",
+  "Knowledge reading",
+  [],
+  "analysis",
+  "Read one persisted Commons source and return a cited Interpretation without external, graph, policy, asset, belief, or skill writes.",
+  knowledgeReadingVerify,
+)
+
 // ---------------------------------------------------------------------------
 // Built-in registry
 // ---------------------------------------------------------------------------
 
-const BUILTIN_TYPES: readonly WorkTypeEntry[] = [coding, decision, research, writing, design, analysis]
+const BUILTIN_TYPES: readonly WorkTypeEntry[] = [
+  coding,
+  decision,
+  research,
+  writing,
+  design,
+  analysis,
+  knowledgeReading,
+]
 
 // ---------------------------------------------------------------------------
 // Service interface

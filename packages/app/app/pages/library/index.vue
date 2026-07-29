@@ -217,6 +217,9 @@ function clearSearch() {
               交付成果
               <span class="ac-work-tab__count">{{ deliveries.length }}</span>
             </button>
+            <NuxtLink to="/library/interpretations" class="ac-work-tab">
+              Interpretations
+            </NuxtLink>
           </div>
 
           <form v-if="activeTab === 'commons'" class="ac-commons-search" @submit.prevent="searchCommons">

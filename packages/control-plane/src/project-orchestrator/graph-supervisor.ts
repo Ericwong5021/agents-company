@@ -9,6 +9,7 @@ import {
   CompanyGraphDecisionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyWorkItemTable,
   CompanyWorkReceiptTable,
 } from "@/company-project/company-project.sql"
 import { CompanyGraphMutation } from "@/company-project/graph-mutation"
@@ -21,6 +22,7 @@ import {
   type GraphOperation as GraphOperationType,
   type GraphSnapshot,
   type Project,
+  type WorkItem,
   type WorkReceipt,
 } from "@/company-project/schema"
 import { CompanyWorkFacts, type ReceiptClaim } from "@/company-project/work-facts"
@@ -374,6 +376,23 @@ export interface Interface {
   readonly getDecision: (id: string) => Effect.Effect<GraphDecisionType | undefined>
   readonly listDecisions: (project_id: string) => Effect.Effect<GraphDecisionType[]>
   readonly recover: (input?: { project_id?: string }) => Effect.Effect<RecoveryReport>
+  readonly scheduleKnowledgeReading: (input: {
+    project_id: string
+    source_id: string
+    source_title: string
+    agent_id: string
+    agent_role: string
+    idempotency_key: string
+  }) => Effect.Effect<WorkItem>
+  readonly stopKnowledgeReading: (input: {
+    project_id: string
+    work_item_id: string
+    reason: string
+  }) => Effect.Effect<WorkItem>
+  readonly completeKnowledgeReading: (input: {
+    work_item_id: string
+    interpretation_id: string
+  }) => Effect.Effect<WorkItem>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/GraphSupervisor") {}
@@ -414,6 +433,99 @@ export function makeLayer(hooks: Hooks = {}) {
               .all(),
           ),
         )).map(decisionFromRow)
+      })
+
+      const scheduleKnowledgeReading = Effect.fn("GraphSupervisor.scheduleKnowledgeReading")(function* (input: {
+        project_id: string
+        source_id: string
+        source_title: string
+        agent_id: string
+        agent_role: string
+        idempotency_key: string
+      }) {
+        const project = yield* projects.get(input.project_id)
+        if (!project) throw new Error(`Company project not found: ${input.project_id}`)
+        const plan = (yield* projects.listPlans(input.project_id)).find((candidate) => candidate.status === "active")
+        if (!plan) throw new Error(`Active project plan not found: ${input.project_id}`)
+        return yield* projects.createWorkItem({
+          project_id: input.project_id,
+          plan_id: plan.id,
+          source_task_key: input.idempotency_key,
+          title: `Read: ${input.source_title}`.slice(0, 500),
+          description: `Read persisted Commons source ${input.source_id} and return the KNOWLEDGE_READING receipt contract with source chunk spans.`,
+          kind: "worker",
+          work_type: "knowledge_reading",
+          role: input.agent_role,
+          capability_packs: ["commons-reading@1"],
+          decision_scope: ["interpretation_only"],
+          resource_scope: [`commons_source:${input.source_id}`],
+          inputs: [input.source_id],
+          expected_outputs: ["One structured Interpretation with cited source chunks and spans"],
+          validators: [
+            "Every claim references a source chunk and span",
+            "No external, Graph, policy, Asset, Belief, or Skill write occurs",
+          ],
+          disposition: "retain",
+          model_group: "standard",
+          risk_level: "low",
+          review_status: "not_required",
+          purpose: "discovery",
+          origin_kind: "graph_mutation",
+          origin_ref_id: input.idempotency_key,
+          graph_revision_created: project.graph_revision,
+          validation_mode: "machine",
+          owner_agent_id: input.agent_id,
+          acceptance_criteria: [
+            "Receipt satisfies KNOWLEDGE_READING",
+            "Interpretation evidence resolves to the assigned Commons source",
+          ],
+          max_attempts: 3,
+        })
+      })
+
+      const stopKnowledgeReading = Effect.fn("GraphSupervisor.stopKnowledgeReading")(function* (input: {
+        project_id: string
+        work_item_id: string
+        reason: string
+      }) {
+        const item = (yield* projects.listWorkItems(input.project_id)).find(
+          (candidate) => candidate.id === input.work_item_id,
+        )
+        if (!item) throw new Error(`Knowledge reading WorkItem not found: ${input.work_item_id}`)
+        if (["completed", "failed", "superseded", "cancelled"].includes(item.status)) return item
+        return yield* projects.blockWorkItem({ id: item.id, error: input.reason })
+      })
+
+      const completeKnowledgeReading = Effect.fn("GraphSupervisor.completeKnowledgeReading")(function* (input: {
+        work_item_id: string
+        interpretation_id: string
+      }) {
+        const row = Database.use((db) =>
+          db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.work_item_id)).get(),
+        )
+        if (!row) throw new Error(`Knowledge reading WorkItem not found: ${input.work_item_id}`)
+        const item = (yield* projects.listWorkItems(row.project_id)).find(
+          (candidate) => candidate.id === input.work_item_id,
+        )!
+        if (item.status === "completed") return item
+        return yield* projects.completeWorkItemWithReceipt({
+          id: input.work_item_id,
+          receipt: {
+            idempotency_key: `knowledge-reading-receipt:${input.interpretation_id}`,
+            outcome: "completed",
+            summary: `Persisted cited Interpretation ${input.interpretation_id}`,
+            artifact_ids: [],
+            evidence_refs: [],
+            confirmed_facts: [`Interpretation ${input.interpretation_id} passed source span validation`],
+            invalidated_assumptions: [],
+            unknowns: [],
+            blockers: [],
+            capability_gaps: [],
+            task_proposals: [],
+            dependency_proposals: [],
+            questions: [],
+          },
+        })
       })
 
       const setState = Effect.fn("GraphSupervisor.setState")(function* (
@@ -954,7 +1066,17 @@ export function makeLayer(hooks: Hooks = {}) {
         }
       })
 
-      return Service.of({ processReceipt, drain, shadowLegacy, getDecision, listDecisions, recover })
+      return Service.of({
+        processReceipt,
+        drain,
+        shadowLegacy,
+        getDecision,
+        listDecisions,
+        recover,
+        scheduleKnowledgeReading,
+        stopKnowledgeReading,
+        completeKnowledgeReading,
+      })
     }),
   )
 }

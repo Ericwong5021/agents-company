@@ -198,6 +198,21 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       method: "post",
       handler: resolver.resolve("./runtime/server/api/commons-retry.post"),
     })
+    addServerHandler({
+      route: "/api/agent-company/reading",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/reading.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/reading/schedule",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/reading-schedule.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/reading/:assignmentID/stop",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/reading-stop.post"),
+    })
 
     extendPages((pages) => {
       pages.push(

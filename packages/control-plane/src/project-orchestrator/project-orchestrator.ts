@@ -2,6 +2,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { and, asc, eq } from "drizzle-orm"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
+import type { WorkItem } from "@/company-project/schema"
 import { CompanyValidationGate } from "@/company-project/validation-gate"
 import { Database } from "@/storage"
 import { CapabilityMaterializer } from "./capability-materializer"
@@ -34,6 +35,23 @@ export interface Interface {
   readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
   readonly resumeDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
   readonly recover: (input?: { project_id?: string }) => Effect.Effect<RecoveryResult>
+  readonly scheduleKnowledgeReading: (input: {
+    project_id: string
+    source_id: string
+    source_title: string
+    agent_id: string
+    agent_role: string
+    idempotency_key: string
+  }) => Effect.Effect<WorkItem>
+  readonly stopKnowledgeReading: (input: {
+    project_id: string
+    work_item_id: string
+    reason: string
+  }) => Effect.Effect<WorkItem>
+  readonly completeKnowledgeReading: (input: {
+    work_item_id: string
+    interpretation_id: string
+  }) => Effect.Effect<WorkItem>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ProjectOrchestrator") {}
@@ -143,6 +161,9 @@ const serviceLayer = Layer.effect(
       pauseDispatch: dispatch.pauseDispatch,
       resumeDispatch: dispatch.resumeDispatch,
       recover,
+      scheduleKnowledgeReading: supervisor.scheduleKnowledgeReading,
+      stopKnowledgeReading: supervisor.stopKnowledgeReading,
+      completeKnowledgeReading: supervisor.completeKnowledgeReading,
     })
   }),
 )

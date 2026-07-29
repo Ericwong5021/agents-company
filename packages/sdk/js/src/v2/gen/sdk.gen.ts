@@ -73,6 +73,14 @@ import type {
   CompanyCommonsSearchResponses,
   CompanyCommonsSourceResponses,
   CompanyCommonsSourcesResponses,
+  CompanyReadingAssignmentsResponses,
+  CompanyReadingCreateInterpretationResponses,
+  CompanyReadingInterpretationsResponses,
+  CompanyReadingProfilesResponses,
+  CompanyReadingScheduleResponses,
+  CompanyReadingStopResponses,
+  CompanyReadingUpsertProfileResponses,
+  InterpretationRecord,
   CompanyId,
   CompanyProjectAttemptsResponses,
   CompanyProjectCancelResponses,
@@ -4113,6 +4121,224 @@ export class CompanyCommons extends HeyApiClient {
       url: "/company-commons/search",
       ...options,
       ...params,
+    })
+  }
+}
+
+export class CompanyReading extends HeyApiClient {
+  public interpretations<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      project_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "query", key: "company_id" },
+        { in: "query", key: "project_ids" },
+        { in: "query", key: "private_owner_id" },
+        { in: "query", key: "project_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).get<CompanyReadingInterpretationsResponses, unknown, ThrowOnError>({
+      url: "/company-reading/interpretations",
+      ...options,
+      ...params,
+    })
+  }
+
+  public createInterpretation<ThrowOnError extends boolean = false>(
+    parameters: {
+      access: {
+        company_id: string
+        project_ids?: Array<string>
+        private_owner_id?: string
+      }
+      receipt: Omit<InterpretationRecord, "id" | "reader_agent_name" | "created_at">
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "body", key: "access" },
+        { in: "body", key: "receipt" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyReadingCreateInterpretationResponses, unknown, ThrowOnError>({
+      url: "/company-reading/interpretations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public profiles<ThrowOnError extends boolean = false>(
+    parameters: { company_id: string; directory?: string; workspace?: string },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "query", key: "company_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).get<CompanyReadingProfilesResponses, unknown, ThrowOnError>({
+      url: "/company-reading/profiles",
+      ...options,
+      ...params,
+    })
+  }
+
+  public upsertProfile<ThrowOnError extends boolean = false>(
+    parameters: {
+      agentID: string
+      company_id: string
+      topics: Array<string>
+      preferred_lenses: Array<string>
+      excluded_topics: Array<string>
+      novelty_threshold: number
+      weekly_reading_budget: number
+      max_concurrency: number
+      privacy_scopes: Array<"company" | "project" | "private">
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "path", key: "agentID" },
+        { in: "body", key: "company_id" },
+        { in: "body", key: "topics" },
+        { in: "body", key: "preferred_lenses" },
+        { in: "body", key: "excluded_topics" },
+        { in: "body", key: "novelty_threshold" },
+        { in: "body", key: "weekly_reading_budget" },
+        { in: "body", key: "max_concurrency" },
+        { in: "body", key: "privacy_scopes" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).put<CompanyReadingUpsertProfileResponses, unknown, ThrowOnError>({
+      url: "/company-reading/profiles/{agentID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public assignments<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "query", key: "company_id" },
+        { in: "query", key: "project_ids" },
+        { in: "query", key: "private_owner_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).get<CompanyReadingAssignmentsResponses, unknown, ThrowOnError>({
+      url: "/company-reading/assignments",
+      ...options,
+      ...params,
+    })
+  }
+
+  public schedule<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+      source_id: string
+      project_id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "body", key: "company_id" },
+        { in: "body", key: "project_ids" },
+        { in: "body", key: "private_owner_id" },
+        { in: "body", key: "source_id" },
+        { in: "body", key: "project_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyReadingScheduleResponses, unknown, ThrowOnError>({
+      url: "/company-reading/schedule",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public stop<ThrowOnError extends boolean = false>(
+    parameters: {
+      assignmentID: string
+      company_id: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "path", key: "assignmentID" },
+        { in: "body", key: "company_id" },
+        { in: "body", key: "project_ids" },
+        { in: "body", key: "private_owner_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyReadingStopResponses, unknown, ThrowOnError>({
+      url: "/company-reading/assignments/{assignmentID}/stop",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -9018,6 +9244,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _companyCommons?: CompanyCommons
   get companyCommons(): CompanyCommons {
     return (this._companyCommons ??= new CompanyCommons({ client: this.client }))
+  }
+
+  private _companyReading?: CompanyReading
+  get companyReading(): CompanyReading {
+    return (this._companyReading ??= new CompanyReading({ client: this.client }))
   }
 
   private _groupSession?: GroupSession

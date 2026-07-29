@@ -262,7 +262,7 @@ export interface Interface {
     title: string
     description: string
     kind: "planner" | "worker" | "reviewer"
-    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis" | "knowledge_reading"
     role: string
     capability_packs?: string[]
     decision_scope?: string[]

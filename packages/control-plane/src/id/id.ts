@@ -32,6 +32,8 @@ const prefixes = {
   artifact: "art",
   commonsSource: "csrc",
   commonsChunk: "cchk",
+  interpretation: "intp",
+  readingAssignment: "rasn",
   gate: "gate",
   localCredential: "lcr",
   channel: "chn",
