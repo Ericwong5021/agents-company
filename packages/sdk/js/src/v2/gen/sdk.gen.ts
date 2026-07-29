@@ -30,6 +30,7 @@ import type {
   BashInteractiveListResponses,
   BashInteractiveReplyErrors,
   BashInteractiveReplyResponses,
+  BeliefLoopActivationInput,
   BootstrapInput,
   ChannelId,
   ChannelSendInput,
@@ -55,6 +56,8 @@ import type {
   CompanyAgentUpdateResponses,
   CompanyApprovalPolicyUpdateErrors,
   CompanyApprovalPolicyUpdateResponses,
+  CompanyBeliefLoopActivateErrors,
+  CompanyBeliefLoopActivateResponses,
   CompanyBootstrapErrors,
   CompanyBootstrapResponses,
   CompanyChannelMessagesErrors,
@@ -63,36 +66,83 @@ import type {
   CompanyChannelSendResponses,
   CompanyChannelsErrors,
   CompanyChannelsResponses,
-  CompanyCurrentErrors,
-  CompanyCurrentResponses,
-  CompanyFounderOSModesResponses,
-  CompanyFounderOSModesUpdateResponses,
-  CompanyBeliefLoopActivateResponses,
-  CompanyDeferSetupGoalErrors,
-  CompanyDeferSetupGoalResponses,
   CompanyCommonsCapabilitiesResponses,
   CompanyCommonsImportSourceResponses,
   CompanyCommonsRetryResponses,
   CompanyCommonsSearchResponses,
   CompanyCommonsSourceResponses,
   CompanyCommonsSourcesResponses,
-  CompanyReadingAssignmentsResponses,
-  CompanyReadingCreateInterpretationResponses,
-  CompanyReadingConsumeReceiptResponses,
-  CompanyReadingInterpretationsResponses,
-  CompanyReadingProfilesResponses,
-  CompanyReadingScheduleResponses,
-  CompanyReadingStopResponses,
-  CompanyReadingUpsertProfileResponses,
-  InterpretationRecord,
+  CompanyCurrentErrors,
+  CompanyCurrentResponses,
+  CompanyDeferSetupGoalErrors,
+  CompanyDeferSetupGoalResponses,
+  CompanyFounderAdvisorReadinessErrors,
+  CompanyFounderAdvisorReadinessRecordErrors,
+  CompanyFounderAdvisorReadinessRecordResponses,
+  CompanyFounderAdvisorReadinessResponses,
+  CompanyFounderBenchmarkCaseCreateErrors,
+  CompanyFounderBenchmarkCaseCreateResponses,
+  CompanyFounderBenchmarkRunErrors,
+  CompanyFounderBenchmarkRunResponses,
+  CompanyFounderBoardConvergeErrors,
+  CompanyFounderBoardConvergeResponses,
+  CompanyFounderBoardErrors,
+  CompanyFounderBoardInterveneErrors,
+  CompanyFounderBoardInterveneResponses,
+  CompanyFounderBoardResponses,
+  CompanyFounderControlCenterErrors,
+  CompanyFounderControlCenterResponses,
+  CompanyFounderOsModesErrors,
+  CompanyFounderOsModesResponses,
+  CompanyFounderOsModesUpdateErrors,
+  CompanyFounderOsModesUpdateResponses,
+  CompanyFounderShadowAuditErrors,
+  CompanyFounderShadowAuditResponses,
+  CompanyFounderShadowComparisonErrors,
+  CompanyFounderShadowComparisonResponses,
+  CompanyFounderShadowContextErrors,
+  CompanyFounderShadowContextResponses,
+  CompanyFounderShadowRunErrors,
+  CompanyFounderShadowRunResponses,
+  CompanyFounderStudioAssetCreateErrors,
+  CompanyFounderStudioAssetCreateResponses,
+  CompanyFounderStudioAssetReviseErrors,
+  CompanyFounderStudioAssetReviseResponses,
+  CompanyFounderStudioCalibrationCreateErrors,
+  CompanyFounderStudioCalibrationCreateResponses,
+  CompanyFounderStudioCalibrationRespondErrors,
+  CompanyFounderStudioCalibrationRespondResponses,
+  CompanyFounderStudioCaseImportErrors,
+  CompanyFounderStudioCaseImportResponses,
+  CompanyFounderStudioErrors,
+  CompanyFounderStudioResponses,
+  CompanyFounderStudioRubricValidateErrors,
+  CompanyFounderStudioRubricValidateResponses,
+  CompanyFounderStudioSnapshotCompileErrors,
+  CompanyFounderStudioSnapshotCompileResponses,
+  CompanyFounderStudioSnapshotSelectErrors,
+  CompanyFounderStudioSnapshotSelectResponses,
   CompanyId,
+  CompanyLearningActOnExperimentResponses,
+  CompanyLearningActOnPatchResponses,
+  CompanyLearningAdoptBeliefResponses,
+  CompanyLearningAppendBeliefEvidenceResponses,
+  CompanyLearningBeliefsResponses,
+  CompanyLearningCompareInterpretationsResponses,
+  CompanyLearningCreateCandidateResponses,
+  CompanyLearningEvidencePackageResponses,
+  CompanyLearningExperimentsResponses,
+  CompanyLearningPatchesResponses,
+  CompanyLearningProposeExperimentResponses,
+  CompanyLearningProposePatchResponses,
+  CompanyLearningResolveTargetResponses,
   CompanyProjectAttemptsResponses,
   CompanyProjectCancelResponses,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
   CompanyProjectOutcomeResponses,
-  CompanyProjectOutcomeTransitionsResponses,
   CompanyProjectOutcomesResponses,
+  CompanyProjectOutcomeTransitionsResponses,
   CompanyProjectReceiptsResponses,
   CompanyProjectResolveGateResponses,
   CompanyProjectRetryResponses,
@@ -118,6 +168,14 @@ import type {
   CompanyProviderSetErrors,
   CompanyProviderSetResponses,
   CompanyProvidersResponses,
+  CompanyReadingAssignmentsResponses,
+  CompanyReadingConsumeReceiptResponses,
+  CompanyReadingCreateInterpretationResponses,
+  CompanyReadingInterpretationsResponses,
+  CompanyReadingProfilesResponses,
+  CompanyReadingScheduleResponses,
+  CompanyReadingStopResponses,
+  CompanyReadingUpsertProfileResponses,
   CompanyRecruitmentCapabilitiesResponses,
   CompanyRecruitmentDepartmentEnsureErrors,
   CompanyRecruitmentDepartmentEnsureResponses,
@@ -149,6 +207,10 @@ import type {
   ConfigUpdateResponses,
   ConversationThreadId,
   CustomProviderModelsInput,
+  DecisionAuthorityInput,
+  DecisionCenterActionInput,
+  DecisionIntent,
+  DecisionRecordAppendInput,
   EventSubscribeResponses,
   ExperienceArtifactGetErrors,
   ExperienceArtifactGetResponses,
@@ -199,6 +261,69 @@ import type {
   FindSymbolsResponses,
   FindTextResponses,
   FormatterStatusResponses,
+  FounderAdvisorConvergenceInput,
+  FounderAdvisorReadinessRecordInput,
+  FounderBenchmarkCaseInput,
+  FounderBenchmarkRunInput,
+  FounderCalibrationRequestInput,
+  FounderCalibrationResponseInput,
+  FounderCaseImportInput,
+  FounderContextBuildInput,
+  FounderCorrectionAppendInput,
+  FounderGreenDelegationInput,
+  FounderGreenReadinessRecordInput,
+  FounderInterventionInput,
+  FounderOsApprovalGateResolveErrors,
+  FounderOsApprovalGateResolveResponses,
+  FounderOsAuthorityEvaluateErrors,
+  FounderOsAuthorityEvaluateResponses,
+  FounderOsCorrectionAppendErrors,
+  FounderOsCorrectionAppendResponses,
+  FounderOsDecisionAppendErrors,
+  FounderOsDecisionAppendResponses,
+  FounderOsDecisionCenterActionErrors,
+  FounderOsDecisionCenterActionResponses,
+  FounderOsDecisionCenterErrors,
+  FounderOsDecisionCenterResponses,
+  FounderOsDecisionDispatchesErrors,
+  FounderOsDecisionDispatchesResponses,
+  FounderOsDecisionDispatchEventsErrors,
+  FounderOsDecisionDispatchEventsResponses,
+  FounderOsDecisionErrors,
+  FounderOsDecisionResponses,
+  FounderOsDecisionsErrors,
+  FounderOsDecisionsResponses,
+  FounderOsDecisionTransitionsErrors,
+  FounderOsDecisionTransitionsResponses,
+  FounderOsDelegationPoliciesErrors,
+  FounderOsDelegationPoliciesResponses,
+  FounderOsGovernanceErrors,
+  FounderOsGovernanceResponses,
+  FounderOsGreenDelegationProjectionErrors,
+  FounderOsGreenDelegationProjectionResponses,
+  FounderOsGreenDelegationSubmitErrors,
+  FounderOsGreenDelegationSubmitResponses,
+  FounderOsGreenReadinessRecordErrors,
+  FounderOsGreenReadinessRecordResponses,
+  FounderOsMetricContractErrors,
+  FounderOsMetricContractResponses,
+  FounderOsModeUpdateInput,
+  FounderOsYellowDelegationProjectionErrors,
+  FounderOsYellowDelegationProjectionResponses,
+  FounderOsYellowDelegationSubmitErrors,
+  FounderOsYellowDelegationSubmitResponses,
+  FounderOsYellowReadinessRecordErrors,
+  FounderOsYellowReadinessRecordResponses,
+  FounderOsYellowRollbackErrors,
+  FounderOsYellowRollbackResponses,
+  FounderRubricValidationInput,
+  FounderShadowComparisonInput,
+  FounderShadowRunInput,
+  FounderSnapshotCompileInput,
+  FounderSnapshotSelectInput,
+  FounderYellowDelegationInput,
+  FounderYellowReadinessRecordInput,
+  FounderYellowRollbackInput,
   GlobalBackupResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -214,6 +339,9 @@ import type {
   GlobalRuntimeListResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
+  GovernanceAssetDraftInput,
+  GovernanceAssetRevisionInput,
+  GovernanceRequest,
   GroupSessionChatErrors,
   GroupSessionChatResponses,
   GroupSessionCreateErrors,
@@ -1211,73 +1339,6 @@ export class Company extends HeyApiClient {
     })
   }
 
-  public founderOSModes<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).get<CompanyFounderOSModesResponses, unknown, ThrowOnError>({
-      url: "/company/founder-os-modes",
-      ...options,
-    })
-  }
-
-  public founderOSModesUpdate<ThrowOnError extends boolean = false>(
-    parameters: {
-      founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
-      companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "body", key: "founderTwinMode" },
-        { in: "body", key: "companyCommonsMode" },
-      ],
-    }])
-    return (options?.client ?? this.client).put<CompanyFounderOSModesUpdateResponses, unknown, ThrowOnError>({
-      url: "/company/founder-os-modes",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public beliefLoopActivate<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: CompanyId
-      k1_artifact_id: string
-      w2_artifact_id: string
-      e0_artifact_id: string
-      k2_evidence_package_artifact_id: string
-      authorization_event_id: string
-      actor: { kind: "human"; id: string }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "body", key: "company_id" },
-        { in: "body", key: "k1_artifact_id" },
-        { in: "body", key: "w2_artifact_id" },
-        { in: "body", key: "e0_artifact_id" },
-        { in: "body", key: "k2_evidence_package_artifact_id" },
-        { in: "body", key: "authorization_event_id" },
-        { in: "body", key: "actor" },
-      ],
-    }])
-    return (options?.client ?? this.client).post<CompanyBeliefLoopActivateResponses, unknown, ThrowOnError>({
-      url: "/company/founder-os-modes/belief-loop/activate",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
   /**
    * List public employee facts with evidence-backed activity projections
    */
@@ -1311,6 +1372,476 @@ export class Company extends HeyApiClient {
       ThrowOnError
     >({
       url: "/company/approval-policy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get Founder OS global maximum, company modes, and effective modes
+   */
+  public founderOsModes<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      CompanyFounderOsModesResponses,
+      CompanyFounderOsModesErrors,
+      ThrowOnError
+    >({ url: "/company/founder-os-modes", ...options })
+  }
+
+  /**
+   * Persist Founder OS company modes
+   */
+  public founderOsModesUpdate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderOsModeUpdateInput?: FounderOsModeUpdateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderOsModeUpdateInput", map: "body" }] }])
+    return (options?.client ?? this.client).put<
+      CompanyFounderOsModesUpdateResponses,
+      CompanyFounderOsModesUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os-modes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Activate Belief Loop after K1, W2, E0, K2 and human authorization gates
+   */
+  public beliefLoopActivate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      beliefLoopActivationInput?: BeliefLoopActivationInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "beliefLoopActivationInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyBeliefLoopActivateResponses,
+      CompanyBeliefLoopActivateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os-modes/belief-loop/activate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read Founder Studio assets and immutable snapshots
+   */
+  public founderStudio<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      scope_kind?: "company" | "domain" | "project" | "brand"
+      scope_ref?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "scope_kind" },
+            { in: "query", key: "scope_ref" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyFounderStudioResponses,
+      CompanyFounderStudioErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create an AI or external Founder Studio draft
+   */
+  public founderStudioAssetCreate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      governanceAssetDraftInput?: GovernanceAssetDraftInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "governanceAssetDraftInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioAssetCreateResponses,
+      CompanyFounderStudioAssetCreateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/assets",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append a Governance Asset version under deterministic authority rules
+   */
+  public founderStudioAssetRevise<ThrowOnError extends boolean = false>(
+    parameters: {
+      assetID: string
+      governanceAssetRevisionInput?: GovernanceAssetRevisionInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "assetID" },
+            { key: "governanceAssetRevisionInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioAssetReviseResponses,
+      CompanyFounderStudioAssetReviseErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/assets/{assetID}/versions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Compile and persist a deterministic Founder Twin Snapshot
+   */
+  public founderStudioSnapshotCompile<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderSnapshotCompileInput?: FounderSnapshotCompileInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderSnapshotCompileInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioSnapshotCompileResponses,
+      CompanyFounderStudioSnapshotCompileErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/snapshots",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append a Founder Twin Snapshot selection or rollback
+   */
+  public founderStudioSnapshotSelect<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderSnapshotSelectInput?: FounderSnapshotSelectInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderSnapshotSelectInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioSnapshotSelectResponses,
+      CompanyFounderStudioSnapshotSelectErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/snapshot-selection",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Build a bounded and scope-filtered Founder Shadow context
+   */
+  public founderShadowContext<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderContextBuildInput?: FounderContextBuildInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderContextBuildInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderShadowContextResponses,
+      CompanyFounderShadowContextErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-shadow/context",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Record a non-speaking and non-executing Founder Shadow suggestion
+   */
+  public founderShadowRun<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderShadowRunInput?: FounderShadowRunInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderShadowRunInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderShadowRunResponses,
+      CompanyFounderShadowRunErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-shadow/runs",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Compare a Shadow suggestion with a separately sourced real decision
+   */
+  public founderShadowComparison<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderShadowComparisonInput?: FounderShadowComparisonInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderShadowComparisonInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderShadowComparisonResponses,
+      CompanyFounderShadowComparisonErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-shadow/comparisons",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the isolated Founder Shadow audit projection
+   */
+  public founderShadowAudit<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      CompanyFounderShadowAuditResponses,
+      CompanyFounderShadowAuditErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-shadow/audit",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Import a sourced decision, taste, or rubric case as a non-human draft
+   */
+  public founderStudioCaseImport<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderCaseImportInput?: FounderCaseImportInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderCaseImportInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioCaseImportResponses,
+      CompanyFounderStudioCaseImportErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/cases",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append an A/B, accept, or reject calibration request
+   */
+  public founderStudioCalibrationCreate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderCalibrationRequestInput?: FounderCalibrationRequestInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderCalibrationRequestInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioCalibrationCreateResponses,
+      CompanyFounderStudioCalibrationCreateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/calibrations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append a human-confirmed calibration response
+   */
+  public founderStudioCalibrationRespond<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderCalibrationResponseInput?: FounderCalibrationResponseInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [{ args: [{ key: "founderCalibrationResponseInput", map: "body" }] }],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioCalibrationRespondResponses,
+      CompanyFounderStudioCalibrationRespondErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/calibration-responses",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Validate scores against a referenced active human-authority Rubric
+   */
+  public founderStudioRubricValidate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderRubricValidationInput?: FounderRubricValidationInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderRubricValidationInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderStudioRubricValidateResponses,
+      CompanyFounderStudioRubricValidateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-studio/rubric-validations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Register a human-authority training or frozen holdout case
+   */
+  public founderBenchmarkCaseCreate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderBenchmarkCaseInput?: FounderBenchmarkCaseInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderBenchmarkCaseInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderBenchmarkCaseCreateResponses,
+      CompanyFounderBenchmarkCaseCreateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-benchmarks/cases",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Recompute a Founder Decision or Taste holdout report
+   */
+  public founderBenchmarkRun<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderBenchmarkRunInput?: FounderBenchmarkRunInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderBenchmarkRunInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderBenchmarkRunResponses,
+      CompanyFounderBenchmarkRunErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-benchmarks/runs",
       ...options,
       ...params,
       headers: {
@@ -1624,6 +2155,146 @@ export class Company extends HeyApiClient {
   }
 
   /**
+   * Read fail-closed Advisor readiness and exact metric thresholds
+   */
+  public founderAdvisorReadiness<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      CompanyFounderAdvisorReadinessResponses,
+      CompanyFounderAdvisorReadinessErrors,
+      ThrowOnError
+    >({
+      url: "/company/board/readiness",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Verify W4 exact commit, benchmark thresholds, and human authorization before Advisor promotion
+   */
+  public founderAdvisorReadinessRecord<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderAdvisorReadinessRecordInput?: FounderAdvisorReadinessRecordInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [{ args: [{ key: "founderAdvisorReadinessRecordInput", map: "body" }] }],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyFounderAdvisorReadinessRecordResponses,
+      CompanyFounderAdvisorReadinessRecordErrors,
+      ThrowOnError
+    >({
+      url: "/company/board/readiness",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the real Founder governance Board surface
+   */
+  public founderBoard<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<CompanyFounderBoardResponses, CompanyFounderBoardErrors, ThrowOnError>({
+      url: "/company/board",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Converge a sourced Shadow recommendation into a fail-closed Advisor DecisionIntent
+   */
+  public founderBoardConverge<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderAdvisorConvergenceInput?: FounderAdvisorConvergenceInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderAdvisorConvergenceInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderBoardConvergeResponses,
+      CompanyFounderBoardConvergeErrors,
+      ThrowOnError
+    >({
+      url: "/company/board/convergences",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Persist a human intervention fence and stop scoped project work
+   */
+  public founderBoardIntervene<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderInterventionInput?: FounderInterventionInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderInterventionInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      CompanyFounderBoardInterveneResponses,
+      CompanyFounderBoardInterveneErrors,
+      ThrowOnError
+    >({
+      url: "/company/board/interventions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the non-mutating Founder Control Center
+   */
+  public founderControlCenter<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      CompanyFounderControlCenterResponses,
+      CompanyFounderControlCenterErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-control-center",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * List company channels visible to the local user
    */
   public channels<ThrowOnError extends boolean = false>(
@@ -1850,6 +2521,545 @@ export class Company extends HeyApiClient {
   private _project?: Project2
   get project(): Project2 {
     return (this._project ??= new Project2({ client: this.client }))
+  }
+}
+
+export class FounderOs extends HeyApiClient {
+  /**
+   * List recovered Founder OS decision projections
+   */
+  public decisions<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      scope_type?: "company" | "project" | "pre_project"
+      project_id?: string
+      pre_project_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "scope_type" },
+            { in: "query", key: "project_id" },
+            { in: "query", key: "pre_project_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<FounderOsDecisionsResponses, FounderOsDecisionsErrors, ThrowOnError>({
+      url: "/company/founder-os/decisions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append an immutable Founder OS decision record
+   */
+  public decisionAppend<ThrowOnError extends boolean = false>(
+    parameters?: {
+      decisionRecordAppendInput?: DecisionRecordAppendInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "decisionRecordAppendInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      FounderOsDecisionAppendResponses,
+      FounderOsDecisionAppendErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/decisions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get a Founder OS decision projection
+   */
+  public decision<ThrowOnError extends boolean = false>(
+    parameters: {
+      decisionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "decisionID" }] }])
+    return (options?.client ?? this.client).get<FounderOsDecisionResponses, FounderOsDecisionErrors, ThrowOnError>({
+      url: "/company/founder-os/decisions/{decisionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List append-only decision transitions
+   */
+  public decisionTransitions<ThrowOnError extends boolean = false>(
+    parameters: {
+      decisionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "decisionID" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsDecisionTransitionsResponses,
+      FounderOsDecisionTransitionsErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/decisions/{decisionID}/transitions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List a decision's durable dispatch outboxes
+   */
+  public decisionDispatches<ThrowOnError extends boolean = false>(
+    parameters: {
+      decisionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "decisionID" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsDecisionDispatchesResponses,
+      FounderOsDecisionDispatchesErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/decisions/{decisionID}/dispatches",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List append-only dispatch lifecycle events
+   */
+  public decisionDispatchEvents<ThrowOnError extends boolean = false>(
+    parameters: {
+      dispatchID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "dispatchID" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsDecisionDispatchEventsResponses,
+      FounderOsDecisionDispatchEventsErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/dispatches/{dispatchID}/events",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List versioned Founder OS delegation policies
+   */
+  public delegationPolicies<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsDelegationPoliciesResponses,
+      FounderOsDelegationPoliciesErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/delegation-policies",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Evaluate deterministic Founder OS authority
+   */
+  public authorityEvaluate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      decisionAuthorityInput?: DecisionAuthorityInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "decisionAuthorityInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      FounderOsAuthorityEvaluateResponses,
+      FounderOsAuthorityEvaluateErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/authority/evaluate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Enter the single Founder OS governance path
+   */
+  public governance<ThrowOnError extends boolean = false>(
+    parameters?: {
+      governanceRequest?: GovernanceRequest
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "governanceRequest", map: "body" }] }])
+    return (options?.client ?? this.client).post<FounderOsGovernanceResponses, FounderOsGovernanceErrors, ThrowOnError>(
+      {
+        url: "/company/founder-os/governance",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Resolve a Founder OS red approval gate
+   */
+  public approvalGateResolve<ThrowOnError extends boolean = false>(
+    parameters: {
+      gateID: string
+      decision?: "approve" | "reject"
+      note?: string
+      actor?: {
+        kind: "human" | "ai_founder" | "board" | "policy_engine"
+        id: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "gateID" },
+            { in: "body", key: "decision" },
+            { in: "body", key: "note" },
+            { in: "body", key: "actor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      FounderOsApprovalGateResolveResponses,
+      FounderOsApprovalGateResolveErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/approval-gates/{gateID}/resolve",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append an immutable Founder OS correction or override
+   */
+  public correctionAppend<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderCorrectionAppendInput?: FounderCorrectionAppendInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderCorrectionAppendInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      FounderOsCorrectionAppendResponses,
+      FounderOsCorrectionAppendErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/corrections",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the persistent Decision Center projection
+   */
+  public decisionCenter<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsDecisionCenterResponses,
+      FounderOsDecisionCenterErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/decision-center",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append a Decision Center accept, reject or rollback action
+   */
+  public decisionCenterAction<ThrowOnError extends boolean = false>(
+    parameters: {
+      decisionID: string
+      decisionCenterActionInput?: DecisionCenterActionInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "decisionID" },
+            { key: "decisionCenterActionInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      FounderOsDecisionCenterActionResponses,
+      FounderOsDecisionCenterActionErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/decision-center/{decisionID}/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the frozen Founder OS metric contract
+   */
+  public metricContract<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      FounderOsMetricContractResponses,
+      FounderOsMetricContractErrors,
+      ThrowOnError
+    >({ url: "/company/founder-os/metrics/contract", ...options })
+  }
+
+  /**
+   * Read fail-closed Green delegation readiness and auditable chains
+   */
+  public greenDelegationProjection<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsGreenDelegationProjectionResponses,
+      FounderOsGreenDelegationProjectionErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/green-delegations",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Authorize and process one Green allowlisted Work Receipt through the existing vertical chain
+   */
+  public greenDelegationSubmit<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderGreenDelegationInput?: FounderGreenDelegationInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderGreenDelegationInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      FounderOsGreenDelegationSubmitResponses,
+      FounderOsGreenDelegationSubmitErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/green-delegations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Record human-authorized Green readiness from verified persisted evidence
+   */
+  public greenReadinessRecord<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderGreenReadinessRecordInput?: FounderGreenReadinessRecordInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [{ args: [{ key: "founderGreenReadinessRecordInput", map: "body" }] }],
+    )
+    return (options?.client ?? this.client).post<
+      FounderOsGreenReadinessRecordResponses,
+      FounderOsGreenReadinessRecordErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/green-readiness",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read fail-closed Yellow contracts, readiness, circuit state, and summaries
+   */
+  public yellowDelegationProjection<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      FounderOsYellowDelegationProjectionResponses,
+      FounderOsYellowDelegationProjectionErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/yellow-delegations",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Prepare and dispatch one contracted Yellow action through the persistent outbox
+   */
+  public yellowDelegationSubmit<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderYellowDelegationInput?: FounderYellowDelegationInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "founderYellowDelegationInput", map: "body" }] }])
+    return (options?.client ?? this.client).post<
+      FounderOsYellowDelegationSubmitResponses,
+      FounderOsYellowDelegationSubmitErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/yellow-delegations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Record human-confirmed Yellow readiness from persisted Green, W6, E0, and Outcome evidence
+   */
+  public yellowReadinessRecord<ThrowOnError extends boolean = false>(
+    parameters?: {
+      founderYellowReadinessRecordInput?: FounderYellowReadinessRecordInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [{ args: [{ key: "founderYellowReadinessRecordInput", map: "body" }] }],
+    )
+    return (options?.client ?? this.client).post<
+      FounderOsYellowReadinessRecordResponses,
+      FounderOsYellowReadinessRecordErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/yellow-readiness",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Run the checkpoint restore handler after a failure condition or human decision
+   */
+  public yellowRollback<ThrowOnError extends boolean = false>(
+    parameters: {
+      runId: string
+      founderYellowRollbackInput?: FounderYellowRollbackInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runId" },
+            { key: "founderYellowRollbackInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      FounderOsYellowRollbackResponses,
+      FounderOsYellowRollbackErrors,
+      ThrowOnError
+    >({
+      url: "/company/founder-os/yellow-delegations/{runId}/rollback",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 }
 
@@ -3968,487 +5178,6 @@ export class AgentRun extends HeyApiClient {
   }
 }
 
-export class CompanyCommons extends HeyApiClient {
-  public capabilities<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<CompanyCommonsCapabilitiesResponses, unknown, ThrowOnError>({
-      url: "/company-commons/capabilities",
-      ...options,
-      ...params,
-    })
-  }
-
-  public sources<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      project_ids?: string
-      private_owner_id?: string
-      limit?: number
-      offset?: number
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "company_id" },
-            { in: "query", key: "project_ids" },
-            { in: "query", key: "private_owner_id" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "offset" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<CompanyCommonsSourcesResponses, unknown, ThrowOnError>({
-      url: "/company-commons/sources",
-      ...options,
-      ...params,
-    })
-  }
-
-  public importSource<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      title: string
-      author?: string
-      origin?: string
-      published_at?: number
-      language?: string
-      tags?: Array<string>
-      metadata?: Record<string, unknown>
-      privacy_scope: "company" | "project" | "private"
-      project_id?: string
-      private_owner_id?: string
-      source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
-      content?: string
-      url?: string
-      content_base64?: string
-      media_type?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "body", key: "company_id" },
-            { in: "body", key: "title" },
-            { in: "body", key: "author" },
-            { in: "body", key: "origin" },
-            { in: "body", key: "published_at" },
-            { in: "body", key: "language" },
-            { in: "body", key: "tags" },
-            { in: "body", key: "metadata" },
-            { in: "body", key: "privacy_scope" },
-            { in: "body", key: "project_id" },
-            { in: "body", key: "private_owner_id" },
-            { in: "body", key: "source_type" },
-            { in: "body", key: "content" },
-            { in: "body", key: "url" },
-            { in: "body", key: "content_base64" },
-            { in: "body", key: "media_type" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<CompanyCommonsImportSourceResponses, unknown, ThrowOnError>({
-      url: "/company-commons/sources",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public source<ThrowOnError extends boolean = false>(
-    parameters: {
-      sourceID: string
-      company_id: string
-      project_ids?: string
-      private_owner_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sourceID" },
-            { in: "query", key: "company_id" },
-            { in: "query", key: "project_ids" },
-            { in: "query", key: "private_owner_id" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<CompanyCommonsSourceResponses, unknown, ThrowOnError>({
-      url: "/company-commons/sources/{sourceID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  public retry<ThrowOnError extends boolean = false>(
-    parameters: {
-      sourceID: string
-      company_id: string
-      project_ids?: Array<string>
-      private_owner_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sourceID" },
-            { in: "body", key: "company_id" },
-            { in: "body", key: "project_ids" },
-            { in: "body", key: "private_owner_id" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<CompanyCommonsRetryResponses, unknown, ThrowOnError>({
-      url: "/company-commons/sources/{sourceID}/retry",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public search<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      project_ids?: string
-      private_owner_id?: string
-      q: string
-      limit?: number
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "company_id" },
-            { in: "query", key: "project_ids" },
-            { in: "query", key: "private_owner_id" },
-            { in: "query", key: "q" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<CompanyCommonsSearchResponses, unknown, ThrowOnError>({
-      url: "/company-commons/search",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class CompanyReading extends HeyApiClient {
-  public interpretations<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      project_ids?: string
-      private_owner_id?: string
-      project_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "query", key: "company_id" },
-        { in: "query", key: "project_ids" },
-        { in: "query", key: "private_owner_id" },
-        { in: "query", key: "project_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).get<CompanyReadingInterpretationsResponses, unknown, ThrowOnError>({
-      url: "/company-reading/interpretations",
-      ...options,
-      ...params,
-    })
-  }
-
-  public createInterpretation<ThrowOnError extends boolean = false>(
-    parameters: {
-      access: {
-        company_id: string
-        project_ids?: Array<string>
-        private_owner_id?: string
-      }
-      receipt: Omit<InterpretationRecord, "id" | "work_receipt_id" | "reader_agent_name" | "created_at">
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "body", key: "access" },
-        { in: "body", key: "receipt" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).post<CompanyReadingCreateInterpretationResponses, unknown, ThrowOnError>({
-      url: "/company-reading/interpretations",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public consumeReceipt<ThrowOnError extends boolean = false>(
-    parameters: {
-      receiptID: string
-      company_id: string
-      project_ids?: Array<string>
-      private_owner_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "path", key: "receiptID" },
-        { in: "body", key: "company_id" },
-        { in: "body", key: "project_ids" },
-        { in: "body", key: "private_owner_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).post<CompanyReadingConsumeReceiptResponses, unknown, ThrowOnError>({
-      url: "/company-reading/receipts/{receiptID}/consume",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public profiles<ThrowOnError extends boolean = false>(
-    parameters: { company_id: string; directory?: string; workspace?: string },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "query", key: "company_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).get<CompanyReadingProfilesResponses, unknown, ThrowOnError>({
-      url: "/company-reading/profiles",
-      ...options,
-      ...params,
-    })
-  }
-
-  public upsertProfile<ThrowOnError extends boolean = false>(
-    parameters: {
-      agentID: string
-      company_id: string
-      topics: Array<string>
-      preferred_lenses: Array<string>
-      excluded_topics: Array<string>
-      novelty_threshold: number
-      weekly_reading_budget: number
-      max_concurrency: number
-      privacy_scopes: Array<"company" | "project" | "private">
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "path", key: "agentID" },
-        { in: "body", key: "company_id" },
-        { in: "body", key: "topics" },
-        { in: "body", key: "preferred_lenses" },
-        { in: "body", key: "excluded_topics" },
-        { in: "body", key: "novelty_threshold" },
-        { in: "body", key: "weekly_reading_budget" },
-        { in: "body", key: "max_concurrency" },
-        { in: "body", key: "privacy_scopes" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).put<CompanyReadingUpsertProfileResponses, unknown, ThrowOnError>({
-      url: "/company-reading/profiles/{agentID}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public assignments<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      project_ids?: string
-      private_owner_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "query", key: "company_id" },
-        { in: "query", key: "project_ids" },
-        { in: "query", key: "private_owner_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).get<CompanyReadingAssignmentsResponses, unknown, ThrowOnError>({
-      url: "/company-reading/assignments",
-      ...options,
-      ...params,
-    })
-  }
-
-  public schedule<ThrowOnError extends boolean = false>(
-    parameters: {
-      company_id: string
-      project_ids?: Array<string>
-      private_owner_id?: string
-      source_id: string
-      project_id: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "body", key: "company_id" },
-        { in: "body", key: "project_ids" },
-        { in: "body", key: "private_owner_id" },
-        { in: "body", key: "source_id" },
-        { in: "body", key: "project_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).post<CompanyReadingScheduleResponses, unknown, ThrowOnError>({
-      url: "/company-reading/schedule",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public stop<ThrowOnError extends boolean = false>(
-    parameters: {
-      assignmentID: string
-      company_id: string
-      project_ids?: Array<string>
-      private_owner_id?: string
-      directory?: string
-      workspace?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "path", key: "assignmentID" },
-        { in: "body", key: "company_id" },
-        { in: "body", key: "project_ids" },
-        { in: "body", key: "private_owner_id" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
-      ],
-    }])
-    return (options?.client ?? this.client).post<CompanyReadingStopResponses, unknown, ThrowOnError>({
-      url: "/company-reading/assignments/{assignmentID}/stop",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class CompanyProject extends HeyApiClient {
   /**
    * List company projects
@@ -4649,6 +5378,9 @@ export class CompanyProject extends HeyApiClient {
     })
   }
 
+  /**
+   * List independent outcome signals
+   */
   public outcomes<ThrowOnError extends boolean = false>(
     parameters: {
       projectID: string
@@ -4680,39 +5412,64 @@ export class CompanyProject extends HeyApiClient {
     })
   }
 
+  /**
+   * Submit an independent outcome signal
+   *
+   * Appends an outcome backed by a terminal Validation Gate or independently verified Artifact. Runtime completion and Work Receipt self-report are insufficient.
+   */
   public submitOutcome<ThrowOnError extends boolean = false>(
     parameters: {
       projectID: string
       directory?: string
       workspace?: string
-      schema_version: 2
-      idempotency_key: string
+      schema_version?: 2
+      idempotency_key?: string
       decision_id?: string
-      result: "succeeded" | "failed" | "inconclusive"
-      summary: string
-      validator_ref: {
-        kind: "validation_gate" | "artifact"
-        id: string
-      }
-      validator_result_ref: {
-        kind: "validation_gate" | "artifact"
-        id: string
-      }
+      result?: "succeeded" | "failed" | "inconclusive"
+      summary?: string
+      validator_ref?:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      validator_result_ref?:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
       work_receipt_id?: string
-      metric_contract_ref: {
+      metric_contract_ref?: {
         kind: "founder_metric_contract" | "project_metric_contract"
         id: string
         version: number
       }
-      observation_window: {
+      observation_window?: {
         starts_at: number
         ends_at: number
       }
-      source_refs: Array<{
-        kind: "work_receipt" | "validation_gate" | "artifact"
-        id: string
-      }>
-      observed_at: number
+      source_refs?: Array<
+        | {
+            kind: "work_receipt"
+            id: string
+          }
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      >
+      observed_at?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4752,6 +5509,9 @@ export class CompanyProject extends HeyApiClient {
     })
   }
 
+  /**
+   * Get an independent outcome signal
+   */
   public outcome<ThrowOnError extends boolean = false>(
     parameters: {
       projectID: string
@@ -4781,6 +5541,9 @@ export class CompanyProject extends HeyApiClient {
     })
   }
 
+  /**
+   * List append-only Outcome Signal transitions
+   */
   public outcomeTransitions<ThrowOnError extends boolean = false>(
     parameters: {
       projectID: string
@@ -4790,14 +5553,19 @@ export class CompanyProject extends HeyApiClient {
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "path", key: "projectID" },
-        { in: "path", key: "outcomeID" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "outcomeID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
       ],
-    }])
+    )
     return (options?.client ?? this.client).get<CompanyProjectOutcomeTransitionsResponses, unknown, ThrowOnError>({
       url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions",
       ...options,
@@ -4805,37 +5573,53 @@ export class CompanyProject extends HeyApiClient {
     })
   }
 
+  /**
+   * Append an Outcome Signal validation transition
+   */
   public transitionOutcome<ThrowOnError extends boolean = false>(
     parameters: {
       projectID: string
       outcomeID: string
-      idempotency_key: string
-      status: "validated" | "invalidated"
-      validator_result_ref: { kind: "validation_gate" | "artifact"; id: string }
-      reason: string
-      actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
-      actor_id?: string
-      occurred_at: number
       directory?: string
       workspace?: string
+      idempotency_key?: string
+      status?: "validated" | "invalidated"
+      validator_result_ref?:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      reason?: string
+      actor_kind?: "human" | "control_plane" | "external_system" | "independent_reviewer"
+      actor_id?: string
+      occurred_at?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams([parameters], [{
-      args: [
-        { in: "path", key: "projectID" },
-        { in: "path", key: "outcomeID" },
-        { in: "body", key: "idempotency_key" },
-        { in: "body", key: "status" },
-        { in: "body", key: "validator_result_ref" },
-        { in: "body", key: "reason" },
-        { in: "body", key: "actor_kind" },
-        { in: "body", key: "actor_id" },
-        { in: "body", key: "occurred_at" },
-        { in: "query", key: "directory" },
-        { in: "query", key: "workspace" },
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "outcomeID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "idempotency_key" },
+            { in: "body", key: "status" },
+            { in: "body", key: "validator_result_ref" },
+            { in: "body", key: "reason" },
+            { in: "body", key: "actor_kind" },
+            { in: "body", key: "actor_id" },
+            { in: "body", key: "occurred_at" },
+          ],
+        },
       ],
-    }])
+    )
     return (options?.client ?? this.client).post<CompanyProjectTransitionOutcomeResponses, unknown, ThrowOnError>({
       url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions",
       ...options,
@@ -4968,6 +5752,1228 @@ export class CompanyProject extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+}
+
+export class CompanyCommons extends HeyApiClient {
+  /**
+   * List verified Commons ingestion capabilities
+   */
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/company-commons/capabilities",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List privacy-filtered Commons sources
+   */
+  public sources<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      limit?: number
+      offset?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "offset" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSourcesResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Import a Commons source as an isolated Artifact
+   *
+   * Stores original content in Artifact and source processing facts in CommonsSource. Imported instructions remain untrusted and cannot execute.
+   */
+  public importSource<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      body?: (
+        | {
+            privacy_scope: "company"
+          }
+        | {
+            privacy_scope: "project"
+            project_id: string
+          }
+        | {
+            privacy_scope: "private"
+            private_owner_id: string
+          }
+      ) &
+        (
+          | {
+              company_id: string
+              title: string
+              author?: string
+              origin?: string
+              published_at?: number
+              language?: string
+              tags?: Array<string>
+              metadata?: {
+                [key: string]: unknown
+              }
+              source_type: "text" | "markdown" | "conversation_export"
+              content: string
+            }
+          | {
+              company_id: string
+              title: string
+              author?: string
+              origin?: string
+              published_at?: number
+              language?: string
+              tags?: Array<string>
+              metadata?: {
+                [key: string]: unknown
+              }
+              source_type: "url"
+              url: string
+            }
+          | {
+              company_id: string
+              title: string
+              author?: string
+              origin?: string
+              published_at?: number
+              language?: string
+              tags?: Array<string>
+              metadata?: {
+                [key: string]: unknown
+              }
+              source_type: "pdf" | "image" | "podcast" | "video"
+              content_base64: string
+              media_type: string
+            }
+        )
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyCommonsImportSourceResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get a Commons source with original Artifact and source spans
+   */
+  public source<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: string
+      directory?: string
+      workspace?: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSourceResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources/{sourceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Retry a recoverable Commons source
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: string
+      directory?: string
+      workspace?: string
+      company_id?: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_ids" },
+            { in: "body", key: "private_owner_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyCommonsRetryResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources/{sourceID}/retry",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Search privacy-filtered Commons chunks
+   *
+   * Uses SQLite FTS without requiring embeddings. Results remain untrusted source content with instructions disabled.
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      q: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "q" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSearchResponses, unknown, ThrowOnError>({
+      url: "/company-commons/search",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class CompanyReading extends HeyApiClient {
+  /**
+   * List privacy-filtered Commons Interpretations
+   */
+  public interpretations<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      project_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "project_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyReadingInterpretationsResponses, unknown, ThrowOnError>({
+      url: "/company-reading/interpretations",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Persist a cited KNOWLEDGE_READING Interpretation
+   */
+  public createInterpretation<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      access?: {
+        company_id: string
+        project_ids?: Array<string>
+        private_owner_id?: string
+      }
+      receipt?: {
+        source_id: string
+        reader_agent_id: string
+        reader_role: string
+        work_item_id: string
+        core_thesis: string
+        important_claims: Array<string>
+        company_relevance: string
+        project_connections: Array<{
+          project_id: string
+          impact: string
+        }>
+        agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+        conflicts: Array<string>
+        counter_arguments: Array<string>
+        inspiration: Array<string>
+        experiment_ideas: Array<string>
+        disposition: "archive" | "candidate" | "reject"
+        confidence: number
+        evidence_refs: Array<{
+          chunk_id: string
+          start_offset: number
+          end_offset: number
+          claim: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "access" },
+            { in: "body", key: "receipt" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyReadingCreateInterpretationResponses, unknown, ThrowOnError>({
+      url: "/company-reading/interpretations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Deterministically consume a typed KNOWLEDGE_READING Work Receipt
+   */
+  public consumeReceipt<ThrowOnError extends boolean = false>(
+    parameters: {
+      receiptID: string
+      directory?: string
+      workspace?: string
+      company_id?: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "receiptID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_ids" },
+            { in: "body", key: "private_owner_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyReadingConsumeReceiptResponses, unknown, ThrowOnError>({
+      url: "/company-reading/receipts/{receiptID}/consume",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List Agent Interest Profiles
+   */
+  public profiles<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyReadingProfilesResponses, unknown, ThrowOnError>({
+      url: "/company-reading/profiles",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create or replace an Agent Interest Profile
+   */
+  public upsertProfile<ThrowOnError extends boolean = false>(
+    parameters: {
+      agentID: string
+      directory?: string
+      workspace?: string
+      company_id?: string
+      topics?: Array<string>
+      preferred_lenses?: Array<string>
+      excluded_topics?: Array<string>
+      novelty_threshold?: number
+      weekly_reading_budget?: number
+      max_concurrency?: number
+      privacy_scopes?: Array<"company" | "project" | "private">
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "agentID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "topics" },
+            { in: "body", key: "preferred_lenses" },
+            { in: "body", key: "excluded_topics" },
+            { in: "body", key: "novelty_threshold" },
+            { in: "body", key: "weekly_reading_budget" },
+            { in: "body", key: "max_concurrency" },
+            { in: "body", key: "privacy_scopes" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<CompanyReadingUpsertProfileResponses, unknown, ThrowOnError>({
+      url: "/company-reading/profiles/{agentID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List privacy-filtered reading assignments
+   */
+  public assignments<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyReadingAssignmentsResponses, unknown, ThrowOnError>({
+      url: "/company-reading/assignments",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Score and schedule bounded Commons reading through the Orchestrator
+   */
+  public schedule<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      company_id?: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+      source_id?: string
+      project_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_ids" },
+            { in: "body", key: "private_owner_id" },
+            { in: "body", key: "source_id" },
+            { in: "body", key: "project_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyReadingScheduleResponses, unknown, ThrowOnError>({
+      url: "/company-reading/schedule",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Stop a reading assignment through the Orchestrator
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters: {
+      assignmentID: string
+      directory?: string
+      workspace?: string
+      company_id?: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "assignmentID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_ids" },
+            { in: "body", key: "private_owner_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyReadingStopResponses, unknown, ThrowOnError>({
+      url: "/company-reading/assignments/{assignmentID}/stop",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class CompanyLearning extends HeyApiClient {
+  /**
+   * List evidence-bearing Company Beliefs
+   */
+  public beliefs<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyLearningBeliefsResponses, unknown, ThrowOnError>({
+      url: "/company-learning/beliefs",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create a proposal-only Candidate Belief
+   */
+  public createCandidate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      company_id?: string
+      source_id?: string
+      statement?: string
+      scope?: Array<string>
+      applicable_scopes?: Array<string>
+      inapplicable_scopes?: Array<string>
+      confidence?: number
+      action_implications?: Array<string>
+      interpretation_refs?: Array<{
+        interpretation_id: string
+        position: "supporting" | "counter" | "context"
+      }>
+      created_by?: string
+      review_at?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "source_id" },
+            { in: "body", key: "statement" },
+            { in: "body", key: "scope" },
+            { in: "body", key: "applicable_scopes" },
+            { in: "body", key: "inapplicable_scopes" },
+            { in: "body", key: "confidence" },
+            { in: "body", key: "action_implications" },
+            { in: "body", key: "interpretation_refs" },
+            { in: "body", key: "created_by" },
+            { in: "body", key: "review_at" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningCreateCandidateResponses, unknown, ThrowOnError>({
+      url: "/company-learning/beliefs",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Compare same-source Interpretations without an automatic verdict
+   */
+  public compareInterpretations<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      source_id?: string
+      interpretation_ids?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "source_id" },
+            { in: "body", key: "interpretation_ids" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningCompareInterpretationsResponses, unknown, ThrowOnError>(
+      {
+        url: "/company-learning/beliefs/compare",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Append supporting or counter evidence to a Belief
+   */
+  public appendBeliefEvidence<ThrowOnError extends boolean = false>(
+    parameters: {
+      beliefID: string
+      directory?: string
+      workspace?: string
+      position?: "supporting" | "counter"
+      source_kind?: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+      source_ref?: string
+      summary?: string
+      created_by?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "beliefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "position" },
+            { in: "body", key: "source_kind" },
+            { in: "body", key: "source_ref" },
+            { in: "body", key: "summary" },
+            { in: "body", key: "created_by" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningAppendBeliefEvidenceResponses, unknown, ThrowOnError>({
+      url: "/company-learning/beliefs/{beliefID}/evidence",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Adopt a Belief through an accepted Board decision
+   */
+  public adoptBelief<ThrowOnError extends boolean = false>(
+    parameters: {
+      beliefID: string
+      directory?: string
+      workspace?: string
+      board_decision_id?: string
+      approved_by?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "beliefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "board_decision_id" },
+            { in: "body", key: "approved_by" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningAdoptBeliefResponses, unknown, ThrowOnError>({
+      url: "/company-learning/beliefs/{beliefID}/adopt",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List governed Belief Experiments
+   */
+  public experiments<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyLearningExperimentsResponses, unknown, ThrowOnError>({
+      url: "/company-learning/experiments",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Propose an Experiment through DecisionIntent and Governance
+   */
+  public proposeExperiment<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      company_id?: string
+      belief_id?: string
+      project_id?: string
+      decision_intent?: DecisionIntent
+      hypothesis?: string
+      success_criteria?: Array<string>
+      failure_criteria?: Array<string>
+      rollback_plan?: string
+      proposed_by?: string
+      idempotency_key?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "belief_id" },
+            { in: "body", key: "project_id" },
+            { in: "body", key: "decision_intent" },
+            { in: "body", key: "hypothesis" },
+            { in: "body", key: "success_criteria" },
+            { in: "body", key: "failure_criteria" },
+            { in: "body", key: "rollback_plan" },
+            { in: "body", key: "proposed_by" },
+            { in: "body", key: "idempotency_key" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningProposeExperimentResponses, unknown, ThrowOnError>({
+      url: "/company-learning/experiments",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Advance an Experiment without treating completion as success
+   */
+  public actOnExperiment<ThrowOnError extends boolean = false>(
+    parameters: {
+      experimentID: string
+      directory?: string
+      workspace?: string
+      body?:
+        | {
+            action: "refresh_authority"
+            actor_id: string
+            idempotency_key: string
+          }
+        | {
+            action: "start"
+            actor_id: string
+          }
+        | {
+            action: "complete"
+            actor_id: string
+          }
+        | {
+            action: "stop"
+            actor_id: string
+          }
+        | {
+            action: "attach_outcome"
+            outcome_signal_id: string
+            actor_id: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "experimentID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningActOnExperimentResponses, unknown, ThrowOnError>({
+      url: "/company-learning/experiments/{experimentID}/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List Learning Patches with Benchmark and Canary facts
+   */
+  public patches<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyLearningPatchesResponses, unknown, ThrowOnError>({
+      url: "/company-learning/patches",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create a proposal-only Learning Patch
+   */
+  public proposePatch<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      company_id?: string
+      source_decision_id?: string
+      source_experiment_id?: string
+      source_outcome_id?: string
+      target_type?: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+      target_id?: string
+      proposed_diff?: {
+        [key: string]: unknown
+      }
+      evidence?: Array<string>
+      expected_impact?: string
+      benchmark_plan?: string
+      rollback_plan?: string
+      created_by?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "source_decision_id" },
+            { in: "body", key: "source_experiment_id" },
+            { in: "body", key: "source_outcome_id" },
+            { in: "body", key: "target_type" },
+            { in: "body", key: "target_id" },
+            { in: "body", key: "proposed_diff" },
+            { in: "body", key: "evidence" },
+            { in: "body", key: "expected_impact" },
+            { in: "body", key: "benchmark_plan" },
+            { in: "body", key: "rollback_plan" },
+            { in: "body", key: "created_by" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningProposePatchResponses, unknown, ThrowOnError>({
+      url: "/company-learning/patches",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Apply the target permission, Benchmark, Canary, activation, or rollback gate
+   */
+  public actOnPatch<ThrowOnError extends boolean = false>(
+    parameters: {
+      patchID: string
+      directory?: string
+      workspace?: string
+      body?:
+        | {
+            action: "approve"
+            decision_id: string
+            actor_kind: "agent" | "human" | "system"
+            actor_id: string
+            idempotency_key: string
+          }
+        | {
+            action: "reject"
+            actor_id: string
+          }
+        | {
+            action: "record_benchmark"
+            holdout_manifest: {
+              [key: string]: unknown
+            }
+            author_id: string
+            subject_id?: string
+            reviewer_id: string
+            report_author_id: string
+            result: "passed" | "failed" | "not_confirmed"
+            evidence_refs: Array<string>
+            real_sample_count: number
+          }
+        | {
+            action: "start_canary"
+            previous_version_ref: string
+            candidate_version_ref: string
+            skill_snapshot_id?: string
+            actor_id: string
+          }
+        | {
+            action: "finish_canary"
+            canary_id: string
+            result: "passed" | "failed" | "not_confirmed"
+            metric_evidence_refs: Array<string>
+            actor_id: string
+          }
+        | {
+            action: "activate"
+            actor_id: string
+          }
+        | {
+            action: "record_planning_read"
+            project_id: string
+            work_receipt_id: string
+            target_version_id: string
+            actor_id: string
+          }
+        | {
+            action: "rollback"
+            actor_id: string
+            reason: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "patchID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyLearningActOnPatchResponses, unknown, ThrowOnError>({
+      url: "/company-learning/patches/{patchID}/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Generate a fail-closed real-chain learning evidence package
+   */
+  public evidencePackage<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyLearningEvidencePackageResponses, unknown, ThrowOnError>({
+      url: "/company-learning/evidence-package",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resolve the active versioned Learning Patch target
+   */
+  public resolveTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      targetType: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+      targetID: string
+      directory?: string
+      workspace?: string
+      company_id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "targetType" },
+            { in: "path", key: "targetID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyLearningResolveTargetResponses, unknown, ThrowOnError>({
+      url: "/company-learning/targets/{targetType}/{targetID}",
+      ...options,
+      ...params,
     })
   }
 }
@@ -9392,6 +11398,11 @@ export class ControlPlaneClient extends HeyApiClient {
     return (this._company ??= new Company({ client: this.client }))
   }
 
+  private _founderOs?: FounderOs
+  get founderOs(): FounderOs {
+    return (this._founderOs ??= new FounderOs({ client: this.client }))
+  }
+
   private _experience?: Experience
   get experience(): Experience {
     return (this._experience ??= new Experience({ client: this.client }))
@@ -9440,6 +11451,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _companyReading?: CompanyReading
   get companyReading(): CompanyReading {
     return (this._companyReading ??= new CompanyReading({ client: this.client }))
+  }
+
+  private _companyLearning?: CompanyLearning
+  get companyLearning(): CompanyLearning {
+    return (this._companyLearning ??= new CompanyLearning({ client: this.client }))
   }
 
   private _groupSession?: GroupSession

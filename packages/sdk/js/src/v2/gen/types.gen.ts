@@ -253,6 +253,456 @@ export type ApprovalPolicyUpdateInput = {
   preset: ApprovalPreset
 }
 
+export type FounderOsModeSettings = {
+  founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+  companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+}
+
+export type FounderOsModeState = {
+  schemaVersion: 1
+  globalMaximum: FounderOsModeSettings
+  company: FounderOsModeSettings
+  effective: FounderOsModeSettings
+}
+
+export type FounderOsModeUpdateInput = {
+  founderTwinMode: "off" | "shadow"
+  companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+}
+
+export type BeliefLoopActivationInput = {
+  company_id: CompanyId
+  k1_artifact_id: string
+  w2_artifact_id: string
+  e0_artifact_id: string
+  k2_evidence_package_artifact_id: string
+  authorization_event_id: string
+  actor: {
+    kind: "human"
+    id: string
+  }
+}
+
+export type GovernanceAssetScope = {
+  kind: "company" | "domain" | "project" | "brand"
+  ref?: string
+}
+
+export type GovernanceAssetSourceRef = {
+  kind: "artifact" | "decision" | "outcome" | "conversation" | "external"
+  id: string
+}
+
+export type GovernanceAsset = {
+  id: string
+  companyId: string
+  type:
+    | "constitution"
+    | "principle"
+    | "heuristic"
+    | "boundary"
+    | "taste_reference"
+    | "taste_anti_reference"
+    | "rubric"
+    | "decision_case"
+  scope: GovernanceAssetScope
+  content: string
+  rationale: string
+  tags: Array<string>
+  authority: "human_explicit" | "human_confirmed" | "board_confirmed" | "ai_proposed" | "external_source"
+  status: "draft" | "active" | "deprecated"
+  sourceRefs: Array<GovernanceAssetSourceRef>
+  supersedes?: number
+  version: number
+  createdBy: string
+  approvedBy?: string
+  createdAt: number
+  approvedAt?: number
+  current: boolean
+}
+
+export type FounderAssetReference = {
+  assetId: string
+  version: number
+}
+
+export type FounderTwinSnapshot = {
+  id: string
+  companyId: string
+  version: number
+  profileSummary: string
+  assetRefs: Array<FounderAssetReference>
+  activePrincipleIds: Array<string>
+  activeHeuristicIds: Array<string>
+  decisionCaseIds: Array<string>
+  tasteExampleIds: Array<string>
+  rubricIds: Array<string>
+  promptTemplateVersion: string
+  modelConfigRef: string
+  retrievalConfigRef: string
+  permissionConfigRef: string
+  compiledPromptHash: string
+  checksum: string
+  createdBy: string
+  createdAt: number
+  selected: boolean
+}
+
+export type FounderCalibrationItem = {
+  id: string
+  companyId: string
+  kind: "ab" | "accept" | "reject"
+  scope: GovernanceAssetScope
+  prompt: string
+  candidates: Array<{
+    artifactId: string
+    label: string
+  }>
+  status: "pending" | "responded"
+  response?: "accept" | "reject" | "prefer_first" | "prefer_second"
+  reason?: string
+  confirmationEventId?: string
+  confirmedBy?: string
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderStudioProjection = {
+  schemaVersion: 1
+  companyId: string
+  assets: Array<GovernanceAsset>
+  snapshots: Array<FounderTwinSnapshot>
+  selectedSnapshotId?: string
+  calibrationQueue?: Array<FounderCalibrationItem>
+  authorization: {
+    status: "not_confirmed"
+    blocking: false
+  }
+}
+
+export type GovernanceAssetDraftInput = {
+  companyId: string
+  type:
+    | "constitution"
+    | "principle"
+    | "heuristic"
+    | "boundary"
+    | "taste_reference"
+    | "taste_anti_reference"
+    | "rubric"
+    | "decision_case"
+  scope: GovernanceAssetScope
+  content: string
+  rationale: string
+  tags?: Array<string>
+  authority: "ai_proposed" | "external_source"
+  sourceRefs?: Array<GovernanceAssetSourceRef>
+  createdBy: string
+}
+
+export type GovernanceAssetRevisionInput = {
+  baseVersion: number
+  content: string
+  rationale: string
+  tags: Array<string>
+  authority: "human_explicit" | "human_confirmed" | "board_confirmed" | "ai_proposed" | "external_source"
+  status: "draft" | "active" | "deprecated"
+  sourceRefs: Array<GovernanceAssetSourceRef>
+  actorKind: "ai" | "external" | "human"
+  createdBy: string
+  confirmation?: {
+    eventId: string
+    confirmedBy: string
+  }
+}
+
+export type FounderSnapshotCompileInput = {
+  companyId: string
+  profileSummary: string
+  promptTemplateVersion: string
+  modelConfigRef: string
+  retrievalConfigRef: string
+  permissionConfigRef: string
+  compiledPromptHash: string
+  scope: GovernanceAssetScope
+  createdBy: string
+}
+
+export type FounderSnapshotSelectInput = {
+  companyId: string
+  snapshotId: string
+  reason: string
+  selectedBy: string
+}
+
+export type FounderShadowEvidenceRef = {
+  kind: "artifact" | "decision" | "outcome" | "conversation" | "fact"
+  id: string
+  version?: number
+  validity: "verified" | "missing" | "forbidden"
+}
+
+export type FounderContextProjection = {
+  schemaVersion: 1
+  status: "ready" | "blocked"
+  companyId: string
+  scope: GovernanceAssetScope
+  currentGoal: string
+  discussion: string
+  authorizationBoundary: string
+  currentFacts: Array<string>
+  evidenceRefs: Array<FounderShadowEvidenceRef>
+  snapshotId?: string
+  snapshotChecksum?: string
+  principles: Array<GovernanceAsset>
+  decisionCases: Array<GovernanceAsset>
+  tasteExamples: Array<GovernanceAsset>
+  rubrics: Array<GovernanceAsset>
+  missingInformation: Array<string>
+  blockReasons: Array<
+    | "snapshot_missing"
+    | "snapshot_checksum_invalid"
+    | "context_insufficient"
+    | "asset_reference_missing"
+    | "asset_scope_forbidden"
+    | "evidence_reference_invalid"
+  >
+}
+
+export type FounderContextBuildInput = {
+  companyId: string
+  scope: GovernanceAssetScope
+  currentGoal: string
+  discussion: string
+  authorizationBoundary: string
+  currentFacts: Array<string>
+  evidenceRefs: Array<FounderShadowEvidenceRef>
+  limits?: {
+    principles?: number
+    decisionCases?: number
+    tasteExamples?: number
+    rubrics?: number
+  }
+}
+
+export type FounderShadowDecision = {
+  id: string
+  companyId: string
+  status: "suggested" | "blocked"
+  blockReasons: Array<
+    | "snapshot_missing"
+    | "snapshot_checksum_invalid"
+    | "context_insufficient"
+    | "asset_reference_missing"
+    | "asset_scope_forbidden"
+    | "evidence_reference_invalid"
+    | "model_unavailable"
+    | "model_timeout"
+    | "model_output_missing"
+    | "model_output_invalid"
+  >
+  scope: GovernanceAssetScope
+  snapshotId?: string
+  snapshotChecksum?: string
+  modelConfigRef: string
+  recommendation?: string
+  alternatives: Array<string>
+  authorityClass?: "green" | "yellow" | "red"
+  confidence?: number
+  principleRefs: Array<FounderAssetReference>
+  decisionCaseRefs: Array<FounderAssetReference>
+  tasteExampleRefs: Array<FounderAssetReference>
+  rubricRefs: Array<FounderAssetReference>
+  evidenceRefs: Array<FounderShadowEvidenceRef>
+  missingInformation: Array<string>
+  createsGate: false
+  canSpeak: false
+  canExecute: false
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderShadowRunInput = {
+  context: FounderContextBuildInput
+  createdBy: string
+}
+
+export type FounderShadowComparison = {
+  id: string
+  companyId: string
+  shadowDecisionId: string
+  actualDecision: string
+  actualDecisionRef: FounderShadowEvidenceRef
+  alignment: "match" | "partial" | "mismatch"
+  rationale: string
+  verificationStatus: "not_confirmed" | "human_confirmed"
+  confirmedBy?: string
+  confirmationEventId?: string
+  comparedBy: string
+  createdAt: number
+}
+
+export type FounderShadowComparisonInput = {
+  companyId: string
+  shadowDecisionId: string
+  actualDecision: string
+  actualDecisionRef: {
+    kind: "artifact" | "decision" | "outcome" | "conversation" | "fact"
+    id: string
+    version?: number
+    validity: "verified" | "missing" | "forbidden"
+  }
+  alignment: "match" | "partial" | "mismatch"
+  rationale: string
+  comparedBy: string
+  confirmation?: {
+    eventId: string
+    confirmedBy: string
+  }
+}
+
+export type FounderBoardShadowProjection = {
+  schemaVersion: 1
+  companyId: string
+  readOnly: true
+  chatIntegrated: false
+  createsGate: false
+  decisions: Array<FounderShadowDecision>
+  comparisons: Array<FounderShadowComparison>
+  calibrationQueue: Array<FounderCalibrationItem>
+  authorization: {
+    status: "not_confirmed"
+    blocking: false
+  }
+}
+
+export type FounderCaseImportInput = {
+  companyId: string
+  kind: "decision_case" | "taste_reference" | "taste_anti_reference" | "rubric"
+  scope: GovernanceAssetScope
+  content: string
+  rationale: string
+  dimensions: Array<string>
+  sourceRefs: Array<GovernanceAssetSourceRef>
+  authority: "ai_proposed" | "external_source"
+  createdBy: string
+}
+
+export type FounderCalibrationRequestInput = {
+  companyId: string
+  kind: "ab" | "accept" | "reject"
+  scope: GovernanceAssetScope
+  prompt: string
+  candidates: Array<{
+    artifactId: string
+    label: string
+  }>
+  createdBy: string
+}
+
+export type FounderCalibrationResponseInput = {
+  companyId: string
+  requestId: string
+  response: "accept" | "reject" | "prefer_first" | "prefer_second"
+  reason: string
+  actorKind: "human"
+  confirmationEventId: string
+  confirmedBy: string
+}
+
+export type FounderRubricValidation = {
+  status: "valid" | "blocked"
+  rubric: FounderAssetReference
+  rubricAuthority?: "human_explicit" | "human_confirmed" | "board_confirmed" | "ai_proposed" | "external_source"
+  scores: Array<{
+    dimension: string
+    score: number
+  }>
+  aggregate?: number
+  blockReasons: Array<"rubric_missing" | "rubric_inactive" | "dimension_mismatch">
+}
+
+export type FounderRubricValidationInput = {
+  companyId: string
+  rubric: FounderAssetReference
+  scores: Array<{
+    dimension: string
+    score: number
+  }>
+}
+
+export type FounderBenchmarkCase = {
+  id: string
+  companyId: string
+  benchmarkType: "founder_decision" | "taste"
+  datasetVersion: string
+  split: "training" | "holdout"
+  sourceAsset: FounderAssetReference
+  expected: {
+    authorityClass?: "green" | "yellow" | "red"
+    decision?: string
+    preference?: "accept" | "reject" | "first" | "second"
+  }
+  confirmationEventId: string
+  confirmedBy: string
+  createdAt: number
+}
+
+export type FounderBenchmarkCaseInput = {
+  companyId: string
+  benchmarkType: "founder_decision" | "taste"
+  datasetVersion: string
+  split: "training" | "holdout"
+  sourceAsset: FounderAssetReference
+  expected: {
+    authorityClass?: "green" | "yellow" | "red"
+    decision?: string
+    preference?: "accept" | "reject" | "first" | "second"
+  }
+  confirmationEventId: string
+  confirmedBy: string
+}
+
+export type FounderBenchmarkReport = {
+  id: string
+  companyId: string
+  benchmarkType: "founder_decision" | "taste"
+  datasetVersion: string
+  snapshotId: string
+  status: "pass" | "fail" | "blocked"
+  blockReasons: Array<
+    | "holdout_empty"
+    | "prediction_set_incomplete"
+    | "training_holdout_leakage"
+    | "snapshot_missing"
+    | "snapshot_checksum_invalid"
+    | "model_unavailable"
+    | "model_timeout"
+    | "model_output_invalid"
+  >
+  metrics: {
+    caseCount: number
+    redRecall: number | null
+    traceabilityRate: number | null
+    agreementRate: number | null
+  }
+  authorization: {
+    status: "not_confirmed"
+    blocking: false
+    confirmedSampleCount: number
+  }
+  createdBy: string
+  createdAt: number
+}
+
+export type FounderBenchmarkRunInput = {
+  companyId: string
+  benchmarkType: "founder_decision" | "taste"
+  datasetVersion: string
+  snapshotId: string
+  createdBy: string
+}
+
 export type CompanySetupGoalInput = {
   body: string
 }
@@ -396,6 +846,1280 @@ export type BootstrapInput = {
   model_id: string
   repository_path: string
   approval_preset?: ApprovalPreset
+}
+
+export type FounderAdvisorReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "ready" | "not_confirmed" | "blocked"
+  exactCommit: {
+    status: "passed" | "missing"
+    sha: string | null
+    evidenceRef: string | null
+  }
+  benchmarkReportId: string | null
+  metrics: {
+    confirmedSampleCount: number
+    redRecall: number | null
+    traceabilityRate: number | null
+    historicalAgreementRate: number | null
+  }
+  authorization: {
+    status: "human_confirmed" | "missing"
+    eventId: string | null
+    confirmedBy: string | null
+  }
+  failClosedReasons: Array<string>
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderAdvisorReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  benchmarkReportId: string
+  exactCommit: {
+    sha: string
+    worktreeRunId: string
+  }
+  authorizationEventId: string
+  actor: {
+    kind: "human"
+    id: string
+  }
+}
+
+export type FounderAdvisorPrincipal = {
+  principalId: "board-ceo"
+  displayName: "AI 大东 · 创始人代理"
+  principalKind: "agent"
+  projectionKind: "founder_governance"
+  humanAuthoritySource: "local_user"
+  isAdditionalEmployee: false
+}
+
+export type FounderAdvisorSource = {
+  boardThreadId: string
+  boardRunId?: string
+  channelMessageId: string
+  shadowDecisionId: string
+}
+
+export type FounderEvidenceReference = {
+  kind: "source" | "artifact" | "decision" | "outcome" | "conversation" | "founder_asset"
+  id: string
+  version?: number
+}
+
+export type FounderProjectGoalProposal = {
+  schemaVersion: 1
+  idempotencyKey: string
+  type: "project.goal.propose"
+  payload: {
+    goal: string
+    projectId?: string
+  }
+}
+
+export type FounderGovernanceReviewRequest = {
+  schemaVersion: 1
+  idempotencyKey: string
+  type: "governance.review.request"
+  payload: {
+    subject: string
+    question: string
+  }
+}
+
+export type FounderStaffingChangeProposal = {
+  schemaVersion: 1
+  idempotencyKey: string
+  type: "organization.staffing.propose"
+  payload: {
+    change: "recruit" | "release" | "role_change"
+    role: string
+    rationale: string
+  }
+}
+
+export type FounderExternalCommunicationProposal = {
+  schemaVersion: 1
+  idempotencyKey: string
+  type: "external.communication.propose"
+  payload: {
+    channel: string
+    audience: string
+    message: string
+  }
+}
+
+export type FounderRequestedAction =
+  | FounderProjectGoalProposal
+  | FounderGovernanceReviewRequest
+  | FounderStaffingChangeProposal
+  | FounderExternalCommunicationProposal
+
+export type DecisionIntent = {
+  schemaVersion: 1
+  decisionId: string
+  recommendation: string
+  alternatives: Array<string>
+  authorityClass: "green" | "yellow" | "red"
+  confidence: number
+  principlesApplied: Array<FounderAssetReference>
+  evidenceRefs: Array<FounderEvidenceReference>
+  dissent?: Array<string>
+  missingInformation?: Array<string>
+  requestedAction?: FounderRequestedAction
+}
+
+export type FounderAdvisorAuthorityResult = {
+  status: "authorized" | "blocked" | "unavailable"
+  reason: string
+  governanceRef?: string
+  reversible?: boolean
+  externalImpact?: boolean
+  riskLevel?: "low" | "medium" | "high" | "critical"
+}
+
+export type FounderAdvisorConvergence = {
+  id: string
+  companyId: string
+  idempotencyKey: string
+  source: FounderAdvisorSource
+  currentRequestKey: string
+  principal: FounderAdvisorPrincipal
+  status: "intent_recorded" | "blocked" | "timed_out"
+  events: Array<{
+    id: string
+    sequence: number
+    status: "intent_recorded" | "blocked" | "timed_out"
+    reason: string
+    createdAt: number
+  }>
+  decisionIntent?: DecisionIntent
+  ledgerDecisionId?: string
+  authority: FounderAdvisorAuthorityResult
+  driAgentId: string
+  timeoutAt: number
+  dissent: Array<string>
+  workItemCreated: false
+  executionCreated: false
+  createdAt: number
+}
+
+export type FounderInterventionEffect = {
+  id: string
+  interventionId: string
+  kind: "attention_opened" | "stop_requested" | "stop_completed" | "stop_failed"
+  status: "recorded" | "failed"
+  detail: string
+  createdAt: number
+}
+
+export type FounderIntervention = {
+  id: string
+  companyId: string
+  idempotencyKey: string
+  kind: "takeover" | "pause" | "correct" | "reject" | "redefine_goal"
+  boardThreadId: string
+  projectId?: string
+  decisionId?: string
+  ledgerDecisionId: string
+  reason: string
+  newGoal?: string
+  actorId: string
+  fenceActive: boolean
+  effects: Array<FounderInterventionEffect>
+  createdAt: number
+}
+
+export type DecisionScope =
+  | {
+      type: "company"
+      companyId: string
+    }
+  | {
+      type: "project"
+      companyId: string
+      projectId: string
+    }
+  | {
+      type: "pre_project"
+      companyId: string
+      preProjectId: string
+    }
+
+export type DecisionSourceMapping = {
+  channelMessageId: string | null
+  boardThreadId: string | null
+  boardRunId: string | null
+  runtimeId: string | null
+  sourceCompleteness: "complete" | "partial"
+}
+
+export type FounderTwinSnapshotReference = {
+  id: string
+  version: number
+}
+
+export type DecisionRecord =
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "live"
+      decisionMaker: "ai_founder"
+      founderTwinSnapshot: FounderTwinSnapshotReference
+      recommendation: string
+      authorityClass: "green" | "yellow" | "red"
+      operatingMode: "shadow" | "advisor" | "green_delegated" | "yellow_delegated"
+      confidence: number
+      reversible: boolean
+      externalImpact: boolean
+      riskLevel: "low" | "medium" | "high" | "critical"
+      currentStatus: "proposed" | "awaiting_approval"
+      finalDecision: null
+      decidedAt: null
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "live"
+      decisionMaker: "ai_founder"
+      founderTwinSnapshot: FounderTwinSnapshotReference
+      recommendation: string
+      authorityClass: "green" | "yellow" | "red"
+      operatingMode: "shadow" | "advisor" | "green_delegated" | "yellow_delegated"
+      confidence: number
+      reversible: boolean
+      externalImpact: boolean
+      riskLevel: "low" | "medium" | "high" | "critical"
+      currentStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      finalDecision: string
+      decidedAt: number
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "live"
+      decisionMaker: "human" | "board" | "policy_engine"
+      founderTwinSnapshot: FounderTwinSnapshotReference | null
+      recommendation: string | null
+      authorityClass: "green" | "yellow" | "red" | null
+      operatingMode:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence: number | null
+      reversible: boolean | null
+      externalImpact: boolean | null
+      riskLevel: "low" | "medium" | "high" | "critical" | null
+      currentStatus: "proposed" | "awaiting_approval"
+      finalDecision: null
+      decidedAt: null
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "live"
+      decisionMaker: "human" | "board" | "policy_engine"
+      founderTwinSnapshot: FounderTwinSnapshotReference | null
+      recommendation: string | null
+      authorityClass: "green" | "yellow" | "red" | null
+      operatingMode:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence: number | null
+      reversible: boolean | null
+      externalImpact: boolean | null
+      riskLevel: "low" | "medium" | "high" | "critical" | null
+      currentStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      finalDecision: string
+      decidedAt: number
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "historical_import"
+      decisionMaker: "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
+      founderTwinSnapshot: FounderTwinSnapshotReference | null
+      recommendation: string | null
+      authorityClass: "green" | "yellow" | "red" | null
+      operatingMode:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence: number | null
+      reversible: boolean | null
+      externalImpact: boolean | null
+      riskLevel: "low" | "medium" | "high" | "critical" | null
+      currentStatus: "unknown"
+      finalDecision: null
+      decidedAt: null
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "historical_import"
+      decisionMaker: "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
+      founderTwinSnapshot: FounderTwinSnapshotReference | null
+      recommendation: string | null
+      authorityClass: "green" | "yellow" | "red" | null
+      operatingMode:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence: number | null
+      reversible: boolean | null
+      externalImpact: boolean | null
+      riskLevel: "low" | "medium" | "high" | "critical" | null
+      currentStatus: "proposed" | "awaiting_approval"
+      finalDecision: null
+      decidedAt: null
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      scope: DecisionScope
+      source: DecisionSourceMapping | null
+      subject: string | null
+      context: string | null
+      options: Array<string> | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference> | null
+      principleRefs: Array<FounderAssetReference> | null
+      decisionCaseRefs: Array<FounderAssetReference> | null
+      overrideOf: string | null
+      outcomeRefIds: Array<string>
+      transitionCount: number
+      createdAt: number
+      updatedAt: number
+      recordOrigin: "historical_import"
+      decisionMaker: "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
+      founderTwinSnapshot: FounderTwinSnapshotReference | null
+      recommendation: string | null
+      authorityClass: "green" | "yellow" | "red" | null
+      operatingMode:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence: number | null
+      reversible: boolean | null
+      externalImpact: boolean | null
+      riskLevel: "low" | "medium" | "high" | "critical" | null
+      currentStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      finalDecision: string
+      decidedAt: number
+    }
+
+export type FounderBoardGovernanceProjection = {
+  schemaVersion: 1
+  companyId: string
+  principal: FounderAdvisorPrincipal
+  mode: FounderOsModeState
+  advisorCanSpeak: boolean
+  authorization: {
+    status: "authorized" | "not_confirmed" | "unavailable"
+    canRaiseModeFromUI: false
+  }
+  convergences: Array<FounderAdvisorConvergence>
+  interventions: Array<FounderIntervention>
+  decisions: Array<DecisionRecord>
+  shadow: FounderBoardShadowProjection
+  assets: Array<GovernanceAsset>
+  readOnlyEvidence: true
+}
+
+export type FounderAdvisorConvergenceInput = {
+  companyId: string
+  idempotencyKey: string
+  source: FounderAdvisorSource
+  subject: string
+  context: string
+  driAgentId: string
+  timeoutAt: number
+  dissent: Array<string>
+  requestedAction?: FounderRequestedAction
+}
+
+export type FounderInterventionInput = {
+  companyId: string
+  idempotencyKey: string
+  kind: "takeover" | "pause" | "correct" | "reject" | "redefine_goal"
+  boardThreadId: string
+  projectId?: string
+  decisionId?: string
+  reason: string
+  newGoal?: string
+  actorKind: "human"
+  actorId: string
+}
+
+export type FounderYellowRollbackRecord = {
+  id: string
+  trigger: "failure_condition" | "human_decision"
+  handlerId: string
+  status: "requested" | "completed" | "failed"
+  reason: string
+  result: string | null
+  actorKind: "human" | "policy_engine"
+  actorId: string
+  createdAt: number
+}
+
+export type FounderYellowSummary = {
+  schemaVersion: 1
+  runId: string
+  status: "blocked" | "authorized" | "outcome_pending" | "completed" | "failed" | "rolled_back"
+  actionType: "project.goal.propose"
+  decisionId: string
+  governanceRef: string | null
+  mutationId: string | null
+  workItemIds: Array<string>
+  receiptIds: Array<string>
+  outcomeIds: Array<string>
+  cost: {
+    unit: "receipt"
+    limit: number
+    actual: number
+  }
+  checkpointId: string | null
+  rollbackHandlerId: string | null
+  rollbacks: Array<FounderYellowRollbackRecord>
+  overrideIds: Array<string>
+  circuitBreakerOpen: boolean
+  failClosedReasons: Array<string>
+  createdAt: number
+  updatedAt: number
+}
+
+export type FounderAssetUpdateProposal = {
+  target: {
+    assetId: string | null
+    type:
+      | "constitution"
+      | "principle"
+      | "heuristic"
+      | "boundary"
+      | "taste_reference"
+      | "taste_anti_reference"
+      | "rubric"
+      | "decision_case"
+    scope: GovernanceAssetScope
+  }
+  baseRevision: {
+    assetId: string
+    version: number
+  } | null
+  typedDiff: {
+    operation: "create" | "revise"
+    content: string
+    rationale: string
+    tags: Array<string>
+    sourceRefs: Array<GovernanceAssetSourceRef>
+  }
+  authority: "ai_proposed"
+}
+
+export type FounderCorrectionRecord = {
+  schemaVersion: 1
+  decisionId: string
+  kind: "override" | "correction"
+  humanDecision: string
+  reason: string
+  proposedAssetUpdates: Array<FounderAssetUpdateProposal>
+  actorKind?: "human"
+  actorId: string
+  id: string
+  originalDecision: string | null
+  createdAt: number
+}
+
+export type FounderControlCenterProjection = {
+  schemaVersion: 1
+  companyId: string
+  principal: FounderAdvisorPrincipal
+  mode: FounderOsModeState
+  authorization: {
+    status: "authorized" | "not_confirmed" | "unavailable"
+    canRaiseModeFromUI: false
+  }
+  pending: {
+    proposedDecisions: number
+    redDecisions: number
+    failedStops: number
+  }
+  trends: {
+    shadowComparisons: number
+    shadowOverrides: number
+    confirmedCalibrations: number
+    takeoverEvents: number
+  }
+  todayDelegatedDecisions: Array<DecisionRecord>
+  yellowSummaries: Array<FounderYellowSummary>
+  redPendingDecisions: Array<DecisionRecord>
+  overrideRecords: Array<FounderCorrectionRecord>
+  calibrationTrend: {
+    pending: number
+    responded: number
+    accepted: number
+    rejected: number
+    preferences: number
+  }
+  recentInterventions: Array<FounderIntervention>
+  recentDecisions: Array<DecisionRecord>
+}
+
+export type DecisionLedgerIdempotencyConflict = {
+  name: "DecisionLedgerIdempotencyConflict"
+  data: {
+    idempotency_key: string
+  }
+}
+
+export type DecisionLedgerIllegalTransition = {
+  name: "DecisionLedgerIllegalTransition"
+  data: {
+    decision_id: string
+    from_status:
+      | "unknown"
+      | "proposed"
+      | "awaiting_approval"
+      | "accepted"
+      | "executed"
+      | "overridden"
+      | "failed"
+      | "rolled_back"
+    to_status:
+      | "unknown"
+      | "proposed"
+      | "awaiting_approval"
+      | "accepted"
+      | "executed"
+      | "overridden"
+      | "failed"
+      | "rolled_back"
+  }
+}
+
+export type DecisionLedgerCorrupt = {
+  name: "DecisionLedgerCorrupt"
+  data: {
+    decision_id: string
+  }
+}
+
+export type DecisionRecordAppendInput =
+  | {
+      schemaVersion: 1
+      idempotencyKey: string
+      scope: DecisionScope
+      subject: string
+      context: string
+      options: Array<string>
+      finalDecision: string | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference>
+      principleRefs: Array<FounderAssetReference>
+      decisionCaseRefs: Array<FounderAssetReference>
+      initialStatus?: "proposed" | "awaiting_approval" | "accepted"
+      overrideOf?: string | null
+      decidedAt?: number | null
+      decisionMaker: "ai_founder"
+      founderTwinSnapshot: FounderTwinSnapshotReference
+      recommendation: string
+      authorityClass: "green" | "yellow" | "red"
+      operatingMode: "shadow" | "advisor" | "green_delegated" | "yellow_delegated"
+      confidence: number
+      reversible: boolean
+      externalImpact: boolean
+      riskLevel: "low" | "medium" | "high" | "critical"
+    }
+  | {
+      schemaVersion: 1
+      idempotencyKey: string
+      scope: DecisionScope
+      subject: string
+      context: string
+      options: Array<string>
+      finalDecision: string | null
+      decisionMakerId: string
+      evidenceRefs: Array<FounderEvidenceReference>
+      principleRefs: Array<FounderAssetReference>
+      decisionCaseRefs: Array<FounderAssetReference>
+      initialStatus?: "proposed" | "awaiting_approval" | "accepted"
+      overrideOf?: string | null
+      decidedAt?: number | null
+      decisionMaker: "human" | "board" | "policy_engine"
+      founderTwinSnapshot?: FounderTwinSnapshotReference | null
+      recommendation?: string | null
+      authorityClass?: "green" | "yellow" | "red" | null
+      operatingMode?:
+        | "off"
+        | "shadow"
+        | "advisor"
+        | "green_delegated"
+        | "yellow_delegated"
+        | "not_applicable"
+        | "unknown"
+        | null
+      confidence?: number | null
+      reversible?: boolean | null
+      externalImpact?: boolean | null
+      riskLevel?: "low" | "medium" | "high" | "critical" | null
+    }
+
+export type DecisionLedgerNotFound = {
+  name: "DecisionLedgerNotFound"
+  data: {
+    decision_id: string
+  }
+}
+
+export type DecisionTransition =
+  | {
+      schemaVersion: 1
+      id: string
+      decisionId: string
+      sequence: number
+      fromStatus:
+        | "unknown"
+        | "proposed"
+        | "awaiting_approval"
+        | "accepted"
+        | "executed"
+        | "overridden"
+        | "failed"
+        | "rolled_back"
+        | null
+      toStatus: "unknown" | "proposed" | "awaiting_approval"
+      kind: "created" | "historical_imported" | "submitted_for_approval"
+      reason: string
+      actorId: string
+      finalDecision: null
+      decidedAt: null
+      createdAt: number
+    }
+  | {
+      schemaVersion: 1
+      id: string
+      decisionId: string
+      sequence: number
+      fromStatus:
+        | "unknown"
+        | "proposed"
+        | "awaiting_approval"
+        | "accepted"
+        | "executed"
+        | "overridden"
+        | "failed"
+        | "rolled_back"
+        | null
+      toStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      kind: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      reason: string
+      actorId: string
+      finalDecision: string
+      decidedAt: number
+      createdAt: number
+    }
+
+export type DecisionDispatchOutbox = {
+  schemaVersion: 1
+  id: string
+  companyId: string
+  decisionId: string
+  transitionId: string | null
+  consumer: string
+  actionType: string
+  payload: {
+    [key: string]: unknown
+  }
+  idempotencyKey: string
+  executionKey: string
+  currentStatus: "committed" | "claimed" | "completed" | "failed"
+  eventCount: number
+  consumerId: string | null
+  leaseToken: string | null
+  leaseExpiresAt: number | null
+  executionReceipt: string | null
+  lastError: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type DecisionDispatchEvent = {
+  schemaVersion: 1
+  id: string
+  outboxId: string
+  sequence: number
+  status: "committed" | "claimed" | "completed" | "failed"
+  consumerId: string | null
+  leaseToken: string | null
+  leaseExpiresAt: number | null
+  executionReceipt: string | null
+  error: string | null
+  createdAt: number
+}
+
+export type DelegationPolicy = {
+  schemaVersion: 1
+  id: string
+  actionType: string
+  riskLevel: "green" | "yellow" | "red"
+  reversible: boolean
+  externalImpact: boolean
+  budgetLimit: {
+    [key: string]: unknown
+  } | null
+  requiresApproval: boolean
+  allowedMode: "advisor" | "green_delegated" | "yellow_delegated" | "none"
+  version: number
+  scope: DecisionScope
+  createdAt: number
+}
+
+export type DecisionAuthorityEvaluation = {
+  schemaVersion: 1
+  decisionId: string
+  authorityClass: "green" | "yellow" | "red"
+  policyId: string | null
+  requiresApproval: boolean
+  allowed: boolean
+  reasons: Array<string>
+}
+
+export type DecisionAuthorityInput = {
+  decisionId: string
+  actionType: string
+  proposedAuthorityClass: "green" | "yellow" | "red"
+  evidenceSufficient: boolean
+  requestedMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+  approvalPreset: "autonomous" | "balanced" | "strict"
+}
+
+export type FounderApprovalGate = {
+  id: string
+  scope: DecisionScope
+  decisionId: string
+  kind: "founder_red"
+  status: "pending" | "approved" | "rejected"
+  title: string
+  summary: string
+  requestedBy: {
+    kind: "human" | "ai_founder" | "board" | "policy_engine"
+    id: string
+  }
+  decisionNote: string | null
+  requestedAt: number
+  decidedAt: number | null
+}
+
+export type GovernanceDecision = {
+  schemaVersion: 1
+  decision: DecisionRecord
+  authority: DecisionAuthorityEvaluation
+  gate: FounderApprovalGate | null
+  dispatchAllowed: boolean
+}
+
+export type GovernanceRequest = {
+  schemaVersion: 1
+  idempotencyKey: string
+  decisionId: string
+  actionType: string
+  proposedAuthorityClass: "green" | "yellow" | "red"
+  evidenceSufficient: boolean
+  requestedBy: {
+    kind: "human" | "ai_founder" | "board" | "policy_engine"
+    id: string
+  }
+}
+
+export type FounderCorrectionAppendInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  decisionId: string
+  kind: "override" | "correction"
+  humanDecision: string
+  reason: string
+  proposedAssetUpdates: Array<FounderAssetUpdateProposal>
+  actorKind?: "human"
+  actorId: string
+}
+
+export type DecisionCenterItem = {
+  decision: DecisionRecord
+  sourceLabel: "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
+  gate: FounderApprovalGate | null
+  corrections: Array<FounderCorrectionRecord>
+  outcomes: Array<{
+    id: string
+    result: "succeeded" | "failed" | "inconclusive"
+    summary: string
+    observedAt: number
+  }>
+  yellowSummary: FounderYellowSummary | null
+}
+
+export type DecisionCenterProjection = {
+  schemaVersion: 1
+  companyId: string
+  pending: Array<DecisionCenterItem>
+  delegated: Array<DecisionCenterItem>
+  executed: Array<DecisionCenterItem>
+  overridden: Array<DecisionCenterItem>
+  withOutcomes: Array<DecisionCenterItem>
+}
+
+export type DecisionCenterActionInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  action: "accept" | "reject" | "rollback"
+  reason: string
+  actorId: string
+}
+
+export type FounderOsMetricContract = {
+  schemaVersion: 1
+  version: "founder-os-w2-v1"
+  observationWindow: {
+    days: 30
+    clock: "observed_at"
+  }
+  metrics: Array<{
+    id: string
+    numerator: string
+    denominator: string
+    minimumSampleSize: number
+    sourceKinds: Array<string>
+    target: string
+  }>
+  failClosedWhen: Array<string>
+  humanSampleGate: {
+    strength: "weak"
+    blockingDevelopment: false
+  }
+  selfEvaluationAcceptedAsTruth: false
+}
+
+export type FounderGreenReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "ready" | "blocked"
+  b3: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+  }
+  e0: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+  }
+  w5Observation: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+  }
+  takeoverFence: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+  }
+  preferenceHoldout: {
+    status: "passed" | "missing"
+    reportRef: string | null
+    agreementRate: number | null
+  }
+  metricContract: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+    windowDays: number | null
+    sampleContractMet: boolean
+  }
+  authorization: {
+    status: "human_confirmed" | "missing"
+    eventId: string | null
+    confirmedBy: string | null
+  }
+  exactCommit: {
+    status: "passed" | "missing"
+    sha: string | null
+    evidenceRef: string | null
+  }
+  failClosedReasons: Array<string>
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderGreenDelegationChain = {
+  decisionId: string
+  ledgerDecisionId: string
+  governanceRef: string | null
+  graphDecisionId: string | null
+  mutationId: string | null
+  workItemIds: Array<string>
+  receiptIds: Array<string>
+  outcomeIds: Array<string>
+  ledgerOutcomeLinked: boolean
+}
+
+export type FounderGreenDelegationRun = {
+  schemaVersion: 1
+  id: string
+  companyId: string
+  idempotencyKey: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: string
+  actionAllowlisted: boolean
+  status: "blocked" | "authorized" | "outcome_pending" | "completed" | "failed"
+  readiness: FounderGreenReadiness
+  mode: FounderOsModeState
+  authority: DecisionAuthorityEvaluation | null
+  gate: FounderApprovalGate | null
+  dispatch: {
+    status: "paused" | "gated" | "idle" | "dispatched"
+    workItemIds: Array<string>
+  } | null
+  chain: FounderGreenDelegationChain
+  outcomeStatus: "missing" | "succeeded" | "failed" | "inconclusive"
+  completeChain: boolean
+  failClosedReasons: Array<string>
+  selfEvaluationAcceptedAsTruth: false
+  createdAt: number
+  updatedAt: number
+}
+
+export type FounderGreenDelegationProjection = {
+  schemaVersion: 1
+  companyId: string
+  readiness: FounderGreenReadiness
+  mode: FounderOsModeState
+  allowlist: Array<"project.receipt.process">
+  unknownActionsClassifiedAsRed: true
+  activeFenceCount: number
+  trends: {
+    humanConfirmedShadowComparisons: number
+    humanOverrides: number
+    selfEvaluations: 0
+  }
+  runs: Array<FounderGreenDelegationRun>
+  autoPromotionAllowed: false
+}
+
+export type FounderGreenDelegationInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  decisionId: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: string
+  requestedBy: {
+    kind: "ai_founder"
+    id: "board-ceo"
+  }
+}
+
+export type FounderGreenReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  b3ArtifactId: string
+  e0ArtifactId: string
+  w5ObservationArtifactId: string
+  takeoverFenceArtifactId: string
+  preferenceBenchmarkReportId: string
+  metricContractArtifactId: string
+  authorizationEventId: string
+  exactCommit: {
+    sha: string
+    worktreeRunId: string
+  }
+  actor: {
+    kind: "human"
+    id: string
+  }
+}
+
+export type FounderYellowReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "not_confirmed" | "confirmed"
+  greenReadinessRef: string | null
+  w6ObservationEvidenceRef: string | null
+  e0EvidenceRef: string | null
+  outcomeSignalRef: string | null
+  authorizationEventRef: string | null
+  confirmedBy: string | null
+  failClosedReasons: Array<string>
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderYellowActionContract = {
+  schemaVersion: 1
+  actionType: "project.goal.propose"
+  costLimit: {
+    unit: "receipt"
+    maximum: 1
+  }
+  reversible: true
+  externalImpact: false
+  rollbackHandlerId: "company-project-direction.restore_checkpoint"
+  outcomeDeadlineMs: 3600000
+}
+
+export type FounderYellowDelegationProjection = {
+  schemaVersion: 1
+  companyId: string
+  readiness: FounderYellowReadiness
+  mode: FounderOsModeState
+  effectiveDelegationMode: "advisor" | "green-delegated" | "yellow-delegated"
+  contracts: Array<FounderYellowActionContract>
+  redInvariants: Array<
+    | "external.communication.propose"
+    | "external.payment.propose"
+    | "production.operation.propose"
+    | "data.delete.propose"
+    | "privacy.change.propose"
+    | "security.change.propose"
+    | "child_safety.change.propose"
+  >
+  circuitBreakerOpen: boolean
+  outcomeConsumer: {
+    baseline: "v1"
+    validatedOutcomeRequired: true
+  }
+  summaries: Array<FounderYellowSummary>
+  autoPromotionAllowed: false
+}
+
+export type FounderYellowDelegationInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  decisionId: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: "project.goal.propose"
+  estimatedCost: {
+    unit: "receipt"
+    amount: number
+  }
+  direction: {
+    briefId: string
+    expectedBriefVersion: number
+    expectedPlanVersion: number
+    brief: {
+      goal: string
+      deliverables: Array<{
+        id: string
+        title: string
+        description: string
+      }>
+      acceptanceCriteria: Array<{
+        id: string
+        description: string
+        verification: string
+      }>
+      constraints: Array<string>
+      nonGoals: Array<string>
+      assumptions: Array<{
+        id: string
+        description: string
+        confirmed: boolean
+      }>
+      openQuestions: Array<{
+        id: string
+        question: string
+        impact: string
+        blocking: boolean
+        /**
+         * 若用户不回答，系统将采用的默认假设
+         */
+        defaultAssumption: string
+      }>
+      riskLevel: "low" | "medium" | "high" | "critical"
+      recommendedPlan: {
+        summary: string
+        steps: Array<{
+          id: string
+          title: string
+          outcome: string
+        }>
+      }
+      approvalMode: "autonomous" | "balanced" | "strict"
+      sourceRefs: Array<{
+        kind:
+          | "project"
+          | "project_event"
+          | "goal_brief"
+          | "legacy_charter"
+          | "work_item"
+          | "approval_gate"
+          | "artifact"
+          | "delivery"
+          | "conversation"
+          | "goal_request"
+          | "user"
+          | "work_attempt"
+          | "work_receipt"
+          | "graph_mutation"
+          | "project_assignment"
+          | "validation_gate"
+        id: string
+        version?: number
+        eventType?: string
+      }>
+    }
+  }
+  requestedBy: {
+    kind: "ai_founder"
+    id: "board-ceo"
+  }
+}
+
+export type FounderYellowReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  w6ObservationArtifactId: string
+  e0ArtifactId: string
+  outcomeSignalId: string
+  authorizationEventId: string
+  actor: {
+    kind: "human"
+    id: string
+  }
+}
+
+export type FounderYellowRollbackInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  trigger: "failure_condition" | "human_decision"
+  reason: string
+  actor:
+    | {
+        kind: "human"
+        id: string
+      }
+    | {
+        kind: "policy_engine"
+        id: "yellow-circuit-breaker"
+      }
 }
 
 export type ChannelId = string
@@ -674,7 +2398,7 @@ export type BoardDecisionResult = {
     title: string
     description: string
     kind: "planner" | "worker" | "reviewer"
-    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis" | "knowledge_reading"
     role: string
     capability_packs: Array<string>
     decision_scope: Array<string>
@@ -4481,34 +6205,6 @@ export type CompanyCurrentResponses = {
 
 export type CompanyCurrentResponse = CompanyCurrentResponses[keyof CompanyCurrentResponses]
 
-export type FounderOSModeStateRecord = {
-  schemaVersion: 1
-  globalMaximum: {
-    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
-    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
-  }
-  company: {
-    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
-    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
-  }
-  effective: {
-    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
-    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
-  }
-}
-
-export type CompanyFounderOSModesResponses = {
-  200: FounderOSModeStateRecord
-}
-
-export type CompanyFounderOSModesUpdateResponses = {
-  200: FounderOSModeStateRecord
-}
-
-export type CompanyBeliefLoopActivateResponses = {
-  200: FounderOSModeStateRecord
-}
-
 export type CompanyAgentsData = {
   body?: never
   path?: never
@@ -4592,6 +6288,750 @@ export type CompanyApprovalPolicyUpdateResponses = {
 
 export type CompanyApprovalPolicyUpdateResponse =
   CompanyApprovalPolicyUpdateResponses[keyof CompanyApprovalPolicyUpdateResponses]
+
+export type CompanyFounderOsModesData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/company/founder-os-modes"
+}
+
+export type CompanyFounderOsModesErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderOsModesError = CompanyFounderOsModesErrors[keyof CompanyFounderOsModesErrors]
+
+export type CompanyFounderOsModesResponses = {
+  /**
+   * Current Founder OS modes
+   */
+  200: FounderOsModeState
+}
+
+export type CompanyFounderOsModesResponse = CompanyFounderOsModesResponses[keyof CompanyFounderOsModesResponses]
+
+export type CompanyFounderOsModesUpdateData = {
+  body?: FounderOsModeUpdateInput
+  path?: never
+  query?: never
+  url: "/company/founder-os-modes"
+}
+
+export type CompanyFounderOsModesUpdateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderOsModesUpdateError =
+  CompanyFounderOsModesUpdateErrors[keyof CompanyFounderOsModesUpdateErrors]
+
+export type CompanyFounderOsModesUpdateResponses = {
+  /**
+   * Updated Founder OS modes
+   */
+  200: FounderOsModeState
+}
+
+export type CompanyFounderOsModesUpdateResponse =
+  CompanyFounderOsModesUpdateResponses[keyof CompanyFounderOsModesUpdateResponses]
+
+export type CompanyBeliefLoopActivateData = {
+  body?: BeliefLoopActivationInput
+  path?: never
+  query?: never
+  url: "/company/founder-os-modes/belief-loop/activate"
+}
+
+export type CompanyBeliefLoopActivateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyBeliefLoopActivateError = CompanyBeliefLoopActivateErrors[keyof CompanyBeliefLoopActivateErrors]
+
+export type CompanyBeliefLoopActivateResponses = {
+  /**
+   * Updated Founder OS modes
+   */
+  200: FounderOsModeState
+}
+
+export type CompanyBeliefLoopActivateResponse =
+  CompanyBeliefLoopActivateResponses[keyof CompanyBeliefLoopActivateResponses]
+
+export type CompanyFounderStudioData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+    scope_kind?: "company" | "domain" | "project" | "brand"
+    scope_ref?: string
+  }
+  url: "/company/founder-studio"
+}
+
+export type CompanyFounderStudioErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioError = CompanyFounderStudioErrors[keyof CompanyFounderStudioErrors]
+
+export type CompanyFounderStudioResponses = {
+  /**
+   * Founder Studio persisted projection
+   */
+  200: FounderStudioProjection
+}
+
+export type CompanyFounderStudioResponse = CompanyFounderStudioResponses[keyof CompanyFounderStudioResponses]
+
+export type CompanyFounderStudioAssetCreateData = {
+  body?: GovernanceAssetDraftInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/assets"
+}
+
+export type CompanyFounderStudioAssetCreateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioAssetCreateError =
+  CompanyFounderStudioAssetCreateErrors[keyof CompanyFounderStudioAssetCreateErrors]
+
+export type CompanyFounderStudioAssetCreateResponses = {
+  /**
+   * Persisted immutable Governance Asset draft
+   */
+  200: GovernanceAsset
+}
+
+export type CompanyFounderStudioAssetCreateResponse =
+  CompanyFounderStudioAssetCreateResponses[keyof CompanyFounderStudioAssetCreateResponses]
+
+export type CompanyFounderStudioAssetReviseData = {
+  body?: GovernanceAssetRevisionInput
+  path: {
+    assetID: string
+  }
+  query?: never
+  url: "/company/founder-studio/assets/{assetID}/versions"
+}
+
+export type CompanyFounderStudioAssetReviseErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioAssetReviseError =
+  CompanyFounderStudioAssetReviseErrors[keyof CompanyFounderStudioAssetReviseErrors]
+
+export type CompanyFounderStudioAssetReviseResponses = {
+  /**
+   * Founder Studio projection after version append
+   */
+  200: FounderStudioProjection
+}
+
+export type CompanyFounderStudioAssetReviseResponse =
+  CompanyFounderStudioAssetReviseResponses[keyof CompanyFounderStudioAssetReviseResponses]
+
+export type CompanyFounderStudioSnapshotCompileData = {
+  body?: FounderSnapshotCompileInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/snapshots"
+}
+
+export type CompanyFounderStudioSnapshotCompileErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioSnapshotCompileError =
+  CompanyFounderStudioSnapshotCompileErrors[keyof CompanyFounderStudioSnapshotCompileErrors]
+
+export type CompanyFounderStudioSnapshotCompileResponses = {
+  /**
+   * Immutable Founder Twin Snapshot without compiled prompt plaintext
+   */
+  200: FounderTwinSnapshot
+}
+
+export type CompanyFounderStudioSnapshotCompileResponse =
+  CompanyFounderStudioSnapshotCompileResponses[keyof CompanyFounderStudioSnapshotCompileResponses]
+
+export type CompanyFounderStudioSnapshotSelectData = {
+  body?: FounderSnapshotSelectInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/snapshot-selection"
+}
+
+export type CompanyFounderStudioSnapshotSelectErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioSnapshotSelectError =
+  CompanyFounderStudioSnapshotSelectErrors[keyof CompanyFounderStudioSnapshotSelectErrors]
+
+export type CompanyFounderStudioSnapshotSelectResponses = {
+  /**
+   * Founder Studio projection with selected immutable Snapshot
+   */
+  200: FounderStudioProjection
+}
+
+export type CompanyFounderStudioSnapshotSelectResponse =
+  CompanyFounderStudioSnapshotSelectResponses[keyof CompanyFounderStudioSnapshotSelectResponses]
+
+export type CompanyFounderShadowContextData = {
+  body?: FounderContextBuildInput
+  path?: never
+  query?: never
+  url: "/company/founder-shadow/context"
+}
+
+export type CompanyFounderShadowContextErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderShadowContextError =
+  CompanyFounderShadowContextErrors[keyof CompanyFounderShadowContextErrors]
+
+export type CompanyFounderShadowContextResponses = {
+  /**
+   * Bounded Founder Shadow context or fail-closed projection
+   */
+  200: FounderContextProjection
+}
+
+export type CompanyFounderShadowContextResponse =
+  CompanyFounderShadowContextResponses[keyof CompanyFounderShadowContextResponses]
+
+export type CompanyFounderShadowRunData = {
+  body?: FounderShadowRunInput
+  path?: never
+  query?: never
+  url: "/company/founder-shadow/runs"
+}
+
+export type CompanyFounderShadowRunErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderShadowRunError = CompanyFounderShadowRunErrors[keyof CompanyFounderShadowRunErrors]
+
+export type CompanyFounderShadowRunResponses = {
+  /**
+   * Persisted Shadow suggestion or fail-closed attempt
+   */
+  200: FounderShadowDecision
+}
+
+export type CompanyFounderShadowRunResponse = CompanyFounderShadowRunResponses[keyof CompanyFounderShadowRunResponses]
+
+export type CompanyFounderShadowComparisonData = {
+  body?: FounderShadowComparisonInput
+  path?: never
+  query?: never
+  url: "/company/founder-shadow/comparisons"
+}
+
+export type CompanyFounderShadowComparisonErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderShadowComparisonError =
+  CompanyFounderShadowComparisonErrors[keyof CompanyFounderShadowComparisonErrors]
+
+export type CompanyFounderShadowComparisonResponses = {
+  /**
+   * Append-only Shadow comparison
+   */
+  200: FounderShadowComparison
+}
+
+export type CompanyFounderShadowComparisonResponse =
+  CompanyFounderShadowComparisonResponses[keyof CompanyFounderShadowComparisonResponses]
+
+export type CompanyFounderShadowAuditData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-shadow/audit"
+}
+
+export type CompanyFounderShadowAuditErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderShadowAuditError = CompanyFounderShadowAuditErrors[keyof CompanyFounderShadowAuditErrors]
+
+export type CompanyFounderShadowAuditResponses = {
+  /**
+   * Read-only projection that is not part of Board chat
+   */
+  200: FounderBoardShadowProjection
+}
+
+export type CompanyFounderShadowAuditResponse =
+  CompanyFounderShadowAuditResponses[keyof CompanyFounderShadowAuditResponses]
+
+export type CompanyFounderStudioCaseImportData = {
+  body?: FounderCaseImportInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/cases"
+}
+
+export type CompanyFounderStudioCaseImportErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioCaseImportError =
+  CompanyFounderStudioCaseImportErrors[keyof CompanyFounderStudioCaseImportErrors]
+
+export type CompanyFounderStudioCaseImportResponses = {
+  /**
+   * Governance Asset draft with source and authority
+   */
+  200: GovernanceAsset
+}
+
+export type CompanyFounderStudioCaseImportResponse =
+  CompanyFounderStudioCaseImportResponses[keyof CompanyFounderStudioCaseImportResponses]
+
+export type CompanyFounderStudioCalibrationCreateData = {
+  body?: FounderCalibrationRequestInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/calibrations"
+}
+
+export type CompanyFounderStudioCalibrationCreateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioCalibrationCreateError =
+  CompanyFounderStudioCalibrationCreateErrors[keyof CompanyFounderStudioCalibrationCreateErrors]
+
+export type CompanyFounderStudioCalibrationCreateResponses = {
+  /**
+   * Pending calibration item
+   */
+  200: FounderCalibrationItem
+}
+
+export type CompanyFounderStudioCalibrationCreateResponse =
+  CompanyFounderStudioCalibrationCreateResponses[keyof CompanyFounderStudioCalibrationCreateResponses]
+
+export type CompanyFounderStudioCalibrationRespondData = {
+  body?: FounderCalibrationResponseInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/calibration-responses"
+}
+
+export type CompanyFounderStudioCalibrationRespondErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioCalibrationRespondError =
+  CompanyFounderStudioCalibrationRespondErrors[keyof CompanyFounderStudioCalibrationRespondErrors]
+
+export type CompanyFounderStudioCalibrationRespondResponses = {
+  /**
+   * Responded calibration item with confirmation event
+   */
+  200: FounderCalibrationItem
+}
+
+export type CompanyFounderStudioCalibrationRespondResponse =
+  CompanyFounderStudioCalibrationRespondResponses[keyof CompanyFounderStudioCalibrationRespondResponses]
+
+export type CompanyFounderStudioRubricValidateData = {
+  body?: FounderRubricValidationInput
+  path?: never
+  query?: never
+  url: "/company/founder-studio/rubric-validations"
+}
+
+export type CompanyFounderStudioRubricValidateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderStudioRubricValidateError =
+  CompanyFounderStudioRubricValidateErrors[keyof CompanyFounderStudioRubricValidateErrors]
+
+export type CompanyFounderStudioRubricValidateResponses = {
+  /**
+   * Rubric validation with exact asset version reference
+   */
+  200: FounderRubricValidation
+}
+
+export type CompanyFounderStudioRubricValidateResponse =
+  CompanyFounderStudioRubricValidateResponses[keyof CompanyFounderStudioRubricValidateResponses]
+
+export type CompanyFounderBenchmarkCaseCreateData = {
+  body?: FounderBenchmarkCaseInput
+  path?: never
+  query?: never
+  url: "/company/founder-benchmarks/cases"
+}
+
+export type CompanyFounderBenchmarkCaseCreateErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderBenchmarkCaseCreateError =
+  CompanyFounderBenchmarkCaseCreateErrors[keyof CompanyFounderBenchmarkCaseCreateErrors]
+
+export type CompanyFounderBenchmarkCaseCreateResponses = {
+  /**
+   * Immutable benchmark case
+   */
+  200: FounderBenchmarkCase
+}
+
+export type CompanyFounderBenchmarkCaseCreateResponse =
+  CompanyFounderBenchmarkCaseCreateResponses[keyof CompanyFounderBenchmarkCaseCreateResponses]
+
+export type CompanyFounderBenchmarkRunData = {
+  body?: FounderBenchmarkRunInput
+  path?: never
+  query?: never
+  url: "/company/founder-benchmarks/runs"
+}
+
+export type CompanyFounderBenchmarkRunErrors = {
+  /**
+   * Invalid company bootstrap request
+   */
+  400:
+    | ProductValidationError
+    | CompanyRepositoryNotGit
+    | CompanyProviderUnsupported
+    | CompanyProviderNotConnected
+    | CompanyModelNotAvailable
+    | ProviderAuthValidationFailed
+    | CustomProviderModelsFailed
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete company operation
+   */
+  500: CompanyCorruptState | UnknownError
+}
+
+export type CompanyFounderBenchmarkRunError = CompanyFounderBenchmarkRunErrors[keyof CompanyFounderBenchmarkRunErrors]
+
+export type CompanyFounderBenchmarkRunResponses = {
+  /**
+   * Deterministic benchmark report
+   */
+  200: FounderBenchmarkReport
+}
+
+export type CompanyFounderBenchmarkRunResponse =
+  CompanyFounderBenchmarkRunResponses[keyof CompanyFounderBenchmarkRunResponses]
 
 export type CompanyDeferSetupGoalData = {
   body?: CompanySetupGoalInput
@@ -5143,6 +7583,981 @@ export type CompanyProjectWorkItemReassignResponses = {
    */
   200: unknown
 }
+
+export type CompanyFounderAdvisorReadinessData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/board/readiness"
+}
+
+export type CompanyFounderAdvisorReadinessErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderAdvisorReadinessError =
+  CompanyFounderAdvisorReadinessErrors[keyof CompanyFounderAdvisorReadinessErrors]
+
+export type CompanyFounderAdvisorReadinessResponses = {
+  /**
+   * Advisor readiness
+   */
+  200: FounderAdvisorReadiness
+}
+
+export type CompanyFounderAdvisorReadinessResponse =
+  CompanyFounderAdvisorReadinessResponses[keyof CompanyFounderAdvisorReadinessResponses]
+
+export type CompanyFounderAdvisorReadinessRecordData = {
+  body?: FounderAdvisorReadinessRecordInput
+  path?: never
+  query?: never
+  url: "/company/board/readiness"
+}
+
+export type CompanyFounderAdvisorReadinessRecordErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderAdvisorReadinessRecordError =
+  CompanyFounderAdvisorReadinessRecordErrors[keyof CompanyFounderAdvisorReadinessRecordErrors]
+
+export type CompanyFounderAdvisorReadinessRecordResponses = {
+  /**
+   * Verified Advisor readiness
+   */
+  200: FounderAdvisorReadiness
+}
+
+export type CompanyFounderAdvisorReadinessRecordResponse =
+  CompanyFounderAdvisorReadinessRecordResponses[keyof CompanyFounderAdvisorReadinessRecordResponses]
+
+export type CompanyFounderBoardData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/board"
+}
+
+export type CompanyFounderBoardErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderBoardError = CompanyFounderBoardErrors[keyof CompanyFounderBoardErrors]
+
+export type CompanyFounderBoardResponses = {
+  /**
+   * Board governance projection
+   */
+  200: FounderBoardGovernanceProjection
+}
+
+export type CompanyFounderBoardResponse = CompanyFounderBoardResponses[keyof CompanyFounderBoardResponses]
+
+export type CompanyFounderBoardConvergeData = {
+  body?: FounderAdvisorConvergenceInput
+  path?: never
+  query?: never
+  url: "/company/board/convergences"
+}
+
+export type CompanyFounderBoardConvergeErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderBoardConvergeError =
+  CompanyFounderBoardConvergeErrors[keyof CompanyFounderBoardConvergeErrors]
+
+export type CompanyFounderBoardConvergeResponses = {
+  /**
+   * Recorded intent or blocked convergence
+   */
+  200: FounderAdvisorConvergence
+}
+
+export type CompanyFounderBoardConvergeResponse =
+  CompanyFounderBoardConvergeResponses[keyof CompanyFounderBoardConvergeResponses]
+
+export type CompanyFounderBoardInterveneData = {
+  body?: FounderInterventionInput
+  path?: never
+  query?: never
+  url: "/company/board/interventions"
+}
+
+export type CompanyFounderBoardInterveneErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderBoardInterveneError =
+  CompanyFounderBoardInterveneErrors[keyof CompanyFounderBoardInterveneErrors]
+
+export type CompanyFounderBoardInterveneResponses = {
+  /**
+   * Persisted intervention and stop effects
+   */
+  200: FounderIntervention
+}
+
+export type CompanyFounderBoardInterveneResponse =
+  CompanyFounderBoardInterveneResponses[keyof CompanyFounderBoardInterveneResponses]
+
+export type CompanyFounderControlCenterData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-control-center"
+}
+
+export type CompanyFounderControlCenterErrors = {
+  /**
+   * Invalid Founder Advisor request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Advisor request
+   */
+  500: UnknownError
+}
+
+export type CompanyFounderControlCenterError =
+  CompanyFounderControlCenterErrors[keyof CompanyFounderControlCenterErrors]
+
+export type CompanyFounderControlCenterResponses = {
+  /**
+   * Founder Control Center projection
+   */
+  200: FounderControlCenterProjection
+}
+
+export type CompanyFounderControlCenterResponse =
+  CompanyFounderControlCenterResponses[keyof CompanyFounderControlCenterResponses]
+
+export type FounderOsDecisionsData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+    scope_type?: "company" | "project" | "pre_project"
+    project_id?: string
+    pre_project_id?: string
+  }
+  url: "/company/founder-os/decisions"
+}
+
+export type FounderOsDecisionsErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionsError = FounderOsDecisionsErrors[keyof FounderOsDecisionsErrors]
+
+export type FounderOsDecisionsResponses = {
+  /**
+   * Decision records
+   */
+  200: Array<DecisionRecord>
+}
+
+export type FounderOsDecisionsResponse = FounderOsDecisionsResponses[keyof FounderOsDecisionsResponses]
+
+export type FounderOsDecisionAppendData = {
+  body?: DecisionRecordAppendInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/decisions"
+}
+
+export type FounderOsDecisionAppendErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Decision ledger conflict
+   */
+  409: DecisionLedgerIdempotencyConflict | DecisionLedgerIllegalTransition
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionAppendError = FounderOsDecisionAppendErrors[keyof FounderOsDecisionAppendErrors]
+
+export type FounderOsDecisionAppendResponses = {
+  /**
+   * Appended or idempotently recovered decision record
+   */
+  200: DecisionRecord
+}
+
+export type FounderOsDecisionAppendResponse = FounderOsDecisionAppendResponses[keyof FounderOsDecisionAppendResponses]
+
+export type FounderOsDecisionData = {
+  body?: never
+  path: {
+    decisionID: string
+  }
+  query?: never
+  url: "/company/founder-os/decisions/{decisionID}"
+}
+
+export type FounderOsDecisionErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Decision record not found
+   */
+  404: DecisionLedgerNotFound
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionError = FounderOsDecisionErrors[keyof FounderOsDecisionErrors]
+
+export type FounderOsDecisionResponses = {
+  /**
+   * Decision record
+   */
+  200: DecisionRecord
+}
+
+export type FounderOsDecisionResponse = FounderOsDecisionResponses[keyof FounderOsDecisionResponses]
+
+export type FounderOsDecisionTransitionsData = {
+  body?: never
+  path: {
+    decisionID: string
+  }
+  query?: never
+  url: "/company/founder-os/decisions/{decisionID}/transitions"
+}
+
+export type FounderOsDecisionTransitionsErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Decision record not found
+   */
+  404: DecisionLedgerNotFound
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionTransitionsError =
+  FounderOsDecisionTransitionsErrors[keyof FounderOsDecisionTransitionsErrors]
+
+export type FounderOsDecisionTransitionsResponses = {
+  /**
+   * Decision transitions
+   */
+  200: Array<DecisionTransition>
+}
+
+export type FounderOsDecisionTransitionsResponse =
+  FounderOsDecisionTransitionsResponses[keyof FounderOsDecisionTransitionsResponses]
+
+export type FounderOsDecisionDispatchesData = {
+  body?: never
+  path: {
+    decisionID: string
+  }
+  query?: never
+  url: "/company/founder-os/decisions/{decisionID}/dispatches"
+}
+
+export type FounderOsDecisionDispatchesErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Decision record not found
+   */
+  404: DecisionLedgerNotFound
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionDispatchesError =
+  FounderOsDecisionDispatchesErrors[keyof FounderOsDecisionDispatchesErrors]
+
+export type FounderOsDecisionDispatchesResponses = {
+  /**
+   * Dispatch outboxes
+   */
+  200: Array<DecisionDispatchOutbox>
+}
+
+export type FounderOsDecisionDispatchesResponse =
+  FounderOsDecisionDispatchesResponses[keyof FounderOsDecisionDispatchesResponses]
+
+export type FounderOsDecisionDispatchEventsData = {
+  body?: never
+  path: {
+    dispatchID: string
+  }
+  query?: never
+  url: "/company/founder-os/dispatches/{dispatchID}/events"
+}
+
+export type FounderOsDecisionDispatchEventsErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionDispatchEventsError =
+  FounderOsDecisionDispatchEventsErrors[keyof FounderOsDecisionDispatchEventsErrors]
+
+export type FounderOsDecisionDispatchEventsResponses = {
+  /**
+   * Dispatch lifecycle events
+   */
+  200: Array<DecisionDispatchEvent>
+}
+
+export type FounderOsDecisionDispatchEventsResponse =
+  FounderOsDecisionDispatchEventsResponses[keyof FounderOsDecisionDispatchEventsResponses]
+
+export type FounderOsDelegationPoliciesData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-os/delegation-policies"
+}
+
+export type FounderOsDelegationPoliciesErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDelegationPoliciesError =
+  FounderOsDelegationPoliciesErrors[keyof FounderOsDelegationPoliciesErrors]
+
+export type FounderOsDelegationPoliciesResponses = {
+  /**
+   * Delegation policies
+   */
+  200: Array<DelegationPolicy>
+}
+
+export type FounderOsDelegationPoliciesResponse =
+  FounderOsDelegationPoliciesResponses[keyof FounderOsDelegationPoliciesResponses]
+
+export type FounderOsAuthorityEvaluateData = {
+  body?: DecisionAuthorityInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/authority/evaluate"
+}
+
+export type FounderOsAuthorityEvaluateErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsAuthorityEvaluateError = FounderOsAuthorityEvaluateErrors[keyof FounderOsAuthorityEvaluateErrors]
+
+export type FounderOsAuthorityEvaluateResponses = {
+  /**
+   * Authority evaluation
+   */
+  200: DecisionAuthorityEvaluation
+}
+
+export type FounderOsAuthorityEvaluateResponse =
+  FounderOsAuthorityEvaluateResponses[keyof FounderOsAuthorityEvaluateResponses]
+
+export type FounderOsGovernanceData = {
+  body?: GovernanceRequest
+  path?: never
+  query?: never
+  url: "/company/founder-os/governance"
+}
+
+export type FounderOsGovernanceErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsGovernanceError = FounderOsGovernanceErrors[keyof FounderOsGovernanceErrors]
+
+export type FounderOsGovernanceResponses = {
+  /**
+   * Governance verdict
+   */
+  200: GovernanceDecision
+}
+
+export type FounderOsGovernanceResponse = FounderOsGovernanceResponses[keyof FounderOsGovernanceResponses]
+
+export type FounderOsApprovalGateResolveData = {
+  body?: {
+    decision: "approve" | "reject"
+    note: string
+    actor: {
+      kind: "human" | "ai_founder" | "board" | "policy_engine"
+      id: string
+    }
+  }
+  path: {
+    gateID: string
+  }
+  query?: never
+  url: "/company/founder-os/approval-gates/{gateID}/resolve"
+}
+
+export type FounderOsApprovalGateResolveErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsApprovalGateResolveError =
+  FounderOsApprovalGateResolveErrors[keyof FounderOsApprovalGateResolveErrors]
+
+export type FounderOsApprovalGateResolveResponses = {
+  /**
+   * Governance verdict
+   */
+  200: GovernanceDecision
+}
+
+export type FounderOsApprovalGateResolveResponse =
+  FounderOsApprovalGateResolveResponses[keyof FounderOsApprovalGateResolveResponses]
+
+export type FounderOsCorrectionAppendData = {
+  body?: FounderCorrectionAppendInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/corrections"
+}
+
+export type FounderOsCorrectionAppendErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsCorrectionAppendError = FounderOsCorrectionAppendErrors[keyof FounderOsCorrectionAppendErrors]
+
+export type FounderOsCorrectionAppendResponses = {
+  /**
+   * Correction record
+   */
+  200: FounderCorrectionRecord
+}
+
+export type FounderOsCorrectionAppendResponse =
+  FounderOsCorrectionAppendResponses[keyof FounderOsCorrectionAppendResponses]
+
+export type FounderOsDecisionCenterData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-os/decision-center"
+}
+
+export type FounderOsDecisionCenterErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionCenterError = FounderOsDecisionCenterErrors[keyof FounderOsDecisionCenterErrors]
+
+export type FounderOsDecisionCenterResponses = {
+  /**
+   * Decision Center projection
+   */
+  200: DecisionCenterProjection
+}
+
+export type FounderOsDecisionCenterResponse = FounderOsDecisionCenterResponses[keyof FounderOsDecisionCenterResponses]
+
+export type FounderOsDecisionCenterActionData = {
+  body?: DecisionCenterActionInput
+  path: {
+    decisionID: string
+  }
+  query?: never
+  url: "/company/founder-os/decision-center/{decisionID}/actions"
+}
+
+export type FounderOsDecisionCenterActionErrors = {
+  /**
+   * Invalid Founder OS ledger request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Decision Ledger operation
+   */
+  500: DecisionLedgerCorrupt | UnknownError
+}
+
+export type FounderOsDecisionCenterActionError =
+  FounderOsDecisionCenterActionErrors[keyof FounderOsDecisionCenterActionErrors]
+
+export type FounderOsDecisionCenterActionResponses = {
+  /**
+   * Updated Decision Center projection
+   */
+  200: DecisionCenterProjection
+}
+
+export type FounderOsDecisionCenterActionResponse =
+  FounderOsDecisionCenterActionResponses[keyof FounderOsDecisionCenterActionResponses]
+
+export type FounderOsMetricContractData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/company/founder-os/metrics/contract"
+}
+
+export type FounderOsMetricContractErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+}
+
+export type FounderOsMetricContractError = FounderOsMetricContractErrors[keyof FounderOsMetricContractErrors]
+
+export type FounderOsMetricContractResponses = {
+  /**
+   * Metric contract
+   */
+  200: FounderOsMetricContract
+}
+
+export type FounderOsMetricContractResponse = FounderOsMetricContractResponses[keyof FounderOsMetricContractResponses]
+
+export type FounderOsGreenDelegationProjectionData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-os/green-delegations"
+}
+
+export type FounderOsGreenDelegationProjectionErrors = {
+  /**
+   * Invalid Founder Green delegation request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Green delegation request
+   */
+  500: UnknownError
+}
+
+export type FounderOsGreenDelegationProjectionError =
+  FounderOsGreenDelegationProjectionErrors[keyof FounderOsGreenDelegationProjectionErrors]
+
+export type FounderOsGreenDelegationProjectionResponses = {
+  /**
+   * Green delegation projection
+   */
+  200: FounderGreenDelegationProjection
+}
+
+export type FounderOsGreenDelegationProjectionResponse =
+  FounderOsGreenDelegationProjectionResponses[keyof FounderOsGreenDelegationProjectionResponses]
+
+export type FounderOsGreenDelegationSubmitData = {
+  body?: FounderGreenDelegationInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/green-delegations"
+}
+
+export type FounderOsGreenDelegationSubmitErrors = {
+  /**
+   * Invalid Founder Green delegation request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Green delegation request
+   */
+  500: UnknownError
+}
+
+export type FounderOsGreenDelegationSubmitError =
+  FounderOsGreenDelegationSubmitErrors[keyof FounderOsGreenDelegationSubmitErrors]
+
+export type FounderOsGreenDelegationSubmitResponses = {
+  /**
+   * Green delegation run
+   */
+  200: FounderGreenDelegationRun
+}
+
+export type FounderOsGreenDelegationSubmitResponse =
+  FounderOsGreenDelegationSubmitResponses[keyof FounderOsGreenDelegationSubmitResponses]
+
+export type FounderOsGreenReadinessRecordData = {
+  body?: FounderGreenReadinessRecordInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/green-readiness"
+}
+
+export type FounderOsGreenReadinessRecordErrors = {
+  /**
+   * Invalid Founder Green delegation request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Green delegation request
+   */
+  500: UnknownError
+}
+
+export type FounderOsGreenReadinessRecordError =
+  FounderOsGreenReadinessRecordErrors[keyof FounderOsGreenReadinessRecordErrors]
+
+export type FounderOsGreenReadinessRecordResponses = {
+  /**
+   * Verified Green readiness
+   */
+  200: FounderGreenReadiness
+}
+
+export type FounderOsGreenReadinessRecordResponse =
+  FounderOsGreenReadinessRecordResponses[keyof FounderOsGreenReadinessRecordResponses]
+
+export type FounderOsYellowDelegationProjectionData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/founder-os/yellow-delegations"
+}
+
+export type FounderOsYellowDelegationProjectionErrors = {
+  /**
+   * Invalid Founder Yellow request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Yellow request
+   */
+  500: UnknownError
+}
+
+export type FounderOsYellowDelegationProjectionError =
+  FounderOsYellowDelegationProjectionErrors[keyof FounderOsYellowDelegationProjectionErrors]
+
+export type FounderOsYellowDelegationProjectionResponses = {
+  /**
+   * Yellow delegation projection
+   */
+  200: FounderYellowDelegationProjection
+}
+
+export type FounderOsYellowDelegationProjectionResponse =
+  FounderOsYellowDelegationProjectionResponses[keyof FounderOsYellowDelegationProjectionResponses]
+
+export type FounderOsYellowDelegationSubmitData = {
+  body?: FounderYellowDelegationInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/yellow-delegations"
+}
+
+export type FounderOsYellowDelegationSubmitErrors = {
+  /**
+   * Invalid Founder Yellow request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Yellow request
+   */
+  500: UnknownError
+}
+
+export type FounderOsYellowDelegationSubmitError =
+  FounderOsYellowDelegationSubmitErrors[keyof FounderOsYellowDelegationSubmitErrors]
+
+export type FounderOsYellowDelegationSubmitResponses = {
+  /**
+   * Yellow delegation summary
+   */
+  200: FounderYellowSummary
+}
+
+export type FounderOsYellowDelegationSubmitResponse =
+  FounderOsYellowDelegationSubmitResponses[keyof FounderOsYellowDelegationSubmitResponses]
+
+export type FounderOsYellowReadinessRecordData = {
+  body?: FounderYellowReadinessRecordInput
+  path?: never
+  query?: never
+  url: "/company/founder-os/yellow-readiness"
+}
+
+export type FounderOsYellowReadinessRecordErrors = {
+  /**
+   * Invalid Founder Yellow request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Yellow request
+   */
+  500: UnknownError
+}
+
+export type FounderOsYellowReadinessRecordError =
+  FounderOsYellowReadinessRecordErrors[keyof FounderOsYellowReadinessRecordErrors]
+
+export type FounderOsYellowReadinessRecordResponses = {
+  /**
+   * Yellow readiness
+   */
+  200: FounderYellowReadiness
+}
+
+export type FounderOsYellowReadinessRecordResponse =
+  FounderOsYellowReadinessRecordResponses[keyof FounderOsYellowReadinessRecordResponses]
+
+export type FounderOsYellowRollbackData = {
+  body?: FounderYellowRollbackInput
+  path: {
+    runId: string
+  }
+  query?: never
+  url: "/company/founder-os/yellow-delegations/{runId}/rollback"
+}
+
+export type FounderOsYellowRollbackErrors = {
+  /**
+   * Invalid Founder Yellow request
+   */
+  400: ProductValidationError
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Unable to complete Founder Yellow request
+   */
+  500: UnknownError
+}
+
+export type FounderOsYellowRollbackError = FounderOsYellowRollbackErrors[keyof FounderOsYellowRollbackErrors]
+
+export type FounderOsYellowRollbackResponses = {
+  /**
+   * Yellow delegation summary after rollback
+   */
+  200: FounderYellowSummary
+}
+
+export type FounderOsYellowRollbackResponse = FounderOsYellowRollbackResponses[keyof FounderOsYellowRollbackResponses]
 
 export type CompanyChannelsData = {
   body?: never
@@ -11477,325 +14892,6 @@ export type AgentRunStopResponses = {
   200: unknown
 }
 
-export type CommonsSourceType =
-  | "text"
-  | "markdown"
-  | "url"
-  | "conversation_export"
-  | "pdf"
-  | "image"
-  | "podcast"
-  | "video"
-
-export type CommonsSourceRecord = {
-  id: string
-  artifact_id: string
-  company_id: string
-  project_id?: string
-  private_owner_id?: string
-  source_type: CommonsSourceType
-  title: string
-  author?: string
-  origin?: string
-  published_at?: number
-  language?: string
-  tags: Array<string>
-  privacy_scope: "company" | "project" | "private"
-  capability_status: "supported" | "unsupported" | "blocked"
-  ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
-  transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
-  content_hash?: string
-  normalized_content_hash?: string
-  duplicate_of_source_id?: string
-  deduplication_kind?: "exact" | "normalized"
-  metadata: Record<string, unknown>
-  adapter_id?: string
-  adapter_version?: string
-  error_code?: string
-  error_message?: string
-  created_at: number
-  updated_at: number
-}
-
-export type CommonsChunkRecord = {
-  id: string
-  source_id: string
-  ordinal: number
-  body: string
-  content_hash: string
-  start_offset: number
-  end_offset: number
-  source_span: Record<string, unknown>
-  trust_class: "untrusted_source"
-  created_at: number
-}
-
-export type CommonsAccess = {
-  company_id: string
-  project_ids?: Array<string>
-  private_owner_id?: string
-}
-
-export type CommonsCapabilityRecord = {
-  source_type: CommonsSourceType
-  status: "supported" | "blocked" | "unsupported"
-  adapter_id?: string
-  adapter_version?: string
-  reason_code?: string
-  reason?: string
-  requirements: Array<string>
-  supports_transcript: boolean
-}
-
-export type CompanyCommonsCapabilitiesData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/company-commons/capabilities"
-}
-
-export type CompanyCommonsCapabilitiesResponses = {
-  200: Array<CommonsCapabilityRecord>
-}
-
-export type CompanyCommonsSourcesData = {
-  body?: never
-  path?: never
-  query: {
-    directory?: string
-    workspace?: string
-    company_id: string
-    project_ids?: string
-    private_owner_id?: string
-    limit?: number
-    offset?: number
-  }
-  url: "/company-commons/sources"
-}
-
-export type CompanyCommonsSourcesResponses = {
-  200: Array<CommonsSourceRecord>
-}
-
-export type CompanyCommonsImportSourceData = {
-  body: {
-    company_id: string
-    title: string
-    author?: string
-    origin?: string
-    published_at?: number
-    language?: string
-    tags?: Array<string>
-    metadata?: Record<string, unknown>
-    privacy_scope: "company" | "project" | "private"
-    project_id?: string
-    private_owner_id?: string
-    source_type: CommonsSourceType
-    content?: string
-    url?: string
-    content_base64?: string
-    media_type?: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/company-commons/sources"
-}
-
-export type CompanyCommonsImportSourceResponses = {
-  200: CommonsSourceRecord
-}
-
-export type CompanyCommonsSourceData = {
-  body?: never
-  path: {
-    sourceID: string
-  }
-  query: {
-    directory?: string
-    workspace?: string
-    company_id: string
-    project_ids?: string
-    private_owner_id?: string
-  }
-  url: "/company-commons/sources/{sourceID}"
-}
-
-export type CompanyCommonsSourceResponses = {
-  200: {
-    source: CommonsSourceRecord
-    artifact: {
-      id: string
-      scope_type: "company" | "project" | "private"
-      project_id?: string
-      company_id?: string
-      private_owner_id?: string
-      kind: string
-      title: string
-      content?: string
-      evidence: Record<string, unknown>
-      created_at: number
-    }
-    chunks: Array<CommonsChunkRecord>
-  }
-}
-
-export type CompanyCommonsRetryData = {
-  body: CommonsAccess
-  path: {
-    sourceID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/company-commons/sources/{sourceID}/retry"
-}
-
-export type CompanyCommonsRetryResponses = {
-  200: CommonsSourceRecord
-}
-
-export type CompanyCommonsSearchData = {
-  body?: never
-  path?: never
-  query: {
-    directory?: string
-    workspace?: string
-    company_id: string
-    project_ids?: string
-    private_owner_id?: string
-    q: string
-    limit?: number
-  }
-  url: "/company-commons/search"
-}
-
-export type CompanyCommonsSearchResponses = {
-  200: Array<{
-    source: CommonsSourceRecord
-    chunk: CommonsChunkRecord
-    excerpt: string
-    score: number
-    retrieval: "sqlite_fts"
-    embedding_status: "unavailable" | "available"
-    instructions_allowed: false
-  }>
-}
-
-export type ReadingEvidenceRefRecord = {
-  chunk_id: string
-  start_offset: number
-  end_offset: number
-  claim: string
-}
-
-export type ReadingProjectConnectionRecord = {
-  project_id: string
-  impact: string
-}
-
-export type InterpretationRecord = {
-  id: string
-  work_receipt_id?: string
-  source_id: string
-  reader_agent_id: string
-  reader_agent_name?: string
-  reader_role: string
-  work_item_id?: string
-  core_thesis: string
-  important_claims: Array<string>
-  company_relevance: string
-  project_connections: Array<ReadingProjectConnectionRecord>
-  agreement: "aligned" | "conflicted" | "mixed" | "unknown"
-  conflicts: Array<string>
-  counter_arguments: Array<string>
-  inspiration: Array<string>
-  experiment_ideas: Array<string>
-  disposition: "archive" | "candidate" | "reject"
-  confidence: number
-  evidence_refs: Array<ReadingEvidenceRefRecord>
-  created_at: number
-}
-
-export type AgentInterestProfileRecord = {
-  company_id: string
-  agent_id: string
-  topics: Array<string>
-  preferred_lenses: Array<string>
-  excluded_topics: Array<string>
-  novelty_threshold: number
-  weekly_reading_budget: number
-  max_concurrency: number
-  privacy_scopes: Array<"company" | "project" | "private">
-  updated_at: number
-}
-
-export type ReadingAssignmentRecord = {
-  id: string
-  source_id: string
-  company_id: string
-  agent_id: string
-  project_id: string
-  linked_project_ids: Array<string>
-  work_item_id?: string
-  idempotency_key: string
-  status: "scheduling" | "scheduled" | "running" | "completed" | "failed" | "stopped"
-  relevance_score: number
-  novelty_score: number
-  gap_score: number
-  budget_score: number
-  total_score: number
-  budget_week: string
-  budget_reserved: boolean
-  error?: string
-  created_at: number
-  updated_at: number
-  stopped_at?: number
-}
-
-export type CompanyReadingInterpretationsResponses = {
-  200: Array<InterpretationRecord>
-}
-
-export type CompanyReadingCreateInterpretationResponses = {
-  200: InterpretationRecord
-}
-
-export type CompanyReadingConsumeReceiptResponses = {
-  200: InterpretationRecord
-}
-
-export type CompanyReadingProfilesResponses = {
-  200: Array<AgentInterestProfileRecord>
-}
-
-export type CompanyReadingUpsertProfileResponses = {
-  200: AgentInterestProfileRecord
-}
-
-export type CompanyReadingAssignmentsResponses = {
-  200: Array<ReadingAssignmentRecord>
-}
-
-export type CompanyReadingScheduleResponses = {
-  200: {
-    source_id: string
-    project_id: string
-    assignments: Array<ReadingAssignmentRecord>
-    eligible_agent_count: number
-  }
-}
-
-export type CompanyReadingStopResponses = {
-  200: ReadingAssignmentRecord
-}
-
 export type CompanyProjectListData = {
   body?: never
   path?: never
@@ -11986,10 +15082,19 @@ export type CompanyProjectReceiptsResponses = {
     outcome: "completed" | "blocked" | "failed" | "ask"
     summary: string
     artifact_ids: Array<string>
-    evidence_refs: Array<{
-      kind: "agent_run" | "artifact" | "project_event"
-      id: string
-    }>
+    evidence_refs: Array<
+      | {
+          kind: "agent_run" | "artifact" | "project_event"
+          id: string
+        }
+      | {
+          kind: "learning_target_version"
+          id: string
+          target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+          target_id: string
+          version: number
+        }
+    >
     confirmed_facts: Array<string>
     invalidated_assumptions: Array<string>
     unknowns: Array<string>
@@ -12005,7 +15110,32 @@ export type CompanyProjectReceiptsResponses = {
     typed_payload?: {
       kind: "knowledge_reading"
       assignment_id: string
-      receipt: Omit<InterpretationRecord, "id" | "work_receipt_id" | "reader_agent_name" | "created_at">
+      receipt: {
+        source_id: string
+        reader_agent_id: string
+        reader_role: string
+        work_item_id: string
+        core_thesis: string
+        important_claims: Array<string>
+        company_relevance: string
+        project_connections: Array<{
+          project_id: string
+          impact: string
+        }>
+        agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+        conflicts: Array<string>
+        counter_arguments: Array<string>
+        inspiration: Array<string>
+        experiment_ideas: Array<string>
+        disposition: "archive" | "candidate" | "reject"
+        confidence: number
+        evidence_refs: Array<{
+          chunk_id: string
+          start_offset: number
+          end_offset: number
+          claim: string
+        }>
+      }
     }
     id: string
     project_id: string
@@ -12023,59 +15153,6 @@ export type CompanyProjectReceiptsResponses = {
 
 export type CompanyProjectReceiptsResponse = CompanyProjectReceiptsResponses[keyof CompanyProjectReceiptsResponses]
 
-export type OutcomeSignalSourceRef = {
-  kind: "work_receipt" | "validation_gate" | "artifact"
-  id: string
-}
-
-export type OutcomeSignalValidatorRef = {
-  kind: "validation_gate" | "artifact"
-  id: string
-}
-
-export type OutcomeSignalRecord = {
-  schema_version: 1 | 2
-  idempotency_key: string
-  decision_id?: string
-  result: "succeeded" | "failed" | "inconclusive"
-  summary: string
-  validator_ref: OutcomeSignalValidatorRef
-  validator_result_ref: OutcomeSignalValidatorRef
-  work_receipt_id?: string
-  metric_contract_ref: {
-    kind: "founder_metric_contract" | "project_metric_contract"
-    id: string
-    version: number
-  }
-  observation_window: {
-    starts_at: number
-    ends_at: number
-  }
-  source_refs: Array<OutcomeSignalSourceRef>
-  observed_at: number
-  id: string
-  company_id: string
-  project_id: string
-  current_status: "observed" | "validated" | "invalidated"
-  validated_at?: number
-  created_at: number
-}
-
-export type OutcomeSignalTransitionRecord = {
-  id: string
-  outcome_signal_id: string
-  sequence: number
-  idempotency_key: string
-  from_status?: "observed" | "validated" | "invalidated"
-  status: "observed" | "validated" | "invalidated"
-  validator_result_ref: OutcomeSignalValidatorRef
-  reason: string
-  actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
-  actor_id?: string
-  occurred_at: number
-  created_at: number
-}
-
 export type CompanyProjectOutcomesData = {
   body?: never
   path: {
@@ -12091,20 +15168,32 @@ export type CompanyProjectOutcomesData = {
 }
 
 export type CompanyProjectOutcomesResponses = {
-  200: Array<OutcomeSignalRecord>
-}
-
-export type CompanyProjectOutcomesResponse = CompanyProjectOutcomesResponses[keyof CompanyProjectOutcomesResponses]
-
-export type CompanyProjectSubmitOutcomeData = {
-  body: {
-    schema_version: 2
+  /**
+   * Outcome signals
+   */
+  200: Array<{
     idempotency_key: string
     decision_id?: string
     result: "succeeded" | "failed" | "inconclusive"
     summary: string
-    validator_ref: OutcomeSignalValidatorRef
-    validator_result_ref: OutcomeSignalValidatorRef
+    validator_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    validator_result_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
     work_receipt_id?: string
     metric_contract_ref: {
       kind: "founder_metric_contract" | "project_metric_contract"
@@ -12115,7 +15204,82 @@ export type CompanyProjectSubmitOutcomeData = {
       starts_at: number
       ends_at: number
     }
-    source_refs: Array<OutcomeSignalSourceRef>
+    source_refs: Array<
+      | {
+          kind: "work_receipt"
+          id: string
+        }
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    >
+    observed_at: number
+    schema_version: 1 | 2
+    id: string
+    company_id: string
+    project_id: string
+    current_status: "observed" | "validated" | "invalidated"
+    validated_at?: number
+    created_at: number
+  }>
+}
+
+export type CompanyProjectOutcomesResponse = CompanyProjectOutcomesResponses[keyof CompanyProjectOutcomesResponses]
+
+export type CompanyProjectSubmitOutcomeData = {
+  body?: {
+    schema_version: 2
+    idempotency_key: string
+    decision_id?: string
+    result: "succeeded" | "failed" | "inconclusive"
+    summary: string
+    validator_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    validator_result_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    work_receipt_id?: string
+    metric_contract_ref: {
+      kind: "founder_metric_contract" | "project_metric_contract"
+      id: string
+      version: number
+    }
+    observation_window: {
+      starts_at: number
+      ends_at: number
+    }
+    source_refs: Array<
+      | {
+          kind: "work_receipt"
+          id: string
+        }
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    >
     observed_at: number
   }
   path: {
@@ -12129,8 +15293,66 @@ export type CompanyProjectSubmitOutcomeData = {
 }
 
 export type CompanyProjectSubmitOutcomeResponses = {
+  /**
+   * Outcome signal
+   */
   200: {
-    signal: OutcomeSignalRecord
+    signal: {
+      idempotency_key: string
+      decision_id?: string
+      result: "succeeded" | "failed" | "inconclusive"
+      summary: string
+      validator_ref:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      validator_result_ref:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      work_receipt_id?: string
+      metric_contract_ref: {
+        kind: "founder_metric_contract" | "project_metric_contract"
+        id: string
+        version: number
+      }
+      observation_window: {
+        starts_at: number
+        ends_at: number
+      }
+      source_refs: Array<
+        | {
+            kind: "work_receipt"
+            id: string
+          }
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      >
+      observed_at: number
+      schema_version: 1 | 2
+      id: string
+      company_id: string
+      project_id: string
+      current_status: "observed" | "validated" | "invalidated"
+      validated_at?: number
+      created_at: number
+    }
     replayed: boolean
   }
 }
@@ -12152,22 +15374,231 @@ export type CompanyProjectOutcomeData = {
 }
 
 export type CompanyProjectOutcomeResponses = {
-  200: OutcomeSignalRecord
+  /**
+   * Outcome signal
+   */
+  200: {
+    idempotency_key: string
+    decision_id?: string
+    result: "succeeded" | "failed" | "inconclusive"
+    summary: string
+    validator_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    validator_result_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    work_receipt_id?: string
+    metric_contract_ref: {
+      kind: "founder_metric_contract" | "project_metric_contract"
+      id: string
+      version: number
+    }
+    observation_window: {
+      starts_at: number
+      ends_at: number
+    }
+    source_refs: Array<
+      | {
+          kind: "work_receipt"
+          id: string
+        }
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    >
+    observed_at: number
+    schema_version: 1 | 2
+    id: string
+    company_id: string
+    project_id: string
+    current_status: "observed" | "validated" | "invalidated"
+    validated_at?: number
+    created_at: number
+  }
 }
 
 export type CompanyProjectOutcomeResponse = CompanyProjectOutcomeResponses[keyof CompanyProjectOutcomeResponses]
 
+export type CompanyProjectOutcomeTransitionsData = {
+  body?: never
+  path: {
+    projectID: string
+    outcomeID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions"
+}
+
 export type CompanyProjectOutcomeTransitionsResponses = {
-  200: Array<OutcomeSignalTransitionRecord>
+  /**
+   * Outcome signal transitions
+   */
+  200: Array<{
+    idempotency_key: string
+    validator_result_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    reason: string
+    actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
+    actor_id?: string
+    occurred_at: number
+    id: string
+    outcome_signal_id: string
+    sequence: number
+    from_status?: "observed" | "validated" | "invalidated"
+    status: "observed" | "validated" | "invalidated"
+    created_at: number
+  }>
+}
+
+export type CompanyProjectOutcomeTransitionsResponse =
+  CompanyProjectOutcomeTransitionsResponses[keyof CompanyProjectOutcomeTransitionsResponses]
+
+export type CompanyProjectTransitionOutcomeData = {
+  body?: {
+    idempotency_key: string
+    status: "validated" | "invalidated"
+    validator_result_ref:
+      | {
+          kind: "validation_gate"
+          id: string
+        }
+      | {
+          kind: "artifact"
+          id: string
+        }
+    reason: string
+    actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
+    actor_id?: string
+    occurred_at: number
+  }
+  path: {
+    projectID: string
+    outcomeID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions"
 }
 
 export type CompanyProjectTransitionOutcomeResponses = {
+  /**
+   * Updated outcome projection
+   */
   200: {
-    signal: OutcomeSignalRecord
-    transition: OutcomeSignalTransitionRecord
+    signal: {
+      idempotency_key: string
+      decision_id?: string
+      result: "succeeded" | "failed" | "inconclusive"
+      summary: string
+      validator_ref:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      validator_result_ref:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      work_receipt_id?: string
+      metric_contract_ref: {
+        kind: "founder_metric_contract" | "project_metric_contract"
+        id: string
+        version: number
+      }
+      observation_window: {
+        starts_at: number
+        ends_at: number
+      }
+      source_refs: Array<
+        | {
+            kind: "work_receipt"
+            id: string
+          }
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      >
+      observed_at: number
+      schema_version: 1 | 2
+      id: string
+      company_id: string
+      project_id: string
+      current_status: "observed" | "validated" | "invalidated"
+      validated_at?: number
+      created_at: number
+    }
+    transition: {
+      idempotency_key: string
+      validator_result_ref:
+        | {
+            kind: "validation_gate"
+            id: string
+          }
+        | {
+            kind: "artifact"
+            id: string
+          }
+      reason: string
+      actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
+      actor_id?: string
+      occurred_at: number
+      id: string
+      outcome_signal_id: string
+      sequence: number
+      from_status?: "observed" | "validated" | "invalidated"
+      status: "observed" | "validated" | "invalidated"
+      created_at: number
+    }
     replayed: boolean
   }
 }
+
+export type CompanyProjectTransitionOutcomeResponse =
+  CompanyProjectTransitionOutcomeResponses[keyof CompanyProjectTransitionOutcomeResponses]
 
 export type CompanyProjectCancelData = {
   body?: {
@@ -12278,6 +15709,1605 @@ export type CompanyProjectResolveGateResponses = {
 
 export type CompanyProjectResolveGateResponse =
   CompanyProjectResolveGateResponses[keyof CompanyProjectResolveGateResponses]
+
+export type CompanyCommonsCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/capabilities"
+}
+
+export type CompanyCommonsCapabilitiesResponses = {
+  /**
+   * Commons capabilities
+   */
+  200: Array<{
+    source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+    status: "supported" | "blocked" | "unsupported"
+    adapter_id?: string
+    adapter_version?: string
+    reason_code?: string
+    reason?: string
+    requirements?: Array<string>
+    supports_transcript: boolean
+  }>
+}
+
+export type CompanyCommonsCapabilitiesResponse =
+  CompanyCommonsCapabilitiesResponses[keyof CompanyCommonsCapabilitiesResponses]
+
+export type CompanyCommonsSourcesData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+    limit?: number
+    offset?: number
+  }
+  url: "/company-commons/sources"
+}
+
+export type CompanyCommonsSourcesResponses = {
+  /**
+   * Commons sources
+   */
+  200: Array<{
+    id: string
+    artifact_id: string
+    company_id: string
+    project_id?: string
+    private_owner_id?: string
+    source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+    title: string
+    author?: string
+    origin?: string
+    published_at?: number
+    language?: string
+    tags: Array<string>
+    privacy_scope: "company" | "project" | "private"
+    capability_status: "supported" | "unsupported" | "blocked"
+    ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    content_hash?: string
+    normalized_content_hash?: string
+    duplicate_of_source_id?: string
+    deduplication_kind?: "exact" | "normalized"
+    metadata: {
+      [key: string]: unknown
+    }
+    adapter_id?: string
+    adapter_version?: string
+    error_code?: string
+    error_message?: string
+    created_at: number
+    updated_at: number
+  }>
+}
+
+export type CompanyCommonsSourcesResponse = CompanyCommonsSourcesResponses[keyof CompanyCommonsSourcesResponses]
+
+export type CompanyCommonsImportSourceData = {
+  body?: (
+    | {
+        privacy_scope: "company"
+      }
+    | {
+        privacy_scope: "project"
+        project_id: string
+      }
+    | {
+        privacy_scope: "private"
+        private_owner_id: string
+      }
+  ) &
+    (
+      | {
+          company_id: string
+          title: string
+          author?: string
+          origin?: string
+          published_at?: number
+          language?: string
+          tags?: Array<string>
+          metadata?: {
+            [key: string]: unknown
+          }
+          source_type: "text" | "markdown" | "conversation_export"
+          content: string
+        }
+      | {
+          company_id: string
+          title: string
+          author?: string
+          origin?: string
+          published_at?: number
+          language?: string
+          tags?: Array<string>
+          metadata?: {
+            [key: string]: unknown
+          }
+          source_type: "url"
+          url: string
+        }
+      | {
+          company_id: string
+          title: string
+          author?: string
+          origin?: string
+          published_at?: number
+          language?: string
+          tags?: Array<string>
+          metadata?: {
+            [key: string]: unknown
+          }
+          source_type: "pdf" | "image" | "podcast" | "video"
+          content_base64: string
+          media_type: string
+        }
+    )
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/sources"
+}
+
+export type CompanyCommonsImportSourceResponses = {
+  /**
+   * Imported Commons source
+   */
+  200: {
+    id: string
+    artifact_id: string
+    company_id: string
+    project_id?: string
+    private_owner_id?: string
+    source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+    title: string
+    author?: string
+    origin?: string
+    published_at?: number
+    language?: string
+    tags: Array<string>
+    privacy_scope: "company" | "project" | "private"
+    capability_status: "supported" | "unsupported" | "blocked"
+    ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    content_hash?: string
+    normalized_content_hash?: string
+    duplicate_of_source_id?: string
+    deduplication_kind?: "exact" | "normalized"
+    metadata: {
+      [key: string]: unknown
+    }
+    adapter_id?: string
+    adapter_version?: string
+    error_code?: string
+    error_message?: string
+    created_at: number
+    updated_at: number
+  }
+}
+
+export type CompanyCommonsImportSourceResponse =
+  CompanyCommonsImportSourceResponses[keyof CompanyCommonsImportSourceResponses]
+
+export type CompanyCommonsSourceData = {
+  body?: never
+  path: {
+    sourceID: string
+  }
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+  }
+  url: "/company-commons/sources/{sourceID}"
+}
+
+export type CompanyCommonsSourceResponses = {
+  /**
+   * Commons source detail
+   */
+  200: {
+    source: {
+      id: string
+      artifact_id: string
+      company_id: string
+      project_id?: string
+      private_owner_id?: string
+      source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+      title: string
+      author?: string
+      origin?: string
+      published_at?: number
+      language?: string
+      tags: Array<string>
+      privacy_scope: "company" | "project" | "private"
+      capability_status: "supported" | "unsupported" | "blocked"
+      ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+      transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+      content_hash?: string
+      normalized_content_hash?: string
+      duplicate_of_source_id?: string
+      deduplication_kind?: "exact" | "normalized"
+      metadata: {
+        [key: string]: unknown
+      }
+      adapter_id?: string
+      adapter_version?: string
+      error_code?: string
+      error_message?: string
+      created_at: number
+      updated_at: number
+    }
+    artifact: {
+      id: string
+      scope_type: "company" | "project" | "private"
+      project_id?: string
+      company_id?: string
+      private_owner_id?: string
+      kind: string
+      title: string
+      content?: string
+      evidence: {
+        [key: string]: unknown
+      }
+      created_at: number
+    }
+    chunks: Array<{
+      id: string
+      source_id: string
+      ordinal: number
+      body: string
+      content_hash: string
+      start_offset: number
+      end_offset: number
+      source_span: {
+        [key: string]: unknown
+      }
+      trust_class: "untrusted_source"
+      created_at: number
+    }>
+  }
+}
+
+export type CompanyCommonsSourceResponse = CompanyCommonsSourceResponses[keyof CompanyCommonsSourceResponses]
+
+export type CompanyCommonsRetryData = {
+  body?: {
+    company_id: string
+    project_ids?: Array<string>
+    private_owner_id?: string
+  }
+  path: {
+    sourceID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/sources/{sourceID}/retry"
+}
+
+export type CompanyCommonsRetryResponses = {
+  /**
+   * Commons source
+   */
+  200: {
+    id: string
+    artifact_id: string
+    company_id: string
+    project_id?: string
+    private_owner_id?: string
+    source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+    title: string
+    author?: string
+    origin?: string
+    published_at?: number
+    language?: string
+    tags: Array<string>
+    privacy_scope: "company" | "project" | "private"
+    capability_status: "supported" | "unsupported" | "blocked"
+    ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+    content_hash?: string
+    normalized_content_hash?: string
+    duplicate_of_source_id?: string
+    deduplication_kind?: "exact" | "normalized"
+    metadata: {
+      [key: string]: unknown
+    }
+    adapter_id?: string
+    adapter_version?: string
+    error_code?: string
+    error_message?: string
+    created_at: number
+    updated_at: number
+  }
+}
+
+export type CompanyCommonsRetryResponse = CompanyCommonsRetryResponses[keyof CompanyCommonsRetryResponses]
+
+export type CompanyCommonsSearchData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+    q: string
+    limit?: number
+  }
+  url: "/company-commons/search"
+}
+
+export type CompanyCommonsSearchResponses = {
+  /**
+   * Commons search results
+   */
+  200: Array<{
+    source: {
+      id: string
+      artifact_id: string
+      company_id: string
+      project_id?: string
+      private_owner_id?: string
+      source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+      title: string
+      author?: string
+      origin?: string
+      published_at?: number
+      language?: string
+      tags: Array<string>
+      privacy_scope: "company" | "project" | "private"
+      capability_status: "supported" | "unsupported" | "blocked"
+      ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+      transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+      content_hash?: string
+      normalized_content_hash?: string
+      duplicate_of_source_id?: string
+      deduplication_kind?: "exact" | "normalized"
+      metadata: {
+        [key: string]: unknown
+      }
+      adapter_id?: string
+      adapter_version?: string
+      error_code?: string
+      error_message?: string
+      created_at: number
+      updated_at: number
+    }
+    chunk: {
+      id: string
+      source_id: string
+      ordinal: number
+      body: string
+      content_hash: string
+      start_offset: number
+      end_offset: number
+      source_span: {
+        [key: string]: unknown
+      }
+      trust_class: "untrusted_source"
+      created_at: number
+    }
+    excerpt: string
+    score: number
+    retrieval: "sqlite_fts"
+    embedding_status: "unavailable" | "available"
+    instructions_allowed: false
+  }>
+}
+
+export type CompanyCommonsSearchResponse = CompanyCommonsSearchResponses[keyof CompanyCommonsSearchResponses]
+
+export type CompanyReadingInterpretationsData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+    project_id?: string
+  }
+  url: "/company-reading/interpretations"
+}
+
+export type CompanyReadingInterpretationsResponses = {
+  /**
+   * Interpretations
+   */
+  200: Array<{
+    source_id: string
+    reader_agent_id: string
+    reader_role: string
+    work_item_id?: string
+    core_thesis: string
+    important_claims: Array<string>
+    company_relevance: string
+    project_connections: Array<{
+      project_id: string
+      impact: string
+    }>
+    agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+    conflicts: Array<string>
+    counter_arguments: Array<string>
+    inspiration: Array<string>
+    experiment_ideas: Array<string>
+    disposition: "archive" | "candidate" | "reject"
+    confidence: number
+    evidence_refs: Array<{
+      chunk_id: string
+      start_offset: number
+      end_offset: number
+      claim: string
+    }>
+    id: string
+    work_receipt_id?: string
+    reader_agent_name?: string
+    created_at: number
+  }>
+}
+
+export type CompanyReadingInterpretationsResponse =
+  CompanyReadingInterpretationsResponses[keyof CompanyReadingInterpretationsResponses]
+
+export type CompanyReadingCreateInterpretationData = {
+  body?: {
+    access: {
+      company_id: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+    }
+    receipt: {
+      source_id: string
+      reader_agent_id: string
+      reader_role: string
+      work_item_id: string
+      core_thesis: string
+      important_claims: Array<string>
+      company_relevance: string
+      project_connections: Array<{
+        project_id: string
+        impact: string
+      }>
+      agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+      conflicts: Array<string>
+      counter_arguments: Array<string>
+      inspiration: Array<string>
+      experiment_ideas: Array<string>
+      disposition: "archive" | "candidate" | "reject"
+      confidence: number
+      evidence_refs: Array<{
+        chunk_id: string
+        start_offset: number
+        end_offset: number
+        claim: string
+      }>
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-reading/interpretations"
+}
+
+export type CompanyReadingCreateInterpretationResponses = {
+  /**
+   * Interpretation
+   */
+  200: {
+    source_id: string
+    reader_agent_id: string
+    reader_role: string
+    work_item_id?: string
+    core_thesis: string
+    important_claims: Array<string>
+    company_relevance: string
+    project_connections: Array<{
+      project_id: string
+      impact: string
+    }>
+    agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+    conflicts: Array<string>
+    counter_arguments: Array<string>
+    inspiration: Array<string>
+    experiment_ideas: Array<string>
+    disposition: "archive" | "candidate" | "reject"
+    confidence: number
+    evidence_refs: Array<{
+      chunk_id: string
+      start_offset: number
+      end_offset: number
+      claim: string
+    }>
+    id: string
+    work_receipt_id?: string
+    reader_agent_name?: string
+    created_at: number
+  }
+}
+
+export type CompanyReadingCreateInterpretationResponse =
+  CompanyReadingCreateInterpretationResponses[keyof CompanyReadingCreateInterpretationResponses]
+
+export type CompanyReadingConsumeReceiptData = {
+  body?: {
+    company_id: string
+    project_ids?: Array<string>
+    private_owner_id?: string
+  }
+  path: {
+    receiptID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-reading/receipts/{receiptID}/consume"
+}
+
+export type CompanyReadingConsumeReceiptResponses = {
+  /**
+   * Interpretation
+   */
+  200: {
+    source_id: string
+    reader_agent_id: string
+    reader_role: string
+    work_item_id?: string
+    core_thesis: string
+    important_claims: Array<string>
+    company_relevance: string
+    project_connections: Array<{
+      project_id: string
+      impact: string
+    }>
+    agreement: "aligned" | "conflicted" | "mixed" | "unknown"
+    conflicts: Array<string>
+    counter_arguments: Array<string>
+    inspiration: Array<string>
+    experiment_ideas: Array<string>
+    disposition: "archive" | "candidate" | "reject"
+    confidence: number
+    evidence_refs: Array<{
+      chunk_id: string
+      start_offset: number
+      end_offset: number
+      claim: string
+    }>
+    id: string
+    work_receipt_id?: string
+    reader_agent_name?: string
+    created_at: number
+  }
+}
+
+export type CompanyReadingConsumeReceiptResponse =
+  CompanyReadingConsumeReceiptResponses[keyof CompanyReadingConsumeReceiptResponses]
+
+export type CompanyReadingProfilesData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-reading/profiles"
+}
+
+export type CompanyReadingProfilesResponses = {
+  /**
+   * Profiles
+   */
+  200: Array<{
+    company_id: string
+    agent_id: string
+    topics: Array<string>
+    preferred_lenses: Array<string>
+    excluded_topics: Array<string>
+    novelty_threshold: number
+    weekly_reading_budget: number
+    max_concurrency: number
+    privacy_scopes: Array<"company" | "project" | "private">
+    updated_at: number
+  }>
+}
+
+export type CompanyReadingProfilesResponse = CompanyReadingProfilesResponses[keyof CompanyReadingProfilesResponses]
+
+export type CompanyReadingUpsertProfileData = {
+  body?: {
+    company_id: string
+    topics: Array<string>
+    preferred_lenses: Array<string>
+    excluded_topics: Array<string>
+    novelty_threshold: number
+    weekly_reading_budget: number
+    max_concurrency: number
+    privacy_scopes: Array<"company" | "project" | "private">
+  }
+  path: {
+    agentID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-reading/profiles/{agentID}"
+}
+
+export type CompanyReadingUpsertProfileResponses = {
+  /**
+   * Profile
+   */
+  200: {
+    company_id: string
+    agent_id: string
+    topics: Array<string>
+    preferred_lenses: Array<string>
+    excluded_topics: Array<string>
+    novelty_threshold: number
+    weekly_reading_budget: number
+    max_concurrency: number
+    privacy_scopes: Array<"company" | "project" | "private">
+    updated_at: number
+  }
+}
+
+export type CompanyReadingUpsertProfileResponse =
+  CompanyReadingUpsertProfileResponses[keyof CompanyReadingUpsertProfileResponses]
+
+export type CompanyReadingAssignmentsData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+  }
+  url: "/company-reading/assignments"
+}
+
+export type CompanyReadingAssignmentsResponses = {
+  /**
+   * Assignments
+   */
+  200: Array<{
+    id: string
+    source_id: string
+    company_id: string
+    agent_id: string
+    project_id: string
+    linked_project_ids: Array<string>
+    work_item_id?: string
+    idempotency_key: string
+    status: "scheduling" | "scheduled" | "running" | "completed" | "failed" | "stopped"
+    relevance_score: number
+    novelty_score: number
+    gap_score: number
+    budget_score: number
+    total_score: number
+    budget_week: string
+    budget_reserved: boolean
+    error?: string
+    created_at: number
+    updated_at: number
+    stopped_at?: number
+  }>
+}
+
+export type CompanyReadingAssignmentsResponse =
+  CompanyReadingAssignmentsResponses[keyof CompanyReadingAssignmentsResponses]
+
+export type CompanyReadingScheduleData = {
+  body?: {
+    company_id: string
+    project_ids?: Array<string>
+    private_owner_id?: string
+    source_id: string
+    project_id: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-reading/schedule"
+}
+
+export type CompanyReadingScheduleResponses = {
+  /**
+   * Schedule result
+   */
+  200: {
+    source_id: string
+    project_id: string
+    assignments: Array<{
+      id: string
+      source_id: string
+      company_id: string
+      agent_id: string
+      project_id: string
+      linked_project_ids: Array<string>
+      work_item_id?: string
+      idempotency_key: string
+      status: "scheduling" | "scheduled" | "running" | "completed" | "failed" | "stopped"
+      relevance_score: number
+      novelty_score: number
+      gap_score: number
+      budget_score: number
+      total_score: number
+      budget_week: string
+      budget_reserved: boolean
+      error?: string
+      created_at: number
+      updated_at: number
+      stopped_at?: number
+    }>
+    eligible_agent_count: number
+  }
+}
+
+export type CompanyReadingScheduleResponse = CompanyReadingScheduleResponses[keyof CompanyReadingScheduleResponses]
+
+export type CompanyReadingStopData = {
+  body?: {
+    company_id: string
+    project_ids?: Array<string>
+    private_owner_id?: string
+  }
+  path: {
+    assignmentID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-reading/assignments/{assignmentID}/stop"
+}
+
+export type CompanyReadingStopResponses = {
+  /**
+   * Stopped assignment
+   */
+  200: {
+    id: string
+    source_id: string
+    company_id: string
+    agent_id: string
+    project_id: string
+    linked_project_ids: Array<string>
+    work_item_id?: string
+    idempotency_key: string
+    status: "scheduling" | "scheduled" | "running" | "completed" | "failed" | "stopped"
+    relevance_score: number
+    novelty_score: number
+    gap_score: number
+    budget_score: number
+    total_score: number
+    budget_week: string
+    budget_reserved: boolean
+    error?: string
+    created_at: number
+    updated_at: number
+    stopped_at?: number
+  }
+}
+
+export type CompanyReadingStopResponse = CompanyReadingStopResponses[keyof CompanyReadingStopResponses]
+
+export type CompanyLearningBeliefsData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-learning/beliefs"
+}
+
+export type CompanyLearningBeliefsResponses = {
+  /**
+   * Beliefs
+   */
+  200: Array<{
+    id: string
+    company_id: string
+    source_id: string
+    statement: string
+    scope: Array<string>
+    applicable_scopes: Array<string>
+    inapplicable_scopes: Array<string>
+    confidence: number
+    status: "candidate" | "contested" | "experiment_pending" | "validated" | "adopted" | "rejected" | "deprecated"
+    action_implications: Array<string>
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    evidence: Array<{
+      id: string
+      belief_id: string
+      position: "supporting" | "counter"
+      source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+      source_ref: string
+      summary: string
+      created_by: string
+      created_at: number
+    }>
+    experiment_ids: Array<string>
+    created_by: string
+    approved_by: string | null
+    board_decision_id: string | null
+    review_at: number | null
+    created_at: number
+    approved_at: number | null
+    updated_at: number
+  }>
+}
+
+export type CompanyLearningBeliefsResponse = CompanyLearningBeliefsResponses[keyof CompanyLearningBeliefsResponses]
+
+export type CompanyLearningCreateCandidateData = {
+  body?: {
+    company_id: string
+    source_id: string
+    statement: string
+    scope: Array<string>
+    applicable_scopes: Array<string>
+    inapplicable_scopes: Array<string>
+    confidence: number
+    action_implications: Array<string>
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    created_by: string
+    review_at?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/beliefs"
+}
+
+export type CompanyLearningCreateCandidateResponses = {
+  /**
+   * Candidate Belief
+   */
+  200: {
+    id: string
+    company_id: string
+    source_id: string
+    statement: string
+    scope: Array<string>
+    applicable_scopes: Array<string>
+    inapplicable_scopes: Array<string>
+    confidence: number
+    status: "candidate" | "contested" | "experiment_pending" | "validated" | "adopted" | "rejected" | "deprecated"
+    action_implications: Array<string>
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    evidence: Array<{
+      id: string
+      belief_id: string
+      position: "supporting" | "counter"
+      source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+      source_ref: string
+      summary: string
+      created_by: string
+      created_at: number
+    }>
+    experiment_ids: Array<string>
+    created_by: string
+    approved_by: string | null
+    board_decision_id: string | null
+    review_at: number | null
+    created_at: number
+    approved_at: number | null
+    updated_at: number
+  }
+}
+
+export type CompanyLearningCreateCandidateResponse =
+  CompanyLearningCreateCandidateResponses[keyof CompanyLearningCreateCandidateResponses]
+
+export type CompanyLearningCompareInterpretationsData = {
+  body?: {
+    source_id: string
+    interpretation_ids: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/beliefs/compare"
+}
+
+export type CompanyLearningCompareInterpretationsResponses = {
+  /**
+   * Comparison
+   */
+  200: {
+    source_id: string
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    supporting_count: number
+    counter_count: number
+    context_count: number
+    candidate_only: true
+    adoption_requires_board_decision: true
+    automatic_verdict: null
+  }
+}
+
+export type CompanyLearningCompareInterpretationsResponse =
+  CompanyLearningCompareInterpretationsResponses[keyof CompanyLearningCompareInterpretationsResponses]
+
+export type CompanyLearningAppendBeliefEvidenceData = {
+  body?: {
+    position: "supporting" | "counter"
+    source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+    source_ref: string
+    summary: string
+    created_by: string
+  }
+  path: {
+    beliefID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/beliefs/{beliefID}/evidence"
+}
+
+export type CompanyLearningAppendBeliefEvidenceResponses = {
+  /**
+   * Belief
+   */
+  200: {
+    id: string
+    company_id: string
+    source_id: string
+    statement: string
+    scope: Array<string>
+    applicable_scopes: Array<string>
+    inapplicable_scopes: Array<string>
+    confidence: number
+    status: "candidate" | "contested" | "experiment_pending" | "validated" | "adopted" | "rejected" | "deprecated"
+    action_implications: Array<string>
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    evidence: Array<{
+      id: string
+      belief_id: string
+      position: "supporting" | "counter"
+      source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+      source_ref: string
+      summary: string
+      created_by: string
+      created_at: number
+    }>
+    experiment_ids: Array<string>
+    created_by: string
+    approved_by: string | null
+    board_decision_id: string | null
+    review_at: number | null
+    created_at: number
+    approved_at: number | null
+    updated_at: number
+  }
+}
+
+export type CompanyLearningAppendBeliefEvidenceResponse =
+  CompanyLearningAppendBeliefEvidenceResponses[keyof CompanyLearningAppendBeliefEvidenceResponses]
+
+export type CompanyLearningAdoptBeliefData = {
+  body?: {
+    board_decision_id: string
+    approved_by: string
+  }
+  path: {
+    beliefID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/beliefs/{beliefID}/adopt"
+}
+
+export type CompanyLearningAdoptBeliefResponses = {
+  /**
+   * Adopted Belief
+   */
+  200: {
+    id: string
+    company_id: string
+    source_id: string
+    statement: string
+    scope: Array<string>
+    applicable_scopes: Array<string>
+    inapplicable_scopes: Array<string>
+    confidence: number
+    status: "candidate" | "contested" | "experiment_pending" | "validated" | "adopted" | "rejected" | "deprecated"
+    action_implications: Array<string>
+    interpretation_refs: Array<{
+      interpretation_id: string
+      position: "supporting" | "counter" | "context"
+    }>
+    evidence: Array<{
+      id: string
+      belief_id: string
+      position: "supporting" | "counter"
+      source_kind: "interpretation" | "outcome_signal" | "artifact" | "decision" | "external"
+      source_ref: string
+      summary: string
+      created_by: string
+      created_at: number
+    }>
+    experiment_ids: Array<string>
+    created_by: string
+    approved_by: string | null
+    board_decision_id: string | null
+    review_at: number | null
+    created_at: number
+    approved_at: number | null
+    updated_at: number
+  }
+}
+
+export type CompanyLearningAdoptBeliefResponse =
+  CompanyLearningAdoptBeliefResponses[keyof CompanyLearningAdoptBeliefResponses]
+
+export type CompanyLearningExperimentsData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-learning/experiments"
+}
+
+export type CompanyLearningExperimentsResponses = {
+  /**
+   * Experiments
+   */
+  200: Array<{
+    id: string
+    company_id: string
+    belief_id: string
+    project_id: string
+    decision_id: string
+    decision_intent: DecisionIntent
+    hypothesis: string
+    success_criteria: Array<string>
+    failure_criteria: Array<string>
+    rollback_plan: string
+    status: "proposed" | "authorized" | "running" | "completed" | "evaluated" | "rejected" | "stopped"
+    verdict: "pending" | "supported" | "refuted" | "inconclusive"
+    authority_class: "green" | "yellow" | "red"
+    approval_gate_id: string | null
+    outcome_signal_ids: Array<string>
+    proposed_by: string
+    created_at: number
+    updated_at: number
+    completed_at: number | null
+    evaluated_at: number | null
+  }>
+}
+
+export type CompanyLearningExperimentsResponse =
+  CompanyLearningExperimentsResponses[keyof CompanyLearningExperimentsResponses]
+
+export type CompanyLearningProposeExperimentData = {
+  body?: {
+    company_id: string
+    belief_id: string
+    project_id: string
+    decision_intent: DecisionIntent
+    hypothesis: string
+    success_criteria: Array<string>
+    failure_criteria: Array<string>
+    rollback_plan: string
+    proposed_by: string
+    idempotency_key: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/experiments"
+}
+
+export type CompanyLearningProposeExperimentResponses = {
+  /**
+   * Experiment
+   */
+  200: {
+    id: string
+    company_id: string
+    belief_id: string
+    project_id: string
+    decision_id: string
+    decision_intent: DecisionIntent
+    hypothesis: string
+    success_criteria: Array<string>
+    failure_criteria: Array<string>
+    rollback_plan: string
+    status: "proposed" | "authorized" | "running" | "completed" | "evaluated" | "rejected" | "stopped"
+    verdict: "pending" | "supported" | "refuted" | "inconclusive"
+    authority_class: "green" | "yellow" | "red"
+    approval_gate_id: string | null
+    outcome_signal_ids: Array<string>
+    proposed_by: string
+    created_at: number
+    updated_at: number
+    completed_at: number | null
+    evaluated_at: number | null
+  }
+}
+
+export type CompanyLearningProposeExperimentResponse =
+  CompanyLearningProposeExperimentResponses[keyof CompanyLearningProposeExperimentResponses]
+
+export type CompanyLearningActOnExperimentData = {
+  body?:
+    | {
+        action: "refresh_authority"
+        actor_id: string
+        idempotency_key: string
+      }
+    | {
+        action: "start"
+        actor_id: string
+      }
+    | {
+        action: "complete"
+        actor_id: string
+      }
+    | {
+        action: "stop"
+        actor_id: string
+      }
+    | {
+        action: "attach_outcome"
+        outcome_signal_id: string
+        actor_id: string
+      }
+  path: {
+    experimentID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/experiments/{experimentID}/actions"
+}
+
+export type CompanyLearningActOnExperimentResponses = {
+  /**
+   * Experiment
+   */
+  200: {
+    id: string
+    company_id: string
+    belief_id: string
+    project_id: string
+    decision_id: string
+    decision_intent: DecisionIntent
+    hypothesis: string
+    success_criteria: Array<string>
+    failure_criteria: Array<string>
+    rollback_plan: string
+    status: "proposed" | "authorized" | "running" | "completed" | "evaluated" | "rejected" | "stopped"
+    verdict: "pending" | "supported" | "refuted" | "inconclusive"
+    authority_class: "green" | "yellow" | "red"
+    approval_gate_id: string | null
+    outcome_signal_ids: Array<string>
+    proposed_by: string
+    created_at: number
+    updated_at: number
+    completed_at: number | null
+    evaluated_at: number | null
+  }
+}
+
+export type CompanyLearningActOnExperimentResponse =
+  CompanyLearningActOnExperimentResponses[keyof CompanyLearningActOnExperimentResponses]
+
+export type CompanyLearningPatchesData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-learning/patches"
+}
+
+export type CompanyLearningPatchesResponses = {
+  /**
+   * Learning Patches
+   */
+  200: Array<{
+    id: string
+    company_id: string
+    source_decision_id: string
+    source_experiment_id: string
+    source_outcome_id: string
+    target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    target_id: string
+    proposed_diff: {
+      [key: string]: unknown
+    }
+    evidence: Array<string>
+    expected_impact: string
+    benchmark_plan: string
+    rollback_plan: string
+    status: "proposed" | "approved" | "canary" | "active" | "rejected" | "rolled_back"
+    authority_class: "yellow" | "red"
+    approval_gate_id: string | null
+    created_by: string
+    approved_by: string | null
+    active_target_version_id: string | null
+    benchmarks: Array<{
+      id: string
+      patch_id: string
+      version: number
+      holdout_manifest: {
+        [key: string]: unknown
+      }
+      holdout_sha256: string
+      frozen_at: number
+      author_id: string
+      subject_id: string | null
+      reviewer_id: string
+      reviewer_principal_id: string | null
+      report_author_id: string | null
+      result: "passed" | "failed" | "not_confirmed"
+      evidence_refs: Array<string>
+      real_sample_count: number
+      reviewed_at: number
+    }>
+    canaries: Array<{
+      id: string
+      patch_id: string
+      previous_version_ref: string
+      candidate_version_ref: string
+      status: "running" | "passed" | "failed" | "rolled_back" | "not_confirmed"
+      metric_evidence_refs: Array<string>
+      started_at: number
+      finished_at: number | null
+    }>
+    created_at: number
+    updated_at: number
+  }>
+}
+
+export type CompanyLearningPatchesResponse = CompanyLearningPatchesResponses[keyof CompanyLearningPatchesResponses]
+
+export type CompanyLearningProposePatchData = {
+  body?: {
+    company_id: string
+    source_decision_id: string
+    source_experiment_id: string
+    source_outcome_id: string
+    target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    target_id: string
+    proposed_diff: {
+      [key: string]: unknown
+    }
+    evidence: Array<string>
+    expected_impact: string
+    benchmark_plan: string
+    rollback_plan: string
+    created_by: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/patches"
+}
+
+export type CompanyLearningProposePatchResponses = {
+  /**
+   * Learning Patch
+   */
+  200: {
+    id: string
+    company_id: string
+    source_decision_id: string
+    source_experiment_id: string
+    source_outcome_id: string
+    target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    target_id: string
+    proposed_diff: {
+      [key: string]: unknown
+    }
+    evidence: Array<string>
+    expected_impact: string
+    benchmark_plan: string
+    rollback_plan: string
+    status: "proposed" | "approved" | "canary" | "active" | "rejected" | "rolled_back"
+    authority_class: "yellow" | "red"
+    approval_gate_id: string | null
+    created_by: string
+    approved_by: string | null
+    active_target_version_id: string | null
+    benchmarks: Array<{
+      id: string
+      patch_id: string
+      version: number
+      holdout_manifest: {
+        [key: string]: unknown
+      }
+      holdout_sha256: string
+      frozen_at: number
+      author_id: string
+      subject_id: string | null
+      reviewer_id: string
+      reviewer_principal_id: string | null
+      report_author_id: string | null
+      result: "passed" | "failed" | "not_confirmed"
+      evidence_refs: Array<string>
+      real_sample_count: number
+      reviewed_at: number
+    }>
+    canaries: Array<{
+      id: string
+      patch_id: string
+      previous_version_ref: string
+      candidate_version_ref: string
+      status: "running" | "passed" | "failed" | "rolled_back" | "not_confirmed"
+      metric_evidence_refs: Array<string>
+      started_at: number
+      finished_at: number | null
+    }>
+    created_at: number
+    updated_at: number
+  }
+}
+
+export type CompanyLearningProposePatchResponse =
+  CompanyLearningProposePatchResponses[keyof CompanyLearningProposePatchResponses]
+
+export type CompanyLearningActOnPatchData = {
+  body?:
+    | {
+        action: "approve"
+        decision_id: string
+        actor_kind: "agent" | "human" | "system"
+        actor_id: string
+        idempotency_key: string
+      }
+    | {
+        action: "reject"
+        actor_id: string
+      }
+    | {
+        action: "record_benchmark"
+        holdout_manifest: {
+          [key: string]: unknown
+        }
+        author_id: string
+        subject_id?: string
+        reviewer_id: string
+        report_author_id: string
+        result: "passed" | "failed" | "not_confirmed"
+        evidence_refs: Array<string>
+        real_sample_count: number
+      }
+    | {
+        action: "start_canary"
+        previous_version_ref: string
+        candidate_version_ref: string
+        skill_snapshot_id?: string
+        actor_id: string
+      }
+    | {
+        action: "finish_canary"
+        canary_id: string
+        result: "passed" | "failed" | "not_confirmed"
+        metric_evidence_refs: Array<string>
+        actor_id: string
+      }
+    | {
+        action: "activate"
+        actor_id: string
+      }
+    | {
+        action: "record_planning_read"
+        project_id: string
+        work_receipt_id: string
+        target_version_id: string
+        actor_id: string
+      }
+    | {
+        action: "rollback"
+        actor_id: string
+        reason: string
+      }
+  path: {
+    patchID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-learning/patches/{patchID}/actions"
+}
+
+export type CompanyLearningActOnPatchResponses = {
+  /**
+   * Learning Patch
+   */
+  200: {
+    id: string
+    company_id: string
+    source_decision_id: string
+    source_experiment_id: string
+    source_outcome_id: string
+    target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    target_id: string
+    proposed_diff: {
+      [key: string]: unknown
+    }
+    evidence: Array<string>
+    expected_impact: string
+    benchmark_plan: string
+    rollback_plan: string
+    status: "proposed" | "approved" | "canary" | "active" | "rejected" | "rolled_back"
+    authority_class: "yellow" | "red"
+    approval_gate_id: string | null
+    created_by: string
+    approved_by: string | null
+    active_target_version_id: string | null
+    benchmarks: Array<{
+      id: string
+      patch_id: string
+      version: number
+      holdout_manifest: {
+        [key: string]: unknown
+      }
+      holdout_sha256: string
+      frozen_at: number
+      author_id: string
+      subject_id: string | null
+      reviewer_id: string
+      reviewer_principal_id: string | null
+      report_author_id: string | null
+      result: "passed" | "failed" | "not_confirmed"
+      evidence_refs: Array<string>
+      real_sample_count: number
+      reviewed_at: number
+    }>
+    canaries: Array<{
+      id: string
+      patch_id: string
+      previous_version_ref: string
+      candidate_version_ref: string
+      status: "running" | "passed" | "failed" | "rolled_back" | "not_confirmed"
+      metric_evidence_refs: Array<string>
+      started_at: number
+      finished_at: number | null
+    }>
+    created_at: number
+    updated_at: number
+  }
+}
+
+export type CompanyLearningActOnPatchResponse =
+  CompanyLearningActOnPatchResponses[keyof CompanyLearningActOnPatchResponses]
+
+export type CompanyLearningEvidencePackageData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-learning/evidence-package"
+}
+
+export type CompanyLearningEvidencePackageResponses = {
+  /**
+   * Evidence package
+   */
+  200: {
+    schema_version: 1
+    company_id: string
+    weak_gate: "confirmed" | "not_confirmed"
+    generated_at: number
+    fixture_success_allowed: false
+    requirements: Array<{
+      id: string
+      status: "present" | "missing" | "not_confirmed"
+      evidence_refs: Array<string>
+    }>
+    complete_real_chain: boolean
+  }
+}
+
+export type CompanyLearningEvidencePackageResponse =
+  CompanyLearningEvidencePackageResponses[keyof CompanyLearningEvidencePackageResponses]
+
+export type CompanyLearningResolveTargetData = {
+  body?: never
+  path: {
+    targetType: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    targetID: string
+  }
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+  }
+  url: "/company-learning/targets/{targetType}/{targetID}"
+}
+
+export type CompanyLearningResolveTargetResponses = {
+  /**
+   * Active target
+   */
+  200: {
+    id: string
+    patch_id: string
+    company_id: string
+    target_type: "governance_asset" | "delegation_policy" | "skill" | "benchmark" | "agent_interest" | "workflow"
+    target_id: string
+    version: number
+    payload: {
+      [key: string]: unknown
+    }
+    previous_version_ref: string | null
+    target_version_ref: string | null
+    status: "active"
+    created_at: number
+  }
+}
+
+export type CompanyLearningResolveTargetResponse =
+  CompanyLearningResolveTargetResponses[keyof CompanyLearningResolveTargetResponses]
 
 export type GroupSessionListData = {
   body?: never

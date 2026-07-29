@@ -143,7 +143,15 @@ export type GovernanceAssetScope = {
 export type GovernanceAsset = {
   id: string
   companyId: string
-  type: "constitution" | "principle" | "heuristic" | "boundary" | "taste_reference" | "taste_anti_reference" | "rubric" | "decision_case"
+  type:
+    | "constitution"
+    | "principle"
+    | "heuristic"
+    | "boundary"
+    | "taste_reference"
+    | "taste_anti_reference"
+    | "rubric"
+    | "decision_case"
   scope: GovernanceAssetScope
   content: string
   rationale: string
@@ -207,7 +215,10 @@ export function createFounderStudioClient(config: FounderStudioClientConfig) {
   const request = async <T>(path: string, init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+      headers: {
+        ...Object.fromEntries(new Headers(config.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
+      },
     })
     if (!response.ok) throw new Error(`Founder Studio request failed with HTTP ${response.status}`)
     return response.json() as Promise<T>
@@ -225,23 +236,29 @@ export function createFounderStudioClient(config: FounderStudioClientConfig) {
         body: JSON.stringify(input),
       })
     },
-    revise(assetId: string, input: {
-      baseVersion: number
-      content: string
-      rationale: string
-      tags: string[]
-      authority: GovernanceAssetAuthority
-      status: GovernanceAssetStatus
-      sourceRefs: GovernanceAsset["sourceRefs"]
-      actorKind: "ai" | "external" | "human"
-      createdBy: string
-      confirmation?: { eventId: string; confirmedBy: string }
-    }) {
-      return request<FounderStudioProjection>(`/company/founder-studio/assets/${encodeURIComponent(assetId)}/versions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      })
+    revise(
+      assetId: string,
+      input: {
+        baseVersion: number
+        content: string
+        rationale: string
+        tags: string[]
+        authority: GovernanceAssetAuthority
+        status: GovernanceAssetStatus
+        sourceRefs: GovernanceAsset["sourceRefs"]
+        actorKind: "ai" | "external" | "human"
+        createdBy: string
+        confirmation?: { eventId: string; confirmedBy: string }
+      },
+    ) {
+      return request<FounderStudioProjection>(
+        `/company/founder-studio/assets/${encodeURIComponent(assetId)}/versions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      )
     },
     compileSnapshot(input: {
       companyId: string
@@ -274,7 +291,10 @@ export function createFounderModesClient(config: FounderStudioClientConfig) {
   const request = async <T>(init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL("/company/founder-os-modes", config.baseUrl), {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+      headers: {
+        ...Object.fromEntries(new Headers(config.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
+      },
     })
     if (!response.ok) throw new Error(`Founder OS modes request failed with HTTP ${response.status}`)
     return response.json() as Promise<T>
@@ -387,9 +407,8 @@ type DecisionRecordHistoricalStatus =
       decidedAt: null
     }
 
-export type DecisionRecord =
-  DecisionRecordCommon
-  & (
+export type DecisionRecord = DecisionRecordCommon &
+  (
     | ({
         recordOrigin: Extract<DecisionRecordOrigin, "live">
         decisionMaker: "ai_founder"
@@ -445,9 +464,8 @@ type DecisionRecordAppendCommon = {
   decidedAt?: number | null
 }
 
-export type DecisionRecordAppendInput =
-  DecisionRecordAppendCommon
-  & (
+export type DecisionRecordAppendInput = DecisionRecordAppendCommon &
+  (
     | {
         decisionMaker: "ai_founder"
         founderTwinSnapshot: FounderTwinSnapshotReference
@@ -479,9 +497,8 @@ type DecisionTransitionInputCommon = {
   actorId: string
 }
 
-export type DecisionTransitionAppendInput =
-  DecisionTransitionInputCommon
-  & (
+export type DecisionTransitionAppendInput = DecisionTransitionInputCommon &
+  (
     | {
         toStatus: "awaiting_approval"
         kind: "submitted_for_approval"
@@ -507,9 +524,8 @@ type DecisionTransitionCommon = {
   createdAt: number
 }
 
-export type DecisionTransition =
-  DecisionTransitionCommon
-  & (
+export type DecisionTransition = DecisionTransitionCommon &
+  (
     | {
         toStatus: "unknown" | "proposed" | "awaiting_approval"
         kind: "created" | "historical_imported" | "submitted_for_approval"
@@ -655,7 +671,7 @@ export type FounderShadowDecision = {
   companyId: string
   status: "suggested" | "blocked"
   blockReasons: Array<
-    FounderContextProjection["blockReasons"][number]
+    | FounderContextProjection["blockReasons"][number]
     | "model_unavailable"
     | "model_timeout"
     | "model_output_missing"
@@ -757,7 +773,10 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
   const request = async <T>(path: string, init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+      headers: {
+        ...Object.fromEntries(new Headers(config.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
+      },
     })
     if (!response.ok) throw new Error(`Founder Shadow request failed with HTTP ${response.status}`)
     return response.json() as Promise<T>
@@ -772,10 +791,7 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
     buildContext(input: FounderContextInput) {
       return post<FounderContextProjection>("/company/founder-shadow/context", input)
     },
-    run(input: {
-      context: FounderContextInput
-      createdBy: string
-    }) {
+    run(input: { context: FounderContextInput; createdBy: string }) {
       return post<FounderShadowDecision>("/company/founder-shadow/runs", input)
     },
     compare(input: {
@@ -791,7 +807,9 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
       return post<FounderShadowComparison>("/company/founder-shadow/comparisons", input)
     },
     audit(companyId: string) {
-      return request<FounderBoardShadowProjection>(`/company/founder-shadow/audit?${new URLSearchParams({ company_id: companyId })}`)
+      return request<FounderBoardShadowProjection>(
+        `/company/founder-shadow/audit?${new URLSearchParams({ company_id: companyId })}`,
+      )
     },
     importCase(input: {
       companyId: string
@@ -847,7 +865,11 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
       datasetVersion: string
       split: "training" | "holdout"
       sourceAsset: FounderAssetReference
-      expected: { authorityClass?: FounderAuthorityClass; decision?: string; preference?: "accept" | "reject" | "first" | "second" }
+      expected: {
+        authorityClass?: FounderAuthorityClass
+        decision?: string
+        preference?: "accept" | "reject" | "first" | "second"
+      }
       confirmationEventId: string
       confirmedBy: string
     }) {
@@ -858,7 +880,11 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
         datasetVersion: string
         split: "training" | "holdout"
         sourceAsset: FounderAssetReference
-        expected: { authorityClass?: FounderAuthorityClass; decision?: string; preference?: "accept" | "reject" | "first" | "second" }
+        expected: {
+          authorityClass?: FounderAuthorityClass
+          decision?: string
+          preference?: "accept" | "reject" | "first" | "second"
+        }
         confirmationEventId: string
         confirmedBy: string
         createdAt: number
@@ -1231,9 +1257,7 @@ export type FounderYellowRollbackInput = {
   idempotencyKey: string
   trigger: "failure_condition" | "human_decision"
   reason: string
-  actor:
-    | { kind: "human"; id: string }
-    | { kind: "policy_engine"; id: "yellow-circuit-breaker" }
+  actor: { kind: "human"; id: string } | { kind: "policy_engine"; id: "yellow-circuit-breaker" }
 }
 
 export type FounderYellowRollbackRecord = {
@@ -1296,7 +1320,10 @@ export function createFounderOSGovernanceClient(config: FounderStudioClientConfi
   const request = async <T>(path: string, init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+      headers: {
+        ...Object.fromEntries(new Headers(config.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
+      },
     })
     if (!response.ok) throw new Error(`Founder OS governance request failed with HTTP ${response.status}`)
     return response.json() as Promise<T>
@@ -1313,11 +1340,14 @@ export function createFounderOSGovernanceClient(config: FounderStudioClientConfi
     govern(input: GovernanceRequest) {
       return request<GovernanceDecision>("/company/founder-os/governance", json(input))
     },
-    resolveGate(gateId: string, input: {
-      decision: "approve" | "reject"
-      note: string
-      actor: { kind: FounderApprovalActorKind; id: string }
-    }) {
+    resolveGate(
+      gateId: string,
+      input: {
+        decision: "approve" | "reject"
+        note: string
+        actor: { kind: FounderApprovalActorKind; id: string }
+      },
+    ) {
       return request<GovernanceDecision>(
         `/company/founder-os/approval-gates/${encodeURIComponent(gateId)}/resolve`,
         json(input),
@@ -1555,7 +1585,10 @@ export function createFounderAdvisorClient(config: FounderStudioClientConfig) {
   const request = async <T>(path: string, init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+      headers: {
+        ...Object.fromEntries(new Headers(config.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
+      },
     })
     if (!response.ok) throw new Error(`Founder Advisor request failed with HTTP ${response.status}`)
     return response.json() as Promise<T>
@@ -1568,7 +1601,9 @@ export function createFounderAdvisorClient(config: FounderStudioClientConfig) {
     })
   return {
     board(companyId: string) {
-      return request<FounderBoardGovernanceProjection>(`/company/board?${new URLSearchParams({ company_id: companyId })}`)
+      return request<FounderBoardGovernanceProjection>(
+        `/company/board?${new URLSearchParams({ company_id: companyId })}`,
+      )
     },
     readiness(companyId: string) {
       return request<FounderAdvisorReadiness>(
