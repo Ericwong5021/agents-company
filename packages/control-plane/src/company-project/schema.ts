@@ -13,7 +13,15 @@ export const ProjectStatus = z.enum([
 ])
 export type ProjectStatus = z.infer<typeof ProjectStatus>
 
-export const WorkItemStatus = z.enum(["pending", "running", "blocked", "failed", "completed", "cancelled"])
+export const WorkItemStatus = z.enum([
+  "pending",
+  "running",
+  "blocked",
+  "failed",
+  "completed",
+  "superseded",
+  "cancelled",
+])
 export type WorkItemStatus = z.infer<typeof WorkItemStatus>
 
 export const DeliveryPolicy = z
@@ -53,6 +61,7 @@ export const Project = z.object({
   active_run_id: z.string().optional(),
   output_dir: z.string(),
   active_plan_version: z.number().int().optional(),
+  graph_revision: z.number().int().nonnegative(),
   created_at: z.number(),
   updated_at: z.number(),
   completed_at: z.number().optional(),
@@ -155,6 +164,12 @@ export const WorkItem = z.object({
   risk_level: z.enum(["low", "medium", "high"]),
   review_status: z.enum(["pending", "running", "accepted", "rejected", "not_required"]),
   status: WorkItemStatus,
+  purpose: z.enum(["discovery", "first_slice", "delivery", "verification", "recovery", "closeout"]),
+  origin_kind: z.enum(["legacy", "seed", "receipt", "graph_mutation", "user"]),
+  origin_ref_id: z.string().optional(),
+  graph_revision_created: z.number().int().nonnegative(),
+  validation_mode: z.enum(["self_check", "machine", "independent_review", "review_and_user_gate"]),
+  superseded_by_id: z.string().optional(),
   owner_agent_id: z.string().optional(),
   workflow_run_id: z.string().optional(),
   acceptance_criteria: z.array(z.string()),
@@ -292,6 +307,198 @@ export const WorkReceipt = WorkReceiptSubmission.extend({
   processed_at: z.number().optional(),
 })
 export type WorkReceipt = z.infer<typeof WorkReceipt>
+
+export const GraphMutationDecision = z.enum([
+  "accept",
+  "retry",
+  "expand",
+  "rewire",
+  "supersede",
+  "request_capability",
+  "request_attention",
+  "quiesce",
+])
+export type GraphMutationDecision = z.infer<typeof GraphMutationDecision>
+
+export const GraphMutationStatus = z.enum(["proposed", "validated", "applied", "rejected", "superseded"])
+export type GraphMutationStatus = z.infer<typeof GraphMutationStatus>
+
+export const NewGraphWorkItem = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    plan_id: z.string().trim().min(1),
+    parent_id: z.string().trim().min(1).optional(),
+    title: z.string().trim().min(1).max(500),
+    description: z.string().trim().min(1).max(8_000),
+    kind: z.enum(["planner", "worker", "reviewer"]),
+    work_type: z.enum(["coding", "decision", "research", "writing", "design", "analysis"]),
+    role: z.string().trim().min(1).max(200),
+    capability_packs: z.array(z.string().trim().min(1)).max(200),
+    decision_scope: z.array(z.string().trim().min(1)).max(500),
+    resource_scope: z.array(z.string().trim().min(1)).max(500),
+    inputs: z.array(z.string().trim().min(1)).max(500),
+    expected_outputs: z.array(z.string().trim().min(1)).max(500),
+    validators: z.array(z.string().trim().min(1)).min(1).max(500),
+    disposition: z.string().trim().min(1).max(200),
+    model_group: z.enum(["ultra", "standard", "lite"]),
+    risk_level: z.enum(["low", "medium", "high"]),
+    review_status: z.enum(["pending", "not_required"]),
+    owner_agent_id: z.string().trim().min(1).optional(),
+    acceptance_criteria: z.array(z.string().trim().min(1)).min(1).max(500),
+    max_attempts: z.number().int().positive().max(100),
+    purpose: z.enum(["discovery", "first_slice", "delivery", "verification", "recovery", "closeout"]),
+    validation_mode: z.enum(["self_check", "machine", "independent_review", "review_and_user_gate"]),
+  })
+  .strict()
+export type NewGraphWorkItem = z.infer<typeof NewGraphWorkItem>
+
+export const GraphValidationGateProposal = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    work_item_id: z.string().trim().min(1),
+    title: z.string().trim().min(1).max(500),
+    summary: z.string().trim().min(1).max(8_000),
+    risk_level: z.enum(["low", "medium", "high"]),
+    validation_mode: z.enum(["machine", "independent_review", "review_and_user_gate"]),
+  })
+  .strict()
+
+export const GraphCapabilityNeedProposal = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    capability: z.string().trim().min(1).max(500),
+    reason: z.string().trim().min(1).max(8_000),
+    allowed_permission_modes: z.array(z.enum(["read_only", "workspace_write"])).min(1),
+    resource_scope: z.array(z.string().trim().min(1)).max(500),
+  })
+  .strict()
+
+export const GraphAttentionProposal = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    title: z.string().trim().min(1).max(500),
+    summary: z.string().trim().min(1).max(8_000),
+    materiality: z.enum(["scope", "permission", "acceptance", "budget", "external_side_effect"]),
+    required_decision: z.string().trim().min(1).max(8_000),
+  })
+  .strict()
+
+export const GraphOperation = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("add_work_item"), item: NewGraphWorkItem }).strict(),
+  z
+    .object({
+      type: z.literal("add_dependency"),
+      work_item_id: z.string().trim().min(1),
+      depends_on_id: z.string().trim().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remove_dependency"),
+      work_item_id: z.string().trim().min(1),
+      depends_on_id: z.string().trim().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("supersede_work_item"),
+      work_item_id: z.string().trim().min(1),
+      replacement_id: z.string().trim().min(1).optional(),
+      reason: z.string().trim().min(1).max(8_000),
+    })
+    .strict(),
+  z.object({ type: z.literal("add_validation_gate"), gate: GraphValidationGateProposal }).strict(),
+  z.object({ type: z.literal("request_capability"), need: GraphCapabilityNeedProposal }).strict(),
+  z.object({ type: z.literal("request_user_decision"), request: GraphAttentionProposal }).strict(),
+])
+export type GraphOperation = z.infer<typeof GraphOperation>
+
+export const GraphMutationProposal = z
+  .object({
+    project_id: z.string().trim().min(1),
+    trigger_receipt_id: z.string().trim().min(1),
+    expected_revision: z.number().int().nonnegative(),
+    orchestrator_version: z.number().int().positive(),
+    idempotency_key: z.string().trim().min(1).max(500),
+    decision: GraphMutationDecision,
+    rationale: z.string().trim().min(1).max(8_000),
+    evidence_refs: z.array(WorkReceiptEvidenceRef).max(1_000),
+    operations: z.array(GraphOperation).max(500),
+  })
+  .strict()
+export type GraphMutationProposal = z.infer<typeof GraphMutationProposal>
+
+export const GraphPolicyViolation = z.enum([
+  "cycle",
+  "self_dependency",
+  "missing_node",
+  "immutable_fact",
+  "scope_escalation",
+  "high_risk_gate_required",
+  "self_review",
+  "running_dependency_change",
+  "evidence_required",
+  "decision_operation_mismatch",
+  "invalid_plan",
+  "invalid_replacement",
+  "duplicate_new_node",
+  "dependency_exists",
+  "dependency_missing",
+])
+export type GraphPolicyViolation = z.infer<typeof GraphPolicyViolation>
+
+export const GraphPolicyVerdict = z
+  .object({
+    result: z.enum(["allowed", "rejected"]),
+    violations: z.array(GraphPolicyViolation),
+  })
+  .strict()
+export type GraphPolicyVerdict = z.infer<typeof GraphPolicyVerdict>
+
+export const GraphMutation = GraphMutationProposal.extend({
+  id: z.string(),
+  applied_revision: z.number().int().nonnegative().optional(),
+  status: GraphMutationStatus,
+  policy_verdict: GraphPolicyVerdict,
+  created_at: z.number(),
+  applied_at: z.number().optional(),
+})
+export type GraphMutation = z.infer<typeof GraphMutation>
+
+export const GraphSnapshotNode = z
+  .object({
+    id: z.string(),
+    plan_id: z.string(),
+    parent_id: z.string().optional(),
+    kind: z.enum(["planner", "worker", "reviewer"]),
+    status: WorkItemStatus,
+    owner_agent_id: z.string().optional(),
+    decision_scope: z.array(z.string()),
+    resource_scope: z.array(z.string()),
+    acceptance_criteria: z.array(z.string()),
+    risk_level: z.enum(["low", "medium", "high"]),
+    purpose: z.enum(["discovery", "first_slice", "delivery", "verification", "recovery", "closeout"]),
+    validation_mode: z.enum(["self_check", "machine", "independent_review", "review_and_user_gate"]),
+    superseded_by_id: z.string().optional(),
+  })
+  .strict()
+
+export const GraphSnapshot = z
+  .object({
+    project_id: z.string(),
+    revision: z.number().int().nonnegative(),
+    nodes: z.array(GraphSnapshotNode),
+    dependencies: z.array(
+      z
+        .object({
+          work_item_id: z.string(),
+          depends_on_id: z.string(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+export type GraphSnapshot = z.infer<typeof GraphSnapshot>
 
 export const ProjectEvent = z.object({
   id: z.string(),

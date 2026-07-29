@@ -249,7 +249,7 @@ export const WorkstationRoutes = lazy(() =>
           const totalThreads = agents.reduce((sum, a) => sum + a.threads.length, 0)
           const openTasks = projectWorkItems
             .flat()
-            .filter((item) => !["completed", "cancelled"].includes(item.status)).length
+            .filter((item) => !["completed", "superseded", "cancelled"].includes(item.status)).length
 
           return {
             project: {

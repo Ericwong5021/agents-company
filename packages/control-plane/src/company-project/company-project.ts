@@ -66,6 +66,8 @@ const workItemFromRow = (row: typeof CompanyWorkItemTable.$inferSelect, depends_
     ...row,
     source_task_key: row.source_task_key ?? undefined,
     parent_id: row.parent_id ?? undefined,
+    origin_ref_id: row.origin_ref_id ?? undefined,
+    superseded_by_id: row.superseded_by_id ?? undefined,
     owner_agent_id: row.owner_agent_id ?? undefined,
     workflow_run_id: row.workflow_run_id ?? undefined,
     capability_packs: parseList(row.capability_packs_json),
@@ -251,6 +253,11 @@ export interface Interface {
     model_group: "ultra" | "standard" | "lite"
     risk_level?: "low" | "medium" | "high"
     review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
+    purpose?: "discovery" | "first_slice" | "delivery" | "verification" | "recovery" | "closeout"
+    origin_kind?: "legacy" | "seed" | "receipt" | "graph_mutation" | "user"
+    origin_ref_id?: string
+    graph_revision_created?: number
+    validation_mode?: "self_check" | "machine" | "independent_review" | "review_and_user_gate"
     owner_agent_id?: string
     acceptance_criteria: string[]
     max_attempts?: number
@@ -715,6 +722,9 @@ export const layer = Layer.effect(
       )
         throw new Error("Work item source task key must be a non-empty trimmed string")
       const depends_on = [...new Set(input.depends_on ?? [])].sort()
+      const review_status = input.review_status ?? (input.kind === "worker" ? "pending" : "not_required")
+      const validation_mode =
+        input.validation_mode ?? (review_status === "not_required" ? "self_check" : "independent_review")
       const facts = {
         parent_id: input.parent_id,
         title: input.title,
@@ -731,7 +741,12 @@ export const layer = Layer.effect(
         disposition: input.disposition ?? "retain",
         model_group: input.model_group,
         risk_level: input.risk_level ?? "medium",
-        review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
+        review_status,
+        purpose: input.purpose ?? "delivery",
+        origin_kind: input.origin_kind ?? "legacy",
+        origin_ref_id: input.origin_ref_id,
+        graph_revision_created: input.graph_revision_created ?? 0,
+        validation_mode,
         owner_agent_id: input.owner_agent_id,
         acceptance_criteria: input.acceptance_criteria,
         max_attempts: input.max_attempts ?? 3,
@@ -756,6 +771,11 @@ export const layer = Layer.effect(
           model_group: existing.model_group,
           risk_level: existing.risk_level,
           review_status: existing.review_status,
+          purpose: existing.purpose,
+          origin_kind: existing.origin_kind,
+          origin_ref_id: existing.origin_ref_id,
+          graph_revision_created: existing.graph_revision_created,
+          validation_mode: existing.validation_mode,
           owner_agent_id: existing.owner_agent_id,
           acceptance_criteria: existing.acceptance_criteria,
           max_attempts: existing.max_attempts,
@@ -809,8 +829,14 @@ export const layer = Layer.effect(
                 disposition: input.disposition ?? "retain",
                 model_group: input.model_group,
                 risk_level: input.risk_level ?? "medium",
-                review_status: input.review_status ?? (input.kind === "worker" ? "pending" : "not_required"),
+                review_status,
                 status: "pending",
+                purpose: input.purpose ?? "delivery",
+                origin_kind: input.origin_kind ?? "legacy",
+                origin_ref_id: input.origin_ref_id ?? null,
+                graph_revision_created: input.graph_revision_created ?? 0,
+                validation_mode,
+                superseded_by_id: null,
                 owner_agent_id: input.owner_agent_id ?? null,
                 workflow_run_id: null,
                 acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
@@ -847,6 +873,11 @@ export const layer = Layer.effect(
           expected_outputs: input.expected_outputs ?? [],
           validators: input.validators ?? input.acceptance_criteria,
           disposition: input.disposition ?? "retain",
+          purpose: input.purpose ?? "delivery",
+          origin_kind: input.origin_kind ?? "legacy",
+          origin_ref_id: input.origin_ref_id,
+          graph_revision_created: input.graph_revision_created ?? 0,
+          validation_mode,
           depends_on,
         },
         input.owner_agent_id,
@@ -1066,7 +1097,7 @@ export const layer = Layer.effect(
             db
               .select({ id: CompanyWorkItemTable.id })
               .from(CompanyWorkItemTable)
-              .where(notInArray(CompanyWorkItemTable.status, ["completed", "cancelled"]))
+              .where(notInArray(CompanyWorkItemTable.status, ["completed", "superseded", "cancelled"]))
               .all(),
           ),
         )).map((item) => item.id),

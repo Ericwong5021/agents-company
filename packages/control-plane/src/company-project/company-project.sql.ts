@@ -18,6 +18,7 @@ export const CompanyProjectTable = sqliteTable(
     active_run_id: text(),
     output_dir: text().notNull(),
     active_plan_version: integer(),
+    graph_revision: integer().notNull().default(0),
     created_at: integer().notNull(),
     updated_at: integer().notNull(),
     completed_at: integer(),
@@ -101,6 +102,12 @@ export const CompanyWorkItemTable = sqliteTable(
     risk_level: text().notNull(),
     review_status: text().notNull(),
     status: text().notNull(),
+    purpose: text().notNull().default("delivery"),
+    origin_kind: text().notNull().default("legacy"),
+    origin_ref_id: text(),
+    graph_revision_created: integer().notNull().default(0),
+    validation_mode: text().notNull().default("self_check"),
+    superseded_by_id: text(),
     owner_agent_id: text(),
     workflow_run_id: text(),
     acceptance_criteria_json: text().notNull(),
@@ -249,6 +256,36 @@ export const CompanyWorkReceiptTable = sqliteTable(
     uniqueIndex("company_work_receipt_attempt_idx").on(table.attempt_id),
     uniqueIndex("company_work_receipt_idempotency_idx").on(table.idempotency_key),
     index("company_work_receipt_project_status_idx").on(table.project_id, table.processing_status),
+  ],
+)
+
+export const CompanyGraphMutationTable = sqliteTable(
+  "company_graph_mutation",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    trigger_receipt_id: text()
+      .notNull()
+      .references(() => CompanyWorkReceiptTable.id, { onDelete: "cascade" }),
+    expected_revision: integer().notNull(),
+    applied_revision: integer(),
+    orchestrator_version: integer().notNull(),
+    idempotency_key: text().notNull(),
+    decision: text().notNull(),
+    rationale: text().notNull(),
+    evidence_refs_json: text().notNull(),
+    operations_json: text().notNull(),
+    status: text().notNull(),
+    policy_verdict_json: text().notNull(),
+    created_at: integer().notNull(),
+    applied_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_graph_mutation_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    index("company_graph_mutation_receipt_idx").on(table.trigger_receipt_id),
+    index("company_graph_mutation_project_status_idx").on(table.project_id, table.status),
   ],
 )
 

@@ -113,6 +113,11 @@ const knownNoopEvents = new Set([
   "work_attempt.finished",
   "work_receipt.submitted",
   "work_receipt.processed",
+  "graph_mutation.applied",
+  "graph_mutation.rejected",
+  "graph.validation_gate.requested",
+  "graph.capability.requested",
+  "graph.user_decision.requested",
   "board_closeout.recorded",
   "worktree_run.created",
   "worktree_run.started",
@@ -679,7 +684,7 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
 
     if (event.type.startsWith("work_item.")) {
       const itemStatus = event.type.slice("work_item.".length)
-      if (["pending", "running", "blocked", "failed", "completed", "cancelled"].includes(itemStatus)) {
+      if (["pending", "running", "blocked", "failed", "completed", "superseded", "cancelled"].includes(itemStatus)) {
         const id = stringValue(event.data, "work_item_id")
         const current = id ? workItems.get(id) : undefined
         if (!id || !current) {
@@ -688,7 +693,12 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
         }
         workItems.set(id, { ...current, status: itemStatus, source: sourceRef(event) })
         const key = `work-item:${id}`
-        if (itemStatus === "completed" || itemStatus === "cancelled" || itemStatus === "running") {
+        if (
+          itemStatus === "completed" ||
+          itemStatus === "superseded" ||
+          itemStatus === "cancelled" ||
+          itemStatus === "running"
+        ) {
           attention.delete(key)
           return
         }
@@ -1048,12 +1058,16 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
 
   if (!state) throw new Error("Work projection state invariant failed")
 
-  const totalItems = workItems.size
-  const completedItems = [...workItems.values()].filter((item) => item.status === "completed").length
+  const currentItems = [...workItems.values()].filter((item) => item.status !== "superseded")
+  const totalItems = currentItems.length
+  const completedItems = currentItems.filter((item) => item.status === "completed").length
   const allowedActions = actionsFor(state.userStatus, state.targetRef)
   const nextAction = allowedActions.find((item) => item.enabled) ?? null
   const nextMilestone = [...workItems.entries()]
-    .filter(([, item]) => item.status !== "completed" && item.status !== "cancelled")
+    .filter(
+      ([, item]) =>
+        item.status !== "completed" && item.status !== "superseded" && item.status !== "cancelled",
+    )
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, item]) => ({ id, title: item.title, completed: false }))
     .at(0)

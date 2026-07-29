@@ -1,4 +1,5 @@
 export * as CompanyProject from "./company-project"
 export * as CompanyProjectExecution from "./execution"
 export * as CompanyWorkFacts from "./work-facts"
+export * as CompanyGraphMutation from "./graph-mutation"
 export * from "./schema"

@@ -21,6 +21,7 @@ const prefixes = {
   companyWorkItem: "cwi",
   workAttempt: "wat",
   workReceipt: "wrc",
+  graphMutation: "gmut",
   projectCharter: "cchr",
   worktreeRun: "wrun",
   artifact: "art",

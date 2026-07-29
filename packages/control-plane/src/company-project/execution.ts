@@ -1008,7 +1008,14 @@ export const layer = Layer.effect(
           yield* blockProject(project_id, "Project has exhausted a work-item retry budget")
           return
         }
-        if (items.every((item) => item.status === "completed" || item.status === "cancelled")) {
+        if (
+          items.every(
+            (item) =>
+              item.status === "completed" ||
+              item.status === "superseded" ||
+              item.status === "cancelled",
+          )
+        ) {
           if (project.company_id)
             yield* recruitment.releaseProject({
               company_id: CompanyID.parse(project.company_id),
