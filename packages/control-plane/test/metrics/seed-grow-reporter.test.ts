@@ -340,7 +340,7 @@ describe("SeedGrowMetricReporter", () => {
           },
         ],
       })
-      expect(report.results[0]?.sourceRefs).toHaveLength(6)
+      expect(report.results[0]?.sourceRefs).toHaveLength(8)
       expect(report.results[0]?.sourceRefs.filter((source) => source.kind === "gate_report")).toHaveLength(2)
     }),
   )
