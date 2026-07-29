@@ -612,6 +612,8 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
   process.env.AGENTCOMPANY_HOME = prepared.paths.runtimeHome
   process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
   process.env.AGENTCOMPANY_DISABLE_MODELS_FETCH = "true"
+  const Database = await import("../src/storage")
+  const ProjectInstance = await import("../src/project/instance")
   const [
     AgentRun,
     CompanyAgent,
@@ -630,8 +632,6 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     PersistedFactExporter,
     PersistedFactArtifactReader,
     SeedGrowMetricReporter,
-    Database,
-    ProjectInstance,
     ProjectTables,
     RecruitmentTables,
     scenarioModule,
@@ -653,8 +653,6 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     import("../src/metrics/persisted-fact-exporter"),
     import("../src/metrics/persisted-fact-artifact"),
     import("../src/metrics/seed-grow-reporter"),
-    import("../src/storage"),
-    import("../src/project/instance"),
     import("../src/company-project/company-project.sql"),
     import("../src/company-recruitment/company-recruitment.sql"),
     import("../src/metrics/b5-candidate-scenarios"),
