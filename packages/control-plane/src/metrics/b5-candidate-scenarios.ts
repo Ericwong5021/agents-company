@@ -1366,6 +1366,13 @@ const runS18 = Effect.fn("B5CandidateScenarios.S18")(function* (
     (candidate) => candidate.work_item_id === worker.id,
   )
   if (!receipt) throw new Error("S18 worker produced no Work Receipt")
+  const processedReceipt = yield* runtime.shadowSupervisor.processReceipt(receipt.id)
+  if (
+    processedReceipt.status !== "processed" ||
+    processedReceipt.mode !== "shadow" ||
+    processedReceipt.mutation_id
+  )
+    throw new Error("S18 worker Receipt did not reach the shadow decision boundary")
   const policy = validationPolicy({
     risk_level: "high",
     external_side_effect: false,
