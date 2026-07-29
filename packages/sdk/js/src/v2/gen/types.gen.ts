@@ -6019,7 +6019,7 @@ export type CompanyRecruitmentNeedCreateData = {
     source_receipt_id?: string
     need_key: string
     role: string
-    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+    work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis" | "knowledge_reading"
     capability_packs: Array<string>
     risk_level?: "low" | "medium" | "high"
     demand_horizon?: "project" | "recurring"
