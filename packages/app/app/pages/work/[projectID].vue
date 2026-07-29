@@ -503,10 +503,11 @@ function artifactRoute(projectID: string, artifactID: string) {
               type="button"
               role="tab"
               class="ac-work3__tab"
+              :id="`work-context-tab-${kind}`"
               :data-context-panel="kind"
               :data-active="kind === activePanel"
               :aria-selected="kind === activePanel"
-              :aria-controls="`context-panel-${kind}`"
+              aria-controls="work-context-panel"
               :tabindex="kind === activePanel ? 0 : -1"
               @click="selectPanel(kind)"
               @keydown="navigatePanel($event, kind)"
@@ -518,7 +519,8 @@ function artifactRoute(projectID: string, artifactID: string) {
           <div
             class="ac-work3__panel"
             role="tabpanel"
-            :id="activePanel ? `context-panel-${activePanel}` : undefined"
+            id="work-context-panel"
+            :aria-labelledby="activePanel ? `work-context-tab-${activePanel}` : undefined"
             tabindex="0"
           >
             <!-- Goal Brief -->
