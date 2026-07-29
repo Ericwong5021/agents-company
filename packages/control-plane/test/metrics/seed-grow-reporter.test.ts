@@ -2,7 +2,11 @@ import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect } from "bun:test"
-import { MetricContract, type MetricSourceRef } from "@agents-company/shared/seed-grow-metrics"
+import {
+  MetricContract,
+  PrePublicBlockingMetricIds,
+  type MetricSourceRef,
+} from "@agents-company/shared/seed-grow-metrics"
 import { Effect } from "effect"
 import {
   bindPersistedFactArtifact,
@@ -18,6 +22,7 @@ import { tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
 const candidateSha = "a".repeat(40)
+const previousCandidateSha = "d".repeat(40)
 const snapshotDigest = "b".repeat(64)
 const contract = MetricContract.parse(
   JSON.parse(
@@ -149,6 +154,109 @@ function runEvents(binding: PersistedFactRunBinding, index: number) {
   ]
 }
 
+function completeRunEvents(binding: PersistedFactRunBinding, index: number) {
+  const legacy = binding.strategy === "legacy_full_plan"
+  const deliveryId = `${binding.runId}-delivery`
+  const receiptId = `${binding.runId}-receipt`
+  const mutationId = `${binding.runId}-mutation`
+  return [
+    event(binding, "project_assignment.activated", "assignment-wayfinder", {
+      assignmentId: `${binding.runId}-assignment-wayfinder`,
+      agentId: `${binding.runId}-wayfinder`,
+      purpose: "wayfinder",
+      initial: true,
+    }),
+    event(binding, "project_assignment.activated", "assignment-builder", {
+      assignmentId: `${binding.runId}-assignment-builder`,
+      agentId: `${binding.runId}-builder`,
+      purpose: "builder",
+      initial: true,
+    }),
+    event(binding, "connection.lost", "connection-lost", {
+      reasonKind: "process_restart",
+    }),
+    event(binding, "connection.recovered", "connection-recovered", {
+      contextPreserved: true,
+      duplicateSideEffects: 0,
+    }),
+    event(binding, "work_receipt.processed", "receipt-processed", {
+      receiptId,
+      duplicate: false,
+      recovered: true,
+    }),
+    event(binding, "graph_mutation.evaluated", "mutation-evaluated", {
+      mutationId,
+      evidenceCount: 1,
+      verdict: "apply",
+    }),
+    event(binding, "graph_mutation.recovered", "mutation-recovered", {
+      mutationId,
+      consistent: true,
+      duplicateSideEffects: 0,
+    }),
+    event(binding, "delivery.presented", "delivery-presented", {
+      deliveryId,
+      artifactCount: 1,
+      noFileReason: "",
+    }),
+    event(binding, "delivery.artifact_opened", "delivery-opened", {
+      deliveryId,
+      artifactId: `${deliveryId}-artifact`,
+      succeeded: true,
+    }),
+    event(binding, "validation_gate.evaluated", "validation-gate", {
+      gateId: `${binding.runId}-gate`,
+      passed: true,
+      anchorPassed: true,
+      falsePass: false,
+    }),
+    event(binding, "graph_repair.completed", "graph-repair", {
+      repairId: `${binding.runId}-repair`,
+      passedOriginalCriterion: true,
+      attemptCount: 1,
+      blindRetryCount: 0,
+    }),
+    event(binding, "repair.circuit_opened", "repair-circuit", {
+      workItemId: `${binding.runId}-work-item`,
+      attemptCount: 1,
+      attentionId: `${binding.runId}-attention`,
+    }),
+    event(binding, "user.interruption_presented", "interruption-presented", {
+      kind: "material_blocker",
+      materialityReason: "missing_authority",
+    }),
+    event(binding, "user.interruption_judged", "interruption-judged", {
+      needed: true,
+    }),
+    event(binding, "delivery.quality_compared", "quality", {
+      risk: "low",
+      strategy: binding.strategy,
+      legacyScore: 1,
+      seedGrowScore: 1,
+    }),
+    ...(legacy
+      ? []
+      : [
+          event(binding, "shadow.compared", "shadow", {
+            comparisonId: `shadow-${index + 1}`,
+            legacyRunId: `legacy-${index === 0 ? "a" : "b"}`,
+            seedGrowRunId: binding.runId,
+          }),
+          event(binding, "candidate.terminal_checked", "terminal", {
+            candidateSha,
+            previousCandidateSha,
+            isolatedRunIndex: index + 1,
+            localGate: "success",
+            deployment: "success",
+            rollback: "success",
+            reproducible: true,
+            terminalEvidenceDigest: createHash("sha256").update(`terminal:${binding.runId}`).digest("hex"),
+            immediateAncestry: true,
+          }),
+        ]),
+  ]
+}
+
 function artifactCore(): PersistedFactArtifactCore {
   const bindings = runBindings()
   return {
@@ -172,6 +280,14 @@ function artifactCore(): PersistedFactArtifactCore {
     },
     runBindings: bindings,
     events: bindings.flatMap((binding, index) => runEvents(binding, index % 2)),
+  }
+}
+
+function completeArtifactCore(): PersistedFactArtifactCore {
+  const core = artifactCore()
+  return {
+    ...core,
+    events: [...core.events, ...core.runBindings.flatMap((binding, index) => completeRunEvents(binding, index % 2))],
   }
 }
 
@@ -223,6 +339,163 @@ describe("SeedGrowMetricReporter", () => {
       })
       expect(report.results[0]?.sourceRefs).toHaveLength(8)
       expect(report.results[0]?.sourceRefs.filter((source) => source.kind === "gate_report")).toHaveLength(2)
+    }),
+  )
+
+  it.live("passes all Pre-Public blocking metrics from complete persisted facts", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const facts = yield* Effect.promise(() => adapter(directory, { core: completeArtifactCore() }))
+      const report = yield* reportWith(facts, [...PrePublicBlockingMetricIds])
+      expect(report.status).toBe("pass")
+      expect(report.runIds).toEqual(["legacy-a", "legacy-b", "seed-a", "seed-b"])
+      expect(report.results).toHaveLength(18)
+      expect(report.results.every((result) => result.status === "pass")).toBe(true)
+      expect(report.results.find((result) => result.metricId === "reviewer_invocation_ratio_vs_legacy")).toMatchObject({
+        value: 0.5,
+        sampleSize: 2,
+      })
+      expect(report.results.find((result) => result.metricId === "candidate_reuse_delta_vs_legacy")).toMatchObject({
+        value: 0.5,
+        sampleSize: 2,
+      })
+      expect(
+        report.results.find((result) => result.metricId === "consecutive_reproducible_candidate_count"),
+      ).toMatchObject({
+        value: 2,
+        sampleSize: 2,
+      })
+    }),
+  )
+
+  it.live("blocks cross-strategy metrics when legacy and seed runs are not exactly matched", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const core = completeArtifactCore()
+      const facts = yield* Effect.promise(() =>
+        adapter(directory, {
+          core: {
+            ...core,
+            runBindings: core.runBindings.map((binding) =>
+              binding.runId === "legacy-b" ? { ...binding, snapshotDigest: "e".repeat(64) } : binding,
+            ),
+          },
+        }),
+      )
+      const report = yield* reportWith(facts, [
+        "reviewer_invocation_ratio_vs_legacy",
+        "candidate_reuse_delta_vs_legacy",
+      ])
+      expect(report.status).toBe("blocked")
+      expect(report.results.every((result) => result.status === "blocked")).toBe(true)
+      expect(report.results.every((result) => result.blockedReasons.includes("missing_observation"))).toBe(true)
+    }),
+  )
+
+  it.live("blocks Candidate reuse delta when Shadow pair bindings are not one-to-one", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const core = completeArtifactCore()
+      const facts = yield* Effect.promise(() =>
+        adapter(directory, {
+          core: {
+            ...core,
+            events: core.events.map((item) =>
+              item.eventId === "seed-b-shadow"
+                ? {
+                    ...item,
+                    properties: {
+                      ...item.properties,
+                      legacyRunId: "legacy-a",
+                    },
+                  }
+                : item,
+            ),
+          },
+        }),
+      )
+      const report = yield* reportWith(facts, ["candidate_reuse_delta_vs_legacy"])
+      expect(report).toMatchObject({
+        status: "blocked",
+        results: [
+          {
+            metricId: "candidate_reuse_delta_vs_legacy",
+            status: "blocked",
+            blockedReasons: ["missing_observation"],
+          },
+        ],
+      })
+    }),
+  )
+
+  it.live("blocks consecutive candidates when terminal evidence metadata is missing", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const core = completeArtifactCore()
+      const facts = yield* Effect.promise(() =>
+        adapter(directory, {
+          core: {
+            ...core,
+            events: core.events.map((item) =>
+              item.eventType === "candidate.terminal_checked"
+                ? {
+                    ...item,
+                    properties: Object.fromEntries(
+                      Object.entries(item.properties).filter(([key]) => key !== "terminalEvidenceDigest"),
+                    ),
+                  }
+                : item,
+            ),
+          },
+        }),
+      )
+      const report = yield* reportWith(facts, ["consecutive_reproducible_candidate_count"])
+      expect(report).toMatchObject({
+        status: "blocked",
+        results: [
+          {
+            metricId: "consecutive_reproducible_candidate_count",
+            status: "blocked",
+            blockedReasons: ["missing_observation"],
+          },
+        ],
+      })
+    }),
+  )
+
+  it.live("does not count two checks of the current SHA as two consecutive candidates", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const core = completeArtifactCore()
+      const facts = yield* Effect.promise(() =>
+        adapter(directory, {
+          core: {
+            ...core,
+            events: core.events.map((item) =>
+              item.eventType === "candidate.terminal_checked"
+                ? {
+                    ...item,
+                    properties: {
+                      ...item.properties,
+                      previousCandidateSha: candidateSha,
+                    },
+                  }
+                : item,
+            ),
+          },
+        }),
+      )
+      const report = yield* reportWith(facts, ["consecutive_reproducible_candidate_count"])
+      expect(report).toMatchObject({
+        status: "blocked",
+        results: [
+          {
+            metricId: "consecutive_reproducible_candidate_count",
+            status: "blocked",
+            blockedReasons: ["missing_observation"],
+          },
+        ],
+      })
     }),
   )
 
