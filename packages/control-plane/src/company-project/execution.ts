@@ -18,7 +18,7 @@ import * as Reputation from "@/reputation/reputation"
 import { Session } from "@/session"
 import { SessionID } from "@/session/schema"
 import * as WorkType from "@/work-type/work-type"
-import type { WorkTypeID } from "@/work-type/schema"
+import type { VerifyResult, WorkTypeID } from "@/work-type/schema"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import {
   SeedPolicyFacts,
@@ -41,6 +41,7 @@ import {
   type Project,
   type ProjectCharter,
   type WorkItem,
+  type WorktreeRun,
 } from "./schema"
 
 const workTypes = ["coding", "decision", "research", "writing", "design", "analysis"] as const
@@ -793,6 +794,109 @@ const serviceLayer = Layer.effect(
       }
     })
 
+    const persistSystemVerification = Effect.fn("CompanyProjectExecution.persistSystemVerification")(function* (
+      input: {
+        item: WorkItem
+        artifact: Artifact
+        verification: VerifyResult
+        worktree?: WorktreeRun
+      },
+    ) {
+      if (!["self_check", "machine"].includes(input.item.validation_mode))
+        throw new Error(`Work item ${input.item.id} requires independent validation`)
+      if (input.item.review_status !== "not_required")
+        throw new Error(`Work item ${input.item.id} cannot use system verification while review is required`)
+      if (
+        (yield* projects.listWorkItems(input.item.project_id)).some(
+          (candidate) =>
+            candidate.kind === "reviewer" &&
+            candidate.parent_id === input.item.id &&
+            !["superseded", "cancelled"].includes(candidate.status),
+        )
+      )
+        throw new Error(`Work item ${input.item.id} has an independent Reviewer`)
+      if (!input.verification.passed)
+        throw new Error(`Work item ${input.item.id} did not pass its Work Type verifier`)
+      if (
+        input.item.work_type === "coding" &&
+        (!input.worktree ||
+          input.worktree.status !== "awaiting_merge_approval" ||
+          input.worktree.verification.passed !== true)
+      )
+        throw new Error(`Coding work item ${input.item.id} did not pass sandbox verification`)
+      if (!input.artifact.content)
+        throw new Error(`Delivery artifact ${input.artifact.id} has no persisted bytes`)
+      const delivery_artifact_sha256 = new Bun.CryptoHasher("sha256")
+        .update(input.artifact.content)
+        .digest("hex")
+      const evidence = {
+        accepted: true,
+        authority: "control_plane",
+        work_item_id: input.item.id,
+        validation_mode: input.item.validation_mode,
+        delivery_artifact_id: input.artifact.id,
+        delivery_artifact_sha256,
+        verifier: {
+          work_type: input.item.work_type,
+          result: input.verification,
+        },
+        ...(input.worktree
+          ? {
+              sandbox: {
+                worktree_run_id: input.worktree.id,
+                head_commit: input.worktree.head_commit,
+                verification_commands: input.worktree.verification_commands,
+                result: input.worktree.verification,
+              },
+            }
+          : {}),
+      }
+      const artifact = yield* projects.addArtifact({
+        project_id: input.item.project_id,
+        work_item_id: input.item.id,
+        kind: "system_verification",
+        title: `${input.item.title} · Control Plane Verification`,
+        path: `artifacts/verification/${input.item.id}-attempt-${input.item.attempt + 1}.json`,
+        content: `${JSON.stringify(evidence, null, 2)}\n`,
+        evidence: {
+          authority: evidence.authority,
+          accepted: evidence.accepted,
+          delivery_artifact_id: evidence.delivery_artifact_id,
+          delivery_artifact_sha256,
+        },
+      })
+      const criteria = input.item.acceptance_criteria.filter(
+        (criterion) =>
+          criterion !== "artifact_exists" && !/^artifact_sha256:[a-f0-9]{64}$/i.test(criterion),
+      )
+      if (!criteria.length) return artifact
+      const gate = yield* validation.create({
+        id: `system-verification-${new Bun.CryptoHasher("sha256")
+          .update(`${input.item.id}:${input.item.attempt + 1}:${artifact.id}`)
+          .digest("hex")
+          .slice(0, 40)}`,
+        project_id: input.item.project_id,
+        work_item_id: input.item.id,
+        kind: "policy",
+        criteria: criteria.map((criterion, index) => ({
+          id: `system-verified-${index + 1}-${new Bun.CryptoHasher("sha256")
+            .update(criterion)
+            .digest("hex")
+            .slice(0, 24)}`,
+          statement: criterion,
+          anchor: { kind: "policy", reference: `artifact:${artifact.id}` },
+          operator: "equals",
+          expected: true,
+        })),
+        blocking_work_item_ids: [input.item.id],
+        evaluator: "policy_invariant_v1",
+        max_repair_rounds: 3,
+      })
+      if (gate.status !== "passed")
+        throw new Error(`System verification Gate ${gate.id} did not pass for ${input.item.id}`)
+      return artifact
+    })
+
     const evidenceSnapshot = Effect.fn("CompanyProjectExecution.evidenceSnapshot")(function* (project: Project) {
       const [items, artifacts, gates, charter, events] = yield* Effect.all([
         projects.listWorkItems(project.id),
@@ -1431,6 +1535,7 @@ const serviceLayer = Layer.effect(
               })
               if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
               if (item.work_type !== "coding" || !worktree) {
+                yield* persistSystemVerification({ item, artifact, verification })
                 yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 return
@@ -1439,6 +1544,7 @@ const serviceLayer = Layer.effect(
               const verified = yield* projects.verifyWorktreeRun({ id: worktree.id, commands })
               if (verified.status !== "awaiting_merge_approval")
                 return yield* failure(item, verified.error ?? "Host worktree verification failed")
+              yield* persistSystemVerification({ item, artifact, verification, worktree: verified })
               const gate = yield* projects.requestMergeApproval({
                 id: worktree.id,
                 title: `批准合并 First Slice：${item.title}`,
@@ -1693,12 +1799,15 @@ const serviceLayer = Layer.effect(
                   created_by_agent_id: item.owner_agent_id,
                 })
                 if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
-                if (item.work_type === "coding" && worktree) {
-                  const commands = submissions.coding.parse(parsed.submission).verificationCommands
-                  const verified = yield* projects.verifyWorktreeRun({ id: worktree.id, commands })
-                  if (verified.status !== "awaiting_merge_approval")
-                    return yield* failure(item, verified.error ?? "Host worktree verification failed")
-                }
+                const verified =
+                  item.work_type === "coding" && worktree
+                    ? yield* projects.verifyWorktreeRun({
+                        id: worktree.id,
+                        commands: submissions.coding.parse(parsed.submission).verificationCommands,
+                      })
+                    : undefined
+                if (verified && verified.status !== "awaiting_merge_approval")
+                  return yield* failure(item, verified.error ?? "Host worktree verification failed")
                 if (item.source_task_key === "board_closeout_and_organization_decision") {
                   if (!project.owner_agent_id || item.owner_agent_id !== project.owner_agent_id)
                     return yield* failure(
@@ -1731,6 +1840,7 @@ const serviceLayer = Layer.effect(
                   })
                   return
                 }
+                yield* persistSystemVerification({ item, artifact, verification, worktree: verified })
                 yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 return
