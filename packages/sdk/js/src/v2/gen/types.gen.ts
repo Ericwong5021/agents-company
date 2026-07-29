@@ -599,6 +599,8 @@ export type BoardDecisionResult = {
     active_run_id?: string
     output_dir: string
     active_plan_version?: number
+    execution_strategy: "legacy_full_plan" | "seed_and_grow"
+    seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
     graph_revision: number
     created_at: number
     updated_at: number
@@ -786,6 +788,36 @@ export type ThreadActionInput =
         dri_agent_id: string
         milestones: Array<string>
         open_decisions: Array<string>
+      }
+      execution_strategy?: "legacy_full_plan" | "seed_and_grow"
+      seed_policy?: {
+        risk_level: "low" | "medium" | "high" | "critical"
+        scope_defined: boolean
+        reversible: boolean
+        stable_sop: boolean
+        unfamiliar_workspace: boolean
+        cross_module: boolean
+        external_side_effect: boolean
+        blocking_unknowns: Array<string>
+        slice_candidates: Array<{
+          id: string
+          title: string
+          description: string
+          work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+          role: string
+          capability_packs?: Array<string>
+          decision_scope?: Array<string>
+          resource_scope?: Array<string>
+          acceptance_criteria: Array<string>
+          reality_contact: number
+          information_gain: number
+          user_value: number
+          reversible: boolean
+          dependency_count: number
+          reality_anchor: string
+          within_authorized_scope: boolean
+          external_side_effect: boolean
+        }>
       }
     }
 
@@ -10163,6 +10195,36 @@ export type CompanyProjectStartData = {
     session_id?: string
     provider_id?: string
     model_id?: string
+    execution_strategy?: "legacy_full_plan" | "seed_and_grow"
+    seed_policy?: {
+      risk_level: "low" | "medium" | "high" | "critical"
+      scope_defined: boolean
+      reversible: boolean
+      stable_sop: boolean
+      unfamiliar_workspace: boolean
+      cross_module: boolean
+      external_side_effect: boolean
+      blocking_unknowns: Array<string>
+      slice_candidates: Array<{
+        id: string
+        title: string
+        description: string
+        work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+        role: string
+        capability_packs?: Array<string>
+        decision_scope?: Array<string>
+        resource_scope?: Array<string>
+        acceptance_criteria: Array<string>
+        reality_contact: number
+        information_gain: number
+        user_value: number
+        reversible: boolean
+        dependency_count: number
+        reality_anchor: string
+        within_authorized_scope: boolean
+        external_side_effect: boolean
+      }>
+    }
   }
   path?: never
   query?: {
@@ -10177,7 +10239,37 @@ export type CompanyProjectStartResponses = {
    * Project and workflow run
    */
   200: {
-    project: unknown
+    project: {
+      id: string
+      company_id?: string
+      root_need_id?: string
+      source_thread_id?: string
+      decision_request_id?: string
+      goal: string
+      title: string
+      status:
+        | "intake"
+        | "planning"
+        | "executing"
+        | "reviewing"
+        | "awaiting_approval"
+        | "completed"
+        | "rejected"
+        | "blocked"
+      owner_agent_id?: string
+      coordinator_session_id?: string
+      provider_id?: string
+      model_id?: string
+      active_run_id?: string
+      output_dir: string
+      active_plan_version?: number
+      execution_strategy: "legacy_full_plan" | "seed_and_grow"
+      seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
+      graph_revision: number
+      created_at: number
+      updated_at: number
+      completed_at?: number
+    }
     run_id: string
   }
 }
@@ -10334,7 +10426,37 @@ export type CompanyProjectRetryResponses = {
    * Project and resumed workflow run
    */
   200: {
-    project: unknown
+    project: {
+      id: string
+      company_id?: string
+      root_need_id?: string
+      source_thread_id?: string
+      decision_request_id?: string
+      goal: string
+      title: string
+      status:
+        | "intake"
+        | "planning"
+        | "executing"
+        | "reviewing"
+        | "awaiting_approval"
+        | "completed"
+        | "rejected"
+        | "blocked"
+      owner_agent_id?: string
+      coordinator_session_id?: string
+      provider_id?: string
+      model_id?: string
+      active_run_id?: string
+      output_dir: string
+      active_plan_version?: number
+      execution_strategy: "legacy_full_plan" | "seed_and_grow"
+      seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
+      graph_revision: number
+      created_at: number
+      updated_at: number
+      completed_at?: number
+    }
     run_id: string
   }
 }

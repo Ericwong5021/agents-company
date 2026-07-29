@@ -178,6 +178,7 @@ export interface Interface {
     summary: string
     failure_kind?: WorkAttemptFailureKind
     actor_id?: string
+    receipt?: WorkReceiptSubmissionType
   }) => Effect.Effect<{ attempt: WorkAttempt; receipt: WorkReceipt }>
   readonly recover: () => Effect.Effect<{
     reconciled_attempt_ids: string[]
@@ -463,6 +464,7 @@ function makeService(recoverOnStart: boolean) {
       summary: string
       failure_kind?: WorkAttemptFailureKind
       actor_id?: string
+      receipt?: WorkReceiptSubmissionType
     }) {
       const attempt = yield* startAttempt({
         project_id: input.project_id,
@@ -509,7 +511,7 @@ function makeService(recoverOnStart: boolean) {
         failure_kind: input.failure_kind,
         safe_summary: input.summary.slice(0, 8_000),
         actor_id: input.actor_id,
-        receipt: {
+        receipt: input.receipt ?? {
           idempotency_key: `legacy-work-item:${input.work_item_id}:attempt:${input.ordinal}:terminal`,
           outcome: input.outcome,
           summary: input.summary.slice(0, 8_000),

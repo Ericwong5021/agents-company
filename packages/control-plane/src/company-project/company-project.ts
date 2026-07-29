@@ -6,6 +6,12 @@ import { Database } from "@/storage"
 import { Global } from "@/global"
 import { Identifier } from "@/id/id"
 import { AppFileSystem } from "@agents-company/shared/filesystem"
+import {
+  ProjectExecutionStrategy,
+  SeedMode,
+  type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
+  type SeedMode as SeedModeValue,
+} from "@agents-company/shared/project-orchestration"
 import { Company } from "@/company"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import {
@@ -34,6 +40,7 @@ import {
   WorkItem,
   type WorkAttempt,
   type WorkReceipt,
+  type WorkReceiptSubmission,
   WorktreeRun,
   type WorktreeRunStatus,
 } from "./schema"
@@ -54,6 +61,7 @@ const projectFromRow = (row: typeof CompanyProjectTable.$inferSelect) =>
     model_id: row.model_id ?? undefined,
     active_run_id: row.active_run_id ?? undefined,
     active_plan_version: row.active_plan_version ?? undefined,
+    seed_mode: row.seed_mode ?? undefined,
     completed_at: row.completed_at ?? undefined,
   })
 const planFromRow = (row: typeof CompanyPlanTable.$inferSelect) =>
@@ -192,6 +200,8 @@ export interface Interface {
     coordinator_session_id?: string
     provider_id?: string
     model_id?: string
+    execution_strategy?: ProjectExecutionStrategyValue
+    seed_mode?: SeedModeValue
   }) => Effect.Effect<Project>
   readonly get: (id: string) => Effect.Effect<Project | undefined>
   readonly findBySourceThread: (source_thread_id: string) => Effect.Effect<Project | undefined>
@@ -286,6 +296,10 @@ export interface Interface {
   readonly blockWorkItem: (input: { id: string; error: string }) => Effect.Effect<WorkItem>
   readonly retryWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly completeWorkItem: (id: string) => Effect.Effect<WorkItem>
+  readonly completeWorkItemWithReceipt: (input: {
+    id: string
+    receipt: WorkReceiptSubmission
+  }) => Effect.Effect<WorkItem>
   readonly createWorktreeRun: (input: {
     project_id: string
     work_item_id?: string
@@ -394,11 +408,19 @@ export const layer = Layer.effect(
       coordinator_session_id?: string
       provider_id?: string
       model_id?: string
+      execution_strategy?: ProjectExecutionStrategyValue
+      seed_mode?: SeedModeValue
     }) {
       if (input.source_thread_id) {
         const existing = yield* findBySourceThread(input.source_thread_id)
         if (existing) return existing
       }
+      const execution_strategy = ProjectExecutionStrategy.parse(input.execution_strategy ?? "legacy_full_plan")
+      const seed_mode = input.seed_mode === undefined ? undefined : SeedMode.parse(input.seed_mode)
+      if (execution_strategy === "legacy_full_plan" && seed_mode)
+        throw new Error("Legacy company projects cannot persist a seed mode")
+      if (execution_strategy === "seed_and_grow" && !seed_mode)
+        throw new Error("Seed-and-Grow company projects require a pinned seed mode")
       const id = Identifier.ascending("companyProject")
       const now = Date.now()
       const output_dir = path.join(Global.Path.data, "workspace", "projects", id)
@@ -429,6 +451,8 @@ export const layer = Layer.effect(
               model_id: input.model_id ?? null,
               active_run_id: null,
               output_dir,
+              execution_strategy,
+              seed_mode: seed_mode ?? null,
               created_at: now,
               updated_at: now,
             })
@@ -438,10 +462,10 @@ export const layer = Layer.effect(
       yield* Effect.promise(() =>
         Bun.write(
           path.join(output_dir, "project.json"),
-          JSON.stringify({ id, goal: input.goal, created_at: now }, null, 2) + "\n",
+          JSON.stringify({ id, goal: input.goal, execution_strategy, seed_mode, created_at: now }, null, 2) + "\n",
         ),
       )
-      yield* event(id, "project.created", { goal: input.goal }, input.owner_agent_id)
+      yield* event(id, "project.created", { goal: input.goal, execution_strategy, seed_mode }, input.owner_agent_id)
       return (yield* get(id))!
     })
 
@@ -1143,6 +1167,7 @@ export const layer = Layer.effect(
       id: string,
       status: "running" | "blocked" | "pending" | "completed",
       error?: string,
+      receipt?: WorkReceiptSubmission,
     ) {
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get()),
@@ -1178,6 +1203,7 @@ export const layer = Layer.effect(
               : (error ?? `Work item ${row.id} blocked`),
           failure_kind: status === "blocked" ? "unknown" : undefined,
           actor_id: row.owner_agent_id ?? undefined,
+          receipt,
         })
       }
       yield* Effect.sync(() =>
@@ -1814,6 +1840,7 @@ export const layer = Layer.effect(
       blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error),
       retryWorkItem: (id) => updateWorkItem(id, "pending"),
       completeWorkItem: (id) => updateWorkItem(id, "completed"),
+      completeWorkItemWithReceipt: (input) => updateWorkItem(input.id, "completed", undefined, input.receipt),
       createWorktreeRun,
       getWorktreeRun,
       listWorktreeRuns,

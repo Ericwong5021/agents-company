@@ -17447,7 +17447,110 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "project": {},
+                    "project": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "company_id": {
+                          "type": "string"
+                        },
+                        "root_need_id": {
+                          "type": "string"
+                        },
+                        "source_thread_id": {
+                          "type": "string"
+                        },
+                        "decision_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "goal": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "intake",
+                            "planning",
+                            "executing",
+                            "reviewing",
+                            "awaiting_approval",
+                            "completed",
+                            "rejected",
+                            "blocked"
+                          ]
+                        },
+                        "owner_agent_id": {
+                          "type": "string"
+                        },
+                        "coordinator_session_id": {
+                          "type": "string"
+                        },
+                        "provider_id": {
+                          "type": "string"
+                        },
+                        "model_id": {
+                          "type": "string"
+                        },
+                        "active_run_id": {
+                          "type": "string"
+                        },
+                        "output_dir": {
+                          "type": "string"
+                        },
+                        "active_plan_version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "execution_strategy": {
+                          "type": "string",
+                          "enum": [
+                            "legacy_full_plan",
+                            "seed_and_grow"
+                          ]
+                        },
+                        "seed_mode": {
+                          "type": "string",
+                          "enum": [
+                            "direct_single",
+                            "seed_pair",
+                            "discovery_first"
+                          ]
+                        },
+                        "graph_revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "created_at": {
+                          "type": "number"
+                        },
+                        "updated_at": {
+                          "type": "number"
+                        },
+                        "completed_at": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "goal",
+                        "title",
+                        "status",
+                        "output_dir",
+                        "execution_strategy",
+                        "graph_revision",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    },
                     "run_id": {
                       "type": "string"
                     }
@@ -17488,6 +17591,194 @@
                   "model_id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "execution_strategy": {
+                    "type": "string",
+                    "enum": [
+                      "legacy_full_plan",
+                      "seed_and_grow"
+                    ]
+                  },
+                  "seed_policy": {
+                    "type": "object",
+                    "properties": {
+                      "risk_level": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "critical"
+                        ]
+                      },
+                      "scope_defined": {
+                        "type": "boolean"
+                      },
+                      "reversible": {
+                        "type": "boolean"
+                      },
+                      "stable_sop": {
+                        "type": "boolean"
+                      },
+                      "unfamiliar_workspace": {
+                        "type": "boolean"
+                      },
+                      "cross_module": {
+                        "type": "boolean"
+                      },
+                      "external_side_effect": {
+                        "type": "boolean"
+                      },
+                      "blocking_unknowns": {
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "slice_candidates": {
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100,
+                              "pattern": "^[a-z0-9][a-z0-9._-]*$"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500
+                            },
+                            "description": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            },
+                            "work_type": {
+                              "type": "string",
+                              "enum": [
+                                "coding",
+                                "decision",
+                                "research",
+                                "writing",
+                                "design",
+                                "analysis"
+                              ]
+                            },
+                            "role": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160
+                            },
+                            "capability_packs": {
+                              "default": [],
+                              "maxItems": 100,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "decision_scope": {
+                              "default": [],
+                              "maxItems": 200,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "resource_scope": {
+                              "default": [],
+                              "maxItems": 200,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "acceptance_criteria": {
+                              "minItems": 1,
+                              "maxItems": 200,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "reality_contact": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 3
+                            },
+                            "information_gain": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 3
+                            },
+                            "user_value": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 3
+                            },
+                            "reversible": {
+                              "type": "boolean"
+                            },
+                            "dependency_count": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "reality_anchor": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 2000
+                            },
+                            "within_authorized_scope": {
+                              "type": "boolean"
+                            },
+                            "external_side_effect": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "description",
+                            "work_type",
+                            "role",
+                            "acceptance_criteria",
+                            "reality_contact",
+                            "information_gain",
+                            "user_value",
+                            "reversible",
+                            "dependency_count",
+                            "reality_anchor",
+                            "within_authorized_scope",
+                            "external_side_effect"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "risk_level",
+                      "scope_defined",
+                      "reversible",
+                      "stable_sop",
+                      "unfamiliar_workspace",
+                      "cross_module",
+                      "external_side_effect",
+                      "blocking_unknowns",
+                      "slice_candidates"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -17982,7 +18273,110 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "project": {},
+                    "project": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "company_id": {
+                          "type": "string"
+                        },
+                        "root_need_id": {
+                          "type": "string"
+                        },
+                        "source_thread_id": {
+                          "type": "string"
+                        },
+                        "decision_request_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "goal": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "intake",
+                            "planning",
+                            "executing",
+                            "reviewing",
+                            "awaiting_approval",
+                            "completed",
+                            "rejected",
+                            "blocked"
+                          ]
+                        },
+                        "owner_agent_id": {
+                          "type": "string"
+                        },
+                        "coordinator_session_id": {
+                          "type": "string"
+                        },
+                        "provider_id": {
+                          "type": "string"
+                        },
+                        "model_id": {
+                          "type": "string"
+                        },
+                        "active_run_id": {
+                          "type": "string"
+                        },
+                        "output_dir": {
+                          "type": "string"
+                        },
+                        "active_plan_version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "execution_strategy": {
+                          "type": "string",
+                          "enum": [
+                            "legacy_full_plan",
+                            "seed_and_grow"
+                          ]
+                        },
+                        "seed_mode": {
+                          "type": "string",
+                          "enum": [
+                            "direct_single",
+                            "seed_pair",
+                            "discovery_first"
+                          ]
+                        },
+                        "graph_revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "created_at": {
+                          "type": "number"
+                        },
+                        "updated_at": {
+                          "type": "number"
+                        },
+                        "completed_at": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "goal",
+                        "title",
+                        "status",
+                        "output_dir",
+                        "execution_strategy",
+                        "graph_revision",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    },
                     "run_id": {
                       "type": "string"
                     }
@@ -30751,6 +31145,21 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991
               },
+              "execution_strategy": {
+                "type": "string",
+                "enum": [
+                  "legacy_full_plan",
+                  "seed_and_grow"
+                ]
+              },
+              "seed_mode": {
+                "type": "string",
+                "enum": [
+                  "direct_single",
+                  "seed_pair",
+                  "discovery_first"
+                ]
+              },
               "graph_revision": {
                 "type": "integer",
                 "minimum": 0,
@@ -30772,6 +31181,7 @@
               "title",
               "status",
               "output_dir",
+              "execution_strategy",
               "graph_revision",
               "created_at",
               "updated_at"
@@ -31748,6 +32158,194 @@
                   "dri_agent_id",
                   "milestones",
                   "open_decisions"
+                ],
+                "additionalProperties": false
+              },
+              "execution_strategy": {
+                "type": "string",
+                "enum": [
+                  "legacy_full_plan",
+                  "seed_and_grow"
+                ]
+              },
+              "seed_policy": {
+                "type": "object",
+                "properties": {
+                  "risk_level": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ]
+                  },
+                  "scope_defined": {
+                    "type": "boolean"
+                  },
+                  "reversible": {
+                    "type": "boolean"
+                  },
+                  "stable_sop": {
+                    "type": "boolean"
+                  },
+                  "unfamiliar_workspace": {
+                    "type": "boolean"
+                  },
+                  "cross_module": {
+                    "type": "boolean"
+                  },
+                  "external_side_effect": {
+                    "type": "boolean"
+                  },
+                  "blocking_unknowns": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "slice_candidates": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100,
+                          "pattern": "^[a-z0-9][a-z0-9._-]*$"
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "work_type": {
+                          "type": "string",
+                          "enum": [
+                            "coding",
+                            "decision",
+                            "research",
+                            "writing",
+                            "design",
+                            "analysis"
+                          ]
+                        },
+                        "role": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "capability_packs": {
+                          "default": [],
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "decision_scope": {
+                          "default": [],
+                          "maxItems": 200,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "resource_scope": {
+                          "default": [],
+                          "maxItems": 200,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "acceptance_criteria": {
+                          "minItems": 1,
+                          "maxItems": 200,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "reality_contact": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 3
+                        },
+                        "information_gain": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 3
+                        },
+                        "user_value": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 3
+                        },
+                        "reversible": {
+                          "type": "boolean"
+                        },
+                        "dependency_count": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "reality_anchor": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "within_authorized_scope": {
+                          "type": "boolean"
+                        },
+                        "external_side_effect": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "description",
+                        "work_type",
+                        "role",
+                        "acceptance_criteria",
+                        "reality_contact",
+                        "information_gain",
+                        "user_value",
+                        "reversible",
+                        "dependency_count",
+                        "reality_anchor",
+                        "within_authorized_scope",
+                        "external_side_effect"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "risk_level",
+                  "scope_defined",
+                  "reversible",
+                  "stable_sop",
+                  "unfamiliar_workspace",
+                  "cross_module",
+                  "external_side_effect",
+                  "blocking_unknowns",
+                  "slice_candidates"
                 ],
                 "additionalProperties": false
               }

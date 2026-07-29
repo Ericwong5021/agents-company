@@ -1,5 +1,6 @@
 import z from "zod"
 import { NamedError } from "@agents-company/shared/util/error"
+import { ProjectExecutionStrategy, SeedMode } from "@agents-company/shared/project-orchestration"
 
 export const ProjectStatus = z.enum([
   "intake",
@@ -61,6 +62,8 @@ export const Project = z.object({
   active_run_id: z.string().optional(),
   output_dir: z.string(),
   active_plan_version: z.number().int().optional(),
+  execution_strategy: ProjectExecutionStrategy,
+  seed_mode: SeedMode.optional(),
   graph_revision: z.number().int().nonnegative(),
   created_at: z.number(),
   updated_at: z.number(),

@@ -2,7 +2,8 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
 import { Effect } from "effect"
 import z from "zod"
-import { CompanyProject, CompanyProjectExecution, WorkAttempt, WorkReceipt } from "@/company-project"
+import { CompanyProject, CompanyProjectExecution, Project, WorkAttempt, WorkReceipt } from "@/company-project"
+import { ProjectExecutionStrategy, SeedPolicyFacts } from "@agents-company/shared/project-orchestration"
 import { AgentRun } from "@/agent-run/agent-run"
 import { TokenGovernance } from "@/token-governance/token-governance"
 import { lazy } from "@/util/lazy"
@@ -14,6 +15,8 @@ const StartSchema = z.object({
   session_id: z.string().min(1).optional(),
   provider_id: z.string().min(1).optional(),
   model_id: z.string().min(1).optional(),
+  execution_strategy: ProjectExecutionStrategy.optional(),
+  seed_policy: SeedPolicyFacts.optional(),
 })
 
 const ResolveGateSchema = z.object({
@@ -28,7 +31,7 @@ const RetrySchema = z.object({
 })
 
 const StartResultSchema = z.object({
-  project: z.unknown(),
+  project: Project,
   run_id: z.string(),
 })
 

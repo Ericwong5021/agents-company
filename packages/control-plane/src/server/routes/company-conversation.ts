@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { Effect } from "effect"
 import z from "zod"
+import { ProjectExecutionStrategy, SeedPolicyFacts } from "@agents-company/shared/project-orchestration"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Conversation, ConversationRuntime } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
@@ -57,6 +58,8 @@ const ThreadActionInput = z
         kind: z.literal("decide"),
         request_id: z.string().uuid(),
         charter: BoardProjectCharter,
+        execution_strategy: ProjectExecutionStrategy.optional(),
+        seed_policy: SeedPolicyFacts.optional(),
       })
       .strict(),
   ])
@@ -416,6 +419,8 @@ export const CompanyThreadRoutes = lazy(() =>
                 charter: input.charter,
                 provider_id: company.company.provider?.provider_id,
                 model_id: company.company.provider?.model_id,
+                execution_strategy: input.execution_strategy,
+                seed_policy: input.seed_policy,
               }),
             )
             const projectChannel = yield* conversation.ensureProjectChannel({
