@@ -14,6 +14,7 @@ import {
   CompanyAttentionTable,
   CompanyGraphDecisionTable,
   CompanyGraphMutationTable,
+  CompanyPlanTable,
   CompanyProjectActionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
@@ -23,6 +24,7 @@ import {
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
 } from "@/company-project/company-project.sql"
+import { WorkflowRunTable } from "@/workflow/workflow.sql"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
 import {
   CompanyRolloutCandidateTable,
@@ -222,6 +224,22 @@ const BenchmarkObservation = z
     oracleKind: Identifier,
   })
   .strict()
+const LegacyFrozenOracle = z
+  .object({
+    kind: z.literal("legacy_frozen_oracle"),
+    scenarioId: Identifier,
+    contractSha256: Digest,
+    oracleKey: Identifier,
+    projectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
+    planIds: z.array(Identifier).min(1),
+    workItemIds: z.array(Identifier).min(1),
+    assignmentIds: z.array(Identifier).min(1),
+    workflowRunIds: z.array(Identifier).min(1),
+    artifactIds: z.array(Identifier),
+    approvalGateIds: z.array(Identifier),
+    settledFactSha256: Digest,
+  })
+  .strict()
 const ScenarioOracleKinds = {
   S13: "s13_seed_pair",
   S14: "s14_direct_single",
@@ -383,6 +401,7 @@ const MetricContractPath = "docs/product-design/experience-refactor/metric-contr
 const B5ScenarioIds = Array.from({ length: 15 }, (_, index) => `S${index + 13}`)
 const RuntimeDependencyPaths = [
   ProducerPath,
+  "packages/control-plane/src/metrics/b5-candidate-scenarios.ts",
   "packages/control-plane/src/metrics/gate-observation.ts",
   "packages/control-plane/src/metrics/gate-observation.sql.ts",
   "packages/control-plane/src/metrics/persisted-fact-artifact.ts",
@@ -434,6 +453,22 @@ const ScenarioContract = z
         sha256: Digest,
       })
       .passthrough(),
+    legacyBaselineOracle: z
+      .object({
+        kind: z.literal("persisted_legacy_outcome"),
+        settleTimeoutMs: z.number().int().positive(),
+        pollIntervalMs: z.number().int().positive(),
+        terminalProjectStatuses: z
+          .array(z.enum(["completed", "blocked", "rejected", "awaiting_approval"]))
+          .min(1),
+        requiredFacts: z.tuple([
+          z.literal("plan"),
+          z.literal("planner_work_item"),
+          z.literal("project_assignment"),
+          z.literal("workflow_run"),
+        ]),
+      })
+      .strict(),
     scenarios: z
       .array(
         z
@@ -648,18 +683,163 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
     if (observation.event_type === "benchmark.checked") {
       const properties = BenchmarkObservation.parse(JSON.parse(observation.properties_json) as unknown)
       const report = JSON.parse(await Bun.file(reportPath).text()) as unknown
+      const parsedReport = z
+        .object({
+          projectStatus: Identifier,
+          terminalDecision: BenchmarkObservation.shape.terminalDecision,
+          oracle: z.record(z.string(), z.unknown()),
+        })
+        .passthrough()
+        .parse(report)
       if (
-        !report ||
-        typeof report !== "object" ||
-        !("terminalDecision" in report) ||
-        !("oracle" in report) ||
-        report.terminalDecision !== properties.terminalDecision ||
-        !report.oracle ||
-        typeof report.oracle !== "object" ||
-        !("kind" in report.oracle) ||
-        report.oracle.kind !== properties.oracleKind
+        parsedReport.terminalDecision !== properties.terminalDecision ||
+        parsedReport.oracle.kind !== properties.oracleKind
       )
         throw new Error(`B5 observation ${observation.id} has a self-reported scenario verdict`)
+      if (binding.strategy === "legacy_full_plan") {
+        const oracle = LegacyFrozenOracle.parse(parsedReport.oracle)
+        const facts = Database.use((database) => {
+          const project = database
+            .select()
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.id, binding.projectId))
+            .get()
+          const plans = database
+            .select()
+            .from(CompanyPlanTable)
+            .where(eq(CompanyPlanTable.project_id, binding.projectId))
+            .all()
+          const workItems = database
+            .select()
+            .from(CompanyWorkItemTable)
+            .where(eq(CompanyWorkItemTable.project_id, binding.projectId))
+            .all()
+          const assignments = database
+            .select()
+            .from(CompanyProjectAssignmentTable)
+            .where(eq(CompanyProjectAssignmentTable.project_id, binding.projectId))
+            .all()
+          const artifacts = database
+            .select()
+            .from(CompanyArtifactTable)
+            .where(eq(CompanyArtifactTable.project_id, binding.projectId))
+            .all()
+          const approvalGates = database
+            .select()
+            .from(CompanyApprovalGateTable)
+            .where(eq(CompanyApprovalGateTable.project_id, binding.projectId))
+            .all()
+          const workflowRunIds = [
+            ...new Set(workItems.flatMap((item) => (item.workflow_run_id ? [item.workflow_run_id] : []))),
+          ].sort()
+          const workflowRuns = workflowRunIds.length
+            ? database
+                .select()
+                .from(WorkflowRunTable)
+                .where(inArray(WorkflowRunTable.id, workflowRunIds))
+                .all()
+            : []
+          return {
+            project,
+            plans,
+            workItems,
+            assignments,
+            artifacts,
+            approvalGates,
+            workflowRunIds,
+            workflowRuns,
+          }
+        })
+        const projection = {
+          project: {
+            id: facts.project?.id,
+            status: facts.project?.status,
+            executionStrategy: facts.project?.execution_strategy,
+          },
+          plans: facts.plans
+            .map((plan) => ({ id: plan.id, version: plan.version, phase: plan.phase, status: plan.status }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          workItems: facts.workItems
+            .map((item) => ({
+              id: item.id,
+              kind: item.kind,
+              status: item.status,
+              workflowRunId: item.workflow_run_id ?? null,
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          assignments: facts.assignments
+            .map((assignment) => ({
+              id: assignment.id,
+              workItemId: assignment.work_item_id,
+              agentId: assignment.agent_id,
+              status: assignment.status,
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          artifacts: facts.artifacts
+            .map((artifact) => ({
+              id: artifact.id,
+              workItemId: artifact.work_item_id ?? null,
+              kind: artifact.kind,
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          approvalGates: facts.approvalGates
+            .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+        }
+        const decision =
+          facts.project?.status === "completed"
+            ? "completed"
+            : facts.project?.status === "blocked"
+              ? "correctly_blocked"
+              : "correctly_stopped"
+        const exact = (left: string[], right: string[]) =>
+          JSON.stringify([...left].sort()) === JSON.stringify([...right].sort())
+        if (
+          oracle.scenarioId !== binding.scenarioId ||
+          oracle.contractSha256 !== sha256(canonical(scenarioContract.legacyBaselineOracle)) ||
+          !facts.project ||
+          facts.project.execution_strategy !== "legacy_full_plan" ||
+          !scenarioContract.legacyBaselineOracle.terminalProjectStatuses.includes(
+            facts.project.status as never,
+          ) ||
+          parsedReport.projectStatus !== facts.project.status ||
+          oracle.projectStatus !== facts.project.status ||
+          properties.terminalDecision !== decision ||
+          !facts.workItems.some(
+            (item) =>
+              item.kind === "planner" &&
+              ["completed", "blocked", "failed"].includes(item.status) &&
+              Boolean(item.workflow_run_id),
+          ) ||
+          facts.workflowRuns.length !== facts.workflowRunIds.length ||
+          facts.workflowRuns.some((run) => !["completed", "failed", "cancelled"].includes(run.status)) ||
+          !exact(oracle.planIds, facts.plans.map((plan) => plan.id)) ||
+          !exact(oracle.workItemIds, facts.workItems.map((item) => item.id)) ||
+          !exact(oracle.assignmentIds, facts.assignments.map((assignment) => assignment.id)) ||
+          !exact(oracle.workflowRunIds, facts.workflowRunIds) ||
+          !exact(oracle.artifactIds, facts.artifacts.map((artifact) => artifact.id)) ||
+          !exact(oracle.approvalGateIds, facts.approvalGates.map((gate) => gate.id)) ||
+          oracle.settledFactSha256 !== sha256(canonical(projection)) ||
+          ![
+            { kind: "project", ids: [binding.projectId] },
+            { kind: "work_item", ids: oracle.workItemIds },
+            { kind: "project_assignment", ids: oracle.assignmentIds },
+            { kind: "workflow_run", ids: oracle.workflowRunIds },
+            { kind: "artifact", ids: oracle.artifactIds },
+            { kind: "approval_gate", ids: oracle.approvalGateIds },
+          ].every(({ kind, ids }) =>
+            ids.every((id) =>
+              sourceRefs.some(
+                (reference) =>
+                  SourceReference.safeParse(reference).success &&
+                  reference.kind === kind &&
+                  reference.id === id,
+              ),
+            ),
+          )
+        )
+          throw new Error(`B5 observation ${observation.id} has no persisted frozen legacy oracle`)
+      }
     }
     if (observation.event_type === "git.blob_checked") {
       const properties = GitBlobObservation.parse(JSON.parse(observation.properties_json) as unknown)
@@ -869,6 +1049,26 @@ function sourceReferenceExists(db: TxOrDb, projectId: string, reference: Record<
         .where(eq(AgentRunTable.id, reference.id))
         .get(),
     )
+  if (reference.kind === "workflow_run") {
+    const run = db
+      .select({ id: WorkflowRunTable.id })
+      .from(WorkflowRunTable)
+      .where(eq(WorkflowRunTable.id, reference.id))
+      .get()
+    return Boolean(
+      run &&
+        db
+          .select({ id: CompanyWorkItemTable.id })
+          .from(CompanyWorkItemTable)
+          .where(
+            and(
+              eq(CompanyWorkItemTable.project_id, projectId),
+              eq(CompanyWorkItemTable.workflow_run_id, reference.id),
+            ),
+          )
+          .get(),
+    )
+  }
   if (reference.kind === "project_action")
     return sameProject(
       db
@@ -1539,13 +1739,19 @@ function gateObservationFacts(
         .map((item) => TerminalInvariantObservation.parse(JSON.parse(item.properties_json) as unknown))
         .find((item) => item.passed)
       const scenarioId = binding.scenarioId as keyof typeof ScenarioOracleKinds
+      const legacyMatched =
+        binding.strategy === "legacy_full_plan" &&
+        value.oracleKind === "legacy_frozen_oracle" &&
+        ["completed", "correctly_stopped", "correctly_blocked"].includes(value.terminalDecision)
       const matched =
         terminal &&
-        value.oracleKind === ScenarioOracleKinds[scenarioId] &&
-        value.terminalDecision === ScenarioTerminalDecisions[scenarioId]
+        (legacyMatched ||
+          (binding.strategy === "seed_and_grow" &&
+            value.oracleKind === ScenarioOracleKinds[scenarioId] &&
+            value.terminalDecision === ScenarioTerminalDecisions[scenarioId]))
       const status = matched
         ? "pass"
-        : value.oracleKind === "legacy_baseline"
+        : binding.strategy === "legacy_full_plan"
           ? "blocked"
           : "fail"
       emit(

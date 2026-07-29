@@ -532,7 +532,7 @@ export const B5ScenarioObservationReport = z
       })
     const expectedOracleKind =
       value.binding.strategy === "legacy_full_plan"
-        ? "legacy_baseline"
+        ? "legacy_frozen_oracle"
         : SeedOracleKindByScenario[value.binding.scenarioId]
     if (value.oracle.kind !== expectedOracleKind)
       context.addIssue({
@@ -995,11 +995,18 @@ export function b5NormalizedResultSha256(value: unknown) {
 function canonicalOracle(
   oracle: B5ScenarioObservationReport["oracle"],
 ): Record<string, unknown> {
-  if (oracle.kind === "legacy_baseline")
+  if (oracle.kind === "legacy_frozen_oracle")
     return {
       kind: oracle.kind,
-      initialWorkItemCount: oracle.initialWorkItemIds.length,
-      initialAssignmentCount: oracle.initialAssignmentIds.length,
+      scenarioId: oracle.scenarioId,
+      projectStatus: oracle.projectStatus,
+      planCount: oracle.planIds.length,
+      workItemCount: oracle.workItemIds.length,
+      assignmentCount: oracle.assignmentIds.length,
+      workflowRunCount: oracle.workflowRunIds.length,
+      artifactCount: oracle.artifactIds.length,
+      approvalGateCount: oracle.approvalGateIds.length,
+      settledFactSha256: oracle.settledFactSha256,
     }
   if (oracle.kind === "s13_seed_pair")
     return {

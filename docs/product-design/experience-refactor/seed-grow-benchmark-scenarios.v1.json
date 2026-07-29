@@ -12,6 +12,13 @@
     "externalSideEffectsAllowed": false,
     "runDirectoryPattern": ".agent/runs/agent-company-seed-grow/<run-id>"
   },
+  "legacyBaselineOracle": {
+    "kind": "persisted_legacy_outcome",
+    "settleTimeoutMs": 300000,
+    "pollIntervalMs": 250,
+    "terminalProjectStatuses": ["completed", "blocked", "rejected", "awaiting_approval"],
+    "requiredFacts": ["plan", "planner_work_item", "project_assignment", "workflow_run"]
+  },
   "scenarios": [
     {
       "id": "S13",

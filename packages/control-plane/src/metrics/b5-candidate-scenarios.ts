@@ -83,10 +83,31 @@ export const B5BenchmarkScenario = z
   .strict()
 export type B5BenchmarkScenario = z.infer<typeof B5BenchmarkScenario>
 
+export const B5LegacyBaselineOracleContract = z
+  .object({
+    kind: z.literal("persisted_legacy_outcome"),
+    settleTimeoutMs: z.number().int().positive(),
+    pollIntervalMs: z.number().int().positive(),
+    terminalProjectStatuses: z
+      .array(z.enum(["completed", "blocked", "rejected", "awaiting_approval"]))
+      .min(1),
+    requiredFacts: z.tuple([
+      z.literal("plan"),
+      z.literal("planner_work_item"),
+      z.literal("project_assignment"),
+      z.literal("workflow_run"),
+    ]),
+  })
+  .strict()
+export type B5LegacyBaselineOracleContract = z.infer<
+  typeof B5LegacyBaselineOracleContract
+>
+
 export const B5ScenarioSnapshot = z
   .object({
     scenario: B5BenchmarkScenario,
     snapshotDigest: Digest,
+    legacyBaselineOracle: B5LegacyBaselineOracleContract.optional(),
   })
   .strict()
 export type B5ScenarioSnapshot = z.infer<typeof B5ScenarioSnapshot>
@@ -116,6 +137,7 @@ const SourceReference = z
       "approval_gate",
       "attention",
       "agent_run",
+      "workflow_run",
       "project_action",
       "artifact",
     ]),
@@ -125,9 +147,18 @@ const SourceReference = z
 
 const LegacyOracle = z
   .object({
-    kind: z.literal("legacy_baseline"),
-    initialWorkItemIds: z.array(z.string()),
-    initialAssignmentIds: z.array(z.string()),
+    kind: z.literal("legacy_frozen_oracle"),
+    scenarioId: B5ScenarioId,
+    contractSha256: Digest,
+    oracleKey: z.string().trim().min(1),
+    projectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
+    planIds: z.array(z.string().trim().min(1)).min(1),
+    workItemIds: z.array(z.string().trim().min(1)).min(1),
+    assignmentIds: z.array(z.string().trim().min(1)).min(1),
+    workflowRunIds: z.array(z.string().trim().min(1)).min(1),
+    artifactIds: z.array(z.string().trim().min(1)),
+    approvalGateIds: z.array(z.string().trim().min(1)),
+    settledFactSha256: Digest,
   })
   .strict()
 
@@ -472,15 +503,22 @@ function digest(value: unknown) {
 }
 
 export function loadB5ScenarioSnapshots(value: unknown) {
-  const scenarios = z
-    .object({ scenarios: z.array(B5BenchmarkScenario) })
+  const contract = z
+    .object({
+      legacyBaselineOracle: B5LegacyBaselineOracleContract,
+      scenarios: z.array(B5BenchmarkScenario),
+    })
     .passthrough()
-    .parse(value).scenarios
-  const byId = new Map(scenarios.map((scenario) => [scenario.id, scenario]))
+    .parse(value)
+  const byId = new Map(contract.scenarios.map((scenario) => [scenario.id, scenario]))
   return B5ScenarioIds.map((id) => {
     const scenario = byId.get(id)
     if (!scenario) throw new Error(`Benchmark scenario ${id} is missing`)
-    return B5ScenarioSnapshot.parse({ scenario, snapshotDigest: digest(scenario) })
+    return B5ScenarioSnapshot.parse({
+      scenario,
+      snapshotDigest: digest(scenario),
+      legacyBaselineOracle: contract.legacyBaselineOracle,
+    })
   })
 }
 
@@ -509,7 +547,9 @@ export function requiredB5ObservationTypes(scenarioId: B5ScenarioId, strategy: B
     "benchmark.checked",
     "model.usage_checked",
     ...(strategy === "seed_and_grow" ? ["shadow_pair.checked"] : []),
-    ...(DeliveryScenarios.has(scenarioId) ? ["delivery.checked"] : []),
+    ...(strategy === "seed_and_grow" && DeliveryScenarios.has(scenarioId)
+      ? ["delivery.checked"]
+      : []),
     ...(strategy === "seed_and_grow" && ["S19", "S27"].includes(scenarioId)
       ? ["receipt.recovery_checked"]
       : []),
@@ -677,6 +717,7 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
   input: B5ScenarioRunInput,
   runtime: B5ScenarioRuntime,
 ) {
+  const contract = B5LegacyBaselineOracleContract.parse(input.snapshot.legacyBaselineOracle)
   const started = yield* runtime.execution.start({
     goal: `Execute benchmark ${input.snapshot.scenario.id} using persisted local facts only`,
     title: `B5 ${input.snapshot.scenario.id} legacy baseline`,
@@ -686,37 +727,114 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
       ? { provider_id: input.providerId, model_id: input.modelId }
       : {}),
   })
-  const items = yield* runtime.projects.listWorkItems(started.project.id)
-  const assignments = yield* runtime.recruitment.listAssignments({ project_id: started.project.id })
-  yield* runtime.recruitment.releaseProject({ project_id: started.project.id })
-  yield* Effect.forEach(
-    [...new Set(assignments.map((assignment) => assignment.agent_id))],
-    (agentId) => runtime.agents.archive(CompanyAgentID.make(agentId)),
-    { concurrency: 1 },
+  const deadline = Date.now() + contract.settleTimeoutMs
+  let project = yield* runtime.projects.get(started.project.id)
+  while (
+    project &&
+    !contract.terminalProjectStatuses.some((status) => status === project!.status)
+  ) {
+    if (Date.now() >= deadline)
+      throw new Error(
+        `Legacy project ${started.project.id} did not reach the frozen oracle terminal set within ${contract.settleTimeoutMs}ms`,
+      )
+    yield* Effect.sleep(`${contract.pollIntervalMs} millis`)
+    project = yield* runtime.projects.get(started.project.id)
+  }
+  if (!project) throw new Error(`Legacy project ${started.project.id} disappeared during execution`)
+  const plans = yield* runtime.projects.listPlans(project.id)
+  const items = yield* runtime.projects.listWorkItems(project.id)
+  const assignments = yield* runtime.recruitment.listAssignments({ project_id: project.id })
+  const artifacts = yield* runtime.projects.listArtifacts(project.id)
+  const approvalGates = yield* runtime.projects.listGates(project.id)
+  const planner = items.find((item) => item.kind === "planner")
+  const workflowRunIds = [
+    ...new Set(items.flatMap((item) => (item.workflow_run_id ? [item.workflow_run_id] : []))),
+  ].sort()
+  if (
+    project.execution_strategy !== "legacy_full_plan" ||
+    !plans.length ||
+    !planner ||
+    !["completed", "blocked", "failed"].includes(planner.status) ||
+    !assignments.length ||
+    !workflowRunIds.length
   )
+    throw new Error(`Legacy project ${project.id} reached a terminal status without the frozen oracle facts`)
+  const projection = {
+    project: {
+      id: project.id,
+      status: project.status,
+      executionStrategy: project.execution_strategy,
+    },
+    plans: plans
+      .map((plan) => ({ id: plan.id, version: plan.version, phase: plan.phase, status: plan.status }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    workItems: items
+      .map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        status: item.status,
+        workflowRunId: item.workflow_run_id ?? null,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    assignments: assignments
+      .map((assignment) => ({
+        id: assignment.id,
+        workItemId: assignment.work_item_id,
+        agentId: assignment.agent_id,
+        status: assignment.status,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    artifacts: artifacts
+      .map((artifact) => ({
+        id: artifact.id,
+        workItemId: artifact.work_item_id ?? null,
+        kind: artifact.kind,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    approvalGates: approvalGates
+      .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  }
+  const terminalDecision =
+    project.status === "completed"
+      ? "completed"
+      : project.status === "blocked"
+        ? "correctly_blocked"
+        : "correctly_stopped"
   return B5ScenarioRunResult.parse({
     binding: {
-      projectId: started.project.id,
+      projectId: project.id,
       scenarioId: input.snapshot.scenario.id,
       runId: started.run_id,
       strategy: input.strategy,
       snapshotDigest: input.snapshot.snapshotDigest,
     },
-    projectStatus: started.project.status,
-    terminalDecision: "in_progress",
+    projectStatus: project.status,
+    terminalDecision,
     sourceRefs: [
-      { kind: "project", id: started.project.id },
+      { kind: "project", id: project.id },
       ...items.map((item) => ({ kind: "work_item" as const, id: item.id })),
       ...assignments.map((assignment) => ({
         kind: "project_assignment" as const,
         id: assignment.id,
       })),
-      { kind: "agent_run", id: started.run_id },
+      ...workflowRunIds.map((id) => ({ kind: "workflow_run" as const, id })),
+      ...artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
+      ...approvalGates.map((gate) => ({ kind: "approval_gate" as const, id: gate.id })),
     ],
     oracle: {
-      kind: "legacy_baseline",
-      initialWorkItemIds: items.map((item) => item.id),
-      initialAssignmentIds: assignments.map((assignment) => assignment.id),
+      kind: "legacy_frozen_oracle",
+      scenarioId: input.snapshot.scenario.id,
+      contractSha256: digest(contract),
+      oracleKey: B5ScenarioPlan.find((scenario) => scenario.id === input.snapshot.scenario.id)!.oracleKey,
+      projectStatus: project.status,
+      planIds: plans.map((plan) => plan.id).sort(),
+      workItemIds: items.map((item) => item.id).sort(),
+      assignmentIds: assignments.map((assignment) => assignment.id).sort(),
+      workflowRunIds,
+      artifactIds: artifacts.map((artifact) => artifact.id).sort(),
+      approvalGateIds: approvalGates.map((gate) => gate.id).sort(),
+      settledFactSha256: digest(projection),
     },
   })
 })
