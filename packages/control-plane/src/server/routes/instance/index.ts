@@ -26,6 +26,7 @@ import { WorkstationRoutes } from "./workstation"
 import { AgentLifecycleRoutes } from "./agent-lifecycle"
 import { AgentRunRoutes } from "./agent-run"
 import { OrgRoutes } from "./org"
+import { RolloutRoutes } from "./rollout"
 import { SessionRoutes } from "./session"
 import { PtyRoutes } from "./pty"
 import { McpRoutes } from "./mcp"
@@ -68,6 +69,7 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     .route("/", AgentLifecycleRoutes())
     .route("/workstation", WorkstationRoutes())
     .route("/org", OrgRoutes())
+    .route("/rollout", RolloutRoutes())
     .route("/pty", PtyRoutes(upgrade))
     .route("/config", ConfigRoutes())
     .route("/experimental", ExperimentalRoutes())
