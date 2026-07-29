@@ -1903,7 +1903,7 @@ function dependencyInstallCommand(cacheDirectory: string, frozen: boolean) {
   ]
 }
 
-async function runDependencyInstall(worktree: string, isolationRoot: string, frozen: boolean) {
+async function runDependencyInstall(worktree: string, isolationRoot: string, frozen: boolean, inherited = process.env) {
   const directories = dependencyInstallationDirectories(isolationRoot)
   await Promise.all(
     [...new Set(Object.values(directories))].map((directory) => fs.mkdir(directory, { recursive: true })),
@@ -1925,7 +1925,7 @@ async function runDependencyInstall(worktree: string, isolationRoot: string, fro
   const child = Bun.spawn({
     cmd: dependencyInstallCommand(directories.BUN_INSTALL_CACHE_DIR!, frozen),
     cwd: worktree,
-    env: dependencyInstallationEnvironment(process.env, directories),
+    env: dependencyInstallationEnvironment(inherited, directories),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -2042,11 +2042,11 @@ async function assertInstalledDependencies(worktree: string, relativePaths: stri
   }
 }
 
-export async function installDependencies(worktree: string, isolationRoot: string) {
+export async function installDependencies(worktree: string, isolationRoot: string, inherited = process.env) {
   const lockPath = path.join(worktree, "bun.lock")
   const lockSha256 = sha256(new Uint8Array(await Bun.file(lockPath).arrayBuffer()))
   await fs.rm(path.join(worktree, "node_modules"), { recursive: true, force: true })
-  const result = await runDependencyInstall(worktree, isolationRoot, true)
+  const result = await runDependencyInstall(worktree, isolationRoot, true, inherited)
   if (result.exitCode !== 0) {
     throw new Error(
       `Fresh exact-build bun install failed: ${(result.stderr || result.stdout).trim().slice(-8_000) || "unknown error"}`,

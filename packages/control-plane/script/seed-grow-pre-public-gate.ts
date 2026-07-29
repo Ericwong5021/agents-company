@@ -498,6 +498,22 @@ const CandidateEvidence = z
     finalDecision: absoluteFileReference,
     stageRunSha256s: z.record(z.enum(stageIDs), digest),
     stageDecisionSha256s: z.record(z.enum(stageIDs), digest),
+    runtime: z
+      .object({
+        bun: z
+          .object({
+            pathSha256: digest,
+            fileSha256: digest,
+          })
+          .strict(),
+        git: z
+          .object({
+            pathSha256: digest,
+            fileSha256: digest,
+          })
+          .strict(),
+      })
+      .strict(),
     repeats: z.tuple([RepeatEvidence, RepeatEvidence]),
   })
   .strict()
@@ -1625,6 +1641,16 @@ async function validateAllStageEvidence(
       finalDecision: { path: finalDecision.path, sha256: finalDecision.sha256 },
       stageRunSha256s,
       stageDecisionSha256s,
+      runtime: {
+        bun: {
+          pathSha256: sha256(path.resolve(process.execPath)),
+          fileSha256: (await regularFile(process.execPath, "Bun runtime")).sha256,
+        },
+        git: {
+          pathSha256: sha256(path.resolve(gitExecutable)),
+          fileSha256: (await regularFile(gitExecutable, "Git runtime")).sha256,
+        },
+      },
       repeats: repeats.map((item) => item.repeat),
     }),
     automaticAttempts: repeats,
@@ -1664,9 +1690,17 @@ async function prepareCandidateWorktree(candidate: z.infer<typeof CandidateInput
   }
   try {
     const installer = (await import(path.join(root, "script/experience-automatic-evidence.ts"))) as {
-      installDependencies: (worktree: string, isolationRoot: string) => Promise<{ lockSha256: string }>
+      installDependencies: (
+        worktree: string,
+        isolationRoot: string,
+        inherited: Record<string, string>,
+      ) => Promise<{ lockSha256: string }>
     }
-    const installed = await installer.installDependencies(worktree, path.join(temporaryRoot, "dependency-isolation"))
+    const installed = await installer.installDependencies(
+      worktree,
+      path.join(temporaryRoot, "dependency-isolation"),
+      isolatedChildEnvironment({}),
+    )
     if (installed.lockSha256 !== sha256(gitSource(["show", `${candidate.candidateSha}:bun.lock`])))
       fail("invalid", "Candidate dependency lock binding mismatch")
     return { temporaryRoot, worktree }
