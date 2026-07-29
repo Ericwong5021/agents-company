@@ -12,6 +12,7 @@ import {
   metricContractDigest,
 } from "@agents-company/shared/seed-grow-metrics"
 import {
+  RolloutActionResult,
   RolloutPromotionDecision,
   RolloutPromotionEvaluationRequest,
   RolloutStatus,
@@ -121,7 +122,7 @@ const verifierOwnedPath = (relativePath: string) =>
   relativePath.endsWith("/package.json") ||
   relativePath === "docs/AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md" ||
   relativePath.startsWith("docs/product-design/experience-refactor/") ||
-  /(^|\/)(scripts?|tests?|e2e|fixtures?|snapshots?)(\/|$)/.test(relativePath) ||
+  /(^|\/)(migrations?|scripts?|tests?|e2e|fixtures?|snapshots?)(\/|$)/.test(relativePath) ||
   /(^|\/)[^/]+\.(test|spec)\.[^/]+$/.test(relativePath) ||
   /(^|\/)bunfig\.toml$/.test(relativePath) ||
   /(^|\/)\.(eslint|oxlint|prettier)[^/]*$/.test(relativePath) ||
@@ -2288,17 +2289,138 @@ function databaseJSON(value: unknown, label: string) {
     .catch(() => fail("invalid", `${label} is not valid persisted JSON`))
 }
 
+function trustedPromotionDecision(input: z.infer<typeof PromotionChildInput>, createdAt: number) {
+  const repeats = input.candidates.flatMap((candidate, candidateIndex) =>
+    candidate.evidence.repeats.map((repeat) => ({
+      id: `repeat-${candidateIndex + 1}-${repeat.ordinal}-${candidate.candidate.candidateSha.slice(0, 12)}`,
+      candidateId: candidate.id,
+      candidateSha: candidate.candidate.candidateSha,
+      ...repeat,
+    })),
+  )
+  return RolloutPromotionDecision.parse({
+    id: input.promotionRequest.id,
+    targetPhase: "pre_public_default",
+    candidateIds: input.candidateIds,
+    candidateShas: input.candidates.map((candidate) => candidate.candidate.candidateSha),
+    repeatIds: repeats.map((repeat) => repeat.id),
+    rollbackIds: (["kill_switch", "legacy_fallback"] as const).map(
+      (target) => input.rollbacks.find((rollback) => rollback.observation.target === target)!.id,
+    ),
+    metricContractSha256: input.promotionRequest.metricContractSha256,
+    metricReportSha256s: input.promotionRequest.metricReports.map((report) => sha256(canonical(report))),
+    shadowReportSha256s: input.promotionRequest.shadowReports.map((report) => sha256(canonical(report))),
+    derivedMetricResult: {
+      metricId: "consecutive_reproducible_candidate_count",
+      blocking: true,
+      status: "pass",
+      value: 2,
+      numerator: 2,
+      denominator: 2,
+      sampleSize: repeats.length,
+      meetsThreshold: true,
+      threshold: {
+        gate: "R4",
+        operator: ">=",
+        value: 2,
+      },
+      reasons: [],
+      sourceRefs: repeats.map((repeat) => ({
+        kind: "gate_report",
+        id: repeat.id,
+        candidateSha: repeat.candidateSha,
+        runId: repeat.runId,
+        digest: repeat.evidenceSha256,
+      })),
+    },
+    ancestry: input.promotionRequest.ancestry,
+    inputSha256: sha256(canonical(input.promotionRequest)),
+    status: "pass",
+    reasons: [],
+    createdAt,
+  })
+}
+
+async function trustedRolloutDatabaseSchema() {
+  const migrationDirectory = path.join(root, "packages/control-plane/migration")
+  const migrations = (
+    await Promise.all(
+      (await readdir(migrationDirectory, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          const file = Bun.file(path.join(migrationDirectory, entry.name, "migration.sql"))
+          if (!(await file.exists())) return
+          return {
+            name: entry.name,
+            created_at: Date.UTC(
+              Number(entry.name.slice(0, 4)),
+              Number(entry.name.slice(4, 6)) - 1,
+              Number(entry.name.slice(6, 8)),
+              Number(entry.name.slice(8, 10)),
+              Number(entry.name.slice(10, 12)),
+              Number(entry.name.slice(12, 14)),
+            ),
+            source: await file.text(),
+          }
+        }),
+    )
+  )
+    .filter((migration): migration is { name: string; created_at: number; source: string } => Boolean(migration))
+    .sort((left, right) => left.created_at - right.created_at || left.name.localeCompare(right.name))
+  const reference = new SQLiteDatabase(":memory:")
+  try {
+    reference.exec("PRAGMA foreign_keys = ON")
+    migrations.forEach((migration) => reference.exec(migration.source.replaceAll("--> statement-breakpoint", "")))
+    return {
+      schema: reference
+        .query(
+          `SELECT type, name, tbl_name, sql
+           FROM sqlite_master
+           WHERE (type = 'table' AND name GLOB 'company_rollout_*')
+              OR (type = 'index' AND name GLOB 'company_rollout_*')
+           ORDER BY type, name`,
+        )
+        .all() as Record<string, unknown>[],
+      migrations: migrations.map((migration) => ({
+        name: migration.name,
+        created_at: migration.created_at,
+      })),
+    }
+  } finally {
+    reference.close()
+  }
+}
+
 async function verifyPromotionDatabase(
   databasePath: string,
   input: z.infer<typeof PromotionChildInput>,
   child: z.infer<typeof PromotionChildResult>,
 ) {
+  const trustedPromotion = trustedPromotionDecision(input, child.promotion.createdAt)
+  const trustedDatabase = await trustedRolloutDatabaseSchema()
   const database = new SQLiteDatabase(databasePath, { create: false })
   try {
     database.exec("PRAGMA foreign_keys = ON")
+    const journalMode = database.query("PRAGMA journal_mode").get() as Record<string, unknown> | null
     const checkpoint = database.query("PRAGMA wal_checkpoint(TRUNCATE)").get() as Record<string, unknown> | null
     const integrity = database.query("PRAGMA integrity_check").get() as Record<string, unknown> | null
     const foreignKeys = database.query("PRAGMA foreign_key_check").all()
+    const schema = database
+      .query(
+        `SELECT type, name, tbl_name, sql
+         FROM sqlite_master
+         WHERE (type = 'table' AND name GLOB 'company_rollout_*')
+            OR (type = 'index' AND name GLOB 'company_rollout_*')
+         ORDER BY type, name`,
+      )
+      .all() as Record<string, unknown>[]
+    const migrationColumns = database.query("PRAGMA table_info('__drizzle_migrations')").all() as Record<
+      string,
+      unknown
+    >[]
+    const migrations = database
+      .query("SELECT name, created_at, hash, applied_at FROM __drizzle_migrations ORDER BY created_at, name")
+      .all() as Record<string, unknown>[]
     const state = database.query("SELECT * FROM company_rollout_state WHERE id = 'seed_and_grow'").get() as Record<
       string,
       unknown
@@ -2324,10 +2446,43 @@ async function verifyPromotionDatabase(
       unknown
     >[]
     if (
+      !journalMode ||
+      !Object.values(journalMode).some((value) => String(value).toLowerCase() === "wal") ||
       checkpoint?.busy !== 0 ||
+      checkpoint.log !== 0 ||
+      checkpoint.checkpointed !== 0 ||
       !integrity ||
       !Object.values(integrity).includes("ok") ||
       foreignKeys.length ||
+      !same(schema, trustedDatabase.schema) ||
+      !same(
+        migrationColumns.map((column) => ({
+          name: column.name,
+          type: String(column.type).toLowerCase(),
+          notnull: column.notnull,
+          pk: column.pk,
+        })),
+        [
+          { name: "id", type: "integer", notnull: 0, pk: 1 },
+          { name: "hash", type: "text", notnull: 1, pk: 0 },
+          { name: "created_at", type: "numeric", notnull: 0, pk: 0 },
+          { name: "name", type: "text", notnull: 0, pk: 0 },
+          { name: "applied_at", type: "text", notnull: 0, pk: 0 },
+        ],
+      ) ||
+      !same(
+        migrations.map((migration) => ({
+          name: migration.name,
+          created_at: migration.created_at,
+        })),
+        trustedDatabase.migrations,
+      ) ||
+      migrations.some(
+        (migration) =>
+          migration.hash !== "" ||
+          typeof migration.applied_at !== "string" ||
+          Number.isNaN(Date.parse(migration.applied_at)),
+      ) ||
       !state ||
       promotions.length !== 1 ||
       candidates.length !== 2 ||
@@ -2338,7 +2493,7 @@ async function verifyPromotionDatabase(
       fail("invalid", "Pinned SQLite verification found incomplete or corrupt promotion persistence")
     if (
       state.phase !== "pre_public_default" ||
-      state.version !== child.persistedStatus.state.version ||
+      state.version !== 5 ||
       state.last_transition_id !== child.transition.transition.id ||
       state.updated_at !== child.persistedStatus.state.updatedAt
     )
@@ -2350,29 +2505,30 @@ async function verifyPromotionDatabase(
       promotion.status !== "pass" ||
       promotion.metric_contract_sha256 !== input.promotionRequest.metricContractSha256 ||
       promotion.input_sha256 !== sha256(canonical(input.promotionRequest)) ||
-      promotion.output_sha256 !== sha256(canonical(child.promotion)) ||
+      promotion.output_sha256 !== sha256(canonical(trustedPromotion)) ||
+      promotion.created_at !== trustedPromotion.createdAt ||
       !same(await databaseJSON(promotion.input_json, "Promotion input"), input.promotionRequest) ||
       !same(await databaseJSON(promotion.candidate_ids_json, "Promotion candidate IDs"), input.candidateIds) ||
       !same(
         await databaseJSON(promotion.candidate_shas_json, "Promotion candidate SHAs"),
         input.candidates.map((candidate) => candidate.candidate.candidateSha),
       ) ||
-      !same(await databaseJSON(promotion.repeat_ids_json, "Promotion repeat IDs"), child.promotion.repeatIds) ||
-      !same(await databaseJSON(promotion.rollback_ids_json, "Promotion rollback IDs"), child.promotion.rollbackIds) ||
+      !same(await databaseJSON(promotion.repeat_ids_json, "Promotion repeat IDs"), trustedPromotion.repeatIds) ||
+      !same(await databaseJSON(promotion.rollback_ids_json, "Promotion rollback IDs"), trustedPromotion.rollbackIds) ||
       !same(
         await databaseJSON(promotion.metric_report_sha256s_json, "Promotion metric report digests"),
-        child.promotion.metricReportSha256s,
+        trustedPromotion.metricReportSha256s,
       ) ||
       !same(
         await databaseJSON(promotion.shadow_report_sha256s_json, "Promotion shadow report digests"),
-        child.promotion.shadowReportSha256s,
+        trustedPromotion.shadowReportSha256s,
       ) ||
       !same(await databaseJSON(promotion.ancestry_json, "Promotion ancestry"), input.promotionRequest.ancestry) ||
       !same(
         await databaseJSON(promotion.derived_metric_result_json, "Promotion derived metric result"),
-        child.promotion.derivedMetricResult,
+        trustedPromotion.derivedMetricResult,
       ) ||
-      !same(await databaseJSON(promotion.reasons_json, "Promotion reasons"), child.promotion.reasons)
+      !same(await databaseJSON(promotion.reasons_json, "Promotion reasons"), trustedPromotion.reasons)
     )
       fail("invalid", "Pinned SQLite verification found an inconsistent promotion decision")
     const expectedCandidates = input.candidates
@@ -2467,24 +2623,201 @@ async function verifyPromotionDatabase(
         return { journal, payload, result: await databaseJSON(journal.result_json, "Rollout journal result") }
       }),
     )
-    const transitionJournal = journalValues.filter(
-      ({ journal }) =>
-        journal.kind === "transition" &&
-        journal.idempotency_key === input.transitionRequest.idempotencyKey &&
-        journal.result_ref_id === child.transition.transition.id,
-    )
-    if (
-      transitionJournal.length !== 1 ||
-      !same(transitionJournal[0].payload, input.transitionRequest) ||
-      !same(transitionJournal[0].result, child.transition) ||
-      journalValues.filter(({ journal }) => journal.kind === "transition").length !== 4 ||
-      journalValues.filter(({ journal }) => journal.kind === "action").length !== 8
-    )
-      fail("invalid", "Pinned SQLite verification found an inconsistent transition journal")
+    const expectedActions = [
+      ...input.candidates.map((candidate, index) => ({
+        kind: "register_candidate" as const,
+        idempotencyKey: `register-${index + 1}-${candidate.candidate.candidateSha.slice(0, 16)}`,
+        candidate: {
+          id: candidate.id,
+          candidateSha: candidate.candidate.candidateSha,
+          targetRef: candidate.candidate.targetRef,
+        },
+      })),
+      ...input.candidates.flatMap((candidate, candidateIndex) =>
+        candidate.evidence.repeats.map((repeat) => ({
+          kind: "record_local_repeat" as const,
+          idempotencyKey: `record-${candidateIndex + 1}-${repeat.ordinal}-${candidate.candidate.candidateSha.slice(0, 12)}`,
+          repeat: {
+            id: `repeat-${candidateIndex + 1}-${repeat.ordinal}-${candidate.candidate.candidateSha.slice(0, 12)}`,
+            candidateId: candidate.id,
+            ...repeat,
+            outcome: "completed" as const,
+          },
+        })),
+      ),
+      ...input.rollbacks.map((rollback, index) => ({
+        kind: "record_rollback" as const,
+        idempotencyKey: `record-${rollback.id}`,
+        rollback: {
+          id: rollback.id,
+          candidateId: input.candidateIds[1],
+          target: rollback.observation.target,
+          phaseAtAction: rollback.observation.phaseAtAction,
+          executionModeAfter: rollback.observation.after.executionMode,
+          outcome: rollback.observation.outcome,
+          evidenceSha256: input.rollbackEvidenceSha256s[index],
+          observedAt: rollback.observation.observedAt,
+        },
+      })),
+    ]
+    expectedActions.forEach((request) => {
+      const matches = journalValues.filter(
+        ({ journal }) =>
+          journal.kind === "action" &&
+          journal.action_kind === request.kind &&
+          journal.idempotency_key === request.idempotencyKey,
+      )
+      if (matches.length !== 1 || !same(matches[0].payload, request))
+        fail("invalid", "Pinned SQLite verification found an unbound action journal")
+      const result = parseOrInvalid(RolloutActionResult, matches[0].result, "Rollout action result")
+      const fact =
+        result.kind === "register_candidate"
+          ? result.candidate
+          : result.kind === "record_local_repeat"
+            ? result.repeat
+            : result.rollback
+      const expectedFact =
+        request.kind === "register_candidate"
+          ? request.candidate
+          : request.kind === "record_local_repeat"
+            ? request.repeat
+            : request.rollback
+      const recordedAt =
+        result.kind === "register_candidate"
+          ? result.candidate.registeredAt
+          : result.kind === "record_local_repeat"
+            ? result.repeat.recordedAt
+            : result.rollback.recordedAt
+      const factCore = Object.fromEntries(
+        Object.entries(fact).filter(([key]) => !["registeredAt", "recordedAt"].includes(key)),
+      )
+      const persistedFact =
+        result.kind === "register_candidate"
+          ? candidates.find((candidate) => candidate.id === fact.id)
+          : result.kind === "record_local_repeat"
+            ? repeats.find((repeat) => repeat.id === fact.id)
+            : rollbacks.find((rollback) => rollback.id === fact.id)
+      const persistedFactValue =
+        result.kind === "register_candidate" && persistedFact
+          ? {
+              id: persistedFact.id,
+              candidateSha: persistedFact.candidate_sha,
+              targetRef: persistedFact.target_ref,
+              registeredAt: persistedFact.registered_at,
+            }
+          : result.kind === "record_local_repeat" && persistedFact
+            ? {
+                id: persistedFact.id,
+                candidateId: persistedFact.candidate_id,
+                runId: persistedFact.run_id,
+                ordinal: persistedFact.ordinal,
+                outcome: persistedFact.outcome,
+                environmentSha256: persistedFact.environment_sha256,
+                evidenceSha256: persistedFact.evidence_sha256,
+                normalizedResultSha256: persistedFact.normalized_result_sha256,
+                startedAt: persistedFact.started_at,
+                finishedAt: persistedFact.finished_at,
+                recordedAt: persistedFact.recorded_at,
+              }
+            : result.kind === "record_rollback" && persistedFact
+              ? {
+                  id: persistedFact.id,
+                  candidateId: persistedFact.candidate_id,
+                  projectId: persistedFact.project_id ?? undefined,
+                  target: persistedFact.target,
+                  phaseAtAction: persistedFact.phase_at_action,
+                  executionModeAfter: persistedFact.execution_mode_after,
+                  outcome: persistedFact.outcome,
+                  evidenceSha256: persistedFact.evidence_sha256,
+                  observedAt: persistedFact.observed_at,
+                  recordedAt: persistedFact.recorded_at,
+                }
+              : undefined
+      if (
+        result.kind !== request.kind ||
+        result.replayed ||
+        !same(factCore, expectedFact) ||
+        !same(persistedFactValue, fact) ||
+        recordedAt !== matches[0].journal.created_at ||
+        matches[0].journal.result_ref_id !== fact.id ||
+        !same(result.journal, {
+          id: matches[0].journal.id,
+          kind: "action",
+          actionKind: request.kind,
+          idempotencyKey: request.idempotencyKey,
+          payloadSha256: matches[0].journal.payload_sha256,
+          resultRefId: fact.id,
+          createdAt: matches[0].journal.created_at,
+        })
+      )
+        fail("invalid", "Pinned SQLite verification found an inconsistent action result")
+    })
+    const currentSha = input.candidates[1].candidate.candidateSha
+    const expectedTransitions = [
+      {
+        idempotencyKey: `pre-public-shadow-${currentSha.slice(0, 12)}`,
+        to: "shadow",
+        reason: "Isolated Pre-Public candidate gate enters shadow",
+        actorId: "seed-grow-pre-public-gate",
+      },
+      {
+        idempotencyKey: `pre-public-opt-in-${currentSha.slice(0, 12)}`,
+        to: "opt_in",
+        reason: "Isolated Pre-Public candidate gate enters opt_in",
+        actorId: "seed-grow-pre-public-gate",
+      },
+      {
+        idempotencyKey: `pre-public-dogfood-${currentSha.slice(0, 12)}`,
+        to: "dogfood_default",
+        reason: "Isolated Pre-Public candidate gate enters dogfood_default",
+        actorId: "seed-grow-pre-public-gate",
+      },
+      input.transitionRequest,
+    ]
+    const phases = ["off", "shadow", "opt_in", "dogfood_default", "pre_public_default"] as const
+    expectedTransitions.forEach((request, index) => {
+      const matches = journalValues.filter(
+        ({ journal }) =>
+          journal.kind === "transition" &&
+          journal.action_kind === null &&
+          journal.idempotency_key === request.idempotencyKey,
+      )
+      if (matches.length !== 1 || !same(matches[0].payload, request))
+        fail("invalid", "Pinned SQLite verification found an unbound transition journal")
+      const result = parseOrInvalid(RolloutTransitionResult, matches[0].result, "Rollout transition result")
+      if (
+        result.replayed ||
+        result.transition.from !== phases[index] ||
+        result.transition.to !== phases[index + 1] ||
+        result.transition.version !== index + 2 ||
+        result.transition.reason !== request.reason ||
+        result.transition.actorId !== request.actorId ||
+        result.transition.promotionDecisionId !==
+          ("promotionDecisionId" in request ? request.promotionDecisionId : undefined) ||
+        result.state.id !== "seed_and_grow" ||
+        result.state.phase !== result.transition.to ||
+        result.state.version !== result.transition.version ||
+        result.state.lastTransitionId !== result.transition.id ||
+        result.state.updatedAt !== result.transition.createdAt ||
+        matches[0].journal.result_ref_id !== result.transition.id ||
+        !same(result.journal, {
+          id: matches[0].journal.id,
+          kind: "transition",
+          idempotencyKey: request.idempotencyKey,
+          payloadSha256: matches[0].journal.payload_sha256,
+          resultRefId: result.transition.id,
+          createdAt: matches[0].journal.created_at,
+        })
+      )
+        fail("invalid", "Pinned SQLite verification found an inconsistent transition result")
+    })
     return sha256(
       canonical({
         checkpoint,
         integrity,
+        journalMode,
+        migrations,
+        schema,
         state,
         promotion,
         candidates,
@@ -2590,6 +2923,7 @@ async function isolatedPromotion(
         ),
         "Promotion child result",
       )
+      const trustedPromotion = trustedPromotionDecision(childInput, child.promotion.createdAt)
       if (
         child.process.pid === process.pid ||
         child.inputSha256 !== promotionInput.sha256 ||
@@ -2611,9 +2945,23 @@ async function isolatedPromotion(
         !same(child.promotion.ancestry, childInput.promotionRequest.ancestry) ||
         child.promotion.inputSha256 !== sha256(canonical(childInput.promotionRequest)) ||
         child.promotion.status !== "pass" ||
+        !same(child.promotion, trustedPromotion) ||
         !same(child.promotion, child.persistedPromotion) ||
         child.transition.transition.promotionDecisionId !== childInput.transitionRequest.promotionDecisionId ||
         child.transition.transition.to !== childInput.transitionRequest.to ||
+        child.transition.transition.from !== "dogfood_default" ||
+        child.transition.transition.version !== 5 ||
+        child.transition.transition.reason !== childInput.transitionRequest.reason ||
+        child.transition.transition.actorId !== childInput.transitionRequest.actorId ||
+        child.transition.state.phase !== "pre_public_default" ||
+        child.transition.state.version !== 5 ||
+        child.transition.state.lastTransitionId !== child.transition.transition.id ||
+        child.transition.state.updatedAt !== child.transition.transition.createdAt ||
+        child.transition.journal.kind !== "transition" ||
+        child.transition.journal.idempotencyKey !== childInput.transitionRequest.idempotencyKey ||
+        child.transition.journal.payloadSha256 !== sha256(canonical(childInput.transitionRequest)) ||
+        child.transition.journal.resultRefId !== child.transition.transition.id ||
+        child.transition.replayed ||
         child.process.databasePathSha256 !== databasePathSha256 ||
         child.process.homePathSha256 !== sha256(path.resolve(homePath))
       )
