@@ -7,6 +7,11 @@ export type FounderOSModeSettings = {
   companyCommonsMode: CompanyCommonsMode
 }
 
+export type FounderOSModeUpdateInput = {
+  founderTwinMode: "off" | "shadow"
+  companyCommonsMode: CompanyCommonsMode
+}
+
 export type FounderOSModeState = {
   schemaVersion: 1
   globalMaximum: FounderOSModeSettings
@@ -278,7 +283,7 @@ export function createFounderModesClient(config: FounderStudioClientConfig) {
     get() {
       return request<FounderOSModeState>()
     },
-    update(input: FounderOSModeSettings) {
+    update(input: FounderOSModeUpdateInput) {
       return request<FounderOSModeState>({
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -480,7 +485,13 @@ export type FounderShadowDecision = {
   id: string
   companyId: string
   status: "suggested" | "blocked"
-  blockReasons: Array<FounderContextProjection["blockReasons"][number] | "model_unavailable" | "model_output_missing">
+  blockReasons: Array<
+    FounderContextProjection["blockReasons"][number]
+    | "model_unavailable"
+    | "model_timeout"
+    | "model_output_missing"
+    | "model_output_invalid"
+  >
   scope: GovernanceAssetScope
   snapshotId?: string
   snapshotChecksum?: string
@@ -540,7 +551,16 @@ export type FounderBenchmarkReport = {
   datasetVersion: string
   snapshotId: string
   status: "pass" | "fail" | "blocked"
-  blockReasons: Array<"holdout_empty" | "prediction_set_incomplete" | "training_holdout_leakage" | "snapshot_missing">
+  blockReasons: Array<
+    | "holdout_empty"
+    | "prediction_set_incomplete"
+    | "training_holdout_leakage"
+    | "snapshot_missing"
+    | "snapshot_checksum_invalid"
+    | "model_unavailable"
+    | "model_timeout"
+    | "model_output_invalid"
+  >
   metrics: {
     caseCount: number
     redRecall: number | null
@@ -585,14 +605,6 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
     },
     run(input: {
       context: FounderContextInput
-      model: { status: "available" | "unavailable"; configRef: string }
-      output?: {
-        recommendation: string
-        alternatives: string[]
-        authorityClass: FounderAuthorityClass
-        confidence: number
-        missingInformation: string[]
-      }
       createdBy: string
     }) {
       return post<FounderShadowDecision>("/company/founder-shadow/runs", input)
@@ -688,15 +700,6 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
       benchmarkType: "founder_decision" | "taste"
       datasetVersion: string
       snapshotId: string
-      predictions: Array<{
-        caseId: string
-        authorityClass?: FounderAuthorityClass
-        decision?: string
-        preference?: "accept" | "reject" | "first" | "second"
-        principleRefs: FounderAssetReference[]
-        evidenceRefs: FounderShadowEvidenceRef[]
-        decisionCaseRefs: FounderAssetReference[]
-      }>
       createdBy: string
     }) {
       return post<FounderBenchmarkReport>("/company/founder-benchmarks/runs", input)
@@ -1008,6 +1011,42 @@ export type FounderAdvisorPrincipal = {
   isAdditionalEmployee: false
 }
 
+export type FounderAdvisorReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "ready" | "not_confirmed" | "blocked"
+  exactCommit: {
+    status: "passed" | "missing"
+    sha: string | null
+    evidenceRef: string | null
+  }
+  benchmarkReportId: string | null
+  metrics: {
+    confirmedSampleCount: number
+    redRecall: number | null
+    traceabilityRate: number | null
+    historicalAgreementRate: number | null
+  }
+  authorization: {
+    status: "human_confirmed" | "missing"
+    eventId: string | null
+    confirmedBy: string | null
+  }
+  failClosedReasons: string[]
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderAdvisorReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  benchmarkReportId: string
+  exactCommit: { sha: string; worktreeRunId: string }
+  authorizationEventId: string
+  actor: { kind: "human"; id: string }
+}
+
 export type FounderAdvisorConvergence = {
   id: string
   companyId: string
@@ -1137,6 +1176,14 @@ export function createFounderAdvisorClient(config: FounderStudioClientConfig) {
   return {
     board(companyId: string) {
       return request<FounderBoardGovernanceProjection>(`/company/board?${new URLSearchParams({ company_id: companyId })}`)
+    },
+    readiness(companyId: string) {
+      return request<FounderAdvisorReadiness>(
+        `/company/board/readiness?${new URLSearchParams({ company_id: companyId })}`,
+      )
+    },
+    recordReadiness(input: FounderAdvisorReadinessRecordInput) {
+      return post<FounderAdvisorReadiness>("/company/board/readiness", input)
     },
     converge(input: {
       companyId: string

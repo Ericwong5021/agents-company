@@ -5,6 +5,8 @@ import z from "zod"
 import {
   FounderAdvisorConvergence,
   FounderAdvisorConvergenceInput,
+  FounderAdvisorReadiness,
+  FounderAdvisorReadinessRecordInput,
   FounderBoardGovernanceProjection,
   FounderControlCenterProjection,
   FounderIntervention,
@@ -25,6 +27,7 @@ import {
   UnknownErrorResponse,
 } from "@/server/error"
 import * as FounderOSAdvisor from "./advisor"
+import * as FounderOSAdvisorReadiness from "./advisor-readiness"
 import * as FounderOSAsset from "./asset"
 import { Service as DecisionLedgerService } from "./decision-ledger"
 import * as FounderOSShadow from "./shadow"
@@ -43,6 +46,42 @@ async function facts(companyId: string) {
 
 export const FounderAdvisorRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/readiness",
+      describeRoute({
+        operationId: "company.founderAdvisorReadiness",
+        summary: "Read fail-closed Advisor readiness and exact metric thresholds",
+        responses: {
+          200: {
+            description: "Advisor readiness",
+            content: { "application/json": { schema: resolver(FounderAdvisorReadiness) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("query", CompanyQuery, productValidationHook),
+      (c) => c.json(FounderOSAdvisorReadiness.readiness(c.req.valid("query").company_id)),
+    )
+    .post(
+      "/readiness",
+      describeRoute({
+        operationId: "company.founderAdvisorReadinessRecord",
+        summary: "Verify W4 exact commit, benchmark thresholds, and human authorization before Advisor promotion",
+        responses: {
+          200: {
+            description: "Verified Advisor readiness",
+            content: { "application/json": { schema: resolver(FounderAdvisorReadiness) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderAdvisorReadinessRecordInput, productValidationHook),
+      (c) => c.json(FounderOSAdvisorReadiness.record(c.req.valid("json"))),
+    )
     .get(
       "/",
       describeRoute({

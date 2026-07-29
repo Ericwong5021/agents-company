@@ -679,6 +679,9 @@ export const FounderShadowModelOutput = z
     alternatives: z.array(LongText).max(20),
     authorityClass: FounderAuthorityClass,
     confidence: z.number().min(0).max(1),
+    principleRefs: z.array(FounderAssetReference).min(1).max(12),
+    decisionCaseRefs: z.array(FounderAssetReference).max(10),
+    evidenceRefs: z.array(FounderShadowEvidenceRef).min(1).max(30),
     missingInformation: z.array(ShortText).max(30),
   })
   .strict()
@@ -688,13 +691,6 @@ export type FounderShadowModelOutput = z.infer<typeof FounderShadowModelOutput>
 export const FounderShadowRunInput = z
   .object({
     context: FounderContextBuildInput,
-    model: z
-      .object({
-        status: z.enum(["available", "unavailable"]),
-        configRef: Identifier,
-      })
-      .strict(),
-    output: FounderShadowModelOutput.optional(),
     createdBy: Identifier,
   })
   .strict()
@@ -706,7 +702,10 @@ export const FounderShadowDecision = z
     id: Identifier,
     companyId: Identifier,
     status: z.enum(["suggested", "blocked"]),
-    blockReasons: z.array(z.union([FounderContextBlockReason, z.enum(["model_unavailable", "model_output_missing"])])),
+    blockReasons: z.array(z.union([
+      FounderContextBlockReason,
+      z.enum(["model_unavailable", "model_timeout", "model_output_missing", "model_output_invalid"]),
+    ])),
     scope: GovernanceAssetScope,
     snapshotId: Identifier.optional(),
     snapshotChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
@@ -917,7 +916,6 @@ export const FounderBenchmarkRunInput = z
     benchmarkType: z.enum(["founder_decision", "taste"]),
     datasetVersion: Identifier,
     snapshotId: Identifier,
-    predictions: z.array(FounderBenchmarkPrediction).max(500),
     createdBy: Identifier,
   })
   .strict()
@@ -937,6 +935,10 @@ export const FounderBenchmarkReport = z
       "prediction_set_incomplete",
       "training_holdout_leakage",
       "snapshot_missing",
+      "snapshot_checksum_invalid",
+      "model_unavailable",
+      "model_timeout",
+      "model_output_invalid",
     ])),
     metrics: z
       .object({
@@ -1216,6 +1218,61 @@ export const FounderAdvisorPrincipal = z
   .strict()
   .meta({ ref: "FounderAdvisorPrincipal" })
 export type FounderAdvisorPrincipal = z.infer<typeof FounderAdvisorPrincipal>
+
+export const FounderAdvisorReadiness = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    status: z.enum(["ready", "not_confirmed", "blocked"]),
+    exactCommit: z
+      .object({
+        status: z.enum(["passed", "missing"]),
+        sha: z.string().regex(/^[a-f0-9]{40}$/).nullable(),
+        evidenceRef: Identifier.nullable(),
+      })
+      .strict(),
+    benchmarkReportId: Identifier.nullable(),
+    metrics: z
+      .object({
+        confirmedSampleCount: z.number().int().nonnegative(),
+        redRecall: z.number().min(0).max(1).nullable(),
+        traceabilityRate: z.number().min(0).max(1).nullable(),
+        historicalAgreementRate: z.number().min(0).max(1).nullable(),
+      })
+      .strict(),
+    authorization: z
+      .object({
+        status: z.enum(["human_confirmed", "missing"]),
+        eventId: Identifier.nullable(),
+        confirmedBy: Identifier.nullable(),
+      })
+      .strict(),
+    failClosedReasons: z.array(ShortText).max(20),
+    autoPromotionAllowed: z.literal(false),
+    recordedAt: z.number().int().nonnegative().nullable(),
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorReadiness" })
+export type FounderAdvisorReadiness = z.infer<typeof FounderAdvisorReadiness>
+
+export const FounderAdvisorReadinessRecordInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    benchmarkReportId: Identifier,
+    exactCommit: z
+      .object({
+        sha: z.string().regex(/^[a-f0-9]{40}$/),
+        worktreeRunId: Identifier,
+      })
+      .strict(),
+    authorizationEventId: Identifier,
+    actor: z.object({ kind: z.literal("human"), id: Identifier }).strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorReadinessRecordInput" })
+export type FounderAdvisorReadinessRecordInput = z.infer<typeof FounderAdvisorReadinessRecordInput>
 
 export const FounderAdvisorSource = z
   .object({

@@ -1,6 +1,31 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { CompanyTable } from "@/company/company.sql"
 import { DecisionRecordTable } from "./decision-ledger.sql"
+import { FounderBenchmarkReportTable } from "./shadow.sql"
+
+export const FounderAdvisorReadinessTable = sqliteTable(
+  "founder_advisor_readiness",
+  {
+    id: text().primaryKey(),
+    company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    input_sha256: text().notNull(),
+    exact_commit_sha: text().notNull(),
+    exact_commit_evidence_ref: text().notNull(),
+    benchmark_report_id: text().notNull().references(() => FounderBenchmarkReportTable.id),
+    confirmed_sample_count: integer().notNull(),
+    red_recall: integer().notNull(),
+    traceability_rate: integer().notNull(),
+    historical_agreement_rate: integer().notNull(),
+    authorization_event_id: text().notNull(),
+    confirmed_by: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_advisor_readiness_idempotency_idx").on(table.company_id, table.idempotency_key),
+    index("founder_advisor_readiness_company_created_idx").on(table.company_id, table.created_at),
+  ],
+)
 
 export const FounderAdvisorConvergenceTable = sqliteTable(
   "founder_advisor_convergence",

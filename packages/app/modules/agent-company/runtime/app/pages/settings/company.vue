@@ -2,6 +2,7 @@
 import { $fetch } from "ofetch"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import type {
+  FounderAdvisorReadiness,
   FounderCalibrationItem,
   FounderControlCenterProjection,
   FounderOSModeState,
@@ -59,11 +60,14 @@ const onboarding = ref<OnboardingState>(parseOnboardingState(null))
 const founderStudio = ref<FounderStudioProjection | null>(null)
 const founderControl = ref<FounderControlCenterProjection | null>(null)
 const founderModes = ref<FounderOSModeState | null>(null)
+const advisorReadiness = ref<FounderAdvisorReadiness | null>(null)
 const studioLoading = ref(false)
 const controlLoading = ref(false)
 const modeLoading = ref(false)
+const advisorLoading = ref(false)
 const studioMessage = ref("")
 const modeMessage = ref("")
+const advisorMessage = ref("")
 const assetDraft = reactive({
   type: "principle" as GovernanceAsset["type"],
   content: "",
@@ -103,7 +107,11 @@ const founderModeOptions = computed(() => {
   return [
     { value: "off" as const, label: "off", disabled: false },
     { value: "shadow" as const, label: "shadow", disabled: maximum < 1 },
-    { value: "advisor" as const, label: "advisor · not_confirmed", disabled: true },
+    {
+      value: "advisor" as const,
+      label: `advisor · ${advisorReadiness.value?.status ?? "not_confirmed"}`,
+      disabled: true,
+    },
   ]
 })
 const commonsModeOptions = computed(() => {
@@ -116,12 +124,19 @@ const modeDraft = reactive({
   founderTwinMode: "off" as "off" | "shadow",
   companyCommonsMode: "off" as "off" | "ingest-only" | "reading",
 })
+const advisorDraft = reactive({
+  benchmarkReportId: "",
+  exactCommitSha: "",
+  worktreeRunId: "",
+  authorizationEventId: "",
+})
 
 onMounted(() => {
   onboarding.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
   loadFounderStudio()
   loadFounderControl()
   loadFounderModes()
+  loadAdvisorReadiness()
 })
 
 async function loadFounderStudio() {
@@ -159,6 +174,60 @@ async function loadFounderModes() {
       : "reading"
   }
   modeLoading.value = false
+}
+
+async function loadAdvisorReadiness() {
+  if (!snapshot.value.company.id || advisorLoading.value) return
+  advisorLoading.value = true
+  advisorReadiness.value = await $fetch<FounderAdvisorReadiness>(
+    "/api/agent-company/founder-advisor-readiness",
+    { query: { companyId: snapshot.value.company.id } },
+  ).catch(() => null)
+  if (!advisorDraft.benchmarkReportId && advisorReadiness.value?.benchmarkReportId)
+    advisorDraft.benchmarkReportId = advisorReadiness.value.benchmarkReportId
+  advisorLoading.value = false
+}
+
+async function confirmAdvisorReadiness() {
+  if (
+    advisorLoading.value
+    || !advisorDraft.benchmarkReportId.trim()
+    || !/^[a-f0-9]{40}$/.test(advisorDraft.exactCommitSha)
+    || !advisorDraft.worktreeRunId.trim()
+    || !advisorDraft.authorizationEventId.trim()
+  )
+    return
+  advisorLoading.value = true
+  advisorMessage.value = ""
+  advisorReadiness.value = await $fetch<FounderAdvisorReadiness>(
+    "/api/agent-company/founder-advisor-readiness",
+    {
+      method: "POST",
+      body: {
+        schemaVersion: 1,
+        companyId: snapshot.value.company.id,
+        idempotencyKey: crypto.randomUUID(),
+        benchmarkReportId: advisorDraft.benchmarkReportId,
+        exactCommit: {
+          sha: advisorDraft.exactCommitSha,
+          worktreeRunId: advisorDraft.worktreeRunId,
+        },
+        authorizationEventId: advisorDraft.authorizationEventId,
+        actor: { kind: "human", id: "local_user" },
+      },
+    },
+  ).then(
+    (value) => {
+      advisorMessage.value = "W4 readiness 已确认，Company 模式已由 shadow 受控提升为 advisor。"
+      return value
+    },
+    () => {
+      advisorMessage.value = "Advisor 未开启，请核对 exact commit、三项指标与人工授权事件。"
+      return advisorReadiness.value
+    },
+  )
+  advisorLoading.value = false
+  await Promise.all([loadFounderModes(), loadFounderControl()])
 }
 
 async function saveFounderModes() {
@@ -428,6 +497,7 @@ watch(() => snapshot.value.company.id, (companyId) => {
   loadFounderStudio()
   loadFounderControl()
   loadFounderModes()
+  loadAdvisorReadiness()
 })
 
 function persistOnboarding(next: OnboardingState) {
@@ -698,6 +768,82 @@ async function saveProvider() {
               </div>
             </div>
             <p v-if="modeMessage" class="company-provider-form__message" role="status">{{ modeMessage }}</p>
+
+            <div class="ac-advisor-readiness" :data-status="advisorReadiness?.status ?? 'not_confirmed'">
+              <div class="ac-advisor-readiness__heading">
+                <div>
+                  <span>W4 Advisor readiness</span>
+                  <strong>{{ advisorReadiness?.status ?? "not_confirmed" }}</strong>
+                </div>
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-lucide-refresh-cw"
+                  aria-label="刷新 Advisor readiness"
+                  :loading="advisorLoading"
+                  @click="loadAdvisorReadiness"
+                />
+              </div>
+              <dl class="ac-advisor-readiness__metrics">
+                <div>
+                  <dt>确认样本</dt>
+                  <dd>{{ advisorReadiness?.metrics.confirmedSampleCount ?? 0 }}</dd>
+                </div>
+                <div>
+                  <dt>红灯召回</dt>
+                  <dd>{{ advisorReadiness?.metrics.redRecall === null || advisorReadiness?.metrics.redRecall === undefined ? "missing" : `${Math.round(advisorReadiness.metrics.redRecall * 100)}%` }}</dd>
+                </div>
+                <div>
+                  <dt>追溯率</dt>
+                  <dd>{{ advisorReadiness?.metrics.traceabilityRate === null || advisorReadiness?.metrics.traceabilityRate === undefined ? "missing" : `${Math.round(advisorReadiness.metrics.traceabilityRate * 100)}%` }}</dd>
+                </div>
+                <div>
+                  <dt>历史一致</dt>
+                  <dd>{{ advisorReadiness?.metrics.historicalAgreementRate === null || advisorReadiness?.metrics.historicalAgreementRate === undefined ? "missing" : `${Math.round(advisorReadiness.metrics.historicalAgreementRate * 100)}%` }}</dd>
+                </div>
+              </dl>
+              <p v-if="advisorReadiness?.failClosedReasons.length" class="company-provider-form__message">
+                {{ advisorReadiness.failClosedReasons.join(" ") }}
+              </p>
+              <details v-if="advisorReadiness?.status !== 'ready'">
+                <summary>提交受控 readiness 证据</summary>
+                <div class="company-provider-form company-provider-form__grid">
+                  <label>
+                    <span>Benchmark report ID</span>
+                    <input v-model="advisorDraft.benchmarkReportId">
+                  </label>
+                  <label>
+                    <span>W4 exact commit SHA</span>
+                    <input v-model="advisorDraft.exactCommitSha" maxlength="40">
+                  </label>
+                  <label>
+                    <span>Merged WorktreeRun ID</span>
+                    <input v-model="advisorDraft.worktreeRunId">
+                  </label>
+                  <label>
+                    <span>Human authorization event ID</span>
+                    <input v-model="advisorDraft.authorizationEventId">
+                  </label>
+                  <div class="company-provider-form__actions company-provider-form__wide">
+                    <span>缺少样本或任一阈值未达标时保持 fail-closed。</span>
+                    <UButton
+                      color="neutral"
+                      :loading="advisorLoading"
+                      :disabled="
+                        !advisorDraft.benchmarkReportId.trim()
+                        || !/^[a-f0-9]{40}$/.test(advisorDraft.exactCommitSha)
+                        || !advisorDraft.worktreeRunId.trim()
+                        || !advisorDraft.authorizationEventId.trim()
+                      "
+                      @click="confirmAdvisorReadiness"
+                    >
+                      验证并开启 Advisor
+                    </UButton>
+                  </div>
+                </div>
+              </details>
+              <p v-if="advisorMessage" class="company-provider-form__message" role="status">{{ advisorMessage }}</p>
+            </div>
           </section>
 
           <section class="company-settings-section">
@@ -785,7 +931,11 @@ async function saveProvider() {
                 </div>
 
                 <div v-if="studioAssets.length" class="ac-founder-studio-list">
-                  <article v-for="asset in studioAssets" :key="`${asset.id}:${asset.version}`">
+                  <article
+                    v-for="asset in studioAssets"
+                    :id="`asset-${asset.id}-${asset.version}`"
+                    :key="`${asset.id}:${asset.version}`"
+                  >
                     <div>
                       <strong>{{ asset.type }}</strong>
                       <span>{{ asset.authority }} · {{ asset.status }} · v{{ asset.version }}</span>

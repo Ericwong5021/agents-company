@@ -1,5 +1,5 @@
 import { NamedError } from "@agents-company/shared/util/error"
-import { FounderOSModeSettings } from "@agents-company/shared/founder-os"
+import { CompanyCommonsMode } from "@agents-company/shared/founder-os"
 import { ModelID, ProviderID } from "@/provider/schema"
 import z from "zod"
 
@@ -15,7 +15,13 @@ export const ApprovalPolicyUpdateInput = z
   .meta({ ref: "ApprovalPolicyUpdateInput" })
 export type ApprovalPolicyUpdateInput = z.infer<typeof ApprovalPolicyUpdateInput>
 
-export const FounderOSModeUpdateInput = FounderOSModeSettings.meta({ ref: "FounderOSModeUpdateInput" })
+export const FounderOSModeUpdateInput = z
+  .object({
+    founderTwinMode: z.enum(["off", "shadow"]),
+    companyCommonsMode: CompanyCommonsMode,
+  })
+  .strict()
+  .meta({ ref: "FounderOSModeUpdateInput" })
 export type FounderOSModeUpdateInput = z.infer<typeof FounderOSModeUpdateInput>
 
 export const BeliefLoopActivationInput = z

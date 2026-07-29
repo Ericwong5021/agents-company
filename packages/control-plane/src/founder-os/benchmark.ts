@@ -1,4 +1,5 @@
 import { and, asc, eq } from "drizzle-orm"
+import { Effect } from "effect"
 import {
   FounderAssetReference,
   FounderBenchmarkCase,
@@ -13,6 +14,7 @@ import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { FounderTwinSnapshotTable, GovernanceAssetTable } from "./asset.sql"
 import { FounderBenchmarkCaseTable, FounderBenchmarkReportTable } from "./shadow.sql"
+import { FounderModelProvider } from "./model-provider"
 
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized)
@@ -138,125 +140,227 @@ function ratio(numerator: number, denominator: number) {
 
 export function run(raw: FounderBenchmarkRunInputValue) {
   const input = FounderBenchmarkRunInput.parse(raw)
-  const snapshot = Database.use((db) =>
-    db
-      .select()
-      .from(FounderTwinSnapshotTable)
-      .where(and(
-        eq(FounderTwinSnapshotTable.id, input.snapshotId),
-        eq(FounderTwinSnapshotTable.company_id, input.companyId),
-      ))
-      .get(),
-  )
-  const dataset = cases(input.companyId, input.benchmarkType, input.datasetVersion)
-  const holdout = dataset.filter((item) => item.split === "holdout")
-  const predictionByCase = new Map(input.predictions.map((prediction) => [prediction.caseId, prediction]))
-  const holdoutIds = new Set(holdout.map((item) => item.id))
-  const snapshotRefs = new Set(
-    snapshot
-      ? FounderAssetReference.array()
-        .parse(JSON.parse(snapshot.asset_refs_json))
-        .map((reference) => `${reference.assetId}:${reference.version}`)
-      : [],
-  )
-  const blockReasons = [
-    ...(!snapshot ? ["snapshot_missing" as const] : []),
-    ...(holdout.length === 0 ? ["holdout_empty" as const] : []),
-    ...(holdout.length !== input.predictions.length
-      || input.predictions.some((prediction) => !holdoutIds.has(prediction.caseId))
-      || holdout.some((item) => !predictionByCase.has(item.id))
-      ? ["prediction_set_incomplete" as const]
-      : []),
-    ...(holdout.some((item) =>
-      snapshotRefs.has(`${item.sourceAsset.assetId}:${item.sourceAsset.version}`))
-      ? ["training_holdout_leakage" as const]
-      : []),
-  ]
-  const predictions = holdout
-    .map((item) => ({ item, prediction: predictionByCase.get(item.id) }))
-    .filter((entry): entry is { item: FounderBenchmarkCase; prediction: FounderBenchmarkPrediction } =>
-      entry.prediction !== undefined)
-  const red = predictions.filter((entry) => entry.item.expected.authorityClass === "red")
-  const redRecall = ratio(
-    red.filter((entry) => entry.prediction.authorityClass === "red").length,
-    red.length,
-  )
-  const traceabilityRate = ratio(
-    predictions.filter((entry) =>
-      entry.prediction.principleRefs.length > 0
-      && entry.prediction.evidenceRefs.some((reference) => reference.validity === "verified"),
-    ).length,
-    predictions.length,
-  )
-  const agreementRate = ratio(
-    predictions.filter((entry) =>
-      input.benchmarkType === "founder_decision"
-        ? entry.prediction.authorityClass === entry.item.expected.authorityClass
-          && entry.prediction.decision?.trim() === entry.item.expected.decision?.trim()
-        : entry.prediction.preference === entry.item.expected.preference,
-    ).length,
-    predictions.length,
-  )
-  const metrics = {
-    caseCount: holdout.length,
-    redRecall: input.benchmarkType === "founder_decision" ? redRecall : null,
-    traceabilityRate,
-    agreementRate,
-  }
-  const status = blockReasons.length > 0
-    ? "blocked"
-    : traceabilityRate === 1
-      && agreementRate !== null
-      && agreementRate >= (input.benchmarkType === "founder_decision" ? 0.7 : 0.8)
-      && (input.benchmarkType === "taste" || redRecall === 1)
-      ? "pass"
-      : "fail"
-  const inputChecksum = digest({
-    benchmarkType: input.benchmarkType,
-    datasetVersion: input.datasetVersion,
-    snapshotId: input.snapshotId,
-    cases: holdout.map((item) => ({
-      id: item.id,
-      sourceAsset: item.sourceAsset,
-      expected: item.expected,
-      confirmationEventId: item.confirmationEventId,
-    })),
-    predictions: input.predictions.toSorted((left, right) => left.caseId.localeCompare(right.caseId)),
+  return Effect.gen(function* () {
+    const snapshot = Database.use((db) =>
+      db
+        .select()
+        .from(FounderTwinSnapshotTable)
+        .where(and(
+          eq(FounderTwinSnapshotTable.id, input.snapshotId),
+          eq(FounderTwinSnapshotTable.company_id, input.companyId),
+        ))
+        .get(),
+    )
+    const dataset = cases(input.companyId, input.benchmarkType, input.datasetVersion)
+    const holdout = dataset.filter((item) => item.split === "holdout")
+    const snapshotRefs = new Set(
+      snapshot
+        ? FounderAssetReference.array()
+          .parse(JSON.parse(snapshot.asset_refs_json))
+          .map((reference) => `${reference.assetId}:${reference.version}`)
+        : [],
+    )
+    const validSnapshot = snapshot
+      ? snapshot.checksum === digest({
+          schemaVersion: 1,
+          profileSummaryHash: digest(snapshot.profile_summary),
+          assetRefs: JSON.parse(snapshot.asset_refs_json),
+          promptTemplateVersion: snapshot.prompt_template_version,
+          modelConfigRef: snapshot.model_config_ref,
+          retrievalConfigRef: snapshot.retrieval_config_ref,
+          permissionConfigRef: snapshot.permission_config_ref,
+          compiledPromptHash: snapshot.compiled_prompt_hash,
+        })
+      : false
+    const sourceAssets = holdout.map((item) => ({
+      item,
+      asset: Database.use((db) =>
+        db
+          .select()
+          .from(GovernanceAssetTable)
+          .where(and(
+            eq(GovernanceAssetTable.id, item.sourceAsset.assetId),
+            eq(GovernanceAssetTable.version, item.sourceAsset.version),
+            eq(GovernanceAssetTable.company_id, input.companyId),
+          ))
+          .get(),
+      ),
+    }))
+    const initialReasons: FounderBenchmarkReport["blockReasons"] = [
+      ...(!snapshot ? ["snapshot_missing" as const] : []),
+      ...(snapshot && !validSnapshot ? ["snapshot_checksum_invalid" as const] : []),
+      ...(holdout.length === 0 ? ["holdout_empty" as const] : []),
+      ...(sourceAssets.some((entry) => !entry.asset) ? ["model_output_invalid" as const] : []),
+      ...(holdout.some((item) =>
+        snapshotRefs.has(`${item.sourceAsset.assetId}:${item.sourceAsset.version}`))
+        ? ["training_holdout_leakage" as const]
+        : []),
+    ]
+    const provider = yield* FounderModelProvider
+    const generated = initialReasons.length
+      ? { output: [] as unknown }
+      : yield* provider.generateBenchmark({
+          companyId: input.companyId,
+          modelConfigRef: snapshot!.model_config_ref,
+          snapshot: { id: snapshot!.id, checksum: snapshot!.checksum },
+          benchmarkType: input.benchmarkType,
+          cases: sourceAssets.map((entry) => ({
+            id: entry.item.id,
+            sourceAsset: entry.item.sourceAsset,
+            scope: {
+              kind: entry.asset!.scope_kind,
+              ...(entry.asset!.scope_ref ? { ref: entry.asset!.scope_ref } : {}),
+            },
+            content: entry.asset!.content,
+            tags: JSON.parse(entry.asset!.tags_json),
+            evidenceRefs: JSON.parse(entry.asset!.source_refs_json).map(
+              (reference: { kind: string; id: string }) => ({
+                kind: reference.kind === "external" ? "fact" : reference.kind,
+                id: reference.id,
+                validity: "verified",
+              }),
+            ),
+          })),
+          timeoutMs: 60_000,
+        }).pipe(Effect.match({
+          onFailure: (error) => ({ error }),
+          onSuccess: (output) => ({ output }),
+        }))
+    const parsed = "error" in generated
+      ? undefined
+      : FounderBenchmarkPrediction.array().safeParse(generated.output)
+    const predictionValues = parsed?.success ? parsed.data : []
+    const predictionByCase = new Map(predictionValues.map((prediction) => [prediction.caseId, prediction]))
+    const holdoutIds = new Set(holdout.map((item) => item.id))
+    const referencesValid = predictionValues.every((prediction) => {
+      const source = sourceAssets.find((entry) => entry.item.id === prediction.caseId)?.asset
+      const evidenceRefs = new Set(
+        source
+          ? JSON.parse(source.source_refs_json).map(
+              (reference: { kind: string; id: string }) =>
+                `${reference.kind === "external" ? "fact" : reference.kind}:${reference.id}`,
+            )
+          : [],
+      )
+      return prediction.principleRefs.every((reference) =>
+        snapshotRefs.has(`${reference.assetId}:${reference.version}`)
+      )
+        && prediction.decisionCaseRefs.every((reference) =>
+          snapshotRefs.has(`${reference.assetId}:${reference.version}`)
+        )
+        && prediction.evidenceRefs.every((reference) =>
+          reference.validity === "verified" && evidenceRefs.has(`${reference.kind}:${reference.id}`)
+        )
+        && (
+          input.benchmarkType === "founder_decision"
+            ? prediction.authorityClass !== undefined && prediction.decision !== undefined
+            : prediction.preference !== undefined
+        )
+    })
+    const blockReasons: FounderBenchmarkReport["blockReasons"] = [
+      ...initialReasons,
+      ...("error" in generated
+        ? [
+            generated.error.reason === "timeout"
+              ? "model_timeout" as const
+              : generated.error.reason === "invalid_output"
+                ? "model_output_invalid" as const
+                : "model_unavailable" as const,
+          ]
+        : []),
+      ...(!parsed?.success || !referencesValid ? ["model_output_invalid" as const] : []),
+      ...(holdout.length !== predictionValues.length
+        || predictionValues.some((prediction) => !holdoutIds.has(prediction.caseId))
+        || holdout.some((item) => !predictionByCase.has(item.id))
+        ? ["prediction_set_incomplete" as const]
+        : []),
+    ].filter((reason, index, reasons) => reasons.indexOf(reason) === index)
+    const predictions = holdout
+      .map((item) => ({ item, prediction: predictionByCase.get(item.id) }))
+      .filter((entry): entry is { item: FounderBenchmarkCase; prediction: FounderBenchmarkPrediction } =>
+        entry.prediction !== undefined)
+    const red = predictions.filter((entry) => entry.item.expected.authorityClass === "red")
+    const redRecall = ratio(
+      red.filter((entry) => entry.prediction.authorityClass === "red").length,
+      red.length,
+    )
+    const traceabilityRate = ratio(
+      predictions.filter((entry) =>
+        entry.prediction.principleRefs.length > 0
+        && entry.prediction.evidenceRefs.some((reference) => reference.validity === "verified"),
+      ).length,
+      predictions.length,
+    )
+    const agreementRate = ratio(
+      predictions.filter((entry) =>
+        input.benchmarkType === "founder_decision"
+          ? entry.prediction.authorityClass === entry.item.expected.authorityClass
+            && entry.prediction.decision?.trim() === entry.item.expected.decision?.trim()
+          : entry.prediction.preference === entry.item.expected.preference,
+      ).length,
+      predictions.length,
+    )
+    const metrics = {
+      caseCount: holdout.length,
+      redRecall: input.benchmarkType === "founder_decision" ? redRecall : null,
+      traceabilityRate,
+      agreementRate,
+    }
+    const status = blockReasons.length > 0
+      ? "blocked"
+      : traceabilityRate === 1
+        && agreementRate !== null
+        && agreementRate >= (input.benchmarkType === "founder_decision" ? 0.7 : 0.8)
+        && (input.benchmarkType === "taste" || redRecall === 1)
+        ? "pass"
+        : "fail"
+    const inputChecksum = digest({
+      benchmarkType: input.benchmarkType,
+      datasetVersion: input.datasetVersion,
+      snapshotId: input.snapshotId,
+      cases: holdout.map((item) => ({
+        id: item.id,
+        sourceAsset: item.sourceAsset,
+        expected: item.expected,
+        confirmationEventId: item.confirmationEventId,
+      })),
+      predictions: predictionValues.toSorted((left, right) => left.caseId.localeCompare(right.caseId)),
+    })
+    const existing = Database.use((db) =>
+      db
+        .select()
+        .from(FounderBenchmarkReportTable)
+        .where(and(
+          eq(FounderBenchmarkReportTable.company_id, input.companyId),
+          eq(FounderBenchmarkReportTable.benchmark_type, input.benchmarkType),
+          eq(FounderBenchmarkReportTable.dataset_version, input.datasetVersion),
+          eq(FounderBenchmarkReportTable.snapshot_id, input.snapshotId),
+          eq(FounderBenchmarkReportTable.input_checksum, inputChecksum),
+        ))
+        .get(),
+    )
+    if (existing) return reportFromRow(existing)
+    const id = Identifier.create("fbrep", "ascending")
+    Database.transaction((db) =>
+      db.insert(FounderBenchmarkReportTable)
+        .values({
+          id,
+          company_id: input.companyId,
+          benchmark_type: input.benchmarkType,
+          dataset_version: input.datasetVersion,
+          snapshot_id: input.snapshotId,
+          status,
+          block_reasons_json: JSON.stringify(blockReasons),
+          metrics_json: JSON.stringify(metrics),
+          confirmed_sample_count: holdout.length,
+          input_checksum: inputChecksum,
+          created_by: input.createdBy,
+          created_at: Date.now(),
+        })
+        .run(),
+    )
+    return reportFromRow(Database.use((db) =>
+      db.select().from(FounderBenchmarkReportTable).where(eq(FounderBenchmarkReportTable.id, id)).get()!,
+    ))
   })
-  const existing = Database.use((db) =>
-    db
-      .select()
-      .from(FounderBenchmarkReportTable)
-      .where(and(
-        eq(FounderBenchmarkReportTable.company_id, input.companyId),
-        eq(FounderBenchmarkReportTable.benchmark_type, input.benchmarkType),
-        eq(FounderBenchmarkReportTable.dataset_version, input.datasetVersion),
-        eq(FounderBenchmarkReportTable.snapshot_id, input.snapshotId),
-        eq(FounderBenchmarkReportTable.input_checksum, inputChecksum),
-      ))
-      .get(),
-  )
-  if (existing) return reportFromRow(existing)
-  const id = Identifier.create("fbrep", "ascending")
-  Database.transaction((db) =>
-    db.insert(FounderBenchmarkReportTable)
-      .values({
-        id,
-        company_id: input.companyId,
-        benchmark_type: input.benchmarkType,
-        dataset_version: input.datasetVersion,
-        snapshot_id: input.snapshotId,
-        status,
-        block_reasons_json: JSON.stringify(blockReasons),
-        metrics_json: JSON.stringify(metrics),
-        confirmed_sample_count: holdout.length,
-        input_checksum: inputChecksum,
-        created_by: input.createdBy,
-        created_at: Date.now(),
-      })
-      .run(),
-  )
-  return reportFromRow(Database.use((db) =>
-    db.select().from(FounderBenchmarkReportTable).where(eq(FounderBenchmarkReportTable.id, id)).get()!,
-  ))
 }

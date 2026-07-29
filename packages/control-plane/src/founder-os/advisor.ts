@@ -38,6 +38,7 @@ import {
   FounderShadowComparisonTable,
   FounderShadowDecisionTable,
 } from "./shadow.sql"
+import * as FounderAdvisorReadiness from "./advisor-readiness"
 import * as FounderOSMode from "./mode"
 
 export const principal = FounderAdvisorPrincipal.parse({
@@ -245,6 +246,11 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
     return saveBlocked(input, inputSha256, {
       status: "blocked",
       reason: "Effective Founder Twin mode cannot produce Advisor intents.",
+    })
+  if (FounderAdvisorReadiness.readiness(input.companyId).status !== "ready")
+    return saveBlocked(input, inputSha256, {
+      status: "blocked",
+      reason: "Advisor readiness is not confirmed.",
     })
   const snapshot = Database.use((db) =>
     db
@@ -538,7 +544,7 @@ export function boardProjection(input: {
   const events = interventions(input.companyId)
   const advisorMode = ["advisor", "green-delegated", "yellow-delegated"].includes(
     input.modes.effective.founderTwinMode,
-  )
+  ) && FounderAdvisorReadiness.readiness(input.companyId).status === "ready"
   return FounderBoardGovernanceProjection.parse({
     schemaVersion: 1,
     companyId: input.companyId,
@@ -564,6 +570,9 @@ export function controlCenter(input: {
   decisions: DecisionRecord[]
 }) {
   const events = interventions(input.companyId)
+  const advisorMode = ["advisor", "green-delegated", "yellow-delegated"].includes(
+    input.modes.effective.founderTwinMode,
+  ) && FounderAdvisorReadiness.readiness(input.companyId).status === "ready"
   const failedStops = events.flatMap((event) => event.effects)
     .filter((effect) => effect.kind === "stop_failed").length
   const shadowComparisons = Database.use((db) =>
@@ -582,9 +591,7 @@ export function controlCenter(input: {
     principal,
     mode: input.modes,
     authorization: {
-      status: ["advisor", "green-delegated", "yellow-delegated"].includes(input.modes.effective.founderTwinMode)
-        ? "authorized"
-        : "not_confirmed",
+      status: advisorMode ? "authorized" : "not_confirmed",
       canRaiseModeFromUI: false,
     },
     pending: {

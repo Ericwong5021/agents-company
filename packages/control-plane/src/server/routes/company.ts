@@ -597,7 +597,7 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       validator("json", FounderShadowRunInput, productValidationHook),
-      (c) => c.json(FounderOSShadow.runShadow(c.req.valid("json"))),
+      async (c) => c.json(await AppRuntime.runPromise(FounderOSShadow.runShadow(c.req.valid("json")))),
     )
     .post(
       "/founder-shadow/comparisons",
@@ -741,7 +741,7 @@ export const CompanyRoutes = lazy(() =>
         },
       }),
       validator("json", FounderBenchmarkRunInput, productValidationHook),
-      (c) => c.json(FounderOSBenchmark.run(c.req.valid("json"))),
+      async (c) => c.json(await AppRuntime.runPromise(FounderOSBenchmark.run(c.req.valid("json")))),
     )
     .put(
       "/setup-goal",

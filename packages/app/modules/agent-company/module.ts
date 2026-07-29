@@ -84,6 +84,16 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/founder-board-intervene.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/founder-advisor-readiness",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/founder-advisor-readiness.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-advisor-readiness",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-advisor-readiness.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/founder-control-center",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/founder-control-center.get"),

@@ -64,6 +64,7 @@ import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { Company } from "@/company"
 import { DecisionLedger, FounderAuthority } from "@/founder-os"
+import * as FounderModelProviderAdapter from "@/founder-model-provider/adapter"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
@@ -160,6 +161,7 @@ export const AppLayer = Layer.suspend(() => {
     Company.defaultLayer,
     DecisionLedger.defaultLayer,
     ...FounderAuthority.defaultLayers,
+    FounderModelProviderAdapter.layer.pipe(Layer.provide(Provider.defaultLayer)),
     LocalAuth.defaultLayer,
     groupSession,
     conversation,

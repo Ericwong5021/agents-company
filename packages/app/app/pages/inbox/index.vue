@@ -86,6 +86,20 @@ const decisionSourceLabels = {
   unknown: "历史来源未确认",
 } as const;
 
+function assetReferenceHref(reference: { assetId: string; version: number }) {
+  return `/settings/company#asset-${encodeURIComponent(reference.assetId)}-${reference.version}`;
+}
+
+function evidenceReferenceHref(reference: { kind: string; id: string; version?: number }) {
+  if (reference.kind === "founder_asset")
+    return `/settings/company#asset-${encodeURIComponent(reference.id)}-${reference.version ?? 1}`;
+  if (reference.kind === "conversation")
+    return `/chat/${encodeURIComponent(reference.id)}`;
+  if (reference.kind === "decision")
+    return `/inbox#decision-${encodeURIComponent(reference.id)}`;
+  return `/work?referenceKind=${encodeURIComponent(reference.kind)}&referenceId=${encodeURIComponent(reference.id)}`;
+}
+
 async function refreshDecisionCenter() {
   if (!available.value || !snapshot.value.company.id) return;
   decisionCenterPending.value = true;
@@ -210,6 +224,35 @@ async function correctDecision(item: DecisionCenterItem, kind: "override" | "cor
       return refreshDecisionCenter();
     },
     () => decisionCenterFeedback.value = "纠正未写入，请刷新后重试。",
+  );
+  decisionCenterPending.value = false;
+}
+
+async function takeoverDecision(item: DecisionCenterItem) {
+  const boardThreadId = item.decision.source?.boardThreadId;
+  if (!boardThreadId) return;
+  const reason = window.prompt("输入接管原因，提交后将写入治理 fence");
+  if (!reason?.trim()) return;
+  decisionCenterPending.value = true;
+  await $fetch("/api/agent-company/founder-board/intervene", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      idempotencyKey: crypto.randomUUID(),
+      kind: "takeover",
+      boardThreadId,
+      ...(item.decision.scope.type === "project" ? { projectId: item.decision.scope.projectId } : {}),
+      decisionId: item.decision.id,
+      reason,
+      actorKind: "human",
+      actorId: "local_user",
+    },
+  }).then(
+    () => {
+      decisionCenterFeedback.value = "接管 fence 与停止请求已写入治理链。";
+      return refreshDecisionCenter();
+    },
+    () => decisionCenterFeedback.value = "接管未完成，请检查 Board Thread 与项目状态。",
   );
   decisionCenterPending.value = false;
 }
@@ -387,6 +430,7 @@ async function editGoalDraft() {
           </p>
           <article
             v-for="item in decisionCenter.pending"
+            :id="`decision-${item.decision.id}`"
             :key="item.decision.id"
             class="ac-attention-card"
             :data-priority="item.decision.authorityClass === 'red' ? 'critical' : 'normal'"
@@ -406,6 +450,44 @@ async function editGoalDraft() {
             </p>
             <p v-if="item.decision.options?.length">备选：{{ item.decision.options.join("；") }}</p>
             <p v-if="item.gate">红灯审批：{{ item.gate.status }} · 请求方 {{ decisionSourceLabels[item.gate.requestedBy.kind] }}</p>
+            <details class="ac-decision-references">
+              <summary>依据与引用</summary>
+              <div>
+                <section>
+                  <strong>原则</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.principleRefs ?? []"
+                    :key="`${reference.assetId}:${reference.version}`"
+                    :to="assetReferenceHref(reference)"
+                  >
+                    {{ reference.assetId }} v{{ reference.version }}
+                  </NuxtLink>
+                  <span v-if="!item.decision.principleRefs?.length">未引用</span>
+                </section>
+                <section>
+                  <strong>Decision case</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.decisionCaseRefs ?? []"
+                    :key="`${reference.assetId}:${reference.version}`"
+                    :to="assetReferenceHref(reference)"
+                  >
+                    {{ reference.assetId }} v{{ reference.version }}
+                  </NuxtLink>
+                  <span v-if="!item.decision.decisionCaseRefs?.length">未引用</span>
+                </section>
+                <section>
+                  <strong>Evidence</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.evidenceRefs ?? []"
+                    :key="`${reference.kind}:${reference.id}:${reference.version ?? 0}`"
+                    :to="evidenceReferenceHref(reference)"
+                  >
+                    {{ reference.kind }} · {{ reference.id }}<template v-if="reference.version"> · v{{ reference.version }}</template>
+                  </NuxtLink>
+                  <span v-if="!item.decision.evidenceRefs?.length">未引用</span>
+                </section>
+              </div>
+            </details>
             <div class="ac-goal-generation-state__actions">
               <UButton
                 color="neutral"
@@ -437,6 +519,14 @@ async function editGoalDraft() {
                 @click="correctDecision(item, 'correction')"
               >
                 Correction
+              </UButton>
+              <UButton
+                color="error"
+                variant="soft"
+                :disabled="decisionCenterPending || !item.decision.source?.boardThreadId"
+                @click="takeoverDecision(item)"
+              >
+                接管
               </UButton>
             </div>
           </article>
@@ -477,6 +567,41 @@ async function editGoalDraft() {
             </div>
             <p>{{ item.decision.finalDecision ?? item.decision.recommendation }}</p>
             <p>Snapshot {{ item.decision.founderTwinSnapshot?.id ?? "缺失" }} · {{ item.decision.evidenceRefs?.length ?? 0 }} 条证据</p>
+            <details class="ac-decision-references">
+              <summary>原则、案例与 evidence</summary>
+              <div>
+                <section>
+                  <strong>原则</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.principleRefs ?? []"
+                    :key="`${reference.assetId}:${reference.version}`"
+                    :to="assetReferenceHref(reference)"
+                  >
+                    {{ reference.assetId }} v{{ reference.version }}
+                  </NuxtLink>
+                </section>
+                <section>
+                  <strong>Decision case</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.decisionCaseRefs ?? []"
+                    :key="`${reference.assetId}:${reference.version}`"
+                    :to="assetReferenceHref(reference)"
+                  >
+                    {{ reference.assetId }} v{{ reference.version }}
+                  </NuxtLink>
+                </section>
+                <section>
+                  <strong>Evidence</strong>
+                  <NuxtLink
+                    v-for="reference in item.decision.evidenceRefs ?? []"
+                    :key="`${reference.kind}:${reference.id}:${reference.version ?? 0}`"
+                    :to="evidenceReferenceHref(reference)"
+                  >
+                    {{ reference.kind }} · {{ reference.id }}
+                  </NuxtLink>
+                </section>
+              </div>
+            </details>
           </article>
           <article
             v-for="item in decisionCenter.overridden"

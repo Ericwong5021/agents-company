@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm"
+import { Effect } from "effect"
 import {
   FounderBoardShadowProjection,
   FounderContextBuildInput,
@@ -7,6 +8,7 @@ import {
   FounderShadowComparisonInput,
   FounderShadowDecision,
   FounderShadowEvidenceRef,
+  FounderShadowModelOutput,
   FounderShadowRunInput,
   FounderAssetReference,
   GovernanceAsset,
@@ -24,6 +26,7 @@ import {
   FounderShadowDecisionTable,
 } from "./shadow.sql"
 import { calibrationItems } from "./taste"
+import { FounderModelProvider } from "./model-provider"
 
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized)
@@ -263,15 +266,14 @@ function comparisonFromRow(row: typeof FounderShadowComparisonTable.$inferSelect
   })
 }
 
-export function runShadow(raw: FounderShadowRunInputValue) {
-  const input = FounderShadowRunInput.parse(raw)
-  const context = buildContext(input.context)
-  const reasons = [
-    ...context.blockReasons,
-    ...(input.model.status === "unavailable" ? ["model_unavailable" as const] : []),
-    ...(input.model.status === "available" && !input.output ? ["model_output_missing" as const] : []),
-  ]
-  const suggested = reasons.length === 0 && input.output !== undefined
+function saveShadow(
+  input: FounderShadowRunInputValue,
+  context: ReturnType<typeof buildContext>,
+  modelConfigRef: string,
+  reasons: FounderShadowDecision["blockReasons"],
+  output?: FounderShadowModelOutput,
+) {
+  const suggested = reasons.length === 0 && output !== undefined
   const id = Identifier.create("fshd", "ascending")
   Database.transaction((db) =>
     db.insert(FounderShadowDecisionTable)
@@ -284,19 +286,19 @@ export function runShadow(raw: FounderShadowRunInputValue) {
         scope_ref: input.context.scope.ref ?? null,
         snapshot_id: suggested ? context.snapshotId! : null,
         snapshot_checksum: suggested ? context.snapshotChecksum! : null,
-        model_config_ref: input.model.configRef,
-        recommendation: suggested ? input.output!.recommendation : null,
-        alternatives_json: JSON.stringify(suggested ? input.output!.alternatives : []),
-        authority_class: suggested ? input.output!.authorityClass : null,
-        confidence: suggested ? Math.round(input.output!.confidence * 1_000_000) : null,
-        principle_refs_json: JSON.stringify(context.principles.map(assetRef)),
-        decision_case_refs_json: JSON.stringify(context.decisionCases.map(assetRef)),
+        model_config_ref: modelConfigRef,
+        recommendation: suggested ? output!.recommendation : null,
+        alternatives_json: JSON.stringify(suggested ? output!.alternatives : []),
+        authority_class: suggested ? output!.authorityClass : null,
+        confidence: suggested ? Math.round(output!.confidence * 1_000_000) : null,
+        principle_refs_json: JSON.stringify(suggested ? output!.principleRefs : context.principles.map(assetRef)),
+        decision_case_refs_json: JSON.stringify(suggested ? output!.decisionCaseRefs : context.decisionCases.map(assetRef)),
         taste_example_refs_json: JSON.stringify(context.tasteExamples.map(assetRef)),
         rubric_refs_json: JSON.stringify(context.rubrics.map(assetRef)),
-        evidence_refs_json: JSON.stringify(context.evidenceRefs),
+        evidence_refs_json: JSON.stringify(suggested ? output!.evidenceRefs : context.evidenceRefs),
         missing_information_json: JSON.stringify([
           ...context.missingInformation,
-          ...(suggested ? input.output!.missingInformation : []),
+          ...(suggested ? output!.missingInformation : []),
         ]),
         created_by: input.createdBy,
         created_at: Date.now(),
@@ -306,6 +308,55 @@ export function runShadow(raw: FounderShadowRunInputValue) {
   return decisionFromRow(Database.use((db) =>
     db.select().from(FounderShadowDecisionTable).where(eq(FounderShadowDecisionTable.id, id)).get()!,
   ))
+}
+
+export function runShadow(raw: FounderShadowRunInputValue) {
+  const input = FounderShadowRunInput.parse(raw)
+  return Effect.gen(function* () {
+    const context = buildContext(input.context)
+    const snapshot = latestSnapshot(input.context.companyId)
+    const modelConfigRef = snapshot?.model_config_ref ?? "company-default-model"
+    if (context.status === "blocked")
+      return saveShadow(input, context, modelConfigRef, context.blockReasons)
+    const provider = yield* FounderModelProvider
+    const generated = yield* provider.generateShadow({
+      companyId: input.context.companyId,
+      modelConfigRef,
+      snapshot: { id: context.snapshotId!, checksum: context.snapshotChecksum! },
+      context,
+      timeoutMs: 30_000,
+    }).pipe(Effect.match({
+      onFailure: (error) => ({ error }),
+      onSuccess: (output) => ({ output }),
+    }))
+    if ("error" in generated)
+      return saveShadow(input, context, modelConfigRef, [
+        generated.error.reason === "timeout"
+          ? "model_timeout"
+          : generated.error.reason === "invalid_output"
+            ? "model_output_invalid"
+            : "model_unavailable",
+      ])
+    const output = FounderShadowModelOutput.safeParse(generated.output)
+    if (!output.success) return saveShadow(input, context, modelConfigRef, ["model_output_invalid"])
+    const principleRefs = new Set(context.principles.map((asset) => `${asset.id}:${asset.version}`))
+    const decisionCaseRefs = new Set(context.decisionCases.map((asset) => `${asset.id}:${asset.version}`))
+    const evidenceRefs = new Set(context.evidenceRefs.map((reference) =>
+      `${reference.kind}:${reference.id}:${reference.version ?? ""}:${reference.validity}`
+    ))
+    const invalidReference = output.data.principleRefs.some((reference) =>
+      !principleRefs.has(`${reference.assetId}:${reference.version}`)
+    )
+      || output.data.decisionCaseRefs.some((reference) =>
+        !decisionCaseRefs.has(`${reference.assetId}:${reference.version}`)
+      )
+      || output.data.evidenceRefs.some((reference) =>
+        !evidenceRefs.has(`${reference.kind}:${reference.id}:${reference.version ?? ""}:${reference.validity}`)
+        || reference.validity !== "verified"
+      )
+    if (invalidReference) return saveShadow(input, context, modelConfigRef, ["model_output_invalid"])
+    return saveShadow(input, context, modelConfigRef, [], output.data)
+  })
 }
 
 export function compare(raw: FounderShadowComparisonInputValue) {
