@@ -25,6 +25,16 @@ function git(...args: string[]) {
   return new TextDecoder().decode(result.stdout).trim()
 }
 
+function gitSource(...args: string[]) {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: path.resolve(import.meta.dir, "../../../.."),
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+  return new TextDecoder().decode(result.stdout)
+}
+
 function sha256(value: string) {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex")
 }
@@ -263,6 +273,13 @@ describe("Seed-and-Grow Pre-Public candidate gate", () => {
     )
     const process = Bun.spawn(["bun", "script/seed-grow-pre-public-gate.ts", requestPath], {
       cwd: path.resolve(import.meta.dir, "../.."),
+      env: {
+        ...globalThis.process.env,
+        AGENTCOMPANY_TRUSTED_VERIFIER_SHA: candidate.verifierSha,
+        AGENTCOMPANY_VERIFIER_LAUNCHER_SHA256: sha256(
+          gitSource("show", `${candidate.verifierSha}:packages/control-plane/script/seed-grow-pre-public-launcher.ts`),
+        ),
+      },
       stdout: "pipe",
       stderr: "pipe",
     })

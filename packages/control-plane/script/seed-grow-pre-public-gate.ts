@@ -80,6 +80,7 @@ const deploymentCommandId = "seed-grow-real-surfaces"
 const physicalIdentityKeys = ["worktree", "runtimeHome", "database", "output", "isolationRoot"] as const
 const b5ReportRoot = ".artifacts/seed-grow-b5/real-candidate-facts"
 const deploymentReportPath = "packages/app/.artifacts/seed-grow-b4/result.json"
+const launcherPath = "packages/control-plane/script/seed-grow-pre-public-launcher.ts"
 const b5ReportSourcePaths = [
   "facts.json",
   "summary.json",
@@ -91,6 +92,7 @@ const b5ReportSourcePaths = [
 ].map((relativePath) => `${b5ReportRoot}/${relativePath}`)
 const runtimeBindingPaths = [
   runnerPath,
+  launcherPath,
   "script/experience-automatic-evidence.ts",
   "script/experience-benchmark.ts",
   "script/seed-grow-stage-evidence.ts",
@@ -873,6 +875,10 @@ function runnerSourceAt(verifierSha: string) {
   return gitSource(["show", `${verifierSha}:${runnerPath}`])
 }
 
+function launcherSourceAt(verifierSha: string) {
+  return gitSource(["show", `${verifierSha}:${launcherPath}`])
+}
+
 function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>, requireTarget = true) {
   const head = resolveCommit("HEAD")
   const target = requireTarget ? resolveCommit(candidate.targetRef) : candidate.candidateSha
@@ -889,6 +895,12 @@ function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>, requi
         ? "Candidate execution worktree HEAD does not match the candidate SHA"
         : "Checked-out HEAD does not match the pinned verifier SHA",
     )
+  if (
+    !candidateExecution &&
+    (process.env.AGENTCOMPANY_TRUSTED_VERIFIER_SHA !== candidate.verifierSha ||
+      process.env.AGENTCOMPANY_VERIFIER_LAUNCHER_SHA256 !== sha256(launcherSourceAt(candidate.verifierSha)))
+  )
+    fail("invalid", "Pre-Public Gate must run through the exact clean verifier launcher")
   if (candidate.verifierSha === candidate.candidateSha) fail("invalid", "Candidate cannot provide its own verifier")
   if (target !== candidate.candidateSha) fail("invalid", "Target ref does not resolve to the candidate SHA")
   const ancestry = Bun.spawnSync(

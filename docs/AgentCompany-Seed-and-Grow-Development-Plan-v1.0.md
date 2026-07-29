@@ -107,18 +107,18 @@ R0–R4 是产品发布阶段，O0–O9 是本计划的工程能力包，两者�
 
 ### 2.1 已有可复用能力
 
-| 现有能力 | 复用方式 |
-|---|---|
-| `Plan.phase = replan` | 承担实质性范围/验收变化的计划版本 |
-| `WorkItem.depends_on` | 继续作为任务图边 |
-| `ProjectEvent` | 记录 Receipt、Mutation、Assignment、Gate 的用户投影来源 |
-| `AgentRun.companyProjectID/workItemID` | Receipt 直接引用真实运行，不重复运行事实 |
-| `Artifact.evidence` | 保存领域验证结果与可消费证据 |
-| `CompanyRecruitment` | 继续负责候选池、选择、释放、绩效与转正 |
-| `WorkProjection` | 继续作为用户状态事实，不让 UI 直接消费 Runtime raw status |
-| `Database.transaction({ behavior: "immediate" })` | 原子应用 Graph Mutation 与 revision CAS |
-| AgentRun/Conversation 恢复 | 作为 Orchestrator 恢复的前置基础 |
-| Worktree/宿主复验 | 软件任务的现实锚点 |
+| 现有能力                                          | 复用方式                                                  |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `Plan.phase = replan`                             | 承担实质性范围/验收变化的计划版本                         |
+| `WorkItem.depends_on`                             | 继续作为任务图边                                          |
+| `ProjectEvent`                                    | 记录 Receipt、Mutation、Assignment、Gate 的用户投影来源   |
+| `AgentRun.companyProjectID/workItemID`            | Receipt 直接引用真实运行，不重复运行事实                  |
+| `Artifact.evidence`                               | 保存领域验证结果与可消费证据                              |
+| `CompanyRecruitment`                              | 继续负责候选池、选择、释放、绩效与转正                    |
+| `WorkProjection`                                  | 继续作为用户状态事实，不让 UI 直接消费 Runtime raw status |
+| `Database.transaction({ behavior: "immediate" })` | 原子应用 Graph Mutation 与 revision CAS                   |
+| AgentRun/Conversation 恢复                        | 作为 Orchestrator 恢复的前置基础                          |
+| Worktree/宿主复验                                 | 软件任务的现实锚点                                        |
 
 ### 2.2 必须替换的中心化主链
 
@@ -185,15 +185,15 @@ flowchart TD
 
 ### 3.1 权限边界
 
-| 主体 | 可以做 | 不可以做 |
-|---|---|---|
-| Worker / Wayfinder | 执行节点、提交 Receipt、声明 blocker、提出任务/依赖/能力建议 | 直接改图、招聘、提权、降低验收标准 |
-| Reviewer / Validator | 给出通过、失败与 findings | 自行修改图或批准高风险动作 |
-| Graph Supervisor | 基于 Receipt 生成结构化 Mutation 提案 | 直接写 DB、暴露私有推理、绕过 Policy |
-| Graph Mutation Policy | 确定性校验并原子应用允许操作 | 解释业务目标、生成开放式方案 |
-| Recruitment Resolver | 根据硬约束与证据选择 Agent | 决定项目范围和验收标准 |
-| Attention Router | 按材料性把问题路由给正确权限主体 | 把所有错误都升级给用户 |
-| 用户 | 决定范围、验收、权限、预算和外部副作用 | 不需要编排每个 Agent |
+| 主体                  | 可以做                                                       | 不可以做                             |
+| --------------------- | ------------------------------------------------------------ | ------------------------------------ |
+| Worker / Wayfinder    | 执行节点、提交 Receipt、声明 blocker、提出任务/依赖/能力建议 | 直接改图、招聘、提权、降低验收标准   |
+| Reviewer / Validator  | 给出通过、失败与 findings                                    | 自行修改图或批准高风险动作           |
+| Graph Supervisor      | 基于 Receipt 生成结构化 Mutation 提案                        | 直接写 DB、暴露私有推理、绕过 Policy |
+| Graph Mutation Policy | 确定性校验并原子应用允许操作                                 | 解释业务目标、生成开放式方案         |
+| Recruitment Resolver  | 根据硬约束与证据选择 Agent                                   | 决定项目范围和验收标准               |
+| Attention Router      | 按材料性把问题路由给正确权限主体                             | 把所有错误都升级给用户               |
+| 用户                  | 决定范围、验收、权限、预算和外部副作用                       | 不需要编排每个 Agent                 |
 
 Graph Supervisor 是 Control Plane 服务，不是员工 Agent，不出现在 Team 页面，不拥有 SOUL、Memory、Relationship 或私域。
 
@@ -583,19 +583,19 @@ Runtime / Worktree / SQLite
 
 O0–O9 是稳定的能力包编号，不等于实际开发顺序。开发阶段不设置阶段测试门禁；按真实代码依赖推进，边界清晰且互不依赖的任务可使用独立 worktree 和 Subagent 并行实施，正式集成仍按下表顺序进行：
 
-| 波次 | 能力包 | 目标 | 开发依赖 | 开发完成记录 |
-|---|---|---|---|---|
-| A0 | O0 | 冻结契约并建立自动验收基础设施 | 当前 R0 behind-flag 基础 | 独立提交与局部检查 |
-| A1 | O1 | 建立 Attempt / Receipt 事实层 | A0 契约 | 独立提交与局部检查 |
-| A2 | O4 | 建立 Graph Mutation、revision 与原子 Policy | A1 数据事实 | 独立提交与局部检查 |
-| A3 | O6 | 建立 ValidationGate、FailureDiagnosis 与 Repair | A2 图变更 | 独立提交与局部检查 |
-| A4 | O7-R3 | 完成 Receipt / Mutation / Gate 恢复与对账 | A3 验证链 | 独立提交与局部检查 |
-| B0 | O2 | 建立 Project Assignment 与招聘硬约束 | A1 事实层、A4 恢复契约 | 独立提交与局部检查 |
-| B1 | O3 | 建立 Seed Policy 与两 Agent 启动 | B0 Assignment | 独立提交与局部检查 |
-| B2 | O5 | 建立 Graph Supervisor 与 Grow Loop | B1 Seed、A2 Mutation | 独立提交与局部检查 |
-| B3 | O7-R4 | 完成 Attention Router 与 R4 恢复链 | B2 Supervisor、A3 验证链 | 独立提交与局部检查 |
-| B4 | O8 | 建立 Experience Projection 与 WebUI | B3 行为与恢复契约 | 独立提交与局部检查 |
-| B5 | O9 | Shadow、Dogfood、默认切换与回滚 | B4 完整产品面 | 独立提交与局部检查 |
+| 波次 | 能力包 | 目标                                            | 开发依赖                 | 开发完成记录       |
+| ---- | ------ | ----------------------------------------------- | ------------------------ | ------------------ |
+| A0   | O0     | 冻结契约并建立自动验收基础设施                  | 当前 R0 behind-flag 基础 | 独立提交与局部检查 |
+| A1   | O1     | 建立 Attempt / Receipt 事实层                   | A0 契约                  | 独立提交与局部检查 |
+| A2   | O4     | 建立 Graph Mutation、revision 与原子 Policy     | A1 数据事实              | 独立提交与局部检查 |
+| A3   | O6     | 建立 ValidationGate、FailureDiagnosis 与 Repair | A2 图变更                | 独立提交与局部检查 |
+| A4   | O7-R3  | 完成 Receipt / Mutation / Gate 恢复与对账       | A3 验证链                | 独立提交与局部检查 |
+| B0   | O2     | 建立 Project Assignment 与招聘硬约束            | A1 事实层、A4 恢复契约   | 独立提交与局部检查 |
+| B1   | O3     | 建立 Seed Policy 与两 Agent 启动                | B0 Assignment            | 独立提交与局部检查 |
+| B2   | O5     | 建立 Graph Supervisor 与 Grow Loop              | B1 Seed、A2 Mutation     | 独立提交与局部检查 |
+| B3   | O7-R4  | 完成 Attention Router 与 R4 恢复链              | B2 Supervisor、A3 验证链 | 独立提交与局部检查 |
+| B4   | O8     | 建立 Experience Projection 与 WebUI             | B3 行为与恢复契约        | 独立提交与局部检查 |
+| B5   | O9     | Shadow、Dogfood、默认切换与回滚                 | B4 完整产品面            | 独立提交与局部检查 |
 
 开发与最终验收遵循同一契约：
 
@@ -982,13 +982,13 @@ Project 只有同时满足以下条件才能进入交付：
 
 ### 非软件 Anchor
 
-| 领域 | Anchor |
-|---|---|
-| 研究 | 来源可访问、抓取时间、正文片段、跨来源一致性 |
-| 文档 | 文件存在、可回读、可解析、可导出 |
-| 本地应用 | 实际启动、关键交互、状态断言 |
-| UI | Playwright、截图回归、真实后端、交互断言 |
-| 外部动作 | 平台返回的真实 ID、状态、时间和可回查记录 |
+| 领域     | Anchor                                       |
+| -------- | -------------------------------------------- |
+| 研究     | 来源可访问、抓取时间、正文片段、跨来源一致性 |
+| 文档     | 文件存在、可回读、可解析、可导出             |
+| 本地应用 | 实际启动、关键交互、状态断言                 |
+| UI       | Playwright、截图回归、真实后端、交互断言     |
+| 外部动作 | 平台返回的真实 ID、状态、时间和可回查记录    |
 
 ### Failure Diagnosis
 
@@ -1044,18 +1044,18 @@ unknown
 
 不再用 `reports_to` 决定项目问题的裁决者：
 
-| 问题 | 路由 |
-|---|---|
-| 实现错误 | Worker 返工 |
-| 缺少前提 | Graph Supervisor |
-| 新能力缺口 | Recruitment Resolver |
-| Reviewer findings | Worker 定向返工 |
-| 图依赖错误 | Graph Mutation Policy |
-| Runtime 临时故障 | 自动恢复/重试 |
-| 权限不足 | Approval Gate |
-| 范围/验收变化 | Project DRI / 用户 |
-| 外部副作用 | 用户 |
-| 永久招聘/部门 | Company Governance |
+| 问题              | 路由                  |
+| ----------------- | --------------------- |
+| 实现错误          | Worker 返工           |
+| 缺少前提          | Graph Supervisor      |
+| 新能力缺口        | Recruitment Resolver  |
+| Reviewer findings | Worker 定向返工       |
+| 图依赖错误        | Graph Mutation Policy |
+| Runtime 临时故障  | 自动恢复/重试         |
+| 权限不足          | Approval Gate         |
+| 范围/验收变化     | Project DRI / 用户    |
+| 外部副作用        | 用户                  |
+| 永久招聘/部门     | Company Governance    |
 
 ### O7-R3 任务
 
@@ -1293,23 +1293,23 @@ GET /experience/work/:projectID/validation
 `docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json`，通过
 `extends.path` 和 `extends.sha256` 绑定该基线，在其上增加：
 
-| ID | 场景 | 必须证明 |
-|---|---|---|
-| S13 | 陌生代码库复杂功能 | 初始恰好 Wayfinder + Builder 两个 Assignment |
-| S14 | 简单文案改写 | direct_single，单 Agent，无 Reviewer |
-| S15 | 高风险外部动作 | discovery_first，Builder 等待前提/用户 Gate |
-| S16 | 假前提暴露 | Gate 拦下游，新增 recovery 节点并重连 |
-| S17 | 新能力缺口 | Receipt 后才加入第三个 Agent |
-| S18 | Reviewer 动态创建 | 低风险无 Reviewer，高风险有独立 Reviewer |
-| S19 | Receipt 后崩溃 | 重启后只处理一次 |
-| S20 | Mutation 提交后崩溃 | 图状态原子、一致、无重复派发 |
-| S21 | 并发 Receipt | revision 冲突后重算，无覆盖 |
-| S22 | 三轮修复失败 | 停止自动执行并生成一条高信号 Attention |
-| S23 | 前置节点错误 | 整段 superseded，历史和替代关系保留 |
-| S24 | 项目完成判定 | pending Receipt/Mutation 时绝不 completed |
-| S25 | 临时角色与身份 | Assignment 不修改永久 role_key |
-| S26 | Agent 复用 | 相似任务优先复用，不无限新建 Candidate |
-| S27 | 服务重启 | AgentRun、Receipt、Mutation、Assignment、Gate 全部对账恢复 |
+| ID  | 场景                | 必须证明                                                   |
+| --- | ------------------- | ---------------------------------------------------------- |
+| S13 | 陌生代码库复杂功能  | 初始恰好 Wayfinder + Builder 两个 Assignment               |
+| S14 | 简单文案改写        | direct_single，单 Agent，无 Reviewer                       |
+| S15 | 高风险外部动作      | discovery_first，Builder 等待前提/用户 Gate                |
+| S16 | 假前提暴露          | Gate 拦下游，新增 recovery 节点并重连                      |
+| S17 | 新能力缺口          | Receipt 后才加入第三个 Agent                               |
+| S18 | Reviewer 动态创建   | 低风险无 Reviewer，高风险有独立 Reviewer                   |
+| S19 | Receipt 后崩溃      | 重启后只处理一次                                           |
+| S20 | Mutation 提交后崩溃 | 图状态原子、一致、无重复派发                               |
+| S21 | 并发 Receipt        | revision 冲突后重算，无覆盖                                |
+| S22 | 三轮修复失败        | 停止自动执行并生成一条高信号 Attention                     |
+| S23 | 前置节点错误        | 整段 superseded，历史和替代关系保留                        |
+| S24 | 项目完成判定        | pending Receipt/Mutation 时绝不 completed                  |
+| S25 | 临时角色与身份      | Assignment 不修改永久 role_key                             |
+| S26 | Agent 复用          | 相似任务优先复用，不无限新建 Candidate                     |
+| S27 | 服务重启            | AgentRun、Receipt、Mutation、Assignment、Gate 全部对账恢复 |
 
 ---
 
@@ -1333,13 +1333,13 @@ GET /experience/work/:projectID/validation
 
 ## 8.2 AI 执行者与确定性裁决者
 
-| 角色 | 职责 | 不得做 |
-|---|---|---|
-| Implementer AI | 实现开发批次、运行快速检查、修复失败 | 修改验收标准掩盖失败、直接写 `pass` |
-| Validation AI | 全部集成后启动精确 SHA runner、分析证据、定位最小失败面 | 用主观判断替代退出码、数据库断言或 E2E |
-| Deterministic Gate | 校验合同、命令、报告、摘要、SHA、覆盖率与最终状态 | 调用模型自行解释失败 |
-| Local Reproducer | 从同一提交创建第二个隔离环境并复现全部 Gate | 复用第一次运行目录或历史成功记录 |
-| CI Adapter | GitHub Actions 恢复后复用同一判定模块 | 在当前不可用状态下阻塞阶段 |
+| 角色               | 职责                                                    | 不得做                                 |
+| ------------------ | ------------------------------------------------------- | -------------------------------------- |
+| Implementer AI     | 实现开发批次、运行快速检查、修复失败                    | 修改验收标准掩盖失败、直接写 `pass`    |
+| Validation AI      | 全部集成后启动精确 SHA runner、分析证据、定位最小失败面 | 用主观判断替代退出码、数据库断言或 E2E |
+| Deterministic Gate | 校验合同、命令、报告、摘要、SHA、覆盖率与最终状态       | 调用模型自行解释失败                   |
+| Local Reproducer   | 从同一提交创建第二个隔离环境并复现全部 Gate             | 复用第一次运行目录或历史成功记录       |
+| CI Adapter         | GitHub Actions 恢复后复用同一判定模块                   | 在当前不可用状态下阻塞阶段             |
 
 Implementer AI 可在独立 worktree 并行工作；Validation AI 必须在所有分支按依赖集成后串行运行。最终 `pass` 只能由确定性 Gate 生成。需要独立 Reviewer 的产品场景，必须使用不同 Agent/Run；最终验收本身不要求真人 Reviewer。
 
@@ -1405,6 +1405,14 @@ bun script/seed-grow-stage-gate.ts \
   --require-pass
 ```
 
+最终 Pre-Public 候选登记与默认切换必须从外部给定受信 verifier SHA，并通过无第三方依赖的启动器进入全新 verifier worktree；启动器使用独立空缓存执行 frozen install，核对自身、Gate、lockfile 与精确提交后才运行 Gate。不得直接从开发 worktree 调用内部 Gate 作为发布证据：
+
+```bash
+AGENTCOMPANY_TRUSTED_VERIFIER_SHA=<verifier-full-sha> \
+bun packages/control-plane/script/seed-grow-pre-public-launcher.ts \
+  <absolute-bootstrap-or-promote-request.json>
+```
+
 stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false` 和 `replacement=two_local_exact_sha_runs`。GitHub Actions 恢复后 CI 复用相同 evidence 与 gate 模块，不维护另一套判定逻辑。`--require-pass` 不接受 human evidence 或 stage waiver；缺失人工 advisory 不影响结果，缺失机器证据必须失败或 blocked。
 
 ## 8.5 最终自动测试与本地部署流水线
@@ -1467,19 +1475,19 @@ stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false
 
 开发期间不要求逐波次执行 8.5。最终候选统一执行通用流水线，并按能力包增加以下必选断言：
 
-| 波次 | 能力包 | 必选自动场景 | 核心证据 |
-|---|---|---|---|
-| A0 | O0 | contract 全覆盖、runner 防伪自检、基线回归、重复运行一致 | contract report、tamper self-test、baseline report |
-| A1 | O1 | fresh/migrated DB、Attempt/Receipt 唯一性、重放幂等、写入后崩溃恢复 | JUnit、Receipt DB invariants、restart report |
-| A2 | O4 | revision CAS、并发 Receipt、原子 apply、每个事务边界崩溃、Shadow 零写入 | mutation snapshots、conflict report、DB diff |
-| A3 | O6 | S16 假前提、S22 三轮熔断、标准不降级、Reviewer 非默认 | gate evidence matrix、三轮 repair trace、Attention |
-| A4 | O7-R3 | Receipt/Mutation/Gate/WorkItem/Runtime 启动对账 | kill-point matrix、recovery report、duplicate check |
-| B0 | O2 | Need→Selection→Assignment、candidate-only、Reassign、并发唯一性 | assignment history、lifecycle diff、DB invariants |
-| B1 | O3 | S13、S14、S15，两 Agent 分离、Wayfinder read-only、off 回退 | assignment snapshot、permission trace、flag diff |
-| B2 | O5 | S13、S17、S21、S24、1–3 节点预算、evidence-backed quiescence | graph decisions、sourceRefs、quiescence report |
-| B3 | O7-R4 | 材料性路由、真实 action handler、Assignment/Attention 恢复 | action trace、attention precision、recovery report |
-| B4 | O8 | real Control Plane Browser/Desktop、SSE 重连、刷新/重启、a11y、视觉差异 | Playwright、axe/DOM assertions、screenshots、watermark |
-| B5 | O9 | Shadow comparison、Dogfood、两候选两轮、local rollback、legacy fallback | metric report、local exact-SHA repeats、rollback report、final decision |
+| 波次 | 能力包 | 必选自动场景                                                            | 核心证据                                                                |
+| ---- | ------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| A0   | O0     | contract 全覆盖、runner 防伪自检、基线回归、重复运行一致                | contract report、tamper self-test、baseline report                      |
+| A1   | O1     | fresh/migrated DB、Attempt/Receipt 唯一性、重放幂等、写入后崩溃恢复     | JUnit、Receipt DB invariants、restart report                            |
+| A2   | O4     | revision CAS、并发 Receipt、原子 apply、每个事务边界崩溃、Shadow 零写入 | mutation snapshots、conflict report、DB diff                            |
+| A3   | O6     | S16 假前提、S22 三轮熔断、标准不降级、Reviewer 非默认                   | gate evidence matrix、三轮 repair trace、Attention                      |
+| A4   | O7-R3  | Receipt/Mutation/Gate/WorkItem/Runtime 启动对账                         | kill-point matrix、recovery report、duplicate check                     |
+| B0   | O2     | Need→Selection→Assignment、candidate-only、Reassign、并发唯一性         | assignment history、lifecycle diff、DB invariants                       |
+| B1   | O3     | S13、S14、S15，两 Agent 分离、Wayfinder read-only、off 回退             | assignment snapshot、permission trace、flag diff                        |
+| B2   | O5     | S13、S17、S21、S24、1–3 节点预算、evidence-backed quiescence            | graph decisions、sourceRefs、quiescence report                          |
+| B3   | O7-R4  | 材料性路由、真实 action handler、Assignment/Attention 恢复              | action trace、attention precision、recovery report                      |
+| B4   | O8     | real Control Plane Browser/Desktop、SSE 重连、刷新/重启、a11y、视觉差异 | Playwright、axe/DOM assertions、screenshots、watermark                  |
+| B5   | O9     | Shadow comparison、Dogfood、两候选两轮、local rollback、legacy fallback | metric report、local exact-SHA repeats、rollback report、final decision |
 
 ## 8.7 测试层
 
@@ -1682,25 +1690,25 @@ Feature Flag 切回 `off`：
 
 # 11. 风险与控制
 
-| 风险 | 控制 |
-|---|---|
-| Graph Supervisor 过度扩图 | 每轮最多新增 1–3 节点、预算、证据绑定、Mutation Policy |
-| Agent 膨胀 | Assignment、候选复用、硬约束、项目结束释放 |
-| 两 Agent 变成固定岗位 | Wayfinder/Builder 是临时 purpose，不是永久 Agent 类型 |
-| Graph Mutation 破坏事实 | completed immutable、superseded 保留、revision CAS |
-| Reviewer 过少导致质量下降 | ValidationPolicy + 机器 Anchor + 高风险独立复核 |
-| Reviewer 过多导致成本高 | 低风险默认 self/machine |
-| 模型自己判断自己通过 | Gate 放行权与 Worker 分离，现实 Anchor |
-| 自动 Gate 复用过期或伪造证据 | 精确 SHA、当前进程执行、文件摘要、覆盖矩阵、防篡改自检 |
-| AI 冒充人工研究 | 人工项只允许 advisory，禁止由模型生成参与者或签署事实 |
+| 风险                          | 控制                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| Graph Supervisor 过度扩图     | 每轮最多新增 1–3 节点、预算、证据绑定、Mutation Policy                             |
+| Agent 膨胀                    | Assignment、候选复用、硬约束、项目结束释放                                         |
+| 两 Agent 变成固定岗位         | Wayfinder/Builder 是临时 purpose，不是永久 Agent 类型                              |
+| Graph Mutation 破坏事实       | completed immutable、superseded 保留、revision CAS                                 |
+| Reviewer 过少导致质量下降     | ValidationPolicy + 机器 Anchor + 高风险独立复核                                    |
+| Reviewer 过多导致成本高       | 低风险默认 self/machine                                                            |
+| 模型自己判断自己通过          | Gate 放行权与 Worker 分离，现实 Anchor                                             |
+| 自动 Gate 复用过期或伪造证据  | 精确 SHA、当前进程执行、文件摘要、覆盖矩阵、防篡改自检                             |
+| AI 冒充人工研究               | 人工项只允许 advisory，禁止由模型生成参与者或签署事实                              |
 | 本地 preview 被误报为发布完成 | deployment step 分别记录 `local-preview`、实际 Pre-Public 目标、远端状态与回查结果 |
-| Receipt 变成大段自述 | 严格 Schema、证据引用、字段预算 |
-| 多 Receipt 并发覆盖 | project revision + immediate transaction + re-decision |
-| 重启重复副作用 | Receipt/Mutation idempotency、恢复对账 |
-| UI 暴露内部复杂度 | 主界面高信号，完整图仅 Diagnostics |
-| Department 再次成为派工中心 | Department 只管长期能力与标准，项目由 Graph 生长 |
-| 旧项目迁移风险 | in-flight legacy pin，不运行中转换 |
-| execution.ts 继续膨胀 | 新建 project-orchestrator 模块，旧路径 facade 化 |
+| Receipt 变成大段自述          | 严格 Schema、证据引用、字段预算                                                    |
+| 多 Receipt 并发覆盖           | project revision + immediate transaction + re-decision                             |
+| 重启重复副作用                | Receipt/Mutation idempotency、恢复对账                                             |
+| UI 暴露内部复杂度             | 主界面高信号，完整图仅 Diagnostics                                                 |
+| Department 再次成为派工中心   | Department 只管长期能力与标准，项目由 Graph 生长                                   |
+| 旧项目迁移风险                | in-flight legacy pin，不运行中转换                                                 |
+| execution.ts 继续膨胀         | 新建 project-orchestrator 模块，旧路径 facade 化                                   |
 
 ---
 
@@ -1716,27 +1724,27 @@ Feature Flag 切回 `off`：
 - 最终 Gate 不需要人工签字、截图审批或 stage waiver；
 - PR 可用于外部协作，但不是本计划的阶段前提。
 
-| 批次 | 波次 | 内容 |
-|---|---|---|
-| BATCH-ORCH-00 | A0 | 契约、Feature Flag、benchmark/metric metadata |
-| BATCH-ORCH-01 | A0 | exact-SHA evidence runner、stage gate、自检与本地双运行复现 |
-| BATCH-ORCH-02 | A1 | Attempt Schema/SQL/Service |
-| BATCH-ORCH-03 | A1 | Receipt Schema/SQL/Service、legacy emission 与恢复 |
-| BATCH-ORCH-04 | A2 | GraphMutation store、revision、superseded |
-| BATCH-ORCH-05 | A2 | GraphPatchValidator、atomic apply、Shadow 零写入 |
-| BATCH-ORCH-06 | A3 | ValidationGate、Evidence Anchor、FailureDiagnosis |
-| BATCH-ORCH-07 | A3 | Repair loop、三轮熔断、risk-driven Reviewer |
-| BATCH-ORCH-08 | A4 | Receipt/Mutation/Gate/WorkItem/Runtime recovery |
-| BATCH-ORCH-09 | B0 | ProjectAssignment 与 Recruitment hard constraints |
-| BATCH-ORCH-10 | B0 | 移除 `role_key` 副作用与 direct employee creation |
-| BATCH-ORCH-11 | B1 | SeedPolicy、Wayfinder、First Slice behind flag |
-| BATCH-ORCH-12 | B2 | GraphSupervisor shadow mode 与 Receipt Processor |
-| BATCH-ORCH-13 | B2 | Supervisor active mode、dispatch 与 Quiescence |
-| BATCH-ORCH-14 | B3 | Attention Router、真实 action handlers、完整 recovery |
-| BATCH-ORCH-15 | B4 | Shared/SDK/Experience projections |
-| BATCH-ORCH-16 | B4 | Work/Team/Diagnostics WebUI 与真实 Control Plane E2E |
-| BATCH-ORCH-17 | B5 | S13–S27、Shadow comparison、两候选重复验证 |
-| BATCH-ORCH-18 | B5 | Dogfood default、Pre-Public default、rollback 演练 |
+| 批次          | 波次 | 内容                                                                |
+| ------------- | ---- | ------------------------------------------------------------------- |
+| BATCH-ORCH-00 | A0   | 契约、Feature Flag、benchmark/metric metadata                       |
+| BATCH-ORCH-01 | A0   | exact-SHA evidence runner、stage gate、自检与本地双运行复现         |
+| BATCH-ORCH-02 | A1   | Attempt Schema/SQL/Service                                          |
+| BATCH-ORCH-03 | A1   | Receipt Schema/SQL/Service、legacy emission 与恢复                  |
+| BATCH-ORCH-04 | A2   | GraphMutation store、revision、superseded                           |
+| BATCH-ORCH-05 | A2   | GraphPatchValidator、atomic apply、Shadow 零写入                    |
+| BATCH-ORCH-06 | A3   | ValidationGate、Evidence Anchor、FailureDiagnosis                   |
+| BATCH-ORCH-07 | A3   | Repair loop、三轮熔断、risk-driven Reviewer                         |
+| BATCH-ORCH-08 | A4   | Receipt/Mutation/Gate/WorkItem/Runtime recovery                     |
+| BATCH-ORCH-09 | B0   | ProjectAssignment 与 Recruitment hard constraints                   |
+| BATCH-ORCH-10 | B0   | 移除 `role_key` 副作用与 direct employee creation                   |
+| BATCH-ORCH-11 | B1   | SeedPolicy、Wayfinder、First Slice behind flag                      |
+| BATCH-ORCH-12 | B2   | GraphSupervisor shadow mode 与 Receipt Processor                    |
+| BATCH-ORCH-13 | B2   | Supervisor active mode、dispatch 与 Quiescence                      |
+| BATCH-ORCH-14 | B3   | Attention Router、真实 action handlers、完整 recovery               |
+| BATCH-ORCH-15 | B4   | Shared/SDK/Experience projections                                   |
+| BATCH-ORCH-16 | B4   | Work/Team/Diagnostics WebUI 与真实 Control Plane E2E                |
+| BATCH-ORCH-17 | B5   | S13–S27、Shadow comparison、两候选重复验证                          |
+| BATCH-ORCH-18 | B5   | Dogfood default、Pre-Public default、rollback 演练                  |
 | BATCH-ORCH-19 | 后续 | Legacy retirement；满足删除条件后作为独立可逆清理目标，不与 B5 混合 |
 
 ---

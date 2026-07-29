@@ -55,6 +55,16 @@ function git(...args: string[]) {
   return result.stdout.toString().trim()
 }
 
+function gitSource(...args: string[]) {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString())
+  return result.stdout.toString()
+}
+
 function sha256(value: string) {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex")
 }
@@ -365,6 +375,13 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     const result = await runBun(
       ["script/seed-grow-pre-public-gate.ts", requestPath],
       path.join(worktree, "packages/control-plane"),
+      {
+        ...process.env,
+        AGENTCOMPANY_TRUSTED_VERIFIER_SHA: candidate.verifierSha,
+        AGENTCOMPANY_VERIFIER_LAUNCHER_SHA256: sha256(
+          gitSource("show", `${candidate.verifierSha}:packages/control-plane/script/seed-grow-pre-public-launcher.ts`),
+        ),
+      },
     )
     if (!result.stdout) throw new Error(result.stderr)
     const decision = JSON.parse(result.stdout) as { status: string; reasons: string[] }
@@ -424,6 +441,13 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     const result = await runBun(
       ["script/seed-grow-pre-public-gate.ts", requestPath],
       path.join(root, "packages/control-plane"),
+      {
+        ...process.env,
+        AGENTCOMPANY_TRUSTED_VERIFIER_SHA: verifierSha,
+        AGENTCOMPANY_VERIFIER_LAUNCHER_SHA256: sha256(
+          gitSource("show", `${verifierSha}:packages/control-plane/script/seed-grow-pre-public-launcher.ts`),
+        ),
+      },
     )
     if (!result.stdout) throw new Error(result.stderr)
     const decision = JSON.parse(result.stdout) as { status: string; reasons: string[] }
