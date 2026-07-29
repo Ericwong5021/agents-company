@@ -376,10 +376,14 @@ async function s19() {
   if (request.mode !== "recover") throw new Error("S19 expects crash or recover")
   const project = projectRow(request)
   const first = await Effect.runPromise(
-    GraphSupervisor.Service.use((service) => service.recover()).pipe(Effect.provide(supervisorLayer)),
+    GraphSupervisor.Service.use((service) =>
+      service.recover({ project_id: project.id }),
+    ).pipe(Effect.provide(supervisorLayer)),
   )
   const replay = await Effect.runPromise(
-    GraphSupervisor.Service.use((service) => service.recover()).pipe(Effect.provide(supervisorLayer)),
+    GraphSupervisor.Service.use((service) =>
+      service.recover({ project_id: project.id }),
+    ).pipe(Effect.provide(supervisorLayer)),
   )
   const facts = projectFacts(project.id)
   const processedEvents = facts.events.filter((event) => event.type === "work_receipt.processed").length
