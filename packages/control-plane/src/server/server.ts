@@ -33,7 +33,7 @@ import { ExperienceRoutes } from "./routes/instance/experience"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { AppRuntime } from "@/effect/app-runtime"
-import { CompanyProjectRecovery } from "@/company-project"
+import { CompanyOutcomeSignal, CompanyProjectRecovery } from "@/company-project"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 
@@ -168,6 +168,7 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   await AppRuntime.runPromise(ConversationRuntime.Service.use((runtime) => runtime.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(AgentRunSupervisor.Service.use((supervisor) => supervisor.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(CompanyProjectRecovery.Service.use((recovery) => recovery.recover()))
+  await AppRuntime.runPromise(CompanyOutcomeSignal.Service.use((outcomes) => outcomes.recover()))
   await AppRuntime.runPromise(ProjectActionExecutor.Service.use((executor) => executor.recover()))
   await AppRuntime.runPromise(ProjectOrchestrator.Service.use((orchestrator) => orchestrator.recover()))
   const server = await built.runtime.listen({ port: opts.port, hostname: opts.hostname })

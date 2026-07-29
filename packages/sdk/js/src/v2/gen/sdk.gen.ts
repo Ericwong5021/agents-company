@@ -72,10 +72,13 @@ import type {
   CompanyProjectCancelResponses,
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
+  CompanyProjectOutcomeResponses,
+  CompanyProjectOutcomesResponses,
   CompanyProjectReceiptsResponses,
   CompanyProjectResolveGateResponses,
   CompanyProjectRetryResponses,
   CompanyProjectStartResponses,
+  CompanyProjectSubmitOutcomeResponses,
   CompanyProjectWorkItemReassignErrors,
   CompanyProjectWorkItemReassignResponses,
   CompanyProviderAuthErrors,
@@ -4073,6 +4076,120 @@ export class CompanyProject extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<CompanyProjectReceiptsResponses, unknown, ThrowOnError>({
       url: "/company-project/{projectID}/receipts",
+      ...options,
+      ...params,
+    })
+  }
+
+  public outcomes<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      limit?: number
+      offset?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "offset" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectOutcomesResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/outcomes",
+      ...options,
+      ...params,
+    })
+  }
+
+  public submitOutcome<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      schema_version: 1
+      idempotency_key: string
+      decision_id?: string
+      result: "succeeded" | "failed" | "inconclusive"
+      summary: string
+      validator_ref: {
+        kind: "validation_gate" | "artifact"
+        id: string
+      }
+      source_refs: Array<{
+        kind: "work_receipt" | "validation_gate" | "artifact"
+        id: string
+      }>
+      observed_at: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "schema_version" },
+            { in: "body", key: "idempotency_key" },
+            { in: "body", key: "decision_id" },
+            { in: "body", key: "result" },
+            { in: "body", key: "summary" },
+            { in: "body", key: "validator_ref" },
+            { in: "body", key: "source_refs" },
+            { in: "body", key: "observed_at" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyProjectSubmitOutcomeResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/outcomes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public outcome<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      outcomeID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "outcomeID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyProjectOutcomeResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/outcomes/{outcomeID}",
       ...options,
       ...params,
     })

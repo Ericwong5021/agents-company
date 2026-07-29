@@ -2,7 +2,16 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
 import { Effect } from "effect"
 import z from "zod"
-import { CompanyProject, CompanyProjectExecution, Project, WorkAttempt, WorkReceipt } from "@/company-project"
+import {
+  CompanyOutcomeSignal,
+  CompanyProject,
+  CompanyProjectExecution,
+  OutcomeSignal,
+  OutcomeSignalSubmission,
+  Project,
+  WorkAttempt,
+  WorkReceipt,
+} from "@/company-project"
 import { ProjectExecutionStrategy, SeedPolicyFacts } from "@agents-company/shared/project-orchestration"
 import { AgentRun } from "@/agent-run/agent-run"
 import { TokenGovernance } from "@/token-governance/token-governance"
@@ -28,6 +37,7 @@ const ReceiptPageSchema = z.object({
   limit: z.coerce.number().int().positive().max(51).default(51),
   offset: z.coerce.number().int().nonnegative().max(100_000).default(0),
 })
+const OutcomePageSchema = ReceiptPageSchema
 
 const CancelSchema = z.object({ reason: z.string().min(1).optional() })
 const RetrySchema = z.object({
@@ -43,6 +53,10 @@ const StartResultSchema = z.object({
 const GateResultSchema = z.object({
   gate: z.unknown(),
   run_id: z.string().optional(),
+})
+const OutcomeSubmissionResultSchema = z.object({
+  signal: OutcomeSignal,
+  replayed: z.boolean(),
 })
 
 export const CompanyProjectRoutes = lazy(() =>
@@ -96,6 +110,7 @@ export const CompanyProjectRoutes = lazy(() =>
             work_items,
             work_attempts,
             work_receipts,
+            outcome_signals,
             artifacts,
             gates,
             charter,
@@ -107,6 +122,7 @@ export const CompanyProjectRoutes = lazy(() =>
             service.listWorkItems(project.id),
             service.listWorkAttempts(project.id),
             service.listWorkReceipts(project.id),
+            (yield* CompanyOutcomeSignal.Service).list(project.id),
             service.listArtifacts(project.id),
             service.listGates(project.id),
             service.getCharter(project.id),
@@ -121,6 +137,7 @@ export const CompanyProjectRoutes = lazy(() =>
             work_items,
             work_attempts,
             work_receipts,
+            outcome_signals,
             worktree_runs,
             artifacts,
             gates,
@@ -167,6 +184,73 @@ export const CompanyProjectRoutes = lazy(() =>
             c.req.valid("param").projectID,
             c.req.valid("query"),
           )
+        }),
+    )
+    .get(
+      "/:projectID/outcomes",
+      describeRoute({
+        summary: "List independent outcome signals",
+        operationId: "companyProject.outcomes",
+        responses: {
+          200: {
+            description: "Outcome signals",
+            content: { "application/json": { schema: resolver(z.array(OutcomeSignal)) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      validator("query", OutcomePageSchema),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.outcomes", c, function* () {
+          return yield* (yield* CompanyOutcomeSignal.Service).list(
+            c.req.valid("param").projectID,
+            c.req.valid("query"),
+          )
+        }),
+    )
+    .post(
+      "/:projectID/outcomes",
+      describeRoute({
+        summary: "Submit an independent outcome signal",
+        description:
+          "Appends an outcome backed by a terminal Validation Gate or independently verified Artifact. Runtime completion and Work Receipt self-report are insufficient.",
+        operationId: "companyProject.submitOutcome",
+        responses: {
+          200: {
+            description: "Outcome signal",
+            content: { "application/json": { schema: resolver(OutcomeSubmissionResultSchema) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1) })),
+      validator("json", OutcomeSignalSubmission),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.submitOutcome", c, function* () {
+          return yield* (yield* CompanyOutcomeSignal.Service).submit({
+            project_id: c.req.valid("param").projectID,
+            signal: c.req.valid("json"),
+          })
+        }),
+    )
+    .get(
+      "/:projectID/outcomes/:outcomeID",
+      describeRoute({
+        summary: "Get an independent outcome signal",
+        operationId: "companyProject.outcome",
+        responses: {
+          200: {
+            description: "Outcome signal",
+            content: { "application/json": { schema: resolver(OutcomeSignal) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1), outcomeID: z.string().min(1) })),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.outcome", c, function* () {
+          const signal = yield* (yield* CompanyOutcomeSignal.Service).get(c.req.valid("param").outcomeID)
+          if (!signal || signal.project_id !== c.req.valid("param").projectID)
+            return yield* Effect.fail(new Error("Outcome signal not found"))
+          return signal
         }),
     )
     .post(

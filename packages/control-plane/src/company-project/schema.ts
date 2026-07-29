@@ -327,6 +327,46 @@ export const WorkReceipt = WorkReceiptSubmission.extend({
 })
 export type WorkReceipt = z.infer<typeof WorkReceipt>
 
+export const OutcomeSignalSchemaVersion = z.literal(1)
+export type OutcomeSignalSchemaVersion = z.infer<typeof OutcomeSignalSchemaVersion>
+
+export const OutcomeSignalResult = z.enum(["succeeded", "failed", "inconclusive"])
+export type OutcomeSignalResult = z.infer<typeof OutcomeSignalResult>
+
+export const OutcomeSignalSourceRef = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("work_receipt"), id: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal("validation_gate"), id: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal("artifact"), id: z.string().trim().min(1) }).strict(),
+])
+export type OutcomeSignalSourceRef = z.infer<typeof OutcomeSignalSourceRef>
+
+export const OutcomeSignalValidatorRef = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("validation_gate"), id: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal("artifact"), id: z.string().trim().min(1) }).strict(),
+])
+export type OutcomeSignalValidatorRef = z.infer<typeof OutcomeSignalValidatorRef>
+
+export const OutcomeSignalSubmission = z
+  .object({
+    schema_version: OutcomeSignalSchemaVersion,
+    idempotency_key: z.string().trim().min(1).max(500),
+    decision_id: z.string().trim().min(1).max(240).optional(),
+    result: OutcomeSignalResult,
+    summary: z.string().trim().min(1).max(8_000),
+    validator_ref: OutcomeSignalValidatorRef,
+    source_refs: z.array(OutcomeSignalSourceRef).min(1).max(1_000),
+    observed_at: z.number().int().nonnegative(),
+  })
+  .strict()
+export type OutcomeSignalSubmission = z.infer<typeof OutcomeSignalSubmission>
+
+export const OutcomeSignal = OutcomeSignalSubmission.extend({
+  id: z.string(),
+  project_id: z.string(),
+  created_at: z.number().int().nonnegative(),
+})
+export type OutcomeSignal = z.infer<typeof OutcomeSignal>
+
 export const ValidationGateKind = z.enum([
   "prerequisite",
   "unit_test",

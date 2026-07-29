@@ -271,6 +271,31 @@ export const CompanyWorkReceiptTable = sqliteTable(
   ],
 )
 
+export const CompanyOutcomeSignalTable = sqliteTable(
+  "company_outcome_signal",
+  {
+    id: text().primaryKey(),
+    schema_version: integer().notNull(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    decision_id: text(),
+    idempotency_key: text().notNull(),
+    result: text().notNull(),
+    summary: text().notNull(),
+    validator_kind: text().notNull(),
+    validator_id: text().notNull(),
+    source_refs_json: text().notNull(),
+    observed_at: integer().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("company_outcome_signal_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    index("company_outcome_signal_project_created_idx").on(table.project_id, table.created_at),
+    index("company_outcome_signal_decision_idx").on(table.decision_id),
+  ],
+)
+
 export const CompanyGraphMutationTable = sqliteTable(
   "company_graph_mutation",
   {

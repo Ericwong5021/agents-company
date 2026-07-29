@@ -777,7 +777,7 @@ export function makeLayer() {
                 now,
               )
               if (result.status === "failed" && round === row.max_repair_rounds) {
-                createAttentionWithDatabase(db, {
+                const attention = createAttentionWithDatabase(db, {
                   project_id: row.project_id,
                   idempotency_key: `validation-circuit:${row.id}`,
                   issue: {
@@ -793,6 +793,17 @@ export function makeLayer() {
                     { kind: "validation_gate", id: row.id },
                   ],
                 })
+                if (!attention.replayed)
+                  insertEvent(
+                    db,
+                    row.project_id,
+                    "attention.requested",
+                    {
+                      attention_id: attention.record.id,
+                      validation_gate_id: row.id,
+                    },
+                    now,
+                  )
               }
               const gate = gateFromRow(
                 db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, row.id)).get()!,
@@ -878,7 +889,19 @@ export function makeLayer() {
                         { kind: "validation_gate", id: row.id },
                       ],
                     })
-                    if (!attention.replayed) attention_gate_ids.push(row.id)
+                    if (!attention.replayed) {
+                      insertEvent(
+                        db,
+                        row.project_id,
+                        "attention.requested",
+                        {
+                          attention_id: attention.record.id,
+                          validation_gate_id: row.id,
+                        },
+                        Date.now(),
+                      )
+                      attention_gate_ids.push(row.id)
+                    }
                   }
                   confirmed_gate_ids.push(row.id)
                 })

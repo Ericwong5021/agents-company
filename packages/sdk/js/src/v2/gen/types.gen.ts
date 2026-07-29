@@ -11671,6 +11671,100 @@ export type CompanyProjectReceiptsResponses = {
 
 export type CompanyProjectReceiptsResponse = CompanyProjectReceiptsResponses[keyof CompanyProjectReceiptsResponses]
 
+export type OutcomeSignalSourceRef = {
+  kind: "work_receipt" | "validation_gate" | "artifact"
+  id: string
+}
+
+export type OutcomeSignalValidatorRef = {
+  kind: "validation_gate" | "artifact"
+  id: string
+}
+
+export type OutcomeSignalRecord = {
+  schema_version: 1
+  idempotency_key: string
+  decision_id?: string
+  result: "succeeded" | "failed" | "inconclusive"
+  summary: string
+  validator_ref: OutcomeSignalValidatorRef
+  source_refs: Array<OutcomeSignalSourceRef>
+  observed_at: number
+  id: string
+  project_id: string
+  created_at: number
+}
+
+export type CompanyProjectOutcomesData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+    limit?: number
+    offset?: number
+  }
+  url: "/company-project/{projectID}/outcomes"
+}
+
+export type CompanyProjectOutcomesResponses = {
+  200: Array<OutcomeSignalRecord>
+}
+
+export type CompanyProjectOutcomesResponse = CompanyProjectOutcomesResponses[keyof CompanyProjectOutcomesResponses]
+
+export type CompanyProjectSubmitOutcomeData = {
+  body: {
+    schema_version: 1
+    idempotency_key: string
+    decision_id?: string
+    result: "succeeded" | "failed" | "inconclusive"
+    summary: string
+    validator_ref: OutcomeSignalValidatorRef
+    source_refs: Array<OutcomeSignalSourceRef>
+    observed_at: number
+  }
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/outcomes"
+}
+
+export type CompanyProjectSubmitOutcomeResponses = {
+  200: {
+    signal: OutcomeSignalRecord
+    replayed: boolean
+  }
+}
+
+export type CompanyProjectSubmitOutcomeResponse =
+  CompanyProjectSubmitOutcomeResponses[keyof CompanyProjectSubmitOutcomeResponses]
+
+export type CompanyProjectOutcomeData = {
+  body?: never
+  path: {
+    projectID: string
+    outcomeID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-project/{projectID}/outcomes/{outcomeID}"
+}
+
+export type CompanyProjectOutcomeResponses = {
+  200: OutcomeSignalRecord
+}
+
+export type CompanyProjectOutcomeResponse = CompanyProjectOutcomeResponses[keyof CompanyProjectOutcomeResponses]
+
 export type CompanyProjectCancelData = {
   body?: {
     reason?: string

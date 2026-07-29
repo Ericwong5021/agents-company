@@ -72,6 +72,7 @@ import {
   CompanyProject,
   CompanyProjectDirection,
   CompanyProjectExecution,
+  CompanyOutcomeSignal,
   CompanyProjectRecovery,
 } from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
@@ -173,6 +174,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyRecruitment.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     CompanyProjectDirection.defaultLayer,
+    CompanyOutcomeSignal.defaultLayer,
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     Thread.defaultLayer,

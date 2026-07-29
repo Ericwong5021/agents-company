@@ -132,6 +132,7 @@ const knownNoopEvents = new Set([
   "validation_gate.recovered",
   "failure_diagnosis.recorded",
   "graph_repair.completed",
+  "outcome_signal.recorded",
   "attention.requested",
   "attention.opened",
   "attention.closed",

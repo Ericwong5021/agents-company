@@ -35,6 +35,7 @@ export {
   CompanyArtifactTable,
   CompanyWorkAttemptTable,
   CompanyWorkReceiptTable,
+  CompanyOutcomeSignalTable,
   CompanyGraphMutationTable,
   CompanyValidationGateTable,
   CompanyValidationRepairTable,
