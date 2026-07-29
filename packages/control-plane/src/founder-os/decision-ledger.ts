@@ -477,8 +477,9 @@ export function appendDecisionTransitionInTransaction(
         eq(DecisionCurrentProjectionTable.latest_transition_id, projection.latest_transition_id),
       ),
     )
-    .run()
-  if (updated.changes !== 1) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
+    .returning({ decisionId: DecisionCurrentProjectionTable.decision_id })
+    .get()
+  if (!updated) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
   const transition = db.select().from(DecisionTransitionTable).where(eq(DecisionTransitionTable.id, id)).get()
   if (!transition) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
   return transitionFromRow(transition)
@@ -564,8 +565,9 @@ function appendDispatchEvent(
           eq(DecisionDispatchCurrentTable.latest_event_id, current.latest_event_id),
         ),
       )
-      .run()
-    if (updated.changes !== 1)
+      .returning({ outboxId: DecisionDispatchCurrentTable.outbox_id })
+      .get()
+    if (!updated)
       throw new DecisionLedgerIdempotencyConflict({ idempotency_key: input.idempotencyKey })
   }
   return db.select().from(DecisionDispatchEventTable).where(eq(DecisionDispatchEventTable.id, id)).get()!

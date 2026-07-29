@@ -5,7 +5,7 @@ export const CompanyProjectTable = sqliteTable(
   "company_project",
   {
     id: text().primaryKey(),
-    company_id: text().notNull(),
+    company_id: text(),
     root_need_id: text(),
     source_thread_id: text(),
     decision_request_id: text(),

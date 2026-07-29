@@ -10,6 +10,7 @@ import { CompanyID } from "@/company/schema"
 import { Conversation } from "@/conversation"
 import { orchestrationPlan } from "./orchestration"
 import { ConversationThreadID } from "@/conversation/schema"
+import { KnowledgeReadingReceipt } from "@/company-reading/schema"
 import { Delegation } from "@/delegation/delegation"
 import { SubTask } from "@/delegation/schema"
 import { Provider } from "@/provider"
@@ -182,6 +183,7 @@ const submissions = {
     conclusions: z.array(z.string()).min(1),
     limitations: z.array(z.string()).optional(),
   }),
+  knowledge_reading: KnowledgeReadingReceipt,
 } satisfies Record<(typeof workTypes)[number], z.ZodType>
 
 const reviewResult = z.object({

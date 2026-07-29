@@ -7,6 +7,7 @@ import {
   type FounderAdvisorReadinessRecordInput as FounderAdvisorReadinessRecordInputValue,
 } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import {
   CompanyProjectTable,
   CompanyWorktreeRunTable,
@@ -131,7 +132,7 @@ export function record(raw: FounderAdvisorReadinessRecordInputValue) {
         throw new Error("Advisor readiness idempotency key has different facts")
       return
     }
-    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(input.companyId))).get()
     if (!company) throw new Error("Company was not found")
     const mode = FounderOSMode.resolve({
       founderTwinMode: company.founder_twin_mode,
@@ -216,7 +217,7 @@ export function record(raw: FounderAdvisorReadinessRecordInputValue) {
       .run()
     db.update(CompanyTable)
       .set({ founder_twin_mode: "advisor", time_updated: Date.now() })
-      .where(eq(CompanyTable.id, input.companyId))
+      .where(eq(CompanyTable.id, CompanyID.parse(input.companyId)))
       .run()
   }, { behavior: "immediate" })
   return readiness(input.companyId)

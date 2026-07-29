@@ -17,6 +17,7 @@ import {
 } from "@agents-company/shared/founder-os"
 import { GoalBriefDraft } from "@agents-company/shared/experience"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import {
   CompanyArtifactTable,
   CompanyGraphDecisionTable,
@@ -140,7 +141,7 @@ function digest(value: unknown) {
 
 function currentMode(companyId: string) {
   const company = Database.use((db) =>
-    db.select().from(CompanyTable).where(eq(CompanyTable.id, companyId)).get(),
+    db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(companyId))).get(),
   )
   if (!company) throw new Error("Company was not found")
   return FounderOSMode.resolve({
@@ -316,7 +317,7 @@ function event(
 
 function downgradeInvalidYellowReadiness(companyId: string, readinessId: string | null) {
   Database.transaction((db) => {
-    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyId)).get()
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(companyId))).get()
     if (company?.founder_twin_mode !== "yellow-delegated") return
     event(db, {
       companyId,
@@ -332,7 +333,7 @@ function downgradeInvalidYellowReadiness(companyId: string, readinessId: string 
     })
     db.update(CompanyTable)
       .set({ founder_twin_mode: "advisor", time_updated: Date.now() })
-      .where(eq(CompanyTable.id, companyId))
+      .where(eq(CompanyTable.id, CompanyID.parse(companyId)))
       .run()
   }, { behavior: "immediate" })
 }
@@ -659,7 +660,7 @@ function recordReadiness(raw: FounderYellowReadinessRecordInputValue) {
         throw new Error("Yellow readiness idempotency key has different facts")
       return
     }
-    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(input.companyId))).get()
     if (!company) throw new Error("Company was not found")
     const resolvedMode = FounderOSMode.resolve({
       founderTwinMode: company.founder_twin_mode,
@@ -726,7 +727,7 @@ function recordReadiness(raw: FounderYellowReadinessRecordInputValue) {
       .run()
     db.update(CompanyTable)
       .set({ founder_twin_mode: "yellow-delegated", time_updated: Date.now() })
-      .where(eq(CompanyTable.id, input.companyId))
+      .where(eq(CompanyTable.id, CompanyID.parse(input.companyId)))
       .run()
     event(db, {
       companyId: input.companyId,
@@ -784,11 +785,15 @@ export const layer = Layer.effect(
             actor: { kind: "policy_engine", id: "yellow-circuit-breaker" },
             data: { reason, targetMode },
           })
-          const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, run.company_id)).get()
+          const company = db
+            .select()
+            .from(CompanyTable)
+            .where(eq(CompanyTable.id, CompanyID.parse(run.company_id)))
+            .get()
           if (company?.founder_twin_mode === "yellow-delegated")
             db.update(CompanyTable)
               .set({ founder_twin_mode: targetMode, time_updated: Date.now() })
-              .where(eq(CompanyTable.id, run.company_id))
+              .where(eq(CompanyTable.id, CompanyID.parse(run.company_id)))
               .run()
         }, { behavior: "immediate" }),
       )
@@ -1278,12 +1283,12 @@ export const layer = Layer.effect(
       const result = yield* Effect.exit(orchestrator.processReceipt(run.receipt_id))
       if (Exit.isFailure(result))
         return yield* completeFailure(String(Cause.squash(result.cause)))
-      if (
-        result.value.processing.status === "disabled"
-        || result.value.processing.decision.status !== "applied"
-        || !result.value.processing.mutation_id
-      )
+      const processing = result.value.processing
+      if (processing.status === "disabled")
         return yield* completeFailure("Graph Supervisor did not apply a reversible Yellow mutation.")
+      if (processing.decision.status !== "applied" || !processing.mutation_id)
+        return yield* completeFailure("Graph Supervisor did not apply a reversible Yellow mutation.")
+      const mutationId = processing.mutation_id
       const direction = FounderYellowDelegationInput.shape.direction.parse(JSON.parse(run.direction_json))
       const project = Database.use((db) =>
         db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, run.project_id)).get(),
@@ -1316,8 +1321,8 @@ export const layer = Layer.effect(
       const updatedChain = Database.use((db) =>
         chain(db, {
           ...run,
-          graph_decision_id: result.value.processing.decision.id,
-          mutation_id: result.value.processing.mutation_id,
+          graph_decision_id: processing.decision.id,
+          mutation_id: mutationId,
         }),
       )
       yield* Effect.sync(() =>
@@ -1329,8 +1334,8 @@ export const layer = Layer.effect(
           db.update(FounderYellowRunTable)
             .set({
               status: "outcome_pending",
-              graph_decision_id: result.value.processing.decision.id,
-              mutation_id: result.value.processing.mutation_id,
+              graph_decision_id: processing.decision.id,
+              mutation_id: mutationId,
               work_item_ids_json: JSON.stringify(updatedChain.workItemIds),
               receipt_ids_json: JSON.stringify(updatedChain.receiptIds),
               actual_cost: updatedChain.actualCost,
@@ -1348,8 +1353,8 @@ export const layer = Layer.effect(
             type: "dispatch_completed",
             actor: { kind: "control_plane", id: "graph-supervisor" },
             data: {
-              graphDecisionId: result.value.processing.decision.id,
-              mutationId: result.value.processing.mutation_id,
+              graphDecisionId: processing.decision.id,
+              mutationId,
               workItemIds: updatedChain.workItemIds,
               receiptIds: updatedChain.receiptIds,
               actualCost: updatedChain.actualCost,
@@ -1361,7 +1366,7 @@ export const layer = Layer.effect(
       yield* ledger.completeDispatch(claimed.id, {
         consumerId,
         leaseToken: claimed.leaseToken,
-        executionReceipt: result.value.processing.mutation_id,
+        executionReceipt: mutationId,
       })
       yield* ledger.appendTransition(run.decision_id, {
         schemaVersion: 1,

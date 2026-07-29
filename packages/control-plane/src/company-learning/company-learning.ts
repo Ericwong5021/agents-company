@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import { AgentRunTable, SkillSnapshotTable } from "@/agent-run/agent-run.sql"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
 import { CompanyInterpretationTable } from "@/company-reading/company-reading.sql"
@@ -186,7 +187,7 @@ function patchFromRow(db: TxOrDb, row: typeof CompanyLearningPatchTable.$inferSe
 }
 
 function requireCompany(db: TxOrDb, company_id: string) {
-  const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, company_id)).get()
+  const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(company_id))).get()
   if (!company) throw new Error("Company was not found")
   return company
 }
@@ -399,12 +400,18 @@ export interface Interface {
   readonly listBeliefs: (company_id: string) => Effect.Effect<BeliefValue[]>
   readonly appendEvidence: (belief_id: string, input: BeliefEvidenceAppendInputValue) => Effect.Effect<BeliefValue>
   readonly adoptBelief: (belief_id: string, input: BeliefAdoptionInputValue) => Effect.Effect<BeliefValue>
-  readonly proposeExperiment: (input: ExperimentProposalInputValue) => Effect.Effect<ExperimentValue>
+  readonly proposeExperiment: (input: ExperimentProposalInputValue) => Effect.Effect<ExperimentValue, unknown>
   readonly listExperiments: (company_id: string) => Effect.Effect<ExperimentValue[]>
-  readonly actOnExperiment: (experiment_id: string, input: ExperimentActionInputValue) => Effect.Effect<ExperimentValue>
+  readonly actOnExperiment: (
+    experiment_id: string,
+    input: ExperimentActionInputValue,
+  ) => Effect.Effect<ExperimentValue, unknown>
   readonly proposePatch: (input: LearningPatchProposalInputValue) => Effect.Effect<LearningPatchValue>
   readonly listPatches: (company_id: string) => Effect.Effect<LearningPatchValue[]>
-  readonly actOnPatch: (patch_id: string, input: LearningPatchActionInputValue) => Effect.Effect<LearningPatchValue>
+  readonly actOnPatch: (
+    patch_id: string,
+    input: LearningPatchActionInputValue,
+  ) => Effect.Effect<LearningPatchValue, unknown>
   readonly evidencePackage: (company_id: string) => Effect.Effect<LearningEvidencePackageValue>
   readonly resolveTarget: (
     company_id: string,
@@ -627,7 +634,7 @@ export const layer = Layer.effect(
         actionType: "experiment.run.propose",
         proposedAuthorityClass: input.decision_intent.authorityClass,
         evidenceSufficient: input.decision_intent.evidenceRefs.length > 0,
-        requestedBy: { kind: "agent", id: input.proposed_by },
+        requestedBy: { kind: "ai_founder", id: input.proposed_by },
       })
       return Database.transaction((db) => {
         const now = Date.now()
@@ -689,7 +696,7 @@ export const layer = Layer.effect(
           actionType: "experiment.run.propose",
           proposedAuthorityClass: intent.authorityClass,
           evidenceSufficient: intent.evidenceRefs.length > 0,
-          requestedBy: { kind: "agent", id: input.actor_id },
+          requestedBy: { kind: "ai_founder", id: input.actor_id },
         })
         Database.use((db) =>
           db.update(CompanyExperimentTable).set({
@@ -880,7 +887,14 @@ export const layer = Layer.effect(
           actionType: `learning_patch.${patch.target_type}.activate`,
           proposedAuthorityClass: patch.authority_class as "yellow" | "red",
           evidenceSufficient: json<string[]>(patch.evidence_json).length > 0,
-          requestedBy: { kind: input.actor_kind, id: input.actor_id },
+          requestedBy: {
+            kind: input.actor_kind === "agent"
+              ? "ai_founder"
+              : input.actor_kind === "system"
+                ? "policy_engine"
+                : "human",
+            id: input.actor_id,
+          },
         })
         Database.use((db) => {
           db.update(CompanyLearningPatchTable).set({
@@ -918,7 +932,7 @@ export const layer = Layer.effect(
             )
               throw new Error("Patch author or evaluated subject cannot review the Benchmark")
             const principals = db.select().from(CompanyAgentTable).where(and(
-              eq(CompanyAgentTable.company_id, patch.company_id),
+              eq(CompanyAgentTable.company_id, CompanyID.parse(patch.company_id)),
               inArray(CompanyAgentTable.id, [input.reviewer_id, input.report_author_id]),
             )).all()
             if (principals.length !== new Set([input.reviewer_id, input.report_author_id]).size)

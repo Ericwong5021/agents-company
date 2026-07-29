@@ -19,6 +19,7 @@ const fallbackCapabilityPacks: Record<WorkItem["work_type"], string[]> = {
   writing: ["document-authoring@1"],
   design: ["design-production@1"],
   analysis: ["research-analysis@1"],
+  knowledge_reading: ["commons-reading@1"],
 }
 
 export interface Interface {

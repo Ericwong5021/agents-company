@@ -1,8 +1,9 @@
-import { Context, Effect, Layer } from "effect"
+import { Cause, Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import { CompanyCommons } from "@/company-commons"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
 import type { CommonsAccess } from "@/company-commons/schema"
@@ -104,7 +105,7 @@ const overlap = (left: Set<string>, right: Set<string>) => {
 
 function effectiveReadingMode(company_id: string) {
   const company = Database.use((db) =>
-    db.select().from(CompanyTable).where(eq(CompanyTable.id, company_id)).get(),
+    db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(company_id))).get(),
   )
   if (!company) throw new Error("Reading company was not found")
   return FounderOSMode.resolve({
@@ -161,7 +162,10 @@ export const layer = Layer.effect(
         db
           .select()
           .from(CompanyAgentTable)
-          .where(and(eq(CompanyAgentTable.id, input.agent_id), eq(CompanyAgentTable.company_id, input.company_id)))
+          .where(and(
+            eq(CompanyAgentTable.id, input.agent_id),
+            eq(CompanyAgentTable.company_id, CompanyID.parse(input.company_id)),
+          ))
           .get(),
       )
       if (!agent) throw new Error("Interest Profile Agent does not belong to the company")
@@ -485,7 +489,7 @@ export const layer = Layer.effect(
               source.source.title,
               agentRows.find((agent) => agent.id === entry.profile.agent_id)?.role_key ?? "Reader",
             ).pipe(
-              Effect.catchAll((error) =>
+              Effect.catchCause((cause) =>
                 Effect.sync(() => {
                   Database.use((db) =>
                     db
@@ -493,7 +497,7 @@ export const layer = Layer.effect(
                       .set({
                         status: "failed",
                         budget_reserved: false,
-                        error: error instanceof Error ? error.message : String(error),
+                        error: String(Cause.squash(cause)),
                         updated_at: Date.now(),
                       })
                       .where(eq(CompanyReadingAssignmentTable.id, row.id))
@@ -889,7 +893,7 @@ export const layer = Layer.effect(
                 project_ids: JSON.parse(row.linked_project_ids_json),
               }).pipe(
                 Effect.map(() => row.id),
-                Effect.catchAll((error) =>
+                Effect.catchCause((cause) =>
                   Effect.sync(() => {
                     Database.use((db) =>
                       db
@@ -897,7 +901,7 @@ export const layer = Layer.effect(
                         .set({
                           status: "failed",
                           budget_reserved: false,
-                          error: error instanceof Error ? error.message : String(error),
+                          error: String(Cause.squash(cause)),
                           updated_at: Date.now(),
                         })
                         .where(eq(CompanyReadingAssignmentTable.id, row.id))
@@ -964,7 +968,7 @@ export const layer = Layer.effect(
             agent?.role_key ?? "Reader",
           ).pipe(
             Effect.map(() => row.id),
-            Effect.catchAll((error) =>
+            Effect.catchCause((cause) =>
               Effect.sync(() => {
                 Database.use((db) =>
                   db
@@ -972,7 +976,7 @@ export const layer = Layer.effect(
                     .set({
                       status: "failed",
                       budget_reserved: false,
-                      error: error instanceof Error ? error.message : String(error),
+                      error: String(Cause.squash(cause)),
                       updated_at: Date.now(),
                     })
                     .where(eq(CompanyReadingAssignmentTable.id, row.id))

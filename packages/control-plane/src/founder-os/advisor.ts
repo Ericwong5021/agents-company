@@ -29,6 +29,11 @@ import {
   ConversationRunTable,
   ConversationThreadTable,
 } from "@/conversation/conversation.sql"
+import {
+  ChannelMessageID,
+  ConversationRunID,
+  ConversationThreadID,
+} from "@/conversation/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -293,12 +298,12 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         throw new Error("Advisor convergence idempotency key has different facts")
       if (existing.status !== "blocked") return convergenceFromRow(db, existing)
     }
-    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(input.companyId))).get()
     if (!company) throw new Error("Company was not found")
     const thread = db
       .select()
       .from(ConversationThreadTable)
-      .where(eq(ConversationThreadTable.id, input.source.boardThreadId))
+      .where(eq(ConversationThreadTable.id, ConversationThreadID.parse(input.source.boardThreadId)))
       .get()
     const channel = thread
       ? db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
@@ -306,10 +311,14 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
     const message = db
       .select()
       .from(ChannelMessageTable)
-      .where(eq(ChannelMessageTable.id, input.source.channelMessageId))
+      .where(eq(ChannelMessageTable.id, ChannelMessageID.parse(input.source.channelMessageId)))
       .get()
     const run = input.source.boardRunId
-      ? db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, input.source.boardRunId)).get()
+      ? db
+          .select()
+          .from(ConversationRunTable)
+          .where(eq(ConversationRunTable.id, ConversationRunID.parse(input.source.boardRunId)))
+          .get()
       : undefined
     const shadow = db
       .select()
@@ -375,7 +384,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       .get()
     if (current && current.status !== "blocked") return convergenceFromRow(db, current)
     if (sourceReason) throw new Error(sourceReason)
-    const block = (authority: FounderAdvisorAuthorityResult) => current
+    const block = (authority: { status: "blocked" | "unavailable"; reason: string }) => current
       ? convergenceFromRow(db, current)
       : saveBlocked(db, input, inputSha256, currentRequestKey, authority)
     if (input.timeoutAt <= Date.now())

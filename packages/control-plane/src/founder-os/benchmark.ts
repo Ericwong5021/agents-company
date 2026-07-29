@@ -8,10 +8,12 @@ import {
   FounderBenchmarkReport,
   FounderBenchmarkRunInput,
   FounderBenchmarkSourcePayload,
+  GovernanceAssetScope,
   type FounderBenchmarkCaseInput as FounderBenchmarkCaseInputValue,
   type FounderBenchmarkRunInput as FounderBenchmarkRunInputValue,
 } from "@agents-company/shared/founder-os"
 import { Identifier } from "@/id/id"
+import { CompanyID } from "@/company/schema"
 import { activeBenchmarkTarget } from "@/company-learning/target-adapters"
 import { Database } from "@/storage"
 import { FounderTwinSnapshotTable, GovernanceAssetTable } from "./asset.sql"
@@ -116,20 +118,22 @@ export function registerCase(raw: FounderBenchmarkCaseInputValue) {
     || digest(input.expected) !== digest(payload.expected)
   )
     throw new Error("Benchmark case facts must exactly match the human-confirmed source asset")
+  const confirmationEventId = asset.confirmation_event_id
+  const confirmedBy = asset.approved_by
   const id = Identifier.create("fbcase", "ascending")
   Database.transaction((db) =>
     db.insert(FounderBenchmarkCaseTable)
       .values({
         id,
-        company_id: input.companyId,
+        company_id: CompanyID.parse(input.companyId),
         benchmark_type: input.benchmarkType,
         dataset_version: input.datasetVersion,
         split: input.split,
         source_asset_id: input.sourceAsset.assetId,
         source_asset_version: input.sourceAsset.version,
         expected_json: JSON.stringify(payload.expected),
-        confirmation_event_id: asset.confirmation_event_id,
-        confirmed_by: asset.approved_by,
+        confirmation_event_id: confirmationEventId,
+        confirmed_by: confirmedBy,
         created_at: Date.now(),
       })
       .run(),
@@ -248,10 +252,10 @@ export function run(raw: FounderBenchmarkRunInputValue) {
           cases: sourceAssets.map((entry) => ({
             id: entry.item.id,
             sourceAsset: entry.item.sourceAsset,
-            scope: {
+            scope: GovernanceAssetScope.parse({
               kind: entry.asset!.scope_kind,
               ...(entry.asset!.scope_ref ? { ref: entry.asset!.scope_ref } : {}),
-            },
+            }),
             prompt: entry.payload!.prompt,
             tags: JSON.parse(entry.asset!.tags_json),
             evidenceRefs: JSON.parse(entry.asset!.source_refs_json).map(

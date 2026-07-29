@@ -34,6 +34,7 @@ import {
   ChannelTable,
   ConversationThreadTable,
 } from "@/conversation/conversation.sql"
+import { ChannelMessageID } from "@/conversation/schema"
 import { FounderTwinSnapshotSelectionTable, FounderTwinSnapshotTable, GovernanceAssetTable } from "./asset.sql"
 import { DecisionRecordTable } from "./decision-ledger.sql"
 import {
@@ -126,7 +127,7 @@ function evidenceExists(
           ConversationThreadTable,
           eq(ConversationThreadTable.id, ChannelMessageTable.source_thread_id),
         )
-        .where(eq(ChannelMessageTable.id, reference.id))
+        .where(eq(ChannelMessageTable.id, ChannelMessageID.parse(reference.id)))
         .get()
       if (!message || message.companyId !== companyId) return false
       if (message.projectId === null) return true

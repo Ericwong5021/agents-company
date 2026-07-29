@@ -11,7 +11,7 @@ export const SubTask = z.object({
   summary: z.string().min(1),
   acceptanceCriteria: z.string().min(1),
   suggestedAgent: z.string().optional(),
-  workType: z.enum(["coding", "decision", "research", "writing", "design", "analysis"]).optional(),
+  workType: z.enum(["coding", "decision", "research", "writing", "design", "analysis", "knowledge_reading"]).optional(),
   role: z.string().min(1).optional(),
   capabilityPacks: z.array(z.string()).optional(),
   decisionScope: z.array(z.string()).optional(),

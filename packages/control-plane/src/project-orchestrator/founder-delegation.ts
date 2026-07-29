@@ -14,6 +14,7 @@ import {
   type FounderGreenReadinessRecordInput as FounderGreenReadinessRecordInputValue,
 } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import {
   CompanyArtifactTable,
   CompanyGraphDecisionTable,
@@ -128,7 +129,7 @@ function digest(value: unknown) {
 
 function mode(companyId: string) {
   const company = Database.use((db) =>
-    db.select().from(CompanyTable).where(eq(CompanyTable.id, companyId)).get(),
+    db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(companyId))).get(),
   )
   if (!company) throw new Error("Company was not found")
   return FounderOSMode.resolve({
@@ -528,7 +529,7 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
         throw new Error("Green readiness idempotency key has different facts")
       return
     }
-    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(input.companyId))).get()
     if (!company) throw new Error("Company was not found")
     const resolvedMode = FounderOSMode.resolve({
       founderTwinMode: company.founder_twin_mode,
@@ -666,7 +667,7 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
       .run()
     db.update(CompanyTable)
       .set({ founder_twin_mode: "green-delegated", time_updated: Date.now() })
-      .where(eq(CompanyTable.id, input.companyId))
+      .where(eq(CompanyTable.id, CompanyID.parse(input.companyId)))
       .run()
   }, { behavior: "immediate" })
   return readiness(input.companyId).value

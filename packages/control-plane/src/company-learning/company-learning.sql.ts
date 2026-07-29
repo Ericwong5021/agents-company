@@ -1,7 +1,11 @@
 import { check, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { sql } from "drizzle-orm"
 import { CompanyTable } from "@/company/company.sql"
-import { CompanyProjectTable, CompanyOutcomeSignalTable } from "@/company-project/company-project.sql"
+import {
+  CompanyOutcomeSignalTable,
+  CompanyProjectTable,
+  CompanyWorkReceiptTable,
+} from "@/company-project/company-project.sql"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
 import { CompanyInterpretationTable } from "@/company-reading/company-reading.sql"
 import { DecisionRecordTable } from "@/founder-os/decision-ledger.sql"

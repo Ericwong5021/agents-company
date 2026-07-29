@@ -393,7 +393,9 @@ export interface Interface {
   }) => Effect.Effect<WorkItem>
   readonly completeKnowledgeReading: (input: {
     work_item_id: string
-    interpretation_id: string
+    assignment_id: string
+    source_artifact_id: string
+    receipt: KnowledgeReadingReceiptValue
   }) => Effect.Effect<WorkItem>
 }
 

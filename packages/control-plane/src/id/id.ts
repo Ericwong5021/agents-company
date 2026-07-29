@@ -22,6 +22,7 @@ const prefixes = {
   workAttempt: "wat",
   workReceipt: "wrc",
   outcomeSignal: "osig",
+  outcomeTransition: "otrn",
   receiptClaim: "rclm",
   graphDecision: "gdec",
   graphMutation: "gmut",

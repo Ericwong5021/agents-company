@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm"
 import z from "zod"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { CompanyID } from "@/company/schema"
 import { CompanyAgentInterestProfileTable } from "@/company-reading/company-reading.sql"
 import { AgentInterestProfileInput } from "@/company-reading/schema"
 import {
@@ -108,7 +109,10 @@ export function validateRealTarget(
   if (targetType === "agent_interest") {
     const value = InterestTarget.parse(proposedDiff)
     const agent = db.select().from(CompanyAgentTable)
-      .where(and(eq(CompanyAgentTable.id, targetId), eq(CompanyAgentTable.company_id, companyId))).get()
+      .where(and(
+        eq(CompanyAgentTable.id, targetId),
+        eq(CompanyAgentTable.company_id, CompanyID.parse(companyId)),
+      )).get()
     if (!agent) throw new Error("Agent Interest Patch target was not found in the company")
     return value
   }
@@ -327,7 +331,7 @@ export function attachPlanningTargetRefs(db: TxOrDb, receiptId: string) {
   const receipt = db.select().from(CompanyWorkReceiptTable).where(eq(CompanyWorkReceiptTable.id, receiptId)).get()
   if (!receipt) return
   const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, receipt.project_id)).get()
-  if (!project) return
+  if (!project?.company_id) return
   const refs = z.array(z.object({ kind: z.string(), id: z.string() }).catchall(z.unknown()))
     .parse(JSON.parse(receipt.evidence_refs_json))
   const existingKinds = new Set(refs.map((reference) => reference.kind))

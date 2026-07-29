@@ -652,11 +652,15 @@ export const governanceLayer = Layer.succeed(
                 : undefined
               if (!requestFacts?.success)
                 throw new Error("ApprovalGate is missing its original deterministic governance facts")
-              const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, before.scope.companyId)).get()
+              const company = db
+                .select()
+                .from(CompanyTable)
+                .where(eq(CompanyTable.id, CompanyID.parse(before.scope.companyId)))
+                .get()
               const preset = db
                 .select()
                 .from(ApprovalPolicyTable)
-                .where(eq(ApprovalPolicyTable.company_id, before.scope.companyId))
+                .where(eq(ApprovalPolicyTable.company_id, CompanyID.parse(before.scope.companyId)))
                 .get()
               if (!company || !preset) throw new Error("Company governance settings were not found")
               const authorizationTransition =

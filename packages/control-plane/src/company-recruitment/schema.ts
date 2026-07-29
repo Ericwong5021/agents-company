@@ -4,7 +4,7 @@ import { ProjectStatus } from "@/company-project/schema"
 import { CompanyID } from "@/company/schema"
 import { RuntimeCapabilities, RuntimePermissionMode } from "@/runtime"
 
-export const WorkType = z.enum(["coding", "decision", "research", "writing", "design", "analysis"])
+export const WorkType = z.enum(["coding", "decision", "research", "writing", "design", "analysis", "knowledge_reading"])
 export const RiskLevel = z.enum(["low", "medium", "high"])
 export const DemandHorizon = z.enum(["project", "recurring"])
 export const AgentLifecycle = z.enum(["candidate", "assigned", "employee", "archived"])
