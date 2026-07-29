@@ -384,16 +384,12 @@
       "cwd": "packages/control-plane",
       "argv": [
         "bun",
-        "test",
-        "--max-concurrency=1",
-        "--timeout",
-        "30000",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/all-unit-junit.xml"
+        "../../script/control-plane-all-unit-sharded.ts"
       ],
       "timeoutMs": 1800000,
       "stdoutValidator": "none",
       "environment": {
+        "AGENTCOMPANY_DISABLE_MODELS_FETCH": "1",
         "AGENTCOMPANY_PURE": "0"
       },
       "reports": [

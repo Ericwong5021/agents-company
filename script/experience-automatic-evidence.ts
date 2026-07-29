@@ -54,6 +54,7 @@ const inheritedEnvironmentAllowlist = new Set([
   "WINDIR",
 ])
 const requirementEnvironmentAllowlist = new Set([
+  "AGENTCOMPANY_DISABLE_MODELS_FETCH",
   "AGENTCOMPANY_PURE",
   "MODELS_DEV_API_JSON",
   "PLAYWRIGHT_JUNIT_OUTPUT",
