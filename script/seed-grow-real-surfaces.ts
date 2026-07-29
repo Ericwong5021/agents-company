@@ -4,6 +4,7 @@ import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import sharp from "sharp"
+import { validateSeedGrowB4Artifacts } from "./validate-seed-grow-b4-artifacts"
 
 const root = path.resolve(import.meta.dir, "..")
 const appRoot = path.join(root, "packages/app")
@@ -732,12 +733,10 @@ try {
   projectionFault = "error"
   await errorPage.goto(`${webUIURL}/work/${encodeURIComponent(projectID)}`, { waitUntil: "domcontentloaded" })
   const errorState = errorPage.getByRole("alert").filter({ hasText: "无法读取动态组织投影" })
-  const errorStateVisible = await errorState
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .then(
-      () => true,
-      () => false,
-    )
+  const errorStateVisible = await errorState.waitFor({ state: "visible", timeout: 15_000 }).then(
+    () => true,
+    () => false,
+  )
   if (!errorStateVisible)
     uncovered.push("Seed-and-Grow projection error is masked by the unavailable WorkProjection fallback.")
   projectionFault = "none"
@@ -794,12 +793,10 @@ try {
   await page.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
   await page.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
   const teamAssignment = page.getByText("Assignment evidence", { exact: true }).first()
-  const teamAssignmentVisible = await teamAssignment
-    .waitFor({ state: "visible", timeout: 15_000 })
-    .then(
-      () => true,
-      () => false,
-    )
+  const teamAssignmentVisible = await teamAssignment.waitFor({ state: "visible", timeout: 15_000 }).then(
+    () => true,
+    () => false,
+  )
   if (teamAssignmentVisible) {
     await page.getByText("加入原因", { exact: true }).first().waitFor({ state: "visible" })
     await page.getByText("evidence analyst", { exact: true }).first().waitFor({ state: "visible" })
@@ -1266,6 +1263,7 @@ if (!cleanupPassed && result) {
   result.cleanupFailure = cleanup
 }
 if (result) await fs.writeFile(evidenceReport, `${JSON.stringify(result, null, 2)}\n`)
+if (!failure && result?.result === "pass") await validateSeedGrowB4Artifacts()
 console.log(JSON.stringify(result, null, 2))
 if (
   !cleanup?.providerPortClosed ||

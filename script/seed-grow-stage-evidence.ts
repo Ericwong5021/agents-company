@@ -455,7 +455,7 @@ export async function runSeedGrowEvidenceSelfTest() {
     stageDefinition(governance.contract, "B1").requiredCommandIds.length !== 3 ||
     stageDefinition(governance.contract, "B2").requiredCommandIds.length !== 2 ||
     stageDefinition(governance.contract, "B3").requiredCommandIds.length !== 2 ||
-    stageDefinition(governance.contract, "B4").requiredCommandIds.length !== 3 ||
+    stageDefinition(governance.contract, "B4").requiredCommandIds.length !== 2 ||
     stageDefinition(governance.contract, "B5").requiredCommandIds.length !== 4 ||
     governance.contract.implementedStages.length !== stageIDs.length ||
     governance.contract.commandRegistry.plannedStageCommands.length !== 0 ||

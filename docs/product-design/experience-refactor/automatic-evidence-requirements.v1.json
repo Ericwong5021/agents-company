@@ -768,10 +768,7 @@
     {
       "id": "control-plane-all-unit",
       "cwd": "packages/control-plane",
-      "argv": [
-        "bun",
-        "../../script/control-plane-all-unit-sharded.ts"
-      ],
+      "argv": ["bun", "../../script/control-plane-all-unit-sharded.ts"],
       "timeoutMs": 1800000,
       "stdoutValidator": "none",
       "environment": {
@@ -802,12 +799,7 @@
     {
       "id": "shared-unit",
       "cwd": "packages/shared",
-      "argv": [
-        "bun",
-        "test",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"
-      ],
+      "argv": ["bun", "test", "--reporter=junit", "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"],
       "timeoutMs": 300000,
       "stdoutValidator": "none",
       "environment": {},
@@ -821,12 +813,7 @@
     {
       "id": "sdk-js-unit",
       "cwd": "packages/sdk/js",
-      "argv": [
-        "bun",
-        "test",
-        "--reporter=junit",
-        "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"
-      ],
+      "argv": ["bun", "test", "--reporter=junit", "--reporter-outfile=.artifacts/automatic-evidence/junit.xml"],
       "timeoutMs": 600000,
       "stdoutValidator": "none",
       "environment": {},
@@ -849,14 +836,7 @@
     {
       "id": "sdk-js-generated-diff",
       "cwd": ".",
-      "argv": [
-        "git",
-        "diff",
-        "--exit-code",
-        "--",
-        "packages/sdk/openapi.json",
-        "packages/sdk/js/src/v2/gen"
-      ],
+      "argv": ["git", "diff", "--exit-code", "--", "packages/sdk/openapi.json", "packages/sdk/js/src/v2/gen"],
       "timeoutMs": 300000,
       "stdoutValidator": "none",
       "environment": {},
@@ -994,20 +974,6 @@
       ]
     },
     {
-      "id": "b4-real-browser-desktop",
-      "cwd": ".",
-      "argv": ["bun", "script/validate-seed-grow-b4-artifacts.ts"],
-      "timeoutMs": 120000,
-      "stdoutValidator": "json_pass",
-      "environment": {},
-      "reports": [
-        {
-          "path": "packages/app/.artifacts/seed-grow-b4/result.json",
-          "validator": "artifact"
-        }
-      ]
-    },
-    {
       "id": "b4-projection-recovery",
       "cwd": "packages/control-plane",
       "argv": [
@@ -1028,24 +994,6 @@
         {
           "path": ".artifacts/automatic-evidence/b4-projection-recovery-junit.xml",
           "validator": "junit"
-        }
-      ]
-    },
-    {
-      "id": "b4-accessibility-visual",
-      "cwd": ".",
-      "argv": ["bun", "script/validate-seed-grow-b4-artifacts.ts"],
-      "timeoutMs": 120000,
-      "stdoutValidator": "json_pass",
-      "environment": {},
-      "reports": [
-        {
-          "path": "packages/app/.artifacts/seed-grow-b4/work-before-restart.png",
-          "validator": "artifact"
-        },
-        {
-          "path": "packages/app/.artifacts/seed-grow-b4/work-after-restart.png",
-          "validator": "artifact"
         }
       ]
     },
@@ -1456,33 +1404,19 @@
         },
         {
           "id": "QA-02-SEED-STARTUP-SAFETY",
-          "evidenceRefs": [
-            "command:b1-seed-policy",
-            "command:b1-benchmark-s13-s15",
-            "command:b1-flag-fallback"
-          ]
+          "evidenceRefs": ["command:b1-seed-policy", "command:b1-benchmark-s13-s15", "command:b1-flag-fallback"]
         },
         {
           "id": "QA-02-SUPERVISOR-AND-QUIESCENCE-SAFETY",
-          "evidenceRefs": [
-            "command:b2-supervisor-benchmarks",
-            "command:b2-quiescence"
-          ]
+          "evidenceRefs": ["command:b2-supervisor-benchmarks", "command:b2-quiescence"]
         },
         {
           "id": "QA-02-ATTENTION-ACTION-AND-RECOVERY-SAFETY",
-          "evidenceRefs": [
-            "command:b3-attention-actions",
-            "command:b3-recovery-matrix"
-          ]
+          "evidenceRefs": ["command:b3-attention-actions", "command:b3-recovery-matrix"]
         },
         {
           "id": "QA-02-REAL-SURFACE-AND-PROJECTION-SAFETY",
-          "evidenceRefs": [
-            "command:b4-real-browser-desktop",
-            "command:b4-projection-recovery",
-            "command:b4-accessibility-visual"
-          ]
+          "evidenceRefs": ["command:seed-grow-real-surfaces", "command:b4-projection-recovery"]
         },
         {
           "id": "QA-02-PRE-PUBLIC-ROLLOUT-SAFETY",

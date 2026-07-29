@@ -95,9 +95,7 @@
       "app-build",
       "app-production",
       "seed-grow-real-surfaces",
-      "b4-real-browser-desktop",
       "b4-projection-recovery",
-      "b4-accessibility-visual",
       "b5-shadow-comparison",
       "b5-two-candidates",
       "b5-metric-gate",
@@ -246,11 +244,7 @@
         {
           "id": "A0-REAL-LOCAL-SURFACES",
           "statement": "A real local Control Plane, production WebUI and Desktop path pass health, routing, data, restart and cleanup checks.",
-          "evidenceRefs": [
-            "command:app-build",
-            "command:seed-grow-real-surfaces",
-            "command:desktop-e2e"
-          ]
+          "evidenceRefs": ["command:app-build", "command:seed-grow-real-surfaces", "command:desktop-e2e"]
         },
         {
           "id": "A0-LOCAL-REPRODUCIBILITY",
@@ -309,7 +303,17 @@
       "capabilityPackage": "O4",
       "releaseWindow": "R3",
       "dependsOn": ["A1"],
-      "taskIds": ["GRAPH-01", "GRAPH-02", "GRAPH-03", "GRAPH-04", "GRAPH-05", "GRAPH-06", "GRAPH-07", "GRAPH-08", "GRAPH-09"],
+      "taskIds": [
+        "GRAPH-01",
+        "GRAPH-02",
+        "GRAPH-03",
+        "GRAPH-04",
+        "GRAPH-05",
+        "GRAPH-06",
+        "GRAPH-07",
+        "GRAPH-08",
+        "GRAPH-09"
+      ],
       "governedPaths": [
         "packages/control-plane/src/company-project",
         "packages/control-plane/src/id/id.ts",
@@ -351,8 +355,23 @@
       "capabilityPackage": "O6",
       "releaseWindow": "R3",
       "dependsOn": ["A2"],
-      "taskIds": ["EVAL-01", "EVAL-02", "EVAL-03", "EVAL-04", "EVAL-05", "EVAL-06", "EVAL-07", "EVAL-08", "EVAL-09", "EVAL-10"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/validation", "packages/control-plane/test/company-project"],
+      "taskIds": [
+        "EVAL-01",
+        "EVAL-02",
+        "EVAL-03",
+        "EVAL-04",
+        "EVAL-05",
+        "EVAL-06",
+        "EVAL-07",
+        "EVAL-08",
+        "EVAL-09",
+        "EVAL-10"
+      ],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/validation",
+        "packages/control-plane/test/company-project"
+      ],
       "requiredCommandIds": ["a3-prerequisite-repair", "a3-repair-circuit", "a3-validation-policy"],
       "repeats": 2,
       "criteria": [
@@ -379,7 +398,11 @@
       "releaseWindow": "R3",
       "dependsOn": ["A3"],
       "taskIds": ["REC-01", "REC-02", "REC-03", "REC-05A"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/test"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/runtime",
+        "packages/control-plane/test"
+      ],
       "requiredCommandIds": ["a4-recovery-matrix"],
       "repeats": 2,
       "criteria": [
@@ -401,7 +424,17 @@
       "releaseWindow": "R4",
       "dependsOn": ["A4"],
       "taskIds": ["TEAM-06", "TEAM-07", "TEAM-08", "TEAM-09", "TEAM-10", "TEAM-11", "TEAM-12", "TEAM-13"],
-      "governedPaths": ["packages/control-plane/src/company-recruitment", "packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/src/capability", "packages/control-plane/src/server", "packages/control-plane/src/storage", "packages/control-plane/src/id", "packages/control-plane/migration", "packages/control-plane/test"],
+      "governedPaths": [
+        "packages/control-plane/src/company-recruitment",
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/runtime",
+        "packages/control-plane/src/capability",
+        "packages/control-plane/src/server",
+        "packages/control-plane/src/storage",
+        "packages/control-plane/src/id",
+        "packages/control-plane/migration",
+        "packages/control-plane/test"
+      ],
       "requiredCommandIds": ["b0-assignment-lifecycle", "b0-selection-constraints", "b0-reassign-recovery"],
       "repeats": 2,
       "criteria": [
@@ -428,7 +461,13 @@
       "releaseWindow": "R4",
       "dependsOn": ["B0"],
       "taskIds": ["SEED-01", "SEED-02", "SEED-03", "SEED-04", "SEED-05", "SEED-06", "SEED-07", "SEED-08", "SEED-09"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/capability", "packages/control-plane/test", "packages/shared", "packages/sdk"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/capability",
+        "packages/control-plane/test",
+        "packages/shared",
+        "packages/sdk"
+      ],
       "requiredCommandIds": ["b1-seed-policy", "b1-benchmark-s13-s15", "b1-flag-fallback"],
       "repeats": 2,
       "criteria": [
@@ -460,7 +499,12 @@
       "releaseWindow": "R4",
       "dependsOn": ["B1", "A2"],
       "taskIds": ["ORCH-03", "ORCH-04", "ORCH-05", "ORCH-06", "ORCH-07", "ORCH-08", "ORCH-09", "ORCH-10", "ORCH-11"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/test/company-project", "packages/shared", "packages/sdk"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/test/company-project",
+        "packages/shared",
+        "packages/sdk"
+      ],
       "requiredCommandIds": ["b2-supervisor-benchmarks", "b2-quiescence"],
       "repeats": 2,
       "criteria": [
@@ -487,7 +531,12 @@
       "releaseWindow": "R4",
       "dependsOn": ["B2"],
       "taskIds": ["GOV-01", "GOV-02", "GOV-03", "GOV-04", "GOV-05", "REC-04", "REC-05B"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/src/runtime", "packages/control-plane/src/server", "packages/control-plane/test"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/runtime",
+        "packages/control-plane/src/server",
+        "packages/control-plane/test"
+      ],
       "requiredCommandIds": ["b3-attention-actions", "b3-recovery-matrix"],
       "repeats": 2,
       "criteria": [
@@ -514,14 +563,20 @@
       "releaseWindow": "R4",
       "dependsOn": ["B3"],
       "taskIds": ["UX-01", "UX-02", "UX-03", "UX-04", "UX-05", "UX-06", "UX-07", "UX-08", "UX-09", "SDK-01", "QA-09"],
-      "governedPaths": ["packages/app", "packages/desktop", "packages/control-plane/src/server", "packages/shared", "packages/sdk"],
-      "requiredCommandIds": ["b4-real-browser-desktop", "b4-projection-recovery", "b4-accessibility-visual"],
+      "governedPaths": [
+        "packages/app",
+        "packages/desktop",
+        "packages/control-plane/src/server",
+        "packages/shared",
+        "packages/sdk"
+      ],
+      "requiredCommandIds": ["seed-grow-real-surfaces", "b4-projection-recovery"],
       "repeats": 2,
       "criteria": [
         {
           "id": "B4-REAL-SURFACES",
           "statement": "Browser and Desktop use the real candidate Control Plane and never a production Fixture.",
-          "evidenceRefs": ["command:b4-real-browser-desktop"]
+          "evidenceRefs": ["command:seed-grow-real-surfaces"]
         },
         {
           "id": "B4-PROJECTION-CONVERGENCE",
@@ -531,7 +586,7 @@
         {
           "id": "B4-USABILITY-CONTRACT",
           "statement": "Keyboard, screen reader, loading, empty, error, offline and visual regression checks pass.",
-          "evidenceRefs": ["command:b4-accessibility-visual"]
+          "evidenceRefs": ["command:seed-grow-real-surfaces"]
         }
       ]
     },
@@ -541,7 +596,14 @@
       "releaseWindow": "R4",
       "dependsOn": ["B4"],
       "taskIds": ["ROLLOUT-01", "ROLLOUT-02", "ROLLOUT-03", "ROLLOUT-04", "ROLLOUT-05", "LEARN-01"],
-      "governedPaths": ["packages/control-plane", "packages/app", "packages/desktop", "packages/shared", "packages/sdk", "docs/product-design/experience-refactor"],
+      "governedPaths": [
+        "packages/control-plane",
+        "packages/app",
+        "packages/desktop",
+        "packages/shared",
+        "packages/sdk",
+        "docs/product-design/experience-refactor"
+      ],
       "requiredCommandIds": ["b5-shadow-comparison", "b5-two-candidates", "b5-metric-gate", "b5-local-rollback"],
       "repeats": 2,
       "criteria": [
