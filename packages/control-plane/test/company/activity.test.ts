@@ -8,13 +8,14 @@ import { ChannelTable, ConversationThreadTable } from "../../src/conversation/co
 import { ChannelID, ConversationThreadID } from "../../src/conversation/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import * as Database from "../../src/storage/db"
+import { runRecruitment, seedB0Project } from "../company-recruitment/b0-fixture"
 import { resetDatabase } from "../fixture/db"
 
 beforeEach(resetDatabase)
 afterEach(resetDatabase)
 
 describe("Company activity projection", () => {
-  test("returns employees and assigned instances with evidence-backed public run state", () => {
+  test("returns employees and assigned instances with evidence-backed public run state", async () => {
     const companyID = CompanyID.parse("cmp_activity")
     Database.use((db) => {
       db.insert(CompanyTable)
@@ -70,7 +71,8 @@ describe("Company activity projection", () => {
             id: "agent_assigned",
             company_id: companyID,
             name: "Assigned Candidate",
-            lifecycle: "assigned",
+            lifecycle: "candidate",
+            responsibilities: JSON.stringify(["evidence analyst", "analysis", "research-analysis@1"]),
             time_created: 1,
             time_updated: 1,
           },
@@ -116,6 +118,33 @@ describe("Company activity projection", () => {
         ])
         .run()
     })
+    seedB0Project({
+      companyID,
+      projectID: "cprj_activity_assigned",
+      workItemID: "cwi_activity_assigned",
+      role: "evidence analyst",
+      capabilityPacks: ["research-analysis@1"],
+    })
+    const need = await runRecruitment((service) =>
+      service.createNeed({
+        company_id: companyID,
+        project_id: "cprj_activity_assigned",
+        work_item_id: "cwi_activity_assigned",
+        need_key: "activity-assigned",
+        role: "evidence analyst",
+        work_type: "analysis",
+        capability_packs: ["research-analysis@1"],
+        risk_level: "medium",
+        demand_horizon: "project",
+      }),
+    )
+    await runRecruitment((service) =>
+      service.selectAndAssign({
+        capability_need_id: need.id,
+        exclude_agent_ids: [],
+        required_agent_id: "agent_assigned",
+      }),
+    )
 
     const projection = CompanyActivity.list(companyID)
     expect(projection.filter((item) => item.presence === "online")).toHaveLength(1)
@@ -143,7 +172,7 @@ describe("Company activity projection", () => {
           id: "agent_assigned",
           name: "Assigned Candidate",
           lifecycle: "assigned",
-          responsibilities: [],
+          responsibilities: ["evidence analyst", "analysis", "research-analysis@1"],
         },
         employment: "temporary",
         presence: "offline",
@@ -152,7 +181,7 @@ describe("Company activity projection", () => {
         since: 1,
         interruptibility: "interruptible",
         collaborators: [],
-        workload: { active: 0, blocked: 0 },
+        workload: { active: 1, blocked: 0 },
       },
       {
         agent: {

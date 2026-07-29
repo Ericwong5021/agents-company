@@ -150,6 +150,11 @@ describe.serial("/company/recruitment", () => {
       expect.objectContaining({ id: "route-evidence-analyst", lifecycle: "candidate" }),
     ])
     const agents = await (await app.request(`/company/agents?company_id=${companyID}`)).json()
-    expect(agents.map((item: { agent: { id: string } }) => item.agent.id)).not.toContain("route-evidence-analyst")
+    expect(agents).toContainEqual(
+      expect.objectContaining({
+        employment: "temporary",
+        agent: expect.objectContaining({ id: "route-evidence-analyst", lifecycle: "assigned" }),
+      }),
+    )
   })
 })

@@ -8,6 +8,7 @@ import { CompanyAgent } from "../../src/company-agent"
 import { CompanyAgentID } from "../../src/company-agent/schema"
 import { CompanyProject, CompanyProjectExecution } from "../../src/company-project"
 import { CompanyRecruitment } from "../../src/company-recruitment"
+import { Company } from "../../src/company"
 import { ApprovalPolicyTable, CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { Conversation } from "../../src/conversation"
@@ -55,24 +56,57 @@ const containsText = (value: unknown, needle: string): boolean =>
         )
 
 const seedCompany = (companyID: CompanyID) =>
-  Effect.sync(() => {
+  Effect.gen(function* () {
     const now = Date.now()
-    Database.use((db) =>
-      db
-        .insert(CompanyTable)
-        .values({
-          id: companyID,
-          name: "Execution Test Company",
-          data_version: 1,
-          default_provider_id: ProviderID.make("test"),
-          default_model_id: ModelID.make("test-model"),
-          bootstrap_request_id: crypto.randomUUID(),
-          bootstrap_input_path: "/tmp/execution-test-company",
-          time_created: now,
-          time_updated: now,
-        })
-        .onConflictDoNothing()
-        .run(),
+    yield* Effect.sync(() =>
+      Database.use((db) => {
+        db.insert(CompanyTable)
+          .values({
+            id: companyID,
+            name: "Execution Test Company",
+            data_version: 1,
+            default_provider_id: ProviderID.make("test"),
+            default_model_id: ModelID.make("test-model"),
+            bootstrap_request_id: crypto.randomUUID(),
+            bootstrap_input_path: "/tmp/execution-test-company",
+            time_created: now,
+            time_updated: now,
+          })
+          .onConflictDoNothing()
+          .run()
+        db.insert(ApprovalPolicyTable)
+          .values({ company_id: companyID, preset: "balanced", time_created: now, time_updated: now })
+          .onConflictDoNothing()
+          .run()
+      }),
+    )
+    const agents = yield* CompanyAgent.Service
+    yield* Effect.forEach(
+      Company.BOARD,
+      (member) =>
+        Effect.gen(function* () {
+          const existing = yield* agents.get(CompanyAgentID.make(member.id))
+          if (existing) {
+            if (member.id === "board-cto")
+              yield* agents.update({
+                id: existing.id,
+                description: "board closeout owner for final decisions",
+              })
+            return
+          }
+          yield* agents.create({
+            id: member.id,
+            company_id: companyID,
+            lifecycle: "employee",
+            role_key: member.role,
+            name: member.name,
+            description: member.id === "board-cto" ? "board closeout owner for final decisions" : undefined,
+            org_layer: "board",
+            reports_to: member.reports_to ?? undefined,
+            responsibilities: [...member.responsibilities],
+          })
+        }),
+      { discard: true },
     )
   })
 
@@ -670,7 +704,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 description: "不具备跨项目交付历史",
                 system_prompt: "只执行被分配的任务。",
                 org_layer: "execution",
-                responsibilities: ["unrelated work"],
+                responsibilities: ["delivery evidence auditor", "analysis", "research-analysis@1"],
               })
               const reviewerAgent = yield* companyAgents.create({
                 id: "independent-evidence-reviewer",
@@ -680,7 +714,11 @@ describe.serial("CompanyProject adaptive execution", () => {
                 description: "独立复核交付证据。",
                 system_prompt: "只根据可验证证据独立复核。",
                 org_layer: "execution",
-                responsibilities: ["independent review"],
+                responsibilities: [
+                  "delivery evidence independent reviewer",
+                  "analysis",
+                  "independent-review@1",
+                ],
               })
               const worker = yield* projects.createWorkItem({
                 project_id: project.id,
@@ -717,14 +755,11 @@ describe.serial("CompanyProject adaptive execution", () => {
                 demand_horizon: "recurring",
                 department_key: "delivery-assurance",
               })
-              const currentSelectionResult = yield* recruitment.selectForNeed({
+              yield* recruitment.selectAndAssign({
                 capability_need_id: currentNeed.id,
                 exclude_agent_ids: [],
+                required_agent_id: wrongAgent.id,
               })
-              const currentSelection = currentSelectionResult.selections.find(
-                (selection) => selection.decision === "selected",
-              )!
-              expect(currentSelection.agent_id).toBe(historySelection.agent_id)
               const reviewer = yield* projects.createWorkItem({
                 project_id: project.id,
                 plan_id: plan.id,
@@ -750,6 +785,23 @@ describe.serial("CompanyProject adaptive execution", () => {
                 max_attempts: 2,
                 depends_on: [worker.id],
               })
+              const reviewerNeed = yield* recruitment.createNeed({
+                company_id: companyID,
+                project_id: project.id,
+                work_item_id: reviewer.id,
+                need_key: "delivery-evidence-review",
+                role: reviewer.role,
+                work_type: reviewer.work_type,
+                capability_packs: reviewer.capability_packs,
+                risk_level: reviewer.risk_level,
+                demand_horizon: "project",
+                independent_from_agent_ids: [wrongAgent.id, historySelection.agent_id],
+              })
+              yield* recruitment.selectAndAssign({
+                capability_need_id: reviewerNeed.id,
+                exclude_agent_ids: [],
+                required_agent_id: reviewerAgent.id,
+              })
               yield* projects.startWorkItem(worker.id)
               yield* projects.blockWorkItem({ id: worker.id, error: "初始 Agent 不满足跨项目复用要求" })
               yield* projects.transition({
@@ -760,7 +812,12 @@ describe.serial("CompanyProject adaptive execution", () => {
               })
               yield* projects.assignWorkItem({
                 id: worker.id,
-                owner_agent_id: currentSelection.agent_id,
+                owner_agent_id: historySelection.agent_id,
+                reason: reassignmentReason,
+              })
+              const currentSelection = yield* recruitment.reassign({
+                work_item_id: worker.id,
+                owner_agent_id: historySelection.agent_id,
                 reason: reassignmentReason,
               })
 
@@ -878,6 +935,7 @@ describe.serial("CompanyProject adaptive execution", () => {
               const companyID = CompanyID.parse("cmp_local")
               yield* seedCompany(companyID)
               const companyAgents = yield* CompanyAgent.Service
+              const recruitment = yield* CompanyRecruitment.Service
               yield* Effect.sync(() =>
                 Database.use((db) =>
                   db
@@ -929,7 +987,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 description: "不具备项目 DRI 身份。",
                 system_prompt: "只执行分配的任务。",
                 org_layer: "execution",
-                responsibilities: ["准备收口材料"],
+                responsibilities: ["board closeout owner", "decision", "board-strategy@1"],
               })
               yield* companyAgents.create({
                 id: "closeout-reviewer",
@@ -939,7 +997,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 description: "独立复核 Board 最终决策。",
                 system_prompt: "只根据持久化证据验收。",
                 org_layer: "execution",
-                responsibilities: ["独立复核"],
+                responsibilities: ["board closeout independent reviewer", "decision", "independent-review@1"],
               })
               const conversation = yield* Conversation.Service
               yield* conversation.ensureCompanyChannels({
@@ -1063,6 +1121,39 @@ describe.serial("CompanyProject adaptive execution", () => {
                 max_attempts: 3,
                 depends_on: [worker.id],
               })
+              const workerNeed = yield* recruitment.createNeed({
+                company_id: companyID,
+                project_id: project.id,
+                work_item_id: worker.id,
+                need_key: "board-closeout-owner",
+                role: worker.role,
+                work_type: worker.work_type,
+                capability_packs: worker.capability_packs,
+                risk_level: worker.risk_level,
+                demand_horizon: "project",
+              })
+              yield* recruitment.selectAndAssign({
+                capability_need_id: workerNeed.id,
+                exclude_agent_ids: [],
+                required_agent_id: "wrong-closeout-owner",
+              })
+              const reviewerNeed = yield* recruitment.createNeed({
+                company_id: companyID,
+                project_id: project.id,
+                work_item_id: reviewer.id,
+                need_key: "board-closeout-reviewer",
+                role: reviewer.role,
+                work_type: reviewer.work_type,
+                capability_packs: reviewer.capability_packs,
+                risk_level: reviewer.risk_level,
+                demand_horizon: "project",
+                independent_from_agent_ids: ["wrong-closeout-owner", "board-cto"],
+              })
+              yield* recruitment.selectAndAssign({
+                capability_need_id: reviewerNeed.id,
+                exclude_agent_ids: [],
+                required_agent_id: "closeout-reviewer",
+              })
               yield* projects.transition({ id: project.id, status: "planning", actor_id: "board-cto" })
               yield* projects.transition({ id: project.id, status: "executing", actor_id: "board-cto" })
               yield* projects.startWorkItem(worker.id)
@@ -1154,8 +1245,8 @@ describe.serial("CompanyProject adaptive execution", () => {
                 },
               })
 
-              yield* projects.assignWorkItem({
-                id: worker.id,
+              yield* recruitment.reassign({
+                work_item_id: worker.id,
                 owner_agent_id: "board-cto",
                 reason: "最终收口只能由项目 DRI 签署",
               })
