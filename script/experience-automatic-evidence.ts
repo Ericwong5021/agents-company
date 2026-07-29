@@ -572,11 +572,7 @@ function reportMediaType(report: RequirementReport) {
   return "application/octet-stream"
 }
 
-async function reportSummary(
-  validator: RequirementReport["validator"],
-  bytes: Uint8Array,
-  sourcePath: string,
-) {
+async function reportSummary(validator: RequirementReport["validator"], bytes: Uint8Array, sourcePath: string) {
   const source = new TextDecoder().decode(bytes)
   if (validator === "junit") {
     const rootTag = source.match(/<testsuites\b[^>]*>/)?.[0]
@@ -2046,7 +2042,7 @@ async function assertInstalledDependencies(worktree: string, relativePaths: stri
   }
 }
 
-async function installDependencies(worktree: string, isolationRoot: string) {
+export async function installDependencies(worktree: string, isolationRoot: string) {
   const lockPath = path.join(worktree, "bun.lock")
   const lockSha256 = sha256(new Uint8Array(await Bun.file(lockPath).arrayBuffer()))
   await fs.rm(path.join(worktree, "node_modules"), { recursive: true, force: true })

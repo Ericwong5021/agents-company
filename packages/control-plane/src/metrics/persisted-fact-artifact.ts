@@ -233,10 +233,7 @@ export async function loadPersistedFactArtifact(raw: unknown) {
   const artifact = PersistedFactArtifact.parse(JSON.parse(new TextDecoder().decode(bytes)) as unknown)
   if (persistedFactSnapshotDigest(artifact) !== artifact.snapshotDigest)
     throw new Error(`Metric fact snapshot digest mismatch: ${reference.path}`)
-  if (
-    artifact.producer.commandId !== "seed-grow-persisted-fact-exporter" ||
-    artifact.producer.version !== "v1"
-  )
+  if (artifact.producer.commandId !== "seed-grow-persisted-fact-exporter" || artifact.producer.version !== "v1")
     throw new Error(`Metric fact artifact producer is not trusted: ${reference.path}`)
   const executable = new Uint8Array(
     await Bun.file(path.join(import.meta.dir, "persisted-fact-exporter.ts")).arrayBuffer(),
@@ -875,16 +872,16 @@ function matchedMetricBindings(artifact: PersistedFactArtifact, strategy: Persis
   return matches.flatMap((bindings) => bindings ?? [])
 }
 
-export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<MetricFactAdapter> {
-  const reference = PersistedFactArtifactReference.parse(raw)
-  const artifact = await loadPersistedFactArtifact(reference)
+export function makePersistedFactArtifactAdapterFromArtifact(raw: unknown, evidenceSha256: string): MetricFactAdapter {
+  const artifact = PersistedFactArtifact.parse(raw)
+  const boundEvidenceSha256 = Digest.parse(evidenceSha256)
   const artifactSources = (runIds: string[]) =>
     runIds.map((runId) => ({
       kind: "gate_report" as const,
       id: `local-gate-${sha256(`${artifact.id}:${runId}`).slice(0, 32)}`,
       candidateSha: artifact.candidateSha,
       runId,
-      digest: reference.sha256,
+      digest: boundEvidenceSha256,
     }))
   return {
     readMetricFacts: (request: MetricFactReadRequest) =>
@@ -906,6 +903,9 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
             const calculationBindings = CrossStrategyMetricIds.has(metricId)
               ? bindings
               : bindings.filter((binding) => binding.strategy === request.strategy)
+            const terminalRunIds = records
+              .filter((event) => event.eventType === "candidate.terminal_checked")
+              .map((event) => event.runId)
             return [
               metricId,
               metric?.applicableScenarioIds
@@ -913,7 +913,9 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
                     .filter((binding) => metric.applicableScenarioIds!.includes(binding.scenarioId))
                     .map((binding) => binding.runId)
                     .sort()
-                : [],
+                : ["exact_sha_terminal_success_rate", "consecutive_reproducible_candidate_count"].includes(metricId)
+                  ? [...new Set(terminalRunIds)].sort()
+                  : calculationBindings.map((binding) => binding.runId).sort(),
             ]
           }),
         )
@@ -1005,6 +1007,11 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
         })
       }),
   }
+}
+
+export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<MetricFactAdapter> {
+  const reference = PersistedFactArtifactReference.parse(raw)
+  return makePersistedFactArtifactAdapterFromArtifact(await loadPersistedFactArtifact(reference), reference.sha256)
 }
 
 export * as PersistedFactArtifactReader from "./persisted-fact-artifact"

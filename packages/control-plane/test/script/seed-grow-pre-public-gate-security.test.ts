@@ -59,6 +59,21 @@ function sha256(value: string) {
   return new Bun.CryptoHasher("sha256").update(value).digest("hex")
 }
 
+function candidateFromVerifier() {
+  const verifierSha = git("rev-parse", "HEAD")
+  return {
+    verifierSha,
+    candidateSha: git(
+      "commit-tree",
+      git("rev-parse", `${verifierSha}^{tree}`),
+      "-p",
+      verifierSha,
+      "-m",
+      "seed-grow gate security candidate",
+    ),
+  }
+}
+
 function passingValue(operator: string, target: number) {
   if (operator === "<") return target - 1
   if (operator === ">") return target + 1
@@ -333,22 +348,16 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     const verifier = path.join(worktree, "script/experience-automatic-evidence.ts")
     await writeFile(verifier, `${await readFile(verifier, "utf8")}\n`)
     const requestPath = path.join(directory, "request.json")
-    const candidateSha = git("rev-parse", "HEAD")
+    const candidate = candidateFromVerifier()
     await writeFile(
       requestPath,
       `${JSON.stringify({
         schemaVersion: 1,
         mode: "bootstrap",
         candidate: {
-          candidateSha,
-          targetRef: "HEAD",
-          evidenceDirectory: path.join(directory, "missing-evidence"),
-          factArtifact: {
-            path: path.join(directory, "missing-facts.json"),
-            sha256: "a".repeat(64),
-          },
-          comparisonId: "comparison",
-          scenarioIds: ["S13", "S18"],
+          candidateSha: candidate.candidateSha,
+          verifierSha: candidate.verifierSha,
+          targetRef: candidate.candidateSha,
         },
         outputDirectory: path.join(directory, "output"),
       })}\n`,
@@ -362,6 +371,65 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     expect(result.exitCode).toBe(64)
     expect(decision.status).toBe("invalid")
     expect(decision.reasons.join("\n")).toMatch(/dirty|runtime|runner binding/i)
+  })
+
+  test("rejects a candidate that changes the pinned acceptance suite", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "seed-grow-acceptance-candidate-"))
+    directories.push(directory)
+    const worktree = path.join(directory, "worktree")
+    const verifierSha = git("rev-parse", "HEAD")
+    const added = Bun.spawnSync(["git", "worktree", "add", "--detach", worktree, verifierSha], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    if (added.exitCode !== 0) throw new Error(added.stderr.toString())
+    worktrees.push(worktree)
+    const manifest = path.join(worktree, "packages/control-plane/package.json")
+    await writeFile(manifest, `${await readFile(manifest, "utf8")}\n`)
+    const staged = Bun.spawnSync(["git", "add", "packages/control-plane/package.json"], {
+      cwd: worktree,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    if (staged.exitCode !== 0) throw new Error(staged.stderr.toString())
+    const tree = Bun.spawnSync(["git", "write-tree"], {
+      cwd: worktree,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    if (tree.exitCode !== 0) throw new Error(tree.stderr.toString())
+    const candidateSha = git(
+      "commit-tree",
+      tree.stdout.toString().trim(),
+      "-p",
+      verifierSha,
+      "-m",
+      "tamper acceptance suite",
+    )
+    const requestPath = path.join(directory, "request.json")
+    await writeFile(
+      requestPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        mode: "bootstrap",
+        candidate: {
+          candidateSha,
+          verifierSha,
+          targetRef: candidateSha,
+        },
+        outputDirectory: path.join(directory, "output"),
+      })}\n`,
+    )
+    const result = await runBun(
+      ["script/seed-grow-pre-public-gate.ts", requestPath],
+      path.join(root, "packages/control-plane"),
+    )
+    if (!result.stdout) throw new Error(result.stderr)
+    const decision = JSON.parse(result.stdout) as { status: string; reasons: string[] }
+    expect(result.exitCode).toBe(64)
+    expect(decision.status).toBe("invalid")
+    expect(decision.reasons.join("\n")).toContain("pinned acceptance assets")
   })
 
   test("rejects copied repeat packages whose only difference can be ignored timestamps", () => {

@@ -324,6 +324,28 @@ function reportWith(facts: Awaited<ReturnType<typeof makePersistedFactArtifactAd
 }
 
 describe("SeedGrowMetricReporter", () => {
+  it.live("derives exact-SHA terminal success from the two bound candidate attempts", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const facts = yield* Effect.promise(() => adapter(directory, { core: completeArtifactCore() }))
+      const report = yield* reportWith(facts, ["exact_sha_terminal_success_rate"])
+      expect(report).toMatchObject({
+        status: "pass",
+        results: [
+          {
+            metricId: "exact_sha_terminal_success_rate",
+            status: "pass",
+            value: 1,
+            numerator: 2,
+            denominator: 2,
+            sampleSize: 2,
+            meetsThreshold: true,
+          },
+        ],
+      })
+    }),
+  )
+
   it.live("calculates metrics from a digest-bound persisted raw fact artifact", () =>
     Effect.gen(function* () {
       const directory = yield* tmpdirScoped()
