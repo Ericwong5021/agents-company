@@ -680,6 +680,8 @@ export function makeLayer(hooks: Hooks = {}) {
                     project.id,
                   )
                   if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
+                  if (recorded.id !== finished.id)
+                    yield* resolveDecision({ id: recorded.id, status: "superseded" })
                   return {
                     status: "processed" as const,
                     receipt_id: claim.receipt.id,
@@ -688,7 +690,7 @@ export function makeLayer(hooks: Hooks = {}) {
                     decision: finished,
                     mutation_id: finished.mutation_id,
                     replayed: true,
-                    conflict_count,
+                    conflict_count: conflict_count + 1,
                   }
                 }
                 yield* resolveDecision({ id: recorded.id, status: "superseded" })
@@ -719,9 +721,11 @@ export function makeLayer(hooks: Hooks = {}) {
                 const finished = yield* recoverAppliedDecision(
                   claim.receipt.id,
                   project.id,
-                )
-                if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
-                return {
+                  )
+                  if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
+                  if (recorded.id !== finished.id)
+                    yield* resolveDecision({ id: recorded.id, status: "superseded" })
+                  return {
                   status: "processed" as const,
                   receipt_id: claim.receipt.id,
                   project_id: project.id,
@@ -729,7 +733,7 @@ export function makeLayer(hooks: Hooks = {}) {
                   decision: finished,
                   mutation_id: finished.mutation_id,
                   replayed: true,
-                  conflict_count,
+                    conflict_count: conflict_count + 1,
                 }
               }
               yield* resolveDecision({ id: recorded.id, status: "superseded" })
