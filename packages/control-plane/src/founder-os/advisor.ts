@@ -371,11 +371,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       ))
       .get()
     if (current) return convergenceFromRow(db, current)
-    if (sourceReason)
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
-        status: "blocked",
-        reason: sourceReason,
-      })
+    if (sourceReason) throw new Error(sourceReason)
     if (input.timeoutAt <= Date.now())
       return saveBlocked(db, input, inputSha256, currentRequestKey, {
         status: "blocked",
