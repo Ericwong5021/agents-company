@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { $fetch } from "ofetch"
 import { computed, onMounted, reactive, ref, watch } from "vue"
+import type { FounderStudioProjection, GovernanceAsset } from "@agents-company/sdk/v2/founder-os"
 import { useCompanySnapshot } from "../../composables/useCompanySnapshot"
 import {
   chooseDemo,
@@ -49,9 +50,77 @@ const saving = ref(false)
 const errorInfo = ref<ProviderErrorInfo | null>(null)
 const message = ref("")
 const onboarding = ref<OnboardingState>(parseOnboardingState(null))
+const founderStudio = ref<FounderStudioProjection | null>(null)
+const studioLoading = ref(false)
+const studioMessage = ref("")
+const assetDraft = reactive({
+  type: "principle" as GovernanceAsset["type"],
+  content: "",
+  rationale: "",
+})
 
 onMounted(() => {
   onboarding.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
+  loadFounderStudio()
+})
+
+async function loadFounderStudio() {
+  if (!snapshot.value.company.id || studioLoading.value) return
+  studioLoading.value = true
+  founderStudio.value = await $fetch<FounderStudioProjection>("/api/agent-company/founder-studio", {
+    query: { companyId: snapshot.value.company.id },
+  }).catch(() => null)
+  studioLoading.value = false
+}
+
+async function createAssetDraft() {
+  if (!assetDraft.content.trim() || !assetDraft.rationale.trim() || studioLoading.value) return
+  studioLoading.value = true
+  studioMessage.value = ""
+  await $fetch("/api/agent-company/founder-studio", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      type: assetDraft.type,
+      scope: { kind: "company" },
+      content: assetDraft.content,
+      rationale: assetDraft.rationale,
+      tags: [],
+      authority: "ai_proposed",
+      sourceRefs: [],
+      createdBy: "local-founder-studio",
+    },
+  })
+    .then(() => {
+      assetDraft.content = ""
+      assetDraft.rationale = ""
+      studioMessage.value = "候选资产已保存为 ai_proposed / draft，尚未获得人工确认。"
+    })
+    .catch(() => {
+      studioMessage.value = "候选资产保存失败。"
+    })
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+async function selectStudioSnapshot(snapshotId: string) {
+  if (studioLoading.value) return
+  studioLoading.value = true
+  await $fetch("/api/agent-company/founder-studio-select", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      snapshotId,
+      reason: "Founder Studio 手动选择历史 Snapshot",
+      selectedBy: "local-founder-studio",
+    },
+  }).catch(() => undefined)
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+watch(() => snapshot.value.company.id, (companyId) => {
+  if (companyId) loadFounderStudio()
 })
 
 function persistOnboarding(next: OnboardingState) {
@@ -219,6 +288,90 @@ async function saveProvider() {
         </header>
 
         <div class="company-settings-stack">
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>Founder Studio</h2>
+                <p>治理资产与不可变 Snapshot 来自本地 Control Plane；authority 与 status 不会被隐藏。</p>
+              </div>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-refresh-cw"
+                aria-label="刷新 Founder Studio"
+                :loading="studioLoading"
+                @click="loadFounderStudio"
+              />
+            </div>
+
+            <p class="company-provider-form__message">
+              人工确认：{{ founderStudio?.authorization.status ?? "not_confirmed" }} · 弱门禁，不自动提升 authority
+            </p>
+
+            <div class="company-provider-form company-provider-form__grid">
+              <label>
+                <span>资产类型</span>
+                <select v-model="assetDraft.type">
+                  <option value="principle">Principle</option>
+                  <option value="heuristic">Heuristic</option>
+                  <option value="boundary">Boundary</option>
+                  <option value="rubric">Rubric</option>
+                </select>
+              </label>
+              <label class="company-provider-form__wide">
+                <span>候选内容</span>
+                <textarea v-model="assetDraft.content" rows="3" />
+              </label>
+              <label class="company-provider-form__wide">
+                <span>判断依据</span>
+                <textarea v-model="assetDraft.rationale" rows="2" />
+              </label>
+              <div class="company-provider-form__actions company-provider-form__wide">
+                <span>写入身份：ai_proposed · 状态：draft</span>
+                <UButton
+                  color="neutral"
+                  :loading="studioLoading"
+                  :disabled="!assetDraft.content.trim() || !assetDraft.rationale.trim()"
+                  @click="createAssetDraft"
+                >
+                  保存候选资产
+                </UButton>
+              </div>
+            </div>
+            <p v-if="studioMessage" class="company-provider-form__message" role="status">{{ studioMessage }}</p>
+
+            <div v-if="founderStudio?.assets.length" class="ac-founder-studio-list">
+              <article v-for="asset in founderStudio.assets" :key="`${asset.id}:${asset.version}`">
+                <div>
+                  <strong>{{ asset.type }}</strong>
+                  <span>{{ asset.authority }} · {{ asset.status }} · v{{ asset.version }}</span>
+                </div>
+                <p>{{ asset.content }}</p>
+                <small>{{ asset.current ? "当前有效版本" : "历史或未生效版本" }}</small>
+              </article>
+            </div>
+            <p v-else class="company-provider-form__message">尚无治理资产。</p>
+
+            <div v-if="founderStudio?.snapshots.length" class="ac-founder-studio-list">
+              <article v-for="item in founderStudio.snapshots" :key="item.id">
+                <div>
+                  <strong>Snapshot v{{ item.version }}</strong>
+                  <span>{{ item.selected ? "当前选择" : "历史版本" }}</span>
+                </div>
+                <p>checksum {{ item.checksum }}</p>
+                <UButton
+                  v-if="!item.selected"
+                  color="neutral"
+                  variant="soft"
+                  :loading="studioLoading"
+                  @click="selectStudioSnapshot(item.id)"
+                >
+                  选择此版本
+                </UButton>
+              </article>
+            </div>
+          </section>
+
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>

@@ -190,3 +190,175 @@ export const FounderCorrection = z
   .strict()
   .meta({ ref: "FounderCorrection" })
 export type FounderCorrection = z.infer<typeof FounderCorrection>
+
+export const GovernanceAssetType = z.enum([
+  "constitution",
+  "principle",
+  "heuristic",
+  "boundary",
+  "taste_reference",
+  "taste_anti_reference",
+  "rubric",
+  "decision_case",
+])
+export type GovernanceAssetType = z.infer<typeof GovernanceAssetType>
+
+export const GovernanceAssetScope = z
+  .object({
+    kind: z.enum(["company", "domain", "project", "brand"]),
+    ref: Identifier.optional(),
+  })
+  .strict()
+  .refine((scope) => scope.kind === "company" ? scope.ref === undefined : scope.ref !== undefined, {
+    message: "Only company scope omits ref",
+  })
+  .meta({ ref: "GovernanceAssetScope" })
+export type GovernanceAssetScope = z.infer<typeof GovernanceAssetScope>
+
+export const GovernanceAssetAuthority = z.enum([
+  "human_explicit",
+  "human_confirmed",
+  "ai_proposed",
+  "external_source",
+])
+export type GovernanceAssetAuthority = z.infer<typeof GovernanceAssetAuthority>
+
+export const GovernanceAssetStatus = z.enum(["draft", "active", "deprecated"])
+export type GovernanceAssetStatus = z.infer<typeof GovernanceAssetStatus>
+
+export const GovernanceAssetSourceRef = z
+  .object({
+    kind: z.enum(["artifact", "decision", "outcome", "conversation", "external"]),
+    id: Identifier,
+  })
+  .strict()
+  .meta({ ref: "GovernanceAssetSourceRef" })
+export type GovernanceAssetSourceRef = z.infer<typeof GovernanceAssetSourceRef>
+
+export const GovernanceAsset = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    type: GovernanceAssetType,
+    scope: GovernanceAssetScope,
+    content: LongText,
+    rationale: LongText,
+    tags: z.array(ShortText).max(100),
+    authority: GovernanceAssetAuthority,
+    status: GovernanceAssetStatus,
+    sourceRefs: z.array(GovernanceAssetSourceRef).max(100),
+    supersedes: z.number().int().positive().optional(),
+    version: z.number().int().positive(),
+    createdBy: Identifier,
+    approvedBy: Identifier.optional(),
+    createdAt: z.number().int().nonnegative(),
+    current: z.boolean(),
+  })
+  .strict()
+  .meta({ ref: "GovernanceAsset" })
+export type GovernanceAsset = z.infer<typeof GovernanceAsset>
+
+export const GovernanceAssetDraftInput = z
+  .object({
+    companyId: Identifier,
+    type: GovernanceAssetType,
+    scope: GovernanceAssetScope,
+    content: LongText,
+    rationale: LongText,
+    tags: z.array(ShortText).max(100).default([]),
+    authority: z.enum(["ai_proposed", "external_source"]),
+    sourceRefs: z.array(GovernanceAssetSourceRef).max(100).default([]),
+    createdBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "GovernanceAssetDraftInput" })
+export type GovernanceAssetDraftInput = z.infer<typeof GovernanceAssetDraftInput>
+
+export const GovernanceAssetRevisionInput = z
+  .object({
+    baseVersion: z.number().int().positive(),
+    content: LongText,
+    rationale: LongText,
+    tags: z.array(ShortText).max(100),
+    authority: GovernanceAssetAuthority,
+    status: GovernanceAssetStatus,
+    sourceRefs: z.array(GovernanceAssetSourceRef).max(100),
+    actorKind: z.enum(["ai", "external", "human"]),
+    createdBy: Identifier,
+    confirmation: z
+      .object({
+        eventId: Identifier,
+        confirmedBy: Identifier,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .meta({ ref: "GovernanceAssetRevisionInput" })
+export type GovernanceAssetRevisionInput = z.infer<typeof GovernanceAssetRevisionInput>
+
+export const FounderSnapshotCompileInput = z
+  .object({
+    companyId: Identifier,
+    profileSummary: z.string().trim().max(4_000),
+    promptTemplateVersion: Identifier,
+    modelConfigRef: Identifier,
+    retrievalConfigRef: Identifier,
+    permissionConfigRef: Identifier,
+    compiledPromptHash: z.string().regex(/^[a-f0-9]{64}$/),
+    scope: GovernanceAssetScope,
+    createdBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderSnapshotCompileInput" })
+export type FounderSnapshotCompileInput = z.infer<typeof FounderSnapshotCompileInput>
+
+export const FounderTwinSnapshot = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    version: z.number().int().positive(),
+    profileSummary: z.string().max(4_000),
+    assetRefs: z.array(FounderAssetReference),
+    promptTemplateVersion: Identifier,
+    modelConfigRef: Identifier,
+    retrievalConfigRef: Identifier,
+    permissionConfigRef: Identifier,
+    compiledPromptHash: z.string().regex(/^[a-f0-9]{64}$/),
+    checksum: z.string().regex(/^[a-f0-9]{64}$/),
+    createdBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+    selected: z.boolean(),
+  })
+  .strict()
+  .meta({ ref: "FounderTwinSnapshot" })
+export type FounderTwinSnapshot = z.infer<typeof FounderTwinSnapshot>
+
+export const FounderSnapshotSelectInput = z
+  .object({
+    companyId: Identifier,
+    snapshotId: Identifier,
+    reason: ShortText,
+    selectedBy: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderSnapshotSelectInput" })
+export type FounderSnapshotSelectInput = z.infer<typeof FounderSnapshotSelectInput>
+
+export const FounderStudioProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    assets: z.array(GovernanceAsset),
+    snapshots: z.array(FounderTwinSnapshot),
+    selectedSnapshotId: Identifier.optional(),
+    authorization: z
+      .object({
+        status: z.literal("not_confirmed"),
+        blocking: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderStudioProjection" })
+export type FounderStudioProjection = z.infer<typeof FounderStudioProjection>

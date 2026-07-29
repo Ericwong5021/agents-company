@@ -128,3 +128,132 @@ export type FounderCorrection = {
   proposedAssetUpdates: string[]
   createdAt: string
 }
+
+export type GovernanceAssetAuthority = "human_explicit" | "human_confirmed" | "ai_proposed" | "external_source"
+export type GovernanceAssetStatus = "draft" | "active" | "deprecated"
+export type GovernanceAssetScope = {
+  kind: "company" | "domain" | "project" | "brand"
+  ref?: string
+}
+export type GovernanceAsset = {
+  id: string
+  companyId: string
+  type: "constitution" | "principle" | "heuristic" | "boundary" | "taste_reference" | "taste_anti_reference" | "rubric" | "decision_case"
+  scope: GovernanceAssetScope
+  content: string
+  rationale: string
+  tags: string[]
+  authority: GovernanceAssetAuthority
+  status: GovernanceAssetStatus
+  sourceRefs: { kind: "artifact" | "decision" | "outcome" | "conversation" | "external"; id: string }[]
+  supersedes?: number
+  version: number
+  createdBy: string
+  approvedBy?: string
+  createdAt: number
+  current: boolean
+}
+export type FounderTwinSnapshot = {
+  id: string
+  companyId: string
+  version: number
+  profileSummary: string
+  assetRefs: FounderAssetReference[]
+  promptTemplateVersion: string
+  modelConfigRef: string
+  retrievalConfigRef: string
+  permissionConfigRef: string
+  compiledPromptHash: string
+  checksum: string
+  createdBy: string
+  createdAt: number
+  selected: boolean
+}
+export type FounderStudioProjection = {
+  schemaVersion: 1
+  companyId: string
+  assets: GovernanceAsset[]
+  snapshots: FounderTwinSnapshot[]
+  selectedSnapshotId?: string
+  authorization: { status: "not_confirmed"; blocking: false }
+}
+
+export type FounderStudioDraftInput = Omit<
+  GovernanceAsset,
+  "id" | "version" | "status" | "supersedes" | "approvedBy" | "createdAt" | "current"
+> & {
+  authority: "ai_proposed" | "external_source"
+}
+
+export type FounderStudioClientConfig = {
+  baseUrl: string
+  headers?: HeadersInit
+  fetch?: typeof fetch
+}
+
+export function createFounderStudioClient(config: FounderStudioClientConfig) {
+  const request = async <T>(path: string, init?: RequestInit) => {
+    const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+    })
+    if (!response.ok) throw new Error(`Founder Studio request failed with HTTP ${response.status}`)
+    return response.json() as Promise<T>
+  }
+  return {
+    projection(companyId: string, scope: GovernanceAssetScope = { kind: "company" }) {
+      const query = new URLSearchParams({ company_id: companyId, scope_kind: scope.kind })
+      if (scope.ref) query.set("scope_ref", scope.ref)
+      return request<FounderStudioProjection>(`/company/founder-studio?${query}`)
+    },
+    createDraft(input: FounderStudioDraftInput) {
+      return request<GovernanceAsset>("/company/founder-studio/assets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    },
+    revise(assetId: string, input: {
+      baseVersion: number
+      content: string
+      rationale: string
+      tags: string[]
+      authority: GovernanceAssetAuthority
+      status: GovernanceAssetStatus
+      sourceRefs: GovernanceAsset["sourceRefs"]
+      actorKind: "ai" | "external" | "human"
+      createdBy: string
+      confirmation?: { eventId: string; confirmedBy: string }
+    }) {
+      return request<FounderStudioProjection>(`/company/founder-studio/assets/${encodeURIComponent(assetId)}/versions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    },
+    compileSnapshot(input: {
+      companyId: string
+      profileSummary: string
+      promptTemplateVersion: string
+      modelConfigRef: string
+      retrievalConfigRef: string
+      permissionConfigRef: string
+      compiledPromptHash: string
+      scope: GovernanceAssetScope
+      createdBy: string
+    }) {
+      return request<FounderTwinSnapshot>("/company/founder-studio/snapshots", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    },
+    selectSnapshot(input: { companyId: string; snapshotId: string; reason: string; selectedBy: string }) {
+      return request<FounderStudioProjection>("/company/founder-studio/snapshot-selection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    },
+  }
+}

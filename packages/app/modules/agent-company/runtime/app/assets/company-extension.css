@@ -417,6 +417,38 @@
   font-size: 11px;
 }
 
+.ac-founder-studio-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ac-founder-studio-list article {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ui-bg) 92%, var(--ui-bg-muted));
+}
+
+.ac-founder-studio-list article > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ac-founder-studio-list article span,
+.ac-founder-studio-list article small {
+  color: var(--ui-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.ac-founder-studio-list article p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 /* TRUST-03 — Provider 连接向导：预设入口、测试动作与模型选择 */
 .ac-provider-presets {
   display: grid;

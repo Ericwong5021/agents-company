@@ -3,7 +3,17 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Cause, Effect, Exit } from "effect"
 import { eq } from "drizzle-orm"
 import z from "zod"
-import { FounderOSModeState } from "@agents-company/shared/founder-os"
+import {
+  FounderOSModeState,
+  FounderSnapshotCompileInput,
+  FounderSnapshotSelectInput,
+  FounderStudioProjection,
+  FounderTwinSnapshot,
+  GovernanceAsset,
+  GovernanceAssetDraftInput,
+  GovernanceAssetRevisionInput,
+  GovernanceAssetScope,
+} from "@agents-company/shared/founder-os"
 import { Auth } from "@/auth"
 import { Company, CompanyReset, CompanySetupInstance } from "@/company"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
@@ -36,6 +46,7 @@ import {
 } from "@/company/schema"
 import { Config } from "@/config"
 import { AppRuntime } from "@/effect/app-runtime"
+import { FounderOSAsset } from "@/founder-os"
 import { Provider, ProviderAuth, ModelsDev } from "@/provider"
 import { ProviderID } from "@/provider/schema"
 import { Database } from "@/storage"
@@ -55,6 +66,14 @@ const RepositoryInspectInput = z
   .strict()
   .meta({ ref: "RepositoryInspectInput" })
 const CompanyAgentsQuery = z.object({ company_id: CompanyID }).strict()
+const FounderStudioQuery = z
+  .object({
+    company_id: CompanyID,
+    scope_kind: z.enum(["company", "domain", "project", "brand"]).default("company"),
+    scope_ref: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .refine((query) => query.scope_kind === "company" ? query.scope_ref === undefined : query.scope_ref !== undefined)
 const ReassignWorkItemInput = z
   .object({
     owner_agent_id: z.string().trim().min(1),
@@ -397,6 +416,107 @@ export const CompanyRoutes = lazy(() =>
             Company.Service.use((service) => service.updateFounderOSModes(c.req.valid("json"))),
           ),
         ),
+    )
+    .get(
+      "/founder-studio",
+      describeRoute({
+        operationId: "company.founderStudio",
+        summary: "Read Founder Studio assets and immutable snapshots",
+        responses: {
+          200: {
+            description: "Founder Studio persisted projection",
+            content: { "application/json": { schema: resolver(FounderStudioProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("query", FounderStudioQuery, productValidationHook),
+      (c) => {
+        const query = c.req.valid("query")
+        return c.json(
+          FounderOSAsset.projection(
+            query.company_id,
+            GovernanceAssetScope.parse({
+              kind: query.scope_kind,
+              ...(query.scope_ref ? { ref: query.scope_ref } : {}),
+            }),
+          ),
+        )
+      },
+    )
+    .post(
+      "/founder-studio/assets",
+      describeRoute({
+        operationId: "company.founderStudioAssetCreate",
+        summary: "Create an AI or external Founder Studio draft",
+        responses: {
+          200: {
+            description: "Persisted immutable Governance Asset draft",
+            content: { "application/json": { schema: resolver(GovernanceAsset) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", GovernanceAssetDraftInput, productValidationHook),
+      (c) => c.json(FounderOSAsset.createDraft(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/assets/:assetID/versions",
+      describeRoute({
+        operationId: "company.founderStudioAssetRevise",
+        summary: "Append a Governance Asset version under deterministic authority rules",
+        responses: {
+          200: {
+            description: "Founder Studio projection after version append",
+            content: { "application/json": { schema: resolver(FounderStudioProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", GovernanceAssetRevisionInput, productValidationHook),
+      (c) => c.json(FounderOSAsset.revise(c.req.param("assetID"), c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/snapshots",
+      describeRoute({
+        operationId: "company.founderStudioSnapshotCompile",
+        summary: "Compile and persist a deterministic Founder Twin Snapshot",
+        responses: {
+          200: {
+            description: "Immutable Founder Twin Snapshot without compiled prompt plaintext",
+            content: { "application/json": { schema: resolver(FounderTwinSnapshot) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderSnapshotCompileInput, productValidationHook),
+      (c) => c.json(FounderOSAsset.compileSnapshot(c.req.valid("json"))),
+    )
+    .post(
+      "/founder-studio/snapshot-selection",
+      describeRoute({
+        operationId: "company.founderStudioSnapshotSelect",
+        summary: "Append a Founder Twin Snapshot selection or rollback",
+        responses: {
+          200: {
+            description: "Founder Studio projection with selected immutable Snapshot",
+            content: { "application/json": { schema: resolver(FounderStudioProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderSnapshotSelectInput, productValidationHook),
+      (c) => c.json(FounderOSAsset.selectSnapshot(c.req.valid("json"))),
     )
     .put(
       "/setup-goal",
