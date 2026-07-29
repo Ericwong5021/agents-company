@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-company.local/schema/founder-os-stage-evidence.v1.json",
+  "title": "Agent Company Founder OS exact-commit stage attempt evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageVersion",
+    "stage",
+    "attemptId",
+    "attemptNonce",
+    "candidateSha",
+    "candidateTreeSha",
+    "baseSha",
+    "contractBinding",
+    "schemaBinding",
+    "runnerBinding",
+    "isolation",
+    "githubActions",
+    "advisory",
+    "artifacts",
+    "startedAt",
+    "finishedAt",
+    "commands",
+    "normalizedDigest",
+    "status"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "packageVersion": { "const": "1.0.0" },
+    "stage": {
+      "enum": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "E0", "K0", "K1", "K2"]
+    },
+    "attemptId": { "enum": ["attempt-01", "attempt-02"] },
+    "attemptNonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "candidateSha": { "$ref": "#/$defs/sha" },
+    "candidateTreeSha": { "$ref": "#/$defs/sha" },
+    "baseSha": { "$ref": "#/$defs/sha" },
+    "contractBinding": { "$ref": "#/$defs/sourceBinding" },
+    "schemaBinding": { "$ref": "#/$defs/sourceBinding" },
+    "runnerBinding": { "$ref": "#/$defs/sourceBinding" },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "detachedHead", "cleanTrackedFiles", "baseAncestor"],
+      "properties": {
+        "mode": { "const": "detached_exact_commit_worktree" },
+        "detachedHead": { "const": true },
+        "cleanTrackedFiles": { "const": true },
+        "baseAncestor": { "const": true }
+      }
+    },
+    "githubActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "blocking", "replacement"],
+      "properties": {
+        "status": { "const": "unavailable" },
+        "blocking": { "const": false },
+        "replacement": { "const": "two_local_exact_sha_runs" }
+      }
+    },
+    "advisory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["humanAuthorization", "realSamples"],
+      "properties": {
+        "humanAuthorization": { "$ref": "#/$defs/advisory" },
+        "realSamples": { "$ref": "#/$defs/advisory" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateSha", "baseSha", "advisoryReport"],
+      "properties": {
+        "candidateSha": { "$ref": "#/$defs/fileBinding" },
+        "baseSha": { "$ref": "#/$defs/fileBinding" },
+        "advisoryReport": { "$ref": "#/$defs/fileBinding" }
+      }
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "commands": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "argv",
+          "cwd",
+          "exitCode",
+          "status",
+          "normalizedDigest",
+          "stdout",
+          "stderr",
+          "report"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["production_contract", "typecheck", "test"] },
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "cwd": { "type": "string", "minLength": 1 },
+          "exitCode": { "type": "integer" },
+          "status": { "enum": ["pass", "failed"] },
+          "normalizedDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "stdout": { "$ref": "#/$defs/fileBinding" },
+          "stderr": { "$ref": "#/$defs/fileBinding" },
+          "report": { "$ref": "#/$defs/fileBinding" }
+        }
+      }
+    },
+    "normalizedDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": { "enum": ["pass", "failed"] }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256", "byteLength", "mediaType"],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaType": {
+          "enum": ["application/json", "text/plain"]
+        }
+      }
+    },
+    "advisory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "blocking"],
+      "properties": {
+        "status": { "const": "not_confirmed" },
+        "blocking": { "const": false }
+      }
+    }
+  }
+}

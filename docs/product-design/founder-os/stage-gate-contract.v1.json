@@ -1,0 +1,562 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-founder-os-stage-gate",
+  "version": "1.0.0",
+  "evidenceSchemaBinding": {
+    "path": "docs/product-design/founder-os/stage-evidence.v1.json"
+  },
+  "runnerBindings": {
+    "contract": "script/founder-os-stage-contract.ts",
+    "evidence": "script/founder-os-stage-evidence.ts",
+    "gate": "script/founder-os-stage-gate.ts"
+  },
+  "exactCommitGate": {
+    "attempts": ["attempt-01", "attempt-02"],
+    "isolation": "detached_exact_commit_worktree",
+    "requireCleanTrackedFiles": true,
+    "requireBaseAncestor": true,
+    "requireSameNormalizedDigest": true
+  },
+  "githubActions": {
+    "status": "unavailable",
+    "blocking": false,
+    "replacement": "two_local_exact_sha_runs"
+  },
+  "advisories": {
+    "humanAuthorization": {
+      "blocking": false,
+      "defaultStatus": "not_confirmed"
+    },
+    "realSamples": {
+      "blocking": false,
+      "defaultStatus": "not_confirmed"
+    }
+  },
+  "commandRegistry": [
+    {
+      "id": "founder-stage-production-contract",
+      "cwd": ".",
+      "argv": ["bun", "script/founder-os-stage-contract.ts", "--stage", "{stage}", "--ref", "{candidateSha}", "--out", "{reportPath}"],
+      "reportPath": "reports/{stage}-production-contract.json",
+      "kind": "production_contract"
+    },
+    {
+      "id": "shared-typecheck",
+      "cwd": "packages/shared",
+      "argv": ["bun", "typecheck"],
+      "reportPath": "reports/shared-typecheck.json",
+      "kind": "typecheck"
+    },
+    {
+      "id": "shared-test",
+      "cwd": "packages/shared",
+      "argv": ["bun", "test"],
+      "reportPath": "reports/shared-test.json",
+      "kind": "test"
+    },
+    {
+      "id": "control-plane-typecheck",
+      "cwd": "packages/control-plane",
+      "argv": ["bun", "typecheck"],
+      "reportPath": "reports/control-plane-typecheck.json",
+      "kind": "typecheck"
+    },
+    {
+      "id": "control-plane-test",
+      "cwd": "packages/control-plane",
+      "argv": ["bun", "test"],
+      "reportPath": "reports/control-plane-test.json",
+      "kind": "test"
+    },
+    {
+      "id": "sdk-typecheck",
+      "cwd": "packages/sdk/js",
+      "argv": ["bun", "typecheck"],
+      "reportPath": "reports/sdk-typecheck.json",
+      "kind": "typecheck"
+    },
+    {
+      "id": "app-typecheck",
+      "cwd": "packages/app",
+      "argv": ["bun", "typecheck"],
+      "reportPath": "reports/app-typecheck.json",
+      "kind": "typecheck"
+    },
+    {
+      "id": "app-unit-test",
+      "cwd": "packages/app",
+      "argv": ["bun", "test:unit"],
+      "reportPath": "reports/app-unit-test.json",
+      "kind": "test"
+    }
+  ],
+  "stages": [
+    {
+      "id": "W1",
+      "taskIds": ["FOS-DEC-001", "FOS-DEC-002", "FOS-DEC-003", "FOS-DEC-004", "FOS-DEC-005", "FOS-DEC-006", "FOS-DEC-007", "FOS-DEC-008", "FOS-DEC-009", "FOS-DEC-010", "FOS-DEC-011", "FOS-SCOPE-001"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/decision-ledger.ts",
+        "packages/control-plane/src/founder-os/decision-ledger.sql.ts",
+        "packages/shared/src/founder-os.ts"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck"],
+      "taskEvidence": {
+        "FOS-DEC-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-008": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-009": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-010": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DEC-011": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-SCOPE-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "append-only-transition-and-current-projection",
+          "path": "packages/control-plane/src/founder-os/decision-ledger.ts",
+          "includeAll": ["appendDecisionTransitionInTransaction", "DecisionTransitionTable", "DecisionCurrentProjectionTable"],
+          "excludeAll": [".delete(DecisionRecordTable)"]
+        },
+        {
+          "id": "atomic-authorized-dispatch-outbox",
+          "path": "packages/control-plane/src/founder-os/decision-ledger.ts",
+          "includeAll": ["appendDecisionDispatchInTransaction", "Database.transaction", "claimDecisionDispatchInTransaction"],
+          "excludeAll": []
+        },
+        {
+          "id": "board-projection-replay",
+          "path": "packages/control-plane/src/founder-os/decision-ledger.ts",
+          "includeAll": ["reconcileBoardDecisionProjectionsInTransaction", "DecisionSourceMappingTable"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "W2",
+      "taskIds": ["FOS-AUTH-001", "FOS-AUTH-002", "FOS-AUTH-003", "FOS-AUTH-005", "FOS-AUTH-006", "FOS-AUTH-004", "FOS-CORR-001", "FOS-OUTCOME-001", "FOS-UI-001", "FOS-UI-002", "FOS-METRIC-001"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/authority.ts",
+        "packages/control-plane/src/founder-os/metric.ts",
+        "packages/app/app/pages/inbox/index.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-AUTH-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-AUTH-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-AUTH-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-AUTH-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-AUTH-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-AUTH-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-CORR-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-OUTCOME-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-UI-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-UI-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-METRIC-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "risk-can-only-escalate",
+          "path": "packages/control-plane/src/founder-os/authority.ts",
+          "includeAll": ["authorityRank", "hardRedActions", "maxAuthority"],
+          "excludeAll": []
+        },
+        {
+          "id": "red-requires-approved-gate",
+          "path": "packages/control-plane/src/founder-os/authority.ts",
+          "includeAll": ["FounderApprovalGate", "Red decisions require an approved ApprovalGate", "founder_red"],
+          "excludeAll": []
+        },
+        {
+          "id": "decision-center-actions-and-outcomes",
+          "path": "packages/app/app/pages/inbox/index.vue",
+          "includeAll": ["Decision Center", "\"accept\" | \"reject\" | \"rollback\"", "withOutcomes"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "W3",
+      "taskIds": ["FOS-ASSET-001", "FOS-ASSET-002", "FOS-ASSET-003", "FOS-ASSET-004", "FOS-ASSET-005", "FOS-ASSET-006", "FOS-ASSET-007", "FOS-STUDIO-001"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/asset.ts",
+        "packages/control-plane/src/founder-os/asset.sql.ts",
+        "packages/app/modules/agent-company/runtime/app/pages/settings/company.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-ASSET-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-ASSET-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-STUDIO-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "versioned-asset-authority",
+          "path": "packages/control-plane/src/founder-os/asset.ts",
+          "includeAll": ["supersedes_version", "human_confirmed", "ai_proposed"],
+          "excludeAll": [".delete(GovernanceAssetTable)"]
+        },
+        {
+          "id": "deterministic-snapshot",
+          "path": "packages/control-plane/src/founder-os/asset.ts",
+          "includeAll": ["compileSnapshot", "checksum", "retrievalConfig"],
+          "excludeAll": []
+        },
+        {
+          "id": "founder-studio-authority-visible",
+          "path": "packages/app/modules/agent-company/runtime/app/pages/settings/company.vue",
+          "includeAll": ["Founder Studio", "confirmAsset", "calibrationQueue"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "W4",
+      "taskIds": ["FOS-TWIN-001", "FOS-TWIN-002", "FOS-TWIN-003", "FOS-TWIN-004", "FOS-TWIN-005", "FOS-TASTE-001", "FOS-TASTE-002", "FOS-TASTE-003", "FOS-TASTE-004", "FOS-CORR-002", "FOS-BENCH-001", "FOS-BENCH-002", "FOS-BOARD-001"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/shadow.ts",
+        "packages/control-plane/src/founder-os/benchmark.ts",
+        "packages/control-plane/src/founder-os/taste.ts",
+        "packages/app/app/pages/company/board.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-TWIN-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TWIN-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TWIN-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TWIN-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TWIN-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TASTE-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TASTE-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TASTE-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-TASTE-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-CORR-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BENCH-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BENCH-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BOARD-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "shadow-provider-and-comparison",
+          "path": "packages/control-plane/src/founder-os/shadow.ts",
+          "includeAll": ["FounderModelProvider", "runShadow", "compare"],
+          "excludeAll": ["GraphSupervisor"]
+        },
+        {
+          "id": "holdout-fail-closed",
+          "path": "packages/control-plane/src/founder-os/benchmark.ts",
+          "includeAll": ["holdout_empty", "training_holdout_leakage", "minimum_sample_count"],
+          "excludeAll": []
+        },
+        {
+          "id": "shadow-remains-audit-drawer",
+          "path": "packages/app/app/pages/company/board.vue",
+          "includeAll": ["board?.shadow.decisions", "founder-confidence", "founder-evidence-groups"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "W5",
+      "taskIds": ["FOS-BOARD-002", "FOS-BOARD-003", "FOS-BOARD-008", "FOS-BOARD-004", "FOS-BOARD-005", "FOS-BOARD-006", "FOS-BOARD-007", "FOS-CTRL-001"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/advisor.ts",
+        "packages/control-plane/src/founder-os/advisor-readiness.ts",
+        "packages/app/app/pages/company/board.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-BOARD-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-BOARD-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-BOARD-008": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BOARD-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BOARD-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-BOARD-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BOARD-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-CTRL-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "advisor-principal-and-convergence",
+          "path": "packages/control-plane/src/founder-os/advisor.ts",
+          "includeAll": ["principalId: \"board-ceo\"", "converge", "idempotencyKey"],
+          "excludeAll": []
+        },
+        {
+          "id": "takeover-fence-and-ledger",
+          "path": "packages/control-plane/src/founder-os/advisor.ts",
+          "includeAll": ["beginIntervention", "FounderInterventionFenceTable", "DecisionIntent"],
+          "excludeAll": []
+        },
+        {
+          "id": "real-board-surface",
+          "path": "packages/app/app/pages/company/board.vue",
+          "includeAll": ["AI 大东 · 创始人代理", "founder-board/intervene", "redefine_goal"],
+          "excludeAll": ["navigateTo(\"/work\")"]
+        }
+      ]
+    },
+    {
+      "id": "W6",
+      "taskIds": ["FOS-DELEGATE-001", "FOS-DELEGATE-002", "FOS-DELEGATE-003", "FOS-DELEGATE-004", "FOS-DELEGATE-005", "FOS-DELEGATE-006"],
+      "governedPaths": [
+        "packages/control-plane/src/project-orchestrator/founder-delegation.ts",
+        "packages/control-plane/src/project-orchestrator/founder-delegation.sql.ts",
+        "packages/control-plane/src/founder-os/authority.ts"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck"],
+      "taskEvidence": {
+        "FOS-DELEGATE-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DELEGATE-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DELEGATE-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DELEGATE-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DELEGATE-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-DELEGATE-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "allowlisted-governed-dispatch",
+          "path": "packages/control-plane/src/project-orchestrator/founder-delegation.ts",
+          "includeAll": ["FounderGreenDelegationAction.safeParse", "authorizeDispatch", "Graph Supervisor"],
+          "excludeAll": []
+        },
+        {
+          "id": "takeover-fence-stops-authorization",
+          "path": "packages/control-plane/src/project-orchestrator/founder-delegation.ts",
+          "includeAll": ["fenced", "takeover_fence_status", "no new authorization was requested"],
+          "excludeAll": []
+        },
+        {
+          "id": "validated-outcome-receipt-chain",
+          "path": "packages/control-plane/src/project-orchestrator/founder-delegation.ts",
+          "includeAll": ["CompanyWorkReceiptTable", "CompanyOutcomeSignalCurrentTable", "\"validated\""],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "W7",
+      "taskIds": ["FOS-YELLOW-001", "FOS-YELLOW-002", "FOS-YELLOW-003", "FOS-YELLOW-004", "FOS-YELLOW-005", "FOS-YELLOW-006"],
+      "governedPaths": [
+        "packages/control-plane/src/founder-os/yellow.ts",
+        "packages/control-plane/src/founder-os/yellow-projection.ts",
+        "packages/app/app/pages/inbox/index.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-YELLOW-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-YELLOW-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-YELLOW-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-YELLOW-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-YELLOW-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-YELLOW-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "checkpoint-before-dispatch",
+          "path": "packages/control-plane/src/founder-os/yellow.ts",
+          "includeAll": ["FounderYellowCheckpointTable", "rollback", "appendDecisionDispatchInTransaction"],
+          "excludeAll": []
+        },
+        {
+          "id": "budget-circuit-downgrade",
+          "path": "packages/control-plane/src/founder-os/yellow.ts",
+          "includeAll": ["openCircuit", "actual_cost", "cost_limit", "green-delegated"],
+          "excludeAll": []
+        },
+        {
+          "id": "yellow-summary-rollback-ui",
+          "path": "packages/control-plane/src/founder-os/yellow-projection.ts",
+          "includeAll": ["FounderYellowSummary", "cost:", "rollbacks:"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "E0",
+      "taskIds": ["FOS-OUTCOME-002", "FOS-OUTCOME-003", "FOS-OUTCOME-004", "FOS-OUTCOME-005", "FOS-OUTCOME-006"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project/outcome-signal.ts",
+        "packages/control-plane/src/company-project/company-project.sql.ts",
+        "packages/shared/src/founder-os.ts"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck"],
+      "taskEvidence": {
+        "FOS-OUTCOME-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-OUTCOME-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-OUTCOME-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-OUTCOME-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-OUTCOME-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "sdk-typecheck"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "outcome-core-transition-projection",
+          "path": "packages/control-plane/src/company-project/company-project.sql.ts",
+          "includeAll": ["CompanyOutcomeSignalTable", "CompanyOutcomeSignalTransitionTable", "CompanyOutcomeSignalCurrentTable"],
+          "excludeAll": []
+        },
+        {
+          "id": "typed-source-validation",
+          "path": "packages/control-plane/src/company-project/outcome-signal.ts",
+          "includeAll": ["validateDecisionReference", "validateValidator", "CompanyWorkReceiptTable"],
+          "excludeAll": []
+        },
+        {
+          "id": "idempotent-recovery",
+          "path": "packages/control-plane/src/company-project/outcome-signal.ts",
+          "includeAll": ["idempotency_key", "recoverCurrentProjection", "linkDecisionOutcome"],
+          "excludeAll": [".delete(CompanyOutcomeSignalTable)"]
+        }
+      ]
+    },
+    {
+      "id": "K0",
+      "taskIds": ["FOS-COMMONS-001", "FOS-COMMONS-011", "FOS-COMMONS-002", "FOS-COMMONS-003", "FOS-COMMONS-004", "FOS-COMMONS-005", "FOS-COMMONS-006", "FOS-COMMONS-007", "FOS-COMMONS-008", "FOS-COMMONS-009", "FOS-COMMONS-010", "FOS-COMMONS-012", "FOS-COMMONS-013"],
+      "governedPaths": [
+        "packages/control-plane/src/company-commons/company-commons.ts",
+        "packages/control-plane/src/company-commons/adapters.ts",
+        "packages/control-plane/src/company-commons/schema.ts",
+        "packages/app/app/pages/library/index.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-COMMONS-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-011": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-008": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-009": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-COMMONS-010": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-012": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-COMMONS-013": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "scoped-source-contract",
+          "path": "packages/control-plane/src/company-commons/schema.ts",
+          "includeAll": ["z.discriminatedUnion(\"privacy_scope\"", "\"private\"", "\"unsupported\""],
+          "excludeAll": []
+        },
+        {
+          "id": "ssrf-and-content-boundary",
+          "path": "packages/control-plane/src/company-commons/company-commons.ts",
+          "includeAll": ["validateURLTarget", "BlockedSourceError", "content_hash"],
+          "excludeAll": []
+        },
+        {
+          "id": "capability-visible-without-fake-support",
+          "path": "packages/app/app/pages/library/index.vue",
+          "includeAll": ["capability.source_type", "unsupported", "privacy_scope"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "K1",
+      "taskIds": ["FOS-READ-001", "FOS-READ-002", "FOS-READ-003", "FOS-READ-004", "FOS-READ-005", "FOS-READ-006", "FOS-READ-007", "FOS-READ-008"],
+      "governedPaths": [
+        "packages/control-plane/src/company-reading/company-reading.ts",
+        "packages/control-plane/src/company-reading/schema.ts",
+        "packages/app/app/pages/library/interpretations.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-READ-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-READ-008": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "bounded-scheduler",
+          "path": "packages/control-plane/src/company-reading/company-reading.ts",
+          "includeAll": ["weekly_reading_budget", "budget_reserved", "scheduleKnowledgeReading"],
+          "excludeAll": ["GraphSupervisor"]
+        },
+        {
+          "id": "receipt-backed-interpretation",
+          "path": "packages/control-plane/src/company-reading/company-reading.ts",
+          "includeAll": ["KNOWLEDGE_READING Work Receipt", "source-span evidence reference", "CompanyInterpretationEvidenceTable"],
+          "excludeAll": []
+        },
+        {
+          "id": "disagreement-and-source-span-ui",
+          "path": "packages/app/app/pages/library/interpretations.vue",
+          "includeAll": ["Interpretations", "evidenceLink", "source span"],
+          "excludeAll": []
+        }
+      ]
+    },
+    {
+      "id": "K2",
+      "taskIds": ["FOS-BELIEF-001", "FOS-BELIEF-002", "FOS-BELIEF-003", "FOS-BELIEF-004", "FOS-EXP-001", "FOS-EXP-002", "FOS-PATCH-001", "FOS-PATCH-002", "FOS-PATCH-003", "FOS-PATCH-004", "FOS-PATCH-007", "FOS-PATCH-008", "FOS-PATCH-005", "FOS-PATCH-006", "FOS-E2E-001"],
+      "governedPaths": [
+        "packages/control-plane/src/company-learning/company-learning.ts",
+        "packages/control-plane/src/company-learning/target-adapters.ts",
+        "packages/control-plane/src/company-learning/company-learning.sql.ts",
+        "packages/app/app/pages/library/beliefs.vue",
+        "packages/app/app/pages/library/patches.vue"
+      ],
+      "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
+      "taskEvidence": {
+        "FOS-BELIEF-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BELIEF-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BELIEF-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-BELIEF-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-EXP-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-EXP-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-002": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-003": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-004": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-007": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-008": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test"],
+        "FOS-PATCH-005": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-PATCH-006": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"],
+        "FOS-E2E-001": ["founder-stage-production-contract", "control-plane-typecheck", "control-plane-test", "app-typecheck", "app-unit-test"]
+      },
+      "semanticAssertions": [
+        {
+          "id": "real-outcome-before-learning",
+          "path": "packages/control-plane/src/company-learning/company-learning.ts",
+          "includeAll": ["Experiment completion is not an Outcome Signal", "current_status, \"validated\"", "source_outcome_id"],
+          "excludeAll": []
+        },
+        {
+          "id": "independent-benchmark-and-rollback",
+          "path": "packages/control-plane/src/company-learning/company-learning.ts",
+          "includeAll": ["reviewer_id === input.author_id", "real_sample_count", "rollbackRealTarget"],
+          "excludeAll": []
+        },
+        {
+          "id": "real-versioned-target-adapters",
+          "path": "packages/control-plane/src/company-learning/target-adapters.ts",
+          "includeAll": ["activateRealTarget", "rollbackRealTarget", "attachPlanningTargetRefs"],
+          "excludeAll": []
+        },
+        {
+          "id": "belief-and-patch-surfaces",
+          "path": "packages/app/app/pages/library/patches.vue",
+          "includeAll": ["Learning Patches", "benchmark", "rollback_plan"],
+          "excludeAll": []
+        }
+      ]
+    }
+  ]
+}
