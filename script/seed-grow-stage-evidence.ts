@@ -425,6 +425,14 @@ export async function runSeedGrowEvidenceSelfTest() {
     stageDefinition(governance.contract, "A2").requiredCommandIds.length !== 4 ||
     stageDefinition(governance.contract, "A3").requiredCommandIds.length !== 3 ||
     stageDefinition(governance.contract, "A4").requiredCommandIds.length !== 1 ||
+    stageDefinition(governance.contract, "B0").requiredCommandIds.length !== 3 ||
+    stageDefinition(governance.contract, "B1").requiredCommandIds.length !== 3 ||
+    stageDefinition(governance.contract, "B2").requiredCommandIds.length !== 2 ||
+    stageDefinition(governance.contract, "B3").requiredCommandIds.length !== 2 ||
+    stageDefinition(governance.contract, "B4").requiredCommandIds.length !== 3 ||
+    stageDefinition(governance.contract, "B5").requiredCommandIds.length !== 4 ||
+    governance.contract.implementedStages.length !== stageIDs.length ||
+    governance.contract.commandRegistry.plannedStageCommands.length !== 0 ||
     stage.repeats !== 2
   ) {
     throw new Error("Seed-and-Grow evidence runner self-test failed.")
@@ -437,6 +445,9 @@ export async function runSeedGrowEvidenceSelfTest() {
     a2Commands: stageDefinition(governance.contract, "A2").requiredCommandIds.length,
     a3Commands: stageDefinition(governance.contract, "A3").requiredCommandIds.length,
     a4Commands: stageDefinition(governance.contract, "A4").requiredCommandIds.length,
+    b3Commands: stageDefinition(governance.contract, "B3").requiredCommandIds.length,
+    b4Commands: stageDefinition(governance.contract, "B4").requiredCommandIds.length,
+    b5Commands: stageDefinition(governance.contract, "B5").requiredCommandIds.length,
     automaticCommands: governance.automaticCommandIDs.length,
     implementedStages: governance.contract.implementedStages,
     repeats: stage.repeats,
