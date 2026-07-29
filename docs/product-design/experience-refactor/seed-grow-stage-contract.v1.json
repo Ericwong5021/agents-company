@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0", "A1"],
+  "implementedStages": ["A0", "A1", "A2"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -61,6 +61,10 @@
       "a1-fresh-db",
       "a1-migrated-db",
       "a1-receipt-recovery",
+      "a2-mutation-policy",
+      "a2-concurrency",
+      "a2-transaction-recovery",
+      "a2-shadow-zero-write",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -80,10 +84,6 @@
       "desktop-e2e"
     ],
     "plannedStageCommands": [
-      "a2-mutation-policy",
-      "a2-concurrency",
-      "a2-transaction-recovery",
-      "a2-shadow-zero-write",
       "a3-prerequisite-repair",
       "a3-repair-circuit",
       "a3-validation-policy",
@@ -311,7 +311,17 @@
       "releaseWindow": "R3",
       "dependsOn": ["A1"],
       "taskIds": ["GRAPH-01", "GRAPH-02", "GRAPH-03", "GRAPH-04", "GRAPH-05", "GRAPH-06", "GRAPH-07", "GRAPH-08", "GRAPH-09"],
-      "governedPaths": ["packages/control-plane/src/company-project", "packages/control-plane/migration", "packages/control-plane/test/company-project"],
+      "governedPaths": [
+        "packages/control-plane/src/company-project",
+        "packages/control-plane/src/id/id.ts",
+        "packages/control-plane/src/storage/schema.ts",
+        "packages/control-plane/src/server/routes/instance/workstation.ts",
+        "packages/control-plane/migration",
+        "packages/control-plane/test/company-project",
+        "packages/sdk",
+        "script",
+        "docs/product-design/experience-refactor"
+      ],
       "requiredCommandIds": ["a2-mutation-policy", "a2-concurrency", "a2-transaction-recovery", "a2-shadow-zero-write"],
       "repeats": 2,
       "criteria": [

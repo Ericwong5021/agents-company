@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agent-company-r0-automatic-evidence-requirements",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "gate": "R0",
   "requiredTaskIds": [
     "FND-01",
@@ -224,6 +224,122 @@
         },
         {
           "path": ".artifacts/seed-grow-a1/receipt-recovery.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a2-mutation-policy",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/graph-mutation.test.ts",
+        "-t",
+        "a2-mutation-policy",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a2-mutation-policy-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a2-mutation-policy-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a2/mutation-policy.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a2-concurrency",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/graph-mutation.test.ts",
+        "-t",
+        "a2-concurrency",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a2-concurrency-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a2-concurrency-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a2/concurrency.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a2-transaction-recovery",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/graph-mutation.test.ts",
+        "-t",
+        "a2-transaction-recovery",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a2-transaction-recovery-junit.xml"
+      ],
+      "timeoutMs": 180000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a2-transaction-recovery-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a2/transaction-recovery.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a2-shadow-zero-write",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/graph-mutation.test.ts",
+        "-t",
+        "a2-shadow-zero-write",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a2-shadow-zero-write-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a2-shadow-zero-write-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a2/shadow-zero-write.json",
           "validator": "artifact"
         }
       ]
@@ -792,6 +908,15 @@
             "command:a1-fresh-db",
             "command:a1-migrated-db",
             "command:a1-receipt-recovery"
+          ]
+        },
+        {
+          "id": "QA-02-GRAPH-MUTATION-SAFETY",
+          "evidenceRefs": [
+            "command:a2-mutation-policy",
+            "command:a2-concurrency",
+            "command:a2-transaction-recovery",
+            "command:a2-shadow-zero-write"
           ]
         },
         {

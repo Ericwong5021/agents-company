@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
   "title": "Agent Company R0 exact-build automatic evidence package",
   "schemaVersion": 1,
-  "packageVersion": "1.4.0",
+  "packageVersion": "1.5.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -30,7 +30,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.4.0"
+      "const": "1.5.0"
     },
     "packageId": {
       "type": "string",
