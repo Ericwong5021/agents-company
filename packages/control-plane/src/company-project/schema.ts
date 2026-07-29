@@ -531,6 +531,173 @@ export const GraphAttentionProposal = z
   })
   .strict()
 
+export const AttentionIssueKind = z.enum([
+  "implementation_error",
+  "missing_prerequisite",
+  "capability_gap",
+  "reviewer_finding",
+  "graph_dependency_error",
+  "runtime_transient",
+  "permission_required",
+  "scope_change",
+  "acceptance_change",
+  "budget_change",
+  "external_side_effect",
+  "permanent_organization_change",
+  "unresolved_material_risk",
+])
+export type AttentionIssueKind = z.infer<typeof AttentionIssueKind>
+
+export const AttentionRisk = z.enum(["low", "medium", "high", "critical"])
+export type AttentionRisk = z.infer<typeof AttentionRisk>
+
+export const AttentionMateriality = z.enum([
+  "internal",
+  "permission",
+  "scope",
+  "acceptance",
+  "budget",
+  "external_side_effect",
+  "organization",
+  "unresolved_risk",
+])
+export type AttentionMateriality = z.infer<typeof AttentionMateriality>
+
+export const AttentionRoute = z.enum([
+  "worker_rework",
+  "graph_supervisor",
+  "recruitment_resolver",
+  "graph_mutation_policy",
+  "automatic_recovery",
+  "approval_gate",
+  "project_dri",
+  "user",
+  "company_governance",
+])
+export type AttentionRoute = z.infer<typeof AttentionRoute>
+
+export const ProjectActionKind = z.enum([
+  "pause_work",
+  "resume_work",
+  "stop_work",
+  "retry",
+  "resolve_blocker",
+  "adjust_brief",
+])
+export type ProjectActionKind = z.infer<typeof ProjectActionKind>
+
+export const AttentionRouteInput = z
+  .object({
+    issue_kind: AttentionIssueKind,
+    risk: AttentionRisk,
+    materiality: AttentionMateriality,
+  })
+  .strict()
+export type AttentionRouteInput = z.infer<typeof AttentionRouteInput>
+
+export const AttentionRouteDecision = AttentionRouteInput.extend({
+  route: AttentionRoute,
+  material: z.boolean(),
+  interrupts_user: z.boolean(),
+  allowed_actions: z.array(ProjectActionKind).max(10),
+}).strict()
+export type AttentionRouteDecision = z.infer<typeof AttentionRouteDecision>
+
+export const AttentionSourceRef = z
+  .object({
+    kind: z.enum([
+      "project",
+      "project_event",
+      "goal_brief",
+      "work_item",
+      "work_attempt",
+      "work_receipt",
+      "graph_mutation",
+      "project_assignment",
+      "validation_gate",
+      "approval_gate",
+      "agent_run",
+      "project_action",
+    ]),
+    id: z.string().trim().min(1).max(240),
+    version: z.number().int().positive().optional(),
+    event_type: z.string().trim().min(1).max(240).optional(),
+  })
+  .strict()
+export type AttentionSourceRef = z.infer<typeof AttentionSourceRef>
+
+export const AttentionStatus = z.enum(["open", "resolved", "superseded"])
+export type AttentionStatus = z.infer<typeof AttentionStatus>
+
+export const AttentionCreate = z
+  .object({
+    project_id: z.string().trim().min(1),
+    idempotency_key: z.string().trim().min(1).max(500),
+    issue: AttentionRouteInput,
+    title: z.string().trim().min(1).max(500),
+    summary: z.string().trim().min(1).max(8_000),
+    required_decision: z.string().trim().min(1).max(8_000).optional(),
+    source_refs: z.array(AttentionSourceRef).min(1).max(500),
+  })
+  .strict()
+export type AttentionCreate = z.infer<typeof AttentionCreate>
+
+export const AttentionRecord = AttentionCreate.omit({ issue: true }).extend({
+  id: z.string(),
+  issue_kind: AttentionIssueKind,
+  risk: AttentionRisk,
+  materiality: AttentionMateriality,
+  route: AttentionRoute,
+  material: z.boolean(),
+  interrupts_user: z.boolean(),
+  allowed_actions: z.array(ProjectActionKind).max(10),
+  input_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  status: AttentionStatus,
+  resolution: z.string().optional(),
+  version: z.number().int().positive(),
+  created_at: z.number().int(),
+  updated_at: z.number().int(),
+  resolved_at: z.number().int().optional(),
+})
+export type AttentionRecord = z.infer<typeof AttentionRecord>
+
+export const AttentionClose = z
+  .object({
+    id: z.string().trim().min(1),
+    expected_version: z.number().int().positive(),
+    resolution: z.string().trim().min(1).max(8_000),
+  })
+  .strict()
+export type AttentionClose = z.infer<typeof AttentionClose>
+
+export const ProjectActionStatus = z.enum(["requested", "claimed", "applied", "rejected"])
+export type ProjectActionStatus = z.infer<typeof ProjectActionStatus>
+
+export const ProjectActionRequest = z
+  .object({
+    project_id: z.string().trim().min(1),
+    attention_id: z.string().trim().min(1).optional(),
+    action: ProjectActionKind,
+    idempotency_key: z.string().trim().min(1).max(500),
+    payload: z.record(z.string(), z.unknown()),
+    expected_revision: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+export type ProjectActionRequest = z.infer<typeof ProjectActionRequest>
+
+export const ProjectActionRecord = ProjectActionRequest.extend({
+  id: z.string(),
+  payload_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  status: ProjectActionStatus,
+  result: z.record(z.string(), z.unknown()).optional(),
+  error: z.string().optional(),
+  created_at: z.number().int(),
+  updated_at: z.number().int(),
+  claimed_at: z.number().int().optional(),
+  finished_at: z.number().int().optional(),
+})
+export type ProjectActionRecord = z.infer<typeof ProjectActionRecord>
+
 export const GraphOperation = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add_work_item"), item: NewGraphWorkItem }).strict(),
   z

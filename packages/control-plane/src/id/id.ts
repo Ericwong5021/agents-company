@@ -46,6 +46,8 @@ const prefixes = {
   agentPerformance: "aperf",
   employmentReview: "erev",
   department: "dept",
+  attention: "attn",
+  projectAction: "pact",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {
