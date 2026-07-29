@@ -152,7 +152,7 @@ export function read(projectID: string, artifactID: string) {
   if (!row) return { status: "not_found" as const }
   const artifact = reference({
     id: row.id,
-    projectId: row.project_id,
+    projectId: projectID,
     kind: row.kind,
     title: row.title,
   })

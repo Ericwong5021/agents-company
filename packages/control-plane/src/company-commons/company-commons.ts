@@ -3,6 +3,7 @@ import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, inArray, or } from "drizzle-orm"
 import z from "zod"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import {
   CompanyArtifactTable,
   CompanyProjectTable,
@@ -21,13 +22,13 @@ import {
   CommonsSource,
   CommonsSourceDetail,
   CommonsSourceSubmission,
+  CommonsSourceType,
   type CommonsAccess as CommonsAccessValue,
   type CommonsCapability as CommonsCapabilityValue,
   type CommonsSearchHit as CommonsSearchHitValue,
   type CommonsSource as CommonsSourceValue,
   type CommonsSourceDetail as CommonsSourceDetailValue,
   type CommonsSourceSubmission as CommonsSourceSubmissionValue,
-  type CommonsSourceType,
 } from "./schema"
 
 const MAX_MEDIA_BYTES = 20_000_000
@@ -546,7 +547,7 @@ export function makeLayer(options: {
       ) {
         const input = CommonsSourceSubmission.parse(raw)
         const company = Database.use((db) =>
-          db.select().from(CompanyTable).where(eq(CompanyTable.id, input.company_id)).get(),
+          db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(input.company_id))).get(),
         )
         if (!company)
           throw new Error(`Company not found: ${input.company_id}`)
@@ -657,7 +658,7 @@ export function makeLayer(options: {
           )!,
         )
         yield* process(source).pipe(
-          Effect.catchAll((error) =>
+          Effect.catchDefect((error) =>
             Effect.sync(() =>
               setFailure(
                 source.id,
@@ -696,7 +697,7 @@ export function makeLayer(options: {
             .run(),
         )
         yield* process(detail.source).pipe(
-          Effect.catchAll((error) =>
+          Effect.catchDefect((error) =>
             Effect.sync(() =>
               setFailure(
                 id,
