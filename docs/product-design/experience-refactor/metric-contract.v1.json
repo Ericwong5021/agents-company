@@ -1018,7 +1018,7 @@
       "eventSource": ["quality_pair.checked", "delivery.criterion_evaluated"],
       "timeWindow": "matched shadow comparison across two candidates",
       "minimumSampleSize": 2,
-      "applicableScenarioIds": ["S14"],
+      "applicableScenarioIds": ["S14", "S18"],
       "unit": "ratio",
       "aggregation": "ratio",
       "collectionMode": "automated",

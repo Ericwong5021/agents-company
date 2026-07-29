@@ -298,6 +298,10 @@ const S17Oracle = z
 const S18Oracle = z
   .object({
     kind: z.literal("s18_risk_reviewer"),
+    lowRiskWorkItemId: z.string().trim().min(1),
+    lowRiskArtifactId: z.string().trim().min(1),
+    lowRiskReceiptId: z.string().trim().min(1),
+    lowRiskValidationGateId: z.string().trim().min(1),
     workerWorkItemId: z.string().trim().min(1),
     reviewerWorkItemId: z.string().trim().min(1),
     workerAssignmentId: z.string().trim().min(1),
@@ -435,6 +439,13 @@ export const B5ScenarioRunResult = z
       value.oracle.workerWorkItemId === value.oracle.reviewerWorkItemId
     )
       issue(["reviewerWorkItemId"], "S18 Reviewer must use an independent WorkItem")
+    if (
+      value.oracle.kind === "s18_risk_reviewer" &&
+      [value.oracle.workerWorkItemId, value.oracle.reviewerWorkItemId].includes(
+        value.oracle.lowRiskWorkItemId,
+      )
+    )
+      issue(["lowRiskWorkItemId"], "S18 low-risk quality must use an independent WorkItem")
     if (
       value.oracle.kind === "s18_risk_reviewer" &&
       value.oracle.workerAssignmentId === value.oracle.reviewerAssignmentId
@@ -597,7 +608,8 @@ export function b5ScenarioEvidenceRequirement(
   strategy: B5Strategy,
 ) {
   const delivery = scenarioId === "S14"
-  const qualityPair = scenarioId === "S14" && strategy === "seed_and_grow"
+  const qualityPair =
+    strategy === "seed_and_grow" && ["S14", "S18"].includes(scenarioId)
   return {
     delivery,
     qualityPair,
@@ -617,7 +629,8 @@ export function b5ScenarioEvidenceRequirement(
       ...(strategy === "seed_and_grow" && ["S20", "S27"].includes(scenarioId)
         ? ["graph_mutation.recovery_checked"]
         : []),
-      ...(strategy === "seed_and_grow" && ValidationScenarios.has(scenarioId)
+      ...((strategy === "seed_and_grow" && ValidationScenarios.has(scenarioId)) ||
+      scenarioId === "S18"
         ? [scenarioId === "S15" ? "approval_gate.checked" : "validation_anchor.checked"]
         : []),
       ...(strategy === "seed_and_grow" && scenarioId === "S24" ? ["quiescence.checked"] : []),
@@ -777,6 +790,109 @@ export const runB5LocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(func
   }
 })
 
+const produceS18LowRiskCriterion = Effect.fn("B5CandidateScenarios.S18LowRiskCriterion")(
+  function* (
+    input: B5ScenarioRunInput,
+    runtime: B5ScenarioRuntime,
+    projectId: string,
+    planId: string,
+  ) {
+    const workItem = yield* runtime.projects.createWorkItem({
+      project_id: projectId,
+      plan_id: planId,
+      title: "Verify matched low-risk quality",
+      description: "Persist and validate the matched low-risk criterion without a Reviewer",
+      kind: "worker",
+      work_type: "analysis",
+      role: "low-risk quality operator",
+      capability_packs: ["research-analysis@1"],
+      decision_scope: ["low-risk quality"],
+      resource_scope: ["artifacts/b5/s18/low-risk"],
+      expected_outputs: ["Matched low-risk quality evidence"],
+      validators: ["The low-risk artifact preserves the deterministic quality criterion"],
+      model_group: "standard",
+      risk_level: "low",
+      review_status: "not_required",
+      purpose: "delivery",
+      origin_kind: "seed",
+      validation_mode: "machine",
+      acceptance_criteria: ["The low-risk artifact preserves the deterministic quality criterion"],
+      max_attempts: 3,
+    })
+    yield* runtime.projects.startWorkItem(workItem.id)
+    const artifact = yield* runtime.projects.addArtifact({
+      project_id: projectId,
+      work_item_id: workItem.id,
+      kind: "quality_evidence",
+      title: "S18 matched low-risk quality evidence",
+      content: JSON.stringify({ deterministic: true, qualityCriterionPassed: true }),
+    })
+    const artifactSha256 = digest(artifact.content ?? "")
+    const gate = yield* runtime.validation.create({
+      project_id: projectId,
+      work_item_id: workItem.id,
+      kind: "artifact",
+      criteria: [
+        {
+          id: "s18-low-risk-quality",
+          statement: "The low-risk artifact preserves the deterministic quality criterion",
+          anchor: { kind: "artifact", reference: `artifact:${artifact.id}` },
+          operator: "digest",
+          expected: artifactSha256,
+        },
+      ],
+      blocking_work_item_ids: [workItem.id],
+      evaluator: "artifact_digest_v1",
+      max_repair_rounds: 3,
+    })
+    const evaluated = yield* runtime.validation.evaluate({
+      gate_id: gate.id,
+      evaluator: "artifact_digest_v1",
+      evidence: [
+        {
+          criterion_id: "s18-low-risk-quality",
+          anchor: "artifact",
+          reference: `artifact:${artifact.id}`,
+          observed: artifactSha256,
+          evidence_ref: { kind: "artifact", id: artifact.id },
+        },
+      ],
+    })
+    if (evaluated.status !== "passed")
+      throw new Error("S18 matched low-risk ValidationGate did not pass")
+    yield* runtime.projects.completeWorkItemWithReceipt({
+      id: workItem.id,
+      receipt: {
+        idempotency_key: `b5-s18-low-risk-${input.runId}`,
+        outcome: "completed",
+        summary: "Matched low-risk quality criterion passed without a Reviewer",
+        artifact_ids: [artifact.id],
+        evidence_refs: [{ kind: "artifact", id: artifact.id }],
+        confirmed_facts: ["low-risk criterion passed=true", "reviewer required=false"],
+        invalidated_assumptions: [],
+        unknowns: [],
+        blockers: [],
+        capability_gaps: [],
+        task_proposals: [],
+        dependency_proposals: [],
+        questions: [],
+      },
+    })
+    const receipt = (yield* runtime.projects.listWorkReceipts(projectId)).find(
+      (candidate) => candidate.work_item_id === workItem.id,
+    )
+    if (!receipt) throw new Error("S18 matched low-risk WorkItem produced no Work Receipt")
+    const processed = yield* (
+      input.strategy === "legacy_full_plan"
+        ? runtime.supervisor
+        : runtime.shadowSupervisor
+    ).processReceipt(receipt.id)
+    if (processed.status !== "processed")
+      throw new Error("S18 matched low-risk Work Receipt was not processed")
+    return { workItem, artifact, gate: evaluated.gate, receipt }
+  },
+)
+
 const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function* (
   input: B5ScenarioRunInput,
   runtime: B5ScenarioRuntime,
@@ -807,6 +923,18 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
     project = yield* runtime.projects.get(started.project.id)
   }
   if (!project) throw new Error(`Legacy project ${started.project.id} disappeared during execution`)
+  const initialPlans = yield* runtime.projects.listPlans(project.id)
+  const activePlan = initialPlans.find((plan) => plan.status === "active")
+  const lowRiskCriterion =
+    input.snapshot.scenario.id === "S18"
+      ? activePlan
+        ? yield* produceS18LowRiskCriterion(input, runtime, project.id, activePlan.id)
+        : undefined
+      : undefined
+  if (input.snapshot.scenario.id === "S18" && !lowRiskCriterion)
+    throw new Error("Legacy S18 has no active Plan for its matched low-risk criterion")
+  project = yield* runtime.projects.get(started.project.id)
+  if (!project) throw new Error(`Legacy project ${started.project.id} disappeared after S18 quality validation`)
   const plans = yield* runtime.projects.listPlans(project.id)
   const items = yield* runtime.projects.listWorkItems(project.id)
   const assignments = yield* runtime.recruitment.listAssignments({ project_id: project.id })
@@ -1571,6 +1699,12 @@ const runS18 = Effect.fn("B5CandidateScenarios.S18")(function* (
     permission_mode: "workspace_write",
   })
   yield* runtime.projects.transition({ id: project.id, status: "executing" })
+  const lowRiskCriterion = yield* produceS18LowRiskCriterion(
+    input,
+    runtime,
+    project.id,
+    plan.id,
+  )
   yield* runtime.projects.startWorkItem(worker.id)
   const workerArtifact = yield* runtime.projects.addArtifact({
     project_id: project.id,
@@ -1770,16 +1904,27 @@ const runS18 = Effect.fn("B5CandidateScenarios.S18")(function* (
     terminalDecision: "in_progress",
     sourceRefs: [
       { kind: "project", id: project.id },
+      { kind: "work_item", id: lowRiskCriterion.workItem.id },
       { kind: "work_item", id: worker.id },
       { kind: "work_item", id: reviewer.id },
       { kind: "project_assignment", id: staffedWorker.assignment.id },
       { kind: "project_assignment", id: staffedReviewer.assignment.id },
       { kind: "agent_run", id: probe.runId },
+      { kind: "artifact", id: lowRiskCriterion.artifact.id },
+      { kind: "artifact", id: workerArtifact.id },
+      { kind: "artifact", id: reviewArtifact.id },
+      { kind: "work_receipt", id: lowRiskCriterion.receipt.id },
+      { kind: "work_receipt", id: receipt.id },
+      { kind: "validation_gate", id: lowRiskCriterion.gate.id },
       { kind: "validation_gate", id: gate.id },
       { kind: "graph_mutation", id: mutation.mutation.id },
     ],
     oracle: {
       kind: "s18_risk_reviewer",
+      lowRiskWorkItemId: lowRiskCriterion.workItem.id,
+      lowRiskArtifactId: lowRiskCriterion.artifact.id,
+      lowRiskReceiptId: lowRiskCriterion.receipt.id,
+      lowRiskValidationGateId: lowRiskCriterion.gate.id,
       workerWorkItemId: worker.id,
       reviewerWorkItemId: reviewer.id,
       workerAssignmentId: staffedWorker.assignment.id,

@@ -1780,7 +1780,21 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
             strategy,
           ).includes("validation_anchor.checked")
           const gate = validationRequired
-            ? gates.findLast((candidate) => candidate.status === "passed")
+            ? snapshot.scenario.id === "S18"
+              ? gates.find(
+                  (candidate) =>
+                    candidate.status === "passed" &&
+                    candidate.criteria.some(
+                      (criterion) => criterion.id === "s18-low-risk-quality",
+                    ) &&
+                    items.some(
+                      (item) =>
+                        item.id === candidate.work_item_id &&
+                        item.risk_level === "low" &&
+                        item.review_status === "not_required",
+                    ),
+                )
+              : gates.findLast((candidate) => candidate.status === "passed")
             : undefined
           const deliveryCriterion = deliveryBinding ? deliveryMatch?.criterion : undefined
           const deliveryGate = deliveryBinding ? deliveryMatch?.gate : undefined
@@ -1790,6 +1804,10 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
           )
             throw new Error(
               `${snapshot.scenario.id} ${strategy} has no runtime delivery bound to a passed acceptance Gate`,
+            )
+          if (validationRequired && !gate)
+            throw new Error(
+              `${snapshot.scenario.id} ${strategy} has no runtime ValidationGate anchor`,
             )
           const interruptionRequired = requiredB5ObservationTypes(
             snapshot.scenario.id,
@@ -2231,6 +2249,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                                         },
                                         sourceRefs: [
                                           { kind: "validation_gate" as const, id: gate!.id },
+                                          ...gate!.evidence_refs,
                                           external,
                                         ],
                                       }
@@ -2320,14 +2339,42 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                                                   external,
                                                 ],
                                               }
-                                            : eventType === "quality_pair.checked" ||
-                                                eventType === "shadow_pair.checked"
+                                            : eventType === "quality_pair.checked"
                                               ? {
                                                   properties: {
                                                     legacyRunId: paired!.result.binding.runId,
                                                     seedGrowRunId: result.binding.runId,
                                                   },
-                                                  sourceRefs: [...baseRefs, external],
+                                                  sourceRefs: [
+                                                    ...baseRefs,
+                                                    ...(snapshot.scenario.id === "S14"
+                                                      ? [
+                                                          {
+                                                            kind: "artifact" as const,
+                                                            id: deliveryBinding!.id,
+                                                          },
+                                                          {
+                                                            kind: "validation_gate" as const,
+                                                            id: deliveryGate!.id,
+                                                          },
+                                                        ]
+                                                      : [
+                                                          {
+                                                            kind: "validation_gate" as const,
+                                                            id: gate!.id,
+                                                          },
+                                                          ...gate!.evidence_refs,
+                                                        ]),
+                                                    external,
+                                                  ],
+                                                }
+                                              : eventType === "shadow_pair.checked"
+                                                ? {
+                                                    properties: {
+                                                      legacyRunId: paired!.result.binding.runId,
+                                                      seedGrowRunId: result.binding.runId,
+                                                    },
+                                                    sourceRefs: [...baseRefs, external],
                                                 }
                                               : eventType === "repair.circuit_checked"
                                                 ? result.oracle.kind ===

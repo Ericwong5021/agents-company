@@ -887,10 +887,6 @@ export function makeLayer() {
             { behavior: "immediate" },
           ),
         )
-        yield* Effect.forEach(recovered.reset_gate_ids, evaluatePending, {
-          concurrency: 1,
-          discard: true,
-        })
         return recovered
       })
 

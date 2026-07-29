@@ -1363,7 +1363,11 @@ function reconcileReviewPresence(
     const parent = items.find((item) => item.id === reviewer.parent_id)
     return parent?.review_status === "rejected"
   })
-  return validateB5ReviewPresenceEvidence({
+  const findingConfirmed = reviewers.some((reviewer) => {
+    const parent = items.find((item) => item.id === reviewer.parent_id)
+    return parent?.review_status === "accepted"
+  })
+  const reconciled = validateB5ReviewPresenceEvidence({
     claimed: value,
     chains,
     unboundReviewerRunIds: reviewerRuns
@@ -1372,6 +1376,104 @@ function reconcileReviewPresence(
     rejected,
     references,
   })
+  if (value.findingConfirmed !== findingConfirmed)
+    throw new Error("B5 review observation does not match persisted Reviewer finding")
+  return { ...reconciled, findingConfirmed }
+}
+
+function reconcileValidationAnchor(
+  db: TxOrDb,
+  binding: PersistedFactRunBindingValue,
+  value: z.infer<typeof ValidationObservation>,
+) {
+  const gate = db
+    .select()
+    .from(CompanyValidationGateTable)
+    .where(eq(CompanyValidationGateTable.id, value.gateId))
+    .get()
+  if (
+    !gate ||
+    gate.project_id !== binding.projectId ||
+    value.passed !== (gate.status === "passed") ||
+    value.passed !== value.anchorPassed
+  )
+    throw new Error(`B5 validation observation ${value.gateId} does not match its Gate anchor`)
+  return { value, gate }
+}
+
+function reconcileS18QualityCriterion(
+  db: TxOrDb,
+  binding: PersistedFactRunBindingValue,
+  rows: typeof CompanyGateObservationTable.$inferSelect[],
+) {
+  const validationRow = rows.find((row) => row.event_type === "validation_anchor.checked")
+  if (!validationRow)
+    throw new Error(`B5 S18 run ${binding.runId} has no persisted low-risk ValidationGate criterion`)
+  const validationReferences = parseList(
+    validationRow.source_refs_json,
+    `B5 observation ${validationRow.id} sources`,
+  ).map((reference) => SourceReference.parse(reference))
+  const reconciled = reconcileValidationAnchor(
+    db,
+    binding,
+    ValidationObservation.parse(JSON.parse(validationRow.properties_json) as unknown),
+  )
+  const workItem = reconciled.gate.work_item_id
+    ? db
+        .select()
+        .from(CompanyWorkItemTable)
+        .where(eq(CompanyWorkItemTable.id, reconciled.gate.work_item_id))
+        .get()
+    : undefined
+  const criteria = JSON.parse(reconciled.gate.criteria_json) as Array<Record<string, unknown>>
+  const gateReferences = parseList(
+    reconciled.gate.evidence_refs_json,
+    `B5 ValidationGate ${reconciled.gate.id} evidence`,
+  ).map((reference) => SourceReference.parse(reference))
+  const artifacts = gateReferences
+    .filter((reference) => reference.kind === "artifact")
+    .map((reference) =>
+      db
+        .select()
+        .from(CompanyArtifactTable)
+        .where(eq(CompanyArtifactTable.id, reference.id))
+        .get(),
+    )
+    .filter((artifact) => artifact !== undefined)
+  const reviewers = workItem
+    ? db
+        .select()
+        .from(CompanyWorkItemTable)
+        .where(eq(CompanyWorkItemTable.project_id, binding.projectId))
+        .all()
+        .filter((item) => item.kind === "reviewer" && item.parent_id === workItem.id)
+    : []
+  if (
+    !workItem ||
+    workItem.project_id !== binding.projectId ||
+    workItem.risk_level !== "low" ||
+    workItem.review_status !== "not_required" ||
+    reviewers.length !== 0 ||
+    reconciled.gate.status !== "passed" ||
+    criteria.length !== 1 ||
+    criteria[0]?.id !== "s18-low-risk-quality" ||
+    !artifacts.length ||
+    artifacts.some(
+      (artifact) =>
+        artifact.project_id !== binding.projectId ||
+        artifact.work_item_id !== workItem.id ||
+        !validationReferences.some(
+          (reference) => reference.kind === "artifact" && reference.id === artifact.id,
+        ),
+    )
+  )
+    throw new Error(`B5 S18 run ${binding.runId} has no real matched low-risk criterion`)
+  return {
+    criterionId: criteria[0].id,
+    status: reconciled.value.passed ? "pass" as const : "fail" as const,
+    evidenceCount: validationReferences.length,
+    risk: workItem.risk_level,
+  }
 }
 
 function gateObservationFacts(
@@ -1619,24 +1721,29 @@ function gateObservationFacts(
     }
     if (row.event_type === "validation_anchor.checked") {
       const value = ValidationObservation.parse(properties)
-      const gate = db
-        .select()
-        .from(CompanyValidationGateTable)
-        .where(eq(CompanyValidationGateTable.id, value.gateId))
-        .get()
-      if (
-        !gate ||
-        gate.project_id !== binding.projectId ||
-        value.passed !== (gate.status === "passed") ||
-        value.passed !== value.anchorPassed
-      )
-        throw new Error(`B5 validation observation ${row.id} does not match its Gate anchor`)
+      reconcileValidationAnchor(db, binding, value)
       emit(row, "validation_gate.evaluated", {
-        gateId: gate.id,
+        gateId: value.gateId,
         passed: value.passed,
         anchorPassed: value.anchorPassed,
         falsePass: value.passed && !value.anchorPassed,
       })
+      if (scenarioId === "S18") {
+        const quality = reconcileS18QualityCriterion(db, binding, rows)
+        emit(
+          row,
+          "delivery.criterion_evaluated",
+          {
+            deliveryId: `quality:${binding.projectId}`,
+            criterionId: quality.criterionId,
+            status: quality.status,
+            evidenceCount: quality.evidenceCount,
+            risk: quality.risk,
+            strategy: binding.strategy,
+          },
+          "quality_criterion",
+        )
+      }
       return
     }
     if (row.event_type === "approval_gate.checked") {
@@ -1789,38 +1896,75 @@ function gateObservationFacts(
     }
     if (row.event_type === "quality_pair.checked") {
       const value = PairObservation.parse(properties)
-      const legacyRequirement = b5ScenarioEvidenceRequirement(
-        scenarioId,
-        "legacy_full_plan",
-      )
-      const legacy = gateEvidence.observations.find(
-        (item) =>
-          item.run_id === value.legacyRunId &&
-          item.event_type === "delivery.checked" &&
-          item.scenario_id === binding.scenarioId &&
-          item.strategy === "legacy_full_plan",
-      )
-      const seed = byType("delivery.checked")[0]
       if (
         binding.strategy !== "seed_and_grow" ||
         !requirement.qualityPair ||
-        !requirement.delivery ||
-        !legacyRequirement.delivery ||
-        value.seedGrowRunId !== binding.runId ||
-        !legacy ||
-        !seed ||
-        row.paired_project_id !== legacy.project_id ||
-        legacy.snapshot_sha256 !== row.snapshot_sha256
+        value.seedGrowRunId !== binding.runId
       )
-        throw new Error(`B5 quality observation ${row.id} has an invalid matched delivery pair`)
-      const legacyDelivery = DeliveryObservation.parse(JSON.parse(legacy.properties_json) as unknown)
-      const seedDelivery = DeliveryObservation.parse(JSON.parse(seed.properties_json) as unknown)
+        throw new Error(`B5 quality observation ${row.id} has an invalid strategy pair`)
+      if (scenarioId === "S14") {
+        const legacy = gateEvidence.observations.find(
+          (item) =>
+            item.run_id === value.legacyRunId &&
+            item.event_type === "delivery.checked" &&
+            item.scenario_id === binding.scenarioId &&
+            item.strategy === "legacy_full_plan",
+        )
+        const seed = byType("delivery.checked")[0]
+        if (
+          !requirement.delivery ||
+          !b5ScenarioEvidenceRequirement(scenarioId, "legacy_full_plan").delivery ||
+          !legacy ||
+          !seed ||
+          row.paired_project_id !== legacy.project_id ||
+          legacy.snapshot_sha256 !== row.snapshot_sha256
+        )
+          throw new Error(`B5 quality observation ${row.id} has an invalid matched delivery pair`)
+        const legacyDelivery = DeliveryObservation.parse(JSON.parse(legacy.properties_json) as unknown)
+        const seedDelivery = DeliveryObservation.parse(JSON.parse(seed.properties_json) as unknown)
+        emit(row, "quality_pair.checked", {
+          legacyRunId: value.legacyRunId,
+          seedGrowRunId: value.seedGrowRunId,
+          risk: seedDelivery.risk,
+          legacyScore: legacyDelivery.criterionStatus === "pass" ? 1 : 0,
+          seedGrowScore: seedDelivery.criterionStatus === "pass" ? 1 : 0,
+          snapshotSha256: binding.snapshotDigest,
+        })
+        return
+      }
+      const legacyValidation = gateEvidence.observations.find(
+        (item) =>
+          item.run_id === value.legacyRunId &&
+          item.event_type === "validation_anchor.checked" &&
+          item.scenario_id === binding.scenarioId &&
+          item.strategy === "legacy_full_plan",
+      )
+      if (
+        scenarioId !== "S18" ||
+        !legacyValidation ||
+        row.paired_project_id !== legacyValidation.project_id ||
+        legacyValidation.snapshot_sha256 !== row.snapshot_sha256
+      )
+        throw new Error(`B5 quality observation ${row.id} has an invalid matched low-risk Gate pair`)
+      const legacyBinding = PersistedFactRunBinding.parse({
+        runId: legacyValidation.run_id,
+        projectId: legacyValidation.project_id,
+        strategy: legacyValidation.strategy,
+        scenarioId: legacyValidation.scenario_id,
+        snapshotDigest: legacyValidation.snapshot_sha256,
+      })
+      const legacyQuality = reconcileS18QualityCriterion(
+        db,
+        legacyBinding,
+        gateEvidence.observations.filter((item) => item.run_id === legacyValidation.run_id),
+      )
+      const seedQuality = reconcileS18QualityCriterion(db, binding, rows)
       emit(row, "quality_pair.checked", {
         legacyRunId: value.legacyRunId,
         seedGrowRunId: value.seedGrowRunId,
-        risk: seedDelivery.risk,
-        legacyScore: legacyDelivery.criterionStatus === "pass" ? 1 : 0,
-        seedGrowScore: seedDelivery.criterionStatus === "pass" ? 1 : 0,
+        risk: seedQuality.risk,
+        legacyScore: legacyQuality.status === "pass" ? 1 : 0,
+        seedGrowScore: seedQuality.status === "pass" ? 1 : 0,
         snapshotSha256: binding.snapshotDigest,
       })
       return

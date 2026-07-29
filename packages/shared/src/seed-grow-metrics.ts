@@ -157,7 +157,7 @@ export const PrePublicScenarioApplicability = {
   candidate_reuse_rate: ["S17", "S25", "S26"],
   candidate_reuse_delta_vs_legacy: ["S17", "S25", "S26"],
   new_candidate_per_completed_project: ["S17", "S26"],
-  low_risk_quality_ratio_vs_legacy: ["S14"],
+  low_risk_quality_ratio_vs_legacy: ["S14", "S18"],
   core_task_completion_rate: [
     "S13",
     "S14",
@@ -177,7 +177,7 @@ export const PrePublicScenarioApplicability = {
   ],
 } as const satisfies Record<(typeof PrePublicScenarioMetricIds)[number], readonly string[]>
 
-export const PrePublicMetricContractSha256 = "fb348d11eb29f31718e15459831155fe569af491a44001ca80433e3354a4b320"
+export const PrePublicMetricContractSha256 = "975d7c42fb5b4f629107b4a09c79cf10eba6d87bb3c6a11c983c4dee090e68a2"
 
 export const MetricOperator = z.enum(["=", "<", "<=", ">", ">=", "observe"])
 export type MetricOperator = z.infer<typeof MetricOperator>

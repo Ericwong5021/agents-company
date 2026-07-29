@@ -457,6 +457,16 @@ function evaluate(db: TxOrDb, proposal: GraphMutationProposalType) {
     .from(CompanyProjectTable)
     .where(eq(CompanyProjectTable.id, proposal.project_id))
     .get()?.version
+  const activePlans = db
+    .select({ id: CompanyPlanTable.id, version: CompanyPlanTable.version })
+    .from(CompanyPlanTable)
+    .where(
+      and(
+        eq(CompanyPlanTable.project_id, proposal.project_id),
+        eq(CompanyPlanTable.status, "active"),
+      ),
+    )
+    .all()
   return {
     status: "evaluated" as const,
     before,
@@ -464,20 +474,14 @@ function evaluate(db: TxOrDb, proposal: GraphMutationProposalType) {
     ...validateGraphPatch({
       proposal,
       snapshot: before,
-      valid_plan_ids: db
-        .select({ id: CompanyPlanTable.id })
-        .from(CompanyPlanTable)
-        .where(
-          and(
-            eq(CompanyPlanTable.project_id, proposal.project_id),
-            eq(CompanyPlanTable.status, "active"),
-            activePlanVersion === null || activePlanVersion === undefined
-              ? eq(CompanyPlanTable.version, -1)
-              : eq(CompanyPlanTable.version, activePlanVersion),
-          ),
-        )
-        .all()
-        .map((plan) => plan.id),
+      valid_plan_ids:
+        activePlanVersion === null || activePlanVersion === undefined
+          ? activePlans.length === 1
+            ? activePlans.map((plan) => plan.id)
+            : []
+          : activePlans
+              .filter((plan) => plan.version === activePlanVersion)
+              .map((plan) => plan.id),
       trigger_work_item_id: receipt.work_item_id,
       receipt_evidence_refs: parseEvidence(receipt.evidence_refs_json),
     }),
