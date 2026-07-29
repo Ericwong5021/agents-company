@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import { createReadStream } from "node:fs"
+import { randomBytes } from "node:crypto"
 import os from "node:os"
 import path from "node:path"
 import sharp from "sharp"
@@ -84,6 +85,9 @@ const releaseCandidateHR01StimulusMinimum = { width: 600, height: 140 }
 const releaseCandidateHR01Presentation =
   "Show the release-candidate state card with its state label hidden. Do not explain the state before the response."
 const releaseCandidateHR01ExactPrompt = "请用自己的话回答三个问题：现在发生了什么？为什么这件事重要？你下一步会怎么做？"
+const b5CandidateCommandId = "b5-candidate-facts"
+const b5CandidateReportRoot = ".artifacts/seed-grow-b5/real-candidate-facts"
+const b5CandidateSummarySourcePath = `${b5CandidateReportRoot}/summary.json`
 const humanResearchProtocolRelativePath = "docs/product-design/experience-refactor/human-research-protocol.v1.json"
 const packageKeys = [
   "schemaVersion",
@@ -192,6 +196,50 @@ type CommandEvidence = {
   reports: ReportEvidence[]
 }
 
+type AutomaticAttemptId = "automatic" | "attempt-01" | "attempt-02"
+
+type EnvironmentStateBinding = {
+  absolutePathSha256: string
+  stateSha256: string
+}
+
+type B5AttemptAttestation = {
+  command: {
+    id: typeof b5CandidateCommandId
+    startedAt: string
+    finishedAt: string
+  }
+  summary: {
+    sha256: string
+    attemptId: "automatic"
+    attemptIsolationId: string
+    normalizedResultSha256: string
+    outputIsolationSha256: string
+    attemptStatus: "completed"
+    promotionClaimed: false
+    environment: {
+      worktree: EnvironmentStateBinding
+      runtimeHome: EnvironmentStateBinding
+      database: EnvironmentStateBinding
+      output: EnvironmentStateBinding
+      isolationRoot: EnvironmentStateBinding
+    }
+  }
+}
+
+type AttemptIsolationAttestation = {
+  outerAttemptId: AutomaticAttemptId
+  nonce: string
+  runnerBindingSha256: string
+  automatic: {
+    worktreeAbsolutePathSha256: string
+    outputAbsolutePathSha256: string
+    isolationRootAbsolutePathSha256: string
+  }
+  command: B5AttemptAttestation["command"]
+  b5Summary: B5AttemptAttestation["summary"]
+}
+
 type ReleaseCandidateScreenshotEvidence = {
   surface: string
   sourceRelativePath: string
@@ -277,6 +325,7 @@ type AutomaticEvidencePackage = {
     productionDataEnvironmentInherited: boolean
     hostPermissionIsolation: boolean
     networkIsolation: string
+    attempt: AttemptIsolationAttestation
     playwright: {
       mode: string
       packageVersion: string
@@ -687,6 +736,254 @@ async function validateFileEvidence(
     file,
     bytes,
     source: new TextDecoder().decode(bytes),
+  }
+}
+
+function validDigest(value: unknown) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+}
+
+function environmentStateBinding(value: unknown): EnvironmentStateBinding | null {
+  if (
+    !isRecord(value) ||
+    !exactKeys(value, ["absolutePathSha256", "stateSha256"]) ||
+    !validDigest(value.absolutePathSha256) ||
+    !validDigest(value.stateSha256)
+  ) {
+    return null
+  }
+  return {
+    absolutePathSha256: value.absolutePathSha256 as string,
+    stateSha256: value.stateSha256 as string,
+  }
+}
+
+function b5SummaryAttestation(value: unknown, summarySha256: string): B5AttemptAttestation["summary"] | null {
+  if (
+    !isRecord(value) ||
+    value.attemptId !== "automatic" ||
+    typeof value.attemptIsolationId !== "string" ||
+    !/^[a-f0-9]{16}$/.test(value.attemptIsolationId) ||
+    !validDigest(value.normalizedResultSha256) ||
+    !validDigest(value.outputIsolationSha256) ||
+    value.attemptStatus !== "completed" ||
+    value.promotionClaimed !== false ||
+    !isRecord(value.environment)
+  ) {
+    return null
+  }
+  const environment = {
+    worktree: environmentStateBinding(value.environment.worktree),
+    runtimeHome: environmentStateBinding(value.environment.runtimeHome),
+    database: environmentStateBinding(value.environment.database),
+    output: environmentStateBinding(value.environment.output),
+    isolationRoot: environmentStateBinding(value.environment.isolationRoot),
+  }
+  if (Object.values(environment).some((binding) => binding === null)) return null
+  return {
+    sha256: summarySha256,
+    attemptId: "automatic",
+    attemptIsolationId: value.attemptIsolationId,
+    normalizedResultSha256: value.normalizedResultSha256 as string,
+    outputIsolationSha256: value.outputIsolationSha256 as string,
+    attemptStatus: "completed",
+    promotionClaimed: false,
+    environment: environment as B5AttemptAttestation["summary"]["environment"],
+  }
+}
+
+async function stateEntries(
+  rootDirectory: string,
+  target = rootDirectory,
+  excludedRelativePaths: ReadonlySet<string> = new Set(),
+): Promise<Array<{ path: string; sha256: string; byteLength: number }>> {
+  const relative = path.relative(rootDirectory, target) || "."
+  if (excludedRelativePaths.has(relative)) return []
+  const info = await fs.lstat(target).catch(() => null)
+  if (!info) return []
+  if (info.isSymbolicLink()) throw new Error(`Automatic evidence state target cannot be a symbolic link: ${target}`)
+  if (info.isFile()) {
+    const source = new Uint8Array(await Bun.file(target).arrayBuffer())
+    return [{ path: relative, sha256: sha256(source), byteLength: source.byteLength }]
+  }
+  if (!info.isDirectory()) throw new Error(`Automatic evidence state target must be a regular file or directory: ${target}`)
+  const children = (await fs.readdir(target)).sort()
+  if (!children.length) return [{ path: `${relative}/`, sha256: sha256(""), byteLength: 0 }]
+  return (
+    await Promise.all(
+      children.map((child) => stateEntries(rootDirectory, path.join(target, child), excludedRelativePaths)),
+    )
+  ).flat()
+}
+
+async function stateSha256(target: string, excludedRelativePaths: ReadonlySet<string> = new Set()) {
+  return sha256(canonicalize(await stateEntries(target, target, excludedRelativePaths)))
+}
+
+function absolutePathSha256(target: string) {
+  return sha256(path.resolve(target))
+}
+
+async function collectB5AttemptAttestation(options: {
+  worktree: string
+  requirement: RequirementCommand
+  reports: ReportEvidence[]
+  startedAt: string
+  finishedAt: string
+  buildSha: string
+}) {
+  const report = options.reports.find((item) => item.sourcePath === b5CandidateSummarySourcePath)
+  if (!report || options.reports.length !== 36) {
+    throw new Error("B5 candidate evidence must archive its summary and all 36 reports.")
+  }
+  const summaryPath = path.join(options.worktree, options.requirement.cwd, b5CandidateSummarySourcePath)
+  const summaryValue: unknown = await Bun.file(summaryPath).json()
+  const summary = b5SummaryAttestation(summaryValue, report.file.sha256)
+  if (
+    !summary ||
+    !isRecord(summaryValue) ||
+    !isRecord(summaryValue.candidate) ||
+    summaryValue.candidate.requestedSha !== options.buildSha ||
+    summaryValue.candidate.headSha !== options.buildSha ||
+    !isRecord(summaryValue.window) ||
+    typeof summaryValue.window.startedAt !== "number" ||
+    typeof summaryValue.window.finishedAt !== "number" ||
+    summaryValue.window.startedAt < Date.parse(options.startedAt) ||
+    summaryValue.window.finishedAt > Date.parse(options.finishedAt)
+  ) {
+    throw new Error("B5 candidate summary is not bound to the exact build and command interval.")
+  }
+  const output = path.join(options.worktree, options.requirement.cwd, b5CandidateReportRoot)
+  const isolationRoot = path.join(output, ".isolation")
+  const environment = {
+    worktree: {
+      absolutePathSha256: absolutePathSha256(options.worktree),
+      stateSha256: sha256(runGit(["rev-parse", "HEAD^{tree}"], options.worktree).trim()),
+    },
+    runtimeHome: {
+      absolutePathSha256: absolutePathSha256(path.join(isolationRoot, "runtime-home")),
+      stateSha256: await stateSha256(path.join(isolationRoot, "runtime-home")),
+    },
+    database: {
+      absolutePathSha256: absolutePathSha256(path.join(isolationRoot, "agent-company.db")),
+      stateSha256: await stateSha256(path.join(isolationRoot, "agent-company.db")),
+    },
+    output: {
+      absolutePathSha256: absolutePathSha256(output),
+      stateSha256: await stateSha256(output, new Set(["summary.json"])),
+    },
+    isolationRoot: {
+      absolutePathSha256: absolutePathSha256(isolationRoot),
+      stateSha256: await stateSha256(isolationRoot),
+    },
+  }
+  if (
+    canonicalize(environment) !== canonicalize(summary.environment) ||
+    summary.outputIsolationSha256 !== environment.output.stateSha256 ||
+    new Set(Object.values(environment).map((binding) => binding.absolutePathSha256)).size !== 5
+  ) {
+    throw new Error("B5 candidate path or state attestation differs from the outer runner recomputation.")
+  }
+  return {
+    command: {
+      id: b5CandidateCommandId,
+      startedAt: options.startedAt,
+      finishedAt: options.finishedAt,
+    },
+    summary,
+  } satisfies B5AttemptAttestation
+}
+
+async function validateAttemptIsolationAttestation(options: {
+  base: string
+  value: unknown
+  commands: unknown[]
+  buildSha: string
+  runnerSha256: string
+  outerAttemptId?: AutomaticAttemptId
+  errors: string[]
+}) {
+  const invalid = () => options.errors.push("automatic evidence package: attempt isolation attestation mismatch")
+  if (
+    !isRecord(options.value) ||
+    !exactKeys(options.value, [
+      "outerAttemptId",
+      "nonce",
+      "runnerBindingSha256",
+      "automatic",
+      "command",
+      "b5Summary",
+    ]) ||
+    !["automatic", "attempt-01", "attempt-02"].includes(String(options.value.outerAttemptId)) ||
+    (options.outerAttemptId !== undefined && options.value.outerAttemptId !== options.outerAttemptId) ||
+    !validDigest(options.value.nonce) ||
+    options.value.runnerBindingSha256 !== options.runnerSha256 ||
+    !isRecord(options.value.automatic) ||
+    !exactKeys(options.value.automatic, [
+      "worktreeAbsolutePathSha256",
+      "outputAbsolutePathSha256",
+      "isolationRootAbsolutePathSha256",
+    ]) ||
+    !Object.values(options.value.automatic).every(validDigest) ||
+    new Set(Object.values(options.value.automatic)).size !== 3 ||
+    !isRecord(options.value.command) ||
+    !exactKeys(options.value.command, ["id", "startedAt", "finishedAt"]) ||
+    options.value.command.id !== b5CandidateCommandId ||
+    !validDate(options.value.command.startedAt) ||
+    !validDate(options.value.command.finishedAt) ||
+    !isRecord(options.value.b5Summary)
+  ) {
+    invalid()
+    return
+  }
+  const command = options.commands.find(
+    (item) => isRecord(item) && item.id === b5CandidateCommandId,
+  )
+  const reports = isRecord(command) && Array.isArray(command.reports) ? command.reports : []
+  const report = reports.find(
+    (item) => isRecord(item) && item.sourcePath === b5CandidateSummarySourcePath,
+  )
+  if (
+    !isRecord(command) ||
+    command.startedAt !== options.value.command.startedAt ||
+    command.finishedAt !== options.value.command.finishedAt ||
+    reports.length !== 36 ||
+    !isRecord(report) ||
+    !isRecord(report.file) ||
+    typeof report.file.relativePath !== "string" ||
+    typeof report.file.sha256 !== "string"
+  ) {
+    invalid()
+    return
+  }
+  const summaryFile = await resolveConfinedFile(options.base, report.file.relativePath)
+  const summaryValue = summaryFile
+    ? await Bun.file(summaryFile)
+        .json()
+        .catch(() => null)
+    : null
+  const expected = b5SummaryAttestation(summaryValue, report.file.sha256)
+  if (
+    !expected ||
+    !isRecord(summaryValue) ||
+    !isRecord(summaryValue.candidate) ||
+    summaryValue.candidate.requestedSha !== options.buildSha ||
+    summaryValue.candidate.headSha !== options.buildSha ||
+    !isRecord(summaryValue.window) ||
+    typeof summaryValue.window.startedAt !== "number" ||
+    typeof summaryValue.window.finishedAt !== "number" ||
+    summaryValue.window.startedAt < Date.parse(String(options.value.command.startedAt)) ||
+    summaryValue.window.finishedAt > Date.parse(String(options.value.command.finishedAt)) ||
+    canonicalize(options.value.b5Summary) !== canonicalize(expected) ||
+    expected.outputIsolationSha256 !== expected.environment.output.stateSha256 ||
+    options.value.automatic.worktreeAbsolutePathSha256 !==
+      expected.environment.worktree.absolutePathSha256 ||
+    options.value.automatic.outputAbsolutePathSha256 === expected.environment.output.absolutePathSha256 ||
+    options.value.automatic.isolationRootAbsolutePathSha256 ===
+      expected.environment.isolationRoot.absolutePathSha256 ||
+    new Set(Object.values(expected.environment).map((binding) => binding.absolutePathSha256)).size !== 5
+  ) {
+    invalid()
   }
 }
 
@@ -1253,6 +1550,7 @@ export async function validateAutomaticEvidencePackage(options: {
   packagePath: string
   buildSha: string
   runnerSha256: string
+  outerAttemptId?: AutomaticAttemptId
   governance?: AutomaticEvidenceGovernance
   packageSource?: string
   allowStructuralFixture?: boolean
@@ -1298,7 +1596,7 @@ export async function validateAutomaticEvidencePackage(options: {
   const governance = options.governance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
   if (
     parsed.schemaVersion !== 1 ||
-    parsed.packageVersion !== "1.5.0" ||
+    parsed.packageVersion !== "1.6.0" ||
     typeof parsed.packageId !== "string" ||
     !/^R0-AUTO-[a-f0-9]{12,40}$/.test(parsed.packageId) ||
     parsed.gate !== "R0" ||
@@ -1353,6 +1651,7 @@ export async function validateAutomaticEvidencePackage(options: {
       "productionDataEnvironmentInherited",
       "hostPermissionIsolation",
       "networkIsolation",
+      "attempt",
       "playwright",
     ]) ||
     parsed.isolation.mode !== governance.requirements.isolation.mode ||
@@ -1517,6 +1816,15 @@ export async function validateAutomaticEvidencePackage(options: {
       )
     }
   }
+  await validateAttemptIsolationAttestation({
+    base: path.dirname(file),
+    value: isRecord(parsed.isolation) ? parsed.isolation.attempt : null,
+    commands,
+    buildSha: options.buildSha,
+    runnerSha256: options.runnerSha256,
+    outerAttemptId: options.outerAttemptId,
+    errors,
+  })
   const releaseCandidateGeneratorStatus = recomputedStatuses.get(releaseCandidateGeneratorCommandId)
   if (parsed.releaseCandidateScreenshots !== null && releaseCandidateGeneratorStatus !== "pass") {
     errors.push("automatic evidence release-candidate screenshots: generator command did not pass")
@@ -1695,6 +2003,7 @@ async function runCommand(
   )
   const environment = commandEnvironment(process.env, directories, requirement, playwrightBrowsersPath)
   const started = Date.now()
+  const startedAt = new Date(started).toISOString()
   const child = Bun.spawn({
     cmd: executableCommand(requirement.argv),
     cwd: path.join(worktree, requirement.cwd),
@@ -1765,6 +2074,7 @@ async function runCommand(
   archivedStderrBytes.set(stderrBytes)
   archivedStderrBytes.set(collectionFailureBytes, stderrBytes.byteLength)
   const finished = Date.now()
+  const finishedAt = new Date(finished).toISOString()
   const commandDirectory = path.posix.join("files", requirement.id)
   const stdout = await writeEvidenceFile(
     outputDirectory,
@@ -1820,6 +2130,17 @@ async function runCommand(
       (Boolean(releaseCandidateResult.screenshots) && Boolean(releaseCandidateResult.hr01Stimuli)))
       ? "pass"
       : "fail"
+  const b5Attempt =
+    requirement.id === b5CandidateCommandId && status === "pass"
+      ? await collectB5AttemptAttestation({
+          worktree,
+          requirement,
+          reports,
+          startedAt,
+          finishedAt,
+          buildSha,
+        })
+      : null
   await cleanIgnoredRuntimePaths(worktree)
   return {
     command: {
@@ -1827,8 +2148,8 @@ async function runCommand(
       cwd: requirement.cwd,
       argv: requirement.argv,
       environment: requirement.environment,
-      startedAt: new Date(started).toISOString(),
-      finishedAt: new Date(finished).toISOString(),
+      startedAt,
+      finishedAt,
       durationMs: finished - started,
       exitCode,
       timedOut,
@@ -1840,6 +2161,7 @@ async function runCommand(
     } satisfies CommandEvidence,
     releaseCandidateScreenshots: releaseCandidateResult.screenshots,
     releaseCandidateHR01Stimuli: releaseCandidateResult.hr01Stimuli,
+    b5Attempt,
   }
 }
 
@@ -2294,6 +2616,12 @@ async function assertPlaywrightBrowsersUnchanged(runtime: PlaywrightRuntime) {
   }
 }
 
+function outerAttemptId(value: Record<string, unknown>): AutomaticAttemptId {
+  if (!("attemptId" in value)) return "automatic"
+  if (value.attemptId === "attempt-01" || value.attemptId === "attempt-02") return value.attemptId
+  throw new Error("Automatic evidence runner binding contains an invalid outer attempt ID.")
+}
+
 export async function generateAutomaticEvidence(options: {
   buildSha: string
   runnerPath: string
@@ -2310,6 +2638,9 @@ export async function generateAutomaticEvidence(options: {
   if (!isRecord(runner) || runner.buildSha !== buildSha) {
     throw new Error("Automatic evidence runner binding does not match the exact build SHA.")
   }
+  const attemptId = outerAttemptId(runner)
+  const runnerSha256 = sha256(runnerSource)
+  const nonce = randomBytes(32).toString("hex")
   const temporaryRoot = await fs.mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "ac-r0-"))
   const worktree = path.join(temporaryRoot, "worktree")
   const isolationRoot = path.join(temporaryRoot, "isolation")
@@ -2339,6 +2670,10 @@ export async function generateAutomaticEvidence(options: {
     const releaseCandidateHR01Stimuli =
       commandResults.find((result) => result.command.id === releaseCandidateGeneratorCommandId)
         ?.releaseCandidateHR01Stimuli ?? null
+    const b5Attempts = commandResults.flatMap((result) => (result.b5Attempt ? [result.b5Attempt] : []))
+    if (b5Attempts.length !== 1) {
+      throw new Error("Automatic evidence requires one successfully attested B5 candidate facts command.")
+    }
     await assertPlaywrightBrowsersUnchanged(playwright)
     await cleanIgnoredRuntimePaths(worktree)
     const finalHead = runGit(["rev-parse", "HEAD^{commit}"], worktree).trim()
@@ -2349,7 +2684,7 @@ export async function generateAutomaticEvidence(options: {
     if (worktreeStatus) throw new Error(`Automatic evidence exact-commit worktree became dirty:\n${worktreeStatus}`)
     const packageValue: AutomaticEvidencePackage = {
       schemaVersion: 1,
-      packageVersion: "1.5.0",
+      packageVersion: "1.6.0",
       packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
       gate: "R0",
       buildSha,
@@ -2364,7 +2699,7 @@ export async function generateAutomaticEvidence(options: {
       },
       runnerBinding: {
         buildSha,
-        sha256: sha256(runnerSource),
+        sha256: runnerSha256,
       },
       provenance: {
         kind: "executed",
@@ -2376,6 +2711,18 @@ export async function generateAutomaticEvidence(options: {
         productionDataEnvironmentInherited: false,
         hostPermissionIsolation: false,
         networkIsolation: "proxy_environment_only",
+        attempt: {
+          outerAttemptId: attemptId,
+          nonce,
+          runnerBindingSha256: runnerSha256,
+          automatic: {
+            worktreeAbsolutePathSha256: absolutePathSha256(worktree),
+            outputAbsolutePathSha256: absolutePathSha256(outputDirectory),
+            isolationRootAbsolutePathSha256: absolutePathSha256(isolationRoot),
+          },
+          command: b5Attempts[0]!.command,
+          b5Summary: b5Attempts[0]!.summary,
+        },
         playwright: {
           mode: "fresh_isolated_install",
           packageVersion: playwright.packageVersion,
@@ -2395,7 +2742,8 @@ export async function generateAutomaticEvidence(options: {
     const validation = await validateAutomaticEvidencePackage({
       packagePath,
       buildSha,
-      runnerSha256: sha256(runnerSource),
+      runnerSha256,
+      outerAttemptId: attemptId,
       governance,
     })
     if (validation.status === "invalid" || validation.status === "incomplete") {
@@ -2416,9 +2764,54 @@ export async function writeStructuralAutomaticEvidenceFixture(
   buildSha: string,
   buildTreeSha: string,
   runnerSha256: string,
+  attemptId: AutomaticAttemptId = "automatic",
 ) {
   await fs.mkdir(directory, { recursive: true })
   const governance = await currentGovernance(buildTreeSha)
+  const automaticPaths = {
+    worktreeAbsolutePathSha256: absolutePathSha256(path.join(directory, "structural-worktree")),
+    outputAbsolutePathSha256: absolutePathSha256(directory),
+    isolationRootAbsolutePathSha256: absolutePathSha256(path.join(directory, "structural-isolation")),
+  }
+  const b5Environment = {
+    worktree: {
+      absolutePathSha256: automaticPaths.worktreeAbsolutePathSha256,
+      stateSha256: sha256(buildTreeSha),
+    },
+    runtimeHome: {
+      absolutePathSha256: absolutePathSha256(path.join(directory, "b5-output/.isolation/runtime-home")),
+      stateSha256: "1".repeat(64),
+    },
+    database: {
+      absolutePathSha256: absolutePathSha256(path.join(directory, "b5-output/.isolation/agent-company.db")),
+      stateSha256: "2".repeat(64),
+    },
+    output: {
+      absolutePathSha256: absolutePathSha256(path.join(directory, "b5-output")),
+      stateSha256: "3".repeat(64),
+    },
+    isolationRoot: {
+      absolutePathSha256: absolutePathSha256(path.join(directory, "b5-output/.isolation")),
+      stateSha256: "4".repeat(64),
+    },
+  }
+  const b5SummaryValue = {
+    candidate: {
+      requestedSha: buildSha,
+      headSha: buildSha,
+    },
+    attemptId: "automatic",
+    attemptIsolationId: sha256(`${directory}:${attemptId}`).slice(0, 16),
+    environment: b5Environment,
+    window: {
+      startedAt: Date.parse("2026-07-25T08:00:00.000Z"),
+      finishedAt: Date.parse("2026-07-25T08:00:01.000Z"),
+    },
+    normalizedResultSha256: "5".repeat(64),
+    outputIsolationSha256: b5Environment.output.stateSha256,
+    attemptStatus: "completed",
+    promotionClaimed: false,
+  }
   const commands: CommandEvidence[] = []
   for (const command of governance.requirements.commands) {
     const commandDirectory = path.posix.join("files", command.id)
@@ -2461,7 +2854,9 @@ export async function writeStructuralAutomaticEvidenceFixture(
                 })
                   .png()
                   .toBuffer()
-              : `${JSON.stringify({ result: "pass" })}\n`
+              : `${JSON.stringify(
+                  report.path === b5CandidateSummarySourcePath ? b5SummaryValue : { result: "pass" },
+                )}\n`
       const bytes = typeof source === "string" ? new TextEncoder().encode(source) : source
       const result = await reportSummary(report.validator, bytes, report.path)
       reports.push({
@@ -2619,7 +3014,7 @@ export async function writeStructuralAutomaticEvidenceFixture(
   }
   const packageValue: AutomaticEvidencePackage = {
     schemaVersion: 1,
-    packageVersion: "1.5.0",
+    packageVersion: "1.6.0",
     packageId: `R0-AUTO-${buildSha.slice(0, 16)}`,
     gate: "R0",
     buildSha,
@@ -2646,6 +3041,25 @@ export async function writeStructuralAutomaticEvidenceFixture(
       productionDataEnvironmentInherited: false,
       hostPermissionIsolation: false,
       networkIsolation: "proxy_environment_only",
+      attempt: {
+        outerAttemptId: attemptId,
+        nonce: sha256(`${path.resolve(directory)}:${attemptId}:nonce`),
+        runnerBindingSha256: runnerSha256,
+        automatic: automaticPaths,
+        command: {
+          id: b5CandidateCommandId,
+          startedAt: "2026-07-25T08:00:00.000Z",
+          finishedAt: "2026-07-25T08:00:01.000Z",
+        },
+        b5Summary: {
+          ...b5SummaryAttestation(
+            b5SummaryValue,
+            commands
+              .find((command) => command.id === b5CandidateCommandId)!
+              .reports.find((report) => report.sourcePath === b5CandidateSummarySourcePath)!.file.sha256,
+          )!,
+        },
+      },
       playwright: {
         mode: "fresh_isolated_install",
         packageVersion: "1.59.1",
@@ -3016,6 +3430,22 @@ export async function runAutomaticEvidenceSelfTest() {
       value.isolation.playwright.browserTreeSha256 = "not-a-digest"
     },
   )
+  const invalidAttemptNonce = await writeMutatedPackage(
+    directory,
+    "invalid-attempt-nonce",
+    fixture.packageValue,
+    (value) => {
+      value.isolation.attempt.nonce = "not-a-digest"
+    },
+  )
+  const mismatchedB5State = await writeMutatedPackage(
+    directory,
+    "mismatched-b5-state",
+    fixture.packageValue,
+    (value) => {
+      value.isolation.attempt.b5Summary.environment.database.stateSha256 = "9".repeat(64)
+    },
+  )
   const tamperedLogPath = path.join(directory, fixture.packageValue.commands[0]!.stdout.relativePath)
   const originalLog = await Bun.file(tamperedLogPath).text()
   await Bun.write(tamperedLogPath, `${originalLog}tampered\n`)
@@ -3076,6 +3506,14 @@ export async function runAutomaticEvidenceSelfTest() {
     {
       name: "invalid_playwright_browser_binding_is_rejected",
       passed: (await validate(invalidBrowserBinding)).status === "invalid",
+    },
+    {
+      name: "invalid_attempt_nonce_is_rejected",
+      passed: (await validate(invalidAttemptNonce)).status === "invalid",
+    },
+    {
+      name: "mismatched_b5_state_attestation_is_rejected",
+      passed: (await validate(mismatchedB5State)).status === "invalid",
     },
     {
       name: "fresh_dependency_install_is_exact_build_and_isolated",

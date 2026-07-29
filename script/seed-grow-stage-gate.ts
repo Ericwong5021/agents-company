@@ -409,6 +409,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
       packagePath: automatic.file,
       buildSha: options.buildSha,
       runnerSha256: runnerDigest,
+      outerAttemptId: attempt.id as "attempt-01" | "attempt-02",
       governance: automaticGovernance,
       packageSource: automatic.source,
       allowStructuralFixture: options.allowStructuralFixtures,
@@ -617,7 +618,7 @@ async function writeFixtureRun(
   const stage = stageDefinition(governance.contract, "A0")
   const now = new Date().toISOString()
   const attempts = []
-  for (const attemptId of ["attempt-01", "attempt-02"]) {
+  for (const attemptId of ["attempt-01", "attempt-02"] as const) {
     const relativeDirectory = `attempts/${attemptId}`
     const runnerBinding = await writeFileBinding(
       directory,
@@ -641,6 +642,7 @@ async function writeFixtureRun(
       buildSha,
       governance.buildTreeSha,
       runnerBinding.sha256,
+      attemptId,
     )
     fixture.packageValue.createdAt = now
     await Bun.write(fixture.packagePath, `${JSON.stringify(fixture.packageValue, null, 2)}\n`)

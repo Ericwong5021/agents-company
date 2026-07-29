@@ -1091,6 +1091,18 @@ const automaticEvidenceDefinitions = isRecord(automaticEvidencePackage.$defs) ? 
 const automaticEvidenceProperties = isRecord(automaticEvidencePackage.properties)
   ? automaticEvidencePackage.properties
   : {}
+const automaticIsolationSchema = isRecord(automaticEvidenceProperties.isolation)
+  ? automaticEvidenceProperties.isolation
+  : {}
+const automaticIsolationProperties = isRecord(automaticIsolationSchema.properties)
+  ? automaticIsolationSchema.properties
+  : {}
+const automaticAttemptIsolationSchema = isRecord(automaticEvidenceDefinitions.attemptIsolation)
+  ? automaticEvidenceDefinitions.attemptIsolation
+  : {}
+const automaticAttemptIsolationProperties = isRecord(automaticAttemptIsolationSchema.properties)
+  ? automaticAttemptIsolationSchema.properties
+  : {}
 const automaticHR01StimuliSchema = isRecord(automaticEvidenceDefinitions.releaseCandidateHR01Stimuli)
   ? automaticEvidenceDefinitions.releaseCandidateHR01Stimuli
   : {}
@@ -1105,11 +1117,27 @@ const automaticHR01StimulusProperties = isRecord(automaticHR01StimulusSchema.pro
   : {}
 check(
   automaticEvidencePackage.schemaVersion === 1 &&
-    automaticEvidencePackage.packageVersion === "1.5.0" &&
+    automaticEvidencePackage.packageVersion === "1.6.0" &&
     automaticEvidencePackage.additionalProperties === false &&
     Array.isArray(automaticEvidencePackage.required) &&
     automaticEvidencePackage.required.includes("releaseCandidateScreenshots") &&
     automaticEvidencePackage.required.includes("releaseCandidateHR01Stimuli") &&
+    Array.isArray(automaticIsolationSchema.required) &&
+    automaticIsolationSchema.required.includes("attempt") &&
+    sameStructure(automaticIsolationProperties.attempt, { $ref: "#/$defs/attemptIsolation" }) &&
+    automaticAttemptIsolationSchema.additionalProperties === false &&
+    Array.isArray(automaticAttemptIsolationSchema.required) &&
+    sameValues(automaticAttemptIsolationSchema.required, [
+      "outerAttemptId",
+      "nonce",
+      "runnerBindingSha256",
+      "automatic",
+      "command",
+      "b5Summary",
+    ]) &&
+    sameStructure(automaticAttemptIsolationProperties.outerAttemptId, {
+      enum: ["automatic", "attempt-01", "attempt-02"],
+    }) &&
     sameStructure(automaticEvidenceProperties.releaseCandidateHR01Stimuli, {
       anyOf: [{ type: "null" }, { $ref: "#/$defs/releaseCandidateHR01Stimuli" }],
     }) &&

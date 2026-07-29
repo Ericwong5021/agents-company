@@ -176,18 +176,75 @@ const automaticCommand = z
     reports: z.array(automaticReport),
   })
   .strict()
+const automaticEnvironmentState = z
+  .object({
+    absolutePathSha256: digest,
+    stateSha256: digest,
+  })
+  .strict()
+const automaticAttemptIsolation = z
+  .object({
+    outerAttemptId: z.enum(["automatic", "attempt-01", "attempt-02"]),
+    nonce: digest,
+    runnerBindingSha256: digest,
+    automatic: z
+      .object({
+        worktreeAbsolutePathSha256: digest,
+        outputAbsolutePathSha256: digest,
+        isolationRootAbsolutePathSha256: digest,
+      })
+      .strict(),
+    command: z
+      .object({
+        id: z.literal(b5CommandId),
+        startedAt: z.string().datetime(),
+        finishedAt: z.string().datetime(),
+      })
+      .strict(),
+    b5Summary: z
+      .object({
+        sha256: digest,
+        attemptId: z.literal("automatic"),
+        attemptIsolationId: z.string().regex(/^[a-f0-9]{16}$/),
+        normalizedResultSha256: digest,
+        outputIsolationSha256: digest,
+        attemptStatus: z.literal("completed"),
+        promotionClaimed: z.literal(false),
+        environment: z
+          .object({
+            worktree: automaticEnvironmentState,
+            runtimeHome: automaticEnvironmentState,
+            database: automaticEnvironmentState,
+            output: automaticEnvironmentState,
+            isolationRoot: automaticEnvironmentState,
+          })
+          .strict(),
+      })
+      .strict(),
+  })
+  .strict()
 const automaticPackage = z
   .object({
     packageId: identifier,
     buildSha: commitSha,
     buildTreeSha: commitSha,
+    runnerBinding: z
+      .object({
+        buildSha: commitSha,
+        sha256: digest,
+      })
+      .strict(),
     provenance: z
       .object({
         kind: z.enum(["executed", "structural_fixture"]),
         worktreeHead: commitSha.nullable(),
       })
       .strict(),
-    isolation: z.record(z.string(), z.unknown()),
+    isolation: z
+      .object({
+        attempt: automaticAttemptIsolation,
+      })
+      .passthrough(),
     commands: z.array(automaticCommand).min(1),
     overallStatus: z.enum(["pass", "fail"]),
   })
@@ -1247,6 +1304,34 @@ async function validateB5Attempt(
   )
   const report = (relativePath: string) => reports.get(`${b5ReportRoot}/${relativePath}`)!
   const summary = await parsedJSON(report("summary.json").source, B5CandidateAttemptSummary, `${label} B5 summary`)
+  const attestation = automatic.value.isolation.attempt
+  if (
+    attestation.outerAttemptId !== label ||
+    attestation.runnerBindingSha256 !== automatic.value.runnerBinding.sha256 ||
+    attestation.command.id !== b5CommandId ||
+    attestation.command.startedAt !== command.startedAt ||
+    attestation.command.finishedAt !== command.finishedAt ||
+    attestation.b5Summary.sha256 !== report("summary.json").sha256 ||
+    attestation.b5Summary.attemptId !== summary.attemptId ||
+    attestation.b5Summary.attemptIsolationId !== summary.attemptIsolationId ||
+    attestation.b5Summary.normalizedResultSha256 !== summary.normalizedResultSha256 ||
+    attestation.b5Summary.outputIsolationSha256 !== summary.outputIsolationSha256 ||
+    attestation.b5Summary.attemptStatus !== summary.attemptStatus ||
+    attestation.b5Summary.promotionClaimed !== summary.promotionClaimed ||
+    !same(attestation.b5Summary.environment, {
+      worktree: summary.environment.worktree,
+      runtimeHome: summary.environment.runtimeHome,
+      database: summary.environment.database,
+      output: summary.environment.output,
+      isolationRoot: summary.environment.isolationRoot,
+    }) ||
+    attestation.automatic.worktreeAbsolutePathSha256 !== summary.environment.worktree.absolutePathSha256 ||
+    attestation.automatic.outputAbsolutePathSha256 === summary.environment.output.absolutePathSha256 ||
+    attestation.automatic.isolationRootAbsolutePathSha256 ===
+      summary.environment.isolationRoot.absolutePathSha256 ||
+    new Set(Object.values(attestation.automatic)).size !== 3
+  )
+    fail("invalid", `${label} outer attempt attestation is not bound to its B5 summary`)
   const parent = git(["rev-list", "--parents", "-n", "1", candidateSha]).split(/\s+/)
   if (
     parent.length !== 2 ||
@@ -1422,6 +1507,7 @@ async function validateB5Attempt(
     normalizedResultSha256,
     reportSha256s: Object.fromEntries([...reports.entries()].map(([sourcePath, file]) => [sourcePath, file.sha256])),
     environmentIdentity: attemptPhysicalIdentity(summary),
+    outerAttestation: attestation,
     environmentSha256: sha256(canonical(attemptPhysicalIdentity(summary))),
     terminalEvidenceSha256: sha256(
       canonical({
@@ -1839,6 +1925,10 @@ async function validateCandidate(
     attempts[0].summary.outputIsolationSha256 === attempts[1].summary.outputIsolationSha256 ||
     attempts[0].environmentSha256 === attempts[1].environmentSha256 ||
     physicalIdentityKeys.some((key) => attempts[0].environmentIdentity[key] === attempts[1].environmentIdentity[key]) ||
+    attempts[0].outerAttestation.nonce === attempts[1].outerAttestation.nonce ||
+    Object.values(attempts[0].outerAttestation.automatic).some((value) =>
+      Object.values(attempts[1].outerAttestation.automatic).includes(value),
+    ) ||
     attempts[0].summary.window.finishedAt > attempts[1].summary.window.startedAt
   )
     fail("invalid", "B5 attempts are not reproducible, isolated, or sequential")

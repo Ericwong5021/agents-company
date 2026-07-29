@@ -3,7 +3,7 @@
   "$id": "https://agent-company.local/schemas/automatic-evidence-package.v1.json",
   "title": "Agent Company R0 exact-build automatic evidence package",
   "schemaVersion": 1,
-  "packageVersion": "1.5.0",
+  "packageVersion": "1.6.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -30,7 +30,7 @@
       "const": 1
     },
     "packageVersion": {
-      "const": "1.5.0"
+      "const": "1.6.0"
     },
     "packageId": {
       "type": "string",
@@ -91,6 +91,7 @@
         "productionDataEnvironmentInherited",
         "hostPermissionIsolation",
         "networkIsolation",
+        "attempt",
         "playwright"
       ],
       "properties": {
@@ -113,6 +114,9 @@
         },
         "networkIsolation": {
           "const": "proxy_environment_only"
+        },
+        "attempt": {
+          "$ref": "#/$defs/attemptIsolation"
         },
         "playwright": {
           "type": "object",
@@ -181,6 +185,150 @@
     }
   },
   "$defs": {
+    "environmentStateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["absolutePathSha256", "stateSha256"],
+      "properties": {
+        "absolutePathSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "stateSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "attemptIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outerAttemptId",
+        "nonce",
+        "runnerBindingSha256",
+        "automatic",
+        "command",
+        "b5Summary"
+      ],
+      "properties": {
+        "outerAttemptId": {
+          "enum": ["automatic", "attempt-01", "attempt-02"]
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "runnerBindingSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "automatic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "worktreeAbsolutePathSha256",
+            "outputAbsolutePathSha256",
+            "isolationRootAbsolutePathSha256"
+          ],
+          "properties": {
+            "worktreeAbsolutePathSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "outputAbsolutePathSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "isolationRootAbsolutePathSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "command": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "startedAt", "finishedAt"],
+          "properties": {
+            "id": {
+              "const": "b5-candidate-facts"
+            },
+            "startedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "finishedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "b5Summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "attemptId",
+            "attemptIsolationId",
+            "normalizedResultSha256",
+            "outputIsolationSha256",
+            "attemptStatus",
+            "promotionClaimed",
+            "environment"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "attemptId": {
+              "const": "automatic"
+            },
+            "attemptIsolationId": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{16}$"
+            },
+            "normalizedResultSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "outputIsolationSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "attemptStatus": {
+              "const": "completed"
+            },
+            "promotionClaimed": {
+              "const": false
+            },
+            "environment": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["worktree", "runtimeHome", "database", "output", "isolationRoot"],
+              "properties": {
+                "worktree": {
+                  "$ref": "#/$defs/environmentStateBinding"
+                },
+                "runtimeHome": {
+                  "$ref": "#/$defs/environmentStateBinding"
+                },
+                "database": {
+                  "$ref": "#/$defs/environmentStateBinding"
+                },
+                "output": {
+                  "$ref": "#/$defs/environmentStateBinding"
+                },
+                "isolationRoot": {
+                  "$ref": "#/$defs/environmentStateBinding"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "governanceBinding": {
       "type": "object",
       "additionalProperties": false,
