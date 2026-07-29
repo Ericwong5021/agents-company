@@ -133,6 +133,12 @@ export const B5CandidateAttemptSummary = z
         unexpectedMetricIds: z.tuple([]),
       })
       .strict(),
+    singleAttemptShadowGate: z
+      .object({
+        status: z.literal("deferred"),
+        blockedReasons: z.tuple([z.literal("insufficient_sample")]),
+      })
+      .strict(),
     attemptStatus: z.literal("completed"),
     promotionClaimed: z.literal(false),
   })
@@ -2579,7 +2585,9 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
   )
     throw new Error("B5 candidate metric report has an unexpected single-attempt result")
   if (
-    reports.shadow.status !== "pass" ||
+    reports.shadow.status !== "blocked" ||
+    reports.shadow.blockedReasons.length !== 1 ||
+    reports.shadow.blockedReasons[0] !== "insufficient_sample" ||
     reports.shadow.scenarioIds.length !== B5ScenarioIds.length ||
     B5ScenarioIds.some(
       (scenarioId) =>
@@ -2588,9 +2596,9 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     ) ||
     reports.shadow.legacyRunIds.length !== B5ScenarioIds.length ||
     reports.shadow.seedAndGrowRunIds.length !== B5ScenarioIds.length ||
-    reports.shadow.checks.some((check) => check.status !== "pass")
+    reports.shadow.checks.some((check) => check.status !== "blocked")
   )
-    throw new Error("B5 candidate shadow report did not pass all 15 matched scenarios")
+    throw new Error("B5 candidate shadow report has an unexpected single-attempt result")
   const strictObservationReports = await Promise.all(
     orderedRunBindings.map(async (binding) =>
       B5ScenarioObservationReport.parse(
@@ -2701,6 +2709,10 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
       status: "deferred",
       deferredMetricIds: ["complex_initial_assignment_median"],
       unexpectedMetricIds: [],
+    },
+    singleAttemptShadowGate: {
+      status: "deferred",
+      blockedReasons: ["insufficient_sample"],
     },
     attemptStatus: "completed",
     promotionClaimed: false,

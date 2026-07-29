@@ -275,15 +275,17 @@ function aggregateReasons(
   for (const fact of Object.values(aggregate.facts)) {
     if (fact.denominator === 0) reasons.push("zero_denominator")
     if (fact.sampleSize < minimumSampleSize) reasons.push("insufficient_sample")
+    if (fact.denominator > 0 && !fact.sourceRefIds.length) reasons.push("source_binding_mismatch")
     if (fact.sourceRefIds.some((id) => !aggregate.sourceRefs.some((source) => source.id === id)))
       reasons.push("source_binding_mismatch")
     if (
-      aggregate.runIds.some(
-        (runId) =>
-          !fact.sourceRefIds.some((id) =>
-            aggregate.sourceRefs.some((source) => source.id === id && source.runId === runId),
+      new Set(
+        fact.sourceRefIds.flatMap((id) =>
+          aggregate.sourceRefs.flatMap((source) =>
+            source.id === id ? [source.runId] : [],
           ),
-      )
+        ),
+      ).size < Math.min(fact.sampleSize, minimumSampleSize)
     )
       reasons.push("source_binding_mismatch")
   }
