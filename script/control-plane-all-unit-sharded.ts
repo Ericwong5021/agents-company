@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 
 const controlPlaneRoot = path.resolve(import.meta.dir, "../packages/control-plane")
@@ -27,6 +28,7 @@ await Promise.all(
 
 for (const [index, job] of jobs.entries()) {
   const report = path.join(reportDirectory, `all-unit-junit-part-${index + 1}.xml`)
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), "agentcompany-all-unit-"))
   await fs.rm(report, { force: true })
   const child = Bun.spawn({
     cmd: [
@@ -41,7 +43,15 @@ for (const [index, job] of jobs.entries()) {
       ...job.files,
     ],
     cwd: controlPlaneRoot,
-    env: process.env,
+    env: {
+      ...process.env,
+      AGENTCOMPANY_HOME: home,
+      AGENT_COMPANY_WEBUI_DATA_DIR: path.join(home, "webui"),
+      XDG_DATA_HOME: path.join(home, "xdg-data"),
+      XDG_CONFIG_HOME: path.join(home, "xdg-config"),
+      XDG_CACHE_HOME: path.join(home, "xdg-cache"),
+      XDG_STATE_HOME: path.join(home, "xdg-state"),
+    },
     stdin: "ignore",
     stdout: "inherit",
     stderr: "inherit",
@@ -54,6 +64,7 @@ for (const [index, job] of jobs.entries()) {
       .text()
       .catch(() => ""),
   })
+  await fs.rm(home, { recursive: true, force: true })
 }
 
 const summaries = results.map((result) => {
