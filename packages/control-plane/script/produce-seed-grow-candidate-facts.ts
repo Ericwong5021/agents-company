@@ -6,13 +6,14 @@ import { Effect, Layer } from "effect"
 import z from "zod"
 import {
   B5RunBinding,
+  B5ScenarioRunResult,
   B5ScenarioIds,
   B5StrategyOrder,
   exactB5RunBindings,
   loadB5ScenarioSnapshots,
   requiredB5ObservationTypes,
-  type B5ScenarioRunResult,
 } from "../src/metrics/b5-candidate-scenarios"
+import { B5CandidateRecoveryResult } from "../src/metrics/b5-candidate-recovery"
 
 const root = path.resolve(import.meta.dir, "../../..")
 const producerPath = "packages/control-plane/script/produce-seed-grow-candidate-facts.ts"
@@ -151,34 +152,54 @@ export const B5CandidateAttemptSummary = z
   })
 export type B5CandidateAttemptSummary = z.infer<typeof B5CandidateAttemptSummary>
 
-const RolloutPolicy = z
-  .object({
-    defaultStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
-    seedOptInAllowed: z.boolean(),
-    explicitLegacyFallbackAllowed: z.boolean(),
-  })
-  .strict()
-
-const RolloutStatus = z
+const ActiveRolloutStatus = z
   .object({
     phase: z.literal("dogfood_default"),
-    executionMode: z.enum(["off", "active"]),
-    newProjectPolicy: RolloutPolicy,
+    executionMode: z.literal("active"),
+    newProjectPolicy: z
+      .object({
+        defaultStrategy: z.literal("seed_and_grow"),
+        seedOptInAllowed: z.literal(true),
+        explicitLegacyFallbackAllowed: z.literal(true),
+      })
+      .strict(),
   })
   .strict()
 
-export const B5RollbackObservation = z
+const DisabledRolloutStatus = z
+  .object({
+    phase: z.literal("dogfood_default"),
+    executionMode: z.literal("off"),
+    newProjectPolicy: z
+      .object({
+        defaultStrategy: z.literal("legacy_full_plan"),
+        seedOptInAllowed: z.literal(false),
+        explicitLegacyFallbackAllowed: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict()
+
+const DispatchResult = z
+  .object({
+    project_id: z.string().trim().min(1),
+    status: z.enum(["paused", "gated", "idle", "dispatched"]),
+    barrier: z.enum(["open", "paused"]),
+    eligible_work_item_ids: z.array(z.string().trim().min(1)),
+    dispatched_work_item_ids: z.array(z.string().trim().min(1)),
+    run_id: z.string().trim().min(1).optional(),
+  })
+  .strict()
+
+const RollbackObservationBase = z
   .object({
     schemaVersion: z.literal(1),
     kind: z.literal("seed-grow-b5-rollback-observation"),
     candidateSha: CommitSha,
     attemptId: AttemptId,
     attemptIsolationId: IsolationId,
-    target: z.enum(["kill_switch", "legacy_fallback"]),
     outcome: z.literal("completed"),
     phaseAtAction: z.literal("dogfood_default"),
-    before: RolloutStatus,
-    after: RolloutStatus,
     inFlightProject: z
       .object({
         id: z.string().trim().min(1),
@@ -197,28 +218,17 @@ export const B5RollbackObservation = z
         startedAt: Timestamp,
       })
       .strict(),
-    dispatch: z
-      .object({
-        coordinator: z.literal("DispatchCoordinator"),
-        action: z.enum(["kill_switch", "legacy_fallback"]),
-        projectId: z.string().trim().min(1),
-        result: z.record(z.string(), z.unknown()),
-        resultSha256: Digest,
-        observedAt: Timestamp,
-      })
-      .strict(),
     businessRows: z
       .object({
         beforeSha256: Digest,
         afterSha256: Digest,
         newProjectId: z.string().trim().min(1),
-        newProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
+        newProjectStrategy: z.literal("legacy_full_plan"),
         existingProjectId: z.string().trim().min(1),
         existingProjectStrategyBefore: z.literal("seed_and_grow"),
         existingProjectStrategyAfter: z.literal("seed_and_grow"),
       })
       .strict(),
-    resolvedNewProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
     resolvedExplicitFallbackStrategy: z.literal("legacy_full_plan"),
     isolation: z
       .object({
@@ -232,16 +242,77 @@ export const B5RollbackObservation = z
     observedAt: Timestamp,
   })
   .strict()
+
+const RollbackDispatch = z
+  .object({
+    coordinator: z.literal("DispatchCoordinator"),
+    action: z.enum(["kill_switch", "legacy_fallback"]),
+    projectId: z.string().trim().min(1),
+    result: DispatchResult,
+    resultSha256: Digest,
+    observedAt: Timestamp,
+  })
+  .strict()
+
+export const B5RollbackObservation = z
+  .discriminatedUnion("target", [
+    RollbackObservationBase.extend({
+      target: z.literal("kill_switch"),
+      before: ActiveRolloutStatus,
+      after: DisabledRolloutStatus,
+      dispatch: RollbackDispatch.extend({
+        action: z.literal("kill_switch"),
+        result: DispatchResult.extend({
+          status: z.literal("paused"),
+          barrier: z.literal("paused"),
+          eligible_work_item_ids: z.tuple([]),
+          dispatched_work_item_ids: z.tuple([]),
+          run_id: z.never().optional(),
+        }).strict(),
+      }).strict(),
+      resolvedNewProjectStrategy: z.literal("legacy_full_plan"),
+    }).strict(),
+    RollbackObservationBase.extend({
+      target: z.literal("legacy_fallback"),
+      before: ActiveRolloutStatus,
+      after: ActiveRolloutStatus,
+      dispatch: RollbackDispatch.extend({
+        action: z.literal("legacy_fallback"),
+        result: DispatchResult.extend({
+          status: z.literal("idle"),
+          barrier: z.literal("open"),
+          eligible_work_item_ids: z.tuple([]),
+          dispatched_work_item_ids: z.tuple([]),
+          run_id: z.never().optional(),
+        }).strict(),
+      }).strict(),
+      resolvedNewProjectStrategy: z.literal("legacy_full_plan"),
+    }).strict(),
+  ])
   .superRefine((value, context) => {
-    const expectedMode = value.target === "kill_switch" ? "off" : "active"
-    const expectedDefault = value.target === "kill_switch" ? "legacy_full_plan" : "seed_and_grow"
-    if (value.after.executionMode !== expectedMode)
-      context.addIssue({ code: "custom", path: ["after", "executionMode"], message: "Rollback mode mismatch" })
-    if (value.after.newProjectPolicy.defaultStrategy !== expectedDefault)
+    if (value.dispatch.result.project_id !== value.dispatch.projectId)
       context.addIssue({
         code: "custom",
-        path: ["after", "newProjectPolicy", "defaultStrategy"],
-        message: "Rollback policy mismatch",
+        path: ["dispatch", "result", "project_id"],
+        message: "Dispatch result project does not match the observed project",
+      })
+    if (value.dispatch.resultSha256 !== valueSha256(value.dispatch.result))
+      context.addIssue({
+        code: "custom",
+        path: ["dispatch", "resultSha256"],
+        message: "Dispatch result digest mismatch",
+      })
+    if (value.dispatch.observedAt !== value.observedAt)
+      context.addIssue({
+        code: "custom",
+        path: ["dispatch", "observedAt"],
+        message: "Dispatch observation timestamp mismatch",
+      })
+    if (value.process.startedAt > value.observedAt)
+      context.addIssue({
+        code: "custom",
+        path: ["process", "startedAt"],
+        message: "Rollback observation predates its producer process",
       })
     if (
       value.inFlightProject.businessStateSha256Before !==
@@ -254,7 +325,6 @@ export const B5RollbackObservation = z
         message: "Rollback changed the in-flight project",
       })
     if (
-      value.dispatch.action !== value.target ||
       value.dispatch.projectId !== value.inFlightProject.id ||
       value.businessRows.existingProjectId !== value.inFlightProject.id ||
       value.businessRows.existingProjectStrategyBefore !== value.inFlightProject.strategyBefore ||
@@ -268,6 +338,270 @@ export const B5RollbackObservation = z
       })
   })
 export type B5RollbackObservation = z.infer<typeof B5RollbackObservation>
+
+const ScenarioProbe = z
+  .object({
+    runId: z.string().trim().min(1),
+    commandId: z.literal("bun-local-project-binding-probe"),
+    stdoutSha256: Digest,
+    stderrSha256: Digest,
+  })
+  .strict()
+
+const ScenarioTerminal = z
+  .object({
+    passed: z.literal(true),
+    falseCompletion: z.literal(false),
+    pendingWorkItemCount: z.number().int().nonnegative(),
+    pendingReceiptCount: z.number().int().nonnegative(),
+    pendingMutationCount: z.number().int().nonnegative(),
+    pendingGateCount: z.number().int().nonnegative(),
+  })
+  .strict()
+
+const ScenarioReviewer = z
+  .object({
+    workItemId: z.string().trim().min(1),
+    assignmentId: z.string().trim().min(1),
+    runId: z.string().trim().min(1),
+    independent: z.literal(true),
+    rejected: z.boolean(),
+  })
+  .strict()
+
+const QuiescenceBlockerCode = z.enum([
+  "not_seed_and_grow",
+  "project_status_not_completable",
+  "nonterminal_work_items",
+  "running_attempts",
+  "terminal_attempts_without_receipt",
+  "unprocessed_receipts",
+  "pending_mutations",
+  "unresolved_validation_gates",
+  "pending_approval_gates",
+  "open_material_attention",
+  "claimed_project_actions",
+  "unresolved_receipt_blockers",
+  "acceptance_evidence_missing",
+  "active_quiesce_decision_missing",
+])
+
+const ScenarioQuiescence = z
+  .object({
+    project_id: z.string().trim().min(1),
+    status: z.literal("blocked"),
+    ready: z.literal(false),
+    replayed: z.boolean(),
+    graph_revision: z.number().int().nonnegative(),
+    blocker_codes: z.array(QuiescenceBlockerCode).min(1),
+    blockers: z
+      .array(
+        z
+          .object({
+            code: QuiescenceBlockerCode,
+            entity_ids: z.array(z.string().trim().min(1)),
+          })
+          .strict(),
+      )
+      .min(1),
+    quiesce_decision_id: z.string().trim().min(1).optional(),
+    delivery_package_artifact_id: z.string().trim().min(1).optional(),
+    released_selection_ids: z.array(z.string().trim().min(1)),
+  })
+  .strict()
+
+export const B5ScenarioObservationReport = z
+  .object({
+    schemaVersion: z.literal(1),
+    kind: z.literal("seed-grow-b5-scenario-observation"),
+    candidateSha: CommitSha,
+    attemptId: AttemptId,
+    attemptIsolationId: IsolationId,
+    result: B5ScenarioRunResult,
+    binding: B5ScenarioRunResult.shape.binding,
+    projectStatus: B5ScenarioRunResult.shape.projectStatus,
+    terminalDecision: B5ScenarioRunResult.shape.terminalDecision,
+    oracle: B5ScenarioRunResult.shape.oracle,
+    sourceRefs: B5ScenarioRunResult.shape.sourceRefs,
+    probe: ScenarioProbe,
+    reviewer: ScenarioReviewer.optional(),
+    delivery: z
+      .object({
+        id: z.string().trim().min(1),
+        sha256: Digest,
+      })
+      .strict()
+      .optional(),
+    validationGate: z
+      .object({
+        id: z.string().trim().min(1),
+        status: z.enum(["pending", "running", "passed", "failed", "superseded"]),
+      })
+      .strict()
+      .optional(),
+    approvalGate: z
+      .object({
+        id: z.string().trim().min(1),
+        status: z.enum(["pending", "approved", "rejected"]),
+      })
+      .strict()
+      .optional(),
+    attention: z
+      .object({
+        id: z.string().trim().min(1),
+        material: z.literal(true),
+        interrupts_user: z.literal(true),
+      })
+      .strict()
+      .optional(),
+    terminal: ScenarioTerminal,
+    quiescence: ScenarioQuiescence.optional(),
+    quiescenceBlockers: z.array(
+      z
+        .object({
+          kind: z.enum([
+            "work_item",
+            "work_attempt",
+            "work_receipt",
+            "graph_mutation",
+            "validation_gate",
+            "approval_gate",
+            "attention",
+            "project_action",
+          ]),
+          id: z.string().trim().min(1),
+        })
+        .strict(),
+    ),
+    recovery: B5CandidateRecoveryResult.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.binding.runId !==
+      b5AttemptRunId({
+        attemptId: value.attemptId,
+        attemptIsolationId: value.attemptIsolationId,
+        scenarioId: value.binding.scenarioId,
+        strategy: value.binding.strategy,
+        candidateSha: value.candidateSha,
+      })
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["binding", "runId"],
+        message: "Scenario run is not bound to candidate, attempt, and isolation identity",
+      })
+    if (
+      valueSha256({
+        binding: value.binding,
+        projectStatus: value.projectStatus,
+        terminalDecision: value.terminalDecision,
+        oracle: value.oracle,
+        sourceRefs: value.sourceRefs,
+      }) !== valueSha256(value.result)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["result"],
+        message: "Scenario result core does not match the archived projection",
+      })
+    if (value.probe.runId !== value.binding.runId)
+      context.addIssue({
+        code: "custom",
+        path: ["probe", "runId"],
+        message: "Scenario probe is not bound to the archived run",
+      })
+    if (value.quiescence?.project_id !== undefined &&
+      value.quiescence.project_id !== value.binding.projectId)
+      context.addIssue({
+        code: "custom",
+        path: ["quiescence", "project_id"],
+        message: "Quiescence result is not bound to the scenario project",
+      })
+    if (
+      value.recovery &&
+      (value.recovery.candidateSha !== value.candidateSha ||
+        value.recovery.scenarioId !== value.binding.scenarioId ||
+        value.recovery.snapshotDigest !== value.binding.snapshotDigest ||
+        value.recovery.runId !== value.binding.runId)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["recovery"],
+        message: "Recovery result is not bound to the scenario candidate and run",
+      })
+    const observationTypes = requiredB5ObservationTypes(
+      value.binding.scenarioId,
+      value.binding.strategy,
+    )
+    const attached = [
+      {
+        path: "delivery",
+        required: observationTypes.includes("delivery.checked"),
+        present: Boolean(value.delivery),
+      },
+      {
+        path: "validationGate",
+        required: observationTypes.includes("validation_anchor.checked"),
+        present: Boolean(value.validationGate),
+      },
+      {
+        path: "approvalGate",
+        required:
+          value.binding.scenarioId === "S15" &&
+          value.binding.strategy === "seed_and_grow",
+        present: Boolean(value.approvalGate),
+      },
+      {
+        path: "attention",
+        required:
+          ["S15", "S22"].includes(value.binding.scenarioId) &&
+          value.binding.strategy === "seed_and_grow",
+        present: Boolean(value.attention),
+      },
+      {
+        path: "reviewer",
+        required: ["S14", "S18"].includes(value.binding.scenarioId),
+        present: Boolean(value.reviewer),
+      },
+      {
+        path: "quiescence",
+        required:
+          value.binding.scenarioId === "S24" &&
+          value.binding.strategy === "seed_and_grow",
+        present: Boolean(value.quiescence),
+      },
+      {
+        path: "recovery",
+        required:
+          ["S19", "S20", "S27"].includes(value.binding.scenarioId) &&
+          value.binding.strategy === "seed_and_grow",
+        present: Boolean(value.recovery),
+      },
+    ]
+    for (const field of attached) {
+      if (field.required === field.present) continue
+      context.addIssue({
+        code: "custom",
+        path: [field.path],
+        message: `${field.path} attachment does not match the scenario contract`,
+      })
+    }
+    const requiresQuiescenceBlockers =
+      value.binding.scenarioId === "S24" &&
+      value.binding.strategy === "seed_and_grow"
+    if (requiresQuiescenceBlockers === Boolean(value.quiescenceBlockers.length))
+      return
+    context.addIssue({
+      code: "custom",
+      path: ["quiescenceBlockers"],
+      message: "Quiescence blockers do not match the scenario contract",
+    })
+  })
+export type B5ScenarioObservationReport = z.infer<
+  typeof B5ScenarioObservationReport
+>
 
 function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
@@ -896,7 +1230,6 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
           max_attempts: 1,
         })
         const need = yield* recruitment.createNeed({
-          company_id: "cmp_local",
           project_id: result.binding.projectId,
           work_item_id: reviewer.id,
           need_key: `b5-${result.binding.scenarioId.toLowerCase()}-legacy-reviewer`,
@@ -1379,29 +1712,41 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
             `${snapshot.scenario.id}-${strategy}.json`,
           )
           const currentProject = (yield* projects.get(result.binding.projectId))!
+          const observationReport = B5ScenarioObservationReport.parse({
+            schemaVersion: 1,
+            kind: "seed-grow-b5-scenario-observation",
+            candidateSha: prepared.git.headSha,
+            attemptId: prepared.arguments.attemptId,
+            attemptIsolationId: prepared.attemptIsolationId,
+            result,
+            binding: result.binding,
+            projectStatus: currentProject.status,
+            terminalDecision: result.terminalDecision,
+            oracle: result.oracle,
+            sourceRefs: result.sourceRefs,
+            probe,
+            reviewer,
+            delivery: deliveryBinding,
+            validationGate: gate
+              ? { id: gate.id, status: gate.status }
+              : undefined,
+            approvalGate: approvalGate
+              ? { id: approvalGate.id, status: approvalGate.status }
+              : undefined,
+            attention: scenarioAttention
+              ? {
+                  id: scenarioAttention.id,
+                  material: scenarioAttention.material,
+                  interrupts_user: scenarioAttention.interrupts_user,
+                }
+              : undefined,
+            terminal,
+            quiescence: quiescenceResult,
+            quiescenceBlockers,
+            recovery,
+          })
           const report = yield* Effect.promise(() =>
-            writeJSON(reportPath, {
-              schemaVersion: 1,
-              kind: "seed-grow-b5-scenario-observation",
-              candidateSha: prepared.git.headSha,
-              attemptId: prepared.arguments.attemptId,
-              attemptIsolationId: prepared.attemptIsolationId,
-              binding: result.binding,
-              projectStatus: currentProject.status,
-              terminalDecision: result.terminalDecision,
-              oracle: result.oracle,
-              sourceRefs: result.sourceRefs,
-              probe,
-              reviewer,
-              delivery: deliveryBinding,
-              validationGate: gate,
-              approvalGate,
-              attention: scenarioAttention,
-              terminal,
-              quiescence: quiescenceResult,
-              quiescenceBlockers,
-              recovery,
-            }),
+            writeJSON(reportPath, observationReport),
           )
           const record: ScenarioRecord = {
             result,
