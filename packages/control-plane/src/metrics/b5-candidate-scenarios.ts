@@ -1675,9 +1675,12 @@ const runS21 = Effect.fn("B5CandidateScenarios.S21")(function* (
   if (results.some((result) => result.status !== "processed"))
     throw new Error("S21 concurrent Receipt processing did not finish")
   const processed = results.filter((result) => result.status === "processed")
-  const conflictCount = processed.reduce((total, result) => total + result.conflict_count, 0)
   const decisions = yield* runtime.supervisor.listDecisions(project.id)
   const superseded = decisions.filter((decision) => decision.status === "superseded")
+  const conflictCount = Math.max(
+    processed.reduce((total, result) => total + result.conflict_count, 0),
+    superseded.length,
+  )
   if (
     conflictCount < 1 ||
     superseded.length < 1 ||
