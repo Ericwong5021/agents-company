@@ -346,11 +346,13 @@ describe.serial("persisted fact semantic rejection", () => {
           risk: "low",
           strategy: run.strategy,
         }),
-        event(run, "delivery.quality_compared", "quality", {
+        event(run, "quality_pair.checked", "quality", {
+          legacyRunId: legacyRuns[index]!.runId,
+          seedGrowRunId: run.runId,
           risk: "low",
-          strategy: run.strategy,
           legacyScore: 1,
           seedGrowScore: 1,
+          snapshotSha256: run.snapshotDigest,
         }),
       ]),
     ]

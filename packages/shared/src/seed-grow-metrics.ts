@@ -7,6 +7,7 @@ const Identifier = z.string().trim().min(1).max(500)
 const EventType = z.string().trim().min(1).max(240)
 const QueryVersion = z.string().trim().min(1).max(100)
 const Timestamp = z.string().datetime()
+const Strategy = z.enum(["legacy_full_plan", "seed_and_grow"])
 
 function unique(values: string[]) {
   return new Set(values).size === values.length
@@ -76,7 +77,7 @@ export const SeedGrowMetricId = z.enum([
 ])
 export type SeedGrowMetricId = z.infer<typeof SeedGrowMetricId>
 
-export const PrePublicBlockingMetricIds = [
+export const PrePublicScenarioMetricIds = [
   "false_completion_count",
   "graph_mutation_without_evidence_rate",
   "complex_initial_assignment_median",
@@ -93,11 +94,90 @@ export const PrePublicBlockingMetricIds = [
   "new_candidate_per_completed_project",
   "low_risk_quality_ratio_vs_legacy",
   "core_task_completion_rate",
+] as const satisfies readonly SeedGrowMetricId[]
+
+export const PrePublicCandidateMetricIds = [
+  ...PrePublicScenarioMetricIds,
   "exact_sha_terminal_success_rate",
+] as const satisfies readonly SeedGrowMetricId[]
+
+export const PrePublicCrossStrategyMetricIds = [
+  "reviewer_invocation_ratio_vs_legacy",
+  "candidate_reuse_delta_vs_legacy",
+  "low_risk_quality_ratio_vs_legacy",
+] as const satisfies readonly SeedGrowMetricId[]
+
+export const PrePublicBlockingMetricIds = [
+  ...PrePublicCandidateMetricIds,
   "consecutive_reproducible_candidate_count",
 ] as const satisfies readonly SeedGrowMetricId[]
 
-export const PrePublicMetricContractSha256 = "8992ac2beee19c69597b1a8c00ff27d781877a796faf4d518990f3f346cc90bf"
+export const PrePublicScenarioApplicability = {
+  false_completion_count: [
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26",
+    "S27",
+  ],
+  graph_mutation_without_evidence_rate: ["S16", "S17", "S20", "S21", "S23", "S27"],
+  complex_initial_assignment_median: ["S13"],
+  receipt_recovery_success_rate: ["S19", "S27"],
+  graph_mutation_recovery_success_rate: ["S20", "S27"],
+  delivery_consumability_rate: ["S13", "S14", "S16", "S17", "S18", "S19", "S20", "S21", "S23", "S25", "S26", "S27"],
+  acceptance_determinability_rate: [
+    "S13",
+    "S14",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S23",
+    "S24",
+    "S25",
+    "S26",
+    "S27",
+  ],
+  validation_gate_false_pass_rate: ["S15", "S16", "S18", "S22", "S23", "S24", "S27"],
+  blind_retry_rate: ["S16", "S22"],
+  invalid_interruption_rate: ["S14", "S15", "S22"],
+  reviewer_invocation_ratio_vs_legacy: ["S14", "S18"],
+  candidate_reuse_rate: ["S17", "S25", "S26"],
+  candidate_reuse_delta_vs_legacy: ["S17", "S25", "S26"],
+  new_candidate_per_completed_project: ["S17", "S26"],
+  low_risk_quality_ratio_vs_legacy: ["S14", "S18"],
+  core_task_completion_rate: [
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26",
+    "S27",
+  ],
+} as const satisfies Record<(typeof PrePublicScenarioMetricIds)[number], readonly string[]>
+
+export const PrePublicMetricContractSha256 = "fb348d11eb29f31718e15459831155fe569af491a44001ca80433e3354a4b320"
 
 export const MetricOperator = z.enum(["=", "<", "<=", ">", ">=", "observe"])
 export type MetricOperator = z.infer<typeof MetricOperator>
@@ -127,6 +207,7 @@ export const MetricDefinition = z
     eventSource: UniqueEventTypes.optional(),
     timeWindow: z.string().trim().min(1).max(500).optional(),
     minimumSampleSize: z.number().int().positive().optional(),
+    applicableScenarioIds: UniqueIdentifiers.optional(),
     requiredDimensions: UniqueIdentifiers.optional(),
     unit: z.string().trim().min(1).max(100),
     aggregation: z.enum(["ratio", "median", "p95", "sum", "max"]),
@@ -306,6 +387,11 @@ export const MetricContract = z
           })
       }
     }
+    for (const id of PrePublicScenarioMetricIds) {
+      const metric = value.metrics.find((item) => item.id === id)
+      if (!metric || !sameValues(metric.applicableScenarioIds ?? [], [...PrePublicScenarioApplicability[id]]))
+        context.addIssue({ code: "custom", message: `Metric ${id} has mismatched applicable scenarios` })
+    }
     if (
       !unique(value.prePublicGate.requiredMetricIds) ||
       value.prePublicGate.requiredMetricIds.length !== PrePublicBlockingMetricIds.length ||
@@ -399,8 +485,21 @@ const MetricWindow = z
 const MetricQueryCoreShape = {
   candidateSha: CandidateSha,
   queryVersion: QueryVersion,
+  strategy: Strategy,
   metricIds: UniqueIdentifiers,
   runIds: UniqueIdentifiersAllowEmpty,
+  runBindings: z
+    .array(
+      z
+        .object({
+          runId: Identifier,
+          scenarioId: Identifier,
+          strategy: Strategy,
+        })
+        .strict(),
+    )
+    .max(500),
+  applicableRunIds: z.record(Identifier, UniqueIdentifiersAllowEmpty),
   window: MetricWindow,
   observations: z.array(MetricObservation).max(10_000),
 } as const
@@ -442,6 +541,12 @@ function normalizedQuery(raw: unknown) {
     ...input,
     metricIds: [...input.metricIds].sort(),
     runIds: [...input.runIds].sort(),
+    runBindings: [...input.runBindings].sort((left, right) => canonical(left).localeCompare(canonical(right))),
+    applicableRunIds: Object.fromEntries(
+      Object.entries(input.applicableRunIds)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([metricId, runIds]) => [metricId, [...runIds].sort()]),
+    ),
     observations: input.observations
       .map((observation) => ({
         ...observation,
@@ -555,10 +660,13 @@ export function evaluateMetrics(raw: unknown): MetricEvaluationReport {
   const digest = metricQueryDigest({
     candidateSha: input.query.candidateSha,
     queryVersion: input.query.queryVersion,
+    strategy: input.query.strategy,
     metricIds: input.query.metricIds,
     runIds: input.query.runIds,
+    runBindings: input.query.runBindings,
     window: input.query.window,
     observations: input.query.observations,
+    applicableRunIds: input.query.applicableRunIds,
   })
   const globalReasons = [
     input.query.queryVersion !== input.expectedQueryVersion || input.query.queryVersion !== input.contract.queryVersion
@@ -572,9 +680,31 @@ export function evaluateMetrics(raw: unknown): MetricEvaluationReport {
     const metric = input.contract.metrics.find((item) => item.id === metricId)
     const observations = input.query.observations.filter((item) => item.metricId === metricId)
     const observation = observations[0]
+    const applicableRunIds = input.query.applicableRunIds[metricId]
+    const contractedRunIds = metric?.applicableScenarioIds
+      ? input.query.runBindings
+          .filter(
+            (binding) =>
+              metric.applicableScenarioIds!.includes(binding.scenarioId) &&
+              (PrePublicCrossStrategyMetricIds.includes(metricId as (typeof PrePublicCrossStrategyMetricIds)[number]) ||
+                binding.strategy === input.query.strategy),
+          )
+          .map((binding) => binding.runId)
+      : applicableRunIds
     const blocking = input.contract.prePublicGate.requiredMetricIds.some((id) => id === metricId)
     const reasons = [...globalReasons]
     if (!metric) reasons.push("unknown_metric")
+    if (!applicableRunIds) reasons.push("run_binding_mismatch")
+    if (
+      !contractedRunIds ||
+      !applicableRunIds ||
+      !sameValues(applicableRunIds, contractedRunIds) ||
+      !sameValues(
+        input.query.runIds,
+        input.query.runBindings.map((binding) => binding.runId),
+      )
+    )
+      reasons.push("run_binding_mismatch")
     if (!observation) reasons.push("missing_observation")
     if (observations.length > 1) reasons.push("duplicate_observation")
     if (metric && observation) {
@@ -584,12 +714,17 @@ export function evaluateMetrics(raw: unknown): MetricEvaluationReport {
       if (metric.timeWindow !== observation.timeWindow) reasons.push("time_window_mismatch")
       if (metric.requiredDimensions?.some((dimension) => observation.dimensions?.[dimension] === undefined))
         reasons.push("missing_dimension")
-      if (!sameValues(observation.runIds, input.query.runIds)) reasons.push("run_binding_mismatch")
+      if (
+        !applicableRunIds ||
+        !sameValues(observation.runIds, applicableRunIds) ||
+        observation.runIds.some((runId) => !input.query.runIds.includes(runId))
+      )
+        reasons.push("run_binding_mismatch")
       if (
         observation.sourceRefs.some(
-          (source) => source.candidateSha !== input.query.candidateSha || !input.query.runIds.includes(source.runId),
+          (source) => source.candidateSha !== input.query.candidateSha || !observation.runIds.includes(source.runId),
         ) ||
-        input.query.runIds.some((runId) => !observation.sourceRefs.some((source) => source.runId === runId))
+        observation.runIds.some((runId) => !observation.sourceRefs.some((source) => source.runId === runId))
       )
         reasons.push("source_binding_mismatch")
       if (observation.denominator === 0) reasons.push("zero_denominator")

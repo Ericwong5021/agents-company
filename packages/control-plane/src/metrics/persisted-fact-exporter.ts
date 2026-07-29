@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { lstat, mkdir, rename } from "node:fs/promises"
+import { lstat, mkdir, realpath, rename } from "node:fs/promises"
 import path from "node:path"
 import { AgentRunEventTable, AgentRunTable, AgentRunUsageTable } from "@/agent-run/agent-run.sql"
 import {
@@ -31,11 +31,14 @@ import {
   CompanyRolloutShadowEvaluationTable,
 } from "@/company-rollout/company-rollout.sql"
 import { GoalBriefTable } from "@/goal-brief/goal-brief.sql"
+import { CompanyGateObservationTable } from "./gate-observation.sql"
 import { and, asc, count, eq, inArray } from "@/storage"
 import { Database } from "@/storage"
 import {
   MetricContract,
   MetricSourceRef,
+  PrePublicScenarioApplicability,
+  PrePublicScenarioMetricIds,
   type MetricContract as MetricContractValue,
   type MetricSourceRef as MetricSourceRefValue,
 } from "@agents-company/shared/seed-grow-metrics"
@@ -51,6 +54,7 @@ import {
 } from "./persisted-fact-artifact"
 
 const CandidateSha = z.string().regex(/^[a-f0-9]{40}$/)
+const Digest = z.string().regex(/^[a-f0-9]{64}$/)
 const Identifier = z.string().trim().min(1).max(500)
 const Timestamp = z.string().datetime()
 const JSONRecord = z.record(z.string(), z.unknown())
@@ -72,6 +76,170 @@ const Window = z
     context.addIssue({ code: "custom", message: "Fact window must end after it starts" })
   })
 
+const ObservationReport = z
+  .object({
+    class: z.enum([
+      "scenario_fixture",
+      "command_probe",
+      "git_blob",
+      "fact_report",
+      "terminal_invariant",
+      "receipt_recovery",
+      "graph_mutation_recovery",
+      "delivery",
+      "validation",
+      "interruption",
+      "review",
+      "quality_pair",
+      "benchmark",
+      "shadow_pair",
+      "repair_circuit",
+      "model_usage",
+    ]),
+    path: z.string().refine((value) => path.isAbsolute(value)),
+    sha256: Digest,
+  })
+  .strict()
+
+const ObservationEvidence = z
+  .object({
+    report: ObservationReport,
+  })
+  .passthrough()
+
+const ObservationReportClass = {
+  "scenario.fixture_checked": "scenario_fixture",
+  "command.probe_checked": "command_probe",
+  "git.blob_checked": "git_blob",
+  "report.file_checked": "fact_report",
+  "terminal.invariant_checked": "terminal_invariant",
+  "receipt.recovery_checked": "receipt_recovery",
+  "graph_mutation.recovery_checked": "graph_mutation_recovery",
+  "delivery.checked": "delivery",
+  "validation_anchor.checked": "validation",
+  "interruption.checked": "interruption",
+  "review_presence.checked": "review",
+  "quality_pair.checked": "quality_pair",
+  "benchmark.checked": "benchmark",
+  "shadow_pair.checked": "shadow_pair",
+  "repair.circuit_checked": "repair_circuit",
+  "model.usage_checked": "model_usage",
+} as const
+
+const TerminalInvariantObservation = z
+  .object({
+    passed: z.boolean(),
+    falseCompletion: z.boolean(),
+    invariantReportSha256: Digest,
+    pendingWorkItemCount: z.number().int().nonnegative(),
+    pendingReceiptCount: z.number().int().nonnegative(),
+    pendingMutationCount: z.number().int().nonnegative(),
+    pendingGateCount: z.number().int().nonnegative(),
+  })
+  .strict()
+const ReceiptRecoveryObservation = z
+  .object({
+    lostAt: z.number().int().nonnegative(),
+    recoveredAt: z.number().int().nonnegative(),
+    duplicate: z.boolean(),
+    consistent: z.boolean(),
+  })
+  .strict()
+const GraphMutationRecoveryObservation = z
+  .object({
+    lostAt: z.number().int().nonnegative(),
+    recoveredAt: z.number().int().nonnegative(),
+    consistent: z.boolean(),
+    duplicateSideEffects: z.number().int().nonnegative(),
+  })
+  .strict()
+const DeliveryObservation = z
+  .object({
+    deliveryId: Identifier,
+    artifactId: Identifier,
+    artifactSha256: Digest,
+    criterionId: Identifier,
+    criterionStatus: z.enum(["pass", "fail", "not_evaluated"]),
+    risk: z.enum(["low", "medium", "high"]),
+    opened: z.boolean(),
+  })
+  .strict()
+const ValidationObservation = z
+  .object({
+    gateId: Identifier,
+    passed: z.boolean(),
+    anchorPassed: z.boolean(),
+  })
+  .strict()
+const InterruptionObservation = z
+  .object({
+    attentionId: Identifier.nullable(),
+    presented: z.boolean(),
+    needed: z.boolean(),
+  })
+  .strict()
+const ReviewObservation = z
+  .object({
+    risk: z.enum(["low", "medium", "high"]),
+    invoked: z.boolean(),
+    rejected: z.boolean(),
+    findingConfirmed: z.boolean(),
+  })
+  .strict()
+const PairObservation = z
+  .object({
+    legacyRunId: Identifier,
+    seedGrowRunId: Identifier,
+  })
+  .strict()
+const BenchmarkObservation = z
+  .object({
+    finalDecision: z.enum(["pass", "fail"]),
+  })
+  .strict()
+const RepairCircuitObservation = z
+  .object({
+    workItemId: Identifier,
+    attentionId: Identifier,
+    attemptCount: z.number().int().min(3),
+  })
+  .strict()
+const ModelUsageObservation = z
+  .object({
+    agentRunId: Identifier,
+    purpose: z.enum(["wayfinder", "builder", "reviewer", "worker"]),
+  })
+  .strict()
+const CommandProbeObservation = z
+  .object({
+    agentRunId: Identifier,
+    commandId: Identifier,
+    exitCode: z.literal(0),
+    stdoutSha256: Digest,
+    stderrSha256: Digest,
+  })
+  .strict()
+const GitBlobObservation = z
+  .object({
+    path: z.string().trim().min(1),
+    candidateBlobSha256: Digest,
+    runtimeSha256: Digest,
+  })
+  .strict()
+const ReportFileObservation = z
+  .object({
+    reportClass: Identifier,
+    path: z.string().refine((value) => path.isAbsolute(value)),
+    sha256: Digest,
+  })
+  .strict()
+const ScenarioFixtureObservation = z
+  .object({
+    scenarioId: Identifier,
+    snapshotSha256: Digest,
+  })
+  .strict()
+
 export const PersistedFactExportRequest = z
   .object({
     id: Identifier,
@@ -80,6 +248,11 @@ export const PersistedFactExportRequest = z
     window: Window,
     runBindings: z.array(PersistedFactRunBinding).min(1).max(10_000),
     outputPath: z.string().refine((value) => path.isAbsolute(value)),
+    evidenceProfile: z.enum(["generic", "b5_real_candidate"]).default("generic"),
+    isolationRoot: z
+      .string()
+      .refine((value) => path.isAbsolute(value))
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -92,6 +265,12 @@ export const PersistedFactExportRequest = z
         code: "custom",
         path: ["runBindings"],
         message: "Each exported run must use an isolated project",
+      })
+    if (value.evidenceProfile === "b5_real_candidate" && !value.isolationRoot)
+      context.addIssue({
+        code: "custom",
+        path: ["isolationRoot"],
+        message: "B5 fact export requires an isolation root",
       })
   })
 export type PersistedFactExportRequest = z.input<typeof PersistedFactExportRequest>
@@ -136,6 +315,270 @@ function canonical(value: unknown) {
 
 function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
+}
+
+const RepositoryRoot = path.resolve(import.meta.dir, "../../../..")
+const ProducerPath = "packages/control-plane/script/produce-seed-grow-candidate-facts.ts"
+const ScenarioContractPath = "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json"
+const MetricContractPath = "docs/product-design/experience-refactor/metric-contract.v1.json"
+const B5ScenarioIds = Array.from({ length: 15 }, (_, index) => `S${index + 13}`)
+const RuntimeDependencyPaths = [
+  ProducerPath,
+  "packages/control-plane/src/metrics/gate-observation.ts",
+  "packages/control-plane/src/metrics/gate-observation.sql.ts",
+  "packages/control-plane/src/metrics/persisted-fact-artifact.ts",
+  "packages/control-plane/src/metrics/persisted-fact-exporter.ts",
+  "packages/control-plane/src/metrics/seed-grow-reporter.ts",
+  "packages/shared/src/seed-grow-metrics.ts",
+] as const
+
+function metricApplies(metricId: keyof typeof PrePublicScenarioApplicability, scenarioId: string) {
+  return (PrePublicScenarioApplicability[metricId] as readonly string[]).includes(scenarioId)
+}
+
+async function candidateBlob(candidateSha: string, filePath: string) {
+  const process = Bun.spawn(["git", "show", `${candidateSha}:${filePath}`], {
+    cwd: RepositoryRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).arrayBuffer(),
+    new Response(process.stderr).text(),
+  ])
+  if (exitCode !== 0) throw new Error(`Candidate Git blob is unavailable for ${filePath}: ${stderr.trim()}`)
+  return new Uint8Array(stdout)
+}
+
+function contains(root: string, target: string) {
+  const relative = path.relative(root, target)
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+async function validateObservationFile(rawPath: string, expectedSha256: string, isolationRoot: string) {
+  const root = await realpath(isolationRoot)
+  const target = await realpath(rawPath)
+  const info = await lstat(rawPath)
+  if (!contains(root, target) || !info.isFile() || info.isSymbolicLink())
+    throw new Error(`Gate observation report escapes the B5 isolation root: ${rawPath}`)
+  const bytes = new Uint8Array(await Bun.file(target).arrayBuffer())
+  if (sha256(bytes) !== expectedSha256) throw new Error(`Gate observation report digest mismatch: ${rawPath}`)
+  return target
+}
+
+const ScenarioContract = z
+  .object({
+    extends: z
+      .object({
+        path: z.string().trim().min(1),
+        sha256: Digest,
+      })
+      .passthrough(),
+    scenarios: z
+      .array(
+        z
+          .object({
+            id: Identifier,
+            observedMetrics: z.array(Identifier),
+          })
+          .passthrough(),
+      )
+      .length(15),
+  })
+  .passthrough()
+
+async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
+  if (raw.evidenceProfile !== "b5_real_candidate") return undefined
+  const scenarioBytes = await candidateBlob(raw.candidateSha, ScenarioContractPath)
+  const scenarioContract = ScenarioContract.parse(JSON.parse(new TextDecoder().decode(scenarioBytes)) as unknown)
+  const metricBytes = await candidateBlob(raw.candidateSha, MetricContractPath)
+  const candidateMetricContract = MetricContract.parse(JSON.parse(new TextDecoder().decode(metricBytes)) as unknown)
+  const producerSha256 = sha256(await candidateBlob(raw.candidateSha, ProducerPath))
+  for (const dependencyPath of RuntimeDependencyPaths) {
+    const candidateSha256 = sha256(await candidateBlob(raw.candidateSha, dependencyPath))
+    const runtimeSha256 = sha256(
+      new Uint8Array(await Bun.file(path.join(RepositoryRoot, dependencyPath)).arrayBuffer()),
+    )
+    if (candidateSha256 !== runtimeSha256)
+      throw new Error(`B5 runtime dependency differs from candidate Git blob: ${dependencyPath}`)
+  }
+  if (persistedMetricContractDigest(candidateMetricContract) !== persistedMetricContractDigest(raw.metricContract))
+    throw new Error("B5 metric contract does not match the candidate Git blob")
+  if (
+    !B5ScenarioIds.every((scenarioId) => scenarioContract.scenarios.some((scenario) => scenario.id === scenarioId)) ||
+    scenarioContract.scenarios.some((scenario) => !B5ScenarioIds.includes(scenario.id))
+  )
+    throw new Error("B5 scenario contract must contain the fixed ordered S13-S27 set")
+  const baseScenarioBytes = await candidateBlob(raw.candidateSha, scenarioContract.extends.path)
+  if (sha256(baseScenarioBytes) !== scenarioContract.extends.sha256)
+    throw new Error("B5 scenario contract base digest does not match the candidate Git blob")
+  scenarioContract.scenarios.forEach((scenario) => {
+    scenario.observedMetrics
+      .filter((metricId) =>
+        PrePublicScenarioMetricIds.includes(metricId as (typeof PrePublicScenarioMetricIds)[number]),
+      )
+      .forEach((metricId) => {
+        if (!metricApplies(metricId as keyof typeof PrePublicScenarioApplicability, scenario.id))
+          throw new Error(`B5 scenario ${scenario.id} has drifted applicability for ${metricId}`)
+      })
+  })
+  const scenarioDigests = new Map(
+    scenarioContract.scenarios.map((scenario) => [scenario.id, sha256(canonical(scenario))]),
+  )
+  const orderedBindings = B5ScenarioIds.flatMap((scenarioId) => [
+    `${scenarioId}:legacy_full_plan`,
+    `${scenarioId}:seed_and_grow`,
+  ])
+  if (
+    raw.runBindings.length !== 30 ||
+    raw.runBindings.some((binding, index) => `${binding.scenarioId}:${binding.strategy}` !== orderedBindings[index]) ||
+    B5ScenarioIds.some((scenarioId) =>
+      ["legacy_full_plan", "seed_and_grow"].some(
+        (strategy) =>
+          raw.runBindings.filter(
+            (binding) =>
+              binding.scenarioId === scenarioId &&
+              binding.strategy === strategy &&
+              binding.snapshotDigest === scenarioDigests.get(scenarioId),
+          ).length !== 1,
+      ),
+    )
+  )
+    throw new Error("B5 fact export requires one isolated legacy and seed project for every S13-S27 scenario")
+  const observations = Database.use((database) =>
+    database
+      .select()
+      .from(CompanyGateObservationTable)
+      .where(eq(CompanyGateObservationTable.candidate_sha, raw.candidateSha))
+      .orderBy(asc(CompanyGateObservationTable.created_at), asc(CompanyGateObservationTable.id))
+      .all(),
+  )
+  const root = raw.isolationRoot!
+  for (const observation of observations) {
+    const binding = raw.runBindings.find((item) => item.runId === observation.run_id)
+    if (
+      !binding ||
+      binding.projectId !== observation.project_id ||
+      binding.scenarioId !== observation.scenario_id ||
+      binding.strategy !== observation.strategy ||
+      binding.snapshotDigest !== observation.snapshot_sha256 ||
+      observation.producer_path !== ProducerPath ||
+      observation.producer_sha256 !== producerSha256
+    )
+      throw new Error(`B5 observation ${observation.id} has a mismatched candidate source binding`)
+    const evidence = ObservationEvidence.parse(JSON.parse(observation.evidence_json) as unknown)
+    const properties = parseRecord(observation.properties_json, `B5 observation ${observation.id} properties`)
+    const sourceRefs = parseList(observation.source_refs_json, `B5 observation ${observation.id} sources`)
+    if (
+      sha256(
+        canonical({
+          projectId: observation.project_id,
+          pairedProjectId: observation.paired_project_id ?? undefined,
+          candidateSha: observation.candidate_sha,
+          scenarioId: observation.scenario_id,
+          runId: observation.run_id,
+          subjectId: observation.subject_id,
+          strategy: observation.strategy,
+          snapshotSha256: observation.snapshot_sha256,
+          eventType: observation.event_type,
+          properties,
+          sourceRefs,
+          evidence: JSON.parse(observation.evidence_json) as unknown,
+          producerPath: observation.producer_path,
+          producerSha256: observation.producer_sha256,
+        }),
+      ) !== observation.input_sha256
+    )
+      throw new Error(`B5 observation ${observation.id} has a tampered input digest`)
+    if (
+      observation.created_at < Date.parse(raw.window.startedAt) ||
+      observation.created_at > Date.parse(raw.window.endedAt)
+    )
+      throw new Error(`B5 observation ${observation.id} falls outside its candidate window`)
+    const pairType = ["quality_pair.checked", "shadow_pair.checked"].includes(observation.event_type)
+    const pairedBinding = observation.paired_project_id
+      ? raw.runBindings.find((item) => item.projectId === observation.paired_project_id)
+      : undefined
+    if (
+      (pairType &&
+        (!pairedBinding ||
+          pairedBinding.scenarioId !== binding.scenarioId ||
+          pairedBinding.snapshotDigest !== binding.snapshotDigest ||
+          pairedBinding.strategy === binding.strategy)) ||
+      (!pairType && observation.paired_project_id)
+    )
+      throw new Error(`B5 observation ${observation.id} has an invalid paired project binding`)
+    const expectedClass = ObservationReportClass[observation.event_type as keyof typeof ObservationReportClass]
+    if (!expectedClass || evidence.report.class !== expectedClass)
+      throw new Error(`B5 observation ${observation.id} has an invalid report class`)
+    const reportPath = await validateObservationFile(evidence.report.path, evidence.report.sha256, root)
+    if (
+      !sourceRefs.some(
+        (reference) =>
+          SourceReference.safeParse(reference).success &&
+          reference.kind === "external_report" &&
+          path.resolve(reference.id as string) === reportPath,
+      )
+    )
+      throw new Error(`B5 observation ${observation.id} has no exact external report source binding`)
+    if (observation.event_type === "scenario.fixture_checked") {
+      const properties = ScenarioFixtureObservation.parse(JSON.parse(observation.properties_json) as unknown)
+      if (
+        properties.scenarioId !== binding.scenarioId ||
+        properties.snapshotSha256 !== scenarioDigests.get(binding.scenarioId)
+      )
+        throw new Error(`B5 observation ${observation.id} has a non-canonical scenario snapshot`)
+    }
+    if (observation.event_type === "delivery.checked") {
+      const properties = DeliveryObservation.parse(JSON.parse(observation.properties_json) as unknown)
+      const artifact = Database.use((database) =>
+        database.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, properties.artifactId)).get(),
+      )
+      if (!artifact || artifact.project_id !== binding.projectId)
+        throw new Error(`B5 observation ${observation.id} has no persisted delivery artifact`)
+      const bytes = artifact.path
+        ? new Uint8Array(await Bun.file(artifact.path).arrayBuffer())
+        : new TextEncoder().encode(artifact.content ?? "")
+      if (!bytes.length || sha256(bytes) !== properties.artifactSha256)
+        throw new Error(`B5 observation ${observation.id} has a mismatched delivery artifact digest`)
+      if (artifact.path) {
+        const project = Database.use((database) =>
+          database
+            .select({ output_dir: CompanyProjectTable.output_dir })
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.id, binding.projectId))
+            .get(),
+        )!
+        const artifactPath = await realpath(artifact.path)
+        const outputDirectory = await realpath(project.output_dir)
+        const info = await lstat(artifact.path)
+        if (!contains(outputDirectory, artifactPath) || !info.isFile() || info.isSymbolicLink())
+          throw new Error(`B5 observation ${observation.id} has an unsafe delivery artifact path`)
+      }
+    }
+    if (observation.event_type === "git.blob_checked") {
+      const properties = GitBlobObservation.parse(JSON.parse(observation.properties_json) as unknown)
+      const blobSha256 = sha256(await candidateBlob(raw.candidateSha, properties.path))
+      const runtimePath = await validateObservationFile(evidence.report.path, properties.runtimeSha256, root)
+      if (
+        properties.candidateBlobSha256 !== blobSha256 ||
+        properties.runtimeSha256 !== blobSha256 ||
+        runtimePath !== reportPath
+      )
+        throw new Error(`B5 observation ${observation.id} has a mismatched runtime Git blob`)
+    }
+    if (observation.event_type === "report.file_checked") {
+      const properties = ReportFileObservation.parse(JSON.parse(observation.properties_json) as unknown)
+      if (
+        path.resolve(properties.path) !== reportPath ||
+        properties.sha256 !== evidence.report.sha256 ||
+        properties.reportClass !== evidence.report.class
+      )
+        throw new Error(`B5 observation ${observation.id} has a mismatched report file`)
+    }
+  }
+  return { observations, producerSha256, scenarioDigests }
 }
 
 function parseRecord(value: string, label: string) {
@@ -211,6 +654,8 @@ function assertEventBinding(
   ] as const
   expected.forEach(([camel, snake, value]) => {
     const observed = explicitBindingValue(data, camel, snake)
+    if (recognized && observed === undefined)
+      throw new Error(`Project event ${row.id} has no exact source binding for ${camel}`)
     if (observed !== undefined && observed !== value) throw new Error(`Project event ${row.id} has mismatched ${camel}`)
   })
 }
@@ -301,6 +746,14 @@ function sourceReferenceExists(db: TxOrDb, projectId: string, reference: Record<
         .where(eq(CompanyApprovalGateTable.id, reference.id))
         .get(),
     )
+  if (reference.kind === "attention")
+    return sameProject(
+      db
+        .select({ project_id: CompanyAttentionTable.project_id })
+        .from(CompanyAttentionTable)
+        .where(eq(CompanyAttentionTable.id, reference.id))
+        .get(),
+    )
   if (reference.kind === "agent_run")
     return sameProject(
       db
@@ -344,6 +797,482 @@ function validateSourceReferences(db: TxOrDb, projectId: string, source: string,
   })
 }
 
+const ObservationRequiredSourceKinds = {
+  "scenario.fixture_checked": [],
+  "command.probe_checked": ["agent_run"],
+  "git.blob_checked": [],
+  "report.file_checked": [],
+  "terminal.invariant_checked": ["project"],
+  "receipt.recovery_checked": ["work_receipt"],
+  "graph_mutation.recovery_checked": ["graph_mutation"],
+  "delivery.checked": ["artifact"],
+  "validation_anchor.checked": ["validation_gate"],
+  "interruption.checked": ["project"],
+  "review_presence.checked": ["agent_run"],
+  "quality_pair.checked": ["project"],
+  "benchmark.checked": ["project"],
+  "shadow_pair.checked": ["project"],
+  "repair.circuit_checked": ["attention", "validation_gate"],
+  "model.usage_checked": ["agent_run"],
+} as const
+
+function validateObservationSources(
+  db: TxOrDb,
+  binding: PersistedFactRunBindingValue,
+  observation: typeof CompanyGateObservationTable.$inferSelect,
+  rollout: ReturnType<typeof CompanyRollout.evidence>,
+  candidateSha: string,
+) {
+  const references = parseList(observation.source_refs_json, `B5 observation ${observation.id} sources`).map(
+    (reference) => SourceReference.parse(reference),
+  )
+  references.forEach((reference) => {
+    if (reference.kind === "external_report") return
+    if (reference.kind === "rollout_repeat") {
+      if (
+        !rollout.localRepeats.some(
+          (item) =>
+            item.id === reference.id &&
+            item.runId === binding.runId &&
+            rollout.candidates.some(
+              (candidate) => candidate.id === item.candidateId && candidate.candidateSha === candidateSha,
+            ),
+        )
+      )
+        throw new Error(`B5 observation ${observation.id} has an unavailable rollout repeat`)
+      return
+    }
+    if (reference.kind === "rollout_rollback") {
+      if (
+        !rollout.rollbacks.some(
+          (item) =>
+            item.id === reference.id &&
+            item.projectId === binding.projectId &&
+            (!item.candidateId ||
+              rollout.candidates.some(
+                (candidate) => candidate.id === item.candidateId && candidate.candidateSha === candidateSha,
+              )),
+        )
+      )
+        throw new Error(`B5 observation ${observation.id} has an unavailable rollback report`)
+      return
+    }
+    if (!sourceReferenceExists(db, binding.projectId, reference))
+      throw new Error(`B5 observation ${observation.id} references an unavailable ${reference.kind} fact`)
+  })
+  ObservationRequiredSourceKinds[observation.event_type as keyof typeof ObservationRequiredSourceKinds].forEach(
+    (kind) => {
+      if (!references.some((reference) => reference.kind === kind))
+        throw new Error(`B5 observation ${observation.id} is missing its required ${kind} source`)
+    },
+  )
+  return references
+}
+
+function gateObservationFacts(
+  db: TxOrDb,
+  binding: PersistedFactRunBindingValue,
+  candidateSha: string,
+  window: z.infer<typeof Window>,
+  rollout: ReturnType<typeof CompanyRollout.evidence>,
+  gateEvidence: NonNullable<Awaited<ReturnType<typeof b5Evidence>>>,
+) {
+  const rows = gateEvidence.observations.filter((item) => item.run_id === binding.runId)
+  const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, binding.projectId)).get()!
+  const byType = (eventType: string) => rows.filter((item) => item.event_type === eventType)
+  const required = [
+    "scenario.fixture_checked",
+    "command.probe_checked",
+    "git.blob_checked",
+    "report.file_checked",
+    "terminal.invariant_checked",
+    "benchmark.checked",
+    "model.usage_checked",
+    ...(binding.strategy === "seed_and_grow" ? ["shadow_pair.checked"] : []),
+    ...(metricApplies("delivery_consumability_rate", binding.scenarioId) ? ["delivery.checked"] : []),
+    ...(metricApplies("receipt_recovery_success_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
+      ? ["receipt.recovery_checked"]
+      : []),
+    ...(metricApplies("graph_mutation_recovery_success_rate", binding.scenarioId) &&
+    binding.strategy === "seed_and_grow"
+      ? ["graph_mutation.recovery_checked"]
+      : []),
+    ...(metricApplies("validation_gate_false_pass_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
+      ? ["validation_anchor.checked"]
+      : []),
+    ...(metricApplies("invalid_interruption_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
+      ? ["interruption.checked"]
+      : []),
+    ...(metricApplies("reviewer_invocation_ratio_vs_legacy", binding.scenarioId) ? ["review_presence.checked"] : []),
+    ...(metricApplies("low_risk_quality_ratio_vs_legacy", binding.scenarioId) && binding.strategy === "seed_and_grow"
+      ? ["quality_pair.checked"]
+      : []),
+    ...(binding.scenarioId === "S22" && binding.strategy === "seed_and_grow" ? ["repair.circuit_checked"] : []),
+  ]
+  required.forEach((eventType) => {
+    if (!byType(eventType).length) throw new Error(`B5 run ${binding.runId} is missing required ${eventType} evidence`)
+  })
+  const output: PersistedMetricEvent[] = []
+  const emit = (
+    row: typeof CompanyGateObservationTable.$inferSelect,
+    eventType: string,
+    properties: Record<string, unknown>,
+    facet = eventType,
+  ) => {
+    if (!inWindow(row.created_at, window)) return
+    output.push(
+      metricEvent({
+        binding,
+        candidateSha,
+        eventType,
+        occurredAt: row.created_at,
+        subjectId: row.subject_id,
+        sourceKind: "gate_report",
+        sourceEntity: "company_gate_observation",
+        sourceId: row.id,
+        sourceFacet: facet,
+        raw: row,
+        properties,
+      }),
+    )
+  }
+  rows.forEach((row) => {
+    const properties = JSON.parse(row.properties_json) as unknown
+    const evidence = ObservationEvidence.parse(JSON.parse(row.evidence_json) as unknown)
+    const references = validateObservationSources(db, binding, row, rollout, candidateSha)
+    if (row.event_type === "scenario.fixture_checked") {
+      ScenarioFixtureObservation.parse(properties)
+      emit(row, "fact.gate_observation", {
+        observationType: row.event_type,
+        reportSha256: evidence.report.sha256,
+      })
+      return
+    }
+    if (row.event_type === "command.probe_checked") {
+      const value = CommandProbeObservation.parse(properties)
+      const run = db.select().from(AgentRunTable).where(eq(AgentRunTable.id, value.agentRunId)).get()
+      if (
+        !run ||
+        run.company_project_id !== binding.projectId ||
+        run.exit_code !== value.exitCode ||
+        run.time_finished === null
+      )
+        throw new Error(`B5 command observation ${row.id} has no successful persisted AgentRun`)
+      emit(row, "fact.gate_observation", {
+        observationType: row.event_type,
+        agentRunId: run.id,
+        commandId: value.commandId,
+        stdoutSha256: value.stdoutSha256,
+        stderrSha256: value.stderrSha256,
+      })
+      return
+    }
+    if (["git.blob_checked", "report.file_checked"].includes(row.event_type)) {
+      if (row.event_type === "git.blob_checked") GitBlobObservation.parse(properties)
+      if (row.event_type === "report.file_checked") ReportFileObservation.parse(properties)
+      emit(row, "fact.gate_observation", {
+        observationType: row.event_type,
+        reportSha256: evidence.report.sha256,
+      })
+      return
+    }
+    if (row.event_type === "terminal.invariant_checked") {
+      const value = TerminalInvariantObservation.parse(properties)
+      const pendingWorkItemCount = db
+        .select()
+        .from(CompanyWorkItemTable)
+        .where(eq(CompanyWorkItemTable.project_id, binding.projectId))
+        .all()
+        .filter((item) => !["completed", "superseded", "cancelled"].includes(item.status)).length
+      const pendingReceiptCount = db
+        .select()
+        .from(CompanyWorkReceiptTable)
+        .where(eq(CompanyWorkReceiptTable.project_id, binding.projectId))
+        .all()
+        .filter((item) => item.processing_status !== "processed").length
+      const pendingMutationCount = db
+        .select()
+        .from(CompanyGraphMutationTable)
+        .where(eq(CompanyGraphMutationTable.project_id, binding.projectId))
+        .all()
+        .filter((item) => !["applied", "rejected", "superseded"].includes(item.status)).length
+      const pendingGateCount = db
+        .select()
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.project_id, binding.projectId))
+        .all()
+        .filter((item) => ["pending", "running"].includes(item.status)).length
+      const falseCompletion =
+        project.status === "completed" &&
+        pendingWorkItemCount + pendingReceiptCount + pendingMutationCount + pendingGateCount > 0
+      if (
+        value.passed === value.falseCompletion ||
+        value.invariantReportSha256 !== evidence.report.sha256 ||
+        value.falseCompletion !== falseCompletion ||
+        value.pendingWorkItemCount !== pendingWorkItemCount ||
+        value.pendingReceiptCount !== pendingReceiptCount ||
+        value.pendingMutationCount !== pendingMutationCount ||
+        value.pendingGateCount !== pendingGateCount
+      )
+        throw new Error(`B5 terminal observation ${row.id} has inconsistent invariant evidence`)
+      emit(row, "terminal.invariant_checked", {
+        projectId: binding.projectId,
+        passed: value.passed,
+        falseCompletion: value.falseCompletion,
+        invariantReportSha256: value.invariantReportSha256,
+      })
+      return
+    }
+    if (row.event_type === "receipt.recovery_checked") {
+      const value = ReceiptRecoveryObservation.parse(properties)
+      const receiptRef = references.find((reference) => reference.kind === "work_receipt")!
+      const receipt = db
+        .select()
+        .from(CompanyWorkReceiptTable)
+        .where(eq(CompanyWorkReceiptTable.id, receiptRef.id))
+        .get()
+      if (
+        !receipt ||
+        receipt.processing_status !== "processed" ||
+        receipt.processed_at === null ||
+        value.recoveredAt <= value.lostAt ||
+        value.duplicate ||
+        !value.consistent
+      )
+        throw new Error(`B5 receipt recovery observation ${row.id} does not match terminal receipt facts`)
+      emit(row, "connection.lost", { reasonKind: "process_restart" }, "lost")
+      emit(
+        row,
+        "connection.recovered",
+        { contextPreserved: value.consistent, duplicateSideEffects: value.duplicate ? 1 : 0 },
+        "recovered",
+      )
+      return
+    }
+    if (row.event_type === "graph_mutation.recovery_checked") {
+      const value = GraphMutationRecoveryObservation.parse(properties)
+      const mutationRef = references.find((reference) => reference.kind === "graph_mutation")!
+      const mutation = db
+        .select()
+        .from(CompanyGraphMutationTable)
+        .where(eq(CompanyGraphMutationTable.id, mutationRef.id))
+        .get()
+      if (
+        !mutation ||
+        mutation.status !== "applied" ||
+        mutation.applied_revision === null ||
+        value.recoveredAt <= value.lostAt ||
+        !value.consistent ||
+        value.duplicateSideEffects !== 0
+      )
+        throw new Error(`B5 mutation recovery observation ${row.id} does not match graph facts`)
+      emit(row, "connection.lost", { reasonKind: "process_restart" }, "lost")
+      emit(
+        row,
+        "connection.recovered",
+        { contextPreserved: value.consistent, duplicateSideEffects: value.duplicateSideEffects },
+        "recovered",
+      )
+      emit(row, "graph_mutation.recovered", {
+        mutationId: mutation.id,
+        consistent: value.consistent,
+        duplicateSideEffects: value.duplicateSideEffects,
+      })
+      return
+    }
+    if (row.event_type === "delivery.checked") {
+      const value = DeliveryObservation.parse(properties)
+      const artifactRef = references.find((reference) => reference.kind === "artifact")!
+      const artifact = db.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, artifactRef.id)).get()
+      if (!artifact || artifact.id !== value.artifactId || artifact.project_id !== binding.projectId || !value.opened)
+        throw new Error(`B5 delivery observation ${row.id} has no consumable persisted artifact`)
+      emit(row, "delivery.presented", {
+        deliveryId: value.deliveryId,
+        artifactCount: 1,
+        noFileReason: "",
+      })
+      emit(row, "delivery.artifact_opened", {
+        deliveryId: value.deliveryId,
+        artifactId: value.artifactId,
+        succeeded: value.opened,
+      })
+      emit(row, "delivery.criterion_evaluated", {
+        deliveryId: value.deliveryId,
+        criterionId: value.criterionId,
+        status: value.criterionStatus,
+        evidenceCount: references.length,
+        risk: value.risk,
+        strategy: binding.strategy,
+      })
+      return
+    }
+    if (row.event_type === "validation_anchor.checked") {
+      const value = ValidationObservation.parse(properties)
+      const gate = db
+        .select()
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.id, value.gateId))
+        .get()
+      if (
+        !gate ||
+        gate.project_id !== binding.projectId ||
+        value.passed !== (gate.status === "passed") ||
+        value.passed !== value.anchorPassed
+      )
+        throw new Error(`B5 validation observation ${row.id} does not match its Gate anchor`)
+      emit(row, "validation_gate.evaluated", {
+        gateId: gate.id,
+        passed: value.passed,
+        anchorPassed: value.anchorPassed,
+        falsePass: value.passed && !value.anchorPassed,
+      })
+      return
+    }
+    if (row.event_type === "interruption.checked") {
+      const value = InterruptionObservation.parse(properties)
+      const attention = value.attentionId
+        ? db.select().from(CompanyAttentionTable).where(eq(CompanyAttentionTable.id, value.attentionId)).get()
+        : undefined
+      if (
+        (value.presented &&
+          (!attention ||
+            attention.project_id !== binding.projectId ||
+            !attention.interrupts_user ||
+            value.needed !== attention.material)) ||
+        (!value.presented && (attention || value.needed))
+      )
+        throw new Error(`B5 interruption observation ${row.id} does not match Attention facts`)
+      if (value.presented && !references.some((reference) => reference.kind === "attention"))
+        throw new Error(`B5 interruption observation ${row.id} is missing its Attention source`)
+      emit(row, "interruption.checked", {
+        projectId: binding.projectId,
+        presented: value.presented,
+        needed: value.needed,
+        attentionId: value.attentionId,
+      })
+      return
+    }
+    if (row.event_type === "review_presence.checked") {
+      const value = ReviewObservation.parse(properties)
+      emit(row, "review.completed", value)
+      return
+    }
+    if (row.event_type === "benchmark.checked") {
+      const value = BenchmarkObservation.parse(properties)
+      const terminal = byType("terminal.invariant_checked")
+        .map((item) => TerminalInvariantObservation.parse(JSON.parse(item.properties_json) as unknown))
+        .find((item) => item.passed)
+      if (!terminal || value.finalDecision !== "pass")
+        throw new Error(`B5 benchmark observation ${row.id} is not backed by a passing invariant audit`)
+      emit(row, "benchmark.completed", {
+        scenarioId: binding.scenarioId,
+        finalDecision: value.finalDecision,
+      })
+      return
+    }
+    if (row.event_type === "shadow_pair.checked") {
+      const value = PairObservation.parse(properties)
+      const legacy = gateEvidence.observations.find(
+        (item) =>
+          item.run_id === value.legacyRunId &&
+          item.scenario_id === binding.scenarioId &&
+          item.strategy === "legacy_full_plan",
+      )
+      if (
+        binding.strategy !== "seed_and_grow" ||
+        value.seedGrowRunId !== binding.runId ||
+        !legacy ||
+        row.paired_project_id !== legacy.project_id ||
+        legacy.snapshot_sha256 !== row.snapshot_sha256
+      )
+        throw new Error(`B5 shadow observation ${row.id} has an invalid matched snapshot pair`)
+      emit(row, "shadow.compared", {
+        comparisonId: row.subject_id,
+        legacyRunId: value.legacyRunId,
+        seedGrowRunId: value.seedGrowRunId,
+      })
+      return
+    }
+    if (row.event_type === "quality_pair.checked") {
+      const value = PairObservation.parse(properties)
+      const legacy = gateEvidence.observations.find(
+        (item) =>
+          item.run_id === value.legacyRunId &&
+          item.event_type === "delivery.checked" &&
+          item.scenario_id === binding.scenarioId &&
+          item.strategy === "legacy_full_plan",
+      )
+      const seed = byType("delivery.checked")[0]
+      if (
+        binding.strategy !== "seed_and_grow" ||
+        value.seedGrowRunId !== binding.runId ||
+        !legacy ||
+        !seed ||
+        row.paired_project_id !== legacy.project_id ||
+        legacy.snapshot_sha256 !== row.snapshot_sha256
+      )
+        throw new Error(`B5 quality observation ${row.id} has an invalid matched delivery pair`)
+      const legacyDelivery = DeliveryObservation.parse(JSON.parse(legacy.properties_json) as unknown)
+      const seedDelivery = DeliveryObservation.parse(JSON.parse(seed.properties_json) as unknown)
+      emit(row, "quality_pair.checked", {
+        legacyRunId: value.legacyRunId,
+        seedGrowRunId: value.seedGrowRunId,
+        risk: seedDelivery.risk,
+        legacyScore: legacyDelivery.criterionStatus === "pass" ? 1 : 0,
+        seedGrowScore: seedDelivery.criterionStatus === "pass" ? 1 : 0,
+        snapshotSha256: binding.snapshotDigest,
+      })
+      return
+    }
+    if (row.event_type === "repair.circuit_checked") {
+      const value = RepairCircuitObservation.parse(properties)
+      const gate = db
+        .select()
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.id, references.find((item) => item.kind === "validation_gate")!.id))
+        .get()!
+      const repairCount = db
+        .select({ value: count() })
+        .from(CompanyValidationRepairTable)
+        .where(eq(CompanyValidationRepairTable.gate_id, gate.id))
+        .get()!.value
+      if (repairCount < 3 || gate.repair_round < 3 || value.attemptCount !== repairCount)
+        throw new Error(`B5 repair circuit observation ${row.id} has no three-round persisted repair history`)
+      emit(row, "repair.circuit_opened", {
+        workItemId: value.workItemId,
+        attemptCount: value.attemptCount,
+        attentionId: value.attentionId,
+      })
+      return
+    }
+    if (row.event_type === "model.usage_checked") {
+      const value = ModelUsageObservation.parse(properties)
+      const usage = db
+        .select()
+        .from(AgentRunUsageTable)
+        .where(eq(AgentRunUsageTable.agent_run_id, value.agentRunId))
+        .get()
+      if (!usage) throw new Error(`B5 model usage observation ${row.id} has no persisted AgentRun usage`)
+      const tokens = [
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.reasoning_tokens,
+        usage.cache_read_tokens,
+        usage.cache_write_tokens,
+      ].reduce<number>((total, item) => total + (item ?? 0), 0)
+      emit(row, "model.usage_recorded", {
+        runId: value.agentRunId,
+        strategy: binding.strategy,
+        purpose: value.purpose,
+        modelCalls: 1,
+        tokens,
+        cost: 0,
+      })
+    }
+  })
+  return output
+}
+
 function projectFacts(
   db: TxOrDb,
   binding: PersistedFactRunBindingValue,
@@ -351,6 +1280,7 @@ function projectFacts(
   contract: MetricContractValue,
   window: z.infer<typeof Window>,
   rollout: ReturnType<typeof CompanyRollout.evidence>,
+  gateEvidence: Awaited<ReturnType<typeof b5Evidence>>,
 ) {
   const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, binding.projectId)).get()
   if (!project) throw new Error(`Run ${binding.runId} references an unavailable project`)
@@ -451,7 +1381,24 @@ function projectFacts(
       ),
   )
   const recognizedTypes = new Map(contract.eventTypes.map((item) => [item.id, item.requiredProperties]))
-  events.forEach(({ row, data }) => assertEventBinding(row, data, binding, candidateSha, recognizedTypes.has(row.type)))
+  events
+    .filter(({ row }) => row.type === "delivery.artifact_opened")
+    .forEach(({ row, data }) => {
+      const artifactId = explicitBindingValue(data, "artifactId", "artifact_id")
+      const artifact =
+        typeof artifactId === "string"
+          ? db
+              .select({ project_id: CompanyArtifactTable.project_id })
+              .from(CompanyArtifactTable)
+              .where(eq(CompanyArtifactTable.id, artifactId))
+              .get()
+          : undefined
+      if (artifact?.project_id !== binding.projectId)
+        throw new Error(`Project event ${row.id} references an unavailable artifact`)
+    })
+  events.forEach(({ row, data }) =>
+    assertEventBinding(row, data, binding, candidateSha, !gateEvidence && recognizedTypes.has(row.type)),
+  )
   const runAnchored =
     project.active_run_id === binding.runId ||
     attempts.some((item) => item.agent_run_id === binding.runId) ||
@@ -463,6 +1410,7 @@ function projectFacts(
         explicitBindingValue(data, "runId", "run_id") === binding.runId,
     )
   const scenarioAnchored =
+    Boolean(gateEvidence) ||
     exactAnchor(events, binding, candidateSha) ||
     shadows.some(
       (item) =>
@@ -470,7 +1418,9 @@ function projectFacts(
         (item.input.scenarioId === binding.scenarioId || item.output.scenarioId === binding.scenarioId),
     )
   const snapshotAnchored =
-    exactAnchor(events, binding, candidateSha) || shadows.some((item) => item.snapshotSha256 === binding.snapshotDigest)
+    Boolean(gateEvidence) ||
+    exactAnchor(events, binding, candidateSha) ||
+    shadows.some((item) => item.snapshotSha256 === binding.snapshotDigest)
   if (!runAnchored) throw new Error(`Run ${binding.runId} is not bound to project ${binding.projectId}`)
   if (!scenarioAnchored) throw new Error(`Run ${binding.runId} has no persisted scenario binding`)
   if (!snapshotAnchored) throw new Error(`Run ${binding.runId} has no persisted snapshot binding`)
@@ -539,9 +1489,14 @@ function projectFacts(
   repairs.forEach((repair) => {
     if (!gates.some((gate) => gate.id === repair.gate_id))
       throw new Error(`Validation Repair ${repair.id} references an unavailable Validation Gate`)
-    parseRecord(repair.diagnosis_json, `Validation Repair ${repair.id} diagnosis`)
-    parseList(repair.repair_diff_json, `Validation Repair ${repair.id} diff`)
-    parseList(repair.reverify_evidence_json, `Validation Repair ${repair.id} evidence`)
+    const diagnosis = parseRecord(repair.diagnosis_json, `Validation Repair ${repair.id} diagnosis`)
+    const diff = parseList(repair.repair_diff_json, `Validation Repair ${repair.id} diff`)
+    const evidence = parseList(repair.reverify_evidence_json, `Validation Repair ${repair.id} evidence`)
+    if (!Object.keys(diagnosis).length)
+      throw new Error(`Validation Repair ${repair.id} diagnosis does not identify a changed fact`)
+    if (!diff.length) throw new Error(`Validation Repair ${repair.id} repair diff does not prove a changed fact`)
+    if (!evidence.length)
+      throw new Error(`Validation Repair ${repair.id} has no reverify evidence for the changed fact`)
   })
   attentions.forEach((attention) => {
     const sourceRefs = parseList(attention.source_refs_json, `Attention ${attention.id} sources`)
@@ -1047,7 +2002,7 @@ function projectFacts(
         .map((key) => data[key])
         .find((value): value is string => typeof value === "string" && Boolean(value.trim())) ?? row.id
     const metricKey = `${row.type}:${subjectId}`
-    const eventType = complete && !logical.has(metricKey) ? row.type : "fact.project_event"
+    const eventType = !gateEvidence && complete && !logical.has(metricKey) ? row.type : "fact.project_event"
     emit(
       {
         eventType,
@@ -1168,6 +2123,7 @@ function projectFacts(
       `fact.rollout_shadow_evaluation:${item.id}`,
     ),
   )
+  if (gateEvidence) output.push(...gateObservationFacts(db, binding, candidateSha, window, rollout, gateEvidence))
   return output
 }
 
@@ -1187,6 +2143,7 @@ async function assertOutputTarget(target: string) {
 export async function exportPersistedFactArtifact(raw: PersistedFactExportRequest): Promise<PersistedFactExportResult> {
   const request = PersistedFactExportRequest.parse(raw)
   const producerDigest = await executableDigest()
+  const gateEvidence = await b5Evidence(request)
   const events = Database.transaction(
     (db) => {
       if (
@@ -1202,7 +2159,7 @@ export async function exportPersistedFactArtifact(raw: PersistedFactExportReques
       if (!rollout.candidates.some((candidate) => candidate.candidateSha === request.candidateSha))
         throw new Error(`Candidate ${request.candidateSha} is not registered in persisted rollout facts`)
       return request.runBindings.flatMap((binding) =>
-        projectFacts(db, binding, request.candidateSha, request.metricContract, request.window, rollout),
+        projectFacts(db, binding, request.candidateSha, request.metricContract, request.window, rollout, gateEvidence),
       )
     },
     { behavior: "immediate" },

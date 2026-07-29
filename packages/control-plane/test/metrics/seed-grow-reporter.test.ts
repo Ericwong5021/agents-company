@@ -106,6 +106,12 @@ function event(
 function runEvents(binding: PersistedFactRunBinding, index: number) {
   const legacy = binding.strategy === "legacy_full_plan"
   return [
+    event(binding, "terminal.invariant_checked", "terminal-invariant", {
+      projectId: binding.projectId,
+      passed: true,
+      falseCompletion: false,
+      invariantReportSha256: createHash("sha256").update(`invariant:${binding.runId}`).digest("hex"),
+    }),
     event(binding, "project.completed", "project", {
       projectId: binding.projectId,
       strategy: binding.strategy,
@@ -217,18 +223,19 @@ function completeRunEvents(binding: PersistedFactRunBinding, index: number) {
       attemptCount: 1,
       attentionId: `${binding.runId}-attention`,
     }),
-    event(binding, "user.interruption_presented", "interruption-presented", {
-      kind: "material_blocker",
-      materialityReason: "missing_authority",
-    }),
-    event(binding, "user.interruption_judged", "interruption-judged", {
+    event(binding, "interruption.checked", "interruption", {
+      projectId: binding.projectId,
+      presented: true,
       needed: true,
+      attentionId: `${binding.runId}-attention`,
     }),
-    event(binding, "delivery.quality_compared", "quality", {
+    event(binding, "quality_pair.checked", "quality", {
+      legacyRunId: `legacy-${index === 0 ? "a" : "b"}`,
+      seedGrowRunId: `seed-${index === 0 ? "a" : "b"}`,
       risk: "low",
-      strategy: binding.strategy,
       legacyScore: 1,
       seedGrowScore: 1,
+      snapshotSha256: binding.snapshotDigest,
     }),
     ...(legacy
       ? []
@@ -338,28 +345,24 @@ describe("SeedGrowMetricReporter", () => {
     }),
   )
 
-  it.live("passes all Pre-Public blocking metrics from complete persisted facts", () =>
+  it.live("blocks an incomplete scenario corpus and candidate-level promotion metrics", () =>
     Effect.gen(function* () {
       const directory = yield* tmpdirScoped()
       const facts = yield* Effect.promise(() => adapter(directory, { core: completeArtifactCore() }))
       const report = yield* reportWith(facts, [...PrePublicBlockingMetricIds])
-      expect(report.status).toBe("pass")
+      expect(report.status).toBe("blocked")
       expect(report.runIds).toEqual(["legacy-a", "legacy-b", "seed-a", "seed-b"])
       expect(report.results).toHaveLength(18)
-      expect(report.results.every((result) => result.status === "pass")).toBe(true)
-      expect(report.results.find((result) => result.metricId === "reviewer_invocation_ratio_vs_legacy")).toMatchObject({
-        value: 0.5,
-        sampleSize: 2,
-      })
-      expect(report.results.find((result) => result.metricId === "candidate_reuse_delta_vs_legacy")).toMatchObject({
-        value: 0.5,
+      expect(report.results.find((result) => result.metricId === "false_completion_count")).toMatchObject({
+        status: "pass",
+        value: 0,
         sampleSize: 2,
       })
       expect(
         report.results.find((result) => result.metricId === "consecutive_reproducible_candidate_count"),
       ).toMatchObject({
-        value: 2,
-        sampleSize: 2,
+        status: "blocked",
+        blockedReasons: ["missing_observation"],
       })
     }),
   )
@@ -522,7 +525,7 @@ describe("SeedGrowMetricReporter", () => {
         adapter(directory, {
           core: {
             ...core,
-            events: core.events.filter((event) => event.eventType !== "benchmark.completed"),
+            events: core.events.filter((event) => event.eventType !== "terminal.invariant_checked"),
           },
         }),
       )

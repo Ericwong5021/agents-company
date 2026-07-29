@@ -25,7 +25,35 @@ const Identifier = z.string().trim().min(1).max(500)
 const Timestamp = z.string().datetime()
 const Strategy = z.enum(["legacy_full_plan", "seed_and_grow"])
 export type PersistedFactStrategy = z.infer<typeof Strategy>
-const CrossStrategyMetricIds = new Set(["reviewer_invocation_ratio_vs_legacy", "candidate_reuse_delta_vs_legacy"])
+const CrossStrategyMetricIds = new Set([
+  "reviewer_invocation_ratio_vs_legacy",
+  "candidate_reuse_delta_vs_legacy",
+  "low_risk_quality_ratio_vs_legacy",
+])
+const PerRunMetricSources: Record<string, string[]> = {
+  false_completion_count: ["terminal.invariant_checked"],
+  graph_mutation_without_evidence_rate: ["graph_mutation.evaluated"],
+  complex_initial_assignment_median: ["project_assignment.activated", "work_receipt.submitted"],
+  receipt_recovery_success_rate: [
+    "work_receipt.submitted",
+    "work_receipt.processed",
+    "connection.lost",
+    "connection.recovered",
+  ],
+  graph_mutation_recovery_success_rate: ["graph_mutation.recovered", "connection.lost", "connection.recovered"],
+  delivery_consumability_rate: ["delivery.presented", "delivery.artifact_opened"],
+  acceptance_determinability_rate: ["delivery.criterion_evaluated"],
+  validation_gate_false_pass_rate: ["validation_gate.evaluated"],
+  blind_retry_rate: ["graph_repair.completed"],
+  invalid_interruption_rate: ["interruption.checked"],
+  reviewer_invocation_ratio_vs_legacy: ["review.completed", "benchmark.completed"],
+  candidate_reuse_rate: ["candidate.selected"],
+  candidate_reuse_delta_vs_legacy: ["candidate.selected"],
+  new_candidate_per_completed_project: ["candidate.selected", "benchmark.completed"],
+  low_risk_quality_ratio_vs_legacy: ["delivery.criterion_evaluated"],
+  core_task_completion_rate: ["benchmark.completed"],
+  exact_sha_terminal_success_rate: ["candidate.terminal_checked"],
+}
 
 const Window = z
   .object({
@@ -232,11 +260,6 @@ function candidateShaProperty(event: PersistedMetricEvent, key: string) {
   return value && CandidateSha.safeParse(value).success ? value : undefined
 }
 
-function digestProperty(event: PersistedMetricEvent, key: string) {
-  const value = stringProperty(event, key)
-  return value && Digest.safeParse(value).success ? value : undefined
-}
-
 function eventsOf(events: PersistedMetricEvent[], eventType: string) {
   return events.filter((event) => event.eventType === eventType)
 }
@@ -289,44 +312,6 @@ function successfulTerminalCheck(event: PersistedMetricEvent) {
   )
 }
 
-function consecutiveCandidateAggregate(events: PersistedMetricEvent[], runIds: string[]): MetricAggregate | undefined {
-  const checks = eventsOf(events, "candidate.terminal_checked")
-  const benchmarks = eventsOf(events, "benchmark.completed")
-  const previousCandidateShas = checks
-    .map((event) => candidateShaProperty(event, "previousCandidateSha"))
-    .filter((value): value is string => value !== undefined)
-  const terminalEvidenceDigests = checks
-    .map((event) => digestProperty(event, "terminalEvidenceDigest"))
-    .filter((value): value is string => value !== undefined)
-  const isolatedRunIndexes = checks
-    .map((event) => numberProperty(event, "isolatedRunIndex"))
-    .sort((left, right) => (left ?? 0) - (right ?? 0))
-  if (
-    runIds.length !== 2 ||
-    checks.length !== 2 ||
-    new Set(checks.map((event) => event.runId)).size !== 2 ||
-    !runIds.every((runId) => checks.some((event) => event.runId === runId)) ||
-    !runIds.every((runId) =>
-      benchmarks.some((event) => event.runId === runId && stringProperty(event, "finalDecision") === "pass"),
-    ) ||
-    isolatedRunIndexes[0] !== 1 ||
-    isolatedRunIndexes[1] !== 2 ||
-    checks.some((event) => !successfulTerminalCheck(event)) ||
-    checks.some((event) => booleanProperty(event, "immediateAncestry") !== true) ||
-    previousCandidateShas.length !== 2 ||
-    new Set(previousCandidateShas).size !== 1 ||
-    previousCandidateShas[0] === checks[0]?.source.candidateSha ||
-    terminalEvidenceDigests.length !== 2 ||
-    new Set(terminalEvidenceDigests).size !== 2
-  )
-    return undefined
-  return {
-    numerator: 2,
-    denominator: 2,
-    sampleSize: 2,
-  }
-}
-
 function metricAggregate(
   metricId: string,
   events: PersistedMetricEvent[],
@@ -342,8 +327,8 @@ function metricAggregate(
 
   if (metricId === "false_completion_count")
     return {
-      numerator: eventsOf(events, "trust.false_state_detected").filter(
-        (event) => stringProperty(event, "kind") === "false_completion",
+      numerator: eventsOf(events, "terminal.invariant_checked").filter(
+        (event) => booleanProperty(event, "falseCompletion") === true,
       ).length,
       denominator: projects.length,
       sampleSize: projects.length,
@@ -481,10 +466,11 @@ function metricAggregate(
     }
   }
   if (metricId === "new_candidate_per_completed_project")
-    return ratio(
-      selections.filter((event) => booleanProperty(event, "createdForNeed") === true).length,
-      benchmarks.length,
-    )
+    return {
+      numerator: selections.filter((event) => booleanProperty(event, "createdForNeed") === true).length,
+      denominator: projects.length,
+      sampleSize: runIds.length,
+    }
   if (metricId === "unnecessary_reviewer_rate") {
     const lowRisk = reviews.filter((event) => stringProperty(event, "risk") === "low")
     return ratio(lowRisk.filter((event) => booleanProperty(event, "invoked") === true).length, lowRisk.length)
@@ -525,8 +511,13 @@ function metricAggregate(
       sampleSize: benchmarks.length,
     }
   if (metricId === "invalid_interruption_rate") {
-    const judged = eventsOf(events, "user.interruption_judged")
-    return ratio(judged.filter((event) => booleanProperty(event, "needed") === false).length, judged.length)
+    const checked = eventsOf(events, "interruption.checked")
+    return ratio(
+      checked.filter(
+        (event) => booleanProperty(event, "presented") === true && booleanProperty(event, "needed") === false,
+      ).length,
+      checked.length,
+    )
   }
   if (metricId === "material_attention_precision") {
     const judged = eventsOf(events, "attention.judged")
@@ -627,13 +618,16 @@ function metricAggregate(
       criteria.length,
     )
   if (metricId === "low_risk_quality_ratio_vs_legacy") {
-    const compared = eventsOf(events, "delivery.quality_compared").filter(
-      (event) => stringProperty(event, "risk") === "low",
-    )
-    return ratio(
-      compared.reduce((total, event) => total + (numberProperty(event, "seedGrowScore") ?? 0), 0),
-      compared.reduce((total, event) => total + (numberProperty(event, "legacyScore") ?? 0), 0),
-    )
+    const lowRisk = criteria.filter((event) => stringProperty(event, "risk") === "low")
+    const legacy = lowRisk.filter((event) => event.strategy === "legacy_full_plan")
+    const seed = lowRisk.filter((event) => event.strategy === "seed_and_grow")
+    const pairCount = matchedRunPairCount(lowRisk)
+    if (!pairCount || !legacy.length || !seed.length) return undefined
+    return {
+      numerator: seed.filter((event) => stringProperty(event, "status") === "pass").length / seed.length,
+      denominator: legacy.filter((event) => stringProperty(event, "status") === "pass").length / legacy.length,
+      sampleSize: pairCount,
+    }
   }
   if (metricId === "core_task_completion_rate")
     return ratio(
@@ -644,7 +638,7 @@ function metricAggregate(
     const checks = eventsOf(events, "candidate.terminal_checked")
     return ratio(checks.filter(successfulTerminalCheck).length, checks.length)
   }
-  if (metricId === "consecutive_reproducible_candidate_count") return consecutiveCandidateAggregate(events, runIds)
+  if (metricId === "consecutive_reproducible_candidate_count") return undefined
   return undefined
 }
 
@@ -689,38 +683,43 @@ function validShadowPairs(events: PersistedMetricEvent[], bindings: PersistedFac
 function observation(
   metric: MetricDefinition,
   records: PersistedMetricEvent[],
-  calculationRunIds: string[],
   observationRunIds: string[],
   strategy: PersistedFactStrategy,
   artifactSources: MetricSourceRef[],
   bindings: PersistedFactRunBinding[],
 ): MetricObservation | undefined {
   if (!metric.eventSource || !metric.timeWindow || !metric.minimumSampleSize) return undefined
-  const sources = records.filter((event) => metric.eventSource?.includes(event.eventType))
+  if (!observationRunIds.length) return undefined
+  const eligibleRecords = records.filter((event) => observationRunIds.includes(event.runId))
+  const sources = eligibleRecords.filter((event) => metric.eventSource?.includes(event.eventType))
   if (!sources.length) return undefined
-  const aggregate = metricAggregate(metric.id, sources, calculationRunIds)
-  if (!aggregate) return undefined
-  const coveredEventTypes =
-    metric.id === "false_completion_count"
-      ? calculationRunIds.every((runId) =>
-          ["project.completed", "benchmark.completed"].every((eventType) =>
-            sources.some((event) => event.runId === runId && event.eventType === eventType),
-          ),
+  const perRunSources = PerRunMetricSources[metric.id] ?? metric.eventSource
+  if (
+    observationRunIds.some((runId) =>
+      perRunSources.some(
+        (eventType) => !eligibleRecords.some((event) => event.runId === runId && event.eventType === eventType),
+      ),
+    ) ||
+    metric.eventSource.some((eventType) => !eligibleRecords.some((event) => event.eventType === eventType)) ||
+    (metric.id === "candidate_reuse_delta_vs_legacy" && !validShadowPairs(sources, bindings)) ||
+    (metric.id === "low_risk_quality_ratio_vs_legacy" &&
+      bindings
+        .filter((binding) => observationRunIds.includes(binding.runId) && binding.strategy === "seed_and_grow")
+        .some(
+          (binding) =>
+            !sources.some((event) => event.runId === binding.runId && event.eventType === "quality_pair.checked"),
+        ))
+  )
+    return undefined
+  const aggregateRecords =
+    metric.id === "new_candidate_per_completed_project"
+      ? eligibleRecords.filter(
+          (event) => metric.eventSource!.includes(event.eventType) || event.eventType === "project.completed",
         )
-        ? [...metric.eventSource]
-        : []
-      : metric.id === "candidate_reuse_delta_vs_legacy"
-        ? validShadowPairs(sources, bindings) &&
-          calculationRunIds.every((runId) =>
-            sources.some((event) => event.runId === runId && event.eventType === "candidate.selected"),
-          )
-          ? [...metric.eventSource]
-          : []
-        : metric.eventSource.filter((eventType) =>
-            calculationRunIds.every((runId) =>
-              sources.some((event) => event.runId === runId && event.eventType === eventType),
-            ),
-          )
+      : eligibleRecords.filter((event) => metric.eventSource!.includes(event.eventType))
+  const aggregate = metricAggregate(metric.id, aggregateRecords, observationRunIds)
+  if (!aggregate) return undefined
+  const coveredEventTypes = [...metric.eventSource]
   if (coveredEventTypes.length !== metric.eventSource.length) return undefined
   return MetricObservation.parse({
     metricId: metric.id,
@@ -730,7 +729,10 @@ function observation(
     sampleSize: aggregate.sampleSize,
     values: aggregate.values,
     eventTypes: coveredEventTypes,
-    sourceRefs: uniqueSourceRefs([...uniqueSources(sources), ...artifactSources]),
+    sourceRefs: uniqueSourceRefs([
+      ...uniqueSources(aggregateRecords),
+      ...artifactSources.filter((source) => observationRunIds.includes(source.runId)),
+    ]),
     runIds: observationRunIds,
     timeWindow: metric.timeWindow,
     dimensions: metric.requiredDimensions?.includes("strategy") ? { strategy } : undefined,
@@ -888,6 +890,23 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
           persistedMetricContractDigest(request.contract) === artifact.metricContractDigest
             ? validEvents(artifact, request.contract).filter((event) => runIds.includes(event.runId))
             : []
+        const applicableRunIds = Object.fromEntries(
+          request.metricIds.map((metricId) => {
+            const metric = request.contract.metrics.find((item) => item.id === metricId)
+            const calculationBindings = CrossStrategyMetricIds.has(metricId)
+              ? bindings
+              : bindings.filter((binding) => binding.strategy === request.strategy)
+            return [
+              metricId,
+              metric?.applicableScenarioIds
+                ? calculationBindings
+                    .filter((binding) => metric.applicableScenarioIds!.includes(binding.scenarioId))
+                    .map((binding) => binding.runId)
+                    .sort()
+                : [],
+            ]
+          }),
+        )
         const observations = request.metricIds.flatMap((metricId) => {
           const metric = request.contract.metrics.find((item) => item.id === metricId)
           const crossStrategy = CrossStrategyMetricIds.has(metricId)
@@ -895,13 +914,12 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
           const calculationBindings = crossStrategy
             ? bindings
             : bindings.filter((binding) => binding.strategy === request.strategy)
-          const calculationRunIds = calculationBindings.map((binding) => binding.runId).sort()
+          const calculationRunIds = applicableRunIds[metricId] ?? []
           const metricRecords = crossStrategy ? records : records.filter((event) => event.strategy === request.strategy)
           const value = observation(
             metric,
             metricRecords,
             calculationRunIds,
-            runIds,
             request.strategy,
             artifactSources(runIds),
             calculationBindings,
@@ -911,8 +929,15 @@ export async function makePersistedFactArtifactAdapter(raw: unknown): Promise<Me
         return MetricQueryCore.parse({
           candidateSha: artifact.candidateSha,
           queryVersion: artifact.metricQueryVersion,
+          strategy: request.strategy,
           metricIds: request.metricIds,
           runIds,
+          runBindings: bindings.map((binding) => ({
+            runId: binding.runId,
+            scenarioId: binding.scenarioId,
+            strategy: binding.strategy,
+          })),
+          applicableRunIds,
           window: artifact.window,
           observations,
         })

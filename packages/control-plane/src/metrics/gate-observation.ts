@@ -31,6 +31,10 @@ const SourceReference = z
   .strict()
 
 export const GateObservationEventType = z.enum([
+  "scenario.fixture_checked",
+  "command.probe_checked",
+  "git.blob_checked",
+  "report.file_checked",
   "terminal.invariant_checked",
   "receipt.recovery_checked",
   "graph_mutation.recovery_checked",
@@ -40,25 +44,9 @@ export const GateObservationEventType = z.enum([
   "review_presence.checked",
   "quality_pair.checked",
   "benchmark.checked",
-  "candidate_terminal.checked",
   "shadow_pair.checked",
-  "trust.false_state_detected",
-  "connection.lost",
-  "connection.recovered",
-  "graph_mutation.recovered",
-  "delivery.presented",
-  "delivery.artifact_opened",
-  "delivery.criterion_evaluated",
-  "validation_gate.evaluated",
-  "user.interruption_presented",
-  "user.interruption_judged",
-  "review.completed",
-  "repair.circuit_opened",
-  "model.usage_recorded",
-  "delivery.quality_compared",
-  "benchmark.completed",
-  "candidate.terminal_checked",
-  "shadow.compared",
+  "repair.circuit_checked",
+  "model.usage_checked",
 ])
 
 export const GateObservationInput = z
@@ -100,7 +88,9 @@ function normalized(value: unknown): unknown {
 }
 
 function digest(value: unknown) {
-  return createHash("sha256").update(JSON.stringify(normalized(value))).digest("hex")
+  return createHash("sha256")
+    .update(JSON.stringify(normalized(value)))
+    .digest("hex")
 }
 
 function fromRow(row: typeof CompanyGateObservationTable.$inferSelect) {
@@ -147,9 +137,7 @@ export const layer = Layer.effect(
       } = {},
     ) {
       const conditions = [
-        input.candidateSha
-          ? eq(CompanyGateObservationTable.candidate_sha, input.candidateSha)
-          : undefined,
+        input.candidateSha ? eq(CompanyGateObservationTable.candidate_sha, input.candidateSha) : undefined,
         input.projectId ? eq(CompanyGateObservationTable.project_id, input.projectId) : undefined,
         input.runId ? eq(CompanyGateObservationTable.run_id, input.runId) : undefined,
       ].filter((condition) => condition !== undefined)
@@ -159,10 +147,7 @@ export const layer = Layer.effect(
             .select()
             .from(CompanyGateObservationTable)
             .where(conditions.length ? and(...conditions) : undefined)
-            .orderBy(
-              asc(CompanyGateObservationTable.created_at),
-              asc(CompanyGateObservationTable.id),
-            )
+            .orderBy(asc(CompanyGateObservationTable.created_at), asc(CompanyGateObservationTable.id))
             .all()
             .map(fromRow),
         ),

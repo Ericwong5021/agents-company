@@ -59,11 +59,19 @@ function core(
   observations: MetricObservation[] = [observation()],
   overrides: Partial<MetricQueryCore> = {},
 ): MetricQueryCore {
+  const metricIds = overrides.metricIds ?? observations.map((item) => item.metricId)
   return {
     candidateSha,
     queryVersion: contract.queryVersion,
-    metricIds: observations.map((item) => item.metricId),
+    strategy: "seed_and_grow",
+    metricIds,
     runIds,
+    runBindings: runIds.map((runId) => ({
+      runId,
+      scenarioId: "S13",
+      strategy: "seed_and_grow" as const,
+    })),
+    applicableRunIds: overrides.applicableRunIds ?? Object.fromEntries(metricIds.map((metricId) => [metricId, runIds])),
     window: {
       id: "candidate-window",
       startedAt: "2026-07-29T00:00:00.000Z",
@@ -189,7 +197,7 @@ describe("Seed-and-Grow metric contract", () => {
         query: bindMetricQuery(
           core([
             observation("false_completion_count", {
-              runIds: ["run-a"],
+              runIds: ["run-a", "run-c"],
             }),
           ]),
         ),
@@ -228,6 +236,37 @@ describe("Seed-and-Grow metric contract", () => {
     ).toMatchObject({
       status: "blocked",
       results: [{ blocking: false, status: "blocked", blockedReasons: ["missing_observation"] }],
+    })
+  })
+
+  test("blocks a fixed applicable scenario run omitted from the declared metric subset", () => {
+    expect(
+      evaluate(
+        bindMetricQuery(
+          core(
+            [
+              observation("false_completion_count", {
+                runIds: ["run-a"],
+                sourceRefs: [sourceRefs()[0]!],
+              }),
+            ],
+            {
+              applicableRunIds: {
+                false_completion_count: ["run-a"],
+              },
+            },
+          ),
+        ),
+      ),
+    ).toMatchObject({
+      status: "blocked",
+      results: [
+        {
+          metricId: "false_completion_count",
+          status: "blocked",
+          blockedReasons: expect.arrayContaining(["run_binding_mismatch"]),
+        },
+      ],
     })
   })
 })

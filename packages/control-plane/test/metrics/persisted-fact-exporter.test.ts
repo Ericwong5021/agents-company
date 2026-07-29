@@ -12,6 +12,7 @@ import {
 import { exportPersistedFactArtifact, type PersistedFactExportRequest } from "../../src/metrics/persisted-fact-exporter"
 import { loadPersistedFactArtifact, PersistedFactArtifactReference } from "../../src/metrics/persisted-fact-artifact"
 import { Database, eq } from "../../src/storage"
+import { GateObservationEventType } from "../../src/metrics/gate-observation"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -147,6 +148,13 @@ async function rejected(promise: Promise<unknown>) {
 }
 
 describe("PersistedFactExporter", () => {
+  test("only accepts raw checked observation types for the trusted B5 exporter", () => {
+    expect(GateObservationEventType.safeParse("terminal.invariant_checked").success).toBe(true)
+    expect(GateObservationEventType.safeParse("quality_pair.checked").success).toBe(true)
+    expect(GateObservationEventType.safeParse("benchmark.completed").success).toBe(false)
+    expect(GateObservationEventType.safeParse("candidate.terminal_checked").success).toBe(false)
+  })
+
   test("exports digest-bound facts from an isolated persisted database", async () => {
     const directory = await tmpdir()
     const now = seed()
