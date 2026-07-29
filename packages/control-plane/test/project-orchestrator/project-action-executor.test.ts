@@ -36,6 +36,10 @@ const calls = {
   workflowCancel: [] as string[],
   agentStop: [] as string[],
 }
+const workflowFailure = {
+  runID: "",
+  remaining: 0,
+}
 
 const dispatchLayer = Layer.succeed(
   DispatchCoordinator.Service,
@@ -113,6 +117,10 @@ const workflowLayer = Layer.succeed(
     cancel: ({ runID }: { runID: string }) =>
       Effect.sync(() => {
         calls.workflowCancel.push(runID)
+        if (workflowFailure.runID === runID && workflowFailure.remaining > 0) {
+          workflowFailure.remaining -= 1
+          throw new Error(`workflow cancel failed: ${runID}`)
+        }
       }),
   } as unknown as WorkflowRuntime.Interface),
 )
@@ -303,6 +311,8 @@ function seedReceipt(project_id: string, work_item_id: string, attempt_id: strin
 beforeEach(async () => {
   await resetDatabase()
   Object.values(calls).forEach((entries) => entries.splice(0))
+  workflowFailure.runID = ""
+  workflowFailure.remaining = 0
 })
 
 afterEach(resetDatabase)
@@ -646,6 +656,115 @@ describe.serial("ProjectActionExecutor", () => {
           .get(),
       )?.value,
     ).toBe(1)
+  })
+
+  test.serial("recovers a partially applied stop without repeating completed external effects", async () => {
+    const project_id = seedProject("action-stop-recovery")
+    seedWorkItem(project_id, "item-workflow-a", {
+      status: "running",
+      attempt: 1,
+      workflow_run_id: "workflow-a",
+    })
+    seedWorkItem(project_id, "item-workflow-b", {
+      status: "running",
+      attempt: 1,
+      workflow_run_id: "workflow-b",
+    })
+    seedAttempt(project_id, "item-workflow-a", "attempt-workflow-a", "running")
+    seedAttempt(project_id, "item-workflow-b", "attempt-workflow-b", "running")
+    Database.use((db) =>
+      db
+        .update(CompanyProjectTable)
+        .set({ active_run_id: "workflow-a" })
+        .where(eq(CompanyProjectTable.id, project_id))
+        .run(),
+    )
+    workflowFailure.runID = "workflow-b"
+    workflowFailure.remaining = 1
+
+    const input = {
+      project_id,
+      action: "stop_work" as const,
+      idempotency_key: "stop-recovery",
+      expected_revision: 1,
+      payload: { reason: "Recover partial stop" },
+    }
+    const interrupted = await execute(input, executorLayer())
+    expect(interrupted.action.status).toBe("claimed")
+    expect(calls.pause).toEqual([project_id])
+    expect(calls.workflowCancel).toEqual(["workflow-a", "workflow-b"])
+    expect(
+      Database.use((db) =>
+        db
+          .select({ id: CompanyWorkItemTable.id, status: CompanyWorkItemTable.status })
+          .from(CompanyWorkItemTable)
+          .where(eq(CompanyWorkItemTable.project_id, project_id))
+          .all(),
+      ).sort((left, right) => left.id.localeCompare(right.id)),
+    ).toEqual([
+      { id: "item-workflow-a", status: "running" },
+      { id: "item-workflow-b", status: "running" },
+    ])
+    Database.use((db) =>
+      db.update(CompanyProjectTable).set({ graph_revision: 2 }).where(eq(CompanyProjectTable.id, project_id)).run(),
+    )
+
+    expect(await recover(executorLayer())).toMatchObject({
+      action_ids: [interrupted.action.id],
+      applied_action_ids: [interrupted.action.id],
+      rejected_action_ids: [],
+      replayed: false,
+    })
+    expect(calls.pause).toEqual([project_id])
+    expect(calls.workflowCancel).toEqual(["workflow-a", "workflow-b", "workflow-b"])
+    expect(
+      Database.use((db) =>
+        db
+          .select({ id: CompanyWorkItemTable.id, status: CompanyWorkItemTable.status })
+          .from(CompanyWorkItemTable)
+          .where(eq(CompanyWorkItemTable.project_id, project_id))
+          .all(),
+      ).sort((left, right) => left.id.localeCompare(right.id)),
+    ).toEqual([
+      { id: "item-workflow-a", status: "cancelled" },
+      { id: "item-workflow-b", status: "cancelled" },
+    ])
+    expect(
+      Database.use((db) =>
+        db
+          .select({ id: CompanyWorkAttemptTable.id, status: CompanyWorkAttemptTable.status })
+          .from(CompanyWorkAttemptTable)
+          .where(eq(CompanyWorkAttemptTable.project_id, project_id))
+          .all(),
+      ).sort((left, right) => left.id.localeCompare(right.id)),
+    ).toEqual([
+      { id: "attempt-workflow-a", status: "stopped" },
+      { id: "attempt-workflow-b", status: "stopped" },
+    ])
+    expect(
+      Database.use((db) => db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, project_id)).get()),
+    ).toMatchObject({
+      status: "blocked",
+      active_run_id: null,
+      dispatch_paused: true,
+      orchestration_state: "paused",
+    })
+    expect(
+      Database.use((db) =>
+        db
+          .select()
+          .from(CompanyProjectActionTable)
+          .where(eq(CompanyProjectActionTable.id, interrupted.action.id))
+          .get(),
+      ),
+    ).toMatchObject({ status: "applied" })
+
+    expect(await recover(executorLayer())).toMatchObject({
+      action_ids: [],
+      replayed: true,
+    })
+    expect(calls.pause).toEqual([project_id])
+    expect(calls.workflowCancel).toEqual(["workflow-a", "workflow-b", "workflow-b"])
   })
 
   test.serial("retries only eligible nodes and keeps failed attempts and receipts immutable", async () => {

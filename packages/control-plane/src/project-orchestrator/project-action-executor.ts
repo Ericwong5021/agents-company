@@ -84,6 +84,10 @@ export type RecoveryReport = {
   replayed: boolean
 }
 
+type StopEffectKind = "dispatch_pause" | "workflow_cancel" | "agent_supervisor_stop" | "agent_run_transition"
+
+class StopRecoveryRequired extends Error {}
+
 export interface Interface {
   readonly execute: (input: ProjectActionRequestValue) => Effect.Effect<ExecutionResult>
   readonly recover: () => Effect.Effect<RecoveryReport>
@@ -131,6 +135,66 @@ function actionEffectResultWithDatabase(db: Database.TxOrDb, action_id: string) 
 
 function actionEffectResult(action_id: string) {
   return Database.use((db) => actionEffectResultWithDatabase(db, action_id))
+}
+
+function stopEffectAppliedWithDatabase(
+  db: Database.TxOrDb,
+  action: ProjectActionRecordValue,
+  kind: StopEffectKind,
+  target_id: string,
+) {
+  return db
+    .select()
+    .from(CompanyProjectEventTable)
+    .where(
+      and(
+        eq(CompanyProjectEventTable.project_id, action.project_id),
+        eq(CompanyProjectEventTable.type, "project_action.effect_step_applied"),
+      ),
+    )
+    .all()
+    .some((candidate) => {
+      const data = eventData(candidate)
+      return data.action_id === action.id && data.kind === kind && data.target_id === target_id
+    })
+}
+
+function stopEffectApplied(action: ProjectActionRecordValue, kind: StopEffectKind, target_id: string) {
+  return Database.use((db) => stopEffectAppliedWithDatabase(db, action, kind, target_id))
+}
+
+function saveStopEffect(action: ProjectActionRecordValue, kind: StopEffectKind, target_id: string) {
+  return Database.transaction(
+    (db) => {
+      if (stopEffectAppliedWithDatabase(db, action, kind, target_id)) return
+      event(db, action.project_id, "project_action.effect_step_applied", {
+        action_id: action.id,
+        kind,
+        target_id,
+      })
+    },
+    { behavior: "immediate" },
+  )
+}
+
+function retainStopForRecovery(action: ProjectActionRecordValue, error: string) {
+  return Database.transaction(
+    (db) => {
+      const current = db
+        .select()
+        .from(CompanyProjectActionTable)
+        .where(eq(CompanyProjectActionTable.id, action.id))
+        .get()
+      if (!current) throw new Error(`Project action not found: ${action.id}`)
+      if (current.status !== "claimed") return CompanyAttention.actionFromRow(current)
+      event(db, action.project_id, "project_action.retry_scheduled", {
+        action_id: action.id,
+        error,
+      })
+      return CompanyAttention.actionFromRow(current)
+    },
+    { behavior: "immediate" },
+  )
 }
 
 function assertRevision(action: ProjectActionRecordValue) {
@@ -272,6 +336,8 @@ function stopPlan(action: ProjectActionRecordValue) {
           .parse(eventData(existing).plan)
       const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, action.project_id)).get()
       if (!project) throw new Error(`Company project not found: ${action.project_id}`)
+      if (action.expected_revision !== undefined && action.expected_revision !== project.graph_revision)
+        throw new Error(`project_revision_conflict:${action.expected_revision}:${project.graph_revision}`)
       const work_item_ids = db
         .select()
         .from(CompanyWorkItemTable)
@@ -427,27 +493,49 @@ export function makeLayer(hooks: Hooks = {}) {
         if (existing) return existing
         const payload = ReasonPayload.parse(action.payload)
         const reason = payload.reason ?? "用户停止执行"
-        yield* dispatch.pauseDispatch(action.project_id, reason)
         const plan = yield* Effect.sync(() => stopPlan(action))
-        yield* Effect.forEach(plan.workflow_run_ids, (runID) => workflow.cancel({ runID }), {
-          concurrency: 1,
-          discard: true,
-        })
-        yield* Effect.forEach(
-          plan.agent_run_ids,
-          (runID) =>
-            Effect.gen(function* () {
-              yield* agentSupervisor.stop(runID)
-              const current = yield* agentRuns.get(runID)
-              if (
-                current &&
-                ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(current.state)
-              )
-                yield* agentRuns.transition({ id: runID, state: "stopped", exitCode: 130 })
-            }),
-          { concurrency: 1, discard: true },
+        const external = yield* Effect.exit(
+          Effect.gen(function* () {
+            if (!stopEffectApplied(action, "dispatch_pause", action.project_id)) {
+              yield* dispatch.pauseDispatch(action.project_id, reason)
+              yield* Effect.sync(() => saveStopEffect(action, "dispatch_pause", action.project_id))
+            }
+            yield* Effect.forEach(
+              plan.workflow_run_ids,
+              (runID) =>
+                Effect.gen(function* () {
+                  if (stopEffectApplied(action, "workflow_cancel", runID)) return
+                  yield* workflow.cancel({ runID })
+                  yield* Effect.sync(() => saveStopEffect(action, "workflow_cancel", runID))
+                }),
+              {
+                concurrency: 1,
+                discard: true,
+              },
+            )
+            yield* Effect.forEach(
+              plan.agent_run_ids,
+              (runID) =>
+                Effect.gen(function* () {
+                  if (!stopEffectApplied(action, "agent_supervisor_stop", runID)) {
+                    yield* agentSupervisor.stop(runID)
+                    yield* Effect.sync(() => saveStopEffect(action, "agent_supervisor_stop", runID))
+                  }
+                  if (stopEffectApplied(action, "agent_run_transition", runID)) return
+                  const current = yield* agentRuns.get(runID)
+                  if (
+                    current &&
+                    ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(current.state)
+                  )
+                    yield* agentRuns.transition({ id: runID, state: "stopped", exitCode: 130 })
+                  yield* Effect.sync(() => saveStopEffect(action, "agent_run_transition", runID))
+                }),
+              { concurrency: 1, discard: true },
+            )
+          }),
         )
-        return yield* Effect.sync(() =>
+        if (Exit.isFailure(external)) return yield* Effect.fail(new StopRecoveryRequired(Cause.pretty(external.cause)))
+        const finalize = Effect.sync(() =>
           Database.transaction(
             (db) => {
               const replayed = actionEffectResultWithDatabase(db, action.id)
@@ -609,6 +697,9 @@ export function makeLayer(hooks: Hooks = {}) {
             { behavior: "immediate" },
           ),
         )
+        const outcome = yield* Effect.exit(finalize)
+        if (Exit.isFailure(outcome)) return yield* Effect.fail(new StopRecoveryRequired(Cause.pretty(outcome.cause)))
+        return outcome.value
       })
 
       const retry = Effect.fn("ProjectActionExecutor.retry")(function* (action: ProjectActionRecordValue) {
@@ -901,8 +992,8 @@ export function makeLayer(hooks: Hooks = {}) {
       })
 
       const perform = Effect.fn("ProjectActionExecutor.perform")(function* (action: ProjectActionRecordValue) {
-        if (!actionEffectResult(action.id)) assertRevision(action)
         const kind = RuntimeAction.parse(action.action)
+        if (!actionEffectResult(action.id) && kind !== "stop_work") assertRevision(action)
         if (kind === "pause_work") return yield* pause(action)
         if (kind === "resume_work") return yield* resume(action)
         if (kind === "stop_work") return yield* stop(action)
@@ -923,6 +1014,11 @@ export function makeLayer(hooks: Hooks = {}) {
         hooks.onBoundary?.("after_claim", claimed.record)
         const outcome = yield* Effect.exit(perform(claimed.record))
         if (Exit.isFailure(outcome)) {
+          const error = Cause.squash(outcome.cause)
+          if (error instanceof StopRecoveryRequired) {
+            const retained = yield* Effect.sync(() => retainStopForRecovery(claimed.record, error.message))
+            return { action: retained, replayed }
+          }
           const rejected = yield* attention.rejectAction({
             id: claimed.record.id,
             error: Cause.pretty(outcome.cause).slice(0, 8_000),
