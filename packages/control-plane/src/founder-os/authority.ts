@@ -7,6 +7,7 @@ import {
   DecisionScope,
   DelegationPolicy,
   FounderApprovalGate,
+  FounderAuthorityClass,
   FounderCorrectionAppendInput,
   FounderCorrectionRecord,
   GovernanceDecision,
@@ -15,7 +16,6 @@ import {
   type DecisionCenterActionInput as DecisionCenterActionInputValue,
   type DecisionScope as DecisionScopeValue,
   type FounderApprovalActorKind,
-  type FounderAuthorityClass,
   type FounderCorrectionAppendInput as FounderCorrectionAppendInputValue,
   type GovernanceRequest as GovernanceRequestValue,
 } from "@agents-company/shared/founder-os"
@@ -37,6 +37,8 @@ import {
   FounderGovernanceEventTable,
 } from "./decision-ledger.sql"
 import { ensureDefaultPolicies, recordFromRow } from "./decision-ledger"
+import { GovernanceAssetSelectionTable, GovernanceAssetTable } from "./asset.sql"
+import * as FounderOSMode from "./mode"
 
 const authorityRank = { green: 0, yellow: 1, red: 2 } as const
 const modeRank = { off: -1, shadow: -1, advisor: -1, "green-delegated": 0, "yellow-delegated": 1 } as const
@@ -62,6 +64,16 @@ const hardRedActions = new Set([
   "strategy.fundamental_change.propose",
   "constitution.change.propose",
 ])
+const ConstitutionBoundary = z
+  .object({
+    schemaVersion: z.literal(1),
+    allowedActionTypes: z.array(z.string().trim().min(1)).max(500),
+    deniedActionTypes: z.array(z.string().trim().min(1)).max(500),
+  })
+  .strict()
+  .refine((value) =>
+    !value.allowedActionTypes.some((actionType) => value.deniedActionTypes.includes(actionType)),
+  )
 
 function maxAuthority(...values: FounderAuthorityClass[]) {
   return values.reduce((current, value) => authorityRank[value] > authorityRank[current] ? value : current)
@@ -115,16 +127,81 @@ function policyFor(db: TxOrDb, scope: DecisionScopeValue, actionType: string) {
   )
 }
 
+function constitutionFor(db: TxOrDb, companyId: string, actionType: string) {
+  const selected = db
+    .select()
+    .from(GovernanceAssetSelectionTable)
+    .where(eq(GovernanceAssetSelectionTable.company_id, companyId))
+    .orderBy(desc(GovernanceAssetSelectionTable.created_at), desc(GovernanceAssetSelectionTable.id))
+    .all()
+    .filter((selection, index, selections) =>
+      selections.findIndex((candidate) => candidate.asset_id === selection.asset_id) === index
+    )
+    .map((selection) =>
+      db
+        .select()
+        .from(GovernanceAssetTable)
+        .where(and(
+          eq(GovernanceAssetTable.id, selection.asset_id),
+          eq(GovernanceAssetTable.version, selection.asset_version),
+          eq(GovernanceAssetTable.company_id, companyId),
+          eq(GovernanceAssetTable.type, "constitution"),
+          eq(GovernanceAssetTable.scope_kind, "company"),
+          eq(GovernanceAssetTable.status, "active"),
+        ))
+        .get(),
+    )
+    .filter((asset): asset is typeof GovernanceAssetTable.$inferSelect =>
+      Boolean(asset && ["human_explicit", "human_confirmed"].includes(asset.authority)),
+    )
+  if (selected.length !== 1)
+    return {
+      status: "missing" as const,
+      ref: selected.length ? "constitution:ambiguous" : "constitution:missing",
+    }
+  const content = (() => {
+    try {
+      return JSON.parse(selected[0].content)
+    } catch {
+      return undefined
+    }
+  })()
+  const boundary = ConstitutionBoundary.safeParse(content)
+  if (!boundary.success)
+    return {
+      status: "missing" as const,
+      ref: `${selected[0].id}@${selected[0].version}:invalid`,
+    }
+  if (
+    boundary.data.deniedActionTypes.includes("*")
+    || boundary.data.deniedActionTypes.includes(actionType)
+  )
+    return {
+      status: "deny" as const,
+      ref: `${selected[0].id}@${selected[0].version}`,
+    }
+  return {
+    status:
+      boundary.data.allowedActionTypes.includes("*")
+      || boundary.data.allowedActionTypes.includes(actionType)
+        ? "allow" as const
+        : "missing" as const,
+    ref: `${selected[0].id}@${selected[0].version}`,
+  }
+}
+
 function evaluateInTransaction(db: TxOrDb, raw: z.input<typeof DecisionAuthorityInput>) {
   const input = DecisionAuthorityInput.parse(raw)
   const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
   if (!row) throw new Error("Governance requests require an existing DecisionRecord")
   const decision = recordFromRow(db, row)
   const policy = policyFor(db, decision.scope, input.actionType)
+  const constitution = constitutionFor(db, decision.scope.companyId, input.actionType)
   const facts = [
     input.proposedAuthorityClass,
     policy.riskLevel,
     policy.actionType === input.actionType ? "green" : "red",
+    constitution.status === "allow" ? "green" : "red",
     hardRedActions.has(input.actionType) ? "red" : "green",
     decision.authorityClass ?? "red",
     !input.evidenceSufficient || !decision.evidenceRefs?.length ? "red" : "green",
@@ -155,6 +232,7 @@ function evaluateInTransaction(db: TxOrDb, raw: z.input<typeof DecisionAuthority
     reasons: [
       `action:${input.actionType}`,
       `policy:${policy.riskLevel}`,
+      `constitution:${constitution.status}:${constitution.ref}`,
       `preset:${input.approvalPreset}`,
       `mode:${input.requestedMode}`,
       ...(!input.evidenceSufficient || !decision.evidenceRefs?.length ? ["evidence:insufficient"] : []),
@@ -431,6 +509,99 @@ export const delegationPolicyLayer = Layer.succeed(
   }),
 )
 
+export function submitGovernanceInTransaction(db: TxOrDb, raw: GovernanceRequestValue) {
+  const input = GovernanceRequest.parse(raw)
+  const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
+  if (!row) throw new Error("Governance requests require an existing DecisionRecord")
+  const decision = recordFromRow(db, row)
+  const companyID = CompanyID.parse(decision.scope.companyId)
+  const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyID)).get()
+  const preset = db
+    .select()
+    .from(ApprovalPolicyTable)
+    .where(eq(ApprovalPolicyTable.company_id, companyID))
+    .get()
+  if (!company || !preset) throw new Error("Company governance settings were not found")
+  const authority = evaluateInTransaction(db, {
+    decisionId: decision.id,
+    actionType: input.actionType,
+    proposedAuthorityClass: input.proposedAuthorityClass,
+    evidenceSufficient: input.evidenceSufficient,
+    requestedMode: FounderOSMode.resolve({
+      founderTwinMode: company.founder_twin_mode,
+      companyCommonsMode: company.company_commons_mode,
+    }).effective.founderTwinMode,
+    approvalPreset: preset.preset,
+  })
+  if (!authority.requiresApproval)
+    return GovernanceDecision.parse({
+      schemaVersion: 1,
+      decision,
+      authority,
+      gate: null,
+      dispatchAllowed: authority.allowed,
+    })
+  const existing = db
+    .select()
+    .from(CompanyApprovalGateTable)
+    .where(eq(CompanyApprovalGateTable.decision_id, decision.id))
+    .orderBy(desc(CompanyApprovalGateTable.requested_at))
+    .get()
+  const gate = existing ?? {
+    id: Identifier.ascending("gate"),
+    ...scopeColumns(decision.scope),
+    decision_id: decision.id,
+    kind: "founder_red",
+    status: "pending",
+    title: decision.subject ?? "Founder OS red decision",
+    summary: decision.recommendation ?? decision.context ?? "Red decision requires explicit approval.",
+    requested_by_agent_id: null,
+    requested_by_actor_kind: input.requestedBy.kind,
+    requested_by_actor_id: input.requestedBy.id,
+    work_item_id: null,
+    resource_scope_json: "[]",
+    worktree_run_id: null,
+    decision_note: null,
+    requested_at: Date.now(),
+    decided_at: null,
+  }
+  if (!existing) {
+    db.insert(CompanyApprovalGateTable).values(gate).run()
+    governanceEvent(db, {
+      scope: decision.scope,
+      decisionId: decision.id,
+      gateId: gate.id,
+      type: "approval_gate.requested",
+      actor: input.requestedBy,
+      data: {
+        authorityClass: authority.authorityClass,
+        actionType: input.actionType,
+        proposedAuthorityClass: input.proposedAuthorityClass,
+        evidenceSufficient: input.evidenceSufficient,
+      },
+    })
+    if (decision.currentStatus === "proposed")
+      transition(db, {
+        decisionId: decision.id,
+        idempotencyKey: `${input.idempotencyKey}:awaiting`,
+        toStatus: "awaiting_approval",
+        kind: "submitted_for_approval",
+        reason: "Deterministic authority evaluation classified the decision as red.",
+        actorId: input.requestedBy.id,
+      })
+  }
+  return GovernanceDecision.parse({
+    schemaVersion: 1,
+    decision: recordFromRow(db, row),
+    authority,
+    gate: gateFromRow(gate),
+    dispatchAllowed:
+      existing?.status === "approved"
+      && decision.currentStatus === "accepted"
+      && authority.allowed,
+  })
+}
+
 export const governanceLayer = Layer.succeed(
   GovernanceService,
   GovernanceService.of({
@@ -438,87 +609,7 @@ export const governanceLayer = Layer.succeed(
       Effect.try({
         try: () =>
           Database.transaction(
-            (db) => {
-              const input = GovernanceRequest.parse(raw)
-              const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
-              if (!row) throw new Error("Governance requests require an existing DecisionRecord")
-              const decision = recordFromRow(db, row)
-              const companyID = CompanyID.parse(decision.scope.companyId)
-              const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyID)).get()
-              const preset = db
-                .select()
-                .from(ApprovalPolicyTable)
-                .where(eq(ApprovalPolicyTable.company_id, companyID))
-                .get()
-              if (!company || !preset) throw new Error("Company governance settings were not found")
-              const authority = evaluateInTransaction(db, {
-                decisionId: decision.id,
-                actionType: input.actionType,
-                proposedAuthorityClass: input.proposedAuthorityClass,
-                evidenceSufficient: input.evidenceSufficient,
-                requestedMode: company.founder_twin_mode,
-                approvalPreset: preset.preset,
-              })
-              if (!authority.requiresApproval)
-                return GovernanceDecision.parse({
-                  schemaVersion: 1,
-                  decision,
-                  authority,
-                  gate: null,
-                  dispatchAllowed: authority.allowed,
-                })
-              const existing = db
-                .select()
-                .from(CompanyApprovalGateTable)
-                .where(eq(CompanyApprovalGateTable.decision_id, decision.id))
-                .orderBy(desc(CompanyApprovalGateTable.requested_at))
-                .get()
-              const gate = existing ?? {
-                id: Identifier.ascending("gate"),
-                ...scopeColumns(decision.scope),
-                decision_id: decision.id,
-                kind: "founder_red",
-                status: "pending",
-                title: decision.subject ?? "Founder OS red decision",
-                summary: decision.recommendation ?? decision.context ?? "Red decision requires explicit approval.",
-                requested_by_agent_id: null,
-                requested_by_actor_kind: input.requestedBy.kind,
-                requested_by_actor_id: input.requestedBy.id,
-                work_item_id: null,
-                resource_scope_json: "[]",
-                worktree_run_id: null,
-                decision_note: null,
-                requested_at: Date.now(),
-                decided_at: null,
-              }
-              if (!existing) {
-                db.insert(CompanyApprovalGateTable).values(gate).run()
-                governanceEvent(db, {
-                  scope: decision.scope,
-                  decisionId: decision.id,
-                  gateId: gate.id,
-                  type: "approval_gate.requested",
-                  actor: input.requestedBy,
-                  data: { authorityClass: authority.authorityClass, actionType: input.actionType },
-                })
-                if (decision.currentStatus === "proposed")
-                  transition(db, {
-                    decisionId: decision.id,
-                    idempotencyKey: `${input.idempotencyKey}:awaiting`,
-                    toStatus: "awaiting_approval",
-                    kind: "submitted_for_approval",
-                    reason: "Deterministic authority evaluation classified the decision as red.",
-                    actorId: input.requestedBy.id,
-                  })
-              }
-              return GovernanceDecision.parse({
-                schemaVersion: 1,
-                decision: recordFromRow(db, row),
-                authority,
-                gate: gateFromRow(gate),
-                dispatchAllowed: existing?.status === "approved" && decision.currentStatus === "accepted",
-              })
-            },
+            (db) => submitGovernanceInTransaction(db, raw),
             { behavior: "immediate" },
           ),
         catch: (error) => error,
@@ -552,6 +643,33 @@ export const governanceLayer = Layer.succeed(
                 .where(eq(DecisionRecordTable.id, gate.decision_id!))
                 .get()!
               const before = recordFromRow(db, row)
+              const requestEvent = db
+                .select()
+                .from(FounderGovernanceEventTable)
+                .where(and(
+                  eq(FounderGovernanceEventTable.gate_id, gate.id),
+                  eq(FounderGovernanceEventTable.type, "approval_gate.requested"),
+                ))
+                .orderBy(desc(FounderGovernanceEventTable.created_at))
+                .get()
+              const requestFacts = requestEvent
+                ? z
+                    .object({
+                      actionType: z.string().trim().min(1),
+                      proposedAuthorityClass: FounderAuthorityClass,
+                      evidenceSufficient: z.boolean(),
+                    })
+                    .safeParse(JSON.parse(requestEvent.data_json))
+                : undefined
+              if (!requestFacts?.success)
+                throw new Error("ApprovalGate is missing its original deterministic governance facts")
+              const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, before.scope.companyId)).get()
+              const preset = db
+                .select()
+                .from(ApprovalPolicyTable)
+                .where(eq(ApprovalPolicyTable.company_id, before.scope.companyId))
+                .get()
+              if (!company || !preset) throw new Error("Company governance settings were not found")
               if (input.decision === "reject" || before.currentStatus !== "accepted")
                 transition(db, {
                   decisionId: gate.decision_id,
@@ -567,16 +685,25 @@ export const governanceLayer = Layer.succeed(
                 gateId: gate.id,
                 type: "approval_gate.resolved",
                 actor: input.actor,
-                data: { decision: input.decision, note: input.note },
+                data: {
+                  decision: input.decision,
+                  note: input.note,
+                  actionType: requestFacts.data.actionType,
+                  proposedAuthorityClass: requestFacts.data.proposedAuthorityClass,
+                  evidenceSufficient: requestFacts.data.evidenceSufficient,
+                },
               })
               const decision = recordFromRow(db, row)
               const authority = evaluateInTransaction(db, {
                 decisionId: decision.id,
-                actionType: "*",
-                proposedAuthorityClass: "red",
-                evidenceSufficient: false,
-                requestedMode: "off",
-                approvalPreset: "strict",
+                actionType: requestFacts.data.actionType,
+                proposedAuthorityClass: requestFacts.data.proposedAuthorityClass,
+                evidenceSufficient: requestFacts.data.evidenceSufficient,
+                requestedMode: FounderOSMode.resolve({
+                  founderTwinMode: company.founder_twin_mode,
+                  companyCommonsMode: company.company_commons_mode,
+                }).effective.founderTwinMode,
+                approvalPreset: preset.preset,
               })
               return GovernanceDecision.parse({
                 schemaVersion: 1,
@@ -588,7 +715,7 @@ export const governanceLayer = Layer.succeed(
                   decision_note: input.note,
                   decided_at: now,
                 }),
-                dispatchAllowed: input.decision === "approve",
+                dispatchAllowed: input.decision === "approve" && authority.allowed,
               })
             },
             { behavior: "immediate" },

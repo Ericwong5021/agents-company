@@ -1,0 +1,65 @@
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { CompanyProjectTable, CompanyWorkReceiptTable } from "@/company-project/company-project.sql"
+import { CompanyTable } from "@/company/company.sql"
+import { DecisionRecordTable } from "@/founder-os/decision-ledger.sql"
+
+export const FounderGreenReadinessTable = sqliteTable(
+  "founder_green_readiness",
+  {
+    id: text().primaryKey(),
+    company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    input_sha256: text().notNull(),
+    b3_status: text().notNull(),
+    b3_evidence_ref: text(),
+    e0_status: text().notNull(),
+    e0_evidence_ref: text(),
+    authorization_status: text().notNull(),
+    authorization_event_id: text(),
+    confirmed_by: text(),
+    exact_commit_status: text().notNull(),
+    exact_commit_sha: text(),
+    exact_commit_evidence_ref: text(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_green_readiness_idempotency_idx").on(table.company_id, table.idempotency_key),
+    index("founder_green_readiness_company_created_idx").on(table.company_id, table.created_at),
+  ],
+)
+
+export const FounderGreenDelegationRunTable = sqliteTable(
+  "founder_green_delegation_run",
+  {
+    id: text().primaryKey(),
+    company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    input_sha256: text().notNull(),
+    decision_id: text().notNull().references(() => DecisionRecordTable.id),
+    project_id: text().notNull().references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    board_thread_id: text().notNull(),
+    receipt_id: text().notNull().references(() => CompanyWorkReceiptTable.id),
+    action_type: text().notNull(),
+    action_allowlisted: integer({ mode: "boolean" }).notNull(),
+    status: text().notNull(),
+    readiness_id: text().references(() => FounderGreenReadinessTable.id, { onDelete: "set null" }),
+    readiness_json: text().notNull(),
+    mode_json: text().notNull(),
+    authority_json: text(),
+    gate_json: text(),
+    governance_ref: text(),
+    graph_decision_id: text(),
+    mutation_id: text(),
+    dispatch_json: text(),
+    fail_closed_reasons_json: text().notNull(),
+    error: text(),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_green_delegation_idempotency_idx").on(table.company_id, table.idempotency_key),
+    index("founder_green_delegation_project_created_idx").on(table.project_id, table.created_at),
+    index("founder_green_delegation_decision_idx").on(table.decision_id, table.created_at),
+    index("founder_green_delegation_thread_idx").on(table.company_id, table.board_thread_id, table.created_at),
+  ],
+)

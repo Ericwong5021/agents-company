@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { and, asc, desc, eq } from "drizzle-orm"
 import {
+  classifyFounderRequestedAction,
   DecisionIntent,
   FounderAdvisorAuthorityResult,
   FounderAdvisorConvergence,
@@ -13,7 +14,6 @@ import {
   FounderInterventionInput,
   FounderShadowEvidenceRef,
   type DecisionRecord,
-  type FounderAdvisorAuthorityResult as FounderAdvisorAuthorityResultValue,
   type FounderAdvisorConvergenceInput as FounderAdvisorConvergenceInputValue,
   type FounderBoardShadowProjection,
   type FounderInterventionInput as FounderInterventionInputValue,
@@ -24,6 +24,7 @@ import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import { submitGovernanceInTransaction } from "./authority"
 import { FounderTwinSnapshotTable } from "./asset.sql"
 import { appendDecisionInTransaction } from "./decision-ledger"
 import {
@@ -60,21 +61,6 @@ function normalized(value: unknown): unknown {
 
 function digest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(normalized(value))).digest("hex")
-}
-
-export interface GovernanceAdapter {
-  authorize(input: {
-    companyId: string
-    intent: DecisionIntent
-    mode: FounderOSModeState
-  }): FounderAdvisorAuthorityResultValue
-}
-
-export const unavailableGovernanceAdapter: GovernanceAdapter = {
-  authorize: () => FounderAdvisorAuthorityResult.parse({
-    status: "unavailable",
-    reason: "GovernanceService is unavailable; Advisor convergence is fail-closed.",
-  }),
 }
 
 function modes(companyId: string) {
@@ -181,7 +167,7 @@ function interventionFromRow(row: typeof FounderInterventionTable.$inferSelect) 
 function saveBlocked(
   input: FounderAdvisorConvergenceInput,
   inputSha256: string,
-  authority: FounderAdvisorAuthorityResultValue,
+  authority: { status: "blocked" | "unavailable"; reason: string },
 ) {
   const id = Identifier.create("fadv", "ascending")
   Database.transaction((db) =>
@@ -216,10 +202,7 @@ function saveBlocked(
   ))
 }
 
-export function converge(
-  raw: FounderAdvisorConvergenceInputValue,
-  governance: GovernanceAdapter = unavailableGovernanceAdapter,
-) {
+export function converge(raw: FounderAdvisorConvergenceInputValue) {
   const input = FounderAdvisorConvergenceInput.parse(raw)
   const inputSha256 = digest(input)
   const existing = Database.use((db) =>
@@ -258,10 +241,10 @@ export function converge(
       reason: "Human intervention fence is active; the Founder proxy cannot speak.",
     })
   const currentMode = modes(input.companyId)
-  if (currentMode.effective.founderTwinMode !== "advisor")
+  if (!["advisor", "green-delegated", "yellow-delegated"].includes(currentMode.effective.founderTwinMode))
     return saveBlocked(input, inputSha256, {
       status: "blocked",
-      reason: "Effective Founder Twin mode is not advisor.",
+      reason: "Effective Founder Twin mode cannot produce Advisor intents.",
     })
   const snapshot = Database.use((db) =>
     db
@@ -294,12 +277,21 @@ export function converge(
     missingInformation: JSON.parse(shadow.missing_information_json),
     ...(input.requestedAction ? { requestedAction: input.requestedAction } : {}),
   })
-  const authority = FounderAdvisorAuthorityResult.parse(governance.authorize({
-    companyId: input.companyId,
-    intent,
-    mode: currentMode,
-  }))
-  if (authority.status !== "authorized") return saveBlocked(input, inputSha256, authority)
+  const requestedAction = input.requestedAction ?? {
+    schemaVersion: 1 as const,
+    idempotencyKey: `farev_${inputSha256}`,
+    type: "governance.review.request" as const,
+    payload: {
+      subject: input.subject.slice(0, 1_000),
+      question: input.context,
+    },
+  }
+  const policyFacts = classifyFounderRequestedAction(requestedAction)
+  const riskLevel = intent.authorityClass === "red"
+    ? "high"
+    : intent.authorityClass === "yellow" && policyFacts.riskLevel === "low"
+      ? "medium"
+      : policyFacts.riskLevel
   const id = Identifier.create("fadv", "ascending")
   Database.transaction((db) => {
     appendDecisionInTransaction(db, {
@@ -324,11 +316,15 @@ export function converge(
       decisionMaker: "ai_founder",
       decisionMakerId: "board-ceo",
       authorityClass: intent.authorityClass,
-      operatingMode: "advisor",
+      operatingMode: currentMode.effective.founderTwinMode === "green-delegated"
+        ? "green_delegated"
+        : currentMode.effective.founderTwinMode === "yellow-delegated"
+          ? "yellow_delegated"
+          : "advisor",
       confidence: intent.confidence,
-      reversible: authority.reversible!,
-      externalImpact: authority.externalImpact!,
-      riskLevel: authority.riskLevel!,
+      reversible: policyFacts.reversible,
+      externalImpact: policyFacts.externalImpact,
+      riskLevel,
       evidenceRefs: intent.evidenceRefs,
       principleRefs: intent.principlesApplied,
       decisionCaseRefs: JSON.parse(shadow.decision_case_refs_json),
@@ -338,6 +334,27 @@ export function converge(
       overrideOf: null,
       createdAt: Date.now(),
       decidedAt: null,
+    })
+    const governance = submitGovernanceInTransaction(db, {
+      schemaVersion: 1,
+      idempotencyKey: `fagov_${inputSha256}`,
+      decisionId,
+      actionType: requestedAction.type,
+      proposedAuthorityClass: intent.authorityClass,
+      evidenceSufficient: Boolean(intent.evidenceRefs.length && !intent.missingInformation?.length),
+      requestedBy: { kind: "ai_founder", id: "board-ceo" },
+    })
+    const governanceRef = governance.gate?.id ?? governance.authority.policyId
+    if (!governanceRef) throw new Error("Governance evaluation did not produce an auditable reference")
+    const authority = FounderAdvisorAuthorityResult.parse({
+      status: "authorized",
+      reason: governance.gate
+        ? `Governance classified the intent as red; ApprovalGate ${governance.gate.status}.`
+        : `Governance evaluated the intent; dispatchAllowed=${governance.dispatchAllowed}.`,
+      governanceRef,
+      reversible: policyFacts.reversible,
+      externalImpact: policyFacts.externalImpact,
+      riskLevel,
     })
     db.insert(FounderAdvisorConvergenceTable)
       .values({
@@ -517,24 +534,19 @@ export function boardProjection(input: {
   decisions: DecisionRecord[]
   shadow: FounderBoardShadowProjection
   studio: FounderStudioProjection
-  governanceAvailable: boolean
 }) {
   const events = interventions(input.companyId)
+  const advisorMode = ["advisor", "green-delegated", "yellow-delegated"].includes(
+    input.modes.effective.founderTwinMode,
+  )
   return FounderBoardGovernanceProjection.parse({
     schemaVersion: 1,
     companyId: input.companyId,
     principal,
     mode: input.modes,
-    advisorCanSpeak:
-      input.modes.effective.founderTwinMode === "advisor"
-      && input.governanceAvailable
-      && !events.some((event) => event.fenceActive),
+    advisorCanSpeak: advisorMode && !events.some((event) => event.fenceActive),
     authorization: {
-      status: !input.governanceAvailable
-        ? "unavailable"
-        : input.modes.effective.founderTwinMode === "advisor"
-          ? "authorized"
-          : "not_confirmed",
+      status: advisorMode ? "authorized" : "not_confirmed",
       canRaiseModeFromUI: false,
     },
     convergences: convergences(input.companyId),
@@ -550,14 +562,16 @@ export function controlCenter(input: {
   companyId: string
   modes: FounderOSModeState
   decisions: DecisionRecord[]
-  governanceAvailable: boolean
 }) {
   const events = interventions(input.companyId)
   const failedStops = events.flatMap((event) => event.effects)
     .filter((effect) => effect.kind === "stop_failed").length
   const shadowComparisons = Database.use((db) =>
     db
-      .select({ alignment: FounderShadowComparisonTable.alignment })
+      .select({
+        alignment: FounderShadowComparisonTable.alignment,
+        verificationStatus: FounderShadowComparisonTable.verification_status,
+      })
       .from(FounderShadowComparisonTable)
       .where(eq(FounderShadowComparisonTable.company_id, input.companyId))
       .all(),
@@ -568,11 +582,9 @@ export function controlCenter(input: {
     principal,
     mode: input.modes,
     authorization: {
-      status: !input.governanceAvailable
-        ? "unavailable"
-        : input.modes.effective.founderTwinMode === "advisor"
-          ? "authorized"
-          : "not_confirmed",
+      status: ["advisor", "green-delegated", "yellow-delegated"].includes(input.modes.effective.founderTwinMode)
+        ? "authorized"
+        : "not_confirmed",
       canRaiseModeFromUI: false,
     },
     pending: {
@@ -584,8 +596,12 @@ export function controlCenter(input: {
       failedStops,
     },
     trends: {
-      shadowComparisons: shadowComparisons.length,
-      shadowOverrides: shadowComparisons.filter((comparison) => comparison.alignment === "mismatch").length,
+      shadowComparisons: shadowComparisons.filter((comparison) =>
+        comparison.verificationStatus === "human_confirmed"
+      ).length,
+      shadowOverrides: shadowComparisons.filter((comparison) =>
+        comparison.verificationStatus === "human_confirmed" && comparison.alignment === "mismatch"
+      ).length,
       confirmedCalibrations: Database.use((db) =>
         db
           .select({ id: FounderCalibrationResponseTable.id })

@@ -74,3 +74,7 @@ export {
   CompanyRolloutPromotionDecisionTable,
 } from "../company-rollout/company-rollout.sql"
 export { GoalBriefGenerationRequestTable, GoalBriefTable, GoalBriefVersionTable } from "../goal-brief/goal-brief.sql"
+export {
+  FounderGreenDelegationRunTable,
+  FounderGreenReadinessTable,
+} from "../project-orchestrator/founder-delegation.sql"

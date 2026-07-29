@@ -133,24 +133,39 @@ export const FounderRequestedActionPolicy = {
   "project.goal.propose": {
     authorityClass: "yellow",
     rollbackCapability: "archive_proposal",
+    reversible: true,
+    externalImpact: false,
+    riskLevel: "medium",
   },
   "governance.review.request": {
     authorityClass: "green",
     rollbackCapability: "withdraw_request",
+    reversible: true,
+    externalImpact: false,
+    riskLevel: "low",
   },
   "organization.staffing.propose": {
     authorityClass: "yellow",
     rollbackCapability: "requires_compensating_action",
+    reversible: false,
+    externalImpact: false,
+    riskLevel: "medium",
   },
   "external.communication.propose": {
     authorityClass: "red",
     rollbackCapability: "none",
+    reversible: false,
+    externalImpact: true,
+    riskLevel: "high",
   },
 } as const satisfies Record<
   FounderRequestedAction["type"],
   {
     authorityClass: FounderAuthorityClass
     rollbackCapability: "archive_proposal" | "withdraw_request" | "requires_compensating_action" | "none"
+    reversible: boolean
+    externalImpact: boolean
+    riskLevel: DecisionRiskLevel
   }
 >
 
@@ -1340,3 +1355,150 @@ export const FounderControlCenterProjection = z
   .strict()
   .meta({ ref: "FounderControlCenterProjection" })
 export type FounderControlCenterProjection = z.infer<typeof FounderControlCenterProjection>
+
+export const FounderGreenDelegationAction = z.enum(["project.receipt.process"])
+export type FounderGreenDelegationAction = z.infer<typeof FounderGreenDelegationAction>
+
+export const FounderGreenReadiness = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    status: z.enum(["ready", "blocked"]),
+    b3: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
+    e0: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
+    authorization: z
+      .object({
+        status: z.enum(["human_confirmed", "missing"]),
+        eventId: Identifier.nullable(),
+        confirmedBy: Identifier.nullable(),
+      })
+      .strict(),
+    exactCommit: z
+      .object({
+        status: z.enum(["passed", "missing"]),
+        sha: z.string().regex(/^[a-f0-9]{40}$/).nullable(),
+        evidenceRef: Identifier.nullable(),
+      })
+      .strict(),
+    failClosedReasons: z.array(ShortText).max(20),
+    autoPromotionAllowed: z.literal(false),
+    recordedAt: z.number().int().nonnegative().nullable(),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenReadiness" })
+export type FounderGreenReadiness = z.infer<typeof FounderGreenReadiness>
+
+export const FounderGreenReadinessRecordInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    b3ArtifactId: Identifier,
+    e0ArtifactId: Identifier,
+    authorizationEventId: Identifier,
+    exactCommit: z
+      .object({
+        sha: z.string().regex(/^[a-f0-9]{40}$/),
+        worktreeRunId: Identifier,
+      })
+      .strict(),
+    actor: z.object({ kind: z.literal("human"), id: Identifier }).strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenReadinessRecordInput" })
+export type FounderGreenReadinessRecordInput = z.infer<typeof FounderGreenReadinessRecordInput>
+
+export const FounderGreenDelegationInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    decisionId: Identifier,
+    projectId: Identifier,
+    boardThreadId: Identifier,
+    receiptId: Identifier,
+    actionType: Identifier,
+    requestedBy: z
+      .object({
+        kind: z.literal("ai_founder"),
+        id: z.literal("board-ceo"),
+      })
+      .strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenDelegationInput" })
+export type FounderGreenDelegationInput = z.infer<typeof FounderGreenDelegationInput>
+
+export const FounderGreenDelegationChain = z
+  .object({
+    decisionId: Identifier,
+    ledgerDecisionId: Identifier,
+    governanceRef: Identifier.nullable(),
+    graphDecisionId: Identifier.nullable(),
+    mutationId: Identifier.nullable(),
+    workItemIds: z.array(Identifier).max(500),
+    receiptIds: z.array(Identifier).max(500),
+    outcomeIds: z.array(Identifier).max(500),
+    ledgerOutcomeLinked: z.boolean(),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenDelegationChain" })
+export type FounderGreenDelegationChain = z.infer<typeof FounderGreenDelegationChain>
+
+export const FounderGreenDelegationRun = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: Identifier,
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    projectId: Identifier,
+    boardThreadId: Identifier,
+    receiptId: Identifier,
+    actionType: Identifier,
+    actionAllowlisted: z.boolean(),
+    status: z.enum(["blocked", "authorized", "outcome_pending", "completed", "failed"]),
+    readiness: FounderGreenReadiness,
+    mode: FounderOSModeState,
+    authority: DecisionAuthorityEvaluation.nullable(),
+    gate: FounderApprovalGate.nullable(),
+    dispatch: z
+      .object({
+        status: z.enum(["paused", "gated", "idle", "dispatched"]),
+        workItemIds: z.array(Identifier).max(500),
+      })
+      .strict()
+      .nullable(),
+    chain: FounderGreenDelegationChain,
+    outcomeStatus: z.enum(["missing", "succeeded", "failed", "inconclusive"]),
+    completeChain: z.boolean(),
+    failClosedReasons: z.array(ShortText).max(30),
+    selfEvaluationAcceptedAsTruth: z.literal(false),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenDelegationRun" })
+export type FounderGreenDelegationRun = z.infer<typeof FounderGreenDelegationRun>
+
+export const FounderGreenDelegationProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    readiness: FounderGreenReadiness,
+    mode: FounderOSModeState,
+    allowlist: z.array(FounderGreenDelegationAction),
+    unknownActionsClassifiedAsRed: z.literal(true),
+    activeFenceCount: z.number().int().nonnegative(),
+    trends: z
+      .object({
+        humanConfirmedShadowComparisons: z.number().int().nonnegative(),
+        humanOverrides: z.number().int().nonnegative(),
+        selfEvaluations: z.literal(0),
+      })
+      .strict(),
+    runs: z.array(FounderGreenDelegationRun).max(100),
+    autoPromotionAllowed: z.literal(false),
+  })
+  .strict()
+  .meta({ ref: "FounderGreenDelegationProjection" })
+export type FounderGreenDelegationProjection = z.infer<typeof FounderGreenDelegationProjection>

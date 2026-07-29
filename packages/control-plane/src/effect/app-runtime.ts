@@ -81,6 +81,7 @@ import { CompanyCommons } from "@/company-commons"
 import { CompanyReading } from "@/company-reading"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
+import { FounderGreenDelegation } from "@/project-orchestrator/founder-delegation"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
 import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
@@ -184,6 +185,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyReading.defaultLayer,
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
+    FounderGreenDelegation.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     AgentRun.defaultLayer,

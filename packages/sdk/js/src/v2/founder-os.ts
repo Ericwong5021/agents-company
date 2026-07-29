@@ -794,6 +794,105 @@ export type FounderOSMetricContract = {
   selfEvaluationAcceptedAsTruth: false
 }
 
+export type FounderGreenReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "ready" | "blocked"
+  b3: { status: "passed" | "missing"; evidenceRef: string | null }
+  e0: { status: "passed" | "missing"; evidenceRef: string | null }
+  authorization: {
+    status: "human_confirmed" | "missing"
+    eventId: string | null
+    confirmedBy: string | null
+  }
+  exactCommit: {
+    status: "passed" | "missing"
+    sha: string | null
+    evidenceRef: string | null
+  }
+  failClosedReasons: string[]
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderGreenDelegationInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  decisionId: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: string
+  requestedBy: { kind: "ai_founder"; id: "board-ceo" }
+}
+
+export type FounderGreenReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  b3ArtifactId: string
+  e0ArtifactId: string
+  authorizationEventId: string
+  exactCommit: { sha: string; worktreeRunId: string }
+  actor: { kind: "human"; id: string }
+}
+
+export type FounderGreenDelegationRun = {
+  schemaVersion: 1
+  id: string
+  companyId: string
+  idempotencyKey: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: string
+  actionAllowlisted: boolean
+  status: "blocked" | "authorized" | "outcome_pending" | "completed" | "failed"
+  readiness: FounderGreenReadiness
+  mode: FounderOSModeState
+  authority: DecisionAuthorityEvaluation | null
+  gate: FounderApprovalGate | null
+  dispatch: {
+    status: "paused" | "gated" | "idle" | "dispatched"
+    workItemIds: string[]
+  } | null
+  chain: {
+    decisionId: string
+    ledgerDecisionId: string
+    governanceRef: string | null
+    graphDecisionId: string | null
+    mutationId: string | null
+    workItemIds: string[]
+    receiptIds: string[]
+    outcomeIds: string[]
+    ledgerOutcomeLinked: boolean
+  }
+  outcomeStatus: "missing" | "succeeded" | "failed" | "inconclusive"
+  completeChain: boolean
+  failClosedReasons: string[]
+  selfEvaluationAcceptedAsTruth: false
+  createdAt: number
+  updatedAt: number
+}
+
+export type FounderGreenDelegationProjection = {
+  schemaVersion: 1
+  companyId: string
+  readiness: FounderGreenReadiness
+  mode: FounderOSModeState
+  allowlist: Array<"project.receipt.process">
+  unknownActionsClassifiedAsRed: true
+  activeFenceCount: number
+  trends: {
+    humanConfirmedShadowComparisons: number
+    humanOverrides: number
+    selfEvaluations: 0
+  }
+  runs: FounderGreenDelegationRun[]
+  autoPromotionAllowed: false
+}
+
 export function createFounderOSGovernanceClient(config: FounderStudioClientConfig) {
   const request = async <T>(path: string, init?: RequestInit) => {
     const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
@@ -841,6 +940,17 @@ export function createFounderOSGovernanceClient(config: FounderStudioClientConfi
     },
     metricContract() {
       return request<FounderOSMetricContract>("/company/founder-os/metrics/contract")
+    },
+    greenDelegations(companyId: string) {
+      return request<FounderGreenDelegationProjection>(
+        `/company/founder-os/green-delegations?${new URLSearchParams({ company_id: companyId })}`,
+      )
+    },
+    delegateGreen(input: FounderGreenDelegationInput) {
+      return request<FounderGreenDelegationRun>("/company/founder-os/green-delegations", json(input))
+    },
+    recordGreenReadiness(input: FounderGreenReadinessRecordInput) {
+      return request<FounderGreenReadiness>("/company/founder-os/green-readiness", json(input))
     },
   }
 }

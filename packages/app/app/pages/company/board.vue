@@ -100,7 +100,7 @@ watch(() => snapshot.value.company.id, (companyId) => {
           </div>
           <div>
             <span>治理授权</span>
-            <strong>{{ board?.authorization.status ?? "unavailable" }}</strong>
+            <strong>{{ board?.authorization.status ?? "not_confirmed" }}</strong>
           </div>
           <div>
             <span>代理发言</span>
@@ -109,7 +109,7 @@ watch(() => snapshot.value.company.id, (companyId) => {
         </section>
 
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
-          单一 GovernanceService 尚未接入或未获真实授权，Advisor 收敛保持 fail-closed，页面不能提高模式。
+          当前模式或真实授权尚未满足，Advisor 收敛保持 fail-closed，页面不能提高模式。
         </p>
 
         <div class="founder-board-layout">
@@ -179,6 +179,58 @@ watch(() => snapshot.value.company.id, (companyId) => {
             <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
           </aside>
         </div>
+
+        <section class="company-section">
+          <div class="company-section__heading">
+            <div>
+              <p class="company-eyebrow">Shadow projection</p>
+              <h2>Shadow 决策投影</h2>
+            </div>
+            <span>{{ board?.shadow.decisions.length ?? 0 }} 条</span>
+          </div>
+          <div class="founder-decision-list">
+            <article v-for="decision in board?.shadow.decisions ?? []" :key="decision.id">
+              <header>
+                <div>
+                  <strong>{{ decision.recommendation || "Shadow 决策被阻断" }}</strong>
+                  <span>{{ decision.status }} · {{ decision.authorityClass ?? "unknown" }} · 只读</span>
+                </div>
+                <span class="founder-confidence">
+                  {{ decision.confidence === undefined ? "置信度未记录" : `置信度 ${Math.round(decision.confidence * 100)}%` }}
+                </span>
+              </header>
+              <p v-if="decision.blockReasons.length">
+                阻断：{{ decision.blockReasons.join("、") }}
+              </p>
+              <details>
+                <summary>查看 Shadow 依据</summary>
+                <div class="founder-evidence-groups">
+                  <div>
+                    <strong>原则</strong>
+                    <a
+                      v-for="reference in decision.principleRefs"
+                      :key="`${reference.assetId}:${reference.version}`"
+                      :href="`#asset-${reference.assetId}-${reference.version}`"
+                    >
+                      {{ reference.assetId }} v{{ reference.version }}
+                    </a>
+                  </div>
+                  <div>
+                    <strong>证据</strong>
+                    <span v-for="reference in decision.evidenceRefs" :key="`${reference.kind}:${reference.id}`">
+                      {{ reference.kind }} · {{ reference.id }} · {{ reference.validity }}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>缺失信息</strong>
+                    <span v-for="item in decision.missingInformation" :key="item">{{ item }}</span>
+                  </div>
+                </div>
+              </details>
+            </article>
+            <p v-if="!board?.shadow.decisions.length" class="company-empty">暂无 Shadow 决策投影。</p>
+          </div>
+        </section>
 
         <section class="company-section">
           <div class="company-section__heading">

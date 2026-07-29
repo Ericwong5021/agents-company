@@ -15,6 +15,7 @@ import * as CompanyAttention from "@/company-project/attention"
 import { CompanyID } from "@/company/schema"
 import { AppRuntime } from "@/effect/app-runtime"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
+import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { lazy } from "@/util/lazy"
 import {
   localAuthUnauthorizedResponse,
@@ -67,7 +68,6 @@ export const FounderAdvisorRoutes = lazy(() =>
           decisions: current.decisions,
           shadow: FounderOSShadow.boardProjection(companyId),
           studio: FounderOSAsset.projection(companyId),
-          governanceAvailable: false,
         }))
       },
     )
@@ -118,6 +118,9 @@ export const FounderAdvisorRoutes = lazy(() =>
         const outcome = await AppRuntime.runPromise(
           Effect.exit(
             Effect.gen(function* () {
+              yield* ProjectOrchestrator.Service.use((orchestrator) =>
+                orchestrator.pauseDispatch(input.projectId!, `Founder intervention ${intervention.id}`),
+              )
               const attention = yield* CompanyAttention.Service.use((service) =>
                 service.create({
                   project_id: input.projectId!,
@@ -139,7 +142,7 @@ export const FounderAdvisorRoutes = lazy(() =>
                   attention.record.id,
                 ),
               )
-              return yield* ProjectActionExecutor.Service.use((executor) =>
+              const stopped = yield* ProjectActionExecutor.Service.use((executor) =>
                 executor.execute({
                   project_id: input.projectId!,
                   attention_id: attention.record.id,
@@ -148,6 +151,10 @@ export const FounderAdvisorRoutes = lazy(() =>
                   payload: { reason: input.reason },
                 }),
               )
+              yield* ProjectOrchestrator.Service.use((orchestrator) =>
+                orchestrator.recover({ project_id: input.projectId! }),
+              )
+              return stopped
             }),
           ),
         )
@@ -196,7 +203,6 @@ export const FounderControlCenterRoutes = lazy(() =>
           companyId,
           modes: current.modes,
           decisions: current.decisions,
-          governanceAvailable: false,
         }))
       },
     ),

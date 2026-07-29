@@ -66,6 +66,7 @@ import { AppRuntime } from "@/effect/app-runtime"
 import { FounderOSAsset, FounderOSBenchmark, FounderOSShadow, FounderOSTaste } from "@/founder-os"
 import { FounderOSRoutes } from "@/founder-os/routes"
 import { FounderAdvisorRoutes, FounderControlCenterRoutes } from "@/founder-os/advisor-routes"
+import { FounderGreenDelegationRoutes } from "@/project-orchestrator/founder-delegation-routes"
 import { Provider, ProviderAuth, ModelsDev } from "@/provider"
 import { ProviderID } from "@/provider/schema"
 import { Database } from "@/storage"
@@ -1136,6 +1137,7 @@ export const CompanyRoutes = lazy(() =>
     .route("/board", FounderAdvisorRoutes())
     .route("/founder-control-center", FounderControlCenterRoutes())
     .route("/founder-os", FounderOSRoutes())
+    .route("/founder-os", FounderGreenDelegationRoutes())
     .route("/channels", CompanyChannelRoutes())
     .route("/threads", CompanyThreadRoutes()),
 )
