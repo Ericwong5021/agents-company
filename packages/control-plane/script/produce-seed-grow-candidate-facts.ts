@@ -657,6 +657,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     import("../src/company-recruitment/company-recruitment.sql"),
     import("../src/metrics/b5-candidate-scenarios"),
   ])
+  await import("../src/server/projectors").then((module) => module.initProjectors())
   const providerId = process.env.B5_PROVIDER_ID
   const modelId = process.env.B5_MODEL_ID
   if (Boolean(providerId) !== Boolean(modelId))
