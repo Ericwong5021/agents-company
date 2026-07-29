@@ -23,6 +23,10 @@ const {
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false);
 const unavailableWork = computed(() => snapshot.value.work.filter(work => work.availability === "unavailable"));
+const projectOptions = computed(() => snapshot.value.work.map(work =>
+  work.availability === "available"
+    ? { id: work.summary.workId, title: work.summary.title }
+    : { id: work.workId, title: work.title }));
 const deliveries = computed(() => snapshot.value.work
   .filter(work => work.availability === "available")
   .flatMap(work => work.delivery
@@ -42,7 +46,7 @@ const dateTimeWithTime = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
 });
-const activeTab = ref<"commons" | "deliveries">("commons");
+const activeTab = ref<"commons" | "deliveries">("deliveries");
 const importOpen = ref(false);
 const importing = ref(false);
 const importError = ref("");
@@ -99,6 +103,14 @@ function resetImport() {
   tags.value = "";
   projectID.value = "";
   importError.value = "";
+}
+
+function toggleImport() {
+  importOpen.value = !importOpen.value;
+}
+
+function closeImport() {
+  importOpen.value = false;
 }
 
 async function importSource() {
@@ -179,7 +191,7 @@ function clearSearch() {
             color="neutral"
             icon="i-lucide-plus"
             :disabled="!available"
-            @click="importOpen = !importOpen"
+            @click="toggleImport"
           >
             导入资料
           </UButton>
@@ -259,8 +271,8 @@ function clearSearch() {
                 <span>项目</span>
                 <select v-model="projectID">
                   <option value="">选择项目</option>
-                  <option v-for="work in snapshot.work" :key="work.workId" :value="work.workId">
-                    {{ work.summary.title }}
+                  <option v-for="project in projectOptions" :key="project.id" :value="project.id">
+                    {{ project.title }}
                   </option>
                 </select>
               </label>
@@ -295,7 +307,7 @@ function clearSearch() {
             </div>
             <p v-if="importError" class="ac-commons-error" role="alert">{{ importError }}</p>
             <div class="ac-commons-import__actions">
-              <UButton color="neutral" variant="ghost" @click="importOpen = false">取消</UButton>
+              <UButton color="neutral" variant="ghost" @click="closeImport">取消</UButton>
               <UButton color="neutral" :loading="importing" :disabled="!canImport" @click="importSource">
                 保存到 Commons
               </UButton>
