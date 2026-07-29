@@ -26,6 +26,17 @@ const projectID = ref("");
 const sourceID = ref("");
 const scheduling = ref(false);
 const scheduleError = ref("");
+const profileAgentID = ref("");
+const profileTopics = ref("");
+const profileLenses = ref("");
+const profileExcluded = ref("");
+const profileNovelty = ref(0.45);
+const profileBudget = ref(3);
+const profileConcurrency = ref(1);
+const profileScopes = ref<Array<"company" | "project" | "private">>(["company", "project"]);
+const privacyScopeOptions = ["company", "project", "private"] as const;
+const savingProfile = ref(false);
+const profileError = ref("");
 const sourceByID = computed(() => new Map(reading.value.sources.map(source => [source.id, source])));
 const filtered = computed(() => projectID.value
   ? reading.value.interpretations.filter(interpretation =>
@@ -37,7 +48,8 @@ const grouped = computed(() => [...new Set(filtered.value.map(interpretation => 
     interpretations: filtered.value.filter(interpretation => interpretation.source_id === id),
   })));
 const readySources = computed(() =>
-  reading.value.sources.filter(source => source.ingestion_status === "ready"));
+  reading.value.sources.filter(source =>
+    source.capability_status === "supported" && source.ingestion_status === "ready"));
 const activeAssignments = computed(() =>
   reading.value.assignments.filter(assignment =>
     ["scheduling", "scheduled", "running"].includes(assignment.status)));
@@ -47,6 +59,57 @@ const agreementLabel: Record<InterpretationRecord["agreement"], string> = {
   mixed: "部分一致",
   unknown: "尚未判断",
 };
+const profileByAgentID = computed(() =>
+  new Map(reading.value.profiles.map(profile => [profile.agent_id, profile])));
+const readerAgents = computed(() =>
+  snapshot.value.agents.filter(agent => agent.employment === "employee"));
+
+watch(profileAgentID, (agentID) => {
+  const profile = profileByAgentID.value.get(agentID);
+  profileTopics.value = profile?.topics.join("，") ?? "";
+  profileLenses.value = profile?.preferred_lenses.join("，") ?? "";
+  profileExcluded.value = profile?.excluded_topics.join("，") ?? "";
+  profileNovelty.value = profile?.novelty_threshold ?? 0.45;
+  profileBudget.value = profile?.weekly_reading_budget ?? 3;
+  profileConcurrency.value = profile?.max_concurrency ?? 1;
+  profileScopes.value = profile?.privacy_scopes ?? ["company", "project"];
+  profileError.value = "";
+});
+
+function listValue(value: string) {
+  return [...new Set(value.split(/[，,\n]/).map(item => item.trim()).filter(Boolean))];
+}
+
+function evidenceLink(sourceID: string, evidence: InterpretationRecord["evidence_refs"][number]) {
+  return `/library/commons/${encodeURIComponent(sourceID)}?chunk=${encodeURIComponent(evidence.chunk_id)}&start=${evidence.start_offset}&end=${evidence.end_offset}`;
+}
+
+async function saveProfile() {
+  if (!profileAgentID.value || savingProfile.value) return;
+  savingProfile.value = true;
+  profileError.value = "";
+  const ok = await $fetch(
+    `/api/agent-company/reading/profiles/${encodeURIComponent(profileAgentID.value)}`,
+    {
+      method: "PUT",
+      body: {
+        topics: listValue(profileTopics.value),
+        preferred_lenses: listValue(profileLenses.value),
+        excluded_topics: listValue(profileExcluded.value),
+        novelty_threshold: profileNovelty.value,
+        weekly_reading_budget: profileBudget.value,
+        max_concurrency: profileConcurrency.value,
+        privacy_scopes: profileScopes.value,
+      },
+    },
+  ).then(() => true, () => false);
+  savingProfile.value = false;
+  if (!ok) {
+    profileError.value = "Reader Profile 未保存。每家公司最多配置 3 个 Reader。";
+    return;
+  }
+  await refresh();
+}
 
 async function scheduleReading() {
   if (!sourceID.value || !projectID.value || scheduling.value) return;
@@ -134,6 +197,72 @@ async function stopReading(assignmentID: string) {
           <p v-if="scheduleError" class="ac-commons-error" role="alert">{{ scheduleError }}</p>
         </section>
 
+        <section class="ac-reader-profile">
+          <div class="ac-reader-profile__heading">
+            <div>
+              <p class="ac-card-kicker">Reader configuration</p>
+              <h2>Interest Profiles</h2>
+              <p>为 1–3 个在职 Agent 配置阅读主题、视角、预算与资料范围。</p>
+            </div>
+            <span>{{ reading.profiles.length }} / 3 Reader</span>
+          </div>
+          <div class="ac-reader-profile__form">
+            <label>
+              Reader
+              <select v-model="profileAgentID">
+                <option value="">选择 Agent</option>
+                <option v-for="agent in readerAgents" :key="agent.id" :value="agent.id">
+                  {{ agent.name }}
+                </option>
+              </select>
+            </label>
+            <label>
+              关注主题
+              <input v-model="profileTopics" type="text" placeholder="用户研究，组织设计" />
+            </label>
+            <label>
+              阅读视角
+              <input v-model="profileLenses" type="text" placeholder="反证，产品影响" />
+            </label>
+            <label>
+              排除主题
+              <input v-model="profileExcluded" type="text" placeholder="可留空" />
+            </label>
+            <label>
+              每周预算
+              <input v-model.number="profileBudget" type="number" min="0" max="168" />
+            </label>
+            <label>
+              并发
+              <select v-model.number="profileConcurrency">
+                <option :value="1">1</option>
+                <option :value="2">2</option>
+                <option :value="3">3</option>
+              </select>
+            </label>
+            <label>
+              新颖度阈值
+              <input v-model.number="profileNovelty" type="number" min="0" max="1" step="0.05" />
+            </label>
+            <fieldset>
+              <legend>资料范围</legend>
+              <label v-for="scope in privacyScopeOptions" :key="scope">
+                <input v-model="profileScopes" type="checkbox" :value="scope" />
+                {{ scope }}
+              </label>
+            </fieldset>
+            <UButton
+              color="neutral"
+              :loading="savingProfile"
+              :disabled="!profileAgentID || !profileScopes.length"
+              @click="saveProfile"
+            >
+              保存 Reader
+            </UButton>
+          </div>
+          <p v-if="profileError" class="ac-commons-error" role="alert">{{ profileError }}</p>
+        </section>
+
         <section v-if="activeAssignments.length" class="ac-reading-queue">
           <article v-for="assignment in activeAssignments" :key="assignment.id">
             <div>
@@ -191,6 +320,21 @@ async function stopReading(assignmentID: string) {
                 </div>
                 <h3>{{ interpretation.core_thesis }}</h3>
                 <p>{{ interpretation.company_relevance }}</p>
+                <div class="ac-interpretation-claims">
+                  <h4>关键判断与来源</h4>
+                  <ul>
+                    <li v-for="claim in interpretation.important_claims" :key="claim">
+                      <span>{{ claim }}</span>
+                      <NuxtLink
+                        v-for="evidence in interpretation.evidence_refs.filter(item => item.claim === claim)"
+                        :key="`${evidence.chunk_id}:${evidence.start_offset}:${evidence.end_offset}`"
+                        :to="evidenceLink(interpretation.source_id, evidence)"
+                      >
+                        查看原文 {{ evidence.start_offset }}–{{ evidence.end_offset }}
+                      </NuxtLink>
+                    </li>
+                  </ul>
+                </div>
                 <dl>
                   <div>
                     <dt>反方论据</dt>

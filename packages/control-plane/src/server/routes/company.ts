@@ -39,6 +39,7 @@ import { CompanyRecruitment } from "@/company-recruitment"
 import * as CompanyActivity from "@/company/activity"
 import {
   ApprovalPolicyUpdateInput,
+  BeliefLoopActivationInput,
   BootstrapInput,
   CompanyAlreadyInitialized,
   CompanyCorruptState,
@@ -434,6 +435,29 @@ export const CompanyRoutes = lazy(() =>
         c.json(
           await AppRuntime.runPromise(
             Company.Service.use((service) => service.updateFounderOSModes(c.req.valid("json"))),
+          ),
+        ),
+    )
+    .post(
+      "/founder-os-modes/belief-loop/activate",
+      describeRoute({
+        operationId: "company.beliefLoopActivate",
+        summary: "Activate Belief Loop after K1, W2, E0, K2 and human authorization gates",
+        responses: {
+          200: {
+            description: "Updated Founder OS modes",
+            content: { "application/json": { schema: resolver(FounderOSModeState) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", BeliefLoopActivationInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            Company.Service.use((service) => service.activateBeliefLoop(c.req.valid("json"))),
           ),
         ),
     )

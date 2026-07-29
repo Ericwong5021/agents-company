@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
+import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -51,6 +52,7 @@ const receiptFromRow = (row: typeof CompanyWorkReceiptTable.$inferSelect) =>
     task_proposals: parseList(row.task_proposals_json),
     dependency_proposals: parseList(row.dependency_proposals_json),
     questions: parseList(row.questions_json),
+    typed_payload: row.typed_payload_json ? JSON.parse(row.typed_payload_json) : undefined,
     processing_status: row.processing_status,
     processing_claim_id: row.processing_claim_id ?? undefined,
     claimed_at: row.claimed_at ?? undefined,
@@ -93,7 +95,9 @@ function sameSubmission(row: typeof CompanyWorkReceiptTable.$inferSelect, input:
     row.capability_gaps_json === JSON.stringify(input.capability_gaps) &&
     row.task_proposals_json === JSON.stringify(input.task_proposals) &&
     row.dependency_proposals_json === JSON.stringify(input.dependency_proposals) &&
-    row.questions_json === JSON.stringify(input.questions)
+    row.questions_json === JSON.stringify(input.questions) &&
+    row.payload_kind === (input.typed_payload?.kind ?? null) &&
+    row.typed_payload_json === (input.typed_payload ? JSON.stringify(input.typed_payload) : null)
   )
 }
 
@@ -118,10 +122,24 @@ function validateReferences(
         .where(inArray(CompanyArtifactTable.id, input.artifact_ids))
         .all()
     : []
+  const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, attempt.project_id)).get()
+  const validReadingArtifact = (artifact: typeof CompanyArtifactTable.$inferSelect) =>
+    input.typed_payload?.kind === "knowledge_reading" &&
+    db
+      .select()
+      .from(CompanyCommonsSourceTable)
+      .where(and(
+        eq(CompanyCommonsSourceTable.id, input.typed_payload.receipt.source_id),
+        eq(CompanyCommonsSourceTable.artifact_id, artifact.id),
+        eq(CompanyCommonsSourceTable.company_id, project?.company_id ?? ""),
+      ))
+      .get() !== undefined
   if (
     artifacts.length !== input.artifact_ids.length ||
     artifacts.some(
-      (artifact) => artifact.project_id !== attempt.project_id || artifact.work_item_id !== attempt.work_item_id,
+      (artifact) =>
+        (artifact.project_id !== attempt.project_id || artifact.work_item_id !== attempt.work_item_id) &&
+        !validReadingArtifact(artifact),
     )
   ) {
     throw new Error("Work Receipt references an unavailable Artifact")
@@ -408,6 +426,8 @@ function makeService(recoverOnStart: boolean) {
               task_proposals_json: JSON.stringify(receiptInput.task_proposals),
               dependency_proposals_json: JSON.stringify(receiptInput.dependency_proposals),
               questions_json: JSON.stringify(receiptInput.questions),
+              payload_kind: receiptInput.typed_payload?.kind ?? null,
+              typed_payload_json: receiptInput.typed_payload ? JSON.stringify(receiptInput.typed_payload) : null,
               processing_status: "pending",
               processing_claim_id: null,
               claimed_at: null,

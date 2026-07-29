@@ -65,6 +65,9 @@ import type {
   CompanyChannelsResponses,
   CompanyCurrentErrors,
   CompanyCurrentResponses,
+  CompanyFounderOSModesResponses,
+  CompanyFounderOSModesUpdateResponses,
+  CompanyBeliefLoopActivateResponses,
   CompanyDeferSetupGoalErrors,
   CompanyDeferSetupGoalResponses,
   CompanyCommonsCapabilitiesResponses,
@@ -75,6 +78,7 @@ import type {
   CompanyCommonsSourcesResponses,
   CompanyReadingAssignmentsResponses,
   CompanyReadingCreateInterpretationResponses,
+  CompanyReadingConsumeReceiptResponses,
   CompanyReadingInterpretationsResponses,
   CompanyReadingProfilesResponses,
   CompanyReadingScheduleResponses,
@@ -87,12 +91,14 @@ import type {
   CompanyProjectGetResponses,
   CompanyProjectListResponses,
   CompanyProjectOutcomeResponses,
+  CompanyProjectOutcomeTransitionsResponses,
   CompanyProjectOutcomesResponses,
   CompanyProjectReceiptsResponses,
   CompanyProjectResolveGateResponses,
   CompanyProjectRetryResponses,
   CompanyProjectStartResponses,
   CompanyProjectSubmitOutcomeResponses,
+  CompanyProjectTransitionOutcomeResponses,
   CompanyProjectWorkItemReassignErrors,
   CompanyProjectWorkItemReassignResponses,
   CompanyProviderAuthErrors,
@@ -1202,6 +1208,73 @@ export class Company extends HeyApiClient {
     return (options?.client ?? this.client).get<CompanyCurrentResponses, CompanyCurrentErrors, ThrowOnError>({
       url: "/company",
       ...options,
+    })
+  }
+
+  public founderOSModes<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<CompanyFounderOSModesResponses, unknown, ThrowOnError>({
+      url: "/company/founder-os-modes",
+      ...options,
+    })
+  }
+
+  public founderOSModesUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+      companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "body", key: "founderTwinMode" },
+        { in: "body", key: "companyCommonsMode" },
+      ],
+    }])
+    return (options?.client ?? this.client).put<CompanyFounderOSModesUpdateResponses, unknown, ThrowOnError>({
+      url: "/company/founder-os-modes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public beliefLoopActivate<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      k1_artifact_id: string
+      w2_artifact_id: string
+      e0_artifact_id: string
+      k2_evidence_package_artifact_id: string
+      authorization_event_id: string
+      actor: { kind: "human"; id: string }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "body", key: "company_id" },
+        { in: "body", key: "k1_artifact_id" },
+        { in: "body", key: "w2_artifact_id" },
+        { in: "body", key: "e0_artifact_id" },
+        { in: "body", key: "k2_evidence_package_artifact_id" },
+        { in: "body", key: "authorization_event_id" },
+        { in: "body", key: "actor" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyBeliefLoopActivateResponses, unknown, ThrowOnError>({
+      url: "/company/founder-os-modes/belief-loop/activate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -4161,7 +4234,7 @@ export class CompanyReading extends HeyApiClient {
         project_ids?: Array<string>
         private_owner_id?: string
       }
-      receipt: Omit<InterpretationRecord, "id" | "reader_agent_name" | "created_at">
+      receipt: Omit<InterpretationRecord, "id" | "work_receipt_id" | "reader_agent_name" | "created_at">
       directory?: string
       workspace?: string
     },
@@ -4177,6 +4250,39 @@ export class CompanyReading extends HeyApiClient {
     }])
     return (options?.client ?? this.client).post<CompanyReadingCreateInterpretationResponses, unknown, ThrowOnError>({
       url: "/company-reading/interpretations",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public consumeReceipt<ThrowOnError extends boolean = false>(
+    parameters: {
+      receiptID: string
+      company_id: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "path", key: "receiptID" },
+        { in: "body", key: "company_id" },
+        { in: "body", key: "project_ids" },
+        { in: "body", key: "private_owner_id" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyReadingConsumeReceiptResponses, unknown, ThrowOnError>({
+      url: "/company-reading/receipts/{receiptID}/consume",
       ...options,
       ...params,
       headers: {
@@ -4579,7 +4685,7 @@ export class CompanyProject extends HeyApiClient {
       projectID: string
       directory?: string
       workspace?: string
-      schema_version: 1
+      schema_version: 2
       idempotency_key: string
       decision_id?: string
       result: "succeeded" | "failed" | "inconclusive"
@@ -4587,6 +4693,20 @@ export class CompanyProject extends HeyApiClient {
       validator_ref: {
         kind: "validation_gate" | "artifact"
         id: string
+      }
+      validator_result_ref: {
+        kind: "validation_gate" | "artifact"
+        id: string
+      }
+      work_receipt_id?: string
+      metric_contract_ref: {
+        kind: "founder_metric_contract" | "project_metric_contract"
+        id: string
+        version: number
+      }
+      observation_window: {
+        starts_at: number
+        ends_at: number
       }
       source_refs: Array<{
         kind: "work_receipt" | "validation_gate" | "artifact"
@@ -4610,6 +4730,10 @@ export class CompanyProject extends HeyApiClient {
             { in: "body", key: "result" },
             { in: "body", key: "summary" },
             { in: "body", key: "validator_ref" },
+            { in: "body", key: "validator_result_ref" },
+            { in: "body", key: "work_receipt_id" },
+            { in: "body", key: "metric_contract_ref" },
+            { in: "body", key: "observation_window" },
             { in: "body", key: "source_refs" },
             { in: "body", key: "observed_at" },
           ],
@@ -4654,6 +4778,73 @@ export class CompanyProject extends HeyApiClient {
       url: "/company-project/{projectID}/outcomes/{outcomeID}",
       ...options,
       ...params,
+    })
+  }
+
+  public outcomeTransitions<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      outcomeID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "path", key: "projectID" },
+        { in: "path", key: "outcomeID" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).get<CompanyProjectOutcomeTransitionsResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions",
+      ...options,
+      ...params,
+    })
+  }
+
+  public transitionOutcome<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      outcomeID: string
+      idempotency_key: string
+      status: "validated" | "invalidated"
+      validator_result_ref: { kind: "validation_gate" | "artifact"; id: string }
+      reason: string
+      actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
+      actor_id?: string
+      occurred_at: number
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{
+      args: [
+        { in: "path", key: "projectID" },
+        { in: "path", key: "outcomeID" },
+        { in: "body", key: "idempotency_key" },
+        { in: "body", key: "status" },
+        { in: "body", key: "validator_result_ref" },
+        { in: "body", key: "reason" },
+        { in: "body", key: "actor_kind" },
+        { in: "body", key: "actor_id" },
+        { in: "body", key: "occurred_at" },
+        { in: "query", key: "directory" },
+        { in: "query", key: "workspace" },
+      ],
+    }])
+    return (options?.client ?? this.client).post<CompanyProjectTransitionOutcomeResponses, unknown, ThrowOnError>({
+      url: "/company-project/{projectID}/outcomes/{outcomeID}/transitions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

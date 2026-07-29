@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import z from "zod"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyTable } from "@/company/company.sql"
 import { CompanyCommons } from "@/company-commons"
@@ -8,6 +9,7 @@ import type { CommonsAccess } from "@/company-commons/schema"
 import {
   CompanyProjectTable,
   CompanyWorkItemTable,
+  CompanyWorkReceiptTable,
 } from "@/company-project/company-project.sql"
 import { Identifier } from "@/id/id"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
@@ -39,6 +41,7 @@ import {
 const profileFromRow = (row: typeof CompanyAgentInterestProfileTable.$inferSelect) =>
   AgentInterestProfile.parse({
     ...row,
+    work_receipt_id: row.work_receipt_id ?? undefined,
     topics: JSON.parse(row.topics_json),
     preferred_lenses: JSON.parse(row.preferred_lenses_json),
     excluded_topics: JSON.parse(row.excluded_topics_json),
@@ -120,6 +123,10 @@ export interface Interface {
     receipt: KnowledgeReadingReceiptValue,
     access: CommonsAccess,
   ) => Effect.Effect<InterpretationValue>
+  readonly consumeReceipt: (
+    work_receipt_id: string,
+    access: CommonsAccess,
+  ) => Effect.Effect<InterpretationValue>
   readonly listInterpretations: (access: CommonsAccess, project_id?: string) => Effect.Effect<InterpretationValue[]>
 }
 
@@ -144,6 +151,24 @@ export const layer = Layer.effect(
           .get(),
       )
       if (!agent) throw new Error("Interest Profile Agent does not belong to the company")
+      const existingProfile = Database.use((db) =>
+        db
+          .select()
+          .from(CompanyAgentInterestProfileTable)
+          .where(eq(CompanyAgentInterestProfileTable.agent_id, input.agent_id))
+          .get(),
+      )
+      if (
+        !existingProfile &&
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyAgentInterestProfileTable)
+            .where(eq(CompanyAgentInterestProfileTable.company_id, input.company_id))
+            .all(),
+        ).length >= 3
+      )
+        throw new Error("A company can configure at most three Reader profiles")
       const row = {
         agent_id: input.agent_id,
         company_id: input.company_id,
@@ -232,7 +257,11 @@ export const layer = Layer.effect(
       if (!input.project_ids.includes(input.project_id))
         throw new Error("Reading project is outside the caller privacy scope")
       const source = yield* commons.get(input.source_id, input)
-      if (!source || source.source.ingestion_status !== "ready")
+      if (
+        !source ||
+        source.source.capability_status !== "supported" ||
+        source.source.ingestion_status !== "ready"
+      )
         throw new Error("Commons source is not ready or not visible")
       const project = Database.use((db) =>
         db
@@ -520,12 +549,29 @@ export const layer = Layer.effect(
       )
     })
 
-    const createInterpretation = Effect.fn("CompanyReading.createInterpretation")(function* (
-      rawReceipt: KnowledgeReadingReceiptValue,
+    const consumeReceipt = Effect.fn("CompanyReading.consumeReceipt")(function* (
+      work_receipt_id: string,
       access: CommonsAccess,
     ) {
-      const receipt = KnowledgeReadingReceipt.parse(rawReceipt)
       requireReadingMode(access.company_id)
+      const workReceipt = Database.use((db) =>
+        db.select().from(CompanyWorkReceiptTable).where(eq(CompanyWorkReceiptTable.id, work_receipt_id)).get(),
+      )
+      if (
+        !workReceipt ||
+        workReceipt.payload_kind !== "knowledge_reading" ||
+        !workReceipt.typed_payload_json
+      )
+        throw new Error("Interpretation requires a persisted typed KNOWLEDGE_READING Work Receipt")
+      const payload = z
+        .object({
+          kind: z.literal("knowledge_reading"),
+          assignment_id: z.string().trim().min(1),
+          receipt: KnowledgeReadingReceipt,
+        })
+        .strict()
+        .parse(JSON.parse(workReceipt.typed_payload_json))
+      const receipt = payload.receipt
       const source = yield* commons.get(receipt.source_id, access)
       if (!source) throw new Error("Interpretation source is not visible")
       const assignment = Database.use((db) =>
@@ -534,15 +580,27 @@ export const layer = Layer.effect(
           .from(CompanyReadingAssignmentTable)
           .where(
             and(
-              eq(CompanyReadingAssignmentTable.source_id, receipt.source_id),
-              eq(CompanyReadingAssignmentTable.agent_id, receipt.reader_agent_id),
-              eq(CompanyReadingAssignmentTable.work_item_id, receipt.work_item_id),
+              eq(CompanyReadingAssignmentTable.id, payload.assignment_id),
+              eq(CompanyReadingAssignmentTable.company_id, access.company_id),
             ),
           )
           .get(),
       )
-      if (!assignment || assignment.status === "stopped")
+      if (
+        !assignment ||
+        assignment.source_id !== receipt.source_id ||
+        assignment.agent_id !== receipt.reader_agent_id ||
+        assignment.work_item_id !== receipt.work_item_id ||
+        workReceipt.work_item_id !== receipt.work_item_id ||
+        assignment.status === "stopped"
+      )
         throw new Error("Interpretation does not match an active reading assignment")
+      if (
+        receipt.important_claims.some(
+          (claim) => !receipt.evidence_refs.some((reference) => reference.claim === claim),
+        )
+      )
+        throw new Error("Every important Interpretation claim requires a matching source-span evidence reference")
       const chunkByID = new Map(source.chunks.map((chunk) => [chunk.id, chunk]))
       if (
         receipt.evidence_refs.some((reference) => {
@@ -578,6 +636,14 @@ export const layer = Layer.effect(
         db
           .select()
           .from(CompanyInterpretationTable)
+          .where(eq(CompanyInterpretationTable.work_receipt_id, work_receipt_id))
+          .get(),
+      )
+      if (existing) return interpretationFromRow(existing)
+      const existingForReader = Database.use((db) =>
+        db
+          .select()
+          .from(CompanyInterpretationTable)
           .where(
             and(
               eq(CompanyInterpretationTable.source_id, receipt.source_id),
@@ -586,19 +652,8 @@ export const layer = Layer.effect(
           )
           .get(),
       )
-      if (existing) {
-        const interpretation = interpretationFromRow(existing)
-        if (
-          JSON.stringify(KnowledgeReadingReceipt.parse(interpretation)) !==
-          JSON.stringify(receipt)
-        )
-          throw new Error("Interpretation idempotency conflict for source and reader Agent")
-        yield* orchestrator.completeKnowledgeReading({
-          work_item_id: receipt.work_item_id,
-          interpretation_id: existing.id,
-        })
-        return interpretation
-      }
+      if (existingForReader)
+        throw new Error("Interpretation source and Reader already consumed a different Work Receipt")
       const id = Identifier.ascending("interpretation")
       const row = {
         id,
@@ -606,6 +661,7 @@ export const layer = Layer.effect(
         reader_agent_id: receipt.reader_agent_id,
         reader_role: receipt.reader_role,
         work_item_id: receipt.work_item_id,
+        work_receipt_id,
         core_thesis: receipt.core_thesis,
         important_claims_json: JSON.stringify(receipt.important_claims),
         company_relevance: receipt.company_relevance,
@@ -629,18 +685,93 @@ export const layer = Layer.effect(
           })),
         ).run()
         db.update(CompanyReadingAssignmentTable)
-          .set({ status: "completed", updated_at: Date.now() })
+          .set({ status: "completed", budget_reserved: false, error: null, updated_at: Date.now() })
           .where(eq(CompanyReadingAssignmentTable.id, assignment.id))
           .run()
-      })
-      yield* orchestrator.completeKnowledgeReading({
-        work_item_id: receipt.work_item_id,
-        interpretation_id: id,
       })
       const agent = Database.use((db) =>
         db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, receipt.reader_agent_id)).get(),
       )
       return interpretationFromRow(row, agent?.name)
+    })
+
+    const createInterpretation = Effect.fn("CompanyReading.createInterpretation")(function* (
+      rawReceipt: KnowledgeReadingReceiptValue,
+      access: CommonsAccess,
+    ) {
+      const receipt = KnowledgeReadingReceipt.parse(rawReceipt)
+      requireReadingMode(access.company_id)
+      const assignment = Database.use((db) =>
+        db
+          .select()
+          .from(CompanyReadingAssignmentTable)
+          .where(
+            and(
+              eq(CompanyReadingAssignmentTable.company_id, access.company_id),
+              eq(CompanyReadingAssignmentTable.source_id, receipt.source_id),
+              eq(CompanyReadingAssignmentTable.agent_id, receipt.reader_agent_id),
+              eq(CompanyReadingAssignmentTable.work_item_id, receipt.work_item_id),
+            ),
+          )
+          .get(),
+      )
+      if (!assignment || assignment.status === "stopped")
+        throw new Error("Knowledge reading Receipt does not match an active assignment")
+      const source = yield* commons.get(receipt.source_id, access)
+      if (!source) throw new Error("Knowledge reading Receipt source is not visible")
+      if (
+        receipt.important_claims.some(
+          (claim) => !receipt.evidence_refs.some((reference) => reference.claim === claim),
+        )
+      )
+        throw new Error("Every important Interpretation claim requires a matching source-span evidence reference")
+      const chunkByID = new Map(source.chunks.map((chunk) => [chunk.id, chunk]))
+      if (
+        receipt.evidence_refs.some((reference) => {
+          const chunk = chunkByID.get(reference.chunk_id)
+          return (
+            !chunk ||
+            reference.start_offset < chunk.start_offset ||
+            reference.end_offset > chunk.end_offset ||
+            reference.end_offset <= reference.start_offset
+          )
+        })
+      )
+        throw new Error("Knowledge reading Receipt evidence does not resolve to the assigned source span")
+      if (
+        receipt.project_connections.some(
+          (connection) =>
+            !Database.use((db) =>
+              db
+                .select()
+                .from(CompanyProjectTable)
+                .where(
+                  and(
+                    eq(CompanyProjectTable.id, connection.project_id),
+                    eq(CompanyProjectTable.company_id, access.company_id),
+                  ),
+                )
+                .get(),
+            ),
+        )
+      )
+        throw new Error("Knowledge reading Receipt project connection is outside the source company")
+      yield* orchestrator.completeKnowledgeReading({
+        work_item_id: receipt.work_item_id,
+        assignment_id: assignment.id,
+        source_artifact_id: source.artifact.id,
+        receipt,
+      })
+      const workReceipt = Database.use((db) =>
+        db
+          .select()
+          .from(CompanyWorkReceiptTable)
+          .where(eq(CompanyWorkReceiptTable.work_item_id, receipt.work_item_id))
+          .orderBy(desc(CompanyWorkReceiptTable.created_at), desc(CompanyWorkReceiptTable.id))
+          .get(),
+      )
+      if (!workReceipt) throw new Error("Knowledge reading Work Receipt was not persisted")
+      return yield* consumeReceipt(workReceipt.id, access)
     })
 
     const listInterpretations = Effect.fn("CompanyReading.listInterpretations")(function* (
@@ -693,7 +824,7 @@ export const layer = Layer.effect(
           ),
         )
       const rows = active.filter((row) =>
-        row.status === "scheduling" && ["reading", "belief-loop"].includes(effectiveReadingMode(row.company_id)),
+        ["reading", "belief-loop"].includes(effectiveReadingMode(row.company_id)),
       )
       const recovered = yield* Effect.forEach(
         rows,
@@ -715,6 +846,70 @@ export const layer = Layer.effect(
             db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, row.work_item_id ?? "")).get(),
           )
           if (source) {
+            if (source.status === "completed") {
+              const receipt = Database.use((db) =>
+                db
+                  .select()
+                  .from(CompanyWorkReceiptTable)
+                  .where(eq(CompanyWorkReceiptTable.work_item_id, source.id))
+                  .orderBy(desc(CompanyWorkReceiptTable.created_at), desc(CompanyWorkReceiptTable.id))
+                  .get(),
+              )
+              if (!receipt) {
+                Database.use((db) =>
+                  db
+                    .update(CompanyReadingAssignmentTable)
+                    .set({
+                      status: "failed",
+                      budget_reserved: false,
+                      error: "Completed reading WorkItem has no typed Work Receipt",
+                      updated_at: Date.now(),
+                    })
+                    .where(eq(CompanyReadingAssignmentTable.id, row.id))
+                    .run(),
+                )
+                return Effect.succeed(undefined)
+              }
+              return consumeReceipt(receipt.id, {
+                company_id: row.company_id,
+                project_ids: JSON.parse(row.linked_project_ids_json),
+              }).pipe(
+                Effect.map(() => row.id),
+                Effect.catchAll((error) =>
+                  Effect.sync(() => {
+                    Database.use((db) =>
+                      db
+                        .update(CompanyReadingAssignmentTable)
+                        .set({
+                          status: "failed",
+                          budget_reserved: false,
+                          error: error instanceof Error ? error.message : String(error),
+                          updated_at: Date.now(),
+                        })
+                        .where(eq(CompanyReadingAssignmentTable.id, row.id))
+                        .run(),
+                    )
+                    return undefined
+                  }),
+                ),
+              )
+            }
+            if (["failed", "superseded", "cancelled", "blocked"].includes(source.status)) {
+              Database.use((db) =>
+                db
+                  .update(CompanyReadingAssignmentTable)
+                  .set({
+                    status: source.status === "cancelled" || source.status === "superseded" ? "stopped" : "failed",
+                    budget_reserved: false,
+                    error: `Reading WorkItem reached terminal status ${source.status}`,
+                    updated_at: Date.now(),
+                    stopped_at: source.status === "cancelled" || source.status === "superseded" ? Date.now() : null,
+                  })
+                  .where(eq(CompanyReadingAssignmentTable.id, row.id))
+                  .run(),
+              )
+              return Effect.succeed(row.id)
+            }
             Database.use((db) =>
               db
                 .update(CompanyReadingAssignmentTable)
@@ -723,6 +918,21 @@ export const layer = Layer.effect(
                 .run(),
             )
             return Effect.succeed(row.id)
+          }
+          if (row.status !== "scheduling") {
+            Database.use((db) =>
+              db
+                .update(CompanyReadingAssignmentTable)
+                .set({
+                  status: "failed",
+                  budget_reserved: false,
+                  error: "Reading assignment lost its scheduled WorkItem",
+                  updated_at: Date.now(),
+                })
+                .where(eq(CompanyReadingAssignmentTable.id, row.id))
+                .run(),
+            )
+            return Effect.succeed(undefined)
           }
           const commonsSource = Database.use((db) =>
             db
@@ -775,6 +985,7 @@ export const layer = Layer.effect(
       recover,
       listAssignments,
       createInterpretation,
+      consumeReceipt,
       listInterpretations,
     })
   }),

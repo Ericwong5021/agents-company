@@ -70,6 +70,28 @@ export const CompanyReadingRoutes = lazy(() =>
           )
         }),
     )
+    .post(
+      "/receipts/:receiptID/consume",
+      describeRoute({
+        summary: "Deterministically consume a typed KNOWLEDGE_READING Work Receipt",
+        operationId: "companyReading.consumeReceipt",
+        responses: {
+          200: {
+            description: "Interpretation",
+            content: { "application/json": { schema: resolver(Interpretation) } },
+          },
+        },
+      }),
+      validator("param", z.object({ receiptID: z.string().trim().min(1) })),
+      validator("json", CommonsAccess),
+      async (c) =>
+        jsonRequest("CompanyReadingRoutes.consumeReceipt", c, function* () {
+          return yield* (yield* CompanyReading.Service).consumeReceipt(
+            c.req.valid("param").receiptID,
+            c.req.valid("json"),
+          )
+        }),
+    )
     .get(
       "/profiles",
       describeRoute({

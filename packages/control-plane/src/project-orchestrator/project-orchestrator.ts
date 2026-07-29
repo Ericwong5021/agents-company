@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
 import type { WorkItem } from "@/company-project/schema"
+import type { KnowledgeReadingReceipt } from "@/company-reading/schema"
 import { CompanyValidationGate } from "@/company-project/validation-gate"
 import { Database } from "@/storage"
 import { CapabilityMaterializer } from "./capability-materializer"
@@ -50,7 +51,9 @@ export interface Interface {
   }) => Effect.Effect<WorkItem>
   readonly completeKnowledgeReading: (input: {
     work_item_id: string
-    interpretation_id: string
+    assignment_id: string
+    source_artifact_id: string
+    receipt: KnowledgeReadingReceipt
   }) => Effect.Effect<WorkItem>
 }
 

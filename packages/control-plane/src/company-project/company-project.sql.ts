@@ -5,7 +5,7 @@ export const CompanyProjectTable = sqliteTable(
   "company_project",
   {
     id: text().primaryKey(),
-    company_id: text(),
+    company_id: text().notNull(),
     root_need_id: text(),
     source_thread_id: text(),
     decision_request_id: text(),
@@ -267,6 +267,8 @@ export const CompanyWorkReceiptTable = sqliteTable(
     task_proposals_json: text().notNull(),
     dependency_proposals_json: text().notNull(),
     questions_json: text().notNull(),
+    payload_kind: text(),
+    typed_payload_json: text(),
     processing_status: text().notNull(),
     processing_claim_id: text(),
     claimed_at: integer(),
@@ -290,6 +292,7 @@ export const CompanyOutcomeSignalTable = sqliteTable(
   {
     id: text().primaryKey(),
     schema_version: integer().notNull(),
+    company_id: text(),
     project_id: text()
       .notNull()
       .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
@@ -299,6 +302,14 @@ export const CompanyOutcomeSignalTable = sqliteTable(
     summary: text().notNull(),
     validator_kind: text().notNull(),
     validator_id: text().notNull(),
+    validator_result_kind: text().notNull(),
+    validator_result_id: text().notNull(),
+    work_receipt_id: text().references(() => CompanyWorkReceiptTable.id, { onDelete: "restrict" }),
+    metric_contract_kind: text().notNull(),
+    metric_contract_id: text().notNull(),
+    metric_contract_version: integer().notNull(),
+    observation_window_starts_at: integer().notNull(),
+    observation_window_ends_at: integer().notNull(),
     source_refs_json: text().notNull(),
     observed_at: integer().notNull(),
     created_at: integer().notNull(),
@@ -307,6 +318,44 @@ export const CompanyOutcomeSignalTable = sqliteTable(
     uniqueIndex("company_outcome_signal_project_idempotency_idx").on(table.project_id, table.idempotency_key),
     index("company_outcome_signal_project_created_idx").on(table.project_id, table.created_at),
     index("company_outcome_signal_decision_idx").on(table.decision_id),
+  ],
+)
+
+export const CompanyOutcomeSignalTransitionTable = sqliteTable(
+  "company_outcome_signal_transition",
+  {
+    id: text().primaryKey(),
+    outcome_signal_id: text().notNull().references(() => CompanyOutcomeSignalTable.id, { onDelete: "cascade" }),
+    sequence: integer().notNull(),
+    idempotency_key: text().notNull(),
+    from_status: text(),
+    to_status: text().notNull(),
+    reason: text().notNull(),
+    actor_kind: text().notNull(),
+    actor_id: text(),
+    validator_result_kind: text(),
+    validator_result_id: text(),
+    occurred_at: integer().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("company_outcome_signal_transition_sequence_idx").on(table.outcome_signal_id, table.sequence),
+    uniqueIndex("company_outcome_signal_transition_idempotency_idx").on(table.outcome_signal_id, table.idempotency_key),
+  ],
+)
+
+export const CompanyOutcomeSignalCurrentTable = sqliteTable(
+  "company_outcome_signal_current",
+  {
+    outcome_signal_id: text().primaryKey().references(() => CompanyOutcomeSignalTable.id, { onDelete: "cascade" }),
+    current_status: text().notNull(),
+    latest_transition_id: text().notNull().references(() => CompanyOutcomeSignalTransitionTable.id, { onDelete: "restrict" }),
+    transition_count: integer().notNull(),
+    validated_at: integer(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    index("company_outcome_signal_current_status_idx").on(table.current_status, table.updated_at),
   ],
 )
 

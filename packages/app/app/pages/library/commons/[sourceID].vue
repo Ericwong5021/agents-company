@@ -2,6 +2,8 @@
 import type { CompanyCommonsSourceResponses, CommonsSourceRecord } from "@agents-company/sdk/v2";
 
 const route = useRoute();
+const highlightedChunkID = computed(() =>
+  typeof route.query.chunk === "string" ? route.query.chunk : "");
 const sourceID = computed(() => Array.isArray(route.params.sourceID)
   ? route.params.sourceID[0]
   : route.params.sourceID);
@@ -42,6 +44,19 @@ const statusLabel: Record<CommonsSourceRecord["ingestion_status"], string> = {
   blocked: "安全阻断",
   unsupported: "缺少适配器",
 };
+
+watch(
+  () => [detail.value, highlightedChunkID.value],
+  async () => {
+    if (!detail.value || !highlightedChunkID.value) return;
+    await nextTick();
+    document.getElementById(`chunk-${highlightedChunkID.value}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  },
+  { immediate: true },
+);
 
 async function retrySource() {
   if (!sourceID.value || retrying.value) return;
@@ -166,7 +181,12 @@ async function retrySource() {
               <span>{{ detail.chunks.length }} 块</span>
             </div>
             <div v-if="detail.chunks.length" class="ac-commons-chunks">
-              <article v-for="chunk in detail.chunks" :key="chunk.id">
+              <article
+                v-for="chunk in detail.chunks"
+                :id="`chunk-${chunk.id}`"
+                :key="chunk.id"
+                :data-highlighted="chunk.id === highlightedChunkID"
+              >
                 <div>
                   <strong>#{{ chunk.ordinal + 1 }}</strong>
                   <span>{{ chunk.start_offset }}–{{ chunk.end_offset }}</span>

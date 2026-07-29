@@ -4,6 +4,7 @@ import { CompanyTable } from "@/company/company.sql"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import {
   CompanyProjectTable,
+  CompanyWorkReceiptTable,
   CompanyWorkItemTable,
 } from "@/company-project/company-project.sql"
 import {
@@ -19,6 +20,7 @@ export const CompanyInterpretationTable = sqliteTable(
     reader_agent_id: text().notNull(),
     reader_role: text().notNull(),
     work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    work_receipt_id: text().references(() => CompanyWorkReceiptTable.id, { onDelete: "restrict" }),
     core_thesis: text().notNull(),
     important_claims_json: text().notNull(),
     company_relevance: text().notNull(),
@@ -35,6 +37,7 @@ export const CompanyInterpretationTable = sqliteTable(
   },
   (table) => [
     uniqueIndex("company_interpretation_source_agent_idx").on(table.source_id, table.reader_agent_id),
+    uniqueIndex("company_interpretation_work_receipt_idx").on(table.work_receipt_id),
     index("company_interpretation_work_item_idx").on(table.work_item_id),
     check("company_interpretation_agreement_check", sql`${table.agreement} IN ('aligned','conflicted','mixed','unknown')`),
     check("company_interpretation_disposition_check", sql`${table.disposition} IN ('archive','candidate','reject')`),

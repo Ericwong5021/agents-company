@@ -9,6 +9,7 @@ import { CompanyInterpretationTable } from "@/company-reading/company-reading.sq
 import {
   CompanyArtifactTable,
   CompanyOutcomeSignalTable,
+  CompanyOutcomeSignalCurrentTable,
   CompanyProjectTable,
   CompanyValidationGateTable,
   CompanyWorkReceiptTable,
@@ -181,7 +182,14 @@ function persistedEvidenceRef(db: TxOrDb, ref: string, company_id: string) {
   if (artifact?.company_id) return artifact.company_id === company_id && artifact.scope_type !== "private"
   const project_id =
     db.select({ project_id: CompanyOutcomeSignalTable.project_id }).from(CompanyOutcomeSignalTable)
-      .where(eq(CompanyOutcomeSignalTable.id, ref)).get()?.project_id ??
+      .innerJoin(
+        CompanyOutcomeSignalCurrentTable,
+        eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+      )
+      .where(and(
+        eq(CompanyOutcomeSignalTable.id, ref),
+        eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+      )).get()?.project_id ??
     artifact?.project_id ??
     db.select({ project_id: CompanyValidationGateTable.project_id }).from(CompanyValidationGateTable)
       .where(eq(CompanyValidationGateTable.id, ref)).get()?.project_id ??
@@ -699,7 +707,14 @@ export const layer = Layer.effect(
           }
           if (experiment.status !== "completed") throw new Error("Experiment completion is not an Outcome Signal")
           const outcome = db.select().from(CompanyOutcomeSignalTable)
-            .where(eq(CompanyOutcomeSignalTable.id, input.outcome_signal_id)).get()
+            .innerJoin(
+              CompanyOutcomeSignalCurrentTable,
+              eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+            )
+            .where(and(
+              eq(CompanyOutcomeSignalTable.id, input.outcome_signal_id),
+              eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+            )).get()?.company_outcome_signal
           if (!outcome || outcome.project_id !== experiment.project_id || outcome.decision_id !== experiment.decision_id)
             throw new Error("Outcome Signal must be real, project-matched, and linked to the Experiment decision")
           db.insert(CompanyExperimentOutcomeTable).values({
@@ -735,7 +750,14 @@ export const layer = Layer.effect(
         const experiment = db.select().from(CompanyExperimentTable)
           .where(eq(CompanyExperimentTable.id, input.source_experiment_id)).get()
         const outcome = db.select().from(CompanyOutcomeSignalTable)
-          .where(eq(CompanyOutcomeSignalTable.id, input.source_outcome_id)).get()
+          .innerJoin(
+            CompanyOutcomeSignalCurrentTable,
+            eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+          )
+          .where(and(
+            eq(CompanyOutcomeSignalTable.id, input.source_outcome_id),
+            eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+          )).get()?.company_outcome_signal
         const linked = db.select().from(CompanyExperimentOutcomeTable).where(and(
           eq(CompanyExperimentOutcomeTable.experiment_id, input.source_experiment_id),
           eq(CompanyExperimentOutcomeTable.outcome_signal_id, input.source_outcome_id),

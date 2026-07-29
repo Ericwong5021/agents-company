@@ -28,6 +28,7 @@ import {
 import { CompanyWorkFacts, type ReceiptClaim } from "@/company-project/work-facts"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import { KnowledgeReadingReceipt, type KnowledgeReadingReceipt as KnowledgeReadingReceiptValue } from "@/company-reading/schema"
 import type { TxOrDb } from "@/storage/db"
 
 export const ORCHESTRATOR_VERSION = 1
@@ -498,8 +499,13 @@ export function makeLayer(hooks: Hooks = {}) {
 
       const completeKnowledgeReading = Effect.fn("GraphSupervisor.completeKnowledgeReading")(function* (input: {
         work_item_id: string
-        interpretation_id: string
+        assignment_id: string
+        source_artifact_id: string
+        receipt: KnowledgeReadingReceiptValue
       }) {
+        const receipt = KnowledgeReadingReceipt.parse(input.receipt)
+        if (receipt.work_item_id !== input.work_item_id)
+          throw new Error("Knowledge reading Receipt does not match the WorkItem")
         const row = Database.use((db) =>
           db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.work_item_id)).get(),
         )
@@ -507,16 +513,30 @@ export function makeLayer(hooks: Hooks = {}) {
         const item = (yield* projects.listWorkItems(row.project_id)).find(
           (candidate) => candidate.id === input.work_item_id,
         )!
-        if (item.status === "completed") return item
+        if (item.status === "completed") {
+          const persisted = Database.use((db) =>
+            db
+              .select({ typed_payload_json: CompanyWorkReceiptTable.typed_payload_json })
+              .from(CompanyWorkReceiptTable)
+              .where(eq(CompanyWorkReceiptTable.work_item_id, input.work_item_id))
+              .get(),
+          )
+          if (
+            persisted?.typed_payload_json !==
+            JSON.stringify({ kind: "knowledge_reading", assignment_id: input.assignment_id, receipt })
+          )
+            throw new Error("Completed knowledge reading WorkItem has different Receipt facts")
+          return item
+        }
         return yield* projects.completeWorkItemWithReceipt({
           id: input.work_item_id,
           receipt: {
-            idempotency_key: `knowledge-reading-receipt:${input.interpretation_id}`,
+            idempotency_key: `knowledge-reading-receipt:${input.assignment_id}`,
             outcome: "completed",
-            summary: `Persisted cited Interpretation ${input.interpretation_id}`,
-            artifact_ids: [],
-            evidence_refs: [],
-            confirmed_facts: [`Interpretation ${input.interpretation_id} passed source span validation`],
+            summary: receipt.core_thesis,
+            artifact_ids: [input.source_artifact_id],
+            evidence_refs: [{ kind: "artifact", id: input.source_artifact_id }],
+            confirmed_facts: [],
             invalidated_assumptions: [],
             unknowns: [],
             blockers: [],
@@ -524,6 +544,11 @@ export function makeLayer(hooks: Hooks = {}) {
             task_proposals: [],
             dependency_proposals: [],
             questions: [],
+            typed_payload: {
+              kind: "knowledge_reading",
+              assignment_id: input.assignment_id,
+              receipt,
+            },
           },
         })
       })

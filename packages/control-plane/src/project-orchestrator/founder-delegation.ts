@@ -18,6 +18,7 @@ import {
   CompanyArtifactTable,
   CompanyGraphDecisionTable,
   CompanyOutcomeSignalTable,
+  CompanyOutcomeSignalCurrentTable,
   CompanyProjectTable,
   CompanyWorktreeRunTable,
   CompanyWorkReceiptTable,
@@ -186,7 +187,14 @@ function chain(row: typeof FounderGreenDelegationRunTable.$inferSelect) {
     db
       .select({ id: CompanyOutcomeSignalTable.id })
       .from(CompanyOutcomeSignalTable)
-      .where(eq(CompanyOutcomeSignalTable.decision_id, row.decision_id))
+      .innerJoin(
+        CompanyOutcomeSignalCurrentTable,
+        eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+      )
+      .where(and(
+        eq(CompanyOutcomeSignalTable.decision_id, row.decision_id),
+        eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+      ))
       .orderBy(asc(CompanyOutcomeSignalTable.observed_at), asc(CompanyOutcomeSignalTable.id))
       .all()
       .map((outcome) => outcome.id),
@@ -218,8 +226,15 @@ function fromRow(row: typeof FounderGreenDelegationRunTable.$inferSelect) {
   const latestOutcome = currentChain.outcomeIds.length
     ? Database.use((db) =>
         db
-          .select({ result: CompanyOutcomeSignalTable.result })
+          .select({
+            result: CompanyOutcomeSignalTable.result,
+            currentStatus: CompanyOutcomeSignalCurrentTable.current_status,
+          })
           .from(CompanyOutcomeSignalTable)
+          .innerJoin(
+            CompanyOutcomeSignalCurrentTable,
+            eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+          )
           .where(eq(
             CompanyOutcomeSignalTable.id,
             currentChain.outcomeIds[currentChain.outcomeIds.length - 1]!,
@@ -227,7 +242,7 @@ function fromRow(row: typeof FounderGreenDelegationRunTable.$inferSelect) {
           .get(),
       )
     : undefined
-  const outcomeStatus = latestOutcome?.result ?? "missing"
+  const outcomeStatus = latestOutcome?.currentStatus === "validated" ? latestOutcome.result : "missing"
   const completeChain = outcomeStatus === "succeeded"
     && Boolean(
       currentChain.governanceRef
@@ -339,11 +354,18 @@ function reconcileOutcomes(companyId: string) {
         const outcome = db
           .select()
           .from(CompanyOutcomeSignalTable)
-          .where(eq(CompanyOutcomeSignalTable.decision_id, run.decision_id))
+          .innerJoin(
+            CompanyOutcomeSignalCurrentTable,
+            eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+          )
+          .where(and(
+            eq(CompanyOutcomeSignalTable.decision_id, run.decision_id),
+            eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+          ))
           .orderBy(desc(CompanyOutcomeSignalTable.observed_at), desc(CompanyOutcomeSignalTable.id))
           .get()
         if (!outcome) return
-        const complete = outcome.result === "succeeded"
+        const complete = outcome.company_outcome_signal.result === "succeeded"
           && Boolean(run.governance_ref && run.graph_decision_id && run.mutation_id)
         db.update(FounderGreenDelegationRunTable)
           .set({
@@ -351,9 +373,9 @@ function reconcileOutcomes(companyId: string) {
             fail_closed_reasons_json: JSON.stringify(
               complete
                 ? []
-                : outcome.result === "succeeded"
+                : outcome.company_outcome_signal.result === "succeeded"
                   ? ["OutcomeSignal succeeded but the persisted delegation chain is incomplete."]
-                  : [`OutcomeSignal result is ${outcome.result}.`],
+                  : [`OutcomeSignal result is ${outcome.company_outcome_signal.result}.`],
             ),
             updated_at: Date.now(),
           })

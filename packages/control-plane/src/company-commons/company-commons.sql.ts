@@ -26,6 +26,7 @@ export const CompanyCommonsSourceTable = sqliteTable(
     language: text(),
     tags_json: text().notNull(),
     privacy_scope: text().notNull(),
+    capability_status: text().notNull(),
     ingestion_status: text().notNull(),
     transcript_status: text().notNull(),
     content_hash: text(),
@@ -62,6 +63,10 @@ export const CompanyCommonsSourceTable = sqliteTable(
     check(
       "company_commons_ingestion_status_check",
       sql.raw("ingestion_status IN ('queued','processing','ready','failed','blocked','unsupported')"),
+    ),
+    check(
+      "company_commons_capability_status_check",
+      sql.raw("capability_status IN ('supported','unsupported','blocked')"),
     ),
     check(
       "company_commons_transcript_status_check",

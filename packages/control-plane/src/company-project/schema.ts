@@ -1,6 +1,7 @@
 import z from "zod"
 import { NamedError } from "@agents-company/shared/util/error"
 import { ProjectExecutionStrategy, SeedMode } from "@agents-company/shared/project-orchestration"
+import { KnowledgeReadingReceipt } from "@/company-reading/schema"
 
 export const ProjectStatus = z.enum([
   "intake",
@@ -293,6 +294,17 @@ export const WorkReceiptEvidenceRef = z
   .strict()
 export type WorkReceiptEvidenceRef = z.infer<typeof WorkReceiptEvidenceRef>
 
+export const WorkReceiptTypedPayload = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("knowledge_reading"),
+      assignment_id: z.string().trim().min(1),
+      receipt: KnowledgeReadingReceipt,
+    })
+    .strict(),
+])
+export type WorkReceiptTypedPayload = z.infer<typeof WorkReceiptTypedPayload>
+
 export const WorkReceiptSubmission = z
   .object({
     idempotency_key: z.string().trim().min(1).max(500),
@@ -308,6 +320,7 @@ export const WorkReceiptSubmission = z
     task_proposals: z.array(z.record(z.string(), z.unknown())).max(500),
     dependency_proposals: z.array(z.record(z.string(), z.unknown())).max(500),
     questions: z.array(z.string().trim().min(1)).max(500),
+    typed_payload: WorkReceiptTypedPayload.optional(),
   })
   .strict()
 export type WorkReceiptSubmission = z.infer<typeof WorkReceiptSubmission>
@@ -327,7 +340,7 @@ export const WorkReceipt = WorkReceiptSubmission.extend({
 })
 export type WorkReceipt = z.infer<typeof WorkReceipt>
 
-export const OutcomeSignalSchemaVersion = z.literal(1)
+export const OutcomeSignalSchemaVersion = z.union([z.literal(1), z.literal(2)])
 export type OutcomeSignalSchemaVersion = z.infer<typeof OutcomeSignalSchemaVersion>
 
 export const OutcomeSignalResult = z.enum(["succeeded", "failed", "inconclusive"])
@@ -346,26 +359,78 @@ export const OutcomeSignalValidatorRef = z.discriminatedUnion("kind", [
 ])
 export type OutcomeSignalValidatorRef = z.infer<typeof OutcomeSignalValidatorRef>
 
+export const OutcomeSignalMetricContractRef = z
+  .object({
+    kind: z.enum(["founder_metric_contract", "project_metric_contract"]),
+    id: z.string().trim().min(1).max(500),
+    version: z.number().int().positive(),
+  })
+  .strict()
+export type OutcomeSignalMetricContractRef = z.infer<typeof OutcomeSignalMetricContractRef>
+
+export const OutcomeSignalObservationWindow = z
+  .object({
+    starts_at: z.number().int().nonnegative(),
+    ends_at: z.number().int().positive(),
+  })
+  .strict()
+  .refine((value) => value.ends_at > value.starts_at, "Outcome observation window must advance")
+export type OutcomeSignalObservationWindow = z.infer<typeof OutcomeSignalObservationWindow>
+
+export const OutcomeSignalStatus = z.enum(["observed", "validated", "invalidated"])
+export type OutcomeSignalStatus = z.infer<typeof OutcomeSignalStatus>
+
 export const OutcomeSignalSubmission = z
   .object({
-    schema_version: OutcomeSignalSchemaVersion,
+    schema_version: z.literal(2),
     idempotency_key: z.string().trim().min(1).max(500),
     decision_id: z.string().trim().min(1).max(240).optional(),
     result: OutcomeSignalResult,
     summary: z.string().trim().min(1).max(8_000),
     validator_ref: OutcomeSignalValidatorRef,
+    validator_result_ref: OutcomeSignalValidatorRef,
+    work_receipt_id: z.string().trim().min(1).optional(),
+    metric_contract_ref: OutcomeSignalMetricContractRef,
+    observation_window: OutcomeSignalObservationWindow,
     source_refs: z.array(OutcomeSignalSourceRef).min(1).max(1_000),
     observed_at: z.number().int().nonnegative(),
   })
   .strict()
 export type OutcomeSignalSubmission = z.infer<typeof OutcomeSignalSubmission>
 
-export const OutcomeSignal = OutcomeSignalSubmission.extend({
+export const OutcomeSignal = OutcomeSignalSubmission.omit({ schema_version: true }).extend({
+  schema_version: OutcomeSignalSchemaVersion,
   id: z.string(),
+  company_id: z.string(),
   project_id: z.string(),
+  current_status: OutcomeSignalStatus,
+  validated_at: z.number().int().nonnegative().optional(),
   created_at: z.number().int().nonnegative(),
 })
 export type OutcomeSignal = z.infer<typeof OutcomeSignal>
+
+export const OutcomeSignalTransitionSubmission = z
+  .object({
+    idempotency_key: z.string().trim().min(1).max(500),
+    status: z.enum(["validated", "invalidated"]),
+    validator_result_ref: OutcomeSignalValidatorRef,
+    reason: z.string().trim().min(1).max(8_000),
+    actor_kind: z.enum(["human", "control_plane", "external_system", "independent_reviewer"]),
+    actor_id: z.string().trim().min(1).optional(),
+    occurred_at: z.number().int().nonnegative(),
+  })
+  .strict()
+export type OutcomeSignalTransitionSubmission = z.infer<typeof OutcomeSignalTransitionSubmission>
+
+export const OutcomeSignalTransition = OutcomeSignalTransitionSubmission.omit({ status: true }).extend({
+  id: z.string(),
+  outcome_signal_id: z.string(),
+  sequence: z.number().int().positive(),
+  from_status: OutcomeSignalStatus.optional(),
+  status: OutcomeSignalStatus,
+  created_at: z.number().int().nonnegative(),
+})
+export type OutcomeSignalTransition = z.infer<typeof OutcomeSignalTransition>
 
 export const ValidationGateKind = z.enum([
   "prerequisite",

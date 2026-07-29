@@ -333,6 +333,22 @@ export function makeLayer(options: {
           adapter.source_types.map((source_type) => [source_type, adapter] as const),
         ),
       )
+      const capabilityStatus = (source_type: CommonsSourceType) =>
+        builtInTypes.has(source_type) || adapters.has(source_type)
+          ? "supported" as const
+          : options.unavailable?.[source_type]?.status ?? "unsupported"
+      const sourceWithCapability = (row: typeof CompanyCommonsSourceTable.$inferSelect) => {
+        const capability_status = capabilityStatus(row.source_type as CommonsSourceType)
+        if (row.capability_status !== capability_status)
+          Database.use((db) =>
+            db
+              .update(CompanyCommonsSourceTable)
+              .set({ capability_status })
+              .where(eq(CompanyCommonsSourceTable.id, row.id))
+              .run(),
+          )
+        return sourceFromRow({ ...row, capability_status })
+      }
 
       const capabilities = Effect.fn("CompanyCommons.capabilities")(function* () {
         return CommonsCapability.array().parse(
@@ -342,7 +358,7 @@ export function makeLayer(options: {
             return {
               source_type,
               status: builtInTypes.has(source_type) || adapter
-                ? "available"
+                ? "supported"
                 : unavailable?.status ?? "unsupported",
               adapter_id: adapter?.id,
               adapter_version: adapter?.version,
@@ -369,7 +385,7 @@ export function makeLayer(options: {
             .limit(page.limit)
             .offset(page.offset)
             .all()
-            .map(sourceFromRow),
+            .map(sourceWithCapability),
         )
       })
 
@@ -391,7 +407,7 @@ export function makeLayer(options: {
         )
         if (!artifact) throw new Error(`Commons source ${id} has no original Artifact`)
         return CommonsSourceDetail.parse({
-          source: sourceFromRow(row),
+          source: sourceWithCapability(row),
           artifact: {
             ...artifact,
             project_id: artifact.project_id ?? undefined,
@@ -423,6 +439,7 @@ export function makeLayer(options: {
             .update(CompanyCommonsSourceTable)
             .set({
               ingestion_status: status,
+              capability_status: status === "blocked" ? "blocked" : status === "unsupported" ? "unsupported" : undefined,
               transcript_status: transcriptTypes.has(
                 db
                   .select({ source_type: CompanyCommonsSourceTable.source_type })
@@ -510,6 +527,7 @@ export function makeLayer(options: {
           db.update(CompanyCommonsSourceTable)
             .set({
               ingestion_status: "ready",
+              capability_status: "supported",
               transcript_status: transcriptTypes.has(source.source_type) ? "ready" : "not_applicable",
               content_hash: rawHash,
               normalized_content_hash,
@@ -552,6 +570,7 @@ export function makeLayer(options: {
             .update(CompanyCommonsSourceTable)
             .set({
               ingestion_status: "processing",
+              capability_status: "supported",
               transcript_status: transcriptTypes.has(source.source_type) ? "processing" : "not_applicable",
               adapter_id: adapter.id,
               adapter_version: adapter.version,
@@ -675,6 +694,7 @@ export function makeLayer(options: {
               language: input.language ?? null,
               tags_json: JSON.stringify([...new Set(input.tags)].sort()),
               privacy_scope: input.privacy_scope,
+              capability_status: capabilityStatus(input.source_type),
               ingestion_status: "queued",
               transcript_status: transcriptTypes.has(input.source_type) ? "queued" : "not_applicable",
               content_hash: sha256(content),
@@ -727,6 +747,7 @@ export function makeLayer(options: {
             .update(CompanyCommonsSourceTable)
             .set({
               ingestion_status: "queued",
+              capability_status: capabilityStatus(detail.source.source_type),
               transcript_status: transcriptTypes.has(detail.source.source_type) ? "queued" : "not_applicable",
               error_code: null,
               error_message: null,
@@ -858,6 +879,7 @@ export function makeLayer(options: {
                 db.update(CompanyCommonsSourceTable)
                   .set({
                     ingestion_status: "queued",
+                    capability_status: capabilityStatus(row.source_type as CommonsSourceType),
                     transcript_status: transcriptTypes.has(row.source_type as CommonsSourceType)
                       ? "queued"
                       : "not_applicable",

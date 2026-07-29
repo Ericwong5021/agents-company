@@ -264,6 +264,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/reading-schedule.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/reading/profiles/:agentID",
+      method: "put",
+      handler: resolver.resolve("./runtime/server/api/reading-profile.put"),
+    })
+    addServerHandler({
       route: "/api/agent-company/reading/:assignmentID/stop",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/reading-stop.post"),

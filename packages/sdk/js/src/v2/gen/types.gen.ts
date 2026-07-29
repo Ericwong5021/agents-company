@@ -4481,6 +4481,34 @@ export type CompanyCurrentResponses = {
 
 export type CompanyCurrentResponse = CompanyCurrentResponses[keyof CompanyCurrentResponses]
 
+export type FounderOSModeStateRecord = {
+  schemaVersion: 1
+  globalMaximum: {
+    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+  }
+  company: {
+    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+  }
+  effective: {
+    founderTwinMode: "off" | "shadow" | "advisor" | "green-delegated" | "yellow-delegated"
+    companyCommonsMode: "off" | "ingest-only" | "reading" | "belief-loop"
+  }
+}
+
+export type CompanyFounderOSModesResponses = {
+  200: FounderOSModeStateRecord
+}
+
+export type CompanyFounderOSModesUpdateResponses = {
+  200: FounderOSModeStateRecord
+}
+
+export type CompanyBeliefLoopActivateResponses = {
+  200: FounderOSModeStateRecord
+}
+
 export type CompanyAgentsData = {
   body?: never
   path?: never
@@ -11473,6 +11501,7 @@ export type CommonsSourceRecord = {
   language?: string
   tags: Array<string>
   privacy_scope: "company" | "project" | "private"
+  capability_status: "supported" | "unsupported" | "blocked"
   ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
   transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
   content_hash?: string
@@ -11509,8 +11538,12 @@ export type CommonsAccess = {
 
 export type CommonsCapabilityRecord = {
   source_type: CommonsSourceType
-  status: "available" | "adapter_required"
+  status: "supported" | "blocked" | "unsupported"
   adapter_id?: string
+  adapter_version?: string
+  reason_code?: string
+  reason?: string
+  requirements: Array<string>
   supports_transcript: boolean
 }
 
@@ -11669,6 +11702,7 @@ export type ReadingProjectConnectionRecord = {
 
 export type InterpretationRecord = {
   id: string
+  work_receipt_id?: string
   source_id: string
   reader_agent_id: string
   reader_agent_name?: string
@@ -11730,6 +11764,10 @@ export type CompanyReadingInterpretationsResponses = {
 }
 
 export type CompanyReadingCreateInterpretationResponses = {
+  200: InterpretationRecord
+}
+
+export type CompanyReadingConsumeReceiptResponses = {
   200: InterpretationRecord
 }
 
@@ -11964,6 +12002,11 @@ export type CompanyProjectReceiptsResponses = {
       [key: string]: unknown
     }>
     questions: Array<string>
+    typed_payload?: {
+      kind: "knowledge_reading"
+      assignment_id: string
+      receipt: Omit<InterpretationRecord, "id" | "work_receipt_id" | "reader_agent_name" | "created_at">
+    }
     id: string
     project_id: string
     work_item_id: string
@@ -11991,16 +12034,45 @@ export type OutcomeSignalValidatorRef = {
 }
 
 export type OutcomeSignalRecord = {
-  schema_version: 1
+  schema_version: 1 | 2
   idempotency_key: string
   decision_id?: string
   result: "succeeded" | "failed" | "inconclusive"
   summary: string
   validator_ref: OutcomeSignalValidatorRef
+  validator_result_ref: OutcomeSignalValidatorRef
+  work_receipt_id?: string
+  metric_contract_ref: {
+    kind: "founder_metric_contract" | "project_metric_contract"
+    id: string
+    version: number
+  }
+  observation_window: {
+    starts_at: number
+    ends_at: number
+  }
   source_refs: Array<OutcomeSignalSourceRef>
   observed_at: number
   id: string
+  company_id: string
   project_id: string
+  current_status: "observed" | "validated" | "invalidated"
+  validated_at?: number
+  created_at: number
+}
+
+export type OutcomeSignalTransitionRecord = {
+  id: string
+  outcome_signal_id: string
+  sequence: number
+  idempotency_key: string
+  from_status?: "observed" | "validated" | "invalidated"
+  status: "observed" | "validated" | "invalidated"
+  validator_result_ref: OutcomeSignalValidatorRef
+  reason: string
+  actor_kind: "human" | "control_plane" | "external_system" | "independent_reviewer"
+  actor_id?: string
+  occurred_at: number
   created_at: number
 }
 
@@ -12026,12 +12098,23 @@ export type CompanyProjectOutcomesResponse = CompanyProjectOutcomesResponses[key
 
 export type CompanyProjectSubmitOutcomeData = {
   body: {
-    schema_version: 1
+    schema_version: 2
     idempotency_key: string
     decision_id?: string
     result: "succeeded" | "failed" | "inconclusive"
     summary: string
     validator_ref: OutcomeSignalValidatorRef
+    validator_result_ref: OutcomeSignalValidatorRef
+    work_receipt_id?: string
+    metric_contract_ref: {
+      kind: "founder_metric_contract" | "project_metric_contract"
+      id: string
+      version: number
+    }
+    observation_window: {
+      starts_at: number
+      ends_at: number
+    }
     source_refs: Array<OutcomeSignalSourceRef>
     observed_at: number
   }
@@ -12073,6 +12156,18 @@ export type CompanyProjectOutcomeResponses = {
 }
 
 export type CompanyProjectOutcomeResponse = CompanyProjectOutcomeResponses[keyof CompanyProjectOutcomeResponses]
+
+export type CompanyProjectOutcomeTransitionsResponses = {
+  200: Array<OutcomeSignalTransitionRecord>
+}
+
+export type CompanyProjectTransitionOutcomeResponses = {
+  200: {
+    signal: OutcomeSignalRecord
+    transition: OutcomeSignalTransitionRecord
+    replayed: boolean
+  }
+}
 
 export type CompanyProjectCancelData = {
   body?: {

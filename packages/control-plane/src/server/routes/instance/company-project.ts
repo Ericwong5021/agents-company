@@ -8,6 +8,8 @@ import {
   CompanyProjectExecution,
   OutcomeSignal,
   OutcomeSignalSubmission,
+  OutcomeSignalTransition,
+  OutcomeSignalTransitionSubmission,
   Project,
   WorkAttempt,
   WorkReceipt,
@@ -56,6 +58,11 @@ const GateResultSchema = z.object({
 })
 const OutcomeSubmissionResultSchema = z.object({
   signal: OutcomeSignal,
+  replayed: z.boolean(),
+})
+const OutcomeTransitionResultSchema = z.object({
+  signal: OutcomeSignal,
+  transition: OutcomeSignalTransition,
   replayed: z.boolean(),
 })
 
@@ -251,6 +258,52 @@ export const CompanyProjectRoutes = lazy(() =>
           if (!signal || signal.project_id !== c.req.valid("param").projectID)
             return yield* Effect.fail(new Error("Outcome signal not found"))
           return signal
+        }),
+    )
+    .get(
+      "/:projectID/outcomes/:outcomeID/transitions",
+      describeRoute({
+        summary: "List append-only Outcome Signal transitions",
+        operationId: "companyProject.outcomeTransitions",
+        responses: {
+          200: {
+            description: "Outcome signal transitions",
+            content: { "application/json": { schema: resolver(z.array(OutcomeSignalTransition)) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1), outcomeID: z.string().min(1) })),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.outcomeTransitions", c, function* () {
+          const signal = yield* (yield* CompanyOutcomeSignal.Service).get(c.req.valid("param").outcomeID)
+          if (!signal || signal.project_id !== c.req.valid("param").projectID)
+            return yield* Effect.fail(new Error("Outcome signal not found"))
+          return yield* (yield* CompanyOutcomeSignal.Service).listTransitions(signal.id)
+        }),
+    )
+    .post(
+      "/:projectID/outcomes/:outcomeID/transitions",
+      describeRoute({
+        summary: "Append an Outcome Signal validation transition",
+        operationId: "companyProject.transitionOutcome",
+        responses: {
+          200: {
+            description: "Updated outcome projection",
+            content: { "application/json": { schema: resolver(OutcomeTransitionResultSchema) } },
+          },
+        },
+      }),
+      validator("param", z.object({ projectID: z.string().min(1), outcomeID: z.string().min(1) })),
+      validator("json", OutcomeSignalTransitionSubmission),
+      async (c) =>
+        jsonRequest("CompanyProjectRoutes.transitionOutcome", c, function* () {
+          const signal = yield* (yield* CompanyOutcomeSignal.Service).get(c.req.valid("param").outcomeID)
+          if (!signal || signal.project_id !== c.req.valid("param").projectID)
+            return yield* Effect.fail(new Error("Outcome signal not found"))
+          return yield* (yield* CompanyOutcomeSignal.Service).transition({
+            outcome_signal_id: signal.id,
+            transition: c.req.valid("json"),
+          })
         }),
     )
     .post(

@@ -2,7 +2,8 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import type { FounderOSModeState } from "@agents-company/shared/founder-os"
 import { Context, Effect, Layer } from "effect"
-import { eq } from "@/storage"
+import { and, eq } from "drizzle-orm"
+import z from "zod"
 import * as Database from "@/storage/db"
 import type { TxOrDb } from "@/storage/db"
 import { Global } from "@/global"
@@ -14,11 +15,15 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { Flag } from "@/flag/flag"
 import { FounderOSMode } from "@/founder-os"
+import { FounderGovernanceEventTable } from "@/founder-os/decision-ledger.sql"
+import { CompanyArtifactTable, CompanyProjectTable } from "@/company-project/company-project.sql"
 import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanySetupGoalTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
 import {
   ApprovalPolicyUpdateInput,
+  BeliefLoopActivationInput,
+  type BeliefLoopActivationInput as BeliefLoopActivationInputType,
   BootstrapInput,
   type BootstrapInput as BootstrapInputType,
   CompanyProviderBindingInput,
@@ -279,6 +284,7 @@ export interface Interface {
   readonly bindProvider: (input: CompanyProviderBindingInputType) => Effect.Effect<CompanyReadyState, unknown>
   readonly updateApprovalPolicy: (input: ApprovalPolicyUpdateInput) => Effect.Effect<CompanyReadyState, unknown>
   readonly updateFounderOSModes: (input: FounderOSModeUpdateInput) => Effect.Effect<FounderOSModeState, unknown>
+  readonly activateBeliefLoop: (input: BeliefLoopActivationInputType) => Effect.Effect<FounderOSModeState, unknown>
   readonly inspectRepository: (path: string) => Effect.Effect<RepositoryCandidate, unknown, Git.Service | Project.Service>
   readonly ensureManagedRepository: () => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
   readonly bootstrap: (input: BootstrapInputType) => Effect.Effect<CompanyReadyState, unknown, Git.Service | Project.Service>
@@ -408,6 +414,13 @@ export const layer = Layer.effect(
       return yield* database(() =>
         Database.transaction((tx) => {
           ensureDefaultCompany(tx as Database.Transaction)
+          const currentMode = tx
+            .select({ mode: CompanyTable.company_commons_mode })
+            .from(CompanyTable)
+            .where(eq(CompanyTable.id, COMPANY_ID))
+            .get()!.mode
+          if (input.companyCommonsMode === "belief-loop" && currentMode !== "belief-loop")
+            throw new Error("Belief Loop mode requires the controlled activation endpoint")
           tx.update(CompanyTable)
             .set({
               founder_twin_mode: input.founderTwinMode,
@@ -415,6 +428,70 @@ export const layer = Layer.effect(
               time_updated: Date.now(),
             })
             .where(eq(CompanyTable.id, COMPANY_ID))
+            .run()
+          return founderOSModes(tx)
+        }, { behavior: "immediate" }),
+      )
+    })
+
+    const activateBeliefLoop = Effect.fn("Company.activateBeliefLoop")(function* (
+      raw: BeliefLoopActivationInputType,
+    ) {
+      const input = BeliefLoopActivationInput.parse(raw)
+      return yield* database(() =>
+        Database.transaction((tx) => {
+          ensureDefaultCompany(tx as Database.Transaction)
+          if (input.company_id !== COMPANY_ID) throw new Error("Belief Loop activation company does not match")
+          const artifact = (id: string, gate: "K1" | "W2" | "E0" | "K2") => {
+            const row = tx.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, id)).get()
+            const project = row?.project_id
+              ? tx.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, row.project_id)).get()
+              : undefined
+            if (!row || (row.company_id !== input.company_id && project?.company_id !== input.company_id))
+              throw new Error(`${gate} activation evidence is not company-scoped`)
+            const evidence = z
+              .object({
+                verified: z.literal(true),
+                gate: z.literal(gate),
+                authority: z.enum(["control_plane", "external_system", "independent_reviewer"]),
+                evidence_package: z
+                  .object({
+                    weak_gate: z.literal("confirmed"),
+                    fixture_success_allowed: z.literal(false),
+                    complete_real_chain: z.literal(true),
+                    requirements: z
+                      .array(z.object({ status: z.literal("present") }).catchall(z.unknown()))
+                      .min(1),
+                  })
+                  .catchall(z.unknown())
+                  .optional(),
+              })
+              .catchall(z.unknown())
+              .parse(JSON.parse(row.evidence_json))
+            if (gate === "K2" && !evidence.evidence_package)
+              throw new Error("K2 activation requires a complete real-chain evidence package")
+            return row
+          }
+          artifact(input.k1_artifact_id, "K1")
+          artifact(input.w2_artifact_id, "W2")
+          artifact(input.e0_artifact_id, "E0")
+          artifact(input.k2_evidence_package_artifact_id, "K2")
+          const authorization = tx
+            .select()
+            .from(FounderGovernanceEventTable)
+            .where(and(
+              eq(FounderGovernanceEventTable.id, input.authorization_event_id),
+              eq(FounderGovernanceEventTable.company_id, input.company_id),
+              eq(FounderGovernanceEventTable.actor_kind, "human"),
+              eq(FounderGovernanceEventTable.actor_id, input.actor.id),
+            ))
+            .get()
+          if (!authorization || authorization.type !== "approval_gate.resolved")
+            throw new Error("Belief Loop activation requires a persisted human authorization event")
+          z.object({ decision: z.literal("approve") }).catchall(z.unknown()).parse(JSON.parse(authorization.data_json))
+          tx.update(CompanyTable)
+            .set({ company_commons_mode: "belief-loop", time_updated: Date.now() })
+            .where(eq(CompanyTable.id, input.company_id))
             .run()
           return founderOSModes(tx)
         }, { behavior: "immediate" }),
@@ -555,6 +632,7 @@ export const layer = Layer.effect(
       bindProvider,
       updateApprovalPolicy,
       updateFounderOSModes,
+      activateBeliefLoop,
       inspectRepository,
       ensureManagedRepository,
       bootstrap,

@@ -7,7 +7,9 @@ import type { TxOrDb } from "@/storage/db"
 import { DecisionCurrentProjectionTable, DecisionRecordTable } from "@/founder-os/decision-ledger.sql"
 import {
   CompanyArtifactTable,
+  CompanyOutcomeSignalCurrentTable,
   CompanyOutcomeSignalTable,
+  CompanyOutcomeSignalTransitionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
   CompanyValidationGateTable,
@@ -17,10 +19,14 @@ import {
   OutcomeSignal,
   OutcomeSignalSourceRef,
   OutcomeSignalSubmission,
+  OutcomeSignalTransition,
+  OutcomeSignalTransitionSubmission,
   WorkReceiptEvidenceRef,
   type OutcomeSignal as OutcomeSignalValue,
   type OutcomeSignalSourceRef as OutcomeSignalSourceRefValue,
   type OutcomeSignalSubmission as OutcomeSignalSubmissionValue,
+  type OutcomeSignalTransition as OutcomeSignalTransitionValue,
+  type OutcomeSignalTransitionSubmission as OutcomeSignalTransitionSubmissionValue,
   type OutcomeSignalValidatorRef,
 } from "./schema"
 
@@ -36,11 +42,15 @@ const IndependentArtifactEvidence = z
 const normalizedRefs = (refs: OutcomeSignalSourceRefValue[]) =>
   [...refs].sort((left, right) => `${left.kind}:${left.id}`.localeCompare(`${right.kind}:${right.id}`))
 
-const signalFromRow = (row: typeof CompanyOutcomeSignalTable.$inferSelect) =>
+const signalFromRow = (
+  row: typeof CompanyOutcomeSignalTable.$inferSelect,
+  current: typeof CompanyOutcomeSignalCurrentTable.$inferSelect,
+) =>
   OutcomeSignal.parse({
     id: row.id,
     schema_version: row.schema_version,
     project_id: row.project_id,
+    company_id: row.company_id,
     decision_id: row.decision_id ?? undefined,
     idempotency_key: row.idempotency_key,
     result: row.result,
@@ -49,10 +59,55 @@ const signalFromRow = (row: typeof CompanyOutcomeSignalTable.$inferSelect) =>
       kind: row.validator_kind,
       id: row.validator_id,
     },
+    validator_result_ref: {
+      kind: row.validator_result_kind ?? row.validator_kind,
+      id: row.validator_result_id ?? row.validator_id,
+    },
+    work_receipt_id: row.work_receipt_id ?? undefined,
+    metric_contract_ref: {
+      kind: row.metric_contract_kind,
+      id: row.metric_contract_id,
+      version: row.metric_contract_version,
+    },
+    observation_window: {
+      starts_at: row.observation_window_starts_at,
+      ends_at: row.observation_window_ends_at,
+    },
     source_refs: JSON.parse(row.source_refs_json),
     observed_at: row.observed_at,
+    current_status: current.current_status,
+    validated_at: current.validated_at ?? undefined,
     created_at: row.created_at,
   })
+
+const transitionFromRow = (row: typeof CompanyOutcomeSignalTransitionTable.$inferSelect) =>
+  OutcomeSignalTransition.parse({
+    id: row.id,
+    outcome_signal_id: row.outcome_signal_id,
+    sequence: row.sequence,
+    idempotency_key: row.idempotency_key,
+    from_status: row.from_status ?? undefined,
+    status: row.to_status,
+    reason: row.reason,
+    actor_kind: row.actor_kind,
+    actor_id: row.actor_id ?? undefined,
+    validator_result_ref: {
+      kind: row.validator_result_kind,
+      id: row.validator_result_id,
+    },
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
+  })
+
+function currentFor(db: TxOrDb, outcome_signal_id: string) {
+  const current = db
+    .select()
+    .from(CompanyOutcomeSignalCurrentTable)
+    .where(eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, outcome_signal_id))
+    .get()
+  if (!current) throw new Error(`Outcome Signal current projection not found: ${outcome_signal_id}`)
+  return current
+}
 
 function sameSubmission(
   row: typeof CompanyOutcomeSignalTable.$inferSelect,
@@ -66,6 +121,14 @@ function sameSubmission(
     row.summary === input.summary &&
     row.validator_kind === input.validator_ref.kind &&
     row.validator_id === input.validator_ref.id &&
+    row.validator_result_kind === input.validator_result_ref.kind &&
+    row.validator_result_id === input.validator_result_ref.id &&
+    row.work_receipt_id === (input.work_receipt_id ?? null) &&
+    row.metric_contract_kind === input.metric_contract_ref.kind &&
+    row.metric_contract_id === input.metric_contract_ref.id &&
+    row.metric_contract_version === input.metric_contract_ref.version &&
+    row.observation_window_starts_at === input.observation_window.starts_at &&
+    row.observation_window_ends_at === input.observation_window.ends_at &&
     row.source_refs_json === JSON.stringify(source_refs) &&
     row.observed_at === input.observed_at
   )
@@ -178,6 +241,11 @@ export interface Interface {
     project_id: string,
     page?: { limit: number; offset: number },
   ) => Effect.Effect<OutcomeSignalValue[]>
+  readonly transition: (input: {
+    outcome_signal_id: string
+    transition: OutcomeSignalTransitionSubmissionValue
+  }) => Effect.Effect<{ signal: OutcomeSignalValue; transition: OutcomeSignalTransitionValue; replayed: boolean }>
+  readonly listTransitions: (outcome_signal_id: string) => Effect.Effect<OutcomeSignalTransitionValue[]>
   readonly recover: () => Effect.Effect<{ signal_ids: string[] }>
 }
 
@@ -190,7 +258,7 @@ export const layer = Layer.effect(
       return yield* Effect.sync(() =>
         Database.use((db) => {
           const row = db.select().from(CompanyOutcomeSignalTable).where(eq(CompanyOutcomeSignalTable.id, id)).get()
-          return row ? signalFromRow(row) : undefined
+          return row ? signalFromRow(row, currentFor(db, row.id)) : undefined
         }),
       )
     })
@@ -209,7 +277,7 @@ export const layer = Layer.effect(
             .limit(page.limit)
             .offset(page.offset)
             .all()
-            .map(signalFromRow),
+            .map((row) => signalFromRow(row, currentFor(db, row.id))),
         ),
       )
     })
@@ -230,6 +298,21 @@ export const layer = Layer.effect(
       )
         throw new Error("Outcome Signal validator must be included in source references")
       if (input.observed_at > Date.now() + 300_000) throw new Error("Outcome Signal observation time is in the future")
+      if (
+        input.observed_at < input.observation_window.starts_at ||
+        input.observed_at > input.observation_window.ends_at
+      )
+        throw new Error("Outcome Signal observation must fall inside the observation window")
+      if (
+        input.validator_ref.kind !== input.validator_result_ref.kind ||
+        input.validator_ref.id !== input.validator_result_ref.id
+      )
+        throw new Error("Outcome Signal validator result must identify the independent validator")
+      if (
+        input.work_receipt_id &&
+        !source_refs.some((reference) => reference.kind === "work_receipt" && reference.id === input.work_receipt_id)
+      )
+        throw new Error("Outcome Signal typed Work Receipt must be included in source references")
       return yield* Effect.sync(() =>
         Database.transaction(
           (db) => {
@@ -249,16 +332,20 @@ export const layer = Layer.effect(
             if (existing) {
               if (!sameSubmission(existing, input, source_refs))
                 throw new Error(`Outcome Signal idempotency key ${input.idempotency_key} has different facts`)
-              return { signal: signalFromRow(existing), replayed: true }
+              return { signal: signalFromRow(existing, currentFor(db, existing.id)), replayed: true }
             }
             source_refs.forEach((reference) => validateSourceReference(db, project_id, reference))
             validateValidator(db, project_id, input.validator_ref)
             const now = Date.now()
             const id = Identifier.ascending("outcomeSignal")
+            const transition_id = Identifier.ascending("outcomeTransition")
+            const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, project_id)).get()!
+            if (!project.company_id) throw new Error("Outcome Signal project is not attached to a company")
             db.insert(CompanyOutcomeSignalTable)
               .values({
                 id,
                 schema_version: input.schema_version,
+                company_id: project.company_id,
                 project_id,
                 decision_id: input.decision_id ?? null,
                 idempotency_key: input.idempotency_key,
@@ -266,17 +353,168 @@ export const layer = Layer.effect(
                 summary: input.summary,
                 validator_kind: input.validator_ref.kind,
                 validator_id: input.validator_ref.id,
+                validator_result_kind: input.validator_result_ref.kind,
+                validator_result_id: input.validator_result_ref.id,
+                work_receipt_id: input.work_receipt_id ?? null,
+                metric_contract_kind: input.metric_contract_ref.kind,
+                metric_contract_id: input.metric_contract_ref.id,
+                metric_contract_version: input.metric_contract_ref.version,
+                observation_window_starts_at: input.observation_window.starts_at,
+                observation_window_ends_at: input.observation_window.ends_at,
                 source_refs_json: JSON.stringify(source_refs),
                 observed_at: input.observed_at,
                 created_at: now,
               })
               .run()
+            db.insert(CompanyOutcomeSignalTransitionTable)
+              .values({
+                id: transition_id,
+                outcome_signal_id: id,
+                sequence: 1,
+                idempotency_key: `observation:${input.idempotency_key}`,
+                from_status: null,
+                to_status: "observed",
+                reason: "Independent outcome observation recorded pending explicit validation",
+                actor_kind: "control_plane",
+                actor_id: null,
+                validator_result_kind: input.validator_result_ref.kind,
+                validator_result_id: input.validator_result_ref.id,
+                occurred_at: input.observed_at,
+                created_at: now,
+              })
+              .run()
+            db.insert(CompanyOutcomeSignalCurrentTable)
+              .values({
+                outcome_signal_id: id,
+                current_status: "observed",
+                latest_transition_id: transition_id,
+                transition_count: 1,
+                validated_at: null,
+                updated_at: now,
+              })
+              .run()
             const signal = signalFromRow(
               db.select().from(CompanyOutcomeSignalTable).where(eq(CompanyOutcomeSignalTable.id, id)).get()!,
+              currentFor(db, id),
             )
             linkDecisionOutcome(db, input.decision_id, id)
             insertEvent(db, project_id, signal)
             return { signal, replayed: false }
+          },
+          { behavior: "immediate" },
+        ),
+      )
+    })
+
+    const listTransitions = Effect.fn("CompanyOutcomeSignal.listTransitions")(function* (outcome_signal_id: string) {
+      return yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyOutcomeSignalTransitionTable)
+            .where(eq(CompanyOutcomeSignalTransitionTable.outcome_signal_id, outcome_signal_id))
+            .orderBy(asc(CompanyOutcomeSignalTransitionTable.sequence))
+            .all()
+            .map(transitionFromRow),
+        ),
+      )
+    })
+
+    const transition = Effect.fn("CompanyOutcomeSignal.transition")(function* (raw: {
+      outcome_signal_id: string
+      transition: OutcomeSignalTransitionSubmissionValue
+    }) {
+      const input = OutcomeSignalTransitionSubmission.parse(raw.transition)
+      if (input.occurred_at > Date.now() + 300_000) throw new Error("Outcome transition time is in the future")
+      return yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const row = db
+              .select()
+              .from(CompanyOutcomeSignalTable)
+              .where(eq(CompanyOutcomeSignalTable.id, raw.outcome_signal_id))
+              .get()
+            if (!row) throw new Error(`Outcome Signal not found: ${raw.outcome_signal_id}`)
+            const existing = db
+              .select()
+              .from(CompanyOutcomeSignalTransitionTable)
+              .where(
+                and(
+                  eq(CompanyOutcomeSignalTransitionTable.outcome_signal_id, row.id),
+                  eq(CompanyOutcomeSignalTransitionTable.idempotency_key, input.idempotency_key),
+                ),
+              )
+              .get()
+            if (existing) {
+              const parsed = transitionFromRow(existing)
+              if (
+                parsed.status !== input.status ||
+                parsed.reason !== input.reason ||
+                parsed.actor_kind !== input.actor_kind ||
+                parsed.actor_id !== input.actor_id ||
+                parsed.occurred_at !== input.occurred_at ||
+                parsed.validator_result_ref.kind !== input.validator_result_ref.kind ||
+                parsed.validator_result_ref.id !== input.validator_result_ref.id
+              )
+                throw new Error("Outcome transition idempotency key has different facts")
+              return {
+                signal: signalFromRow(row, currentFor(db, row.id)),
+                transition: parsed,
+                replayed: true,
+              }
+            }
+            const current = currentFor(db, row.id)
+            if (
+              (input.status === "validated" && current.current_status !== "observed") ||
+              current.current_status === "invalidated"
+            )
+              throw new Error(`Outcome Signal cannot transition from ${current.current_status}`)
+            if (
+              row.validator_result_kind !== input.validator_result_ref.kind ||
+              row.validator_result_id !== input.validator_result_ref.id
+            )
+              throw new Error("Outcome transition validator result differs from the observed contract")
+            validateValidator(db, row.project_id, input.validator_result_ref)
+            const now = Date.now()
+            const transition_id = Identifier.ascending("outcomeTransition")
+            db.insert(CompanyOutcomeSignalTransitionTable)
+              .values({
+                id: transition_id,
+                outcome_signal_id: row.id,
+                sequence: current.transition_count + 1,
+                idempotency_key: input.idempotency_key,
+                from_status: current.current_status,
+                to_status: input.status,
+                reason: input.reason,
+                actor_kind: input.actor_kind,
+                actor_id: input.actor_id ?? null,
+                validator_result_kind: input.validator_result_ref.kind,
+                validator_result_id: input.validator_result_ref.id,
+                occurred_at: input.occurred_at,
+                created_at: now,
+              })
+              .run()
+            db.update(CompanyOutcomeSignalCurrentTable)
+              .set({
+                current_status: input.status,
+                latest_transition_id: transition_id,
+                transition_count: current.transition_count + 1,
+                validated_at: input.status === "validated" ? input.occurred_at : null,
+                updated_at: now,
+              })
+              .where(eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, row.id))
+              .run()
+            return {
+              signal: signalFromRow(row, currentFor(db, row.id)),
+              transition: transitionFromRow(
+                db
+                  .select()
+                  .from(CompanyOutcomeSignalTransitionTable)
+                  .where(eq(CompanyOutcomeSignalTransitionTable.id, transition_id))
+                  .get()!,
+              ),
+              replayed: false,
+            }
           },
           { behavior: "immediate" },
         ),
@@ -292,10 +530,12 @@ export const layer = Layer.effect(
             .orderBy(asc(CompanyOutcomeSignalTable.created_at), asc(CompanyOutcomeSignalTable.id))
             .all()
             .map((row) => {
-              const signal = signalFromRow(row)
+              const current = currentFor(db, row.id)
+              const signal = signalFromRow(row, current)
               validateDecisionReference(db, signal.project_id, signal.decision_id)
               signal.source_refs.forEach((reference) => validateSourceReference(db, signal.project_id, reference))
-              validateValidator(db, signal.project_id, signal.validator_ref)
+              if (current.current_status === "validated")
+                validateValidator(db, signal.project_id, signal.validator_result_ref)
               linkDecisionOutcome(db, signal.decision_id, signal.id)
               return signal.id
             }),
@@ -303,7 +543,7 @@ export const layer = Layer.effect(
       }))
     })
 
-    return Service.of({ submit, get, list, recover })
+    return Service.of({ submit, get, list, transition, listTransitions, recover })
   }),
 )
 

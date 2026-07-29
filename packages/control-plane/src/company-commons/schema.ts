@@ -90,6 +90,7 @@ export const CommonsSource = z.object({
   language: z.string().optional(),
   tags: z.array(z.string()),
   privacy_scope: CommonsPrivacyScope,
+  capability_status: z.enum(["supported", "unsupported", "blocked"]),
   ingestion_status: CommonsIngestionStatus,
   transcript_status: CommonsTranscriptStatus,
   content_hash: z.string().optional(),
@@ -158,7 +159,7 @@ export type CommonsSearchHit = z.infer<typeof CommonsSearchHit>
 
 export const CommonsCapability = z.object({
   source_type: CommonsSourceType,
-  status: z.enum(["available", "blocked", "unsupported"]),
+  status: z.enum(["supported", "blocked", "unsupported"]),
   adapter_id: z.string().optional(),
   adapter_version: z.string().optional(),
   reason_code: z.string().optional(),

@@ -18,6 +18,20 @@ export type ApprovalPolicyUpdateInput = z.infer<typeof ApprovalPolicyUpdateInput
 export const FounderOSModeUpdateInput = FounderOSModeSettings.meta({ ref: "FounderOSModeUpdateInput" })
 export type FounderOSModeUpdateInput = z.infer<typeof FounderOSModeUpdateInput>
 
+export const BeliefLoopActivationInput = z
+  .object({
+    company_id: CompanyID,
+    k1_artifact_id: z.string().trim().min(1),
+    w2_artifact_id: z.string().trim().min(1),
+    e0_artifact_id: z.string().trim().min(1),
+    k2_evidence_package_artifact_id: z.string().trim().min(1),
+    authorization_event_id: z.string().trim().min(1),
+    actor: z.object({ kind: z.literal("human"), id: z.string().trim().min(1) }).strict(),
+  })
+  .strict()
+  .meta({ ref: "BeliefLoopActivationInput" })
+export type BeliefLoopActivationInput = z.infer<typeof BeliefLoopActivationInput>
+
 export const AgentLifecycle = z.enum(["candidate", "assigned", "employee", "archived"])
 export type AgentLifecycle = z.infer<typeof AgentLifecycle>
 

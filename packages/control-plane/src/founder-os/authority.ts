@@ -24,7 +24,11 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { ApprovalPolicyTable, CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
-import { CompanyApprovalGateTable, CompanyOutcomeSignalTable } from "@/company-project/company-project.sql"
+import {
+  CompanyApprovalGateTable,
+  CompanyOutcomeSignalCurrentTable,
+  CompanyOutcomeSignalTable,
+} from "@/company-project/company-project.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -467,14 +471,23 @@ function decisionCenterProjection(db: TxOrDb, companyId: string) {
       const outcomes = db
         .select()
         .from(CompanyOutcomeSignalTable)
-        .where(eq(CompanyOutcomeSignalTable.decision_id, decision.id))
+        .innerJoin(
+          CompanyOutcomeSignalCurrentTable,
+          eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+        )
+        .where(
+          and(
+            eq(CompanyOutcomeSignalTable.decision_id, decision.id),
+            eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+          ),
+        )
         .orderBy(asc(CompanyOutcomeSignalTable.observed_at), asc(CompanyOutcomeSignalTable.id))
         .all()
-        .map((outcome) => ({
-          id: outcome.id,
-          result: outcome.result,
-          summary: outcome.summary,
-          observedAt: outcome.observed_at,
+        .map((row) => ({
+          id: row.company_outcome_signal.id,
+          result: row.company_outcome_signal.result,
+          summary: row.company_outcome_signal.summary,
+          observedAt: row.company_outcome_signal.observed_at,
         }))
       return {
         decision,

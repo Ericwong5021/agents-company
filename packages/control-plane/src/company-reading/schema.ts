@@ -43,6 +43,7 @@ export type KnowledgeReadingReceipt = z.infer<typeof KnowledgeReadingReceipt>
 
 export const Interpretation = KnowledgeReadingReceipt.extend({
   id: z.string(),
+  work_receipt_id: z.string().optional(),
   work_item_id: z.string().optional(),
   reader_agent_name: z.string().optional(),
   created_at: z.number(),
