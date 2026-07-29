@@ -1811,6 +1811,13 @@ const runS23 = Effect.fn("B5CandidateScenarios.S23")(function* (
     (candidate) => candidate.work_item_id === source.id,
   )
   if (!receipt) throw new Error("S23 invalidation produced no Work Receipt")
+  const processedReceipt = yield* runtime.shadowSupervisor.processReceipt(receipt.id)
+  if (
+    processedReceipt.status !== "processed" ||
+    processedReceipt.mode !== "shadow" ||
+    processedReceipt.mutation_id
+  )
+    throw new Error("S23 invalidation Receipt did not reach the shadow decision boundary")
   const replacementId = stableEntityId("cwi", `${input.runId}:s23-replacement`)
   const mutation = yield* runtime.graph.apply(
     GraphMutationProposal.parse({
