@@ -11066,7 +11066,6 @@
                         "type": "string",
                         "enum": [
                           "user_input",
-                          "system_suggestion",
                           "user_confirmation"
                         ]
                       },
@@ -21894,6 +21893,26 @@
               "minLength": 1
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 51,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 51
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
           }
         ],
         "summary": "List persisted work receipts",

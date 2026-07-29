@@ -2131,7 +2131,7 @@ export class Work extends HeyApiClient {
             briefId: string
             expectedBriefVersion: number
             expectedPlanVersion: number
-            source: "user_input" | "system_suggestion" | "user_confirmation"
+            source: "user_input" | "user_confirmation"
             brief: {
               goal: string
               deliverables: Array<{
@@ -4052,6 +4052,8 @@ export class CompanyProject extends HeyApiClient {
       projectID: string
       directory?: string
       workspace?: string
+      limit?: number
+      offset?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4063,6 +4065,8 @@ export class CompanyProject extends HeyApiClient {
             { in: "path", key: "projectID" },
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "offset" },
           ],
         },
       ],

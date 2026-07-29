@@ -7814,7 +7814,7 @@ export type ExperienceWorkActionData = {
         briefId: string
         expectedBriefVersion: number
         expectedPlanVersion: number
-        source: "user_input" | "system_suggestion" | "user_confirmation"
+        source: "user_input" | "user_confirmation"
         brief: {
           goal: string
           deliverables: Array<{
@@ -11624,6 +11624,8 @@ export type CompanyProjectReceiptsData = {
   query?: {
     directory?: string
     workspace?: string
+    limit?: number
+    offset?: number
   }
   url: "/company-project/{projectID}/receipts"
 }
