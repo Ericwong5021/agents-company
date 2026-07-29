@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Option } from "effect"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
 import { Database } from "@/storage"
@@ -32,7 +32,7 @@ export interface Interface {
   readonly checkQuiescence: (project_id: string) => Effect.Effect<QuiescenceResult>
   readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
   readonly resumeDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
-  readonly recover: () => Effect.Effect<RecoveryResult>
+  readonly recover: (input?: { project_id?: string }) => Effect.Effect<RecoveryResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ProjectOrchestrator") {}
@@ -59,7 +59,9 @@ export const layer = Layer.effect(
       }
     })
 
-    const recover = Effect.fn("ProjectOrchestrator.recover")(function* () {
+    const recover = Effect.fn("ProjectOrchestrator.recover")(function* (
+      input: { project_id?: string } = {},
+    ) {
       const actions = actionExecutor
         ? yield* actionExecutor.recover()
         : {
@@ -72,13 +74,20 @@ export const layer = Layer.effect(
             rejected_action_ids: [],
             replayed: true,
           }
-      const receipts = yield* supervisor.recover()
+      const receipts = yield* supervisor.recover(input)
       const project_ids = yield* Effect.sync(() =>
         Database.use((db) =>
           db
             .select({ id: CompanyProjectTable.id })
             .from(CompanyProjectTable)
-            .where(eq(CompanyProjectTable.execution_strategy, "seed_and_grow"))
+            .where(
+              and(
+                eq(CompanyProjectTable.execution_strategy, "seed_and_grow"),
+                input.project_id
+                  ? eq(CompanyProjectTable.id, input.project_id)
+                  : undefined,
+              ),
+            )
             .orderBy(asc(CompanyProjectTable.created_at), asc(CompanyProjectTable.id))
             .all()
             .map((project) => project.id),

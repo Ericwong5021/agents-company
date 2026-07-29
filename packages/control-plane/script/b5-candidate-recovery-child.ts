@@ -305,13 +305,15 @@ async function recoverOrchestration(projectId: string) {
   )
   phases.push("company_project")
   const receiptRecovery = await Effect.runPromise(
-    GraphSupervisor.Service.use((service) => service.drain(projectId)).pipe(
+    GraphSupervisor.Service.use((service) => service.recover({ project_id: projectId })).pipe(
       Effect.provide(supervisorLayer),
     ),
   )
   phases.push("receipt_graph")
   const orchestrator = await Effect.runPromise(
-    ProjectOrchestrator.Service.use((service) => service.recover()).pipe(
+    ProjectOrchestrator.Service.use((service) =>
+      service.recover({ project_id: projectId }),
+    ).pipe(
       Effect.provide(ProjectOrchestrator.defaultLayer),
     ),
   )

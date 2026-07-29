@@ -362,7 +362,7 @@ export interface Interface {
   readonly shadowLegacy: (project_id: string) => Effect.Effect<RolloutShadowEvaluation[]>
   readonly getDecision: (id: string) => Effect.Effect<GraphDecisionType | undefined>
   readonly listDecisions: (project_id: string) => Effect.Effect<GraphDecisionType[]>
-  readonly recover: () => Effect.Effect<RecoveryReport>
+  readonly recover: (input?: { project_id?: string }) => Effect.Effect<RecoveryReport>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/GraphSupervisor") {}
@@ -912,7 +912,9 @@ export function makeLayer(hooks: Hooks = {}) {
         return yield* lock(project_id).withPermits(1)(drainUnlocked(project_id, mode))
       })
 
-      const recover = Effect.fn("GraphSupervisor.recover")(function* () {
+      const recover = Effect.fn("GraphSupervisor.recover")(function* (
+        input: { project_id?: string } = {},
+      ) {
         const project_ids = yield* Effect.sync(() =>
           Database.use((db) =>
             db
@@ -923,6 +925,9 @@ export function makeLayer(hooks: Hooks = {}) {
                 and(
                   eq(CompanyProjectTable.execution_strategy, "seed_and_grow"),
                   inArray(CompanyWorkReceiptTable.processing_status, ["pending", "processing"]),
+                  input.project_id
+                    ? eq(CompanyProjectTable.id, input.project_id)
+                    : undefined,
                 ),
               )
               .orderBy(asc(CompanyProjectTable.created_at), asc(CompanyProjectTable.id))
