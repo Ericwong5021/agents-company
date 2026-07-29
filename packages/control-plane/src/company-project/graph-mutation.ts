@@ -452,6 +452,11 @@ function evaluate(db: TxOrDb, proposal: GraphMutationProposalType) {
       before,
     }
   }
+  const activePlanVersion = db
+    .select({ version: CompanyProjectTable.active_plan_version })
+    .from(CompanyProjectTable)
+    .where(eq(CompanyProjectTable.id, proposal.project_id))
+    .get()?.version
   return {
     status: "evaluated" as const,
     before,
@@ -462,7 +467,15 @@ function evaluate(db: TxOrDb, proposal: GraphMutationProposalType) {
       valid_plan_ids: db
         .select({ id: CompanyPlanTable.id })
         .from(CompanyPlanTable)
-        .where(eq(CompanyPlanTable.project_id, proposal.project_id))
+        .where(
+          and(
+            eq(CompanyPlanTable.project_id, proposal.project_id),
+            eq(CompanyPlanTable.status, "active"),
+            activePlanVersion === null || activePlanVersion === undefined
+              ? eq(CompanyPlanTable.version, -1)
+              : eq(CompanyPlanTable.version, activePlanVersion),
+          ),
+        )
         .all()
         .map((plan) => plan.id),
       trigger_work_item_id: receipt.work_item_id,

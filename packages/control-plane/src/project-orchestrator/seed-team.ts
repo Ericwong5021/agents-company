@@ -88,11 +88,12 @@ export const authorizeDiscoveryBuilder = Effect.fn(
   project: Project
   recruitment: CompanyRecruitmentService
   projects: CompanyProjectService
+  work_item_id: string
 }) {
   if (input.project.execution_strategy !== "seed_and_grow" || input.project.seed_mode !== "discovery_first")
     return
   const items = yield* input.projects.listWorkItems(input.project.id)
-  const builder = items.find((item) => item.purpose === "first_slice")
+  const builder = items.find((item) => item.id === input.work_item_id && item.purpose === "first_slice")
   if (!builder) throw new Error(`Discovery project ${input.project.id} has no First Slice Builder`)
   const wayfinder = items.find((item) => item.purpose === "discovery")
   return yield* assignSeedWorkItem({
@@ -109,7 +110,7 @@ export const startSeedProject = Effect.fn("ProjectOrchestrator.startSeedProject"
   verdict: SeedPolicyVerdict
   projects: CompanyProjectService
   recruitment: CompanyRecruitmentService
-  authorize_builder?: boolean
+  authorize_builder_work_item_id?: string
 }) {
   if (input.project.execution_strategy !== "seed_and_grow" || input.project.seed_mode !== input.verdict.mode)
     throw new Error(`Company project ${input.project.id} is not pinned to ${input.verdict.mode}`)
@@ -215,8 +216,10 @@ export const startSeedProject = Effect.fn("ProjectOrchestrator.startSeedProject"
         recruitment: input.recruitment,
       })
     : undefined
+  if (input.authorize_builder_work_item_id && input.authorize_builder_work_item_id !== builder.id)
+    throw new Error(`Risk approval does not belong to First Slice Builder ${builder.id}`)
   const staffedBuilder =
-    input.verdict.mode !== "discovery_first" || input.authorize_builder
+    input.verdict.mode !== "discovery_first" || input.authorize_builder_work_item_id
       ? yield* assignSeedWorkItem({
           project: input.project,
           item: builder,

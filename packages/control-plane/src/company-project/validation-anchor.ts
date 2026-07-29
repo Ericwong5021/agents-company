@@ -1,4 +1,5 @@
 import path from "node:path"
+import fs from "node:fs/promises"
 import { and, desc, eq } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Database } from "@/storage"
@@ -31,12 +32,16 @@ const booleanValue = (content: string) => {
 }
 
 const numericValue = (content: string, key: string) => {
-  const matched = content.match(new RegExp(`"${key}"\\s*:\\s*(-?\\d+)`, "i"))
+  const matched = content.match(
+    new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*(-?\\d+)`, "i"),
+  )
   return matched ? Number(matched[1]) : undefined
 }
 
 const stringValue = (content: string, key: string) =>
-  content.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`, "i"))?.[1]
+  content.match(
+    new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"([^"]*)"`, "i"),
+  )?.[1]
 
 const artifactValue = (criterion: ValidationCriterion, content: string) => {
   if (criterion.operator === "digest")
@@ -163,23 +168,8 @@ export async function observeGate(gate: ValidationGate) {
         }
       }
       if (criterion.anchor.kind === "source") {
-        if (/^https?:\/\//.test(criterion.anchor.reference)) {
-          const response = await fetch(criterion.anchor.reference, {
-            method: "GET",
-            redirect: "follow",
-            signal: AbortSignal.timeout(10_000),
-          }).catch(() => undefined)
-          return {
-            criterion_id: criterion.id,
-            anchor: criterion.anchor.kind,
-            reference: criterion.anchor.reference,
-            observed:
-              criterion.operator === "equals"
-                ? response?.status ?? 0
-                : Boolean(response?.ok),
-            warning: response?.ok ? undefined : "source is not reachable",
-          }
-        }
+        if (/^https?:\/\//i.test(criterion.anchor.reference))
+          return unavailable(criterion, "HTTP source anchors require an authorized fetch policy")
         const requested = referenceID(criterion.anchor.reference, "file") ?? criterion.anchor.reference
         const resolved = path.resolve(project.output_dir, requested)
         if (
@@ -189,6 +179,17 @@ export async function observeGate(gate: ValidationGate) {
           return unavailable(criterion, "source path exceeds project workspace")
         const file = Bun.file(resolved)
         const exists = await file.exists()
+        const [workspaceRealPath, sourceRealPath] = await Promise.all([
+          fs.realpath(project.output_dir).catch(() => undefined),
+          exists ? fs.realpath(resolved).catch(() => undefined) : undefined,
+        ])
+        if (
+          !workspaceRealPath ||
+          !sourceRealPath ||
+          (sourceRealPath !== workspaceRealPath &&
+            !sourceRealPath.startsWith(`${workspaceRealPath}${path.sep}`))
+        )
+          return unavailable(criterion, "source file resolves outside project workspace")
         return {
           criterion_id: criterion.id,
           anchor: criterion.anchor.kind,

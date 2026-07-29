@@ -441,13 +441,20 @@ export function makeLayer(hooks: Hooks = {}) {
         )
       })
 
-      const authorizeBuilder = (project_id: string) =>
+      const authorizeBuilder = (project_id: string, work_item_id: string) =>
         Effect.gen(function* () {
           const projects = yield* CompanyProject.Service
           const recruitment = yield* CompanyRecruitment.Service
           const project = yield* projects.get(project_id)
           if (!project) return
-          const builder = yield* authorizeDiscoveryBuilder({ project, projects, recruitment })
+          if (
+            project.execution_strategy !== "seed_and_grow" ||
+            project.seed_mode !== "discovery_first" ||
+            (yield* projects.listWorkItems(project_id)).find((item) => item.id === work_item_id)?.purpose !==
+              "first_slice"
+          )
+            return
+          const builder = yield* authorizeDiscoveryBuilder({ project, projects, recruitment, work_item_id })
           if (!builder) return
           return (yield* recruitment.listAssignments({
             project_id,
@@ -459,6 +466,45 @@ export function makeLayer(hooks: Hooks = {}) {
           Effect.provide(CompanyProject.defaultLayer),
           Effect.provide(CompanyRecruitment.defaultLayer),
         )
+
+      const blockBuilderRecruitment = Effect.fn("ProjectActionExecutor.blockBuilderRecruitment")(function* (input: {
+        project_id: string
+        gate_id: string
+        work_item_id: string
+        error: string
+      }) {
+        yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              db.update(CompanyProjectTable)
+                .set({ status: "blocked", orchestration_state: "blocked", updated_at: Date.now() })
+                .where(eq(CompanyProjectTable.id, input.project_id))
+                .run()
+              event(db, input.project_id, "project.builder_recruitment_blocked", {
+                gate_id: input.gate_id,
+                work_item_id: input.work_item_id,
+                error: input.error,
+              })
+            },
+            { behavior: "immediate" },
+          ),
+        )
+        yield* attention.create({
+          project_id: input.project_id,
+          idempotency_key: `builder-recruitment:${input.gate_id}`,
+          issue: {
+            issue_kind: "capability_gap",
+            risk: "high",
+            materiality: "internal",
+          },
+          title: "First Slice Builder 招募失败",
+          summary: `ApprovalGate ${input.gate_id} 已批准，但 WorkItem ${input.work_item_id} 无法建立 Builder Assignment。`,
+          source_refs: [
+            { kind: "approval_gate", id: input.gate_id },
+            { kind: "work_item", id: input.work_item_id },
+          ],
+        })
+      })
 
       const adjustDirection = (input: CompanyProjectDirection.AdjustDirectionRequest) =>
         Effect.gen(function* () {
@@ -1035,7 +1081,26 @@ export function makeLayer(hooks: Hooks = {}) {
                 .get(),
             ),
           )
-          if (gate?.kind === "risk_approval") yield* authorizeBuilder(action.project_id)
+          if (gate?.kind === "risk_approval") {
+            if (!gate.work_item_id)
+              throw new Error(`Risk approval ${gate.id} has no WorkItem binding`)
+            const authorized = yield* Effect.exit(authorizeBuilder(action.project_id, gate.work_item_id))
+            if (Exit.isFailure(authorized)) {
+              yield* Effect.exit(
+                blockBuilderRecruitment({
+                  project_id: action.project_id,
+                  gate_id: gate.id,
+                  work_item_id: gate.work_item_id,
+                  error: Cause.pretty(authorized.cause).slice(0, 8_000),
+                }),
+              )
+              return {
+                ...persisted,
+                dispatch_resumed: false,
+                builder_recruitment: "blocked",
+              }
+            }
+          }
         }
         if (persisted.dispatch_resumed === true) yield* dispatchReady(action)
         return persisted
@@ -1110,31 +1175,39 @@ export function makeLayer(hooks: Hooks = {}) {
             Database.use((db) =>
               db
                 .select()
-                .from(CompanyProjectTable)
-                .where(eq(CompanyProjectTable.execution_strategy, "seed_and_grow"))
-                .all()
-                .filter(
-                  (project) =>
-                    project.seed_mode === "discovery_first" &&
-                    db
-                      .select()
-                      .from(CompanyApprovalGateTable)
-                      .where(
-                        and(
-                          eq(CompanyApprovalGateTable.project_id, project.id),
-                          eq(CompanyApprovalGateTable.kind, "risk_approval"),
-                          eq(CompanyApprovalGateTable.status, "approved"),
-                        ),
-                      )
-                      .get(),
+                .from(CompanyApprovalGateTable)
+                .where(
+                  and(
+                    eq(CompanyApprovalGateTable.kind, "risk_approval"),
+                    eq(CompanyApprovalGateTable.status, "approved"),
+                  ),
                 )
-                .map((project) => project.id),
+                .all()
+                .filter((gate) => {
+                  const project = db
+                    .select()
+                    .from(CompanyProjectTable)
+                    .where(eq(CompanyProjectTable.id, gate.project_id))
+                    .get()
+                  return (
+                    Boolean(gate.work_item_id) &&
+                    project?.execution_strategy === "seed_and_grow" &&
+                    project.seed_mode === "discovery_first"
+                  )
+                }),
             ),
           ),
-          (project_id) =>
+          (gate) =>
             Effect.gen(function* () {
-              return yield* authorizeBuilder(project_id)
-            }),
+              const authorized = yield* Effect.exit(authorizeBuilder(gate.project_id, gate.work_item_id!))
+              if (Exit.isSuccess(authorized)) return authorized.value
+              yield* Effect.exit(blockBuilderRecruitment({
+                project_id: gate.project_id,
+                gate_id: gate.id,
+                work_item_id: gate.work_item_id!,
+                error: Cause.pretty(authorized.cause).slice(0, 8_000),
+              }))
+            }).pipe(Effect.catchAllCause(() => Effect.succeed(undefined))),
           { concurrency: 1 },
         )
         const assignment_ids = [

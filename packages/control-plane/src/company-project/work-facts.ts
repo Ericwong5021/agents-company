@@ -211,7 +211,10 @@ export interface Interface {
     pending_seed_receipt_ids: string[]
   }>
   readonly listAttempts: (project_id: string) => Effect.Effect<WorkAttempt[]>
-  readonly listReceipts: (project_id: string) => Effect.Effect<WorkReceipt[]>
+  readonly listReceipts: (
+    project_id: string,
+    page?: { limit: number; offset: number },
+  ) => Effect.Effect<WorkReceipt[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyWorkFacts") {}
@@ -944,7 +947,10 @@ function makeService(recoverOnStart: boolean) {
       )).map(attemptFromRow)
     })
 
-    const listReceipts = Effect.fn("CompanyWorkFacts.listReceipts")(function* (project_id: string) {
+    const listReceipts = Effect.fn("CompanyWorkFacts.listReceipts")(function* (
+      project_id: string,
+      page?: { limit: number; offset: number },
+    ) {
       return (yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -952,6 +958,8 @@ function makeService(recoverOnStart: boolean) {
             .from(CompanyWorkReceiptTable)
             .where(eq(CompanyWorkReceiptTable.project_id, project_id))
             .orderBy(asc(CompanyWorkReceiptTable.created_at), asc(CompanyWorkReceiptTable.id))
+            .limit(page?.limit ?? 500)
+            .offset(page?.offset ?? 0)
             .all(),
         ),
       )).map(receiptFromRow)

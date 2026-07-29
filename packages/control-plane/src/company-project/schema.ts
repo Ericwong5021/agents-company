@@ -881,6 +881,8 @@ export const ApprovalGate = z.object({
   title: z.string(),
   summary: z.string(),
   requested_by_agent_id: z.string().optional(),
+  work_item_id: z.string().optional(),
+  resource_scope: z.array(z.string()),
   worktree_run_id: z.string().optional(),
   decision_note: z.string().optional(),
   requested_at: z.number(),

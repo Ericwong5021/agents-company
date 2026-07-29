@@ -1,9 +1,9 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray, notInArray } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import z from "zod"
 import {
   GoalBriefDraft,
-  GoalBriefSource,
+  GoalBriefUserSource,
   type GoalBrief as GoalBriefValue,
 } from "@agents-company/shared/experience"
 import { GoalBriefStore } from "@/goal-brief"
@@ -13,10 +13,12 @@ import { Database } from "@/storage"
 import * as CompanyAttention from "./attention"
 import { actionFromRow } from "./attention"
 import {
+  CompanyApprovalGateTable,
   CompanyPlanTable,
   CompanyProjectActionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyWorkItemTable,
 } from "./company-project.sql"
 import {
   Plan,
@@ -33,7 +35,7 @@ export const AdjustDirectionRequest = z
     expected_graph_revision: z.number().int().nonnegative(),
     expected_brief_version: z.number().int().positive(),
     expected_plan_version: z.number().int().positive(),
-    source: GoalBriefSource,
+    source: GoalBriefUserSource,
     brief: GoalBriefDraft,
     change_reason: z.string().trim().min(1).max(8_000),
   })
@@ -258,6 +260,35 @@ function applyWithDatabase(
         )
       if (plan.status !== "active")
         return rejected(rejectWithDatabase(db, row, "plan_not_active", conflict, now), replayed)
+      if (
+        (project.status === "executing" && !project.dispatch_paused) ||
+        db
+          .select({ id: CompanyWorkItemTable.id })
+          .from(CompanyWorkItemTable)
+          .where(
+            and(
+              eq(CompanyWorkItemTable.project_id, input.project_id),
+              eq(CompanyWorkItemTable.plan_id, plan.id),
+              eq(CompanyWorkItemTable.status, "running"),
+            ),
+          )
+          .get()
+      )
+        return rejected(rejectWithDatabase(db, row, "direction_requires_pause", conflict, now), replayed)
+      if (
+        briefVersion.goal === input.brief.goal &&
+        briefVersion.deliverables_json === JSON.stringify(input.brief.deliverables) &&
+        briefVersion.acceptance_criteria_json === JSON.stringify(input.brief.acceptanceCriteria) &&
+        briefVersion.constraints_json === JSON.stringify(input.brief.constraints) &&
+        briefVersion.non_goals_json === JSON.stringify(input.brief.nonGoals) &&
+        briefVersion.assumptions_json === JSON.stringify(input.brief.assumptions) &&
+        briefVersion.open_questions_json === JSON.stringify(input.brief.openQuestions) &&
+        briefVersion.risk_level === input.brief.riskLevel &&
+        briefVersion.recommended_plan_json === JSON.stringify(input.brief.recommendedPlan) &&
+        briefVersion.approval_mode === input.brief.approvalMode &&
+        briefVersion.source_refs_json === JSON.stringify(input.brief.sourceRefs)
+      )
+        return rejected(rejectWithDatabase(db, row, "brief_unchanged", conflict, now), replayed)
 
       const brief = GoalBriefStore.appendWithDatabase(
         db,
@@ -301,12 +332,56 @@ function applyWithDatabase(
           created_at: now,
         })
         .run()
+      const supersededWorkItemIds = db
+        .select({ id: CompanyWorkItemTable.id })
+        .from(CompanyWorkItemTable)
+        .where(
+          and(
+            eq(CompanyWorkItemTable.project_id, input.project_id),
+            eq(CompanyWorkItemTable.plan_id, plan.id),
+            notInArray(CompanyWorkItemTable.status, ["completed", "superseded", "cancelled"]),
+          ),
+        )
+        .all()
+        .map((item) => item.id)
+      if (supersededWorkItemIds.length)
+        db.update(CompanyWorkItemTable)
+          .set({
+            status: "superseded",
+            error: `Superseded by active plan ${plan_id}`,
+            updated_at: now,
+          })
+          .where(
+            and(
+              eq(CompanyWorkItemTable.project_id, input.project_id),
+              eq(CompanyWorkItemTable.plan_id, plan.id),
+              notInArray(CompanyWorkItemTable.status, ["completed", "superseded", "cancelled"]),
+            ),
+          )
+          .run()
+      if (supersededWorkItemIds.length)
+        db.update(CompanyApprovalGateTable)
+          .set({
+            status: "rejected",
+            decision_note: `Superseded by active plan ${plan_id}`,
+            decided_at: now,
+          })
+          .where(
+            and(
+              eq(CompanyApprovalGateTable.project_id, input.project_id),
+              eq(CompanyApprovalGateTable.status, "pending"),
+              inArray(CompanyApprovalGateTable.work_item_id, supersededWorkItemIds),
+            ),
+          )
+          .run()
       hooks.onBoundary?.("after_plan_version")
 
+      const graph_revision = project.graph_revision + 1
       db.update(CompanyProjectTable)
         .set({
           goal: input.brief.goal,
           active_plan_version: plan_version,
+          graph_revision,
           updated_at: now,
         })
         .where(
@@ -316,7 +391,6 @@ function applyWithDatabase(
           ),
         )
         .run()
-      const actor_id = input.source === "system_suggestion" ? "system" : "user"
       db.insert(CompanyProjectEventTable)
         .values([
           eventValues(
@@ -330,7 +404,7 @@ function applyWithDatabase(
               brief_version: brief.brief.version,
               action_id,
             },
-            actor_id,
+            "user",
             now,
           ),
           eventValues(
@@ -342,9 +416,10 @@ function applyWithDatabase(
               brief_version: brief.brief.version,
               plan_id,
               plan_version,
-              graph_revision: project.graph_revision,
+              graph_revision,
+              superseded_work_item_ids: supersededWorkItemIds,
             },
-            actor_id,
+            "user",
             now,
           ),
         ])
@@ -354,7 +429,7 @@ function applyWithDatabase(
         brief_version: brief.brief.version,
         plan_id,
         plan_version,
-        graph_revision: project.graph_revision,
+        graph_revision,
       })
       db.update(CompanyProjectActionTable)
         .set({
@@ -376,7 +451,7 @@ function applyWithDatabase(
             input.project_id,
             "project_action.applied",
             { action_id },
-            actor_id,
+            "user",
             now,
           ),
         )

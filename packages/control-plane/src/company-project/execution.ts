@@ -390,6 +390,12 @@ const workerPermission = (
     : assignmentPermission
 }
 
+const riskApprovalCovers = (gate: ApprovalGate, item: WorkItem) =>
+  gate.kind === "risk_approval" &&
+  gate.status === "approved" &&
+  gate.work_item_id === item.id &&
+  JSON.stringify(gate.resource_scope) === JSON.stringify(item.resource_scope)
+
 const boardBiddingEvidenceRule = (item: WorkItem) =>
   /bidding|董事会/i.test(`${item.source_task_key ?? ""} ${item.title} ${item.description}`)
     ? "产品语义：Bidding 是已有 Group Session/Thread 内选择下一位发言者的机制，不是筛选 Thread 成员。董事会 Thread 可以包含全部固定董事；验收应检查实际产生高信号消息的 winner、选择或 pass 理由，以及全员 pass/预算结束，而不能把候选成员存在误判成其已经发言。"
@@ -711,30 +717,61 @@ export const layer = Layer.effect(
       const artifact_sha256 = new Bun.CryptoHasher("sha256")
         .update(input.artifact.content)
         .digest("hex")
-      const gate = yield* validation.create({
-        id: `delivery-${new Bun.CryptoHasher("sha256")
-          .update(`${input.item.id}:${input.item.attempt + 1}:${input.artifact.id}`)
-          .digest("hex")
-          .slice(0, 40)}`,
-        project_id: input.item.project_id,
-        work_item_id: input.item.id,
-        kind: "artifact",
-        criteria: input.item.acceptance_criteria.map((criterion, index) => ({
+      const passedGates = (yield* validation.list(input.item.project_id)).filter(
+        (gate) =>
+          gate.work_item_id === input.item.id &&
+          gate.status === "passed" &&
+          gate.evidence_refs.length > 0 &&
+          gate.evaluator !== "artifact_digest_v1",
+      )
+      const criteria = input.item.acceptance_criteria.map((criterion, index) => {
+        const digest = criterion.match(/^artifact_sha256:([a-f0-9]{64})$/i)?.[1]?.toLowerCase()
+        const exists = criterion === "artifact_exists"
+        const proven = passedGates.find((gate) =>
+          gate.criteria.some((candidate) => candidate.statement === criterion),
+        )
+        return {
           id: `criterion-${index + 1}-${new Bun.CryptoHasher("sha256")
             .update(criterion)
             .digest("hex")
             .slice(0, 24)}`,
           statement: criterion,
           anchor: { kind: "artifact" as const, reference: `artifact:${input.artifact.id}` },
-          operator: "digest" as const,
-          expected: artifact_sha256,
-        })),
-        blocking_work_item_ids: [input.item.id],
-        evaluator: "artifact_digest_v1",
-        max_repair_rounds: 3,
+          operator: exists ? ("exists" as const) : ("digest" as const),
+          expected: exists ? true : (digest ?? "0".repeat(64)),
+          deterministic: exists || Boolean(digest) || Boolean(proven),
+          proven,
+        }
       })
-      if (gate.status !== "passed")
-        throw new Error(`Delivery ValidationGate ${gate.id} did not pass`)
+      const artifactCriteria = criteria.filter((criterion) => !criterion.proven)
+      const gate = artifactCriteria.length
+        ? yield* validation.create({
+            id: `delivery-${new Bun.CryptoHasher("sha256")
+              .update(`${input.item.id}:${input.item.attempt + 1}:${input.artifact.id}`)
+              .digest("hex")
+              .slice(0, 40)}`,
+            project_id: input.item.project_id,
+            work_item_id: input.item.id,
+            kind: "artifact",
+            criteria: artifactCriteria.map((criterion) => ({
+              id: criterion.id,
+              statement: criterion.statement,
+              anchor: criterion.anchor,
+              operator: criterion.operator,
+              expected: criterion.expected,
+            })),
+            blocking_work_item_ids: [input.item.id],
+            evaluator: "artifact_digest_v1",
+            max_repair_rounds: 3,
+          })
+        : undefined
+      if ((gate && gate.status !== "passed") || criteria.some((criterion) => !criterion.deterministic))
+        throw new Error(
+          `Delivery acceptance remains unverified: ${criteria
+            .filter((criterion) => !criterion.deterministic)
+            .map((criterion) => criterion.statement)
+            .join("; ")}`,
+        )
       yield* projects.completeWorkItemWithReceipt({
         id: input.item.id,
         receipt: {
@@ -743,9 +780,11 @@ export const layer = Layer.effect(
           summary: input.summary,
           artifact_ids: [input.artifact.id],
           evidence_refs: [{ kind: "artifact", id: input.artifact.id }],
-          confirmed_facts: input.item.acceptance_criteria.map(
+          confirmed_facts: criteria.map(
             (criterion) =>
-              `acceptance:${criterion}:artifact:${input.artifact.id}:sha256:${artifact_sha256}:validation_gate:${gate.id}:passed`,
+              criterion.proven
+                ? `deterministic:${criterion.statement}:validation_gate:${criterion.proven.id}:passed`
+                : `deterministic:${criterion.statement}:artifact:${input.artifact.id}:sha256:${artifact_sha256}:validation_gate:${gate!.id}:passed`,
           ),
           invalidated_assumptions: [],
           unknowns: [],
@@ -756,7 +795,16 @@ export const layer = Layer.effect(
           questions: [],
         },
       })
-      return { gate, artifact_sha256 }
+      return {
+        gate_ids: [
+          ...new Set(
+            criteria.flatMap((criterion) =>
+              criterion.proven ? [criterion.proven.id] : gate ? [gate.id] : [],
+            ),
+          ),
+        ],
+        artifact_sha256,
+      }
     })
 
     const evidenceSnapshot = Effect.fn("CompanyProjectExecution.evidenceSnapshot")(function* (project: Project) {
@@ -1238,13 +1286,11 @@ export const layer = Layer.effect(
       const charter = yield* projects.getCharter(project.id)
       if (!charter) throw new Error("Seed project Charter is missing")
       const gates = yield* projects.listGates(project.id)
-      const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
       const gated = ready.filter(
         (item) =>
-          item.purpose === "first_slice" &&
           item.work_type === "coding" &&
           charter.policy.source_approval_preset === "strict" &&
-          !writeApproved,
+          !gates.some((gate) => riskApprovalCovers(gate, item)),
       )
       const dispatchable = ready.filter((item) => !gated.some((candidate) => candidate.id === item.id))
       if (project.status !== "executing")
@@ -1289,7 +1335,7 @@ export const layer = Layer.effect(
                         item,
                         agentModelRef(project, item.model_group),
                         charter.policy,
-                        writeApproved,
+                        gates.some((gate) => riskApprovalCovers(gate, item)),
                         assignment.permission_mode,
                         evidence,
                       ),
@@ -1300,7 +1346,7 @@ export const layer = Layer.effect(
                     : workerPermission(
                         item,
                         charter.policy,
-                        writeApproved,
+                        gates.some((gate) => riskApprovalCovers(gate, item)),
                         assignment.permission_mode,
                       ),
               }),
@@ -1309,14 +1355,29 @@ export const layer = Layer.effect(
           }),
         { concurrency: 4 },
       )
-      if (gated.length && !gates.some((gate) => gate.kind === "risk_approval" && gate.status === "pending"))
-        yield* projects.requestGate({
-          project_id: project.id,
-          kind: "risk_approval",
-          title: "批准 First Slice 写入项目工作区",
-          summary: "Wayfinder 保持只读；继续后只允许 First Slice Builder 在隔离工作树内写入并运行验证。",
-          requested_by_agent_id: project.owner_agent_id,
-        })
+      yield* Effect.forEach(
+        gated.filter(
+          (item) =>
+            !gates.some(
+              (gate) =>
+                gate.kind === "risk_approval" &&
+                gate.status === "pending" &&
+                gate.work_item_id === item.id &&
+                JSON.stringify(gate.resource_scope) === JSON.stringify(item.resource_scope),
+            ),
+        ),
+        (item) =>
+          projects.requestGate({
+            project_id: project.id,
+            kind: "risk_approval",
+            title: `批准 ${item.purpose === "first_slice" ? "First Slice" : "Worker"} 写入项目工作区`,
+            summary: `仅允许 WorkItem ${item.id} 在资源范围 ${item.resource_scope.join("、")} 内写入并运行验证。`,
+            requested_by_agent_id: project.owner_agent_id,
+            work_item_id: item.id,
+            resource_scope: item.resource_scope,
+          }),
+        { concurrency: 1 },
+      )
       yield* Effect.gen(function* () {
         yield* Effect.forEach(
           started,
@@ -1484,21 +1545,37 @@ export const layer = Layer.effect(
       const gates = yield* projects.listGates(project.id)
       const evidence = yield* evidenceSnapshot(project)
       const assignments = yield* recruitment.listAssignments({ project_id })
-      const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
-      if (
-        charter.policy.source_approval_preset === "strict" &&
-        ready.some((item) => item.kind === "worker" && item.work_type === "coding") &&
-        !writeApproved
-      ) {
-        if (!gates.some((gate) => gate.kind === "risk_approval" && gate.status === "pending"))
-          yield* projects.requestGate({
-            project_id: project.id,
-            kind: "risk_approval",
-            title: "批准 Agent 写入项目工作区",
-            summary:
-              "当前公司使用“全部请求批准”。Agent 已完成只读规划，继续执行将允许其在隔离工作树中写入和运行验证命令。",
-            requested_by_agent_id: project.owner_agent_id,
-          })
+      const gated = ready.filter(
+        (item) =>
+          item.kind === "worker" &&
+          item.work_type === "coding" &&
+          charter.policy.source_approval_preset === "strict" &&
+          !gates.some((gate) => riskApprovalCovers(gate, item)),
+      )
+      if (gated.length) {
+        yield* Effect.forEach(
+          gated.filter(
+            (item) =>
+              !gates.some(
+                (gate) =>
+                  gate.kind === "risk_approval" &&
+                  gate.status === "pending" &&
+                  gate.work_item_id === item.id &&
+                  JSON.stringify(gate.resource_scope) === JSON.stringify(item.resource_scope),
+              ),
+          ),
+          (item) =>
+            projects.requestGate({
+              project_id: project.id,
+              kind: "risk_approval",
+              title: `批准 Agent 写入 WorkItem ${item.id}`,
+              summary: `仅允许该 WorkItem 在资源范围 ${item.resource_scope.join("、")} 内写入和运行验证命令。`,
+              requested_by_agent_id: project.owner_agent_id,
+              work_item_id: item.id,
+              resource_scope: item.resource_scope,
+            }),
+          { concurrency: 1 },
+        )
         return
       }
       const nextStatus = ready.every((item) => item.kind === "reviewer") ? "reviewing" : "executing"
@@ -1583,7 +1660,7 @@ export const layer = Layer.effect(
                   item,
                   agentModelRef(project, item.model_group),
                   charter.policy,
-                  writeApproved,
+                  gates.some((gate) => riskApprovalCovers(gate, item)),
                   assignment.permission_mode,
                   evidence,
                   reviewFeedback,
@@ -1592,7 +1669,7 @@ export const layer = Layer.effect(
                 permission_mode: workerPermission(
                   item,
                   charter.policy,
-                  writeApproved,
+                  gates.some((gate) => riskApprovalCovers(gate, item)),
                   assignment.permission_mode,
                 ),
               }),
@@ -1645,6 +1722,23 @@ export const layer = Layer.effect(
                     )
                   yield* recordBoardCloseout({ project, item, artifact, summary: parsed.summary })
                 }
+                const reviewer = (yield* projects.listWorkItems(project.id)).find(
+                  (candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id,
+                )
+                if (reviewer) {
+                  yield* projects.setWorkItemReview({ id: item.id, review_status: "pending" })
+                  yield* projects.recordEvent({
+                    project_id: project.id,
+                    type: "work_item.delivery_ready_for_review",
+                    actor_id: item.owner_agent_id,
+                    data: {
+                      work_item_id: item.id,
+                      reviewer_id: reviewer.id,
+                      artifact_id: artifact.id,
+                    },
+                  })
+                  return
+                }
                 yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 return
@@ -1672,6 +1766,7 @@ export const layer = Layer.effect(
               if (!parsed.accepted) {
                 const error = parsed.findings.join("; ") || parsed.summary
                 yield* projects.blockWorkItem({ id: item.id, error })
+                if (parent.status === "running") yield* projects.blockWorkItem({ id: parent.id, error })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 yield* reputation.updateFromAdmission(
                   parent.owner_agent_id ?? parent.role,
@@ -1696,8 +1791,87 @@ export const layer = Layer.effect(
                 }
                 return
               }
-              yield* completeValidatedWorkItem({ item, artifact: reviewArtifact, summary: parsed.summary })
+              if (!parsed.evidence_checked.length)
+                throw new Error(`Reviewer ${item.id} accepted without checked evidence`)
+              const parentArtifact = (yield* projects.listArtifacts(project.id)).findLast(
+                (candidate) => candidate.work_item_id === parent.id && candidate.kind !== "attempt_failure",
+              )
+              if (!parentArtifact?.content) throw new Error(`Reviewer parent ${parent.id} has no persisted artifact`)
+              const parentArtifactSha = new Bun.CryptoHasher("sha256")
+                .update(parentArtifact.content)
+                .digest("hex")
+              const parentArtifactGate = yield* validation.create({
+                id: `review-parent-${new Bun.CryptoHasher("sha256")
+                  .update(`${parent.id}:${parentArtifact.id}:${item.id}`)
+                  .digest("hex")
+                  .slice(0, 40)}`,
+                project_id: project.id,
+                work_item_id: parent.id,
+                kind: "artifact",
+                criteria: [
+                  {
+                    id: `parent-artifact-${parentArtifactSha.slice(0, 24)}`,
+                    statement: "Parent delivery artifact bytes are persisted",
+                    anchor: { kind: "artifact", reference: `artifact:${parentArtifact.id}` },
+                    operator: "digest",
+                    expected: parentArtifactSha,
+                  },
+                ],
+                blocking_work_item_ids: [parent.id],
+                evaluator: "artifact_digest_v1",
+                max_repair_rounds: 3,
+              })
+              const reviewGate = yield* validation.create({
+                id: `review-acceptance-${new Bun.CryptoHasher("sha256")
+                  .update(`${parent.id}:${reviewArtifact.id}:${item.id}`)
+                  .digest("hex")
+                  .slice(0, 40)}`,
+                project_id: project.id,
+                work_item_id: parent.id,
+                kind: "policy",
+                criteria: parent.acceptance_criteria.map((criterion, index) => ({
+                  id: `reviewed-${index + 1}-${new Bun.CryptoHasher("sha256")
+                    .update(criterion)
+                    .digest("hex")
+                    .slice(0, 24)}`,
+                  statement: criterion,
+                  anchor: { kind: "policy", reference: `artifact:${reviewArtifact.id}` },
+                  operator: "equals",
+                  expected: true,
+                })),
+                blocking_work_item_ids: [parent.id],
+                evaluator: "policy_invariant_v1",
+                max_repair_rounds: 3,
+              })
+              if (parentArtifactGate.status !== "passed" || reviewGate.status !== "passed")
+                throw new Error(`Independent review gates did not pass for ${parent.id}`)
+              yield* completeValidatedWorkItem({ item: parent, artifact: parentArtifact, summary: parsed.summary })
+              yield* projects.completeWorkItemWithReceipt({
+                id: item.id,
+                receipt: {
+                  idempotency_key: `review:${item.id}:attempt:${item.attempt + 1}`,
+                  outcome: "completed",
+                  summary: parsed.summary,
+                  artifact_ids: [reviewArtifact.id],
+                  evidence_refs: [
+                    { kind: "artifact", id: parentArtifact.id },
+                    { kind: "artifact", id: reviewArtifact.id },
+                  ],
+                  confirmed_facts: [
+                    `independent_review:${parent.id}:validation_gate:${reviewGate.id}:passed`,
+                    `parent_artifact:${parentArtifact.id}:validation_gate:${parentArtifactGate.id}:passed`,
+                  ],
+                  invalidated_assumptions: [],
+                  unknowns: [],
+                  blockers: [],
+                  capability_gaps: [],
+                  task_proposals: [],
+                  dependency_proposals: [],
+                  questions: [],
+                },
+              })
               yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+              yield* reputation.updateFromAdmission(parent.owner_agent_id ?? parent.role, true, [], "project")
               if (parent.work_type !== "coding") return
               const parentWorktree =
                 worktree ??
@@ -2202,7 +2376,11 @@ export const layer = Layer.effect(
         if (
           verdict.mode === "discovery_first" &&
           !(yield* projects.listGates(project.id)).some(
-            (gate) => gate.kind === "risk_approval" && gate.status === "pending",
+            (gate) =>
+              gate.kind === "risk_approval" &&
+              gate.status === "pending" &&
+              gate.work_item_id === team.builder.id &&
+              JSON.stringify(gate.resource_scope) === JSON.stringify(team.builder.resource_scope),
           )
         )
           yield* projects.requestGate({
@@ -2211,6 +2389,8 @@ export const layer = Layer.effect(
             title: "批准 First Slice Builder",
             summary: "Wayfinder 保持只读。批准后才会为 First Slice Builder 建立 Assignment 并启动执行。",
             requested_by_agent_id: team.wayfinder?.owner_agent_id ?? project.owner_agent_id,
+            work_item_id: team.builder.id,
+            resource_scope: team.builder.resource_scope,
           })
         return {
           project: (yield* projects.get(project.id))!,
@@ -2338,7 +2518,11 @@ export const layer = Layer.effect(
         if (
           verdict.mode === "discovery_first" &&
           !(yield* projects.listGates(project.id)).some(
-            (gate) => gate.kind === "risk_approval" && gate.status === "pending",
+            (gate) =>
+              gate.kind === "risk_approval" &&
+              gate.status === "pending" &&
+              gate.work_item_id === team.builder.id &&
+              JSON.stringify(gate.resource_scope) === JSON.stringify(team.builder.resource_scope),
           )
         )
           yield* projects.requestGate({
@@ -2347,6 +2531,8 @@ export const layer = Layer.effect(
             title: "批准 First Slice Builder",
             summary: "Wayfinder 保持只读。批准后才会为 First Slice Builder 建立 Assignment 并启动执行。",
             requested_by_agent_id: team.wayfinder?.owner_agent_id ?? project.owner_agent_id,
+            work_item_id: team.builder.id,
+            resource_scope: team.builder.resource_scope,
           })
         if (!run_id) throw new Error(`Seed project ${project.id} has no dispatchable initial AgentRun`)
         return { project: (yield* projects.get(project.id))!, run_id }
@@ -2487,14 +2673,20 @@ export const layer = Layer.effect(
         return { gate }
       }
       if (gate.kind === "risk_approval") {
-        if (project.execution_strategy === "seed_and_grow") {
+        if (!gate.work_item_id || !gate.resource_scope.length)
+          throw new Error(`Risk approval ${gate.id} has no WorkItem scope`)
+        const approvedItem = (yield* projects.listWorkItems(project.id)).find(
+          (item) => item.id === gate.work_item_id,
+        )
+        if (!approvedItem) throw new Error(`Risk approval ${gate.id} WorkItem is unavailable`)
+        if (project.execution_strategy === "seed_and_grow" && approvedItem.purpose === "first_slice") {
           const verdict = yield* seedVerdict(project)
           yield* startSeedProject({
             project,
             verdict,
             projects,
             recruitment,
-            authorize_builder: true,
+            authorize_builder_work_item_id: gate.work_item_id,
           })
         }
         const run_id = yield* startReadyWave(project.id)

@@ -398,6 +398,8 @@ export const CompanyApprovalGateTable = sqliteTable(
     title: text().notNull(),
     summary: text().notNull(),
     requested_by_agent_id: text(),
+    work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    resource_scope_json: text().notNull().default("[]"),
     worktree_run_id: text().references(() => CompanyWorktreeRunTable.id, { onDelete: "set null" }),
     decision_note: text(),
     requested_at: integer().notNull(),
@@ -406,6 +408,7 @@ export const CompanyApprovalGateTable = sqliteTable(
   (table) => [
     index("company_approval_gate_project_idx").on(table.project_id, table.status),
     index("company_approval_gate_project_kind_status_idx").on(table.project_id, table.kind, table.status),
+    index("company_approval_gate_work_item_idx").on(table.work_item_id, table.status),
   ],
 )
 

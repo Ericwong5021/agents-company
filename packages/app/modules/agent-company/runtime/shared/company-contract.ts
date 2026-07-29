@@ -300,6 +300,14 @@ export type SeedGrowProjectExperience = {
   graph: GraphChangeSummary
   validation: ValidationSummary
   discoveries: DiscoverySummary[]
+  receiptPage: {
+    page: number
+    pageSize: number
+    returned: number
+    availability: "available" | "unavailable"
+    reason?: "projection_overflow" | "page_unavailable"
+    nextPage?: number
+  }
 }
 
 export type CompanySnapshot = {

@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm"
@@ -139,6 +140,8 @@ const gateFromRow = (row: typeof CompanyApprovalGateTable.$inferSelect) =>
   ApprovalGate.parse({
     ...row,
     requested_by_agent_id: row.requested_by_agent_id ?? undefined,
+    work_item_id: row.work_item_id ?? undefined,
+    resource_scope: parseList(row.resource_scope_json),
     worktree_run_id: row.worktree_run_id ?? undefined,
     decision_note: row.decision_note ?? undefined,
     decided_at: row.decided_at ?? undefined,
@@ -329,7 +332,10 @@ export interface Interface {
   }) => Effect.Effect<Artifact>
   readonly listArtifacts: (project_id: string) => Effect.Effect<Artifact[]>
   readonly listWorkAttempts: (project_id: string) => Effect.Effect<WorkAttempt[]>
-  readonly listWorkReceipts: (project_id: string) => Effect.Effect<WorkReceipt[]>
+  readonly listWorkReceipts: (
+    project_id: string,
+    page?: { limit: number; offset: number },
+  ) => Effect.Effect<WorkReceipt[]>
   readonly listEvents: (project_id: string) => Effect.Effect<ProjectEvent[]>
   readonly requestGate: (input: {
     project_id: string
@@ -337,6 +343,8 @@ export interface Interface {
     title: string
     summary: string
     requested_by_agent_id?: string
+    work_item_id?: string
+    resource_scope?: string[]
     worktree_run_id?: string
   }) => Effect.Effect<ApprovalGate>
   readonly resolveGate: (input: {
@@ -983,7 +991,7 @@ export const layer = Layer.effect(
             if (!worker || worker.kind !== "worker") throw new Error(`Worker not found: ${input.worker_id}`)
             if (!reviewer || reviewer.kind !== "reviewer" || reviewer.parent_id !== worker.id)
               throw new Error(`Reviewer ${input.reviewer_id} does not review worker ${input.worker_id}`)
-            if (worker.status !== "completed" || worker.review_status !== "rejected")
+            if (!["completed", "blocked"].includes(worker.status) || worker.review_status !== "rejected")
               throw new Error(`Worker ${worker.id} is not awaiting rejected-review rework`)
             if (!["blocked", "failed"].includes(reviewer.status))
               throw new Error(`Reviewer ${reviewer.id} cannot request rework from ${reviewer.status}`)
@@ -1092,12 +1100,40 @@ export const layer = Layer.effect(
     })
 
     const readyWorkItems = Effect.fn("CompanyProject.readyWorkItems")(function* (project_id: string) {
+      const activePlan = yield* Effect.sync(() =>
+        Database.use((db) => {
+          const project = db
+            .select({ active_plan_version: CompanyProjectTable.active_plan_version })
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.id, project_id))
+            .get()
+          if (!project?.active_plan_version) return
+          return db
+            .select({ id: CompanyPlanTable.id })
+            .from(CompanyPlanTable)
+            .where(
+              and(
+                eq(CompanyPlanTable.project_id, project_id),
+                eq(CompanyPlanTable.version, project.active_plan_version),
+                eq(CompanyPlanTable.status, "active"),
+              ),
+            )
+            .get()
+        }),
+      )
+      if (!activePlan) return []
       const pending = yield* Effect.sync(() =>
         Database.use((db) =>
           db
             .select()
             .from(CompanyWorkItemTable)
-            .where(and(eq(CompanyWorkItemTable.project_id, project_id), eq(CompanyWorkItemTable.status, "pending")))
+            .where(
+              and(
+                eq(CompanyWorkItemTable.project_id, project_id),
+                eq(CompanyWorkItemTable.plan_id, activePlan.id),
+                eq(CompanyWorkItemTable.status, "pending"),
+              ),
+            )
             .all(),
         ),
       )
@@ -1128,9 +1164,37 @@ export const layer = Layer.effect(
           ),
         )).map((item) => item.id),
       )
+      const reviewableParents = new Set(
+        pending
+          .filter((item) => item.kind === "reviewer" && Boolean(item.parent_id))
+          .filter((item) =>
+            Database.use((db) =>
+              db
+                .select({ id: CompanyArtifactTable.id })
+                .from(CompanyArtifactTable)
+                .where(
+                  and(
+                    eq(CompanyArtifactTable.project_id, project_id),
+                    eq(CompanyArtifactTable.work_item_id, item.parent_id!),
+                  ),
+                )
+                .get(),
+            ),
+          )
+          .map((item) => item.parent_id!),
+      )
+      const pendingByID = new Map(pending.map((item) => [item.id, item]))
       const blocked = new Set(
         dependencies
-          .filter((dependency) => incomplete.has(dependency.depends_on_id))
+          .filter(
+            (dependency) =>
+              incomplete.has(dependency.depends_on_id) &&
+              !(
+                pendingByID.get(dependency.work_item_id)?.kind === "reviewer" &&
+                pendingByID.get(dependency.work_item_id)?.parent_id === dependency.depends_on_id &&
+                reviewableParents.has(dependency.depends_on_id)
+              ),
+          )
           .map((dependency) => dependency.work_item_id),
       )
       ;(
@@ -1354,6 +1418,8 @@ export const layer = Layer.effect(
       title: string
       summary: string
       requested_by_agent_id?: string
+      work_item_id?: string
+      resource_scope?: string[]
       worktree_run_id?: string
     }) {
       const current = yield* get(input.project_id)
@@ -1362,6 +1428,26 @@ export const layer = Layer.effect(
         throw new Error(`${input.kind} cannot be requested while project is ${current.status}`)
       if (input.kind === "merge_approval" && !input.worktree_run_id)
         throw new Error("Merge approval must belong to a worktree run")
+      if (input.kind === "risk_approval" && (!input.work_item_id || !input.resource_scope?.length))
+        throw new Error("Risk approval must belong to a WorkItem and resource scope")
+      if (input.kind === "risk_approval") {
+        const item = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select({
+                project_id: CompanyWorkItemTable.project_id,
+                resource_scope_json: CompanyWorkItemTable.resource_scope_json,
+              })
+              .from(CompanyWorkItemTable)
+              .where(eq(CompanyWorkItemTable.id, input.work_item_id!))
+              .get(),
+          ),
+        )
+        if (!item || item.project_id !== input.project_id)
+          throw new Error("Risk approval WorkItem does not belong to its project")
+        if (item.resource_scope_json !== JSON.stringify(input.resource_scope))
+          throw new Error("Risk approval resource scope differs from its WorkItem")
+      }
       const pending = yield* Effect.sync(() =>
         Database.use((db) =>
           db
@@ -1372,6 +1458,11 @@ export const layer = Layer.effect(
                 eq(CompanyApprovalGateTable.project_id, input.project_id),
                 eq(CompanyApprovalGateTable.kind, input.kind),
                 eq(CompanyApprovalGateTable.status, "pending"),
+                input.kind === "risk_approval"
+                  ? eq(CompanyApprovalGateTable.work_item_id, input.work_item_id!)
+                  : input.worktree_run_id
+                    ? eq(CompanyApprovalGateTable.worktree_run_id, input.worktree_run_id)
+                    : undefined,
               ),
             )
             .get(),
@@ -1387,6 +1478,8 @@ export const layer = Layer.effect(
         title: input.title,
         summary: input.summary,
         requested_by_agent_id: input.requested_by_agent_id ?? null,
+        work_item_id: input.work_item_id ?? null,
+        resource_scope_json: JSON.stringify(input.resource_scope ?? []),
         worktree_run_id: input.worktree_run_id ?? null,
         decision_note: null,
         requested_at: Date.now(),
@@ -1399,7 +1492,17 @@ export const layer = Layer.effect(
           status: "awaiting_approval",
           actor_id: input.requested_by_agent_id,
         })
-      yield* event(input.project_id, "gate.requested", { gate_id: id, kind: input.kind }, input.requested_by_agent_id)
+      yield* event(
+        input.project_id,
+        "gate.requested",
+        {
+          gate_id: id,
+          kind: input.kind,
+          work_item_id: input.work_item_id,
+          resource_scope: input.resource_scope,
+        },
+        input.requested_by_agent_id,
+      )
       return gateFromRow(row)
     })
 
@@ -1415,6 +1518,30 @@ export const layer = Layer.effect(
       )
       if (!gate) throw new Error(`Approval gate not found: ${input.id}`)
       if (gate.status !== "pending") throw new Error(`Approval gate ${input.id} is already ${gate.status}`)
+      if (gate.kind === "risk_approval" && input.decision === "approve") {
+        const item = yield* Effect.sync(() =>
+          Database.use((db) =>
+            gate.work_item_id
+              ? db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, gate.work_item_id)).get()
+              : undefined,
+          ),
+        )
+        const plan = item
+          ? yield* Effect.sync(() =>
+              Database.use((db) =>
+                db.select().from(CompanyPlanTable).where(eq(CompanyPlanTable.id, item.plan_id)).get(),
+              ),
+            )
+          : undefined
+        if (
+          !item ||
+          item.project_id !== gate.project_id ||
+          item.resource_scope_json !== gate.resource_scope_json ||
+          ["completed", "superseded", "cancelled"].includes(item.status) ||
+          plan?.status !== "active"
+        )
+          throw new Error(`Risk approval ${gate.id} no longer matches an active WorkItem scope`)
+      }
       const status = input.decision === "approve" ? "approved" : "rejected"
       const decided_at = Date.now()
       const updated = yield* Effect.sync(() =>
@@ -1539,17 +1666,187 @@ export const layer = Layer.effect(
         return { code, output: `${stdout}\n${stderr}`.trim() }
       })
 
-    const command = (cwd: string, value: string) =>
+    const sandboxPath = (value: string) => value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
+
+    const command = (cwd: string, value: string, writeScope: string[] = []) =>
       Effect.promise(async () => {
-        const args = process.platform === "win32" ? ["cmd", "/c", value] : ["/bin/sh", "-lc", value]
-        const child = Bun.spawn(args, { cwd, stdout: "pipe", stderr: "pipe" })
+        const sandbox = process.platform === "darwin" ? Bun.which("sandbox-exec") : Bun.which("bwrap")
+        if (!sandbox)
+          return {
+            command: value,
+            code: 126,
+            output: `Verification sandbox is unavailable on ${process.platform}`,
+          }
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), "agent-company-sandbox-"))
+        const home = path.join(root, "home")
+        const tmp = path.join(root, "tmp")
+        await Promise.all([fs.mkdir(home), fs.mkdir(tmp)])
+        const writablePaths = writeScope.map((scope) =>
+          path.resolve(scope ? path.join(cwd, scope) : cwd),
+        )
+        const linuxSystemBinds =
+          process.platform === "linux"
+            ? (
+                await Promise.all(
+                  ["/lib", "/lib64"].map((directory) =>
+                    fs.access(directory).then(
+                      () => ["--ro-bind", directory, directory],
+                      () => [],
+                    ),
+                  ),
+                )
+              ).flat()
+            : []
+        const args =
+          process.platform === "darwin"
+            ? [
+                "-p",
+                [
+                  "(version 1)",
+                  "(deny default)",
+                  "(allow process*)",
+                  "(allow signal (target self))",
+                  "(allow sysctl-read)",
+                  "(allow mach-lookup)",
+                  `(allow file-read* (subpath "${sandboxPath(cwd)}") (subpath "/System") (subpath "/Library") (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "${sandboxPath(path.dirname(process.execPath))}"))`,
+                  `(allow file-write* (subpath "${sandboxPath(root)}"))`,
+                  ...writablePaths.flatMap((target) => [
+                    `(allow file-write* (literal "${sandboxPath(target)}"))`,
+                    `(allow file-write* (subpath "${sandboxPath(target)}"))`,
+                  ]),
+                  "(deny network*)",
+                ].join("\n"),
+                "/bin/sh",
+                "-lc",
+                value,
+              ]
+            : [
+                "--die-with-parent",
+                "--new-session",
+                "--unshare-all",
+                "--clearenv",
+                "--proc",
+                "/proc",
+                "--dev",
+                "/dev",
+                "--ro-bind",
+                "/usr",
+                "/usr",
+                "--ro-bind",
+                "/bin",
+                "/bin",
+                ...linuxSystemBinds,
+                "--dir",
+                "/opt",
+                "--dir",
+                "/opt/agent-company",
+                "--ro-bind",
+                process.execPath,
+                "/opt/agent-company/bun",
+                "--ro-bind",
+                cwd,
+                "/workspace",
+                "--bind",
+                root,
+                "/sandbox",
+                ...writablePaths.flatMap((target) => [
+                  "--bind",
+                  target,
+                  target === path.resolve(cwd)
+                    ? "/workspace"
+                    : `/workspace/${path.relative(cwd, target).split(path.sep).join("/")}`,
+                ]),
+                "--chdir",
+                "/workspace",
+                "--setenv",
+                "HOME",
+                "/sandbox/home",
+                "--setenv",
+                "TMPDIR",
+                "/sandbox/tmp",
+                "--setenv",
+                "PATH",
+                "/opt/agent-company:/usr/bin:/bin",
+                "/bin/sh",
+                "-lc",
+                value,
+              ]
+        const child = Bun.spawn([sandbox, ...args], {
+          cwd,
+          env: {
+            HOME: home,
+            TMPDIR: tmp,
+            PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,
+            LANG: "C.UTF-8",
+            LC_ALL: "C.UTF-8",
+            CI: "1",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        })
+        const timeoutState = { expired: false }
+        const timeout = setTimeout(() => {
+          timeoutState.expired = true
+          child.kill("SIGKILL")
+        }, 15 * 60_000)
         const [stdout, stderr, code] = await Promise.all([
           new Response(child.stdout).text(),
           new Response(child.stderr).text(),
           child.exited,
         ])
-        return { command: value, code, output: `${stdout}\n${stderr}`.trim().slice(-8000) }
+        clearTimeout(timeout)
+        await fs.rm(root, { recursive: true, force: true })
+        return {
+          command: value,
+          code,
+          output: `${stdout}\n${stderr}${timeoutState.expired ? "\nVerification command exceeded 15 minutes" : ""}`
+            .trim()
+            .slice(-8000),
+        }
       })
+
+    const changedPaths = (cwd: string) =>
+      Effect.gen(function* () {
+        const [tracked, untracked] = yield* Effect.all([
+          git(cwd, ["diff", "--no-renames", "--name-only", "-z", "HEAD"]),
+          git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]),
+        ])
+        if (tracked.code !== 0 || untracked.code !== 0)
+          throw new Error(`Failed to inspect worktree changes: ${tracked.output || untracked.output}`)
+        return [...new Set(`${tracked.output}\0${untracked.output}`.split("\0").filter(Boolean))].sort()
+      })
+
+    const allowedWorktreePaths = (
+      current: typeof CompanyWorktreeRunTable.$inferSelect,
+      scopes: string[],
+      outputDir: string,
+    ) =>
+      scopes.map((scope) => {
+        if (scope.includes("*") || scope.includes("?") || scope.includes("["))
+          throw new Error(`Resource scope must be an exact path or directory: ${scope}`)
+        const repository = path.resolve(current.repository_path)
+        const worktree = path.resolve(current.directory)
+        const absolute = path.resolve(path.isAbsolute(scope) ? scope : path.join(repository, scope))
+        const relative =
+          absolute === path.resolve(outputDir)
+            ? ""
+            : absolute === repository || absolute.startsWith(`${repository}${path.sep}`)
+            ? path.relative(repository, absolute)
+            : absolute === worktree || absolute.startsWith(`${worktree}${path.sep}`)
+              ? path.relative(worktree, absolute)
+              : undefined
+        if (relative === undefined || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+          throw new Error(`Resource scope exceeds repository boundary: ${scope}`)
+        return relative.split(path.sep).join("/")
+      })
+
+    const outOfScopePaths = (paths: string[], scopes: string[]) =>
+      paths.filter(
+        (candidate) =>
+          !scopes.some(
+            (scope) => !scope || candidate === scope || candidate.startsWith(`${scope.replace(/\/+$/, "")}/`),
+          ),
+      )
 
     const updateWorktreeRun = Effect.fn("CompanyProject.updateWorktreeRun")(function* (input: {
       id: string
@@ -1672,10 +1969,65 @@ export const layer = Layer.effect(
       if (!current) throw new Error(`Company worktree run not found: ${input.id}`)
       if (current.status !== "running") throw new Error(`Worktree run ${input.id} is not running`)
       if (!input.commands.length) throw new Error("At least one verification command is required")
+      if (!current.work_item_id) throw new Error(`Worktree run ${input.id} has no WorkItem`)
+      const scope = yield* Effect.sync(() =>
+        Database.use((db) => {
+          const item = db
+            .select()
+            .from(CompanyWorkItemTable)
+            .where(eq(CompanyWorkItemTable.id, current.work_item_id!))
+            .get()
+          const project = db
+            .select({ output_dir: CompanyProjectTable.output_dir })
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.id, current.project_id))
+            .get()
+          const assignment = db
+            .select()
+            .from(CompanyProjectAssignmentTable)
+            .where(
+              and(
+                eq(CompanyProjectAssignmentTable.project_id, current.project_id),
+                eq(CompanyProjectAssignmentTable.work_item_id, current.work_item_id!),
+                inArray(CompanyProjectAssignmentTable.status, ["assigned", "active"]),
+              ),
+            )
+            .orderBy(desc(CompanyProjectAssignmentTable.assigned_at))
+            .get()
+          if (!item || !assignment || !project) throw new Error(`Worktree run ${input.id} has no active Assignment`)
+          const itemScope = parseList(item.resource_scope_json)
+          const assignmentScope = parseList(assignment.resource_scope_json)
+          if (JSON.stringify(itemScope) !== JSON.stringify(assignmentScope))
+            throw new Error(`Worktree run ${input.id} Assignment scope differs from its WorkItem`)
+          return allowedWorktreePaths(current, itemScope, project.output_dir)
+        }),
+      )
+      const existingOutOfScope = outOfScopePaths(yield* changedPaths(current.directory), scope)
+      if (existingOutOfScope.length)
+        throw new Error(`Worktree has changes outside its Assignment scope: ${existingOutOfScope.join(", ")}`)
       yield* updateWorktreeRun({ id: input.id, status: "verifying" })
-      const results = yield* Effect.forEach(input.commands, (item) => command(current.directory, item))
+      const results = yield* Effect.forEach(input.commands, (item) =>
+        command(current.directory, item, scope),
+      )
       const failed = results.find((item) => item.code !== 0)
       if (!failed) {
+        const paths = yield* changedPaths(current.directory)
+        const outside = outOfScopePaths(paths, scope)
+        if (outside.length) {
+          const error = `Verification changed paths outside its Assignment scope: ${outside.join(", ")}`
+          const failedRun = yield* updateWorktreeRun({
+            id: input.id,
+            status: "failed",
+            verification_commands: input.commands,
+            verification: { passed: false, worktree: results },
+            error,
+          })
+          yield* event(current.project_id, "worktree_run.verification_failed", {
+            worktree_run_id: current.id,
+            error,
+          })
+          return failedRun
+        }
         const dirty = yield* git(current.directory, ["status", "--porcelain"])
         if (dirty.code !== 0) {
           const failedRun = yield* updateWorktreeRun({
@@ -1692,7 +2044,7 @@ export const layer = Layer.effect(
           return failedRun
         }
         if (dirty.output) {
-          const staged = yield* git(current.directory, ["add", "--all"])
+          const staged = yield* git(current.directory, ["add", "--", ...paths])
           const committed =
             staged.code === 0
               ? yield* git(current.directory, [
@@ -1790,9 +2142,16 @@ export const layer = Layer.effect(
         yield* updateWorktreeRun({ id, status: "failed", error: merged.output })
         throw new Error(`Failed to merge worktree branch: ${merged.output}`)
       }
+      const verificationDirectory = path.join(path.dirname(current.directory), `${current.id}-merged-verification`)
+      const prepared = charter.policy.require_main_branch_verification
+        ? yield* git(current.repository_path, ["worktree", "add", "--detach", verificationDirectory, "HEAD"])
+        : undefined
+      if (prepared && prepared.code !== 0)
+        throw new Error(`Failed to create isolated main verification worktree: ${prepared.output}`)
       const mainResults = charter.policy.require_main_branch_verification
-        ? yield* Effect.forEach(current.verification_commands, (item) => command(current.repository_path, item))
+        ? yield* Effect.forEach(current.verification_commands, (item) => command(verificationDirectory, item))
         : []
+      if (prepared) yield* git(current.repository_path, ["worktree", "remove", "--force", verificationDirectory])
       const failed = mainResults.find((item) => item.code !== 0)
       if (failed) {
         yield* updateWorktreeRun({

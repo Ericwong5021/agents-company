@@ -37,6 +37,8 @@ export type ExperienceSourceRef = z.infer<typeof ExperienceSourceRef>
 
 export const GoalBriefSource = z.enum(["user_input", "system_suggestion", "user_confirmation"])
 export type GoalBriefSource = z.infer<typeof GoalBriefSource>
+export const GoalBriefUserSource = z.enum(["user_input", "user_confirmation"])
+export type GoalBriefUserSource = z.infer<typeof GoalBriefUserSource>
 
 export const GoalBriefDeliverable = z
   .object({
@@ -447,7 +449,7 @@ export const ExperienceWorkActionRequest = z.union([
       briefId: Identifier,
       expectedBriefVersion: z.number().int().positive(),
       expectedPlanVersion: z.number().int().positive(),
-      source: GoalBriefSource,
+      source: GoalBriefUserSource,
       brief: GoalBriefDraft,
       changeReason: LongText,
     })

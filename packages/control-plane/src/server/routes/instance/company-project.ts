@@ -24,6 +24,11 @@ const ResolveGateSchema = z.object({
   note: z.string().optional(),
 })
 
+const ReceiptPageSchema = z.object({
+  limit: z.coerce.number().int().positive().max(51).default(51),
+  offset: z.coerce.number().int().nonnegative().max(100_000).default(0),
+})
+
 const CancelSchema = z.object({ reason: z.string().min(1).optional() })
 const RetrySchema = z.object({
   provider_id: z.string().min(1).optional(),
@@ -155,9 +160,13 @@ export const CompanyProjectRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ projectID: z.string().min(1) })),
+      validator("query", ReceiptPageSchema),
       async (c) =>
         jsonRequest("CompanyProjectRoutes.receipts", c, function* () {
-          return yield* (yield* CompanyProject.Service).listWorkReceipts(c.req.valid("param").projectID)
+          return yield* (yield* CompanyProject.Service).listWorkReceipts(
+            c.req.valid("param").projectID,
+            c.req.valid("query"),
+          )
         }),
     )
     .post(
