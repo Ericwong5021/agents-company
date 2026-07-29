@@ -97,8 +97,40 @@ export const B5LegacyBaselineOracleContract = z
       z.literal("project_assignment"),
       z.literal("workflow_run"),
     ]),
+    scenarioExpectations: z
+      .array(
+        z
+          .object({
+            scenarioId: B5ScenarioId,
+            projectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
+            terminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked"]),
+            plannerStatus: z.literal("completed"),
+            workflowRunStatus: z.literal("completed"),
+          })
+          .strict(),
+      )
+      .length(B5ScenarioIds.length),
   })
   .strict()
+  .superRefine((value, context) => {
+    if (
+      new Set(value.scenarioExpectations.map((expectation) => expectation.scenarioId)).size !==
+      B5ScenarioIds.length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["scenarioExpectations"],
+        message: "Legacy oracle requires one expectation for every B5 scenario",
+      })
+    value.scenarioExpectations.forEach((expectation, index) => {
+      if (value.terminalProjectStatuses.includes(expectation.projectStatus)) return
+      context.addIssue({
+        code: "custom",
+        path: ["scenarioExpectations", index, "projectStatus"],
+        message: "Scenario expectation is outside the terminal project status set",
+      })
+    })
+  })
 export type B5LegacyBaselineOracleContract = z.infer<
   typeof B5LegacyBaselineOracleContract
 >
@@ -150,7 +182,10 @@ const LegacyOracle = z
     kind: z.literal("legacy_frozen_oracle"),
     scenarioId: B5ScenarioId,
     contractSha256: Digest,
+    taskSha256: Digest,
     oracleKey: z.string().trim().min(1),
+    expectedProjectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
+    expectedTerminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked"]),
     projectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
     planIds: z.array(z.string().trim().min(1)).min(1),
     workItemIds: z.array(z.string().trim().min(1)).min(1),
@@ -158,6 +193,7 @@ const LegacyOracle = z
     workflowRunIds: z.array(z.string().trim().min(1)).min(1),
     artifactIds: z.array(z.string().trim().min(1)),
     approvalGateIds: z.array(z.string().trim().min(1)),
+    validationGateIds: z.array(z.string().trim().min(1)),
     settledFactSha256: Digest,
   })
   .strict()
@@ -353,7 +389,13 @@ export const B5ScenarioRunResult = z
       "rejected",
       "blocked",
     ]),
-    terminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked", "in_progress"]),
+    terminalDecision: z.enum([
+      "completed",
+      "correctly_stopped",
+      "correctly_blocked",
+      "in_progress",
+      "failed",
+    ]),
     sourceRefs: z.array(SourceReference).min(1),
     oracle: z.discriminatedUnion("kind", [
       LegacyOracle,
@@ -470,20 +512,6 @@ export const B5ScenarioPlan = [
   oracleKey: string
 }[]
 
-const DeliveryScenarios = new Set<B5ScenarioId>([
-  "S13",
-  "S14",
-  "S16",
-  "S17",
-  "S18",
-  "S19",
-  "S20",
-  "S21",
-  "S23",
-  "S25",
-  "S26",
-  "S27",
-])
 const ValidationScenarios = new Set<B5ScenarioId>(["S15", "S16", "S18", "S22", "S23", "S24", "S27"])
 const InterruptionScenarios = new Set<B5ScenarioId>(["S14", "S15", "S22"])
 const ReviewScenarios = new Set<B5ScenarioId>(["S14", "S18"])
@@ -537,38 +565,74 @@ export function exactB5RunBindings(value: readonly B5RunBinding[]) {
   })
 }
 
-export function requiredB5ObservationTypes(scenarioId: B5ScenarioId, strategy: B5Strategy) {
+export function b5LegacyScenarioTask(scenario: B5BenchmarkScenario) {
   return [
-    "scenario.fixture_checked",
-    "command.probe_checked",
-    "git.blob_checked",
-    "report.file_checked",
-    "terminal.invariant_checked",
-    "benchmark.checked",
-    "model.usage_checked",
-    ...(strategy === "seed_and_grow" ? ["shadow_pair.checked"] : []),
-    ...(strategy === "seed_and_grow" && DeliveryScenarios.has(scenarioId)
-      ? ["delivery.checked"]
-      : []),
-    ...(strategy === "seed_and_grow" && ["S19", "S27"].includes(scenarioId)
-      ? ["receipt.recovery_checked"]
-      : []),
-    ...(strategy === "seed_and_grow" && ["S20", "S27"].includes(scenarioId)
-      ? ["graph_mutation.recovery_checked"]
-      : []),
-    ...(strategy === "seed_and_grow" && ValidationScenarios.has(scenarioId)
-      ? [scenarioId === "S15" ? "approval_gate.checked" : "validation_anchor.checked"]
-      : []),
-    ...(strategy === "seed_and_grow" && scenarioId === "S24" ? ["quiescence.checked"] : []),
-    ...(strategy === "seed_and_grow" && InterruptionScenarios.has(scenarioId)
-      ? ["interruption.checked"]
-      : []),
-    ...(ReviewScenarios.has(scenarioId) ? ["review_presence.checked"] : []),
-    ...(strategy === "seed_and_grow" && ["S14", "S18"].includes(scenarioId)
-      ? ["quality_pair.checked"]
-      : []),
-    ...(strategy === "seed_and_grow" && scenarioId === "S22" ? ["repair.circuit_checked"] : []),
-  ]
+    `Scenario ${scenario.id}: ${scenario.title}`,
+    "Inputs:",
+    ...scenario.inputs.map((item) => `- ${item}`),
+    "Expected outputs:",
+    ...scenario.expectedOutputs.map((item) => `- ${item}`),
+    "Acceptance criteria:",
+    ...scenario.acceptanceCriteria.map(
+      (criterion) => `- ${criterion.id}: ${criterion.statement} Evidence: ${criterion.evidence}`,
+    ),
+    "Failure conditions:",
+    ...scenario.failureConditions.map((item) => `- ${item}`),
+  ].join("\n")
+}
+
+export function b5LegacyScenarioExpectation(
+  contract: B5LegacyBaselineOracleContract,
+  scenarioId: B5ScenarioId,
+) {
+  const expectation = contract.scenarioExpectations.find(
+    (candidate) => candidate.scenarioId === scenarioId,
+  )
+  if (!expectation) throw new Error(`Legacy oracle has no scenario-specific expectation for ${scenarioId}`)
+  return expectation
+}
+
+export function b5ScenarioEvidenceRequirement(
+  scenarioId: B5ScenarioId,
+  strategy: B5Strategy,
+) {
+  const delivery = scenarioId === "S14"
+  const qualityPair = scenarioId === "S14" && strategy === "seed_and_grow"
+  return {
+    delivery,
+    qualityPair,
+    observationTypes: [
+      "scenario.fixture_checked",
+      "command.probe_checked",
+      "git.blob_checked",
+      "report.file_checked",
+      "terminal.invariant_checked",
+      "benchmark.checked",
+      "model.usage_checked",
+      ...(strategy === "seed_and_grow" ? ["shadow_pair.checked"] : []),
+      ...(delivery ? ["delivery.checked"] : []),
+      ...(strategy === "seed_and_grow" && ["S19", "S27"].includes(scenarioId)
+        ? ["receipt.recovery_checked"]
+        : []),
+      ...(strategy === "seed_and_grow" && ["S20", "S27"].includes(scenarioId)
+        ? ["graph_mutation.recovery_checked"]
+        : []),
+      ...(strategy === "seed_and_grow" && ValidationScenarios.has(scenarioId)
+        ? [scenarioId === "S15" ? "approval_gate.checked" : "validation_anchor.checked"]
+        : []),
+      ...(strategy === "seed_and_grow" && scenarioId === "S24" ? ["quiescence.checked"] : []),
+      ...(strategy === "seed_and_grow" && InterruptionScenarios.has(scenarioId)
+        ? ["interruption.checked"]
+        : []),
+      ...(ReviewScenarios.has(scenarioId) ? ["review_presence.checked"] : []),
+      ...(qualityPair ? ["quality_pair.checked"] : []),
+      ...(strategy === "seed_and_grow" && scenarioId === "S22" ? ["repair.circuit_checked"] : []),
+    ],
+  }
+}
+
+export function requiredB5ObservationTypes(scenarioId: B5ScenarioId, strategy: B5Strategy) {
+  return b5ScenarioEvidenceRequirement(scenarioId, strategy).observationTypes
 }
 
 function firstSlice(scenario: B5BenchmarkScenario) {
@@ -718,9 +782,11 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
   runtime: B5ScenarioRuntime,
 ) {
   const contract = B5LegacyBaselineOracleContract.parse(input.snapshot.legacyBaselineOracle)
+  const expectation = b5LegacyScenarioExpectation(contract, input.snapshot.scenario.id)
+  const task = b5LegacyScenarioTask(input.snapshot.scenario)
   const started = yield* runtime.execution.start({
-    goal: `Execute benchmark ${input.snapshot.scenario.id} using persisted local facts only`,
-    title: `B5 ${input.snapshot.scenario.id} legacy baseline`,
+    goal: task,
+    title: `B5 ${input.snapshot.scenario.id} ${input.snapshot.scenario.title}`,
     execution_strategy: "legacy_full_plan",
     seed_policy: b5SeedPolicy(input.snapshot.scenario),
     ...(input.providerId && input.modelId
@@ -746,6 +812,7 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
   const assignments = yield* runtime.recruitment.listAssignments({ project_id: project.id })
   const artifacts = yield* runtime.projects.listArtifacts(project.id)
   const approvalGates = yield* runtime.projects.listGates(project.id)
+  const validationGates = yield* runtime.validation.list(project.id)
   const planner = items.find((item) => item.kind === "planner")
   const workflowRunIds = [
     ...new Set(items.flatMap((item) => (item.workflow_run_id ? [item.workflow_run_id] : []))),
@@ -754,7 +821,6 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
     project.execution_strategy !== "legacy_full_plan" ||
     !plans.length ||
     !planner ||
-    !["completed", "blocked", "failed"].includes(planner.status) ||
     !assignments.length ||
     !workflowRunIds.length
   )
@@ -794,13 +860,15 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
     approvalGates: approvalGates
       .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
       .sort((left, right) => left.id.localeCompare(right.id)),
+    validationGates: validationGates
+      .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
   }
   const terminalDecision =
-    project.status === "completed"
-      ? "completed"
-      : project.status === "blocked"
-        ? "correctly_blocked"
-        : "correctly_stopped"
+    project.status === expectation.projectStatus &&
+    planner.status === expectation.plannerStatus
+      ? expectation.terminalDecision
+      : "failed"
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: project.id,
@@ -821,12 +889,16 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
       ...workflowRunIds.map((id) => ({ kind: "workflow_run" as const, id })),
       ...artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
       ...approvalGates.map((gate) => ({ kind: "approval_gate" as const, id: gate.id })),
+      ...validationGates.map((gate) => ({ kind: "validation_gate" as const, id: gate.id })),
     ],
     oracle: {
       kind: "legacy_frozen_oracle",
       scenarioId: input.snapshot.scenario.id,
       contractSha256: digest(contract),
+      taskSha256: digest(task),
       oracleKey: B5ScenarioPlan.find((scenario) => scenario.id === input.snapshot.scenario.id)!.oracleKey,
+      expectedProjectStatus: expectation.projectStatus,
+      expectedTerminalDecision: expectation.terminalDecision,
       projectStatus: project.status,
       planIds: plans.map((plan) => plan.id).sort(),
       workItemIds: items.map((item) => item.id).sort(),
@@ -834,6 +906,7 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
       workflowRunIds,
       artifactIds: artifacts.map((artifact) => artifact.id).sort(),
       approvalGateIds: approvalGates.map((gate) => gate.id).sort(),
+      validationGateIds: validationGates.map((gate) => gate.id).sort(),
       settledFactSha256: digest(projection),
     },
   })
@@ -922,6 +995,19 @@ const runS14 = Effect.fn("B5CandidateScenarios.S14")(function* (
   const reviewers = items.filter((item) => item.kind === "reviewer")
   if (!workItem || !assignment || items.length !== 1 || assignments.length !== 1 || reviewers.length)
     throw new Error("S14 direct_single created an unnecessary role or Reviewer")
+  const contract = B5LegacyBaselineOracleContract.parse(input.snapshot.legacyBaselineOracle)
+  const deadline = Date.now() + contract.settleTimeoutMs
+  let project = yield* runtime.projects.get(started.project.id)
+  while (project && !contract.terminalProjectStatuses.includes(project.status as never)) {
+    if (Date.now() >= deadline)
+      throw new Error(`S14 project ${started.project.id} did not reach a terminal state`)
+    yield* Effect.sleep(`${contract.pollIntervalMs} millis`)
+    project = yield* runtime.projects.get(started.project.id)
+  }
+  if (!project || project.status !== "completed")
+    throw new Error(`S14 project ${started.project.id} did not complete its real delivery`)
+  const artifacts = yield* runtime.projects.listArtifacts(project.id)
+  const gates = yield* runtime.validation.list(project.id)
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: started.project.id,
@@ -930,13 +1016,15 @@ const runS14 = Effect.fn("B5CandidateScenarios.S14")(function* (
       strategy: input.strategy,
       snapshotDigest: input.snapshot.snapshotDigest,
     },
-    projectStatus: started.project.status,
-    terminalDecision: "in_progress",
+    projectStatus: project.status,
+    terminalDecision: "completed",
     sourceRefs: [
-      { kind: "project", id: started.project.id },
+      { kind: "project", id: project.id },
       { kind: "work_item", id: workItem.id },
       { kind: "project_assignment", id: assignment.id },
       { kind: "agent_run", id: started.run_id },
+      ...artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
+      ...gates.map((gate) => ({ kind: "validation_gate" as const, id: gate.id })),
     ],
     oracle: {
       kind: "s14_direct_single",

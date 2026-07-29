@@ -1724,9 +1724,36 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
               .filter((reference) => reference.kind === "artifact")
               .map((reference) => reference.id),
           )
-          const delivery = deliveryRequired
+          const gates = yield* validation.list(result.binding.projectId)
+          const deliveryMatch = deliveryRequired
+            ? gates
+                .filter((candidate) => candidate.status === "passed")
+                .flatMap((candidate) =>
+                  candidate.criteria
+                    .filter((criterion) =>
+                      snapshot.scenario.acceptanceCriteria.some(
+                        (expected) => expected.statement === criterion.statement,
+                      ),
+                    )
+                    .flatMap((criterion) =>
+                      candidate.evidence_refs
+                        .filter(
+                          (reference) =>
+                            reference.kind === "artifact" &&
+                            referencedArtifactIds.has(reference.id),
+                        )
+                        .map((reference) => ({
+                          artifactId: reference.id,
+                          criterion,
+                          gate: candidate,
+                        })),
+                    ),
+                )
+                .at(-1)
+            : undefined
+          const delivery = deliveryMatch
             ? (yield* projects.listArtifacts(result.binding.projectId)).find(
-                (artifact) => referencedArtifactIds.has(artifact.id),
+                (artifact) => artifact.id === deliveryMatch.artifactId,
               )
             : undefined
           const deliveryBytes = delivery
@@ -1748,7 +1775,6 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                   (gate) => gate.kind === "risk_approval",
                 )
               : undefined
-          const gates = yield* validation.list(result.binding.projectId)
           const validationRequired = requiredB5ObservationTypes(
             snapshot.scenario.id,
             strategy,
@@ -1756,32 +1782,8 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
           const gate = validationRequired
             ? gates.findLast((candidate) => candidate.status === "passed")
             : undefined
-          const deliveryCriterion = deliveryBinding
-            ? snapshot.scenario.acceptanceCriteria.find((criterion) =>
-                gates.some(
-                  (candidate) =>
-                    candidate.status === "passed" &&
-                    candidate.criteria.some((item) => item.id === criterion.id) &&
-                    candidate.evidence_refs.some(
-                      (reference) =>
-                        reference.kind === "artifact" &&
-                        reference.id === deliveryBinding.id,
-                    ),
-                ),
-              )
-            : undefined
-          const deliveryGate = deliveryCriterion
-            ? gates.find(
-                (candidate) =>
-                  candidate.status === "passed" &&
-                  candidate.criteria.some((criterion) => criterion.id === deliveryCriterion.id) &&
-                  candidate.evidence_refs.some(
-                    (reference) =>
-                      reference.kind === "artifact" &&
-                      reference.id === deliveryBinding!.id,
-                  ),
-              )
-            : undefined
+          const deliveryCriterion = deliveryBinding ? deliveryMatch?.criterion : undefined
+          const deliveryGate = deliveryBinding ? deliveryMatch?.gate : undefined
           if (
             deliveryRequired &&
             (!deliveryBinding || !deliveryCriterion || !deliveryGate)

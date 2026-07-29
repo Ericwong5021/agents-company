@@ -54,6 +54,16 @@ import {
   type PersistedFactRunBinding as PersistedFactRunBindingValue,
   type PersistedMetricEvent,
 } from "./persisted-fact-artifact"
+import {
+  B5BenchmarkScenario,
+  B5LegacyBaselineOracleContract,
+  B5ScenarioId,
+  B5Strategy,
+  b5LegacyScenarioExpectation,
+  b5LegacyScenarioTask,
+  b5ScenarioEvidenceRequirement,
+  requiredB5ObservationTypes,
+} from "./b5-candidate-scenarios"
 
 const CandidateSha = z.string().regex(/^[a-f0-9]{40}$/)
 const Digest = z.string().regex(/^[a-f0-9]{64}$/)
@@ -220,7 +230,13 @@ const PairObservation = z
   .strict()
 const BenchmarkObservation = z
   .object({
-    terminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked", "in_progress"]),
+    terminalDecision: z.enum([
+      "completed",
+      "correctly_stopped",
+      "correctly_blocked",
+      "in_progress",
+      "failed",
+    ]),
     oracleKind: Identifier,
   })
   .strict()
@@ -229,7 +245,10 @@ const LegacyFrozenOracle = z
     kind: z.literal("legacy_frozen_oracle"),
     scenarioId: Identifier,
     contractSha256: Digest,
+    taskSha256: Digest,
     oracleKey: Identifier,
+    expectedProjectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
+    expectedTerminalDecision: z.enum(["completed", "correctly_stopped", "correctly_blocked"]),
     projectStatus: z.enum(["completed", "blocked", "rejected", "awaiting_approval"]),
     planIds: z.array(Identifier).min(1),
     workItemIds: z.array(Identifier).min(1),
@@ -237,6 +256,7 @@ const LegacyFrozenOracle = z
     workflowRunIds: z.array(Identifier).min(1),
     artifactIds: z.array(Identifier),
     approvalGateIds: z.array(Identifier),
+    validationGateIds: z.array(Identifier),
     settledFactSha256: Digest,
   })
   .strict()
@@ -259,7 +279,7 @@ const ScenarioOracleKinds = {
 } as const
 const ScenarioTerminalDecisions = {
   S13: "in_progress",
-  S14: "in_progress",
+  S14: "completed",
   S15: "correctly_stopped",
   S16: "in_progress",
   S17: "in_progress",
@@ -453,32 +473,8 @@ const ScenarioContract = z
         sha256: Digest,
       })
       .passthrough(),
-    legacyBaselineOracle: z
-      .object({
-        kind: z.literal("persisted_legacy_outcome"),
-        settleTimeoutMs: z.number().int().positive(),
-        pollIntervalMs: z.number().int().positive(),
-        terminalProjectStatuses: z
-          .array(z.enum(["completed", "blocked", "rejected", "awaiting_approval"]))
-          .min(1),
-        requiredFacts: z.tuple([
-          z.literal("plan"),
-          z.literal("planner_work_item"),
-          z.literal("project_assignment"),
-          z.literal("workflow_run"),
-        ]),
-      })
-      .strict(),
-    scenarios: z
-      .array(
-        z
-          .object({
-            id: Identifier,
-            observedMetrics: z.array(Identifier),
-          })
-          .passthrough(),
-      )
-      .length(15),
+    legacyBaselineOracle: B5LegacyBaselineOracleContract,
+    scenarios: z.array(B5BenchmarkScenario).length(15),
   })
   .passthrough()
 
@@ -698,6 +694,14 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
         throw new Error(`B5 observation ${observation.id} has a self-reported scenario verdict`)
       if (binding.strategy === "legacy_full_plan") {
         const oracle = LegacyFrozenOracle.parse(parsedReport.oracle)
+        const scenario = scenarioContract.scenarios.find(
+          (candidate) => candidate.id === binding.scenarioId,
+        )
+        if (!scenario) throw new Error(`B5 observation ${observation.id} has no frozen scenario`)
+        const expectation = b5LegacyScenarioExpectation(
+          scenarioContract.legacyBaselineOracle,
+          scenario.id,
+        )
         const facts = Database.use((database) => {
           const project = database
             .select()
@@ -729,6 +733,11 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
             .from(CompanyApprovalGateTable)
             .where(eq(CompanyApprovalGateTable.project_id, binding.projectId))
             .all()
+          const validationGates = database
+            .select()
+            .from(CompanyValidationGateTable)
+            .where(eq(CompanyValidationGateTable.project_id, binding.projectId))
+            .all()
           const workflowRunIds = [
             ...new Set(workItems.flatMap((item) => (item.workflow_run_id ? [item.workflow_run_id] : []))),
           ].sort()
@@ -746,6 +755,7 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
             assignments,
             artifacts,
             approvalGates,
+            validationGates,
             workflowRunIds,
             workflowRuns,
           }
@@ -785,40 +795,40 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
           approvalGates: facts.approvalGates
             .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
             .sort((left, right) => left.id.localeCompare(right.id)),
+          validationGates: facts.validationGates
+            .map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
         }
-        const decision =
-          facts.project?.status === "completed"
-            ? "completed"
-            : facts.project?.status === "blocked"
-              ? "correctly_blocked"
-              : "correctly_stopped"
         const exact = (left: string[], right: string[]) =>
           JSON.stringify([...left].sort()) === JSON.stringify([...right].sort())
         if (
           oracle.scenarioId !== binding.scenarioId ||
           oracle.contractSha256 !== sha256(canonical(scenarioContract.legacyBaselineOracle)) ||
+          oracle.taskSha256 !== sha256(canonical(b5LegacyScenarioTask(scenario))) ||
+          oracle.expectedProjectStatus !== expectation.projectStatus ||
+          oracle.expectedTerminalDecision !== expectation.terminalDecision ||
           !facts.project ||
           facts.project.execution_strategy !== "legacy_full_plan" ||
-          !scenarioContract.legacyBaselineOracle.terminalProjectStatuses.includes(
-            facts.project.status as never,
-          ) ||
+          facts.project.goal !== b5LegacyScenarioTask(scenario) ||
+          facts.project.status !== expectation.projectStatus ||
           parsedReport.projectStatus !== facts.project.status ||
           oracle.projectStatus !== facts.project.status ||
-          properties.terminalDecision !== decision ||
+          properties.terminalDecision !== expectation.terminalDecision ||
           !facts.workItems.some(
             (item) =>
               item.kind === "planner" &&
-              ["completed", "blocked", "failed"].includes(item.status) &&
+              item.status === expectation.plannerStatus &&
               Boolean(item.workflow_run_id),
           ) ||
           facts.workflowRuns.length !== facts.workflowRunIds.length ||
-          facts.workflowRuns.some((run) => !["completed", "failed", "cancelled"].includes(run.status)) ||
+          facts.workflowRuns.some((run) => run.status !== expectation.workflowRunStatus) ||
           !exact(oracle.planIds, facts.plans.map((plan) => plan.id)) ||
           !exact(oracle.workItemIds, facts.workItems.map((item) => item.id)) ||
           !exact(oracle.assignmentIds, facts.assignments.map((assignment) => assignment.id)) ||
           !exact(oracle.workflowRunIds, facts.workflowRunIds) ||
           !exact(oracle.artifactIds, facts.artifacts.map((artifact) => artifact.id)) ||
           !exact(oracle.approvalGateIds, facts.approvalGates.map((gate) => gate.id)) ||
+          !exact(oracle.validationGateIds, facts.validationGates.map((gate) => gate.id)) ||
           oracle.settledFactSha256 !== sha256(canonical(projection)) ||
           ![
             { kind: "project", ids: [binding.projectId] },
@@ -827,6 +837,7 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
             { kind: "workflow_run", ids: oracle.workflowRunIds },
             { kind: "artifact", ids: oracle.artifactIds },
             { kind: "approval_gate", ids: oracle.approvalGateIds },
+            { kind: "validation_gate", ids: oracle.validationGateIds },
           ].every(({ kind, ids }) =>
             ids.every((id) =>
               sourceRefs.some(
@@ -865,7 +876,7 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
         throw new Error(`B5 observation ${observation.id} has a mismatched report file`)
     }
   }
-  return { observations, producerSha256, scenarioDigests }
+  return { observations, producerSha256, scenarioDigests, scenarioContract }
 }
 
 function parseRecord(value: string, label: string) {
@@ -1371,36 +1382,10 @@ function gateObservationFacts(
   const rows = gateEvidence.observations.filter((item) => item.run_id === binding.runId)
   const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, binding.projectId)).get()!
   const byType = (eventType: string) => rows.filter((item) => item.event_type === eventType)
-  const required = [
-    "scenario.fixture_checked",
-    "command.probe_checked",
-    "git.blob_checked",
-    "report.file_checked",
-    "terminal.invariant_checked",
-    "benchmark.checked",
-    "model.usage_checked",
-    ...(binding.strategy === "seed_and_grow" ? ["shadow_pair.checked"] : []),
-    ...(metricApplies("delivery_consumability_rate", binding.scenarioId) ? ["delivery.checked"] : []),
-    ...(metricApplies("receipt_recovery_success_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
-      ? ["receipt.recovery_checked"]
-      : []),
-    ...(metricApplies("graph_mutation_recovery_success_rate", binding.scenarioId) &&
-    binding.strategy === "seed_and_grow"
-      ? ["graph_mutation.recovery_checked"]
-      : []),
-    ...(metricApplies("validation_gate_false_pass_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
-      ? [binding.scenarioId === "S15" ? "approval_gate.checked" : "validation_anchor.checked"]
-      : []),
-    ...(binding.scenarioId === "S24" && binding.strategy === "seed_and_grow" ? ["quiescence.checked"] : []),
-    ...(metricApplies("invalid_interruption_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
-      ? ["interruption.checked"]
-      : []),
-    ...(metricApplies("reviewer_invocation_ratio_vs_legacy", binding.scenarioId) ? ["review_presence.checked"] : []),
-    ...(metricApplies("low_risk_quality_ratio_vs_legacy", binding.scenarioId) && binding.strategy === "seed_and_grow"
-      ? ["quality_pair.checked"]
-      : []),
-    ...(binding.scenarioId === "S22" && binding.strategy === "seed_and_grow" ? ["repair.circuit_checked"] : []),
-  ]
+  const scenarioId = B5ScenarioId.parse(binding.scenarioId)
+  const strategy = B5Strategy.parse(binding.strategy)
+  const requirement = b5ScenarioEvidenceRequirement(scenarioId, strategy)
+  const required = requiredB5ObservationTypes(scenarioId, strategy)
   requireExactB5CheckedObservations(
     rows.map((row) => row.event_type),
     required,
@@ -1739,10 +1724,14 @@ function gateObservationFacts(
         .map((item) => TerminalInvariantObservation.parse(JSON.parse(item.properties_json) as unknown))
         .find((item) => item.passed)
       const scenarioId = binding.scenarioId as keyof typeof ScenarioOracleKinds
+      const legacyExpectation = b5LegacyScenarioExpectation(
+        gateEvidence.scenarioContract.legacyBaselineOracle,
+        B5ScenarioId.parse(binding.scenarioId),
+      )
       const legacyMatched =
         binding.strategy === "legacy_full_plan" &&
         value.oracleKind === "legacy_frozen_oracle" &&
-        ["completed", "correctly_stopped", "correctly_blocked"].includes(value.terminalDecision)
+        value.terminalDecision === legacyExpectation.terminalDecision
       const matched =
         terminal &&
         (legacyMatched ||
@@ -1797,6 +1786,10 @@ function gateObservationFacts(
     }
     if (row.event_type === "quality_pair.checked") {
       const value = PairObservation.parse(properties)
+      const legacyRequirement = b5ScenarioEvidenceRequirement(
+        scenarioId,
+        "legacy_full_plan",
+      )
       const legacy = gateEvidence.observations.find(
         (item) =>
           item.run_id === value.legacyRunId &&
@@ -1807,6 +1800,9 @@ function gateObservationFacts(
       const seed = byType("delivery.checked")[0]
       if (
         binding.strategy !== "seed_and_grow" ||
+        !requirement.qualityPair ||
+        !requirement.delivery ||
+        !legacyRequirement.delivery ||
         value.seedGrowRunId !== binding.runId ||
         !legacy ||
         !seed ||

@@ -17,7 +17,24 @@
     "settleTimeoutMs": 300000,
     "pollIntervalMs": 250,
     "terminalProjectStatuses": ["completed", "blocked", "rejected", "awaiting_approval"],
-    "requiredFacts": ["plan", "planner_work_item", "project_assignment", "workflow_run"]
+    "requiredFacts": ["plan", "planner_work_item", "project_assignment", "workflow_run"],
+    "scenarioExpectations": [
+      {"scenarioId": "S13", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S14", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S15", "projectStatus": "awaiting_approval", "terminalDecision": "correctly_stopped", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S16", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S17", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S18", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S19", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S20", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S21", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S22", "projectStatus": "blocked", "terminalDecision": "correctly_blocked", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S23", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S24", "projectStatus": "blocked", "terminalDecision": "correctly_blocked", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S25", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S26", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"},
+      {"scenarioId": "S27", "projectStatus": "completed", "terminalDecision": "completed", "plannerStatus": "completed", "workflowRunStatus": "completed"}
+    ]
   },
   "scenarios": [
     {

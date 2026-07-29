@@ -134,7 +134,7 @@ export const PrePublicScenarioApplicability = {
   complex_initial_assignment_median: ["S13"],
   receipt_recovery_success_rate: ["S19", "S27"],
   graph_mutation_recovery_success_rate: ["S20", "S27"],
-  delivery_consumability_rate: ["S13", "S14", "S16", "S17", "S18", "S19", "S20", "S21", "S23", "S25", "S26", "S27"],
+  delivery_consumability_rate: ["S14"],
   acceptance_determinability_rate: [
     "S13",
     "S14",
@@ -157,7 +157,7 @@ export const PrePublicScenarioApplicability = {
   candidate_reuse_rate: ["S17", "S25", "S26"],
   candidate_reuse_delta_vs_legacy: ["S17", "S25", "S26"],
   new_candidate_per_completed_project: ["S17", "S26"],
-  low_risk_quality_ratio_vs_legacy: ["S14", "S18"],
+  low_risk_quality_ratio_vs_legacy: ["S14"],
   core_task_completion_rate: [
     "S13",
     "S14",
