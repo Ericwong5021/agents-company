@@ -318,8 +318,12 @@ function promotionFromRow(row: typeof CompanyRolloutPromotionDecisionTable.$infe
   return decision
 }
 
-function executionMode() {
-  return SeedGrowExecutionMode.parse(Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION)
+export function executionMode(phase = Database.use(readState).phase) {
+  const override = Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION_OVERRIDE
+  if (override) return SeedGrowExecutionMode.parse(override)
+  if (phase === "shadow") return "shadow" as const
+  if (phase === "opt_in" || phase === "dogfood_default" || phase === "pre_public_default") return "active" as const
+  return "off" as const
 }
 
 export function projectPolicy(phase: RolloutPhaseValue, mode = executionMode()) {
@@ -357,7 +361,7 @@ export function resolveProjectStrategy(input: {
 
 export function status() {
   const state = Database.use(readState)
-  const mode = executionMode()
+  const mode = executionMode(state.phase)
   return RolloutStatus.parse({
     state,
     executionMode: mode,

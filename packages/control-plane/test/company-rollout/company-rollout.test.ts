@@ -283,6 +283,51 @@ describe("company rollout", () => {
     }
   })
 
+  test("derives the normal execution mode from persisted rollout and keeps an explicit off override", () => {
+    delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+    expect(CompanyRollout.status()).toMatchObject({
+      state: { phase: "off" },
+      executionMode: "off",
+      newProjectPolicy: { defaultStrategy: "legacy_full_plan" },
+    })
+    CompanyRollout.transition({
+      idempotencyKey: "persisted-mode-shadow",
+      to: "shadow",
+      reason: "verify persisted shadow mode",
+    })
+    expect(CompanyRollout.status()).toMatchObject({
+      state: { phase: "shadow" },
+      executionMode: "shadow",
+      newProjectPolicy: { defaultStrategy: "legacy_full_plan" },
+    })
+    CompanyRollout.transition({
+      idempotencyKey: "persisted-mode-opt-in",
+      to: "opt_in",
+      reason: "verify persisted opt-in mode",
+    })
+    expect(CompanyRollout.status()).toMatchObject({
+      state: { phase: "opt_in" },
+      executionMode: "active",
+      newProjectPolicy: { defaultStrategy: "legacy_full_plan", seedOptInAllowed: true },
+    })
+    CompanyRollout.transition({
+      idempotencyKey: "persisted-mode-dogfood",
+      to: "dogfood_default",
+      reason: "verify persisted default mode",
+    })
+    expect(CompanyRollout.status()).toMatchObject({
+      state: { phase: "dogfood_default" },
+      executionMode: "active",
+      newProjectPolicy: { defaultStrategy: "seed_and_grow" },
+    })
+    process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "off"
+    expect(CompanyRollout.status()).toMatchObject({
+      state: { phase: "dogfood_default" },
+      executionMode: "off",
+      newProjectPolicy: { defaultStrategy: "legacy_full_plan" },
+    })
+  })
+
   test("advances one phase at a time with an idempotent fail-closed journal", () => {
     expect(
       storeError(() =>
@@ -552,10 +597,7 @@ describe("company rollout", () => {
     })
     expect(failedShadowDecision.derivedMetricResult).toMatchObject({
       status: "failed",
-      reasons: [
-        `shadow_check_not_pass:${previousSha}:${failedShadowCheckId}`,
-        `shadow_report_failed:${previousSha}`,
-      ],
+      reasons: [`shadow_check_not_pass:${previousSha}:${failedShadowCheckId}`, `shadow_report_failed:${previousSha}`],
     })
   })
 

@@ -10,7 +10,6 @@ import { Conversation } from "@/conversation"
 import { ConversationThreadID } from "@/conversation/schema"
 import { Delegation } from "@/delegation/delegation"
 import { SubTask } from "@/delegation/schema"
-import { Flag } from "@/flag/flag"
 import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import * as Reputation from "@/reputation/reputation"
@@ -43,6 +42,61 @@ import {
 
 const workTypes = ["coding", "decision", "research", "writing", "design", "analysis"] as const
 const modelGroups = ["standard", "lite"] as const
+
+function defaultSeedPolicy(input: { goal: string; charter?: BoardProjectCharter }) {
+  const resources = input.charter?.resources ?? []
+  const text = [
+    input.goal,
+    ...(input.charter?.deliverables ?? []),
+    ...(input.charter?.scope ?? []),
+    ...resources.flatMap((resource) => [resource.scope, resource.disposition]),
+  ].join("\n")
+  const external_side_effect =
+    /(?:deploy|publish|release|send|upload|production|external write|部署|发布|上线|发送|上传|外部写入)/i.test(text)
+  const destructive = /(?:delete|remove|overwrite|truncate|drop|删除|移除|覆盖|清空)/i.test(text)
+  const acceptance_criteria = input.charter?.acceptance_criteria ?? ["第一块工作有可复核的现实证据与明确限制"]
+  return SeedPolicyFacts.parse({
+    risk_level: external_side_effect || destructive ? "high" : "medium",
+    scope_defined: Boolean(input.charter),
+    reversible: !destructive,
+    stable_sop: false,
+    unfamiliar_workspace:
+      !input.charter || resources.some((resource) => ["repository", "application"].includes(resource.kind)),
+    cross_module: resources.length > 1,
+    external_side_effect,
+    blocking_unknowns: [],
+    slice_candidates: [
+      {
+        id: "initial-reality-slice",
+        title: input.charter?.deliverables[0] ?? `验证第一块：${input.goal.slice(0, 120)}`,
+        description:
+          input.charter?.acceptance_criteria.join("\n") ?? "先接触真实环境，形成一份可复核发现，再决定后续任务图。",
+        work_type: /(?:code|implement|software|repository|代码|实现|开发)/i.test(text)
+          ? "coding"
+          : /(?:write|document|report|文档|撰写|报告)/i.test(text)
+            ? "writing"
+            : /(?:design|设计)/i.test(text)
+              ? "design"
+              : /(?:research|调查|研究)/i.test(text)
+                ? "research"
+                : "analysis",
+        role: "first-slice-builder",
+        capability_packs: [],
+        decision_scope: input.charter?.scope ?? ["第一块工作边界"],
+        resource_scope: resources.map((resource) => resource.scope),
+        acceptance_criteria,
+        reality_contact: 3,
+        information_gain: 3,
+        user_value: 2,
+        reversible: !destructive,
+        dependency_count: 0,
+        reality_anchor: resources[0]?.scope ?? input.goal,
+        within_authorized_scope: true,
+        external_side_effect,
+      },
+    ],
+  })
+}
 
 const charterResult = z.object({
   summary: z.string(),
@@ -535,6 +589,8 @@ export const layer = Layer.effect(
       project.provider_id && project.model_id ? `${project.provider_id}/${project.model_id}` : group
 
     const resolveNewExecution = (input: {
+      goal: string
+      charter?: BoardProjectCharter
       execution_strategy?: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
     }): {
@@ -556,7 +612,7 @@ export const layer = Layer.effect(
           shadow: { seed_policy, verdict: evaluateSeedPolicy(seed_policy) },
         }
       }
-      const seed_policy = SeedPolicyFacts.parse(input.seed_policy)
+      const seed_policy = input.seed_policy ? SeedPolicyFacts.parse(input.seed_policy) : defaultSeedPolicy(input)
       return {
         execution_strategy: "seed_and_grow" as const,
         seed_policy,
@@ -1881,7 +1937,6 @@ export const layer = Layer.effect(
       execution_strategy?: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
     }) {
-      void Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
       const charterInput = BoardProjectCharter.parse(input.charter)
       const existing = yield* projects.findBySourceThread(input.source_thread_id)
       if (existing && existing.decision_request_id !== input.request_id) {

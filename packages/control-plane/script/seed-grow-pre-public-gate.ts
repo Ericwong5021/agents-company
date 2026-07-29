@@ -747,6 +747,8 @@ const PromotionVerificationResult = z
     schemaVersion: z.literal(1),
     inputSha256: digest,
     verified: z.literal(true),
+    executionMode: z.literal("active"),
+    defaultStrategy: z.literal("seed_and_grow"),
     verifierPid: z.number().int().positive(),
     databasePathSha256: digest,
     homePathSha256: digest,
@@ -2163,6 +2165,7 @@ async function executePromotionChild(inputPath: string) {
       },
     })
   })
+  delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
   const promotion = CompanyRollout.evaluatePrePublicPromotion(input.promotionRequest)
   if (promotion.status !== "pass") stageStatusError(promotion.status, "CompanyRollout promotion")
   const persistedPromotion = CompanyRollout.getPromotionDecision(promotion.id)
@@ -2174,6 +2177,9 @@ async function executePromotionChild(inputPath: string) {
   const journal = CompanyRollout.listJournal()
   if (
     persistedStatus.state.phase !== "pre_public_default" ||
+    persistedStatus.executionMode !== "active" ||
+    persistedStatus.newProjectPolicy.defaultStrategy !== "seed_and_grow" ||
+    CompanyRollout.resolveNewProjectStrategy() !== "seed_and_grow" ||
     !evidence.promotionDecisions.some((decision) => same(decision, persistedPromotion)) ||
     !journal.items.some(
       (item) =>
@@ -2225,6 +2231,9 @@ async function executePromotionVerificationChild(inputPath: string) {
     CompanyRollout.valueSha256(evidence) !== input.expected.persistedEvidenceSha256 ||
     CompanyRollout.valueSha256(journal) !== input.expected.persistedJournalSha256 ||
     persistedStatus.state.phase !== "pre_public_default" ||
+    persistedStatus.executionMode !== "active" ||
+    persistedStatus.newProjectPolicy.defaultStrategy !== "seed_and_grow" ||
+    CompanyRollout.resolveNewProjectStrategy() !== "seed_and_grow" ||
     !journal.items.some(
       (item) =>
         item.kind === "transition" &&
@@ -2239,6 +2248,8 @@ async function executePromotionVerificationChild(inputPath: string) {
     schemaVersion: 1,
     inputSha256: source.sha256,
     verified: true,
+    executionMode: persistedStatus.executionMode,
+    defaultStrategy: persistedStatus.newProjectPolicy.defaultStrategy,
     verifierPid: process.pid,
     databasePathSha256: sha256(path.resolve(databasePath)),
     homePathSha256: sha256(path.resolve(homePath)),
@@ -2260,7 +2271,6 @@ async function runPromotionProcess(
     env: isolatedChildEnvironment({
       AGENTCOMPANY_DB: databasePath,
       AGENTCOMPANY_HOME: homePath,
-      AGENTCOMPANY_SEED_GROW_ORCHESTRATION: "active",
       AGENTCOMPANY_GATE_CANDIDATE_EXECUTION: "1",
       HOME: homePath,
       USERPROFILE: homePath,

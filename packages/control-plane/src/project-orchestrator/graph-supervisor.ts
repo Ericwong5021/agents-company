@@ -24,7 +24,6 @@ import {
   type WorkReceipt,
 } from "@/company-project/schema"
 import { CompanyWorkFacts, type ReceiptClaim } from "@/company-project/work-facts"
-import { Flag } from "@/flag/flag"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -584,15 +583,8 @@ export function makeLayer(hooks: Hooks = {}) {
             candidate.idempotency_key.startsWith("graph-mutation:"),
         )
         if (!mutation) return undefined
-        const decision = yield* getDecision(
-          mutation.idempotency_key.slice("graph-mutation:".length),
-        )
-        if (
-          !decision ||
-          decision.receipt_id !== receipt_id ||
-          decision.status !== "recorded"
-        )
-          return undefined
+        const decision = yield* getDecision(mutation.idempotency_key.slice("graph-mutation:".length))
+        if (!decision || decision.receipt_id !== receipt_id || decision.status !== "recorded") return undefined
         return yield* resolveDecision({
           id: decision.id,
           status: "applied",
@@ -675,13 +667,9 @@ export function makeLayer(hooks: Hooks = {}) {
               const result = yield* graph.shadow(proposal)
               if (result.status === "conflict") {
                 if (result.reason === "receipt_already_processed") {
-                  const finished = yield* recoverAppliedDecision(
-                    claim.receipt.id,
-                    project.id,
-                  )
+                  const finished = yield* recoverAppliedDecision(claim.receipt.id, project.id)
                   if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
-                  if (recorded.id !== finished.id)
-                    yield* resolveDecision({ id: recorded.id, status: "superseded" })
+                  if (recorded.id !== finished.id) yield* resolveDecision({ id: recorded.id, status: "superseded" })
                   return {
                     status: "processed" as const,
                     receipt_id: claim.receipt.id,
@@ -718,14 +706,10 @@ export function makeLayer(hooks: Hooks = {}) {
             const result = yield* graph.apply(proposal)
             if (result.status === "conflict") {
               if (result.reason === "receipt_already_processed") {
-                const finished = yield* recoverAppliedDecision(
-                  claim.receipt.id,
-                  project.id,
-                  )
-                  if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
-                  if (recorded.id !== finished.id)
-                    yield* resolveDecision({ id: recorded.id, status: "superseded" })
-                  return {
+                const finished = yield* recoverAppliedDecision(claim.receipt.id, project.id)
+                if (!finished) throw new Error(`Receipt ${claim.receipt.id} was processed without Graph Decision`)
+                if (recorded.id !== finished.id) yield* resolveDecision({ id: recorded.id, status: "superseded" })
+                return {
                   status: "processed" as const,
                   receipt_id: claim.receipt.id,
                   project_id: project.id,
@@ -733,7 +717,7 @@ export function makeLayer(hooks: Hooks = {}) {
                   decision: finished,
                   mutation_id: finished.mutation_id,
                   replayed: true,
-                    conflict_count: conflict_count + 1,
+                  conflict_count: conflict_count + 1,
                 }
               }
               yield* resolveDecision({ id: recorded.id, status: "superseded" })
@@ -797,7 +781,7 @@ export function makeLayer(hooks: Hooks = {}) {
           ),
         )
         if (!location) throw new Error(`Work Receipt not found: ${receipt_id}`)
-        const mode = hooks.mode ?? Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+        const mode = hooks.mode ?? CompanyRollout.executionMode()
         if (mode === "off") return { status: "disabled" as const, receipt_id, project_id: location.project_id }
         if (location.processing_status === "processed") {
           if (!location.processed_decision_id)
@@ -899,7 +883,7 @@ export function makeLayer(hooks: Hooks = {}) {
         const project = yield* projects.get(project_id)
         if (!project) throw new Error(`Company project not found: ${project_id}`)
         if (project.execution_strategy !== "seed_and_grow") return []
-        const mode = hooks.mode ?? Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+        const mode = hooks.mode ?? CompanyRollout.executionMode()
         if (mode === "off") {
           return (yield* facts.listReceipts(project_id))
             .filter((receipt) => ["pending", "processing"].includes(receipt.processing_status))
@@ -912,9 +896,7 @@ export function makeLayer(hooks: Hooks = {}) {
         return yield* lock(project_id).withPermits(1)(drainUnlocked(project_id, mode))
       })
 
-      const recover = Effect.fn("GraphSupervisor.recover")(function* (
-        input: { project_id?: string } = {},
-      ) {
+      const recover = Effect.fn("GraphSupervisor.recover")(function* (input: { project_id?: string } = {}) {
         const project_ids = yield* Effect.sync(() =>
           Database.use((db) =>
             db
@@ -925,9 +907,7 @@ export function makeLayer(hooks: Hooks = {}) {
                 and(
                   eq(CompanyProjectTable.execution_strategy, "seed_and_grow"),
                   inArray(CompanyWorkReceiptTable.processing_status, ["pending", "processing"]),
-                  input.project_id
-                    ? eq(CompanyProjectTable.id, input.project_id)
-                    : undefined,
+                  input.project_id ? eq(CompanyProjectTable.id, input.project_id) : undefined,
                 ),
               )
               .orderBy(asc(CompanyProjectTable.created_at), asc(CompanyProjectTable.id))

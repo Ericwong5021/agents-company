@@ -8,7 +8,7 @@ import {
 } from "@/company-project/company-project.sql"
 import { CompanyProjectExecution } from "@/company-project/execution"
 import { CompanyRecruitment } from "@/company-recruitment"
-import { Flag } from "@/flag/flag"
+import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 
@@ -97,7 +97,7 @@ export const layer = Layer.effect(
     const dispatchReady = Effect.fn("DispatchCoordinator.dispatchReady")(function* (project_id: string) {
       const project = yield* projects.get(project_id)
       if (!project) throw new Error(`Company project not found: ${project_id}`)
-      if (project.execution_strategy === "seed_and_grow" && Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION !== "active")
+      if (project.execution_strategy === "seed_and_grow" && CompanyRollout.executionMode() !== "active")
         return {
           project_id,
           status: "paused" as const,

@@ -101,6 +101,27 @@ const withSeedFlag = <A, E, R>(value: "off" | "shadow" | "active", effect: Effec
       }),
   )
 
+const withPersistedSeedDefault = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+      delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+      enableSeedOptIn()
+      CompanyRollout.transition({
+        idempotencyKey: "seed-execution-dogfood-default",
+        to: "dogfood_default",
+        reason: "verify persisted seed default",
+      })
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        if (previous === undefined) delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+        else process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = previous
+      }),
+  )
+
 const seedCompany = (companyID: CompanyID) =>
   Effect.sync(() => {
     const now = Date.now()
@@ -151,14 +172,17 @@ const queueWayfinder = (
       .stop(),
   )
 
-const queueBuilder = (llm: {
-  pushMatch: (
-    match: (hit: { body: Record<string, unknown> }) => boolean,
-    ...input: (Item | Reply)[]
-  ) => Effect.Effect<void>
-}) =>
+const queueBuilder = (
+  llm: {
+    pushMatch: (
+      match: (hit: { body: Record<string, unknown> }) => boolean,
+      ...input: (Item | Reply)[]
+    ) => Effect.Effect<void>
+  },
+  role = "evidence analyst",
+) =>
   llm.pushMatch(
-    (hit) => JSON.stringify(hit.body).includes("你的临时角色：evidence analyst"),
+    (hit) => JSON.stringify(hit.body).includes(`你的临时角色：${role}`),
     reply()
       .text(
         JSON.stringify({
@@ -177,6 +201,41 @@ const queueBuilder = (llm: {
   )
 
 describe.serial("Seed-and-Grow project execution", () => {
+  it.live(
+    "uses the persisted default and derives a bounded Seed Policy for a normal project request",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* ({ llm }) {
+          return yield* withPersistedSeedDefault(
+            Effect.gen(function* () {
+              yield* queueWayfinder(llm)
+              yield* queueBuilder(llm, "first-slice-builder")
+              const execution = yield* CompanyProjectExecution.Service
+              const projects = yield* CompanyProject.Service
+              expect(CompanyRollout.status()).toMatchObject({
+                state: { phase: "dogfood_default" },
+                executionMode: "active",
+                newProjectPolicy: { defaultStrategy: "seed_and_grow" },
+              })
+              const started = yield* execution.start({
+                goal: "分析本地代码与运行时并交付第一块可验证实现",
+                provider_id: "test",
+                model_id: "test-model",
+              })
+              expect(started.project).toMatchObject({
+                execution_strategy: "seed_and_grow",
+                seed_mode: "seed_pair",
+              })
+              expect(yield* projects.listWorkItems(started.project.id)).toHaveLength(2)
+              yield* execution.cancel({ project_id: started.project.id })
+            }),
+          )
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
   it.live(
     "starts a Seed Pair with independent Wayfinder and Builder assignments",
     () =>
