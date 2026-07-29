@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto"
 import { lstat, mkdir, readdir, realpath, rm } from "node:fs/promises"
 import path from "node:path"
-import { MetricContract, PrePublicScenarioMetricIds } from "@agents-company/shared/seed-grow-metrics"
+import {
+  MetricContract,
+  MetricEvaluationReport,
+  PrePublicScenarioMetricIds,
+} from "@agents-company/shared/seed-grow-metrics"
+import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
 import { Effect, Layer } from "effect"
 import z from "zod"
 import {
@@ -410,6 +415,24 @@ const ScenarioQuiescence = z
   })
   .strict()
 
+const SeedOracleKindByScenario = {
+  S13: "s13_seed_pair",
+  S14: "s14_direct_single",
+  S15: "s15_approval_stop",
+  S16: "s16_prerequisite_repair",
+  S17: "s17_capability_growth",
+  S18: "s18_risk_reviewer",
+  S19: "b5_process_recovery",
+  S20: "b5_process_recovery",
+  S21: "s21_revision_conflict",
+  S22: "s22_repair_circuit",
+  S23: "s23_supersede_replace",
+  S24: "s24_quiescence_blocked",
+  S25: "s25_assignment_release",
+  S26: "s26_company_pool_reuse",
+  S27: "b5_process_recovery",
+} as const
+
 export const B5ScenarioObservationReport = z
   .object({
     schemaVersion: z.literal(1),
@@ -492,6 +515,25 @@ export const B5ScenarioObservationReport = z
         path: ["binding", "runId"],
         message: "Scenario run is not bound to candidate, attempt, and isolation identity",
       })
+    const expectedOracleKind =
+      value.binding.strategy === "legacy_full_plan"
+        ? "legacy_baseline"
+        : SeedOracleKindByScenario[value.binding.scenarioId]
+    if (value.oracle.kind !== expectedOracleKind)
+      context.addIssue({
+        code: "custom",
+        path: ["oracle", "kind"],
+        message: "Scenario oracle does not match its strategy and scenario binding",
+      })
+    if (
+      value.oracle.kind === "b5_process_recovery" &&
+      value.oracle.scenarioId !== value.binding.scenarioId
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["oracle", "scenarioId"],
+        message: "Recovery oracle does not match its scenario binding",
+      })
     if (
       valueSha256({
         binding: value.binding,
@@ -511,6 +553,29 @@ export const B5ScenarioObservationReport = z
         code: "custom",
         path: ["probe", "runId"],
         message: "Scenario probe is not bound to the archived run",
+      })
+    const pendingCount =
+      value.terminal.pendingWorkItemCount +
+      value.terminal.pendingReceiptCount +
+      value.terminal.pendingMutationCount +
+      value.terminal.pendingGateCount
+    if (
+      value.projectStatus === "completed" &&
+      pendingCount !== 0
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["terminal"],
+        message: "Completed project retains pending terminal facts",
+      })
+    if (
+      value.terminalDecision === "completed" &&
+      (value.projectStatus !== "completed" || pendingCount !== 0)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["terminalDecision"],
+        message: "Completed decision is inconsistent with persisted terminal facts",
       })
     if (value.quiescence?.project_id !== undefined &&
       value.quiescence.project_id !== value.binding.projectId)
@@ -604,6 +669,108 @@ export const B5ScenarioObservationReport = z
   })
 export type B5ScenarioObservationReport = z.infer<
   typeof B5ScenarioObservationReport
+>
+
+export const B5CanonicalNormalizedResultInput = z
+  .object({
+    scenarioReports: z.array(B5ScenarioObservationReport).length(30),
+    metricReport: MetricEvaluationReport,
+    shadowReport: ShadowComparisonReport,
+    rollbackObservations: z.array(B5RollbackObservation).length(2),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const first = value.scenarioReports[0]
+    if (!first) return
+    try {
+      exactB5RunBindings(value.scenarioReports.map((report) => report.binding))
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        path: ["scenarioReports"],
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (
+      value.scenarioReports.some(
+        (report) =>
+          report.candidateSha !== first.candidateSha ||
+          report.attemptId !== first.attemptId ||
+          report.attemptIsolationId !== first.attemptIsolationId,
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["scenarioReports"],
+        message: "Scenario reports do not belong to one candidate attempt",
+      })
+    const runIds = value.scenarioReports.map((report) => report.binding.runId).sort()
+    if (
+      value.metricReport.candidateSha !== first.candidateSha ||
+      value.metricReport.status !== "pass" ||
+      value.metricReport.results.length !== PrePublicScenarioMetricIds.length ||
+      value.metricReport.results.some((result) => result.status !== "pass") ||
+      JSON.stringify([...value.metricReport.runIds].sort()) !== JSON.stringify(runIds)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["metricReport"],
+        message: "Metric report does not match the complete passing scenario run set",
+      })
+    if (
+      PrePublicScenarioMetricIds.some(
+        (metricId) =>
+          value.metricReport.results.filter((result) => result.metricId === metricId)
+            .length !== 1,
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["metricReport", "results"],
+        message: "Metric report does not contain each required B5 metric exactly once",
+      })
+    const legacyRunIds = value.scenarioReports
+      .filter((report) => report.binding.strategy === "legacy_full_plan")
+      .map((report) => report.binding.runId)
+      .sort()
+    const seedRunIds = value.scenarioReports
+      .filter((report) => report.binding.strategy === "seed_and_grow")
+      .map((report) => report.binding.runId)
+      .sort()
+    if (
+      value.shadowReport.candidateSha !== first.candidateSha ||
+      value.shadowReport.status !== "pass" ||
+      value.shadowReport.checks.some((check) => check.status !== "pass") ||
+      JSON.stringify([...value.shadowReport.scenarioIds].sort()) !==
+        JSON.stringify([...B5ScenarioIds].sort()) ||
+      JSON.stringify([...value.shadowReport.legacyRunIds].sort()) !==
+        JSON.stringify(legacyRunIds) ||
+      JSON.stringify([...value.shadowReport.seedAndGrowRunIds].sort()) !==
+        JSON.stringify(seedRunIds)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["shadowReport"],
+        message: "Shadow report does not match the complete passing scenario pairs",
+      })
+    if (
+      value.rollbackObservations.some(
+        (observation) =>
+          observation.candidateSha !== first.candidateSha ||
+          observation.attemptId !== first.attemptId ||
+          observation.attemptIsolationId !== first.attemptIsolationId,
+      ) ||
+      new Set(value.rollbackObservations.map((observation) => observation.target))
+        .size !== 2
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["rollbackObservations"],
+        message: "Rollback observations do not bind both targets to the candidate attempt",
+      })
+  })
+export type B5CanonicalNormalizedResultInput = z.infer<
+  typeof B5CanonicalNormalizedResultInput
 >
 
 function sha256(value: string | Uint8Array) {
@@ -795,6 +962,217 @@ function valueSha256(value: unknown) {
 
 export function b5NormalizedResultSha256(value: unknown) {
   return valueSha256(value)
+}
+
+function canonicalOracle(
+  oracle: B5ScenarioObservationReport["oracle"],
+): Record<string, unknown> {
+  if (oracle.kind === "legacy_baseline")
+    return {
+      kind: oracle.kind,
+      initialWorkItemCount: oracle.initialWorkItemIds.length,
+      initialAssignmentCount: oracle.initialAssignmentIds.length,
+    }
+  if (oracle.kind === "s13_seed_pair")
+    return {
+      kind: oracle.kind,
+      seedMode: oracle.seedMode,
+      assignmentCount: oracle.assignmentIds.length,
+      agentCount: oracle.agentIds.length,
+      initialGraphNodeCount: oracle.initialGraphNodeCount,
+    }
+  if (oracle.kind === "s14_direct_single")
+    return {
+      kind: oracle.kind,
+      seedMode: oracle.seedMode,
+      reviewerWorkItemCount: oracle.reviewerWorkItemIds.length,
+    }
+  if (oracle.kind === "s15_approval_stop")
+    return {
+      kind: oracle.kind,
+      seedMode: oracle.seedMode,
+      builderDispatched: oracle.builderDispatched,
+      externalEffectEventCount: oracle.externalEffectEventIds.length,
+    }
+  if (oracle.kind === "s16_prerequisite_repair")
+    return {
+      kind: oracle.kind,
+      criteriaSha256: oracle.criteriaSha256,
+      initialStatus: oracle.initialStatus,
+      repairedStatus: oracle.repairedStatus,
+    }
+  if (oracle.kind === "s17_capability_growth")
+    return {
+      kind: oracle.kind,
+      assignmentCount: oracle.assignmentIds.length,
+      agentCount: oracle.agentIds.length,
+      replayedMaterialization: oracle.replayedMaterialization,
+    }
+  if (oracle.kind === "s18_risk_reviewer")
+    return {
+      kind: oracle.kind,
+      independent: oracle.independent,
+      rejected: oracle.rejected,
+    }
+  if (oracle.kind === "s21_revision_conflict")
+    return {
+      kind: oracle.kind,
+      receiptCount: oracle.receiptIds.length,
+      decisionCount: oracle.decisionIds.length,
+      supersededDecisionCount: oracle.supersededDecisionIds.length,
+      conflictCount: oracle.conflictCount,
+    }
+  if (oracle.kind === "s22_repair_circuit")
+    return {
+      kind: oracle.kind,
+      attemptCount: oracle.attemptIds.length,
+      repairRounds: oracle.repairRounds,
+      fourthAttemptScheduled: oracle.fourthAttemptScheduled,
+      fourthRepairReplayed: oracle.fourthRepairReplayed,
+    }
+  if (oracle.kind === "s23_supersede_replace")
+    return { kind: oracle.kind, historyRetained: oracle.historyRetained }
+  if (oracle.kind === "s24_quiescence_blocked")
+    return {
+      kind: oracle.kind,
+      blockerCodes: [...oracle.blockerCodes].sort(),
+      deliveryArtifactCount: oracle.deliveryArtifactIds.length,
+    }
+  if (oracle.kind === "s25_assignment_release")
+    return {
+      kind: oracle.kind,
+      identityPreserved:
+        oracle.identityBeforeSha256 === oracle.identityAfterSha256,
+      released: oracle.released,
+    }
+  if (oracle.kind === "s26_company_pool_reuse")
+    return {
+      kind: oracle.kind,
+      candidateCountBeforeSecond: oracle.candidateCountBeforeSecond,
+      candidateCountAfterSecond: oracle.candidateCountAfterSecond,
+      secondSelectionSource: oracle.secondSelectionSource,
+    }
+  return {
+    kind: oracle.kind,
+    scenarioId: oracle.scenarioId,
+    receiptCount: oracle.receiptIds.length,
+    mutationCount: oracle.mutationIds.length,
+    duplicateSideEffects: oracle.duplicateSideEffects,
+    exactlyOnce: oracle.exactlyOnce,
+    processSeparated:
+      !oracle.crashedPids.some((pid) => oracle.recoveryPids.includes(pid)),
+  }
+}
+
+export function b5CanonicalNormalizedResultSha256(
+  raw: B5CanonicalNormalizedResultInput,
+) {
+  const input = B5CanonicalNormalizedResultInput.parse(raw)
+  const byRun = new Map(
+    input.scenarioReports.map((report) => [
+      `${report.binding.scenarioId}:${report.binding.strategy}`,
+      report,
+    ]),
+  )
+  return b5NormalizedResultSha256({
+    runs: B5ScenarioIds.flatMap((scenarioId) =>
+      B5StrategyOrder.map((strategy) => {
+        const report = byRun.get(`${scenarioId}:${strategy}`)!
+        return {
+          scenarioId,
+          strategy,
+          projectStatus: report.projectStatus,
+          terminalDecision: report.terminalDecision,
+          oracle: canonicalOracle(report.oracle),
+          terminal: report.terminal,
+          reviewer: report.reviewer
+            ? {
+                independent: report.reviewer.independent,
+                rejected: report.reviewer.rejected,
+              }
+            : null,
+          deliveryPresent: Boolean(report.delivery),
+          validationStatus: report.validationGate?.status ?? null,
+          approvalStatus: report.approvalGate?.status ?? null,
+          attention: report.attention
+            ? {
+                material: report.attention.material,
+                interruptsUser: report.attention.interrupts_user,
+              }
+            : null,
+          quiescence: report.quiescence
+            ? {
+                status: report.quiescence.status,
+                ready: report.quiescence.ready,
+                blockerCodes: [...report.quiescence.blocker_codes].sort(),
+              }
+            : null,
+          recovery: report.recovery
+            ? {
+                scenarioId: report.recovery.scenarioId,
+                duplicateSideEffects: report.recovery.duplicateSideEffects,
+                exactlyOnce: report.recovery.exactlyOnce,
+              }
+            : null,
+        }
+      }),
+    ),
+    metrics: [...input.metricReport.results]
+      .sort((left, right) => left.metricId.localeCompare(right.metricId))
+      .map((result) => ({
+        metricId: result.metricId,
+        blocking: result.blocking,
+        status: result.status,
+        value: result.value,
+        numerator: result.numerator,
+        denominator: result.denominator,
+        sampleSize: result.sampleSize,
+        meetsThreshold: result.meetsThreshold,
+        threshold: result.threshold,
+        blockedReasons: [...result.blockedReasons].sort(),
+      })),
+    shadow: {
+      status: input.shadowReport.status,
+      deltas: input.shadowReport.deltas,
+      checks: [...input.shadowReport.checks]
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map((check) => ({
+          id: check.id,
+          field: check.field,
+          operator: check.operator,
+          target: check.target,
+          blocking: check.blocking,
+          status: check.status,
+          value: check.value,
+        })),
+    },
+    rollback: [...input.rollbackObservations]
+      .sort((left, right) => left.target.localeCompare(right.target))
+      .map((observation) => ({
+        target: observation.target,
+        outcome: observation.outcome,
+        before: observation.before,
+        after: observation.after,
+        inFlightStatus: observation.inFlightProject.status,
+        inFlightStrategyBefore: observation.inFlightProject.strategyBefore,
+        inFlightStrategyAfter: observation.inFlightProject.strategyAfter,
+        businessStatePreserved:
+          observation.inFlightProject.businessStateSha256Before ===
+          observation.inFlightProject.businessStateSha256After,
+        dispatch: {
+          status: observation.dispatch.result.status,
+          barrier: observation.dispatch.result.barrier,
+          eligibleCount:
+            observation.dispatch.result.eligible_work_item_ids.length,
+          dispatchedCount:
+            observation.dispatch.result.dispatched_work_item_ids.length,
+        },
+        newProjectStrategy: observation.businessRows.newProjectStrategy,
+        resolvedNewProjectStrategy: observation.resolvedNewProjectStrategy,
+        resolvedExplicitFallbackStrategy:
+          observation.resolvedExplicitFallbackStrategy,
+      })),
+  })
 }
 
 async function writeJSON(target: string, value: unknown) {
@@ -2153,10 +2531,31 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     throw new Error("B5 candidate metric report did not pass the exact 16-metric scenario Gate")
   if (
     reports.shadow.status !== "pass" ||
-    reports.shadow.checks.length !== B5ScenarioIds.length ||
+    reports.shadow.scenarioIds.length !== B5ScenarioIds.length ||
+    B5ScenarioIds.some(
+      (scenarioId) =>
+        reports.shadow.scenarioIds.filter((candidate) => candidate === scenarioId)
+          .length !== 1,
+    ) ||
+    reports.shadow.legacyRunIds.length !== B5ScenarioIds.length ||
+    reports.shadow.seedAndGrowRunIds.length !== B5ScenarioIds.length ||
     reports.shadow.checks.some((check) => check.status !== "pass")
   )
     throw new Error("B5 candidate shadow report did not pass all 15 matched scenarios")
+  const strictObservationReports = await Promise.all(
+    orderedRunBindings.map(async (binding) =>
+      B5ScenarioObservationReport.parse(
+        JSON.parse(
+          await Bun.file(
+            path.join(
+              prepared.paths.observationReports,
+              `${binding.scenarioId}-${binding.strategy}.json`,
+            ),
+          ).text(),
+        ) as unknown,
+      ),
+    ),
+  )
   const observationReports = await Promise.all(
     orderedRunBindings.map((binding) =>
       relativeFile(
@@ -2168,32 +2567,11 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
       ),
     ),
   )
-  const normalizedResultSha256 = b5NormalizedResultSha256({
-    runs: run.records.map((record) => ({
-      scenarioId: record.result.binding.scenarioId,
-      strategy: record.result.binding.strategy,
-      projectStatus: record.result.projectStatus,
-      terminalDecision: record.result.terminalDecision,
-      oracleKind: record.result.oracle.kind,
-      terminalPassed: record.terminal.passed,
-    })),
-    metrics: reports.metric.results.map((result) => ({
-      metricId: result.metricId,
-      status: result.status,
-      value: result.value,
-    })),
-    shadow: reports.shadow.checks.map((check) => ({
-      id: check.id,
-      status: check.status,
-    })),
-    rollback: [run.rollbackKillSwitch, run.rollbackLegacyFallback].map((observation) => ({
-      target: observation.target,
-      outcome: observation.outcome,
-      executionMode: observation.after.executionMode,
-      defaultStrategy: observation.after.newProjectPolicy.defaultStrategy,
-      newProjectStrategy: observation.businessRows.newProjectStrategy,
-      dispatchStatus: observation.dispatch.result.status,
-    })),
+  const normalizedResultSha256 = b5CanonicalNormalizedResultSha256({
+    scenarioReports: strictObservationReports,
+    metricReport: reports.metric,
+    shadowReport: reports.shadow,
+    rollbackObservations: [run.rollbackKillSwitch, run.rollbackLegacyFallback],
   })
   const outputIsolationSha256 = await stateSha256(
     prepared.paths.outputDirectory,

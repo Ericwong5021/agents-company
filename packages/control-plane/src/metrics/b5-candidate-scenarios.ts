@@ -341,6 +341,79 @@ export const B5ScenarioRunResult = z
     ]),
   })
   .strict()
+  .superRefine((value, context) => {
+    const issue = (path: (string | number)[], message: string) =>
+      context.addIssue({ code: "custom", path: ["oracle", ...path], message })
+    if (value.oracle.kind === "s13_seed_pair") {
+      if (new Set(value.oracle.assignmentIds).size !== value.oracle.assignmentIds.length)
+        issue(["assignmentIds"], "S13 assignments must be unique")
+      if (new Set(value.oracle.agentIds).size !== value.oracle.agentIds.length)
+        issue(["agentIds"], "S13 agents must be independent")
+    }
+    if (value.oracle.kind === "s17_capability_growth") {
+      if (new Set(value.oracle.assignmentIds).size !== value.oracle.assignmentIds.length)
+        issue(["assignmentIds"], "S17 assignments must be unique")
+      if (new Set(value.oracle.agentIds).size !== value.oracle.agentIds.length)
+        issue(["agentIds"], "S17 agents must be independent")
+    }
+    if (
+      value.oracle.kind === "s18_risk_reviewer" &&
+      value.oracle.workerWorkItemId === value.oracle.reviewerWorkItemId
+    )
+      issue(["reviewerWorkItemId"], "S18 Reviewer must use an independent WorkItem")
+    if (
+      value.oracle.kind === "s18_risk_reviewer" &&
+      value.oracle.workerAssignmentId === value.oracle.reviewerAssignmentId
+    )
+      issue(["reviewerAssignmentId"], "S18 Reviewer must use an independent Assignment")
+    if (value.oracle.kind === "s21_revision_conflict") {
+      const oracle = value.oracle
+      if (new Set(oracle.receiptIds).size !== oracle.receiptIds.length)
+        issue(["receiptIds"], "S21 receipts must be unique")
+      if (new Set(oracle.decisionIds).size !== oracle.decisionIds.length)
+        issue(["decisionIds"], "S21 decisions must be unique")
+      if (
+        new Set(oracle.supersededDecisionIds).size !==
+        oracle.supersededDecisionIds.length
+      )
+        issue(["supersededDecisionIds"], "S21 superseded decisions must be unique")
+      if (
+        oracle.supersededDecisionIds.some(
+          (id) => !oracle.decisionIds.includes(id),
+        )
+      )
+        issue(["supersededDecisionIds"], "S21 superseded decisions must belong to the decision set")
+    }
+    if (
+      value.oracle.kind === "s22_repair_circuit" &&
+      new Set(value.oracle.attemptIds).size !== value.oracle.attemptIds.length
+    )
+      issue(["attemptIds"], "S22 repair attempts must be unique")
+    if (
+      value.oracle.kind === "s23_supersede_replace" &&
+      value.oracle.supersededWorkItemId === value.oracle.replacementWorkItemId
+    )
+      issue(["replacementWorkItemId"], "S23 replacement must differ from the superseded WorkItem")
+    if (
+      value.oracle.kind === "s25_assignment_release" &&
+      value.oracle.identityBeforeSha256 !== value.oracle.identityAfterSha256
+    )
+      issue(["identityAfterSha256"], "S25 assignment release changed Agent identity")
+    if (
+      value.oracle.kind === "s26_company_pool_reuse" &&
+      value.oracle.candidateCountAfterSecond !== value.oracle.candidateCountBeforeSecond
+    )
+      issue(["candidateCountAfterSecond"], "S26 company-pool reuse changed the candidate count")
+    if (value.oracle.kind === "b5_process_recovery") {
+      const oracle = value.oracle
+      if (oracle.recoveredAt < oracle.lostAt)
+        issue(["recoveredAt"], "Recovery completed before the observed loss")
+      if (
+        oracle.crashedPids.some((pid) => oracle.recoveryPids.includes(pid))
+      )
+        issue(["recoveryPids"], "Recovery must run in a process distinct from every crashed process")
+    }
+  })
 export type B5ScenarioRunResult = z.infer<typeof B5ScenarioRunResult>
 
 export const B5ScenarioPlan = [
