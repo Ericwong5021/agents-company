@@ -1404,7 +1404,7 @@ const runS18 = Effect.fn("B5CandidateScenarios.S18")(function* (
             work_type: "analysis",
             role: "independent risk reviewer",
             capability_packs: ["independent-review@1"],
-            decision_scope: ["acceptance evidence"],
+            decision_scope: ["risk evidence"],
             resource_scope: ["artifacts/b5/s18"],
             inputs: [workerArtifact.id],
             expected_outputs: ["Independent review result"],
