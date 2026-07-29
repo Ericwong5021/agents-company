@@ -394,8 +394,8 @@ function evaluate(db: TxOrDb, proposal: GraphMutationProposalType) {
   if (!receipt || receipt.project_id !== proposal.project_id) {
     throw new Error("Graph Mutation references an unavailable Work Receipt")
   }
-  if (receipt.processing_status !== "processed") {
-    throw new Error("Graph Mutation requires a processed Work Receipt")
+  if (!["processing", "processed"].includes(receipt.processing_status)) {
+    throw new Error("Graph Mutation requires a claimed or processed Work Receipt")
   }
   if (before.revision !== proposal.expected_revision) {
     return {
