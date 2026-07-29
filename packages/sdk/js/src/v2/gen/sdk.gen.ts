@@ -141,7 +141,15 @@ import type {
   ExperienceGoalBriefProjectResponses,
   ExperienceWorkGetErrors,
   ExperienceWorkGetResponses,
+  ExperienceWorkGraphErrors,
+  ExperienceWorkGraphResponses,
   ExperienceWorkListResponses,
+  ExperienceWorkOrganizationErrors,
+  ExperienceWorkOrganizationResponses,
+  ExperienceWorkReceiptErrors,
+  ExperienceWorkReceiptResponses,
+  ExperienceWorkValidationErrors,
+  ExperienceWorkValidationResponses,
   ExperimentalConsoleGetResponses,
   ExperimentalConsoleListOrgsResponses,
   ExperimentalConsoleSwitchOrgResponses,
@@ -1775,6 +1783,11 @@ export class GoalBrief extends HeyApiClient {
             | "conversation"
             | "goal_request"
             | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
           id: string
           version?: number
           eventType?: string
@@ -1953,6 +1966,11 @@ export class GoalBrief extends HeyApiClient {
             | "conversation"
             | "goal_request"
             | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
           id: string
           version?: number
           eventType?: string
@@ -2054,6 +2072,97 @@ export class Work extends HeyApiClient {
     return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
       url: "/experience/work",
       ...options,
+    })
+  }
+
+  /**
+   * Read the source-traceable project organization projection
+   */
+  public organization<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
+    return (options?.client ?? this.client).get<
+      ExperienceWorkOrganizationResponses,
+      ExperienceWorkOrganizationErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/organization",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read source-traceable graph change diagnostics without raw mutation operations
+   */
+  public graph<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
+    return (options?.client ?? this.client).get<ExperienceWorkGraphResponses, ExperienceWorkGraphErrors, ThrowOnError>({
+      url: "/experience/work/{projectID}/graph",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read a source-traceable discovery summary for one persisted Work Receipt
+   */
+  public receipt<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      receiptID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "receiptID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceWorkReceiptResponses,
+      ExperienceWorkReceiptErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/receipts/{receiptID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read source-traceable validation criteria and evidence summaries
+   */
+  public validation<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
+    return (options?.client ?? this.client).get<
+      ExperienceWorkValidationResponses,
+      ExperienceWorkValidationErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/validation",
+      ...options,
+      ...params,
     })
   }
 

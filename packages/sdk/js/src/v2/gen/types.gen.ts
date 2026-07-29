@@ -5666,6 +5666,11 @@ export type ExperienceGoalBriefCreateData = {
           | "conversation"
           | "goal_request"
           | "user"
+          | "work_attempt"
+          | "work_receipt"
+          | "graph_mutation"
+          | "project_assignment"
+          | "validation_gate"
         id: string
         version?: number
         eventType?: string
@@ -5733,6 +5738,11 @@ export type ExperienceGoalBriefCreateResponses = {
         | "conversation"
         | "goal_request"
         | "user"
+        | "work_attempt"
+        | "work_receipt"
+        | "graph_mutation"
+        | "project_assignment"
+        | "validation_gate"
       id: string
       version?: number
       eventType?: string
@@ -5864,6 +5874,11 @@ export type ExperienceGoalBriefGenerateResponses = {
         | "conversation"
         | "goal_request"
         | "user"
+        | "work_attempt"
+        | "work_receipt"
+        | "graph_mutation"
+        | "project_assignment"
+        | "validation_gate"
       id: string
       version?: number
       eventType?: string
@@ -5984,6 +5999,11 @@ export type ExperienceGoalBriefProjectResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -6025,6 +6045,11 @@ export type ExperienceGoalBriefProjectResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -6142,6 +6167,11 @@ export type ExperienceGoalBriefHistoryResponses = {
           | "conversation"
           | "goal_request"
           | "user"
+          | "work_attempt"
+          | "work_receipt"
+          | "graph_mutation"
+          | "project_assignment"
+          | "validation_gate"
         id: string
         version?: number
         eventType?: string
@@ -6215,6 +6245,11 @@ export type ExperienceGoalBriefAppendData = {
           | "conversation"
           | "goal_request"
           | "user"
+          | "work_attempt"
+          | "work_receipt"
+          | "graph_mutation"
+          | "project_assignment"
+          | "validation_gate"
         id: string
         version?: number
         eventType?: string
@@ -6351,6 +6386,11 @@ export type ExperienceGoalBriefAppendResponses = {
         | "conversation"
         | "goal_request"
         | "user"
+        | "work_attempt"
+        | "work_receipt"
+        | "graph_mutation"
+        | "project_assignment"
+        | "validation_gate"
       id: string
       version?: number
       eventType?: string
@@ -6468,6 +6508,11 @@ export type ExperienceGoalBriefGetResponses = {
         | "conversation"
         | "goal_request"
         | "user"
+        | "work_attempt"
+        | "work_receipt"
+        | "graph_mutation"
+        | "project_assignment"
+        | "validation_gate"
       id: string
       version?: number
       eventType?: string
@@ -6620,6 +6665,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6666,6 +6716,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6707,6 +6762,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6729,6 +6789,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -6769,6 +6834,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6810,6 +6880,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6856,6 +6931,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6902,6 +6982,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6943,6 +7028,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -6965,6 +7055,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -7005,6 +7100,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7046,6 +7146,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7077,6 +7182,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7124,6 +7234,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7165,6 +7280,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7188,6 +7308,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -7228,6 +7353,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7269,6 +7399,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7306,6 +7441,11 @@ export type ExperienceWorkListResponses = {
                   | "conversation"
                   | "goal_request"
                   | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
                 id: string
                 version?: number
                 eventType?: string
@@ -7347,6 +7487,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7388,6 +7533,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7410,6 +7560,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -7450,6 +7605,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7491,6 +7651,11 @@ export type ExperienceWorkListResponses = {
                       | "conversation"
                       | "goal_request"
                       | "user"
+                      | "work_attempt"
+                      | "work_receipt"
+                      | "graph_mutation"
+                      | "project_assignment"
+                      | "validation_gate"
                     id: string
                     version?: number
                     eventType?: string
@@ -7518,6 +7683,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -7554,6 +7724,11 @@ export type ExperienceWorkListResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -7565,6 +7740,739 @@ export type ExperienceWorkListResponses = {
 }
 
 export type ExperienceWorkListResponse = ExperienceWorkListResponses[keyof ExperienceWorkListResponses]
+
+export type ExperienceWorkOrganizationData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}/organization"
+}
+
+export type ExperienceWorkOrganizationErrors = {
+  /**
+   * Project not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkOrganizationError = ExperienceWorkOrganizationErrors[keyof ExperienceWorkOrganizationErrors]
+
+export type ExperienceWorkOrganizationResponses = {
+  /**
+   * Project organization projection
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        activeAssignmentCount: number
+        assignments: Array<
+          | {
+              availability: "available"
+              projectorVersion: number
+              sourceWatermark: string
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+              updatedAt: string
+              assignmentId: string
+              projectId: string
+              workItemId: string
+              agent: {
+                id: string
+                name?: string
+              }
+              lifecycleAtSelection: "candidate" | "assigned" | "employee" | "archived"
+              currentLifecycle: "candidate" | "assigned" | "employee" | "archived"
+              status: "assigned" | "active" | "released"
+              version: number
+              temporaryRole: string
+              responsibility: string
+              permissionMode: "read_only" | "workspace_write" | "full_access"
+              need: {
+                id: string
+                key: string
+                role: string
+              }
+              selectionReason: string
+              sourceReceiptId?: string
+              supersedesAssignmentId?: string
+              assignedAt: string
+              startedAt?: string
+              releasedAt?: string
+              releaseReason?: string
+            }
+          | {
+              availability: "unavailable"
+              projectorVersion: number
+              sourceWatermark: string
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+              updatedAt: string
+              assignmentId: string
+              projectId: string
+              reason: {
+                code: "invalid_persisted_fact" | "projection_overflow"
+                message: string
+              }
+            }
+        >
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        reason: {
+          code: "invalid_persisted_fact" | "projection_overflow"
+          message: string
+        }
+      }
+}
+
+export type ExperienceWorkOrganizationResponse =
+  ExperienceWorkOrganizationResponses[keyof ExperienceWorkOrganizationResponses]
+
+export type ExperienceWorkGraphData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}/graph"
+}
+
+export type ExperienceWorkGraphErrors = {
+  /**
+   * Project not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkGraphError = ExperienceWorkGraphErrors[keyof ExperienceWorkGraphErrors]
+
+export type ExperienceWorkGraphResponses = {
+  /**
+   * Project graph change summary
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        revision: number
+        changes: Array<{
+          mutationId: string
+          decision:
+            | "accept"
+            | "retry"
+            | "expand"
+            | "rewire"
+            | "supersede"
+            | "request_capability"
+            | "request_attention"
+            | "quiesce"
+          status: "proposed" | "validated" | "applied" | "rejected" | "superseded"
+          rationale: string
+          expectedRevision: number
+          appliedRevision?: number
+          triggerReceiptId: string
+          operationCounts: {
+            addedWorkItems: number
+            addedDependencies: number
+            removedDependencies: number
+            supersededWorkItems: number
+            addedValidationGates: number
+            requestedCapabilities: number
+            requestedUserDecisions: number
+          }
+          createdAt: string
+          appliedAt?: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+        }>
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        reason: {
+          code: "invalid_persisted_fact" | "projection_overflow"
+          message: string
+        }
+      }
+}
+
+export type ExperienceWorkGraphResponse = ExperienceWorkGraphResponses[keyof ExperienceWorkGraphResponses]
+
+export type ExperienceWorkReceiptData = {
+  body?: never
+  path: {
+    projectID: string
+    receiptID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}/receipts/{receiptID}"
+}
+
+export type ExperienceWorkReceiptErrors = {
+  /**
+   * Project or Work Receipt not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkReceiptError = ExperienceWorkReceiptErrors[keyof ExperienceWorkReceiptErrors]
+
+export type ExperienceWorkReceiptResponses = {
+  /**
+   * Receipt discovery summary
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        receiptId: string
+        projectId: string
+        workItemId: string
+        attempt: {
+          id: string
+          ordinal: number
+          status: "running" | "completed" | "failed" | "stopped"
+          failureKind?:
+            | "implementation"
+            | "environment"
+            | "missing_prerequisite"
+            | "dependency"
+            | "permission"
+            | "validator"
+            | "scope"
+            | "unknown"
+          safeSummary?: string
+          startedAt: string
+          finishedAt?: string
+        }
+        outcome: "completed" | "blocked" | "failed" | "ask"
+        processingStatus: "pending" | "processing" | "processed" | "rejected"
+        summary: string
+        confirmedFacts: Array<string>
+        invalidatedAssumptions: Array<string>
+        unknowns: Array<string>
+        blockers: Array<string>
+        capabilityGaps: Array<string>
+        questions: Array<string>
+        processedMutationId?: string
+        createdAt: string
+        processedAt?: string
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        receiptId: string
+        projectId: string
+        reason: {
+          code: "invalid_persisted_fact" | "projection_overflow"
+          message: string
+        }
+      }
+}
+
+export type ExperienceWorkReceiptResponse = ExperienceWorkReceiptResponses[keyof ExperienceWorkReceiptResponses]
+
+export type ExperienceWorkValidationData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}/validation"
+}
+
+export type ExperienceWorkValidationErrors = {
+  /**
+   * Project not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkValidationError = ExperienceWorkValidationErrors[keyof ExperienceWorkValidationErrors]
+
+export type ExperienceWorkValidationResponses = {
+  /**
+   * Project validation summary
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        blockingGateCount: number
+        gates: Array<{
+          gateId: string
+          workItemId?: string
+          kind:
+            | "prerequisite"
+            | "unit_test"
+            | "integration_test"
+            | "device"
+            | "runtime"
+            | "artifact"
+            | "source"
+            | "policy"
+          status: "pending" | "running" | "passed" | "failed" | "superseded"
+          criteria: Array<{
+            id: string
+            statement: string
+            anchor: {
+              kind:
+                | "prerequisite"
+                | "unit_test"
+                | "integration_test"
+                | "device"
+                | "runtime"
+                | "artifact"
+                | "source"
+                | "policy"
+              reference: string
+            }
+            operator: "exists" | "equals" | "exit_code" | "digest"
+            expected: string | number | boolean
+          }>
+          criteriaSha256: string
+          blockingWorkItemIds: Array<string>
+          evidenceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+          evaluator:
+            | "fact_match_v1"
+            | "command_exit_v1"
+            | "artifact_digest_v1"
+            | "source_reachability_v1"
+            | "runtime_state_v1"
+            | "policy_invariant_v1"
+          repairRound: number
+          maxRepairRounds: number
+          failureSummary?: string
+          supersedesGateId?: string
+          createdAt: string
+          evaluatedAt?: string
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+        }>
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        reason: {
+          code: "invalid_persisted_fact" | "projection_overflow"
+          message: string
+        }
+      }
+}
+
+export type ExperienceWorkValidationResponse =
+  ExperienceWorkValidationResponses[keyof ExperienceWorkValidationResponses]
 
 export type ExperienceWorkGetData = {
   body?: never
@@ -7665,6 +8573,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7711,6 +8624,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7752,6 +8670,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7774,6 +8697,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -7814,6 +8742,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7855,6 +8788,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7901,6 +8839,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7947,6 +8890,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -7988,6 +8936,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8010,6 +8963,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -8050,6 +9008,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8091,6 +9054,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8122,6 +9090,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8169,6 +9142,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8210,6 +9188,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8233,6 +9216,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -8273,6 +9261,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8314,6 +9307,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8351,6 +9349,11 @@ export type ExperienceWorkGetResponses = {
                 | "conversation"
                 | "goal_request"
                 | "user"
+                | "work_attempt"
+                | "work_receipt"
+                | "graph_mutation"
+                | "project_assignment"
+                | "validation_gate"
               id: string
               version?: number
               eventType?: string
@@ -8392,6 +9395,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8433,6 +9441,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8455,6 +9468,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -8495,6 +9513,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8536,6 +9559,11 @@ export type ExperienceWorkGetResponses = {
                     | "conversation"
                     | "goal_request"
                     | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
                   id: string
                   version?: number
                   eventType?: string
@@ -8563,6 +9591,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
@@ -8599,6 +9632,11 @@ export type ExperienceWorkGetResponses = {
               | "conversation"
               | "goal_request"
               | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
             id: string
             version?: number
             eventType?: string
