@@ -1,12 +1,8 @@
 import { createHash } from "node:crypto"
+import { writeSync } from "node:fs"
 import { Effect, Layer } from "effect"
 import { and, asc, eq } from "drizzle-orm"
-import {
-  CompanyGraphMutation,
-  CompanyProject,
-  CompanyProjectRecovery,
-  CompanyWorkFacts,
-} from "../src/company-project"
+import { CompanyGraphMutation, CompanyProject, CompanyProjectRecovery, CompanyWorkFacts } from "../src/company-project"
 import {
   CompanyArtifactTable,
   CompanyGraphDecisionTable,
@@ -44,7 +40,9 @@ function normalized(value: unknown): unknown {
 }
 
 function sha256(value: unknown) {
-  return createHash("sha256").update(JSON.stringify(normalized(value))).digest("hex")
+  return createHash("sha256")
+    .update(JSON.stringify(normalized(value)))
+    .digest("hex")
 }
 
 function title(input: ChildRequest) {
@@ -53,7 +51,11 @@ function title(input: ChildRequest) {
 
 function projectRow(input: ChildRequest) {
   const row = Database.use((db) =>
-    db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.title, title(input))).get(),
+    db
+      .select()
+      .from(CompanyProjectTable)
+      .where(eq(CompanyProjectTable.title, title(input)))
+      .get(),
   )
   if (!row) throw new Error(`B5 recovery project is unavailable: ${title(input)}`)
   return row
@@ -295,24 +297,29 @@ function proposal(input: ChildRequest) {
 
 async function recoverOrchestration(projectId: string) {
   const recoveryStartedAt = Date.now()
+  const phases: Array<"company_project" | "receipt_graph" | "project_orchestrator" | "projection"> = []
   const projectRecovery = await Effect.runPromise(
     CompanyProjectRecovery.Service.use((service) => service.recover()).pipe(
       Effect.provide(CompanyProjectRecovery.defaultLayer),
     ),
   )
+  phases.push("company_project")
   const receiptRecovery = await Effect.runPromise(
     GraphSupervisor.Service.use((service) => service.recover()).pipe(Effect.provide(supervisorLayer)),
   )
+  phases.push("receipt_graph")
   const orchestrator = await Effect.runPromise(
     ProjectOrchestrator.Service.use((service) => service.recover()).pipe(
       Effect.provide(ProjectOrchestrator.defaultLayer),
     ),
   )
-  const converged = await Effect.runPromise(
-    CompanyProjectRecovery.Service.use((service) => service.recover()).pipe(
-      Effect.provide(CompanyProjectRecovery.defaultLayer),
-    ),
+  phases.push("project_orchestrator")
+  const projection = WorkProjection.rebuild(projectId)
+  const projectionRow = Database.use((db) =>
+    db.select().from(CompanyWorkProjectionTable).where(eq(CompanyWorkProjectionTable.project_id, projectId)).get(),
   )
+  if (!projection || !projectionRow) throw new Error(`S27 projection did not converge for ${projectId}`)
+  phases.push("projection")
   const reconciledAt = Date.now()
   const dispatch = await Effect.runPromise(
     ProjectOrchestrator.Service.use((service) => service.dispatchReady(projectId)).pipe(
@@ -326,7 +333,9 @@ async function recoverOrchestration(projectId: string) {
     projectRecovery,
     receiptRecovery,
     orchestrator,
-    converged,
+    phases,
+    projection,
+    projectionRow,
     dispatch,
   }
 }
@@ -371,9 +380,7 @@ async function s19() {
   const facts = projectFacts(project.id)
   const processedEvents = facts.events.filter((event) => event.type === "work_receipt.processed").length
   const duplicateSideEffects =
-    Math.max(0, processedEvents - 1) +
-    Math.max(0, facts.decisions.length - 1) +
-    Math.max(0, facts.mutations.length - 1)
+    Math.max(0, processedEvents - 1) + Math.max(0, facts.decisions.length - 1) + Math.max(0, facts.mutations.length - 1)
   await write({
     projectId: project.id,
     workItemIds: facts.workItems.map((item) => item.id),
@@ -421,7 +428,16 @@ async function s20() {
         Effect.provide(
           CompanyGraphMutation.makeLayer({
             onBoundary: (boundary) => {
-              if (boundary === request.boundary) process.kill(process.pid, 9)
+              if (boundary !== request.boundary) return
+              writeSync(
+                1,
+                `${JSON.stringify({
+                  kind: "b5-s20-boundary",
+                  boundary,
+                  pid: process.pid,
+                })}\n`,
+              )
+              process.kill(process.pid, 9)
             },
             publish: async () => {},
           }),
@@ -504,18 +520,9 @@ async function s27() {
   }
   if (request.mode !== "recover") throw new Error("S27 expects crash or recover")
   const project = projectRow(request)
-  const projectionBefore =
-    projectFacts(project.id).projection?.source_watermark ?? "missing"
+  const projectionBefore = projectFacts(project.id).projection?.source_watermark ?? "missing"
   const startup = await recoverOrchestration(project.id)
   const facts = projectFacts(project.id)
-  const projection = WorkProjection.rebuild(project.id)
-  const projectionAfter = Database.use((db) =>
-    db
-      .select()
-      .from(CompanyWorkProjectionTable)
-      .where(eq(CompanyWorkProjectionTable.project_id, project.id))
-      .get(),
-  )
   const processedEvents = facts.events.filter((event) => event.type === "work_receipt.processed").length
   const appliedEvents = facts.events.filter((event) => event.type === "graph_mutation.applied").length
   const duplicateSideEffects =
@@ -545,13 +552,12 @@ async function s27() {
         startup.dispatchProbedAt >= startup.reconciledAt &&
         startup.dispatch.dispatched_work_item_ids.length === 0 &&
         startup.orchestrator.dispatches.every((item) => item.dispatched_work_item_ids.length === 0),
-      phases: ["company_project", "receipt_graph", "project_orchestrator", "projection"],
+      phases: startup.phases,
       projectionWatermarkBefore: projectionBefore,
-      projectionWatermarkAfter: projectionAfter?.source_watermark ?? "missing",
+      projectionWatermarkAfter: startup.projectionRow.source_watermark,
       projectionConverged:
-        Boolean(projection) &&
-        projectionAfter?.source_watermark === projection?.sourceWatermark &&
-        projectionBefore !== projectionAfter?.source_watermark,
+        startup.projectionRow.source_watermark === startup.projection.sourceWatermark &&
+        projectionBefore !== startup.projectionRow.source_watermark,
     },
   })
 }

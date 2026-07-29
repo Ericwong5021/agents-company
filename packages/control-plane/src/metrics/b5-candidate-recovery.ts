@@ -6,6 +6,13 @@ const Digest = z.string().regex(/^[a-f0-9]{64}$/)
 const CommitSha = z.string().regex(/^[a-f0-9]{40}$/)
 const Scenario = z.enum(["S19", "S20", "S27"])
 const Boundary = z.enum(["before_transaction", "after_mutation_write", "after_commit"])
+const BoundaryMarker = z
+  .object({
+    kind: z.literal("b5-s20-boundary"),
+    boundary: Boundary,
+    pid: z.number().int().positive(),
+  })
+  .strict()
 const FileBinding = z
   .object({
     path: z.string().refine((value) => path.isAbsolute(value)),
@@ -45,6 +52,7 @@ const BoundaryResult = z
     crashedPid: z.number().int().positive(),
     recoveryPid: z.number().int().positive(),
     signal: z.literal("SIGKILL"),
+    markerVerified: z.literal(true),
     beforeDatabaseSha256: Digest,
     afterDatabaseSha256: Digest,
     beforeBusinessSha256: Digest,
@@ -159,20 +167,24 @@ const ChildOutput = z
 
 const packageRoot = path.resolve(import.meta.dir, "../..")
 const childScript = path.join(packageRoot, "script/b5-candidate-recovery-child.ts")
+const childTimeoutMs = 20_000
 
 function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
 }
 
-function childRequest(input: B5CandidateRecoveryInput, mode: B5CandidateRecoveryChildRequest["mode"], boundary?: z.infer<typeof Boundary>) {
+function childRequest(
+  input: B5CandidateRecoveryInput,
+  mode: B5CandidateRecoveryChildRequest["mode"],
+  boundary?: z.infer<typeof Boundary>,
+) {
   return B5CandidateRecoveryChildRequest.parse({
     ...input,
     mode,
     boundary,
-    key: sha256(`${input.candidateSha}:${input.snapshotDigest}:${input.runId}:${input.scenarioId}:${boundary ?? ""}`).slice(
-      0,
-      16,
-    ),
+    key: sha256(
+      `${input.candidateSha}:${input.snapshotDigest}:${input.runId}:${input.scenarioId}:${boundary ?? ""}`,
+    ).slice(0, 16),
   })
 }
 
@@ -194,6 +206,12 @@ function spawn(input: B5CandidateRecoveryChildRequest) {
   })
 }
 
+function childDeadline(child: ReturnType<typeof spawn>) {
+  const timeout = setTimeout(() => child.kill("SIGKILL"), childTimeoutMs)
+  timeout.unref()
+  return timeout
+}
+
 async function lineFrom(stream: ReadableStream<Uint8Array>) {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
@@ -212,11 +230,13 @@ async function lineFrom(stream: ReadableStream<Uint8Array>) {
 
 async function run(input: B5CandidateRecoveryChildRequest) {
   const child = spawn(input)
+  const timeout = childDeadline(child)
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
   ])
+  clearTimeout(timeout)
   if (exitCode !== 0) throw new Error(stderr || stdout || `B5 recovery child exited ${exitCode}`)
   const line = stdout
     .trim()
@@ -228,29 +248,46 @@ async function run(input: B5CandidateRecoveryChildRequest) {
 
 async function crashAfterHandshake(input: B5CandidateRecoveryChildRequest) {
   const child = spawn(input)
+  const timeout = childDeadline(child)
   const ready = await lineFrom(child.stdout)
   const lostAt = Date.now()
   child.kill(9)
   const exitCode = await child.exited
+  clearTimeout(timeout)
   if (exitCode === 0) throw new Error("B5 recovery child did not terminate at the crash boundary")
   return { ready, lostAt }
 }
 
 async function crashAtBoundary(input: B5CandidateRecoveryChildRequest) {
+  if (!input.boundary) throw new Error("B5 mutation crash requires a boundary")
   const child = spawn(input)
+  const timeout = childDeadline(child)
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
   ])
-  if (exitCode === 0)
-    throw new Error(`B5 mutation child did not terminate at ${input.boundary}: ${stderr || stdout}`)
-  return { lostAt: Date.now(), crashedPid: child.pid }
+  clearTimeout(timeout)
+  if (exitCode === 0) throw new Error(`B5 mutation child did not terminate at ${input.boundary}: ${stderr || stdout}`)
+  const markers = stdout
+    .trim()
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      if (!line.startsWith("{")) return []
+      const parsed = BoundaryMarker.safeParse(JSON.parse(line))
+      return parsed.success ? [parsed.data] : []
+    })
+  if (markers.length !== 1 || markers[0]!.boundary !== input.boundary || markers[0]!.pid !== child.pid)
+    throw new Error(`B5 mutation child did not prove boundary ${input.boundary}: ${stderr || stdout}`)
+  return { lostAt: Date.now(), crashedPid: markers[0]!.pid }
 }
 
 async function writeReport(input: B5CandidateRecoveryInput, value: Omit<B5CandidateRecoveryResult, "report">) {
   await Bun.$`mkdir -p ${input.outputDirectory}`.quiet()
-  const target = path.join(input.outputDirectory, `${input.scenarioId.toLowerCase()}-${sha256(input.runId).slice(0, 12)}.json`)
+  const target = path.join(
+    input.outputDirectory,
+    `${input.scenarioId.toLowerCase()}-${sha256(input.runId).slice(0, 12)}.json`,
+  )
   const content = `${JSON.stringify(value, null, 2)}\n`
   await Bun.write(target, content)
   return FileBinding.parse({ path: target, sha256: sha256(content) })
@@ -337,6 +374,7 @@ export async function produceB5CandidateRecovery(raw: B5CandidateRecoveryInput):
       crashedPid: crashed.crashedPid,
       recoveryPid: recovered.pid,
       signal: "SIGKILL" as const,
+      markerVerified: true as const,
       beforeDatabaseSha256: prepared.databaseSha256,
       afterDatabaseSha256: recovered.databaseSha256,
       beforeBusinessSha256: prepared.businessSha256,
@@ -370,7 +408,9 @@ export async function produceB5CandidateRecovery(raw: B5CandidateRecoveryInput):
     exactlyOnce: results.every(
       (item) => item.afterRevision === item.beforeRevision + 1 && item.duplicateSideEffects === 0,
     ),
-    boundaries: results.map(({ lostAt: _lostAt, recoveredAt: _recoveredAt, workItemIds: _workItemIds, ...item }) => item),
+    boundaries: results.map(
+      ({ lostAt: _lostAt, recoveredAt: _recoveredAt, workItemIds: _workItemIds, ...item }) => item,
+    ),
   }
   return B5CandidateRecoveryResult.parse({ ...value, report: await writeReport(input, value) })
 }
