@@ -394,11 +394,10 @@ function metricAggregate(
     const values = groupedByRun(assignments, runIds).map(
       (items) => items.filter((event) => booleanProperty(event, "initial") === true).length,
     )
-    const sampleSize = assignments.filter((event) => booleanProperty(event, "initial") === true).length
     return {
       numerator: values.reduce((total, value) => total + value, 0),
       denominator: values.length,
-      sampleSize,
+      sampleSize: values.length,
       values,
     }
   }
@@ -713,7 +712,11 @@ function observation(
       ),
     ) ||
     metric.eventSource.some((eventType) => !eligibleRecords.some((event) => event.eventType === eventType)) ||
-    (metric.id === "candidate_reuse_delta_vs_legacy" && !validShadowPairs(sources, bindings)) ||
+    (metric.id === "candidate_reuse_delta_vs_legacy" &&
+      !validShadowPairs(
+        sources,
+        bindings.filter((binding) => observationRunIds.includes(binding.runId)),
+      )) ||
     (metric.id === "low_risk_quality_ratio_vs_legacy" &&
       bindings
         .filter((binding) => observationRunIds.includes(binding.runId) && binding.strategy === "seed_and_grow")

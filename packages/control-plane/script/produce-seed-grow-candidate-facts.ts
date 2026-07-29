@@ -124,6 +124,15 @@ export const B5CandidateAttemptSummary = z
       .strict(),
     normalizedResultSha256: Digest,
     outputIsolationSha256: Digest,
+    singleAttemptMetricGate: z
+      .object({
+        status: z.literal("deferred"),
+        deferredMetricIds: z.tuple([
+          z.literal("complex_initial_assignment_median"),
+        ]),
+        unexpectedMetricIds: z.tuple([]),
+      })
+      .strict(),
     attemptStatus: z.literal("completed"),
     promotionClaimed: z.literal(false),
   })
@@ -2548,15 +2557,27 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
   ])
   Database.Database.close()
   const metricIds = reports.metric.results.map((result) => result.metricId)
+  const deferredMetric = reports.metric.results.find(
+    (result) => result.metricId === "complex_initial_assignment_median",
+  )
   if (
-    reports.metric.status !== "pass" ||
+    reports.metric.status !== "blocked" ||
     metricIds.length !== PrePublicScenarioMetricIds.length ||
     PrePublicScenarioMetricIds.some(
       (metricId) => metricIds.filter((candidate) => candidate === metricId).length !== 1,
     ) ||
-    reports.metric.results.some((result) => result.status !== "pass")
+    !deferredMetric ||
+    deferredMetric.status !== "blocked" ||
+    deferredMetric.sampleSize !== 1 ||
+    deferredMetric.blockedReasons.length !== 1 ||
+    deferredMetric.blockedReasons[0] !== "insufficient_sample" ||
+    reports.metric.results.some(
+      (result) =>
+        result.metricId !== "complex_initial_assignment_median" &&
+        result.status !== "pass",
+    )
   )
-    throw new Error("B5 candidate metric report did not pass the exact 16-metric scenario Gate")
+    throw new Error("B5 candidate metric report has an unexpected single-attempt result")
   if (
     reports.shadow.status !== "pass" ||
     reports.shadow.scenarioIds.length !== B5ScenarioIds.length ||
@@ -2676,6 +2697,11 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     },
     normalizedResultSha256,
     outputIsolationSha256,
+    singleAttemptMetricGate: {
+      status: "deferred",
+      deferredMetricIds: ["complex_initial_assignment_median"],
+      unexpectedMetricIds: [],
+    },
     attemptStatus: "completed",
     promotionClaimed: false,
   })
