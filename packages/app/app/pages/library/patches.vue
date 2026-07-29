@@ -24,6 +24,7 @@ type LearningPatch = {
   status: "proposed" | "approved" | "canary" | "active" | "rejected" | "rolled_back";
   authority_class: "yellow" | "red";
   approval_gate_id: string | null;
+  active_target_version_id: string | null;
   evidence: string[];
   benchmarks: PatchBenchmark[];
   canaries: PatchCanary[];
@@ -114,8 +115,8 @@ const patchDraft = (patch: LearningPatch) => patchDrafts[patch.id] ??= {
   benchmark_result: "not_confirmed",
   evidence_refs: "",
   real_sample_count: 0,
-  previous_version_ref: "",
-  candidate_version_ref: "",
+  previous_version_ref: patch.active_target_version_id ?? `initial:${patch.target_type}:${patch.target_id}`,
+  candidate_version_ref: `candidate:${patch.id}`,
   skill_snapshot_id: "",
   canary_id: "",
   canary_result: "not_confirmed",
@@ -317,6 +318,10 @@ async function submitPatchAction(patch: LearningPatch) {
                 <label v-if="patchDraft(patch).action === 'approve'" class="company-provider-form__wide">
                   <span>治理 Decision ID</span>
                   <input v-model="patchDraft(patch).decision_id" required placeholder="与该 Patch 关联的真实 DecisionRecord">
+                  <small>
+                    Decision subject 必须为 <code>learning_patch:{{ patch.id }}</code>，
+                    final decision 必须为 <code>approve_learning_patch:{{ patch.id }}</code>。
+                  </small>
                 </label>
 
                 <template v-if="patchDraft(patch).action === 'record_benchmark'">
@@ -361,11 +366,11 @@ async function submitPatchAction(patch: LearningPatch) {
                 <template v-if="patchDraft(patch).action === 'start_canary'">
                   <label>
                     <span>上一版本引用</span>
-                    <input v-model="patchDraft(patch).previous_version_ref" required>
+                    <input v-model="patchDraft(patch).previous_version_ref" required readonly>
                   </label>
                   <label>
                     <span>候选版本引用</span>
-                    <input v-model="patchDraft(patch).candidate_version_ref" required>
+                    <input v-model="patchDraft(patch).candidate_version_ref" required readonly>
                   </label>
                   <label v-if="patch.target_type === 'skill'" class="company-provider-form__wide">
                     <span>真实 SkillSnapshot ID</span>

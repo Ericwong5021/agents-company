@@ -85,27 +85,36 @@ function evidenceFromRow(row: typeof CompanyBeliefEvidenceTable.$inferSelect) {
 }
 
 function benchmarkFromRow(row: typeof CompanyPatchBenchmarkTable.$inferSelect) {
+  const { holdout_manifest_json, evidence_refs_json, ...record } = row
   return PatchBenchmark.parse({
-    ...row,
-    holdout_manifest: json(row.holdout_manifest_json),
-    evidence_refs: json(row.evidence_refs_json),
+    ...record,
+    holdout_manifest: json(holdout_manifest_json),
+    evidence_refs: json(evidence_refs_json),
   })
 }
 
 function canaryFromRow(row: typeof CompanyPatchCanaryTable.$inferSelect) {
+  const { metric_evidence_refs_json, ...record } = row
   return PatchCanary.parse({
-    ...row,
-    metric_evidence_refs: json(row.metric_evidence_refs_json),
+    ...record,
+    metric_evidence_refs: json(metric_evidence_refs_json),
   })
 }
 
 function beliefFromRow(db: TxOrDb, row: typeof CompanyBeliefTable.$inferSelect) {
+  const {
+    scope_json,
+    applicable_scopes_json,
+    inapplicable_scopes_json,
+    action_implications_json,
+    ...record
+  } = row
   return Belief.parse({
-    ...row,
-    scope: json(row.scope_json),
-    applicable_scopes: json(row.applicable_scopes_json),
-    inapplicable_scopes: json(row.inapplicable_scopes_json),
-    action_implications: json(row.action_implications_json),
+    ...record,
+    scope: json(scope_json),
+    applicable_scopes: json(applicable_scopes_json),
+    inapplicable_scopes: json(inapplicable_scopes_json),
+    action_implications: json(action_implications_json),
     interpretation_refs: db
       .select()
       .from(CompanyBeliefInterpretationTable)
@@ -130,11 +139,12 @@ function beliefFromRow(db: TxOrDb, row: typeof CompanyBeliefTable.$inferSelect) 
 }
 
 function experimentFromRow(db: TxOrDb, row: typeof CompanyExperimentTable.$inferSelect) {
+  const { idempotency_key: _, decision_intent_json, success_criteria_json, failure_criteria_json, ...record } = row
   return Experiment.parse({
-    ...row,
-    decision_intent: json(row.decision_intent_json),
-    success_criteria: json(row.success_criteria_json),
-    failure_criteria: json(row.failure_criteria_json),
+    ...record,
+    decision_intent: json(decision_intent_json),
+    success_criteria: json(success_criteria_json),
+    failure_criteria: json(failure_criteria_json),
     outcome_signal_ids: db
       .select({ id: CompanyExperimentOutcomeTable.outcome_signal_id })
       .from(CompanyExperimentOutcomeTable)
@@ -146,10 +156,18 @@ function experimentFromRow(db: TxOrDb, row: typeof CompanyExperimentTable.$infer
 }
 
 function patchFromRow(db: TxOrDb, row: typeof CompanyLearningPatchTable.$inferSelect) {
+  const { proposed_diff_json, evidence_json, ...record } = row
+  const activeTarget = db.select().from(CompanyPatchTargetVersionTable).where(and(
+    eq(CompanyPatchTargetVersionTable.company_id, row.company_id),
+    eq(CompanyPatchTargetVersionTable.target_type, row.target_type),
+    eq(CompanyPatchTargetVersionTable.target_id, row.target_id),
+    eq(CompanyPatchTargetVersionTable.status, "active"),
+  )).orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
   return LearningPatch.parse({
-    ...row,
-    proposed_diff: json(row.proposed_diff_json),
-    evidence: json(row.evidence_json),
+    ...record,
+    proposed_diff: json(proposed_diff_json),
+    evidence: json(evidence_json),
+    active_target_version_id: activeTarget?.id ?? null,
     benchmarks: db
       .select()
       .from(CompanyPatchBenchmarkTable)

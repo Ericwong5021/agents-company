@@ -220,6 +220,7 @@ export const LearningPatch = z.object({
   approval_gate_id: Identifier.nullable(),
   created_by: Identifier,
   approved_by: Identifier.nullable(),
+  active_target_version_id: Identifier.nullable(),
   benchmarks: z.array(PatchBenchmark),
   canaries: z.array(PatchCanary),
   created_at: z.number().int().nonnegative(),
