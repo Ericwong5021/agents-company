@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
@@ -91,6 +91,13 @@ export type ShadowResult =
       before: GraphSnapshotType
     }
 
+export type RecoveryResult = {
+  applied_mutation_ids: string[]
+  rejected_mutation_ids: string[]
+  confirmed_mutation_ids: string[]
+  unresolved_mutation_ids: string[]
+}
+
 const parseList = (value: string) => z.array(z.string()).parse(JSON.parse(value))
 const parseEvidence = (value: string) => z.array(WorkReceiptEvidenceRef).parse(JSON.parse(value))
 
@@ -154,6 +161,20 @@ function mutationFromRow(row: typeof CompanyGraphMutationTable.$inferSelect) {
     policy_verdict: JSON.parse(row.policy_verdict_json),
     created_at: row.created_at,
     applied_at: row.applied_at ?? undefined,
+  })
+}
+
+function proposalFromRow(row: typeof CompanyGraphMutationTable.$inferSelect) {
+  return GraphMutationProposal.parse({
+    project_id: row.project_id,
+    trigger_receipt_id: row.trigger_receipt_id,
+    expected_revision: row.expected_revision,
+    orchestrator_version: row.orchestrator_version,
+    idempotency_key: row.idempotency_key,
+    decision: row.decision,
+    rationale: row.rationale,
+    evidence_refs: JSON.parse(row.evidence_refs_json),
+    operations: JSON.parse(row.operations_json),
   })
 }
 
@@ -419,6 +440,7 @@ export interface Interface {
   readonly snapshot: (project_id: string) => Effect.Effect<GraphSnapshotType>
   readonly get: (id: string) => Effect.Effect<GraphMutationType | undefined>
   readonly list: (project_id: string) => Effect.Effect<GraphMutationType[]>
+  readonly recover: () => Effect.Effect<RecoveryResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyGraphMutation") {}
@@ -490,8 +512,7 @@ export function makeLayer(hooks: Hooks = {}) {
                 if (mutation.status === "applied") {
                   return { status: "applied", mutation, before: current, after: current, replayed: true }
                 }
-                const evaluated = evaluate(db, proposal)
-                if (evaluated.status === "conflict") {
+                if (mutation.status === "rejected" || mutation.status === "superseded") {
                   return {
                     status: "rejected",
                     mutation,
@@ -500,17 +521,10 @@ export function makeLayer(hooks: Hooks = {}) {
                     replayed: true,
                   }
                 }
-                return {
-                  status: "rejected",
-                  mutation,
-                  before: evaluated.before,
-                  preview: evaluated.preview,
-                  replayed: true,
-                }
               }
               const evaluated = evaluate(db, proposal)
               if (evaluated.status === "conflict") return evaluated
-              const id = Identifier.ascending("graphMutation")
+              const id = existing?.id ?? Identifier.ascending("graphMutation")
               const now = Date.now()
               const status = evaluated.verdict.result === "allowed" ? "applied" : "rejected"
               const applied_revision = status === "applied" ? proposal.expected_revision + 1 : null
@@ -528,10 +542,22 @@ export function makeLayer(hooks: Hooks = {}) {
                 operations_json: JSON.stringify(proposal.operations),
                 status,
                 policy_verdict_json: JSON.stringify(evaluated.verdict),
-                created_at: now,
+                created_at: existing?.created_at ?? now,
                 applied_at: status === "applied" ? now : null,
               }
-              db.insert(CompanyGraphMutationTable).values(row).run()
+              if (existing) {
+                db.update(CompanyGraphMutationTable)
+                  .set({
+                    applied_revision,
+                    status,
+                    policy_verdict_json: row.policy_verdict_json,
+                    applied_at: row.applied_at,
+                  })
+                  .where(eq(CompanyGraphMutationTable.id, id))
+                  .run()
+              } else {
+                db.insert(CompanyGraphMutationTable).values(row).run()
+              }
               hooks.onBoundary?.("after_mutation_write")
               if (status === "rejected") {
                 insertEvent(
@@ -627,7 +653,99 @@ export function makeLayer(hooks: Hooks = {}) {
         return result
       })
 
-      return Service.of({ apply, shadow, snapshot: readSnapshot, get, list })
+      const recover = Effect.fn("CompanyGraphMutation.recover")(function* () {
+        const normalized = yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              const pending: { id: string; proposal: GraphMutationProposalType }[] = []
+              const confirmed_mutation_ids: string[] = []
+              const unresolved_mutation_ids: string[] = []
+              db.select()
+                .from(CompanyGraphMutationTable)
+                .where(inArray(CompanyGraphMutationTable.status, ["proposed", "validated", "applied"]))
+                .orderBy(asc(CompanyGraphMutationTable.created_at), asc(CompanyGraphMutationTable.id))
+                .all()
+                .forEach((row) => {
+                  if (row.status === "proposed" || row.status === "validated") {
+                    pending.push({ id: row.id, proposal: proposalFromRow(row) })
+                    return
+                  }
+                  const project = db
+                    .select({ graph_revision: CompanyProjectTable.graph_revision })
+                    .from(CompanyProjectTable)
+                    .where(eq(CompanyProjectTable.id, row.project_id))
+                    .get()
+                  const receipt = db
+                    .select({ processed_mutation_id: CompanyWorkReceiptTable.processed_mutation_id })
+                    .from(CompanyWorkReceiptTable)
+                    .where(eq(CompanyWorkReceiptTable.id, row.trigger_receipt_id))
+                    .get()
+                  if (
+                    row.applied_revision !== null &&
+                    project &&
+                    project.graph_revision >= row.applied_revision &&
+                    receipt &&
+                    (!receipt.processed_mutation_id || receipt.processed_mutation_id === row.id)
+                  ) {
+                    if (!receipt.processed_mutation_id) {
+                      db.update(CompanyWorkReceiptTable)
+                        .set({ processed_mutation_id: row.id })
+                        .where(eq(CompanyWorkReceiptTable.id, row.trigger_receipt_id))
+                        .run()
+                    }
+                    confirmed_mutation_ids.push(row.id)
+                    return
+                  }
+                  if (project?.graph_revision === row.expected_revision && receipt && !receipt.processed_mutation_id) {
+                    db.update(CompanyGraphMutationTable)
+                      .set({
+                        status: "proposed",
+                        applied_revision: null,
+                        applied_at: null,
+                      })
+                      .where(eq(CompanyGraphMutationTable.id, row.id))
+                      .run()
+                    pending.push({ id: row.id, proposal: proposalFromRow(row) })
+                    return
+                  }
+                  unresolved_mutation_ids.push(row.id)
+                })
+              return {
+                pending,
+                confirmed_mutation_ids,
+                unresolved_mutation_ids,
+              }
+            },
+            { behavior: "immediate" },
+          ),
+        )
+        const outcomes = yield* Effect.forEach(
+          normalized.pending,
+          (item) =>
+            apply(item.proposal).pipe(
+              Effect.exit,
+              Effect.map((result) => ({ id: item.id, result })),
+            ),
+          { concurrency: 1 },
+        )
+        return {
+          applied_mutation_ids: outcomes.flatMap((outcome) =>
+            outcome.result._tag === "Success" && outcome.result.value.status === "applied" ? [outcome.id] : [],
+          ),
+          rejected_mutation_ids: outcomes.flatMap((outcome) =>
+            outcome.result._tag === "Success" && outcome.result.value.status === "rejected" ? [outcome.id] : [],
+          ),
+          confirmed_mutation_ids: normalized.confirmed_mutation_ids,
+          unresolved_mutation_ids: [
+            ...normalized.unresolved_mutation_ids,
+            ...outcomes.flatMap((outcome) =>
+              outcome.result._tag === "Failure" || outcome.result.value.status === "conflict" ? [outcome.id] : [],
+            ),
+          ],
+        }
+      })
+
+      return Service.of({ apply, shadow, snapshot: readSnapshot, get, list, recover })
     }),
   )
 }

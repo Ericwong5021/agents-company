@@ -68,7 +68,7 @@ import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
 import { ConversationRuntime } from "@/conversation/runtime"
-import { CompanyProject, CompanyProjectExecution } from "@/company-project"
+import { CompanyProject, CompanyProjectExecution, CompanyProjectRecovery } from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
@@ -152,7 +152,8 @@ export const AppLayer = Layer.suspend(() => {
         Layer.mergeAll(conversation, conversationRuntime, bus, Company.defaultLayer, Git.defaultLayer, Project.defaultLayer),
       ),
     ),
-    CompanyProject.defaultLayer,
+    CompanyProject.recoveryControlledLayer,
+    CompanyProjectRecovery.defaultLayer,
     CompanyRecruitment.defaultLayer,
     CompanyProjectExecution.defaultLayer,
     Thread.defaultLayer,

@@ -1828,4 +1828,9 @@ export const defaultLayer = layer.pipe(
   Layer.provide(CompanyWorkFacts.defaultLayer),
 )
 
+export const recoveryControlledLayer = layer.pipe(
+  Layer.provide(Company.defaultLayer),
+  Layer.provide(CompanyWorkFacts.makeLayer({ recoverOnStart: false })),
+)
+
 export * as CompanyProject from "./company-project"

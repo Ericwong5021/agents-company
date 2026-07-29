@@ -189,9 +189,8 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyWorkFacts") {}
 
-export const layer = Layer.effect(
-  Service,
-  Effect.gen(function* () {
+function makeService(recoverOnStart: boolean) {
+  return Effect.gen(function* () {
     const startAttempt = Effect.fn("CompanyWorkFacts.startAttempt")(function* (input: {
       project_id: string
       work_item_id: string
@@ -645,10 +644,16 @@ export const layer = Layer.effect(
       listAttempts,
       listReceipts,
     })
-    yield* recover()
+    if (recoverOnStart) yield* recover()
     return service
-  }),
-)
+  })
+}
+
+export function makeLayer(options: { recoverOnStart?: boolean } = {}) {
+  return Layer.effect(Service, makeService(options.recoverOnStart ?? true))
+}
+
+export const layer = makeLayer()
 
 export const defaultLayer = layer
 

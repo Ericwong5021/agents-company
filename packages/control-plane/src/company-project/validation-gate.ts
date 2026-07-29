@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq, inArray } from "drizzle-orm"
+import { and, asc, eq, inArray, sql } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
@@ -47,6 +47,12 @@ export type RepairResult = {
   gate: ValidationGateType
   round: number
   replayed: boolean
+}
+
+export type RecoveryResult = {
+  reset_gate_ids: string[]
+  confirmed_gate_ids: string[]
+  attention_gate_ids: string[]
 }
 
 const evaluatorSupport = {
@@ -280,6 +286,7 @@ export interface Interface {
   ) => Effect.Effect<GraphMutationProposalType>
   readonly get: (id: string) => Effect.Effect<ValidationGateType | undefined>
   readonly list: (project_id: string) => Effect.Effect<ValidationGateType[]>
+  readonly recover: () => Effect.Effect<RecoveryResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -749,7 +756,95 @@ export function makeLayer() {
         )
       })
 
-      return Service.of({ create, evaluate, repair, planPrerequisiteRepair, get, list })
+      const recover = Effect.fn("CompanyValidationGate.recover")(function* () {
+        return yield* Effect.sync(() =>
+          Database.transaction(
+            (db): RecoveryResult => {
+              const reset_gate_ids: string[] = []
+              const confirmed_gate_ids: string[] = []
+              const attention_gate_ids: string[] = []
+              db.select()
+                .from(CompanyValidationGateTable)
+                .where(inArray(CompanyValidationGateTable.status, ["pending", "running", "passed", "failed"]))
+                .orderBy(asc(CompanyValidationGateTable.created_at), asc(CompanyValidationGateTable.id))
+                .all()
+                .forEach((row) => {
+                  const references = parseEvidenceRefs(row.evidence_refs_json)
+                  const invalidPassed =
+                    row.status === "passed" &&
+                    (!row.evaluated_at ||
+                      !references.length ||
+                      references.some((reference) => !evidenceReferenceExists(db, row.project_id, reference)))
+                  if (row.status === "running" || invalidPassed) {
+                    const now = Date.now()
+                    db.update(CompanyValidationGateTable)
+                      .set({
+                        status: "pending",
+                        evidence_refs_json: "[]",
+                        failure_summary: invalidPassed
+                          ? "Recovery requires deterministic re-evaluation"
+                          : row.failure_summary,
+                        evaluated_at: null,
+                      })
+                      .where(eq(CompanyValidationGateTable.id, row.id))
+                      .run()
+                    insertEvent(
+                      db,
+                      row.project_id,
+                      "validation_gate.recovered",
+                      {
+                        gate_id: row.id,
+                        previous_status: row.status,
+                        next_status: "pending",
+                        reason: invalidPassed ? "invalid_pass_evidence" : "interrupted_evaluation",
+                      },
+                      now,
+                    )
+                    reset_gate_ids.push(row.id)
+                    return
+                  }
+                  if (
+                    row.status === "failed" &&
+                    row.repair_round >= row.max_repair_rounds &&
+                    !db
+                      .select({ id: CompanyProjectEventTable.id })
+                      .from(CompanyProjectEventTable)
+                      .where(
+                        and(
+                          eq(CompanyProjectEventTable.project_id, row.project_id),
+                          eq(CompanyProjectEventTable.type, "attention.requested"),
+                          sql`json_extract(${CompanyProjectEventTable.data_json}, '$.gate_id') = ${row.id}`,
+                        ),
+                      )
+                      .get()
+                  ) {
+                    insertEvent(
+                      db,
+                      row.project_id,
+                      "attention.requested",
+                      {
+                        attention_id: `validation-gate-${row.id}`,
+                        gate_id: row.id,
+                        materiality: "acceptance",
+                        repair_rounds: row.repair_round,
+                        failure_summary: row.failure_summary,
+                        required_decision: "Resolve the failed Gate or supersede its scope",
+                        recovered: true,
+                      },
+                      Date.now(),
+                    )
+                    attention_gate_ids.push(row.id)
+                  }
+                  confirmed_gate_ids.push(row.id)
+                })
+              return { reset_gate_ids, confirmed_gate_ids, attention_gate_ids }
+            },
+            { behavior: "immediate" },
+          ),
+        )
+      })
+
+      return Service.of({ create, evaluate, repair, planPrerequisiteRepair, get, list, recover })
     }),
   )
 }
