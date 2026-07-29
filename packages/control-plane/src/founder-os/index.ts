@@ -1,3 +1,4 @@
+export * as FounderOSAdvisor from "./advisor"
 export * as FounderOSAsset from "./asset"
 export * as DecisionLedger from "./decision-ledger"
 export * as FounderAuthority from "./authority"

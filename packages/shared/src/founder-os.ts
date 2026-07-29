@@ -1142,3 +1142,201 @@ export const FounderOSMetricContract = z
   .strict()
   .meta({ ref: "FounderOSMetricContract" })
 export type FounderOSMetricContract = z.infer<typeof FounderOSMetricContract>
+
+export const FounderAdvisorPrincipal = z
+  .object({
+    principalId: z.literal("board-ceo"),
+    displayName: z.literal("AI 大东 · 创始人代理"),
+    principalKind: z.literal("agent"),
+    projectionKind: z.literal("founder_governance"),
+    humanAuthoritySource: z.literal("local_user"),
+    isAdditionalEmployee: z.literal(false),
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorPrincipal" })
+export type FounderAdvisorPrincipal = z.infer<typeof FounderAdvisorPrincipal>
+
+export const FounderAdvisorSource = z
+  .object({
+    boardThreadId: Identifier,
+    boardRunId: Identifier.optional(),
+    channelMessageId: Identifier,
+    shadowDecisionId: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorSource" })
+export type FounderAdvisorSource = z.infer<typeof FounderAdvisorSource>
+
+export const FounderAdvisorConvergenceInput = z
+  .object({
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    source: FounderAdvisorSource,
+    subject: LongText,
+    context: LongText,
+    driAgentId: Identifier,
+    timeoutAt: z.number().int().nonnegative(),
+    dissent: z.array(LongText).max(100),
+    requestedAction: FounderRequestedAction.optional(),
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorConvergenceInput" })
+export type FounderAdvisorConvergenceInput = z.infer<typeof FounderAdvisorConvergenceInput>
+
+export const FounderAdvisorAuthorityResult = z
+  .object({
+    status: z.enum(["authorized", "blocked", "unavailable"]),
+    reason: ShortText,
+    governanceRef: Identifier.optional(),
+    reversible: z.boolean().optional(),
+    externalImpact: z.boolean().optional(),
+    riskLevel: DecisionRiskLevel.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.status === "authorized"
+      && (value.governanceRef === undefined
+        || value.reversible === undefined
+        || value.externalImpact === undefined
+        || value.riskLevel === undefined)
+    )
+      context.addIssue({ code: "custom", message: "Authorized Advisor decisions require governance facts." })
+  })
+  .meta({ ref: "FounderAdvisorAuthorityResult" })
+export type FounderAdvisorAuthorityResult = z.infer<typeof FounderAdvisorAuthorityResult>
+
+export const FounderAdvisorConvergence = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    source: FounderAdvisorSource,
+    principal: FounderAdvisorPrincipal,
+    status: z.enum(["intent_recorded", "blocked"]),
+    decisionIntent: DecisionIntent.optional(),
+    ledgerDecisionId: Identifier.optional(),
+    authority: FounderAdvisorAuthorityResult,
+    driAgentId: Identifier,
+    timeoutAt: z.number().int().nonnegative(),
+    dissent: z.array(LongText).max(100),
+    workItemCreated: z.literal(false),
+    executionCreated: z.literal(false),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderAdvisorConvergence" })
+export type FounderAdvisorConvergence = z.infer<typeof FounderAdvisorConvergence>
+
+export const FounderInterventionKind = z.enum(["takeover", "pause", "correct", "reject", "redefine_goal"])
+export type FounderInterventionKind = z.infer<typeof FounderInterventionKind>
+
+export const FounderInterventionInput = z
+  .object({
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    kind: FounderInterventionKind,
+    boardThreadId: Identifier,
+    projectId: Identifier.optional(),
+    decisionId: Identifier.optional(),
+    reason: LongText,
+    newGoal: LongText.optional(),
+    actorKind: z.literal("human"),
+    actorId: Identifier,
+  })
+  .strict()
+  .refine((input) => input.kind !== "redefine_goal" || input.newGoal !== undefined)
+  .meta({ ref: "FounderInterventionInput" })
+export type FounderInterventionInput = z.infer<typeof FounderInterventionInput>
+
+export const FounderInterventionEffect = z
+  .object({
+    id: Identifier,
+    interventionId: Identifier,
+    kind: z.enum(["attention_opened", "stop_requested", "stop_completed", "stop_failed"]),
+    status: z.enum(["recorded", "failed"]),
+    detail: LongText,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderInterventionEffect" })
+export type FounderInterventionEffect = z.infer<typeof FounderInterventionEffect>
+
+export const FounderIntervention = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    kind: FounderInterventionKind,
+    boardThreadId: Identifier,
+    projectId: Identifier.optional(),
+    decisionId: Identifier.optional(),
+    ledgerDecisionId: Identifier,
+    reason: LongText,
+    newGoal: LongText.optional(),
+    actorId: Identifier,
+    fenceActive: z.boolean(),
+    effects: z.array(FounderInterventionEffect),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderIntervention" })
+export type FounderIntervention = z.infer<typeof FounderIntervention>
+
+export const FounderBoardGovernanceProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    principal: FounderAdvisorPrincipal,
+    mode: FounderOSModeState,
+    advisorCanSpeak: z.boolean(),
+    authorization: z
+      .object({
+        status: z.enum(["authorized", "not_confirmed", "unavailable"]),
+        canRaiseModeFromUI: z.literal(false),
+      })
+      .strict(),
+    convergences: z.array(FounderAdvisorConvergence).max(100),
+    interventions: z.array(FounderIntervention).max(100),
+    decisions: z.array(DecisionRecord).max(100),
+    shadow: FounderBoardShadowProjection,
+    assets: z.array(GovernanceAsset).max(500),
+    readOnlyEvidence: z.literal(true),
+  })
+  .strict()
+  .meta({ ref: "FounderBoardGovernanceProjection" })
+export type FounderBoardGovernanceProjection = z.infer<typeof FounderBoardGovernanceProjection>
+
+export const FounderControlCenterProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    principal: FounderAdvisorPrincipal,
+    mode: FounderOSModeState,
+    authorization: z
+      .object({
+        status: z.enum(["authorized", "not_confirmed", "unavailable"]),
+        canRaiseModeFromUI: z.literal(false),
+      })
+      .strict(),
+    pending: z
+      .object({
+        proposedDecisions: z.number().int().nonnegative(),
+        redDecisions: z.number().int().nonnegative(),
+        failedStops: z.number().int().nonnegative(),
+      })
+      .strict(),
+    trends: z
+      .object({
+        shadowComparisons: z.number().int().nonnegative(),
+        shadowOverrides: z.number().int().nonnegative(),
+        confirmedCalibrations: z.number().int().nonnegative(),
+        takeoverEvents: z.number().int().nonnegative(),
+      })
+      .strict(),
+    recentInterventions: z.array(FounderIntervention).max(20),
+    recentDecisions: z.array(DecisionRecord).max(20),
+  })
+  .strict()
+  .meta({ ref: "FounderControlCenterProjection" })
+export type FounderControlCenterProjection = z.infer<typeof FounderControlCenterProjection>

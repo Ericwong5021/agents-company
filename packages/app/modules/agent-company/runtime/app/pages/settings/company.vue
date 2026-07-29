@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { $fetch } from "ofetch"
 import { computed, onMounted, reactive, ref, watch } from "vue"
-import type { FounderStudioProjection, GovernanceAsset } from "@agents-company/sdk/v2/founder-os"
+import type {
+  FounderControlCenterProjection,
+  FounderStudioProjection,
+  GovernanceAsset,
+} from "@agents-company/sdk/v2/founder-os"
 import { useCompanySnapshot } from "../../composables/useCompanySnapshot"
 import {
   chooseDemo,
@@ -51,7 +55,9 @@ const errorInfo = ref<ProviderErrorInfo | null>(null)
 const message = ref("")
 const onboarding = ref<OnboardingState>(parseOnboardingState(null))
 const founderStudio = ref<FounderStudioProjection | null>(null)
+const founderControl = ref<FounderControlCenterProjection | null>(null)
 const studioLoading = ref(false)
+const controlLoading = ref(false)
 const studioMessage = ref("")
 const assetDraft = reactive({
   type: "principle" as GovernanceAsset["type"],
@@ -62,6 +68,7 @@ const assetDraft = reactive({
 onMounted(() => {
   onboarding.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
   loadFounderStudio()
+  loadFounderControl()
 })
 
 async function loadFounderStudio() {
@@ -71,6 +78,15 @@ async function loadFounderStudio() {
     query: { companyId: snapshot.value.company.id },
   }).catch(() => null)
   studioLoading.value = false
+}
+
+async function loadFounderControl() {
+  if (!snapshot.value.company.id || controlLoading.value) return
+  controlLoading.value = true
+  founderControl.value = await $fetch<FounderControlCenterProjection>("/api/agent-company/founder-control-center", {
+    query: { companyId: snapshot.value.company.id },
+  }).catch(() => null)
+  controlLoading.value = false
 }
 
 async function createAssetDraft() {
@@ -120,7 +136,9 @@ async function selectStudioSnapshot(snapshotId: string) {
 }
 
 watch(() => snapshot.value.company.id, (companyId) => {
-  if (companyId) loadFounderStudio()
+  if (!companyId) return
+  loadFounderStudio()
+  loadFounderControl()
 })
 
 function persistOnboarding(next: OnboardingState) {
@@ -288,6 +306,58 @@ async function saveProvider() {
         </header>
 
         <div class="company-settings-stack">
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>Founder Control Center</h2>
+                <p>只读显示代理模式、待办与校准趋势；未获授权时不能在这里提高模式。</p>
+              </div>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-refresh-cw"
+                aria-label="刷新 Founder Control Center"
+                :loading="controlLoading"
+                @click="loadFounderControl"
+              />
+            </div>
+
+            <p class="company-provider-form__message">
+              {{ founderControl?.principal.displayName ?? "AI 大东 · 创始人代理" }}
+              · 授权 {{ founderControl?.authorization.status ?? "unavailable" }}
+              · 模式提升 {{ founderControl?.authorization.canRaiseModeFromUI ? "可用" : "已禁用" }}
+            </p>
+
+            <dl>
+              <div>
+                <dt>当前有效模式</dt>
+                <dd>{{ founderControl?.mode.effective.founderTwinMode ?? "off" }}</dd>
+              </div>
+              <div>
+                <dt>待处理决定</dt>
+                <dd>{{ founderControl?.pending.proposedDecisions ?? 0 }}</dd>
+              </div>
+              <div>
+                <dt>红灯待办</dt>
+                <dd>{{ founderControl?.pending.redDecisions ?? 0 }}</dd>
+              </div>
+              <div>
+                <dt>停止失败</dt>
+                <dd>{{ founderControl?.pending.failedStops ?? 0 }}</dd>
+              </div>
+              <div>
+                <dt>Shadow 对比</dt>
+                <dd>{{ founderControl?.trends.shadowComparisons ?? 0 }}</dd>
+              </div>
+              <div>
+                <dt>真实接管</dt>
+                <dd>{{ founderControl?.trends.takeoverEvents ?? 0 }}</dd>
+              </div>
+            </dl>
+
+            <NuxtLink to="/company/board" class="company-text-link">打开董事会治理承载面</NuxtLink>
+          </section>
+
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>

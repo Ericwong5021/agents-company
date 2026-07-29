@@ -844,3 +844,166 @@ export function createFounderOSGovernanceClient(config: FounderStudioClientConfi
     },
   }
 }
+
+export type FounderAdvisorPrincipal = {
+  principalId: "board-ceo"
+  displayName: "AI 大东 · 创始人代理"
+  principalKind: "agent"
+  projectionKind: "founder_governance"
+  humanAuthoritySource: "local_user"
+  isAdditionalEmployee: false
+}
+
+export type FounderAdvisorConvergence = {
+  id: string
+  companyId: string
+  idempotencyKey: string
+  source: {
+    boardThreadId: string
+    boardRunId?: string
+    channelMessageId: string
+    shadowDecisionId: string
+  }
+  principal: FounderAdvisorPrincipal
+  status: "intent_recorded" | "blocked"
+  decisionIntent?: DecisionIntent
+  ledgerDecisionId?: string
+  authority: {
+    status: "authorized" | "blocked" | "unavailable"
+    reason: string
+    governanceRef?: string
+    reversible?: boolean
+    externalImpact?: boolean
+    riskLevel?: "low" | "medium" | "high" | "critical"
+  }
+  driAgentId: string
+  timeoutAt: number
+  dissent: string[]
+  workItemCreated: false
+  executionCreated: false
+  createdAt: number
+}
+
+export type FounderIntervention = {
+  id: string
+  companyId: string
+  idempotencyKey: string
+  kind: "takeover" | "pause" | "correct" | "reject" | "redefine_goal"
+  boardThreadId: string
+  projectId?: string
+  decisionId?: string
+  ledgerDecisionId: string
+  reason: string
+  newGoal?: string
+  actorId: string
+  fenceActive: boolean
+  effects: Array<{
+    id: string
+    interventionId: string
+    kind: "attention_opened" | "stop_requested" | "stop_completed" | "stop_failed"
+    status: "recorded" | "failed"
+    detail: string
+    createdAt: number
+  }>
+  createdAt: number
+}
+
+export type FounderInterventionInput = {
+  companyId: string
+  idempotencyKey: string
+  kind: "takeover" | "pause" | "correct" | "reject" | "redefine_goal"
+  boardThreadId: string
+  projectId?: string
+  decisionId?: string
+  reason: string
+  newGoal?: string
+  actorKind: "human"
+  actorId: string
+}
+
+export type FounderBoardGovernanceProjection = {
+  schemaVersion: 1
+  companyId: string
+  principal: FounderAdvisorPrincipal
+  mode: FounderOSModeState
+  advisorCanSpeak: boolean
+  authorization: { status: "authorized" | "not_confirmed" | "unavailable"; canRaiseModeFromUI: false }
+  convergences: FounderAdvisorConvergence[]
+  interventions: FounderIntervention[]
+  decisions: Array<{
+    id: string
+    subject: string | null
+    recommendation: string | null
+    finalDecision: string | null
+    authorityClass: FounderAuthorityClass | null
+    confidence: number | null
+    principleRefs: FounderAssetReference[] | null
+    decisionCaseRefs: FounderAssetReference[] | null
+    evidenceRefs: FounderEvidenceReference[] | null
+    currentStatus: string
+    createdAt: number
+  }>
+  shadow: FounderBoardShadowProjection
+  assets: GovernanceAsset[]
+  readOnlyEvidence: true
+}
+
+export type FounderControlCenterProjection = {
+  schemaVersion: 1
+  companyId: string
+  principal: FounderAdvisorPrincipal
+  mode: FounderOSModeState
+  authorization: { status: "authorized" | "not_confirmed" | "unavailable"; canRaiseModeFromUI: false }
+  pending: { proposedDecisions: number; redDecisions: number; failedStops: number }
+  trends: {
+    shadowComparisons: number
+    shadowOverrides: number
+    confirmedCalibrations: number
+    takeoverEvents: number
+  }
+  recentInterventions: FounderIntervention[]
+  recentDecisions: FounderBoardGovernanceProjection["decisions"]
+}
+
+export function createFounderAdvisorClient(config: FounderStudioClientConfig) {
+  const request = async <T>(path: string, init?: RequestInit) => {
+    const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+    })
+    if (!response.ok) throw new Error(`Founder Advisor request failed with HTTP ${response.status}`)
+    return response.json() as Promise<T>
+  }
+  const post = <T>(path: string, input: unknown) =>
+    request<T>(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+  return {
+    board(companyId: string) {
+      return request<FounderBoardGovernanceProjection>(`/company/board?${new URLSearchParams({ company_id: companyId })}`)
+    },
+    converge(input: {
+      companyId: string
+      idempotencyKey: string
+      source: { boardThreadId: string; boardRunId?: string; channelMessageId: string; shadowDecisionId: string }
+      subject: string
+      context: string
+      driAgentId: string
+      timeoutAt: number
+      dissent: string[]
+      requestedAction?: FounderRequestedAction
+    }) {
+      return post<FounderAdvisorConvergence>("/company/board/convergences", input)
+    },
+    intervene(input: FounderInterventionInput) {
+      return post<FounderIntervention>("/company/board/interventions", input)
+    },
+    controlCenter(companyId: string) {
+      return request<FounderControlCenterProjection>(
+        `/company/founder-control-center?${new URLSearchParams({ company_id: companyId })}`,
+      )
+    },
+  }
+}
