@@ -2,24 +2,40 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { MockLanguageModelV3 } from "ai/test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { count } from "drizzle-orm"
+import { count, eq } from "drizzle-orm"
 import { Effect } from "effect"
 import {
+  DiscoverySummary,
   ExperienceApiError,
   ExperienceArtifactUnavailable,
   ExperienceArtifactView,
+  GraphChangeSummary,
   GoalBrief,
   GoalBriefHistory,
   GoalBriefStructuredFailure,
+  OrganizationProjection,
+  ValidationSummary,
   WorkProjection,
   WorkProjectionList,
 } from "@agents-company/shared/experience"
+import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import {
   CompanyArtifactTable,
+  CompanyGraphMutationTable,
+  CompanyPlanTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyValidationGateTable,
+  CompanyWorkAttemptTable,
+  CompanyWorkItemTable,
+  CompanyWorkReceiptTable,
 } from "../../src/company-project/company-project.sql"
 import * as ExperienceArtifact from "../../src/company-project/experience-artifact"
+import {
+  CompanyCapabilityNeedTable,
+  CompanyProjectAssignmentTable,
+  CompanyTeamSelectionTable,
+} from "../../src/company-recruitment/company-recruitment.sql"
 import { GoalBriefModelAdapter } from "../../src/goal-brief"
 import { GoalBriefTable } from "../../src/goal-brief/goal-brief.sql"
 import { createExperienceRoutes } from "../../src/server/routes/instance/experience"
@@ -209,6 +225,10 @@ describe.serial("/experience", () => {
       json("/experience/goal-brief/brief-missing/versions"),
       json("/experience/goal-brief/brief-missing"),
       json("/experience/work/project-missing"),
+      json("/experience/work/project-missing/organization"),
+      json("/experience/work/project-missing/graph"),
+      json("/experience/work/project-missing/receipts/receipt-missing"),
+      json("/experience/work/project-missing/validation"),
       json("/experience/goal-brief/brief-missing/versions", {
         method: "POST",
         body: JSON.stringify({
@@ -219,7 +239,7 @@ describe.serial("/experience", () => {
       }),
     ])
 
-    expect(responses.map((item) => item.response.status)).toEqual([404, 404, 404, 404, 404])
+    expect(responses.map((item) => item.response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404])
     responses.forEach((item) => {
       expect(ExperienceApiError.parse(item.body).code).toBe("not_found")
     })
@@ -267,6 +287,313 @@ describe.serial("/experience", () => {
     const listResult = await json("/experience/work")
     expect(listResult.response.status).toBe(200)
     expect(WorkProjectionList.parse(listResult.body).items).toHaveLength(1)
+  })
+
+  test.serial("projects organization, graph, receipt, and validation from persisted source facts", async () => {
+    Database.use((db) => {
+      db.insert(CompanyProjectTable)
+        .values({
+          id: "project-b4",
+          goal: "验证 B4 真实只读投影",
+          title: "B4 只读投影",
+          status: "executing",
+          output_dir: "/tmp/project-b4",
+          active_plan_version: 1,
+          graph_revision: 1,
+          created_at: 100,
+          updated_at: 900,
+        })
+        .run()
+      db.insert(CompanyPlanTable)
+        .values({
+          id: "plan-b4",
+          project_id: "project-b4",
+          version: 1,
+          phase: "execution",
+          status: "active",
+          summary: "执行可追溯投影",
+          assumptions_json: "[]",
+          acceptance_criteria_json: JSON.stringify(["共享契约可解析"]),
+          created_at: 100,
+        })
+        .run()
+      db.insert(CompanyWorkItemTable)
+        .values({
+          id: "item-b4",
+          project_id: "project-b4",
+          plan_id: "plan-b4",
+          title: "建立真实投影",
+          description: "从 SQLite 事实生成安全摘要",
+          kind: "worker",
+          work_type: "analysis",
+          role: "Projection Builder",
+          capability_packs_json: JSON.stringify(["projection"]),
+          decision_scope_json: "[]",
+          resource_scope_json: "[]",
+          inputs_json: "[]",
+          expected_outputs_json: JSON.stringify(["只读投影"]),
+          validators_json: JSON.stringify(["targeted tests"]),
+          disposition: "temporary",
+          model_group: "standard",
+          risk_level: "medium",
+          review_status: "not_required",
+          status: "completed",
+          purpose: "delivery",
+          origin_kind: "seed",
+          graph_revision_created: 0,
+          validation_mode: "machine",
+          acceptance_criteria_json: JSON.stringify(["targeted tests pass"]),
+          attempt: 1,
+          max_attempts: 3,
+          started_at: 150,
+          completed_at: 400,
+          created_at: 100,
+          updated_at: 400,
+        })
+        .run()
+      db.insert(CompanyWorkAttemptTable)
+        .values({
+          id: "attempt-b4",
+          project_id: "project-b4",
+          work_item_id: "item-b4",
+          ordinal: 1,
+          status: "completed",
+          safe_summary: "完成真实 SQLite 投影实现",
+          started_at: 200,
+          finished_at: 400,
+        })
+        .run()
+      db.insert(CompanyWorkReceiptTable)
+        .values({
+          id: "receipt-b4",
+          project_id: "project-b4",
+          work_item_id: "item-b4",
+          attempt_id: "attempt-b4",
+          idempotency_key: "receipt-b4-idempotency",
+          outcome: "completed",
+          summary: "发现并映射现有事实",
+          artifact_ids_json: "[]",
+          evidence_refs_json: "[]",
+          confirmed_facts_json: JSON.stringify(["发现真实代码事实"]),
+          invalidated_assumptions_json: JSON.stringify(["旧投影不足以表达组织"]),
+          unknowns_json: "[]",
+          blockers_json: "[]",
+          capability_gaps_json: "[]",
+          task_proposals_json: JSON.stringify([{ privateProposal: "不得暴露原始提案" }]),
+          dependency_proposals_json: JSON.stringify([{ privateDependency: "不得暴露原始依赖" }]),
+          questions_json: "[]",
+          processing_status: "processed",
+          processed_mutation_id: "mutation-b4",
+          created_at: 500,
+          processed_at: 600,
+        })
+        .run()
+      db.insert(CompanyGraphMutationTable)
+        .values({
+          id: "mutation-b4",
+          project_id: "project-b4",
+          trigger_receipt_id: "receipt-b4",
+          expected_revision: 0,
+          applied_revision: 1,
+          orchestrator_version: 1,
+          idempotency_key: "mutation-b4-idempotency",
+          decision: "accept",
+          rationale: "已有事实足以收敛",
+          evidence_refs_json: "[]",
+          operations_json: "[]",
+          status: "applied",
+          policy_verdict_json: JSON.stringify({ result: "allowed", violations: [] }),
+          created_at: 650,
+          applied_at: 700,
+        })
+        .run()
+      db.insert(CompanyValidationGateTable)
+        .values({
+          id: "gate-b4",
+          project_id: "project-b4",
+          work_item_id: "item-b4",
+          kind: "unit_test",
+          status: "passed",
+          criteria_json: JSON.stringify([
+            {
+              id: "criterion-b4",
+              statement: "targeted tests pass",
+              anchor: { kind: "unit_test", reference: "bun test targeted" },
+              operator: "exit_code",
+              expected: 0,
+            },
+          ]),
+          criteria_sha256: "a".repeat(64),
+          blocking_work_item_ids_json: JSON.stringify(["item-b4"]),
+          evidence_refs_json: "[]",
+          evaluator: "command_exit_v1",
+          repair_round: 0,
+          max_repair_rounds: 3,
+          created_at: 750,
+          evaluated_at: 800,
+        })
+        .run()
+      db.insert(CompanyAgentTable)
+        .values({
+          id: "agent-b4",
+          lifecycle: "assigned",
+          name: "Projection Builder",
+          preferred_runtime: "pi",
+          time_created: 100,
+          time_updated: 700,
+        })
+        .run()
+      db.insert(CompanyCapabilityNeedTable)
+        .values({
+          id: "need-b4",
+          project_id: "project-b4",
+          need_key: "projection.builder",
+          work_item_id: "item-b4",
+          source_receipt_id: "receipt-b4",
+          role: "Projection Builder",
+          work_type: "analysis",
+          capability_packs_json: JSON.stringify(["projection"]),
+          risk_level: "medium",
+          demand_horizon: "project",
+          required_runtime_capabilities_json: "[]",
+          required_tools_json: "[]",
+          allowed_permission_modes_json: JSON.stringify(["read_only"]),
+          workspace_scopes_json: "[]",
+          independent_from_agent_ids_json: "[]",
+          time_created: 650,
+          time_updated: 700,
+        })
+        .run()
+      db.insert(CompanyTeamSelectionTable)
+        .values({
+          id: "selection-b4",
+          project_id: "project-b4",
+          capability_need_id: "need-b4",
+          selection_round: 1,
+          agent_id: "agent-b4",
+          decision: "selected",
+          source: "new_candidate",
+          lifecycle_at_selection: "candidate",
+          reason: "具备真实投影能力",
+          score_json: JSON.stringify({
+            capability_match: 100,
+            availability: 100,
+            historical_quality: 80,
+            historical_reliability: 80,
+            cost_efficiency: 80,
+            speed: 80,
+            risk_fit: 90,
+            reuse_value: 70,
+            total: 680,
+          }),
+          constraint_results_json: "[]",
+          time_created: 700,
+          time_updated: 700,
+        })
+        .run()
+      db.insert(CompanyProjectAssignmentTable)
+        .values({
+          id: "assignment-b4",
+          project_id: "project-b4",
+          work_item_id: "item-b4",
+          capability_need_id: "need-b4",
+          selection_id: "selection-b4",
+          agent_id: "agent-b4",
+          version: 1,
+          idempotency_key: "assignment-b4-idempotency",
+          temporary_role: "Projection Builder",
+          responsibility: "生成安全且可追溯的只读投影",
+          decision_scope_json: "[]",
+          resource_scope_json: "[]",
+          permission_mode: "read_only",
+          source_receipt_id: "receipt-b4",
+          status: "active",
+          assigned_at: 700,
+          started_at: 710,
+        })
+        .run()
+    })
+
+    const organizationResult = await json("/experience/work/project-b4/organization")
+    expect(organizationResult.response.status).toBe(200)
+    const organization = OrganizationProjection.parse(organizationResult.body)
+    if (organization.availability !== "available") throw new Error("Expected organization projection")
+    expect(organization.projectorVersion).toBe(4)
+    expect(organization.activeAssignmentCount).toBe(1)
+    expect(organization.assignments[0]).toMatchObject({
+      availability: "available",
+      assignmentId: "assignment-b4",
+      sourceReceiptId: "receipt-b4",
+      currentLifecycle: "assigned",
+    })
+    expect(organizationResult.body).not.toHaveProperty("assignments.0.score")
+
+    const graphResult = await json("/experience/work/project-b4/graph")
+    expect(graphResult.response.status).toBe(200)
+    const graph = GraphChangeSummary.parse(graphResult.body)
+    if (graph.availability !== "available") throw new Error("Expected graph projection")
+    expect(graph.revision).toBe(1)
+    expect(graph.changes[0].operationCounts).toEqual({
+      addedWorkItems: 0,
+      addedDependencies: 0,
+      removedDependencies: 0,
+      supersededWorkItems: 0,
+      addedValidationGates: 0,
+      requestedCapabilities: 0,
+      requestedUserDecisions: 0,
+    })
+    expect(graphResult.body).not.toHaveProperty("changes.0.operations")
+
+    const discoveryResult = await json("/experience/work/project-b4/receipts/receipt-b4")
+    expect(discoveryResult.response.status).toBe(200)
+    const discovery = DiscoverySummary.parse(discoveryResult.body)
+    if (discovery.availability !== "available") throw new Error("Expected discovery projection")
+    expect(discovery.confirmedFacts).toEqual(["发现真实代码事实"])
+    expect(discovery.attempt).toMatchObject({ id: "attempt-b4", status: "completed" })
+    expect(discoveryResult.body).not.toHaveProperty("taskProposals")
+    expect(discoveryResult.body).not.toHaveProperty("dependencyProposals")
+
+    const validationResult = await json("/experience/work/project-b4/validation")
+    expect(validationResult.response.status).toBe(200)
+    const validation = ValidationSummary.parse(validationResult.body)
+    if (validation.availability !== "available") throw new Error("Expected validation projection")
+    expect(validation.blockingGateCount).toBe(0)
+    expect(validation.gates[0]).toMatchObject({
+      gateId: "gate-b4",
+      status: "passed",
+      criteriaSha256: "a".repeat(64),
+    })
+
+    const sourceKinds = new Set([
+      ...organization.assignments[0].sourceRefs.map((ref) => ref.kind),
+      ...graph.changes[0].sourceRefs.map((ref) => ref.kind),
+      ...discovery.sourceRefs.map((ref) => ref.kind),
+      ...validation.gates[0].sourceRefs.map((ref) => ref.kind),
+    ])
+    expect(sourceKinds).toEqual(
+      new Set([
+        "project",
+        "work_item",
+        "work_attempt",
+        "work_receipt",
+        "graph_mutation",
+        "project_assignment",
+        "validation_gate",
+      ]),
+    )
+    expect(
+      DiscoverySummary.parse((await json("/experience/work/project-b4/receipts/receipt-b4")).body).sourceWatermark,
+    ).toBe(discovery.sourceWatermark)
+
+    Database.use((db) =>
+      db
+        .update(CompanyWorkReceiptTable)
+        .set({ confirmed_facts_json: "{" })
+        .where(eq(CompanyWorkReceiptTable.id, "receipt-b4"))
+        .run(),
+    )
+    const unavailable = DiscoverySummary.parse((await json("/experience/work/project-b4/receipts/receipt-b4")).body)
+    expect(unavailable.availability).toBe("unavailable")
   })
 
   test.serial("makes every delivered Artifact ref resolve to a safe project-bound view", async () => {
@@ -636,9 +963,7 @@ describe.serial("/experience", () => {
         .run()
     })
 
-    const stable = await json(
-      "/experience/projects/project-artifact-ancestor-race/artifacts/artifact-ancestor-race",
-    )
+    const stable = await json("/experience/projects/project-artifact-ancestor-race/artifacts/artifact-ancestor-race")
     expect(stable.response.status).toBe(200)
     expect(ExperienceArtifactView.parse(stable.body).content).toBe("safe ancestor artifact")
 
@@ -782,6 +1107,22 @@ describe.serial("/experience", () => {
         statuses: ["200", "404", "422"],
       },
       { method: "get", path: "/experience/work", statuses: ["200"] },
+      {
+        method: "get",
+        path: "/experience/work/{projectID}/organization",
+        statuses: ["200", "404"],
+      },
+      { method: "get", path: "/experience/work/{projectID}/graph", statuses: ["200", "404"] },
+      {
+        method: "get",
+        path: "/experience/work/{projectID}/receipts/{receiptID}",
+        statuses: ["200", "404"],
+      },
+      {
+        method: "get",
+        path: "/experience/work/{projectID}/validation",
+        statuses: ["200", "404"],
+      },
       { method: "get", path: "/experience/work/{projectID}", statuses: ["200", "404"] },
     ] as const
 
@@ -794,7 +1135,7 @@ describe.serial("/experience", () => {
           throw new Error(`Missing JSON response schema for ${item.method} ${item.path} ${status}`)
         const schema = response.content?.["application/json"]?.schema
         expect(schema).toBeDefined()
-        expect(JSON.stringify(schema)).not.toMatch(/"unknown"/)
+        expect(JSON.stringify(schema)).not.toContain('"type":"unknown"')
       }
     }
 

@@ -22,6 +22,11 @@ export const ExperienceSourceRef = z
       "conversation",
       "goal_request",
       "user",
+      "work_attempt",
+      "work_receipt",
+      "graph_mutation",
+      "project_assignment",
+      "validation_gate",
     ]),
     id: Identifier,
     version: z.number().int().positive().optional(),
@@ -935,6 +940,283 @@ export const WorkProjectionList = z
   })
   .strict()
 export type WorkProjectionList = z.infer<typeof WorkProjectionList>
+
+const ReadProjectionMetadata = {
+  projectorVersion: z.number().int().positive(),
+  sourceWatermark: z.string().regex(/^[a-f0-9]{64}$/),
+  sourceRefs: z.array(ExperienceSourceRef).min(1).max(500),
+  updatedAt: Timestamp,
+}
+
+const ReadProjectionUnavailableReason = z
+  .object({
+    code: z.enum(["invalid_persisted_fact", "projection_overflow"]),
+    message: LongText,
+  })
+  .strict()
+
+export const AssignmentSummary = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      assignmentId: Identifier,
+      projectId: Identifier,
+      workItemId: Identifier,
+      agent: ExperienceAgentRef,
+      lifecycleAtSelection: z.enum(["candidate", "assigned", "employee", "archived"]),
+      currentLifecycle: z.enum(["candidate", "assigned", "employee", "archived"]),
+      status: z.enum(["assigned", "active", "released"]),
+      version: z.number().int().positive(),
+      temporaryRole: ShortText,
+      responsibility: LongText,
+      permissionMode: z.enum(["read_only", "workspace_write", "full_access"]),
+      need: z
+        .object({
+          id: Identifier,
+          key: ShortText,
+          role: ShortText,
+        })
+        .strict(),
+      selectionReason: LongText,
+      sourceReceiptId: Identifier.optional(),
+      supersedesAssignmentId: Identifier.optional(),
+      assignedAt: Timestamp,
+      startedAt: Timestamp.optional(),
+      releasedAt: Timestamp.optional(),
+      releaseReason: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      assignmentId: Identifier,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type AssignmentSummary = z.infer<typeof AssignmentSummary>
+
+export const OrganizationProjection = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      activeAssignmentCount: z.number().int().nonnegative(),
+      assignments: z.array(AssignmentSummary).max(499),
+    })
+    .strict(),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type OrganizationProjection = z.infer<typeof OrganizationProjection>
+
+const GraphOperationCounts = z
+  .object({
+    addedWorkItems: z.number().int().nonnegative(),
+    addedDependencies: z.number().int().nonnegative(),
+    removedDependencies: z.number().int().nonnegative(),
+    supersededWorkItems: z.number().int().nonnegative(),
+    addedValidationGates: z.number().int().nonnegative(),
+    requestedCapabilities: z.number().int().nonnegative(),
+    requestedUserDecisions: z.number().int().nonnegative(),
+  })
+  .strict()
+
+const GraphChange = z
+  .object({
+    mutationId: Identifier,
+    decision: z.enum([
+      "accept",
+      "retry",
+      "expand",
+      "rewire",
+      "supersede",
+      "request_capability",
+      "request_attention",
+      "quiesce",
+    ]),
+    status: z.enum(["proposed", "validated", "applied", "rejected", "superseded"]),
+    rationale: LongText,
+    expectedRevision: z.number().int().nonnegative(),
+    appliedRevision: z.number().int().nonnegative().optional(),
+    triggerReceiptId: Identifier,
+    operationCounts: GraphOperationCounts,
+    createdAt: Timestamp,
+    appliedAt: Timestamp.optional(),
+    sourceRefs: z.array(ExperienceSourceRef).min(2).max(500),
+  })
+  .strict()
+
+export const GraphChangeSummary = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      revision: z.number().int().nonnegative(),
+      changes: z.array(GraphChange).max(499),
+    })
+    .strict(),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type GraphChangeSummary = z.infer<typeof GraphChangeSummary>
+
+const DiscoveryAttempt = z
+  .object({
+    id: Identifier,
+    ordinal: z.number().int().positive(),
+    status: z.enum(["running", "completed", "failed", "stopped"]),
+    failureKind: z
+      .enum([
+        "implementation",
+        "environment",
+        "missing_prerequisite",
+        "dependency",
+        "permission",
+        "validator",
+        "scope",
+        "unknown",
+      ])
+      .optional(),
+    safeSummary: LongText.optional(),
+    startedAt: Timestamp,
+    finishedAt: Timestamp.optional(),
+  })
+  .strict()
+
+export const DiscoverySummary = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      receiptId: Identifier,
+      projectId: Identifier,
+      workItemId: Identifier,
+      attempt: DiscoveryAttempt,
+      outcome: z.enum(["completed", "blocked", "failed", "ask"]),
+      processingStatus: z.enum(["pending", "processing", "processed", "rejected"]),
+      summary: LongText,
+      confirmedFacts: z.array(LongText).max(500),
+      invalidatedAssumptions: z.array(LongText).max(500),
+      unknowns: z.array(LongText).max(500),
+      blockers: z.array(LongText).max(500),
+      capabilityGaps: z.array(LongText).max(500),
+      questions: z.array(LongText).max(500),
+      processedMutationId: Identifier.optional(),
+      createdAt: Timestamp,
+      processedAt: Timestamp.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      receiptId: Identifier,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type DiscoverySummary = z.infer<typeof DiscoverySummary>
+
+const ValidationCriterionSummary = z
+  .object({
+    id: Identifier,
+    statement: LongText,
+    anchor: z
+      .object({
+        kind: z.enum([
+          "prerequisite",
+          "unit_test",
+          "integration_test",
+          "device",
+          "runtime",
+          "artifact",
+          "source",
+          "policy",
+        ]),
+        reference: z.string().trim().min(1).max(2_000),
+      })
+      .strict(),
+    operator: z.enum(["exists", "equals", "exit_code", "digest"]),
+    expected: z.union([z.string(), z.number(), z.boolean()]),
+  })
+  .strict()
+
+const ValidationGateSummary = z
+  .object({
+    gateId: Identifier,
+    workItemId: Identifier.optional(),
+    kind: z.enum([
+      "prerequisite",
+      "unit_test",
+      "integration_test",
+      "device",
+      "runtime",
+      "artifact",
+      "source",
+      "policy",
+    ]),
+    status: z.enum(["pending", "running", "passed", "failed", "superseded"]),
+    criteria: z.array(ValidationCriterionSummary).min(1).max(500),
+    criteriaSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    blockingWorkItemIds: z.array(Identifier).min(1).max(500),
+    evidenceRefs: z.array(ExperienceSourceRef).max(500),
+    evaluator: z.enum([
+      "fact_match_v1",
+      "command_exit_v1",
+      "artifact_digest_v1",
+      "source_reachability_v1",
+      "runtime_state_v1",
+      "policy_invariant_v1",
+    ]),
+    repairRound: z.number().int().nonnegative(),
+    maxRepairRounds: z.number().int().positive(),
+    failureSummary: LongText.optional(),
+    supersedesGateId: Identifier.optional(),
+    createdAt: Timestamp,
+    evaluatedAt: Timestamp.optional(),
+    sourceRefs: z.array(ExperienceSourceRef).min(1).max(500),
+  })
+  .strict()
+
+export const ValidationSummary = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      blockingGateCount: z.number().int().nonnegative(),
+      gates: z.array(ValidationGateSummary).max(499),
+    })
+    .strict(),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type ValidationSummary = z.infer<typeof ValidationSummary>
 
 export const GoalBriefRecoveryAction = z.enum(["retry", "manual_edit"])
 export type GoalBriefRecoveryAction = z.infer<typeof GoalBriefRecoveryAction>

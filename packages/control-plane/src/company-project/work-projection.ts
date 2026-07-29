@@ -25,7 +25,7 @@ import { CompanyArtifactTable, CompanyProjectEventTable, CompanyProjectTable } f
 import * as ExperienceArtifact from "./experience-artifact"
 import { CompanyWorkProjectionTable } from "./work-projection.sql"
 
-export const PROJECTOR_VERSION = 3
+export const PROJECTOR_VERSION = 4
 const MAX_PROJECTION_DIAGNOSTICS = 500
 const MAX_PROJECTION_ITEMS = 500
 const EventTimestamp = z.number().int().min(0).max(253_402_300_799_999)
