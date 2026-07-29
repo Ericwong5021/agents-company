@@ -186,6 +186,7 @@ const controlPlaneEnvironment = {
   AGENTCOMPANY_HOME: path.join(temporaryRoot, "control-plane-home"),
   AGENTCOMPANY_DISABLE_CLAUDE_IMPORT: "1",
   AGENTCOMPANY_DISABLE_DEFAULT_PLUGINS: "1",
+  AGENTCOMPANY_DISABLE_MODELS_FETCH: "1",
   AGENTCOMPANY_DISABLE_PROVIDER_ENV: "1",
   AGENTCOMPANY_PURE: "1",
   XDG_DATA_HOME: path.join(temporaryRoot, "xdg-data"),
