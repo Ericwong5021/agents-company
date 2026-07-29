@@ -24,13 +24,9 @@ import {
   type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
   type SeedPolicyFacts as SeedPolicyFactsValue,
 } from "@agents-company/shared/project-orchestration"
-import {
-  SeedPolicyVerdict,
-  WayfinderReceipt,
-  evaluateSeedPolicy,
-  startSeedProject,
-  wayfinderWorkflow,
-} from "@/project-orchestrator"
+import { SeedPolicyVerdict, WayfinderReceipt } from "@/project-orchestrator/schema"
+import { evaluateSeedPolicy } from "@/project-orchestrator/seed-policy"
+import { startSeedProject, wayfinderWorkflow } from "@/project-orchestrator/seed-team"
 import { CompanyProject } from "./company-project"
 import {
   BoardProjectCharter,
@@ -498,6 +494,7 @@ export interface Interface {
     note?: string
   }) => Effect.Effect<{ gate: ApprovalGate; run_id?: string }>
   readonly cancel: (input: { project_id: string; reason?: string }) => Effect.Effect<Project>
+  readonly dispatchReady: (project_id: string) => Effect.Effect<string | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyProjectExecution") {}
@@ -1017,12 +1014,21 @@ export const layer = Layer.effect(
       if (
         !project ||
         project.execution_strategy !== "seed_and_grow" ||
+        project.dispatch_paused ||
         ["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)
       )
         return
-      const ready = (yield* projects.readyWorkItems(project_id)).filter(
-        (item) => item.kind === "worker" && Boolean(item.owner_agent_id),
-      )
+      const assignments = yield* recruitment.listAssignments({ project_id })
+      const ready = (yield* projects.readyWorkItems(project_id))
+        .filter((item) => item.kind === "worker" && Boolean(item.owner_agent_id))
+        .filter((item) =>
+          assignments.some(
+            (assignment) =>
+              assignment.work_item_id === item.id &&
+              assignment.agent_id === item.owner_agent_id &&
+              (assignment.status === "assigned" || assignment.status === "active"),
+          ),
+        )
       if (!ready.length) {
         const items = yield* projects.listWorkItems(project_id)
         if (items.some((item) => item.status === "blocked" || item.status === "failed")) {
@@ -2243,7 +2249,7 @@ export const layer = Layer.effect(
       return run_id ? { gate, run_id } : { gate }
     })
 
-    return Service.of({ start, startFromCharter, retry, resolveGate, cancel })
+    return Service.of({ start, startFromCharter, retry, resolveGate, cancel, dispatchReady: startReadyWave })
   }),
 )
 

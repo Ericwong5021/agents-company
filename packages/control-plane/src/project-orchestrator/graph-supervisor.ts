@@ -165,6 +165,67 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
       summary: `Receipt ${input.receipt.id} references a WorkItem absent from revision ${input.snapshot.revision}.`,
       operations: [],
     }
+  if (input.receipt.capability_gaps.length) {
+    if (!input.receipt.evidence_refs.length)
+      return {
+        kind: "retry",
+        reason_code: "capability_evidence_missing",
+        summary: `Receipt ${input.receipt.id} reported capability gaps without persisted evidence references.`,
+        operations: [],
+      }
+    const operations = input.receipt.capability_gaps.slice(0, 3).flatMap((capability, index) => {
+      const work_item_id = Identifier.ascending("companyWorkItem")
+      return [
+        {
+          type: "add_work_item" as const,
+          item: {
+            id: work_item_id,
+            plan_id: trigger.plan_id,
+            parent_id: trigger.id,
+            title: `Resolve capability gap: ${capability}`.slice(0, 500),
+            description: `Produce verified evidence that resolves the reported capability gap: ${capability}`.slice(
+              0,
+              8_000,
+            ),
+            kind: "worker" as const,
+            work_type: "analysis" as const,
+            role: capability.slice(0, 160),
+            capability_packs: ["research-analysis@1"],
+            decision_scope: trigger.decision_scope,
+            resource_scope: trigger.resource_scope,
+            inputs: [input.receipt.summary, capability],
+            expected_outputs: [`Verified resolution for ${capability}`],
+            validators: ["Capability gap resolution is backed by persisted evidence"],
+            disposition: "retain",
+            model_group: "standard" as const,
+            risk_level: "medium" as const,
+            review_status: "not_required" as const,
+            acceptance_criteria: ["Capability gap resolution is backed by persisted evidence"],
+            max_attempts: 3,
+            purpose: "recovery" as const,
+            validation_mode: "machine" as const,
+          },
+        },
+        {
+          type: "request_capability" as const,
+          need: {
+            id: `receipt-gap-${index + 1}`,
+            work_item_id,
+            capability,
+            reason: `Work Receipt ${input.receipt.id} reported this capability gap.`,
+            allowed_permission_modes: ["read_only" as const],
+            resource_scope: trigger.resource_scope,
+          },
+        },
+      ]
+    })
+    return {
+      kind: "request_capability",
+      reason_code: "receipt_capability_gap",
+      summary: `Receipt ${input.receipt.id} reported ${input.receipt.capability_gaps.length} capability gaps; ${Math.min(input.receipt.capability_gaps.length, 3)} bounded Needs were proposed.`,
+      operations,
+    }
+  }
   const directOperations = input.receipt.task_proposals.flatMap((proposal) => {
     const operation = GraphOperation.safeParse(proposal)
     if (operation.success) return [operation.data]

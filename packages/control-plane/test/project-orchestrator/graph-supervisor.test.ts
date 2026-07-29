@@ -1,6 +1,6 @@
 import { afterEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import {
   CompanyGraphMutation,
   CompanyProject,
@@ -180,7 +180,12 @@ describe("Graph Supervisor", () => {
           db
             .select()
             .from(CompanyProjectEventTable)
-            .where(eq(CompanyProjectEventTable.type, "graph_decision.recorded"))
+            .where(
+              and(
+                eq(CompanyProjectEventTable.project_id, input.project.id),
+                eq(CompanyProjectEventTable.type, "graph_decision.recorded"),
+              ),
+            )
             .get(),
         )
         expect(audit ? JSON.parse(audit.data_json) : undefined).toMatchObject({

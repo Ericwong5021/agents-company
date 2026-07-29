@@ -9,6 +9,7 @@ import {
   CompanyProjectEventTable,
   CompanyProjectTable,
   CompanyWorkItemTable,
+  CompanyWorkReceiptTable,
 } from "@/company-project/company-project.sql"
 import { ProjectStatus } from "@/company-project/schema"
 import { CompanyTable } from "@/company/company.sql"
@@ -235,6 +236,15 @@ export const layer = Layer.effect(
               .get()
             if (!workItem || workItem.project_id !== input.project_id)
               throw new Error(`Company work item ${input.work_item_id} does not belong to project ${input.project_id}`)
+            const sourceReceipt = input.source_receipt_id
+              ? db
+                  .select()
+                  .from(CompanyWorkReceiptTable)
+                  .where(eq(CompanyWorkReceiptTable.id, input.source_receipt_id))
+                  .get()
+              : undefined
+            if (input.source_receipt_id && sourceReceipt?.project_id !== input.project_id)
+              throw new Error(`Work Receipt ${input.source_receipt_id} does not belong to project ${input.project_id}`)
             const now = Date.now()
             db.insert(CompanyCapabilityNeedTable)
               .values({
@@ -734,7 +744,11 @@ export const layer = Layer.effect(
 
     const selectAndAssign = Effect.fn("CompanyRecruitment.selectAndAssign")(function* (raw: SelectAndAssignInput) {
       const input = SelectAndAssignInput.parse(raw)
-      const selected = yield* selectForNeed(input)
+      const selected = yield* selectForNeed({
+        capability_need_id: input.capability_need_id,
+        exclude_agent_ids: input.exclude_agent_ids,
+        required_agent_id: input.required_agent_id,
+      })
       const selection = selected.selections.find(
         (item) => item.decision === "selected" && !item.time_released,
       )

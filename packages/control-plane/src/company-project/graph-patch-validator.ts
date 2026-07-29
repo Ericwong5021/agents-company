@@ -217,11 +217,19 @@ export function validateGraphPatch(input: {
       }
       return
     }
-    if (
-      operation.type === "request_capability" &&
-      (!trigger || operation.need.resource_scope.some((scope) => !trigger.resource_scope.includes(scope)))
-    ) {
-      violations.add("scope_escalation")
+    if (operation.type === "request_capability") {
+      const item = nodes.get(operation.need.work_item_id)
+      if (!item) {
+        violations.add("missing_node")
+        return
+      }
+      if (
+        !trigger ||
+        operation.need.resource_scope.some(
+          (scope) => !trigger.resource_scope.includes(scope) || !item.resource_scope.includes(scope),
+        )
+      )
+        violations.add("scope_escalation")
     }
   })
 

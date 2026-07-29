@@ -536,6 +536,7 @@ export const GraphValidationGateProposal = z
 export const GraphCapabilityNeedProposal = z
   .object({
     id: z.string().trim().min(1).max(200),
+    work_item_id: z.string().trim().min(1),
     capability: z.string().trim().min(1).max(500),
     reason: z.string().trim().min(1).max(8_000),
     allowed_permission_modes: z.array(z.enum(["read_only", "workspace_write"])).min(1),
