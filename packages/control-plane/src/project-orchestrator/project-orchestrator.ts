@@ -38,7 +38,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ProjectOrchestrator") {}
 
-export const layer = Layer.effect(
+const serviceLayer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const supervisor = yield* GraphSupervisor.Service
@@ -61,9 +61,7 @@ export const layer = Layer.effect(
       }
     })
 
-    const recover = Effect.fn("ProjectOrchestrator.recover")(function* (
-      input: { project_id?: string } = {},
-    ) {
+    const recover = Effect.fn("ProjectOrchestrator.recover")(function* (input: { project_id?: string } = {}) {
       const actions = actionExecutor
         ? yield* actionExecutor.recover()
         : {
@@ -85,9 +83,7 @@ export const layer = Layer.effect(
             .where(
               and(
                 eq(CompanyProjectTable.execution_strategy, "seed_and_grow"),
-                input.project_id
-                  ? eq(CompanyProjectTable.id, input.project_id)
-                  : undefined,
+                input.project_id ? eq(CompanyProjectTable.id, input.project_id) : undefined,
               ),
             )
             .orderBy(asc(CompanyProjectTable.created_at), asc(CompanyProjectTable.id))
@@ -151,12 +147,13 @@ export const layer = Layer.effect(
   }),
 )
 
+export const layer = serviceLayer.pipe(Layer.provide(CompanyValidationGate.defaultLayer))
+
 export const defaultLayer = layer.pipe(
   Layer.provide(GraphSupervisor.defaultLayer),
   Layer.provide(CapabilityMaterializer.defaultLayer),
   Layer.provide(DispatchCoordinator.defaultLayer),
   Layer.provide(QuiescenceService.defaultLayer),
-  Layer.provide(CompanyValidationGate.defaultLayer),
   Layer.provide(ReceiptProcessor.defaultLayer),
   Layer.provide(ProjectActionExecutor.defaultLayer),
 )

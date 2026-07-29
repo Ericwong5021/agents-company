@@ -18,7 +18,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ReceiptProcessor") {}
 
-export const layer = Layer.effect(
+const serviceLayer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const supervisor = yield* GraphSupervisor.Service
@@ -28,8 +28,7 @@ export const layer = Layer.effect(
     const processReceipt = Effect.fn("ReceiptProcessor.processReceipt")(function* (receipt_id: string) {
       const processing = yield* supervisor.processReceipt(receipt_id)
       if (processing.status === "disabled") return { processing }
-      if (processing.mode === "active")
-        yield* validation.evaluateProjectPending(processing.project_id)
+      if (processing.mode === "active") yield* validation.evaluateProjectPending(processing.project_id)
       return {
         processing,
         materialization: yield* materializer.materializeDecision(processing.decision),
@@ -40,10 +39,11 @@ export const layer = Layer.effect(
   }),
 )
 
+export const layer = serviceLayer.pipe(Layer.provide(CompanyValidationGate.defaultLayer))
+
 export const defaultLayer = layer.pipe(
   Layer.provide(GraphSupervisor.defaultLayer),
   Layer.provide(CapabilityMaterializer.defaultLayer),
-  Layer.provide(CompanyValidationGate.defaultLayer),
   Layer.provide(QuiescenceService.defaultLayer),
 )
 

@@ -385,9 +385,7 @@ const workerPermission = (
       : policy.source_approval_preset === "autonomous"
         ? "full_access"
         : "workspace_write"
-  return permissionRank[requested] <= permissionRank[assignmentPermission]
-    ? requested
-    : assignmentPermission
+  return permissionRank[requested] <= permissionRank[assignmentPermission] ? requested : assignmentPermission
 }
 
 const riskApprovalCovers = (gate: ApprovalGate, item: WorkItem) =>
@@ -577,7 +575,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyProjectExecution") {}
 
-export const layer = Layer.effect(
+const serviceLayer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const projects = yield* CompanyProject.Service
@@ -705,18 +703,14 @@ export const layer = Layer.effect(
       return verdict
     })
 
-    const completeValidatedWorkItem = Effect.fn(
-      "CompanyProjectExecution.completeValidatedWorkItem",
-    )(function* (input: {
+    const completeValidatedWorkItem = Effect.fn("CompanyProjectExecution.completeValidatedWorkItem")(function* (input: {
       item: WorkItem
       artifact: Artifact
       summary: string
     }) {
       if (!input.artifact.content) throw new Error(`Artifact ${input.artifact.id} has no persisted bytes`)
       yield* validation.evaluateProjectPending(input.item.project_id)
-      const artifact_sha256 = new Bun.CryptoHasher("sha256")
-        .update(input.artifact.content)
-        .digest("hex")
+      const artifact_sha256 = new Bun.CryptoHasher("sha256").update(input.artifact.content).digest("hex")
       const passedGates = (yield* validation.list(input.item.project_id)).filter(
         (gate) =>
           gate.work_item_id === input.item.id &&
@@ -727,14 +721,9 @@ export const layer = Layer.effect(
       const criteria = input.item.acceptance_criteria.map((criterion, index) => {
         const digest = criterion.match(/^artifact_sha256:([a-f0-9]{64})$/i)?.[1]?.toLowerCase()
         const exists = criterion === "artifact_exists"
-        const proven = passedGates.find((gate) =>
-          gate.criteria.some((candidate) => candidate.statement === criterion),
-        )
+        const proven = passedGates.find((gate) => gate.criteria.some((candidate) => candidate.statement === criterion))
         return {
-          id: `criterion-${index + 1}-${new Bun.CryptoHasher("sha256")
-            .update(criterion)
-            .digest("hex")
-            .slice(0, 24)}`,
+          id: `criterion-${index + 1}-${new Bun.CryptoHasher("sha256").update(criterion).digest("hex").slice(0, 24)}`,
           statement: criterion,
           anchor: { kind: "artifact" as const, reference: `artifact:${input.artifact.id}` },
           operator: exists ? ("exists" as const) : ("digest" as const),
@@ -780,11 +769,10 @@ export const layer = Layer.effect(
           summary: input.summary,
           artifact_ids: [input.artifact.id],
           evidence_refs: [{ kind: "artifact", id: input.artifact.id }],
-          confirmed_facts: criteria.map(
-            (criterion) =>
-              criterion.proven
-                ? `deterministic:${criterion.statement}:validation_gate:${criterion.proven.id}:passed`
-                : `deterministic:${criterion.statement}:artifact:${input.artifact.id}:sha256:${artifact_sha256}:validation_gate:${gate!.id}:passed`,
+          confirmed_facts: criteria.map((criterion) =>
+            criterion.proven
+              ? `deterministic:${criterion.statement}:validation_gate:${criterion.proven.id}:passed`
+              : `deterministic:${criterion.statement}:artifact:${input.artifact.id}:sha256:${artifact_sha256}:validation_gate:${gate!.id}:passed`,
           ),
           invalidated_assumptions: [],
           unknowns: [],
@@ -798,9 +786,7 @@ export const layer = Layer.effect(
       return {
         gate_ids: [
           ...new Set(
-            criteria.flatMap((criterion) =>
-              criterion.proven ? [criterion.proven.id] : gate ? [gate.id] : [],
-            ),
+            criteria.flatMap((criterion) => (criterion.proven ? [criterion.proven.id] : gate ? [gate.id] : [])),
           ),
         ],
         artifact_sha256,
@@ -1797,9 +1783,7 @@ export const layer = Layer.effect(
                 (candidate) => candidate.work_item_id === parent.id && candidate.kind !== "attempt_failure",
               )
               if (!parentArtifact?.content) throw new Error(`Reviewer parent ${parent.id} has no persisted artifact`)
-              const parentArtifactSha = new Bun.CryptoHasher("sha256")
-                .update(parentArtifact.content)
-                .digest("hex")
+              const parentArtifactSha = new Bun.CryptoHasher("sha256").update(parentArtifact.content).digest("hex")
               const parentArtifactGate = yield* validation.create({
                 id: `review-parent-${new Bun.CryptoHasher("sha256")
                   .update(`${parent.id}:${parentArtifact.id}:${item.id}`)
@@ -1853,10 +1837,7 @@ export const layer = Layer.effect(
                   outcome: "completed",
                   summary: parsed.summary,
                   artifact_ids: [reviewArtifact.id],
-                  evidence_refs: [
-                    { kind: "artifact", id: parentArtifact.id },
-                    { kind: "artifact", id: reviewArtifact.id },
-                  ],
+                  evidence_refs: [{ kind: "artifact", id: reviewArtifact.id }],
                   confirmed_facts: [
                     `independent_review:${parent.id}:validation_gate:${reviewGate.id}:passed`,
                     `parent_artifact:${parentArtifact.id}:validation_gate:${parentArtifactGate.id}:passed`,
@@ -2675,9 +2656,7 @@ export const layer = Layer.effect(
       if (gate.kind === "risk_approval") {
         if (!gate.work_item_id || !gate.resource_scope.length)
           throw new Error(`Risk approval ${gate.id} has no WorkItem scope`)
-        const approvedItem = (yield* projects.listWorkItems(project.id)).find(
-          (item) => item.id === gate.work_item_id,
-        )
+        const approvedItem = (yield* projects.listWorkItems(project.id)).find((item) => item.id === gate.work_item_id)
         if (!approvedItem) throw new Error(`Risk approval ${gate.id} WorkItem is unavailable`)
         if (project.execution_strategy === "seed_and_grow" && approvedItem.purpose === "first_slice") {
           const verdict = yield* seedVerdict(project)
@@ -2713,6 +2692,8 @@ export const layer = Layer.effect(
   }),
 ).pipe(Layer.provide(ReceiptProcessor.defaultLayer))
 
+export const layer = serviceLayer.pipe(Layer.provide(CompanyValidationGate.defaultLayer))
+
 export const defaultLayer = layer.pipe(
   Layer.provide(CompanyProject.defaultLayer),
   Layer.provide(CompanyAgent.defaultLayer),
@@ -2724,7 +2705,6 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Session.defaultLayer),
   Layer.provide(WorkType.defaultLayer),
   Layer.provide(WorkflowRuntime.defaultLayer),
-  Layer.provide(CompanyValidationGate.defaultLayer),
 )
 
 export * as CompanyProjectExecution from "./execution"

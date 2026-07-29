@@ -44,6 +44,13 @@ export const CompanyRecruitmentRoutes = lazy(() =>
           ...snapshot,
           candidate_pool: snapshot.candidate_pool.map(CompanyAgent.toPublicInfo),
           assigned_candidates: snapshot.assigned_candidates.map(CompanyAgent.toPublicInfo),
+          organization: {
+            board_members: snapshot.organization.board_members.map(CompanyAgent.toPublicInfo),
+            employees: snapshot.organization.employees.map(CompanyAgent.toPublicInfo),
+            temporary_instances: snapshot.organization.temporary_instances.map(CompanyAgent.toPublicInfo),
+            reused_candidates: snapshot.organization.reused_candidates.map(CompanyAgent.toPublicInfo),
+            candidate_pool: snapshot.organization.candidate_pool.map(CompanyAgent.toPublicInfo),
+          },
         })
       },
     )

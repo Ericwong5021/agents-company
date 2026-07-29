@@ -2,7 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { Context, Effect, Layer } from "effect"
-import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, notInArray } from "drizzle-orm"
 import { Database } from "@/storage"
 import { Global } from "@/global"
 import { Identifier } from "@/id/id"
@@ -286,11 +286,7 @@ export interface Interface {
   readonly listWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly readyWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly startWorkItem: (id: string) => Effect.Effect<WorkItem>
-  readonly assignWorkItem: (input: {
-    id: string
-    owner_agent_id: string
-    reason: string
-  }) => Effect.Effect<WorkItem>
+  readonly assignWorkItem: (input: { id: string; owner_agent_id: string; reason: string }) => Effect.Effect<WorkItem>
   readonly setWorkItemRun: (input: { id: string; workflow_run_id?: string }) => Effect.Effect<WorkItem>
   readonly setWorkItemReview: (input: {
     id: string
@@ -1168,18 +1164,30 @@ export const layer = Layer.effect(
         pending
           .filter((item) => item.kind === "reviewer" && Boolean(item.parent_id))
           .filter((item) =>
-            Database.use((db) =>
-              db
-                .select({ id: CompanyArtifactTable.id })
-                .from(CompanyArtifactTable)
-                .where(
-                  and(
-                    eq(CompanyArtifactTable.project_id, project_id),
-                    eq(CompanyArtifactTable.work_item_id, item.parent_id!),
-                  ),
-                )
-                .get(),
-            ),
+            Database.use((db) => {
+              const parent = db
+                .select({
+                  status: CompanyWorkItemTable.status,
+                  started_at: CompanyWorkItemTable.started_at,
+                })
+                .from(CompanyWorkItemTable)
+                .where(eq(CompanyWorkItemTable.id, item.parent_id!))
+                .get()
+              if (parent?.status !== "running" || parent.started_at === null) return false
+              return Boolean(
+                db
+                  .select({ id: CompanyArtifactTable.id })
+                  .from(CompanyArtifactTable)
+                  .where(
+                    and(
+                      eq(CompanyArtifactTable.project_id, project_id),
+                      eq(CompanyArtifactTable.work_item_id, item.parent_id!),
+                      gte(CompanyArtifactTable.created_at, parent.started_at),
+                    ),
+                  )
+                  .get(),
+              )
+            }),
           )
           .map((item) => item.parent_id!),
       )
@@ -1197,22 +1205,20 @@ export const layer = Layer.effect(
           )
           .map((dependency) => dependency.work_item_id),
       )
-      ;(
-        yield* Effect.sync(() =>
-          Database.use((db) =>
-            db
-              .select({ blocking_work_item_ids_json: CompanyValidationGateTable.blocking_work_item_ids_json })
-              .from(CompanyValidationGateTable)
-              .where(
-                and(
-                  eq(CompanyValidationGateTable.project_id, project_id),
-                  notInArray(CompanyValidationGateTable.status, ["passed", "superseded"]),
-                ),
-              )
-              .all(),
-          ),
-        )
-      ).forEach((gate) =>
+      ;(yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ blocking_work_item_ids_json: CompanyValidationGateTable.blocking_work_item_ids_json })
+            .from(CompanyValidationGateTable)
+            .where(
+              and(
+                eq(CompanyValidationGateTable.project_id, project_id),
+                notInArray(CompanyValidationGateTable.status, ["passed", "superseded"]),
+              ),
+            )
+            .all(),
+        ),
+      )).forEach((gate) =>
         parseList(gate.blocking_work_item_ids_json).forEach((work_item_id) => blocked.add(work_item_id)),
       )
       return pending
@@ -1261,10 +1267,7 @@ export const layer = Layer.effect(
           ordinal: row.attempt,
           status: status === "completed" ? "completed" : "failed",
           outcome: status === "completed" ? "completed" : "blocked",
-          summary:
-            status === "completed"
-              ? `Work item ${row.id} completed`
-              : (error ?? `Work item ${row.id} blocked`),
+          summary: status === "completed" ? `Work item ${row.id} completed` : (error ?? `Work item ${row.id} blocked`),
           failure_kind: status === "blocked" ? "unknown" : undefined,
           actor_id: row.owner_agent_id ?? undefined,
           receipt,
@@ -1272,8 +1275,7 @@ export const layer = Layer.effect(
       }
       yield* Effect.sync(() =>
         Database.transaction((db) => {
-          db
-            .update(CompanyWorkItemTable)
+          db.update(CompanyWorkItemTable)
             .set({
               status,
               attempt,
@@ -1286,8 +1288,7 @@ export const layer = Layer.effect(
             .where(eq(CompanyWorkItemTable.id, id))
             .run()
           if (status === "running")
-            db
-              .update(CompanyProjectAssignmentTable)
+            db.update(CompanyProjectAssignmentTable)
               .set({ status: "active", started_at: now })
               .where(
                 and(
@@ -1681,9 +1682,7 @@ export const layer = Layer.effect(
         const home = path.join(root, "home")
         const tmp = path.join(root, "tmp")
         await Promise.all([fs.mkdir(home), fs.mkdir(tmp)])
-        const writablePaths = writeScope.map((scope) =>
-          path.resolve(scope ? path.join(cwd, scope) : cwd),
-        )
+        const writablePaths = writeScope.map((scope) => path.resolve(scope ? path.join(cwd, scope) : cwd))
         const linuxSystemBinds =
           process.platform === "linux"
             ? (
@@ -1817,7 +1816,7 @@ export const layer = Layer.effect(
       })
 
     const allowedWorktreePaths = (
-      current: typeof CompanyWorktreeRunTable.$inferSelect,
+      current: Pick<WorktreeRun, "repository_path" | "directory">,
       scopes: string[],
       outputDir: string,
     ) =>
@@ -1831,10 +1830,10 @@ export const layer = Layer.effect(
           absolute === path.resolve(outputDir)
             ? ""
             : absolute === repository || absolute.startsWith(`${repository}${path.sep}`)
-            ? path.relative(repository, absolute)
-            : absolute === worktree || absolute.startsWith(`${worktree}${path.sep}`)
-              ? path.relative(worktree, absolute)
-              : undefined
+              ? path.relative(repository, absolute)
+              : absolute === worktree || absolute.startsWith(`${worktree}${path.sep}`)
+                ? path.relative(worktree, absolute)
+                : undefined
         if (relative === undefined || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
           throw new Error(`Resource scope exceeds repository boundary: ${scope}`)
         return relative.split(path.sep).join("/")
@@ -2006,9 +2005,7 @@ export const layer = Layer.effect(
       if (existingOutOfScope.length)
         throw new Error(`Worktree has changes outside its Assignment scope: ${existingOutOfScope.join(", ")}`)
       yield* updateWorktreeRun({ id: input.id, status: "verifying" })
-      const results = yield* Effect.forEach(input.commands, (item) =>
-        command(current.directory, item, scope),
-      )
+      const results = yield* Effect.forEach(input.commands, (item) => command(current.directory, item, scope))
       const failed = results.find((item) => item.code !== 0)
       if (!failed) {
         const paths = yield* changedPaths(current.directory)

@@ -86,14 +86,11 @@ const evaluatorSupport = {
 const normalizedCriteria = (criteria: ValidationCriterionType[]) =>
   [...criteria].sort((left, right) => left.id.localeCompare(right.id))
 
-const digest = (value: unknown) =>
-  new Bun.CryptoHasher("sha256").update(JSON.stringify(value)).digest("hex")
+const digest = (value: unknown) => new Bun.CryptoHasher("sha256").update(JSON.stringify(value)).digest("hex")
 
-const parseCriteria = (value: string) =>
-  normalizedCriteria(ValidationCriterion.array().parse(JSON.parse(value)))
+const parseCriteria = (value: string) => normalizedCriteria(ValidationCriterion.array().parse(JSON.parse(value)))
 
-const parseEvidenceRefs = (value: string) =>
-  WorkReceiptEvidenceRef.array().parse(JSON.parse(value))
+const parseEvidenceRefs = (value: string) => WorkReceiptEvidenceRef.array().parse(JSON.parse(value))
 
 function gateFromRow(row: typeof CompanyValidationGateTable.$inferSelect) {
   return ValidationGate.parse({
@@ -116,13 +113,7 @@ function gateFromRow(row: typeof CompanyValidationGateTable.$inferSelect) {
   })
 }
 
-function insertEvent(
-  db: TxOrDb,
-  project_id: string,
-  type: string,
-  data: Record<string, unknown>,
-  created_at: number,
-) {
+function insertEvent(db: TxOrDb, project_id: string, type: string, data: Record<string, unknown>, created_at: number) {
   db.insert(CompanyProjectEventTable)
     .values({
       id: Identifier.ascending("event"),
@@ -152,11 +143,7 @@ function assertEvaluator(criteria: ValidationCriterionType[], evaluator: Validat
   })
 }
 
-function evidenceReferenceExists(
-  db: TxOrDb,
-  project_id: string,
-  reference: WorkReceiptEvidenceRef,
-) {
+function evidenceReferenceExists(db: TxOrDb, project_id: string, reference: WorkReceiptEvidenceRef) {
   if (reference.kind === "artifact") {
     return (
       db
@@ -221,11 +208,7 @@ function persistAnchorEvidence(
   })
 }
 
-function evaluateRow(
-  db: TxOrDb,
-  row: typeof CompanyValidationGateTable.$inferSelect,
-  input: ValidationEvaluationType,
-) {
+function evaluateRow(db: TxOrDb, row: typeof CompanyValidationGateTable.$inferSelect, input: ValidationEvaluationType) {
   if (row.evaluator !== input.evaluator) {
     throw new Error("Validation evaluator cannot change while a Gate is active")
   }
@@ -250,27 +233,20 @@ function evaluateRow(
       criterion.operator === "exists" || criterion.operator === "equals"
         ? item.observed === criterion.expected
         : criterion.operator === "exit_code"
-          ? typeof item.observed === "number" &&
-            Number.isInteger(item.observed) &&
-            item.observed === criterion.expected
+          ? typeof item.observed === "number" && Number.isInteger(item.observed) && item.observed === criterion.expected
           : typeof item.observed === "string" && item.observed === criterion.expected
     return passed ? [] : [criterion.id]
   })
   const evidence_refs = [
     ...new Map(
-      input.evidence.map((item) => [
-        `${item.evidence_ref.kind}:${item.evidence_ref.id}`,
-        item.evidence_ref,
-      ]),
+      input.evidence.map((item) => [`${item.evidence_ref.kind}:${item.evidence_ref.id}`, item.evidence_ref]),
     ).values(),
   ]
   return {
     status: failed_criterion_ids.length ? ("failed" as const) : ("passed" as const),
     failed_criterion_ids,
     evidence_refs,
-    failure_summary: failed_criterion_ids.length
-      ? `Failed criteria: ${failed_criterion_ids.join(", ")}`
-      : undefined,
+    failure_summary: failed_criterion_ids.length ? `Failed criteria: ${failed_criterion_ids.join(", ")}` : undefined,
   }
 }
 
@@ -284,8 +260,7 @@ function sameGate(
     row.work_item_id === (input.work_item_id ?? null) &&
     row.kind === input.kind &&
     row.criteria_json === JSON.stringify(criteria) &&
-    row.blocking_work_item_ids_json ===
-      JSON.stringify([...input.blocking_work_item_ids].sort()) &&
+    row.blocking_work_item_ids_json === JSON.stringify([...input.blocking_work_item_ids].sort()) &&
     row.evaluator === input.evaluator &&
     row.max_repair_rounds === input.max_repair_rounds &&
     row.supersedes_gate_id === (input.supersedes_gate_id ?? null)
@@ -298,17 +273,13 @@ export interface Interface {
   readonly evaluatePending: (gate_id: string) => Effect.Effect<EvaluationResult>
   readonly evaluateProjectPending: (project_id: string) => Effect.Effect<EvaluationResult[]>
   readonly repair: (input: ValidationRepairInputType) => Effect.Effect<RepairResult>
-  readonly planPrerequisiteRepair: (
-    input: PrerequisiteRepairRequestType,
-  ) => Effect.Effect<GraphMutationProposalType>
+  readonly planPrerequisiteRepair: (input: PrerequisiteRepairRequestType) => Effect.Effect<GraphMutationProposalType>
   readonly get: (id: string) => Effect.Effect<ValidationGateType | undefined>
   readonly list: (project_id: string) => Effect.Effect<ValidationGateType[]>
   readonly recover: () => Effect.Effect<RecoveryResult>
 }
 
-export class Service extends Context.Service<Service, Interface>()(
-  "@control-plane/CompanyValidationGate",
-) {}
+export class Service extends Context.Service<Service, Interface>()("@control-plane/CompanyValidationGate") {}
 
 export function makeLayer() {
   return Layer.effect(
@@ -346,8 +317,7 @@ export function makeLayer() {
                 .where(eq(CompanyValidationGateTable.id, gate_id))
                 .get()
               if (!row) throw new Error(`Validation Gate not found: ${gate_id}`)
-              if (row.status === "passed" || row.status === "failed")
-                return gateFromRow(row)
+              if (row.status === "passed" || row.status === "failed") return gateFromRow(row)
               if (row.status !== "pending" && row.status !== "running")
                 throw new Error(`Validation Gate ${row.id} cannot be evaluated from ${row.status}`)
               if (row.status === "pending") {
@@ -355,10 +325,7 @@ export function makeLayer() {
                 db.update(CompanyValidationGateTable)
                   .set({ status: "running" })
                   .where(
-                    and(
-                      eq(CompanyValidationGateTable.id, row.id),
-                      eq(CompanyValidationGateTable.status, "pending"),
-                    ),
+                    and(eq(CompanyValidationGateTable.id, row.id), eq(CompanyValidationGateTable.status, "pending")),
                   )
                   .run()
                 insertEvent(
@@ -370,11 +337,7 @@ export function makeLayer() {
                 )
               }
               return gateFromRow(
-                db
-                  .select()
-                  .from(CompanyValidationGateTable)
-                  .where(eq(CompanyValidationGateTable.id, row.id))
-                  .get()!,
+                db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, row.id)).get()!,
               )
             },
             { behavior: "immediate" },
@@ -384,8 +347,7 @@ export function makeLayer() {
           return {
             status: claimed.status,
             gate: claimed,
-            failed_criterion_ids:
-              claimed.status === "failed" ? claimed.criteria.map((criterion) => criterion.id) : [],
+            failed_criterion_ids: claimed.status === "failed" ? claimed.criteria.map((criterion) => criterion.id) : [],
           }
         const observations = yield* Effect.promise(() => observeGate(claimed))
         return yield* Effect.sync(() =>
@@ -402,8 +364,7 @@ export function makeLayer() {
                 return {
                   status: row.status,
                   gate,
-                  failed_criterion_ids:
-                    row.status === "failed" ? gate.criteria.map((criterion) => criterion.id) : [],
+                  failed_criterion_ids: row.status === "failed" ? gate.criteria.map((criterion) => criterion.id) : [],
                 }
               }
               if (row.status !== "running")
@@ -440,11 +401,7 @@ export function makeLayer() {
               return {
                 status: result.status,
                 gate: gateFromRow(
-                  db
-                    .select()
-                    .from(CompanyValidationGateTable)
-                    .where(eq(CompanyValidationGateTable.id, row.id))
-                    .get()!,
+                  db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, row.id)).get()!,
                 ),
                 failed_criterion_ids: result.failed_criterion_ids,
               }
@@ -454,9 +411,9 @@ export function makeLayer() {
         )
       })
 
-      const evaluateProjectPending = Effect.fn(
-        "CompanyValidationGate.evaluateProjectPending",
-      )(function* (project_id: string) {
+      const evaluateProjectPending = Effect.fn("CompanyValidationGate.evaluateProjectPending")(function* (
+        project_id: string,
+      ) {
         const ids = yield* Effect.sync(() =>
           Database.use((db) =>
             db
@@ -476,9 +433,7 @@ export function makeLayer() {
         return yield* Effect.forEach(ids, evaluatePending, { concurrency: 1 })
       })
 
-      const create = Effect.fn("CompanyValidationGate.create")(function* (
-        raw: ValidationGateCreateType,
-      ) {
+      const create = Effect.fn("CompanyValidationGate.create")(function* (raw: ValidationGateCreateType) {
         const input = ValidationGateCreate.parse(raw)
         const criteria = normalizedCriteria(input.criteria)
         if (new Set(criteria.map((criterion) => criterion.id)).size !== criteria.length) {
@@ -498,10 +453,7 @@ export function makeLayer() {
                 throw new Error(`Company project not found: ${input.project_id}`)
               }
               const workItemIDs = [
-                ...new Set([
-                  ...input.blocking_work_item_ids,
-                  ...(input.work_item_id ? [input.work_item_id] : []),
-                ]),
+                ...new Set([...input.blocking_work_item_ids, ...(input.work_item_id ? [input.work_item_id] : [])]),
               ]
               const existingWorkItemIDs = new Set(
                 db
@@ -567,9 +519,7 @@ export function makeLayer() {
                   status: "pending",
                   criteria_json: JSON.stringify(criteria),
                   criteria_sha256: digest(criteria),
-                  blocking_work_item_ids_json: JSON.stringify(
-                    [...input.blocking_work_item_ids].sort(),
-                  ),
+                  blocking_work_item_ids_json: JSON.stringify([...input.blocking_work_item_ids].sort()),
                   evidence_refs_json: "[]",
                   evaluator: input.evaluator,
                   repair_round: 0,
@@ -599,11 +549,7 @@ export function makeLayer() {
                 now,
               )
               return gateFromRow(
-                db
-                  .select()
-                  .from(CompanyValidationGateTable)
-                  .where(eq(CompanyValidationGateTable.id, id))
-                  .get()!,
+                db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, id)).get()!,
               )
             },
             { behavior: "immediate" },
@@ -614,9 +560,7 @@ export function makeLayer() {
         return created
       })
 
-      const evaluate = Effect.fn("CompanyValidationGate.evaluate")(function* (
-        raw: ValidationEvaluationType,
-      ) {
+      const evaluate = Effect.fn("CompanyValidationGate.evaluate")(function* (raw: ValidationEvaluationType) {
         const input = ValidationEvaluation.parse(raw)
         const gate = yield* get(input.gate_id)
         if (!gate) throw new Error(`Validation Gate not found: ${input.gate_id}`)
@@ -625,9 +569,9 @@ export function makeLayer() {
         return yield* evaluatePending(input.gate_id)
       })
 
-      const planPrerequisiteRepair = Effect.fn(
-        "CompanyValidationGate.planPrerequisiteRepair",
-      )(function* (raw: PrerequisiteRepairRequestType) {
+      const planPrerequisiteRepair = Effect.fn("CompanyValidationGate.planPrerequisiteRepair")(function* (
+        raw: PrerequisiteRepairRequestType,
+      ) {
         const input = PrerequisiteRepairRequest.parse(raw)
         return yield* Effect.sync(() =>
           Database.use((db) => {
@@ -649,8 +593,7 @@ export function makeLayer() {
               receipt.project_id !== gate.project_id ||
               receipt.processing_status !== "processed" ||
               !parseEvidenceRefs(receipt.evidence_refs_json).length ||
-              (!JSON.parse(receipt.invalidated_assumptions_json).length &&
-                !JSON.parse(receipt.blockers_json).length)
+              (!JSON.parse(receipt.invalidated_assumptions_json).length && !JSON.parse(receipt.blockers_json).length)
             ) {
               throw new Error("Prerequisite repair requires a processed evidence-backed Receipt")
             }
@@ -700,15 +643,13 @@ export function makeLayer() {
         )
       })
 
-      const repair = Effect.fn("CompanyValidationGate.repair")(function* (
-        raw: ValidationRepairInputType,
-      ) {
+      const repair = Effect.fn("CompanyValidationGate.repair")(function* (raw: ValidationRepairInputType) {
         const input = ValidationRepairInput.parse(raw)
         const gate = yield* get(input.gate_id)
         if (!gate) throw new Error(`Validation Gate not found: ${input.gate_id}`)
         if (gate.evaluator !== input.evaluator)
           throw new Error("Validation evaluator cannot change while a Gate is active")
-        const observations = yield* Effect.promise(() => observeGate(gate))
+        const observations = yield* Effect.promise(() => observeGate(gate, input.evidence))
         return yield* Effect.sync(() =>
           Database.transaction(
             (db): RepairResult => {
@@ -854,11 +795,7 @@ export function makeLayer() {
                 })
               }
               const gate = gateFromRow(
-                db
-                  .select()
-                  .from(CompanyValidationGateTable)
-                  .where(eq(CompanyValidationGateTable.id, row.id))
-                  .get()!,
+                db.select().from(CompanyValidationGateTable).where(eq(CompanyValidationGateTable.id, row.id)).get()!,
               )
               return {
                 status:

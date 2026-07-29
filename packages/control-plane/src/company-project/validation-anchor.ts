@@ -1,6 +1,6 @@
 import path from "node:path"
 import fs from "node:fs/promises"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Database } from "@/storage"
 import {
@@ -8,10 +8,12 @@ import {
   CompanyGraphMutationTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
 } from "./company-project.sql"
 import type {
   ValidationCriterion,
+  ValidationEvidence,
   ValidationGate,
   ValidationScalar,
   WorkReceiptEvidenceRef,
@@ -32,20 +34,15 @@ const booleanValue = (content: string) => {
 }
 
 const numericValue = (content: string, key: string) => {
-  const matched = content.match(
-    new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*(-?\\d+)`, "i"),
-  )
+  const matched = content.match(new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*(-?\\d+)`, "i"))
   return matched ? Number(matched[1]) : undefined
 }
 
 const stringValue = (content: string, key: string) =>
-  content.match(
-    new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"([^"]*)"`, "i"),
-  )?.[1]
+  content.match(new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:\\s*"([^"]*)"`, "i"))?.[1]
 
 const artifactValue = (criterion: ValidationCriterion, content: string) => {
-  if (criterion.operator === "digest")
-    return new Bun.CryptoHasher("sha256").update(content).digest("hex")
+  if (criterion.operator === "digest") return new Bun.CryptoHasher("sha256").update(content).digest("hex")
   if (criterion.operator === "exit_code") return numericValue(content, "exit_code") ?? -1
   if (criterion.operator === "exists") return booleanValue(content) ?? content.length > 0
   if (typeof criterion.expected === "boolean") return booleanValue(content) ?? false
@@ -74,22 +71,15 @@ const unavailable = (criterion: ValidationCriterion, warning: string): AnchorObs
 const referenceID = (reference: string, prefix: string) =>
   reference.startsWith(`${prefix}:`) ? reference.slice(prefix.length + 1) : undefined
 
-export async function observeGate(gate: ValidationGate) {
+export async function observeGate(gate: ValidationGate, evidence: ValidationEvidence[] = []) {
   const facts = Database.use((db) => ({
-    project: db
-      .select()
-      .from(CompanyProjectTable)
-      .where(eq(CompanyProjectTable.id, gate.project_id))
-      .get(),
+    project: db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, gate.project_id)).get(),
     item: gate.work_item_id
       ? db
           .select()
           .from(CompanyWorkItemTable)
           .where(
-            and(
-              eq(CompanyWorkItemTable.project_id, gate.project_id),
-              eq(CompanyWorkItemTable.id, gate.work_item_id),
-            ),
+            and(eq(CompanyWorkItemTable.project_id, gate.project_id), eq(CompanyWorkItemTable.id, gate.work_item_id)),
           )
           .get()
       : undefined,
@@ -105,17 +95,40 @@ export async function observeGate(gate: ValidationGate) {
       .where(eq(AgentRunTable.company_project_id, gate.project_id))
       .orderBy(desc(AgentRunTable.time_created), desc(AgentRunTable.id))
       .all(),
+    dependencies: gate.blocking_work_item_ids.length
+      ? db
+          .select()
+          .from(CompanyWorkItemDependencyTable)
+          .where(inArray(CompanyWorkItemDependencyTable.work_item_id, gate.blocking_work_item_ids))
+          .all()
+      : [],
   }))
   if (!facts.project) return gate.criteria.map((criterion) => unavailable(criterion, "project unavailable"))
   const project = facts.project
+  const allowedWorkItemIDs = new Set([
+    ...(gate.work_item_id ? [gate.work_item_id] : []),
+    ...facts.dependencies.map((dependency) => dependency.depends_on_id),
+  ])
   return await Promise.all(
     gate.criteria.map(async (criterion): Promise<AnchorObservation> => {
+      const hint = evidence.find(
+        (candidate) =>
+          candidate.criterion_id === criterion.id &&
+          candidate.anchor === criterion.anchor.kind &&
+          candidate.reference === criterion.anchor.reference,
+      )
       const artifactID = referenceID(criterion.anchor.reference, "artifact")
+      const hintedArtifactID = hint?.evidence_ref.kind === "artifact" ? hint.evidence_ref.id : undefined
       const artifact = artifactID
         ? facts.artifacts.find((candidate) => candidate.id === artifactID)
-        : facts.artifacts.find(
-            (candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id,
-          )
+        : hintedArtifactID
+          ? facts.artifacts.find(
+              (candidate) =>
+                candidate.id === hintedArtifactID &&
+                (!gate.work_item_id ||
+                  Boolean(candidate.work_item_id && allowedWorkItemIDs.has(candidate.work_item_id))),
+            )
+          : facts.artifacts.find((candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id)
       if (criterion.anchor.kind === "artifact") {
         if (!artifact?.content) return unavailable(criterion, "artifact content unavailable")
         return {
@@ -128,9 +141,17 @@ export async function observeGate(gate: ValidationGate) {
       }
       if (criterion.anchor.kind === "unit_test" || criterion.anchor.kind === "integration_test") {
         const runID = referenceID(criterion.anchor.reference, "agent_run")
+        const hintedRunID = hint?.evidence_ref.kind === "agent_run" ? hint.evidence_ref.id : undefined
         const run = runID
           ? facts.runs.find((candidate) => candidate.id === runID)
-          : facts.runs.find((candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id)
+          : hintedRunID
+            ? facts.runs.find(
+                (candidate) =>
+                  candidate.id === hintedRunID &&
+                  (!gate.work_item_id ||
+                    Boolean(candidate.work_item_id && allowedWorkItemIDs.has(candidate.work_item_id))),
+              )
+            : facts.runs.find((candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id)
         if (run?.exit_code !== null && run?.exit_code !== undefined)
           return {
             criterion_id: criterion.id,
@@ -146,17 +167,23 @@ export async function observeGate(gate: ValidationGate) {
           anchor: criterion.anchor.kind,
           reference: criterion.anchor.reference,
           observed: artifactValue(criterion, artifact.content),
-          warning: /"warning"\s*:\s*true/i.test(artifact.content)
-            ? "command evidence contains a warning"
-            : undefined,
+          warning: /"warning"\s*:\s*true/i.test(artifact.content) ? "command evidence contains a warning" : undefined,
           source_ref: { kind: "artifact", id: artifact.id },
         }
       }
       if (criterion.anchor.kind === "runtime" || criterion.anchor.kind === "device") {
         const runID = referenceID(criterion.anchor.reference, "agent_run")
+        const hintedRunID = hint?.evidence_ref.kind === "agent_run" ? hint.evidence_ref.id : undefined
         const run = runID
           ? facts.runs.find((candidate) => candidate.id === runID)
-          : facts.runs.find((candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id)
+          : hintedRunID
+            ? facts.runs.find(
+                (candidate) =>
+                  candidate.id === hintedRunID &&
+                  (!gate.work_item_id ||
+                    Boolean(candidate.work_item_id && allowedWorkItemIDs.has(candidate.work_item_id))),
+              )
+            : facts.runs.find((candidate) => !gate.work_item_id || candidate.work_item_id === gate.work_item_id)
         if (!run) return unavailable(criterion, "runtime state unavailable")
         return {
           criterion_id: criterion.id,
@@ -186,8 +213,7 @@ export async function observeGate(gate: ValidationGate) {
         if (
           !workspaceRealPath ||
           !sourceRealPath ||
-          (sourceRealPath !== workspaceRealPath &&
-            !sourceRealPath.startsWith(`${workspaceRealPath}${path.sep}`))
+          (sourceRealPath !== workspaceRealPath && !sourceRealPath.startsWith(`${workspaceRealPath}${path.sep}`))
         )
           return unavailable(criterion, "source file resolves outside project workspace")
         return {
@@ -196,9 +222,7 @@ export async function observeGate(gate: ValidationGate) {
           reference: criterion.anchor.reference,
           observed:
             criterion.operator === "digest" && exists
-              ? new Bun.CryptoHasher("sha256")
-                  .update(new Uint8Array(await file.arrayBuffer()))
-                  .digest("hex")
+              ? new Bun.CryptoHasher("sha256").update(new Uint8Array(await file.arrayBuffer())).digest("hex")
               : exists,
           warning: exists ? undefined : "source file unavailable",
         }
@@ -221,9 +245,7 @@ export async function observeGate(gate: ValidationGate) {
           criterion_id: criterion.id,
           anchor: criterion.anchor.kind,
           reference: criterion.anchor.reference,
-          observed:
-            mutation?.status === "applied" &&
-            facts.item?.id === graph[2],
+          observed: mutation?.status === "applied" && facts.item?.id === graph[2],
           warning: mutation?.status === "applied" ? undefined : "graph mutation is not applied",
         }
       }
@@ -234,10 +256,7 @@ export async function observeGate(gate: ValidationGate) {
             .select()
             .from(CompanyProjectEventTable)
             .where(
-              and(
-                eq(CompanyProjectEventTable.id, eventID),
-                eq(CompanyProjectEventTable.project_id, gate.project_id),
-              ),
+              and(eq(CompanyProjectEventTable.id, eventID), eq(CompanyProjectEventTable.project_id, gate.project_id)),
             )
             .get(),
         )

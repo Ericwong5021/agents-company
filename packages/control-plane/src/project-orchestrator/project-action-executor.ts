@@ -12,6 +12,7 @@ import * as CompanyProjectDirection from "@/company-project/direction"
 import {
   CompanyApprovalGateTable,
   CompanyAttentionTable,
+  CompanyPlanTable,
   CompanyProjectActionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
@@ -31,14 +32,7 @@ import { WorkflowRuntime } from "@/workflow/runtime"
 import { DispatchCoordinator } from "./dispatch"
 import { authorizeDiscoveryBuilder } from "./seed-team"
 
-const RuntimeAction = z.enum([
-  "pause_work",
-  "resume_work",
-  "stop_work",
-  "retry",
-  "resolve_blocker",
-  "adjust_brief",
-])
+const RuntimeAction = z.enum(["pause_work", "resume_work", "stop_work", "retry", "resolve_blocker", "adjust_brief"])
 type RuntimeAction = z.infer<typeof RuntimeAction>
 
 const ReasonPayload = z
@@ -459,13 +453,8 @@ export function makeLayer(hooks: Hooks = {}) {
           return (yield* recruitment.listAssignments({
             project_id,
             work_item_id: builder.id,
-          })).findLast(
-            (assignment) => assignment.status === "assigned" || assignment.status === "active",
-          )?.id
-        }).pipe(
-          Effect.provide(CompanyProject.defaultLayer),
-          Effect.provide(CompanyRecruitment.defaultLayer),
-        )
+          })).findLast((assignment) => assignment.status === "assigned" || assignment.status === "active")?.id
+        }).pipe(Effect.provide(CompanyProject.defaultLayer), Effect.provide(CompanyRecruitment.defaultLayer))
 
       const blockBuilderRecruitment = Effect.fn("ProjectActionExecutor.blockBuilderRecruitment")(function* (input: {
         project_id: string
@@ -510,9 +499,7 @@ export function makeLayer(hooks: Hooks = {}) {
         Effect.gen(function* () {
           const direction = yield* CompanyProjectDirection.Service
           return yield* direction.adjust(input)
-        }).pipe(
-          Effect.provide(CompanyProjectDirection.defaultLayer),
-        )
+        }).pipe(Effect.provide(CompanyProjectDirection.defaultLayer))
 
       const pause = Effect.fn("ProjectActionExecutor.pause")(function* (action: ProjectActionRecordValue) {
         const existing = actionEffectResult(action.id)
@@ -939,6 +926,25 @@ export function makeLayer(hooks: Hooks = {}) {
                 payload.decision === "approve" ? "approved" : payload.decision === "reject" ? "rejected" : undefined
               if (gate && gate.status !== "pending" && gate.status !== desiredGateStatus)
                 throw new Error("approval_gate_already_decided_differently")
+              if (gate?.kind === "risk_approval" && desiredGateStatus === "approved") {
+                if (!gate.work_item_id) throw new Error(`Risk approval ${gate.id} has no WorkItem binding`)
+                const item = db
+                  .select()
+                  .from(CompanyWorkItemTable)
+                  .where(eq(CompanyWorkItemTable.id, gate.work_item_id))
+                  .get()
+                const plan = item
+                  ? db.select().from(CompanyPlanTable).where(eq(CompanyPlanTable.id, item.plan_id)).get()
+                  : undefined
+                if (
+                  !item ||
+                  item.project_id !== gate.project_id ||
+                  item.resource_scope_json !== gate.resource_scope_json ||
+                  ["completed", "superseded", "cancelled"].includes(item.status) ||
+                  plan?.status !== "active"
+                )
+                  throw new Error(`Risk approval ${gate.id} no longer matches an active WorkItem scope`)
+              }
               const now = Date.now()
               if (attention?.status === "open") {
                 db.update(CompanyAttentionTable)
@@ -1082,8 +1088,7 @@ export function makeLayer(hooks: Hooks = {}) {
             ),
           )
           if (gate?.kind === "risk_approval") {
-            if (!gate.work_item_id)
-              throw new Error(`Risk approval ${gate.id} has no WorkItem binding`)
+            if (!gate.work_item_id) throw new Error(`Risk approval ${gate.id} has no WorkItem binding`)
             const authorized = yield* Effect.exit(authorizeBuilder(action.project_id, gate.work_item_id))
             if (Exit.isFailure(authorized)) {
               yield* Effect.exit(
@@ -1201,22 +1206,22 @@ export function makeLayer(hooks: Hooks = {}) {
             Effect.gen(function* () {
               const authorized = yield* Effect.exit(authorizeBuilder(gate.project_id, gate.work_item_id!))
               if (Exit.isSuccess(authorized)) return authorized.value
-              yield* Effect.exit(blockBuilderRecruitment({
-                project_id: gate.project_id,
-                gate_id: gate.id,
-                work_item_id: gate.work_item_id!,
-                error: Cause.pretty(authorized.cause).slice(0, 8_000),
-              }))
-            }).pipe(Effect.catchAllCause(() => Effect.succeed(undefined))),
+              yield* Effect.exit(
+                blockBuilderRecruitment({
+                  project_id: gate.project_id,
+                  gate_id: gate.id,
+                  work_item_id: gate.work_item_id!,
+                  error: Cause.pretty(authorized.cause).slice(0, 8_000),
+                }),
+              )
+            }).pipe(Effect.catchCause(() => Effect.succeed(undefined))),
           { concurrency: 1 },
         )
         const assignment_ids = [
-          ...new Set(
-            [
-              ...recoveredBuilders.filter((id): id is string => Boolean(id)),
-              ...(yield* Effect.sync(reconcileAssignments)),
-            ],
-          ),
+          ...new Set([
+            ...recoveredBuilders.filter((id): id is string => Boolean(id)),
+            ...(yield* Effect.sync(reconcileAssignments)),
+          ]),
         ].sort()
         const attention_ids = yield* Effect.sync(resolveInternalAttention)
         const rows = yield* Effect.sync(() =>
