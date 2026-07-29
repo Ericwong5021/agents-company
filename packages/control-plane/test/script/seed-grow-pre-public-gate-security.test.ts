@@ -370,7 +370,7 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
     const decision = JSON.parse(result.stdout) as { status: string; reasons: string[] }
     expect(result.exitCode).toBe(64)
     expect(decision.status).toBe("invalid")
-    expect(decision.reasons.join("\n")).toMatch(/dirty|runtime|runner binding/i)
+    expect(decision.reasons.join("\n")).toMatch(/dirty|runtime|runner binding|exact Git tree/i)
   })
 
   test("rejects a candidate that changes the pinned acceptance suite", async () => {

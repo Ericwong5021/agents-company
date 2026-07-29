@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { cp, lstat, mkdir, mkdtemp, open, readdir, realpath, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { Database as SQLiteDatabase } from "bun:sqlite"
 import {
   MetricContract,
   MetricEvaluationReport,
@@ -47,6 +48,23 @@ export class PrePublicGateError extends Error {
 }
 
 const root = path.resolve(import.meta.dir, "../../..")
+const trustedGitSearchPath = (
+  process.platform === "win32"
+    ? ["C:\\Program Files\\Git\\cmd", "C:\\Windows\\System32"]
+    : ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+).join(path.delimiter)
+const gitExecutable =
+  Bun.which("git", { PATH: trustedGitSearchPath }) ??
+  (() => {
+    throw new Error("A system Git executable is required for the Pre-Public gate.")
+  })()
+const trustedExecutablePath = [
+  path.dirname(process.execPath),
+  path.dirname(gitExecutable),
+  ...trustedGitSearchPath.split(path.delimiter),
+]
+  .filter((value, index, values) => values.indexOf(value) === index)
+  .join(path.delimiter)
 const stageIDs = ["A0", "A1", "A2", "A3", "A4", "B0", "B1", "B2", "B3", "B4", "B5"] as const
 type StageID = (typeof stageIDs)[number]
 type Governance = {
@@ -98,6 +116,8 @@ const runtimeBindingPaths = [
 const verifierOwnedPath = (relativePath: string) =>
   relativePath === "bun.lock" ||
   relativePath === "package.json" ||
+  relativePath === ".gitattributes" ||
+  relativePath === ".gitmodules" ||
   relativePath.endsWith("/package.json") ||
   relativePath === "docs/AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md" ||
   relativePath.startsWith("docs/product-design/experience-refactor/") ||
@@ -803,9 +823,9 @@ async function parseJSONFile<T>(target: string, schema: z.ZodType<T>, label: str
 }
 
 function git(args: string[]) {
-  const result = Bun.spawnSync(["git", ...args], {
+  const result = Bun.spawnSync([gitExecutable, ...args], {
     cwd: root,
-    env: process.env,
+    env: isolatedChildEnvironment({}),
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -815,9 +835,9 @@ function git(args: string[]) {
 }
 
 function gitSource(args: string[]) {
-  const result = Bun.spawnSync(["git", ...args], {
+  const result = Bun.spawnSync([gitExecutable, ...args], {
     cwd: root,
-    env: process.env,
+    env: isolatedChildEnvironment({}),
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -834,9 +854,9 @@ function runnerSourceAt(verifierSha: string) {
   return gitSource(["show", `${verifierSha}:${runnerPath}`])
 }
 
-function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>) {
+function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>, requireTarget = true) {
   const head = resolveCommit("HEAD")
-  const target = resolveCommit(candidate.targetRef)
+  const target = requireTarget ? resolveCommit(candidate.targetRef) : candidate.candidateSha
   const candidateExecution =
     process.env.AGENTCOMPANY_GATE_CANDIDATE_EXECUTION === "1" &&
     ["--promotion-child", "--promotion-verify-child"].includes(Bun.argv[2] ?? "")
@@ -853,15 +873,15 @@ function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>) {
   if (candidate.verifierSha === candidate.candidateSha) fail("invalid", "Candidate cannot provide its own verifier")
   if (target !== candidate.candidateSha) fail("invalid", "Target ref does not resolve to the candidate SHA")
   const ancestry = Bun.spawnSync(
-    ["git", "merge-base", "--is-ancestor", candidate.verifierSha, candidate.candidateSha],
-    { cwd: root, env: process.env, stdout: "pipe", stderr: "pipe" },
+    [gitExecutable, "merge-base", "--is-ancestor", candidate.verifierSha, candidate.candidateSha],
+    { cwd: root, env: isolatedChildEnvironment({}), stdout: "pipe", stderr: "pipe" },
   )
   if (ancestry.exitCode !== 0) fail("invalid", "Pinned verifier is not an ancestor of the candidate")
   const trackedDiff = Bun.spawnSync(
-    ["git", "diff", "--quiet", candidateExecution ? candidate.candidateSha : candidate.verifierSha, "--"],
+    [gitExecutable, "diff", "--quiet", candidateExecution ? candidate.candidateSha : candidate.verifierSha, "--"],
     {
       cwd: root,
-      env: process.env,
+      env: isolatedChildEnvironment({}),
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -1614,10 +1634,11 @@ async function validateAllStageEvidence(
 function isolatedChildEnvironment(overrides: Record<string, string>) {
   return {
     ...Object.fromEntries(
-      ["PATH", "LANG", "LC_ALL", "LC_CTYPE", "SHELL", "TERM", "COLORTERM"]
+      ["LANG", "LC_ALL", "LC_CTYPE", "SHELL", "TERM", "COLORTERM"]
         .map((key) => [key, process.env[key]])
         .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
     ),
+    PATH: trustedExecutablePath,
     TZ: "UTC",
     CI: "1",
     AGENTCOMPANY_DISABLE_CLAUDE_IMPORT: "1",
@@ -1631,7 +1652,7 @@ function isolatedChildEnvironment(overrides: Record<string, string>) {
 async function prepareCandidateWorktree(candidate: z.infer<typeof CandidateInput>) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "ac-pre-public-gate-"))
   const worktree = path.join(temporaryRoot, "worktree")
-  const added = Bun.spawnSync(["git", "worktree", "add", "--detach", worktree, candidate.candidateSha], {
+  const added = Bun.spawnSync([gitExecutable, "worktree", "add", "--detach", worktree, candidate.candidateSha], {
     cwd: root,
     env: isolatedChildEnvironment({}),
     stdout: "pipe",
@@ -1650,7 +1671,7 @@ async function prepareCandidateWorktree(candidate: z.infer<typeof CandidateInput
       fail("invalid", "Candidate dependency lock binding mismatch")
     return { temporaryRoot, worktree }
   } catch (error) {
-    Bun.spawnSync(["git", "worktree", "remove", "--force", worktree], {
+    Bun.spawnSync([gitExecutable, "worktree", "remove", "--force", worktree], {
       cwd: root,
       env: isolatedChildEnvironment({}),
       stdout: "pipe",
@@ -1662,7 +1683,7 @@ async function prepareCandidateWorktree(candidate: z.infer<typeof CandidateInput
 }
 
 async function removeCandidateWorktree(execution: Awaited<ReturnType<typeof prepareCandidateWorktree>>) {
-  const removed = Bun.spawnSync(["git", "worktree", "remove", "--force", execution.worktree], {
+  const removed = Bun.spawnSync([gitExecutable, "worktree", "remove", "--force", execution.worktree], {
     cwd: root,
     env: isolatedChildEnvironment({}),
     stdout: "pipe",
@@ -1673,8 +1694,8 @@ async function removeCandidateWorktree(execution: Awaited<ReturnType<typeof prep
     fail("invalid", `Cannot remove candidate worktree: ${removed.stderr.toString().trim().slice(0, 2_000)}`)
 }
 
-async function generateTrustedCandidateEvidence(candidate: z.infer<typeof CandidateInput>) {
-  verifyCurrentCandidate(candidate)
+async function generateTrustedCandidateEvidence(candidate: z.infer<typeof CandidateInput>, requireTarget: boolean) {
+  verifyCurrentCandidate(candidate, requireTarget)
   const execution = await prepareCandidateWorktree(candidate)
   const outputName = `gate-${candidate.candidateSha.slice(0, 12)}-${randomUUID().replaceAll("-", "")}`
   const sourceRoot = path.join(execution.worktree, ".agent/runs/agent-company-seed-grow")
@@ -1723,14 +1744,18 @@ async function generateTrustedCandidateEvidence(candidate: z.infer<typeof Candid
         force: false,
         errorOnExist: true,
       })
-    verifyCurrentCandidate(candidate)
+    verifyCurrentCandidate(candidate, requireTarget)
     return path.join(trustedRoot, outputName)
   } finally {
     await removeCandidateWorktree(execution)
   }
 }
 
-async function validateCandidate(candidateValue: z.infer<typeof CandidateInput>, evidenceDirectory?: string) {
+async function validateCandidate(
+  candidateValue: z.infer<typeof CandidateInput>,
+  evidenceDirectory?: string,
+  requireTarget = true,
+) {
   const candidate = CandidateInput.parse(candidateValue)
   const coreRuntime = await import(path.join(root, "script/seed-grow-stage-core.ts"))
   const governance = (await coreRuntime
@@ -1746,7 +1771,7 @@ async function validateCandidate(candidateValue: z.infer<typeof CandidateInput>,
   const allStage = await validateAllStageEvidence(
     candidate,
     governance,
-    evidenceDirectory ?? (await generateTrustedCandidateEvidence(candidate)),
+    evidenceDirectory ?? (await generateTrustedCandidateEvidence(candidate, requireTarget)),
   )
   const firstAutomatic = allStage.automaticAttempts[0]
   const secondAutomatic = allStage.automaticAttempts[1]
@@ -1950,7 +1975,7 @@ async function revalidateBootstrap(reference: z.infer<typeof absoluteFileReferen
   const artifact = parseOrInvalid(BootstrapArtifact, source.value, "Previous bootstrap artifact")
   if (!same(artifact.runnerBinding, runnerBindingAt(artifact.candidate.verifierSha)))
     fail("invalid", "Previous bootstrap runner binding mismatch")
-  const archived = await validateCandidate(artifact.candidate, artifact.candidateEvidence.evidenceDirectory)
+  const archived = await validateCandidate(artifact.candidate, artifact.candidateEvidence.evidenceDirectory, false)
   if (archived.status !== "pass") stageStatusError(archived.status, "Previous archived candidate reports")
   if (
     artifact.metricContract.sourceSha256 !== archived.governance.metricSha256 ||
@@ -1984,7 +2009,7 @@ async function revalidateBootstrap(reference: z.infer<typeof absoluteFileReferen
     !same(parseOrInvalid(ShadowComparisonReport, shadowValue, "Previous shadow report"), archived.reports.shadow)
   )
     fail("invalid", "Previous bootstrap reports differ from persisted-fact re-evaluation")
-  const validated = await validateCandidate(artifact.candidate)
+  const validated = await validateCandidate(artifact.candidate, undefined, false)
   if (validated.status !== "pass") stageStatusError(validated.status, "Previous candidate fresh reports")
   return { artifact, validated, reference }
 }
@@ -2222,6 +2247,223 @@ async function runPromotionProcess(
     .catch(() => fail("invalid", "Promotion child output is not valid JSON"))
 }
 
+function databaseJSON(value: unknown, label: string) {
+  if (typeof value !== "string") fail("invalid", `${label} is not persisted JSON`)
+  return Promise.resolve()
+    .then(() => JSON.parse(value) as unknown)
+    .catch(() => fail("invalid", `${label} is not valid persisted JSON`))
+}
+
+async function verifyPromotionDatabase(
+  databasePath: string,
+  input: z.infer<typeof PromotionChildInput>,
+  child: z.infer<typeof PromotionChildResult>,
+) {
+  const database = new SQLiteDatabase(databasePath, { create: false })
+  try {
+    database.exec("PRAGMA foreign_keys = ON")
+    const checkpoint = database.query("PRAGMA wal_checkpoint(TRUNCATE)").get() as Record<string, unknown> | null
+    const integrity = database.query("PRAGMA integrity_check").get() as Record<string, unknown> | null
+    const foreignKeys = database.query("PRAGMA foreign_key_check").all()
+    const state = database.query("SELECT * FROM company_rollout_state WHERE id = 'seed_and_grow'").get() as Record<
+      string,
+      unknown
+    > | null
+    const promotions = database.query("SELECT * FROM company_rollout_promotion_decision").all() as Record<
+      string,
+      unknown
+    >[]
+    const candidates = database.query("SELECT * FROM company_rollout_candidate ORDER BY id").all() as Record<
+      string,
+      unknown
+    >[]
+    const repeats = database.query("SELECT * FROM company_rollout_local_repeat ORDER BY id").all() as Record<
+      string,
+      unknown
+    >[]
+    const rollbacks = database.query("SELECT * FROM company_rollout_rollback ORDER BY id").all() as Record<
+      string,
+      unknown
+    >[]
+    const journals = database.query("SELECT * FROM company_rollout_journal ORDER BY created_at, id").all() as Record<
+      string,
+      unknown
+    >[]
+    if (
+      checkpoint?.busy !== 0 ||
+      !integrity ||
+      !Object.values(integrity).includes("ok") ||
+      foreignKeys.length ||
+      !state ||
+      promotions.length !== 1 ||
+      candidates.length !== 2 ||
+      repeats.length !== 4 ||
+      rollbacks.length !== 2 ||
+      journals.length !== 12
+    )
+      fail("invalid", "Pinned SQLite verification found incomplete or corrupt promotion persistence")
+    if (
+      state.phase !== "pre_public_default" ||
+      state.version !== child.persistedStatus.state.version ||
+      state.last_transition_id !== child.transition.transition.id ||
+      state.updated_at !== child.persistedStatus.state.updatedAt
+    )
+      fail("invalid", "Pinned SQLite verification found an inconsistent rollout state")
+    const promotion = promotions[0]
+    if (
+      promotion.id !== input.promotionRequest.id ||
+      promotion.target_phase !== "pre_public_default" ||
+      promotion.status !== "pass" ||
+      promotion.metric_contract_sha256 !== input.promotionRequest.metricContractSha256 ||
+      promotion.input_sha256 !== sha256(canonical(input.promotionRequest)) ||
+      promotion.output_sha256 !== sha256(canonical(child.promotion)) ||
+      !same(await databaseJSON(promotion.input_json, "Promotion input"), input.promotionRequest) ||
+      !same(await databaseJSON(promotion.candidate_ids_json, "Promotion candidate IDs"), input.candidateIds) ||
+      !same(
+        await databaseJSON(promotion.candidate_shas_json, "Promotion candidate SHAs"),
+        input.candidates.map((candidate) => candidate.candidate.candidateSha),
+      ) ||
+      !same(await databaseJSON(promotion.repeat_ids_json, "Promotion repeat IDs"), child.promotion.repeatIds) ||
+      !same(await databaseJSON(promotion.rollback_ids_json, "Promotion rollback IDs"), child.promotion.rollbackIds) ||
+      !same(
+        await databaseJSON(promotion.metric_report_sha256s_json, "Promotion metric report digests"),
+        child.promotion.metricReportSha256s,
+      ) ||
+      !same(
+        await databaseJSON(promotion.shadow_report_sha256s_json, "Promotion shadow report digests"),
+        child.promotion.shadowReportSha256s,
+      ) ||
+      !same(await databaseJSON(promotion.ancestry_json, "Promotion ancestry"), input.promotionRequest.ancestry) ||
+      !same(
+        await databaseJSON(promotion.derived_metric_result_json, "Promotion derived metric result"),
+        child.promotion.derivedMetricResult,
+      ) ||
+      !same(await databaseJSON(promotion.reasons_json, "Promotion reasons"), child.promotion.reasons)
+    )
+      fail("invalid", "Pinned SQLite verification found an inconsistent promotion decision")
+    const expectedCandidates = input.candidates
+      .map((candidate) => ({
+        id: candidate.id,
+        candidate_sha: candidate.candidate.candidateSha,
+        target_ref: candidate.candidate.targetRef,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id))
+    if (
+      !same(
+        candidates.map((candidate) => ({
+          id: candidate.id,
+          candidate_sha: candidate.candidate_sha,
+          target_ref: candidate.target_ref,
+        })),
+        expectedCandidates,
+      )
+    )
+      fail("invalid", "Pinned SQLite verification found inconsistent candidate rows")
+    const expectedRepeats = input.candidates
+      .flatMap((candidate, candidateIndex) =>
+        candidate.evidence.repeats.map((repeat) => ({
+          id: `repeat-${candidateIndex + 1}-${repeat.ordinal}-${candidate.candidate.candidateSha.slice(0, 12)}`,
+          candidate_id: candidate.id,
+          run_id: repeat.runId,
+          ordinal: repeat.ordinal,
+          outcome: "completed",
+          environment_sha256: repeat.environmentSha256,
+          evidence_sha256: repeat.evidenceSha256,
+          normalized_result_sha256: repeat.normalizedResultSha256,
+          started_at: repeat.startedAt,
+          finished_at: repeat.finishedAt,
+        })),
+      )
+      .sort((left, right) => left.id.localeCompare(right.id))
+    if (
+      !same(
+        repeats.map((repeat) => ({
+          id: repeat.id,
+          candidate_id: repeat.candidate_id,
+          run_id: repeat.run_id,
+          ordinal: repeat.ordinal,
+          outcome: repeat.outcome,
+          environment_sha256: repeat.environment_sha256,
+          evidence_sha256: repeat.evidence_sha256,
+          normalized_result_sha256: repeat.normalized_result_sha256,
+          started_at: repeat.started_at,
+          finished_at: repeat.finished_at,
+        })),
+        expectedRepeats,
+      )
+    )
+      fail("invalid", "Pinned SQLite verification found inconsistent repeat rows")
+    const expectedRollbacks = input.rollbacks
+      .map((rollback, index) => ({
+        id: rollback.id,
+        candidate_id: input.candidateIds[1],
+        target: rollback.observation.target,
+        phase_at_action: rollback.observation.phaseAtAction,
+        execution_mode_after: rollback.observation.after.executionMode,
+        outcome: rollback.observation.outcome,
+        evidence_sha256: input.rollbackEvidenceSha256s[index],
+        observed_at: rollback.observation.observedAt,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id))
+    if (
+      !same(
+        rollbacks.map((rollback) => ({
+          id: rollback.id,
+          candidate_id: rollback.candidate_id,
+          target: rollback.target,
+          phase_at_action: rollback.phase_at_action,
+          execution_mode_after: rollback.execution_mode_after,
+          outcome: rollback.outcome,
+          evidence_sha256: rollback.evidence_sha256,
+          observed_at: rollback.observed_at,
+        })),
+        expectedRollbacks,
+      )
+    )
+      fail("invalid", "Pinned SQLite verification found inconsistent rollback rows")
+    const journalValues = await Promise.all(
+      journals.map(async (journal) => {
+        const payload = await databaseJSON(journal.payload_json, "Rollout journal payload")
+        if (
+          journal.payload_sha256 !== sha256(canonical(payload)) ||
+          typeof journal.result_json !== "string" ||
+          !["transition", "action"].includes(String(journal.kind))
+        )
+          fail("invalid", "Pinned SQLite verification found an invalid rollout journal")
+        return { journal, payload, result: await databaseJSON(journal.result_json, "Rollout journal result") }
+      }),
+    )
+    const transitionJournal = journalValues.filter(
+      ({ journal }) =>
+        journal.kind === "transition" &&
+        journal.idempotency_key === input.transitionRequest.idempotencyKey &&
+        journal.result_ref_id === child.transition.transition.id,
+    )
+    if (
+      transitionJournal.length !== 1 ||
+      !same(transitionJournal[0].payload, input.transitionRequest) ||
+      !same(transitionJournal[0].result, child.transition) ||
+      journalValues.filter(({ journal }) => journal.kind === "transition").length !== 4 ||
+      journalValues.filter(({ journal }) => journal.kind === "action").length !== 8
+    )
+      fail("invalid", "Pinned SQLite verification found an inconsistent transition journal")
+    return sha256(
+      canonical({
+        checkpoint,
+        integrity,
+        state,
+        promotion,
+        candidates,
+        repeats,
+        rollbacks,
+        journals,
+      }),
+    )
+  } finally {
+    database.close()
+  }
+}
+
 async function isolatedPromotion(
   request: z.infer<typeof PromoteRequest>,
   inputSha256: string,
@@ -2374,6 +2616,7 @@ async function isolatedPromotion(
   const child = processes.child
   const verification = processes.verification
   const verificationInput = processes.verificationInput
+  const databaseAttestationSha256 = await verifyPromotionDatabase(databasePath, childInput, child)
   const database = await regularFile(databasePath, "Isolated promotion database")
   const result = {
     schemaVersion: 1,
@@ -2429,6 +2672,7 @@ async function isolatedPromotion(
       networkPortsUsed: [],
       writerProcessSha256: sha256(String(child.process.pid)),
       verifierProcessSha256: sha256(String(verification.verifierPid)),
+      databaseAttestationSha256,
       processRestartVerified: true,
     },
     status: "pass",
