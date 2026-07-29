@@ -89,6 +89,61 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/founder-control-center.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/founder-modes",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/founder-modes.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-modes",
+      method: "put",
+      handler: resolver.resolve("./runtime/server/api/founder-modes.put"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/founder-studio.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/assets/:assetID/versions",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-revise.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/cases",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-case.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/calibrations",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-calibration.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/calibration-responses",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-calibration-response.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/snapshots",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-compile.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-studio/snapshot-selection",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-studio-select.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/decision-center-correction",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/decision-center-correction.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/messages",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/message.post"),

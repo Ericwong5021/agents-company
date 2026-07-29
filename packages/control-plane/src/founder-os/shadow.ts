@@ -60,6 +60,7 @@ function assetFromRow(row: typeof GovernanceAssetTable.$inferSelect) {
     version: row.version,
     createdBy: row.created_by,
     ...(row.approved_by ? { approvedBy: row.approved_by } : {}),
+    ...(row.approved_at ? { approvedAt: row.approved_at } : {}),
     createdAt: row.created_at,
     current: true,
   })

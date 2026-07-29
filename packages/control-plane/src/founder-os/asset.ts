@@ -1,5 +1,7 @@
 import { and, asc, desc, eq } from "drizzle-orm"
 import {
+  FounderAssetUpdateProposal,
+  FounderCalibrationItem,
   FounderSnapshotCompileInput,
   FounderSnapshotSelectInput,
   FounderStudioProjection,
@@ -10,6 +12,8 @@ import {
   GovernanceAssetSourceRef,
   type FounderSnapshotCompileInput as FounderSnapshotCompileInputValue,
   type FounderSnapshotSelectInput as FounderSnapshotSelectInputValue,
+  type FounderAssetUpdateProposal as FounderAssetUpdateProposalValue,
+  type FounderCalibrationItem as FounderCalibrationItemValue,
   type GovernanceAssetDraftInput as GovernanceAssetDraftInputValue,
   type GovernanceAssetRevisionInput as GovernanceAssetRevisionInputValue,
   type GovernanceAssetScope,
@@ -18,6 +22,7 @@ import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import type { TxOrDb } from "@/storage/db"
 import {
   FounderTwinSnapshotSelectionTable,
   FounderTwinSnapshotTable,
@@ -94,6 +99,7 @@ function assetFromRow(row: typeof GovernanceAssetTable.$inferSelect, current: bo
     createdBy: row.created_by,
     ...(row.approved_by ? { approvedBy: row.approved_by } : {}),
     createdAt: row.created_at,
+    ...(row.approved_at ? { approvedAt: row.approved_at } : {}),
     current,
   })
 }
@@ -105,6 +111,11 @@ function snapshotFromRow(row: typeof FounderTwinSnapshotTable.$inferSelect, sele
     version: row.version,
     profileSummary: row.profile_summary,
     assetRefs: JSON.parse(row.asset_refs_json),
+    activePrincipleIds: JSON.parse(row.active_principle_ids_json),
+    activeHeuristicIds: JSON.parse(row.active_heuristic_ids_json),
+    decisionCaseIds: JSON.parse(row.decision_case_ids_json),
+    tasteExampleIds: JSON.parse(row.taste_example_ids_json),
+    rubricIds: JSON.parse(row.rubric_ids_json),
     promptTemplateVersion: row.prompt_template_version,
     modelConfigRef: row.model_config_ref,
     retrievalConfigRef: row.retrieval_config_ref,
@@ -132,7 +143,11 @@ export function listAssets(companyId: string, scope: GovernanceAssetScope = { ki
     .map((row) => assetFromRow(row, selections.get(row.id) === row.version))
 }
 
-export function projection(companyId: string, scope: GovernanceAssetScope = { kind: "company" }) {
+export function projection(
+  companyId: string,
+  scope: GovernanceAssetScope = { kind: "company" },
+  calibrationQueue: FounderCalibrationItemValue[] = [],
+) {
   const selected = selectedSnapshotId(companyId)
   return FounderStudioProjection.parse({
     schemaVersion: 1,
@@ -147,6 +162,7 @@ export function projection(companyId: string, scope: GovernanceAssetScope = { ki
         .all(),
     ).map((row) => snapshotFromRow(row, row.id === selected)),
     ...(selected ? { selectedSnapshotId: selected } : {}),
+    calibrationQueue: FounderCalibrationItem.array().parse(calibrationQueue),
     authorization: { status: "not_confirmed", blocking: false },
   })
 }
@@ -175,6 +191,7 @@ export function createDraft(raw: GovernanceAssetDraftInputValue) {
         version: 1,
         created_by: input.createdBy,
         approved_by: null,
+        approved_at: null,
         confirmation_event_id: null,
         created_at: now,
       })
@@ -206,7 +223,10 @@ export function revise(assetId: string, raw: GovernanceAssetRevisionInputValue) 
     human_confirmed: 1,
     human_explicit: 2,
   } as const
-  if (authorityRank[input.authority] < authorityRank[base.authority as keyof typeof authorityRank])
+  if (
+    input.status !== "draft"
+    && authorityRank[input.authority] < authorityRank[base.authority as keyof typeof authorityRank]
+  )
     throw new Error("Governance asset authority cannot be downgraded")
   if (input.actorKind === "ai" && input.authority !== "ai_proposed")
     throw new Error("AI actors can only create ai_proposed drafts")
@@ -240,6 +260,7 @@ export function revise(assetId: string, raw: GovernanceAssetRevisionInputValue) 
         version,
         created_by: input.createdBy,
         approved_by: input.confirmation?.confirmedBy ?? null,
+        approved_at: input.confirmation ? now : null,
         confirmation_event_id: input.confirmation?.eventId ?? null,
         created_at: now,
       })
@@ -263,10 +284,24 @@ export function revise(assetId: string, raw: GovernanceAssetRevisionInputValue) 
 
 export function compileSnapshot(raw: FounderSnapshotCompileInputValue) {
   const input = FounderSnapshotCompileInput.parse(raw)
-  const refs = listAssets(input.companyId, input.scope)
+  const assets = listAssets(input.companyId, input.scope)
     .filter((asset) => asset.current && asset.status === "active")
+  const refs = assets
     .map((asset) => ({ assetId: asset.id, version: asset.version }))
     .toSorted((left, right) => `${left.assetId}:${left.version}`.localeCompare(`${right.assetId}:${right.version}`))
+  const ids = {
+    activePrincipleIds: assets
+      .filter((asset) => ["constitution", "principle", "boundary"].includes(asset.type))
+      .map((asset) => asset.id)
+      .toSorted(),
+    activeHeuristicIds: assets.filter((asset) => asset.type === "heuristic").map((asset) => asset.id).toSorted(),
+    decisionCaseIds: assets.filter((asset) => asset.type === "decision_case").map((asset) => asset.id).toSorted(),
+    tasteExampleIds: assets
+      .filter((asset) => ["taste_reference", "taste_anti_reference"].includes(asset.type))
+      .map((asset) => asset.id)
+      .toSorted(),
+    rubricIds: assets.filter((asset) => asset.type === "rubric").map((asset) => asset.id).toSorted(),
+  }
   const checksum = digest({
     schemaVersion: 1,
     profileSummaryHash: digest(input.profileSummary),
@@ -292,6 +327,11 @@ export function compileSnapshot(raw: FounderSnapshotCompileInputValue) {
       version,
       profile_summary: input.profileSummary,
       asset_refs_json: JSON.stringify(refs),
+      active_principle_ids_json: JSON.stringify(ids.activePrincipleIds),
+      active_heuristic_ids_json: JSON.stringify(ids.activeHeuristicIds),
+      decision_case_ids_json: JSON.stringify(ids.decisionCaseIds),
+      taste_example_ids_json: JSON.stringify(ids.tasteExampleIds),
+      rubric_ids_json: JSON.stringify(ids.rubricIds),
       prompt_template_version: input.promptTemplateVersion,
       model_config_ref: input.modelConfigRef,
       retrieval_config_ref: input.retrievalConfigRef,
@@ -325,4 +365,93 @@ export function selectSnapshot(raw: FounderSnapshotSelectInputValue) {
     }).run(),
   )
   return projection(input.companyId)
+}
+
+export function materializeCorrectionProposals(
+  db: TxOrDb,
+  input: {
+    companyId: string
+    decisionId: string
+    correctionId: string
+    proposals: FounderAssetUpdateProposalValue[]
+  },
+) {
+  return FounderAssetUpdateProposal.array().parse(input.proposals).map((proposal, index) => {
+    const createdBy = `founder-correction:${input.correctionId}:${index}`
+    const existing = db
+      .select()
+      .from(GovernanceAssetTable)
+      .where(and(
+        eq(GovernanceAssetTable.company_id, input.companyId),
+        eq(GovernanceAssetTable.created_by, createdBy),
+      ))
+      .get()
+    if (existing) return { id: existing.id, version: existing.version }
+    const sourceRefs = GovernanceAssetSourceRef.array().max(100).parse(
+      [
+        ...proposal.typedDiff.sourceRefs,
+        { kind: "decision" as const, id: input.decisionId },
+      ].filter(
+        (reference, index, references) =>
+          references.findIndex((candidate) => candidate.kind === reference.kind && candidate.id === reference.id) === index,
+      ),
+    )
+    const base = proposal.baseRevision
+      ? db
+          .select()
+          .from(GovernanceAssetTable)
+          .where(and(
+            eq(GovernanceAssetTable.id, proposal.baseRevision.assetId),
+            eq(GovernanceAssetTable.version, proposal.baseRevision.version),
+            eq(GovernanceAssetTable.company_id, input.companyId),
+          ))
+          .get()
+      : undefined
+    if (proposal.typedDiff.operation === "revise" && !base)
+      throw new Error("Correction Asset Proposal base revision was not found")
+    if (
+      base
+      && (
+        base.type !== proposal.target.type
+        || base.scope_kind !== proposal.target.scope.kind
+        || base.scope_ref !== (proposal.target.scope.ref ?? null)
+      )
+    )
+      throw new Error("Correction Asset Proposal target does not match its base revision")
+    const latest = base
+      ? db
+          .select()
+          .from(GovernanceAssetTable)
+          .where(eq(GovernanceAssetTable.id, base.id))
+          .orderBy(desc(GovernanceAssetTable.version))
+          .get()
+      : undefined
+    if (base && latest?.version !== base.version)
+      throw new Error("Correction Asset Proposal base revision is stale")
+    const id = base?.id ?? Identifier.create("gast", "ascending")
+    const version = base ? base.version + 1 : 1
+    db.insert(GovernanceAssetTable)
+      .values({
+        id,
+        company_id: input.companyId,
+        type: proposal.target.type,
+        scope_kind: proposal.target.scope.kind,
+        scope_ref: proposal.target.scope.ref ?? null,
+        content: proposal.typedDiff.content,
+        rationale: proposal.typedDiff.rationale,
+        tags_json: JSON.stringify(proposal.typedDiff.tags),
+        authority: "ai_proposed",
+        status: "draft",
+        source_refs_json: JSON.stringify(sourceRefs),
+        supersedes_version: base?.version ?? null,
+        version,
+        created_by: createdBy,
+        approved_by: null,
+        approved_at: null,
+        confirmation_event_id: null,
+        created_at: Date.now(),
+      })
+      .run()
+    return { id, version }
+  })
 }

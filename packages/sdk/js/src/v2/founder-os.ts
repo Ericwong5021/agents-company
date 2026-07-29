@@ -151,6 +151,7 @@ export type GovernanceAsset = {
   createdBy: string
   approvedBy?: string
   createdAt: number
+  approvedAt?: number
   current: boolean
 }
 export type FounderTwinSnapshot = {
@@ -159,6 +160,11 @@ export type FounderTwinSnapshot = {
   version: number
   profileSummary: string
   assetRefs: FounderAssetReference[]
+  activePrincipleIds: string[]
+  activeHeuristicIds: string[]
+  decisionCaseIds: string[]
+  tasteExampleIds: string[]
+  rubricIds: string[]
   promptTemplateVersion: string
   modelConfigRef: string
   retrievalConfigRef: string
@@ -175,12 +181,13 @@ export type FounderStudioProjection = {
   assets: GovernanceAsset[]
   snapshots: FounderTwinSnapshot[]
   selectedSnapshotId?: string
+  calibrationQueue: FounderCalibrationItem[]
   authorization: { status: "not_confirmed"; blocking: false }
 }
 
 export type FounderStudioDraftInput = Omit<
   GovernanceAsset,
-  "id" | "version" | "status" | "supersedes" | "approvedBy" | "createdAt" | "current"
+  "id" | "version" | "status" | "supersedes" | "approvedBy" | "approvedAt" | "createdAt" | "current"
 > & {
   authority: "ai_proposed" | "external_source"
 }
@@ -251,6 +258,29 @@ export function createFounderStudioClient(config: FounderStudioClientConfig) {
     selectSnapshot(input: { companyId: string; snapshotId: string; reason: string; selectedBy: string }) {
       return request<FounderStudioProjection>("/company/founder-studio/snapshot-selection", {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    },
+  }
+}
+
+export function createFounderModesClient(config: FounderStudioClientConfig) {
+  const request = async <T>(init?: RequestInit) => {
+    const response = await (config.fetch ?? fetch)(new URL("/company/founder-os-modes", config.baseUrl), {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+    })
+    if (!response.ok) throw new Error(`Founder OS modes request failed with HTTP ${response.status}`)
+    return response.json() as Promise<T>
+  }
+  return {
+    get() {
+      return request<FounderOSModeState>()
+    },
+    update(input: FounderOSModeSettings) {
+      return request<FounderOSModeState>({
+        method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       })
@@ -728,8 +758,22 @@ export type GovernanceDecision = {
 }
 
 export type FounderAssetUpdateProposal = {
-  assetId: string | null
-  change: string
+  target: {
+    assetId: string | null
+    type: GovernanceAsset["type"]
+    scope: GovernanceAssetScope
+  }
+  baseRevision: {
+    assetId: string
+    version: number
+  } | null
+  typedDiff: {
+    operation: "create" | "revise"
+    content: string
+    rationale: string
+    tags: string[]
+    sourceRefs: GovernanceAsset["sourceRefs"]
+  }
   authority: "ai_proposed"
 }
 

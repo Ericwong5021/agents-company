@@ -2,7 +2,9 @@
 import { $fetch } from "ofetch"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import type {
+  FounderCalibrationItem,
   FounderControlCenterProjection,
+  FounderOSModeState,
   FounderStudioProjection,
   GovernanceAsset,
 } from "@agents-company/sdk/v2/founder-os"
@@ -56,19 +58,70 @@ const message = ref("")
 const onboarding = ref<OnboardingState>(parseOnboardingState(null))
 const founderStudio = ref<FounderStudioProjection | null>(null)
 const founderControl = ref<FounderControlCenterProjection | null>(null)
+const founderModes = ref<FounderOSModeState | null>(null)
 const studioLoading = ref(false)
 const controlLoading = ref(false)
+const modeLoading = ref(false)
 const studioMessage = ref("")
+const modeMessage = ref("")
 const assetDraft = reactive({
   type: "principle" as GovernanceAsset["type"],
   content: "",
   rationale: "",
+  authority: "ai_proposed" as "ai_proposed" | "external_source",
+  sourceRefId: "",
+  dimensions: "",
+  tags: "",
+})
+const snapshotDraft = reactive({
+  profileSummary: "",
+  promptTemplateVersion: "founder-studio-v1",
+  modelConfigRef: "company-default-model",
+  retrievalConfigRef: "founder-assets-v1",
+  permissionConfigRef: "company-scope-v1",
+})
+const calibrationDraft = reactive({
+  kind: "accept" as FounderCalibrationItem["kind"],
+  prompt: "",
+  firstArtifactId: "",
+  firstLabel: "",
+  secondArtifactId: "",
+  secondLabel: "",
+})
+const studioAssets = computed(() =>
+  (founderStudio.value?.assets ?? []).filter(
+    (asset, index, assets) =>
+      asset.current || assets.findIndex((candidate) => candidate.id === asset.id) === index,
+  ),
+)
+function isLatestAssetVersion(asset: GovernanceAsset) {
+  return founderStudio.value?.assets.find((candidate) => candidate.id === asset.id)?.version === asset.version
+}
+const founderModeOptions = computed(() => {
+  const globalOrder = ["off", "shadow", "advisor", "green-delegated", "yellow-delegated"] as const
+  const maximum = globalOrder.indexOf(founderModes.value?.globalMaximum.founderTwinMode ?? "off")
+  return [
+    { value: "off" as const, label: "off", disabled: false },
+    { value: "shadow" as const, label: "shadow", disabled: maximum < 1 },
+    { value: "advisor" as const, label: "advisor · not_confirmed", disabled: true },
+  ]
+})
+const commonsModeOptions = computed(() => {
+  const order = ["off", "ingest-only", "reading"] as const
+  const globalOrder = ["off", "ingest-only", "reading", "belief-loop"] as const
+  const maximum = globalOrder.indexOf(founderModes.value?.globalMaximum.companyCommonsMode ?? "off")
+  return order.map((value, index) => ({ value, disabled: index > maximum }))
+})
+const modeDraft = reactive({
+  founderTwinMode: "off" as "off" | "shadow",
+  companyCommonsMode: "off" as "off" | "ingest-only" | "reading",
 })
 
 onMounted(() => {
   onboarding.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
   loadFounderStudio()
   loadFounderControl()
+  loadFounderModes()
 })
 
 async function loadFounderStudio() {
@@ -77,6 +130,8 @@ async function loadFounderStudio() {
   founderStudio.value = await $fetch<FounderStudioProjection>("/api/agent-company/founder-studio", {
     query: { companyId: snapshot.value.company.id },
   }).catch(() => null)
+  if (!snapshotDraft.profileSummary && founderStudio.value?.snapshots[0]?.profileSummary)
+    snapshotDraft.profileSummary = founderStudio.value.snapshots[0].profileSummary
   studioLoading.value = false
 }
 
@@ -89,28 +144,93 @@ async function loadFounderControl() {
   controlLoading.value = false
 }
 
+async function loadFounderModes() {
+  if (!snapshot.value.company.id || modeLoading.value) return
+  modeLoading.value = true
+  founderModes.value = await $fetch<FounderOSModeState>("/api/agent-company/founder-modes").catch(() => null)
+  if (founderModes.value) {
+    modeDraft.founderTwinMode =
+      founderModes.value.company.founderTwinMode === "shadow"
+      && founderModes.value.globalMaximum.founderTwinMode !== "off"
+        ? "shadow"
+        : "off"
+    modeDraft.companyCommonsMode = ["off", "ingest-only", "reading"].includes(founderModes.value.company.companyCommonsMode)
+      ? founderModes.value.company.companyCommonsMode as typeof modeDraft.companyCommonsMode
+      : "reading"
+  }
+  modeLoading.value = false
+}
+
+async function saveFounderModes() {
+  if (modeLoading.value) return
+  modeLoading.value = true
+  modeMessage.value = ""
+  founderModes.value = await $fetch<FounderOSModeState>("/api/agent-company/founder-modes", {
+    method: "PUT",
+    body: modeDraft,
+  }).then(
+    (value) => {
+      modeMessage.value = "公司模式已保存，实际能力仍受全局上限约束。"
+      return value
+    },
+    () => {
+      modeMessage.value = "模式未保存，请检查全局上限与 Delegation Readiness。"
+      return founderModes.value
+    },
+  )
+  modeLoading.value = false
+  await loadFounderControl()
+}
+
 async function createAssetDraft() {
   if (!assetDraft.content.trim() || !assetDraft.rationale.trim() || studioLoading.value) return
+  const caseType = ["taste_reference", "taste_anti_reference", "decision_case", "rubric"].includes(assetDraft.type)
+  if (caseType && (!assetDraft.sourceRefId.trim() || !assetDraft.dimensions.trim())) {
+    studioMessage.value = "品味、案例与 Rubric 需要原始 Artifact ID 和至少一个评估维度。"
+    return
+  }
   studioLoading.value = true
   studioMessage.value = ""
-  await $fetch("/api/agent-company/founder-studio", {
+  await $fetch(caseType
+    ? "/api/agent-company/founder-studio/cases"
+    : "/api/agent-company/founder-studio", {
     method: "POST",
-    body: {
-      companyId: snapshot.value.company.id,
-      type: assetDraft.type,
-      scope: { kind: "company" },
-      content: assetDraft.content,
-      rationale: assetDraft.rationale,
-      tags: [],
-      authority: "ai_proposed",
-      sourceRefs: [],
-      createdBy: "local-founder-studio",
-    },
+    body: caseType
+      ? {
+          companyId: snapshot.value.company.id,
+          kind: assetDraft.type,
+          scope: { kind: "company" },
+          content: assetDraft.content,
+          rationale: assetDraft.rationale,
+          dimensions: assetDraft.dimensions.split(",").map((value) => value.trim()).filter(Boolean),
+          sourceRefs: [{ kind: "artifact", id: assetDraft.sourceRefId.trim() }],
+          authority: assetDraft.authority,
+          createdBy: "local-founder-studio",
+        }
+      : {
+          companyId: snapshot.value.company.id,
+          type: assetDraft.type,
+          scope: { kind: "company" },
+          content: assetDraft.content,
+          rationale: assetDraft.rationale,
+          tags: assetDraft.tags.split(",").map((value) => value.trim()).filter(Boolean),
+          authority: assetDraft.authority,
+          sourceRefs: assetDraft.sourceRefId.trim()
+            ? [{ kind: "artifact", id: assetDraft.sourceRefId.trim() }]
+            : [],
+          createdBy: "local-founder-studio",
+        },
   })
     .then(() => {
       assetDraft.content = ""
       assetDraft.rationale = ""
-      studioMessage.value = "候选资产已保存为 ai_proposed / draft，尚未获得人工确认。"
+      assetDraft.sourceRefId = ""
+      assetDraft.dimensions = ""
+      assetDraft.tags = ""
+      studioMessage.value =
+        assetDraft.authority === "external_source"
+          ? "外部来源候选已保存为 external_source / draft，尚未获得人工确认。"
+          : "AI 候选已保存为 ai_proposed / draft，尚未获得人工确认。"
     })
     .catch(() => {
       studioMessage.value = "候选资产保存失败。"
@@ -119,10 +239,178 @@ async function createAssetDraft() {
   await loadFounderStudio()
 }
 
+async function reviseAsset(asset: GovernanceAsset) {
+  const content = window.prompt("输入修订后的内容", asset.content)
+  if (!content?.trim()) return
+  const rationale = window.prompt("输入本次修订依据", asset.rationale)
+  if (!rationale?.trim()) return
+  studioLoading.value = true
+  await $fetch(`/api/agent-company/founder-studio/assets/${encodeURIComponent(asset.id)}/versions`, {
+    method: "POST",
+    body: {
+      baseVersion: asset.version,
+      content,
+      rationale,
+      tags: asset.tags,
+      authority: "ai_proposed",
+      status: "draft",
+      sourceRefs: asset.sourceRefs,
+      actorKind: "ai",
+      createdBy: "local-founder-studio",
+    },
+  }).then(
+    () => studioMessage.value = "修订已追加为 ai_proposed / draft。",
+    () => studioMessage.value = "修订未写入，请刷新后重试。",
+  )
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+async function confirmAsset(asset: GovernanceAsset) {
+  const reason = window.prompt("输入人工确认依据，确认后该版本进入 active")
+  if (!reason?.trim()) return
+  studioLoading.value = true
+  await $fetch(`/api/agent-company/founder-studio/assets/${encodeURIComponent(asset.id)}/versions`, {
+    method: "POST",
+    body: {
+      baseVersion: asset.version,
+      content: asset.content,
+      rationale: `${asset.rationale}\n\n人工确认：${reason}`,
+      tags: asset.tags,
+      authority: "human_confirmed",
+      status: "active",
+      sourceRefs: asset.sourceRefs,
+      actorKind: "human",
+      createdBy: "local_user",
+      confirmation: {
+        eventId: `founder-studio-confirmation:${crypto.randomUUID()}`,
+        confirmedBy: "local_user",
+      },
+    },
+  }).then(
+    () => studioMessage.value = "人工确认事件已记录，新版本已激活。",
+    () => studioMessage.value = "确认未写入，AI 或外部来源不能自行提升 authority。",
+  )
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+async function sha256(value: string) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+async function compileStudioSnapshot() {
+  if (!snapshotDraft.profileSummary.trim() || studioLoading.value) return
+  studioLoading.value = true
+  const activeAssets = (founderStudio.value?.assets ?? [])
+    .filter((asset) => asset.current && asset.status === "active")
+    .map((asset) => ({
+      id: asset.id,
+      version: asset.version,
+      type: asset.type,
+      content: asset.content,
+    }))
+    .sort((left, right) => `${left.id}:${left.version}`.localeCompare(`${right.id}:${right.version}`))
+  await $fetch("/api/agent-company/founder-studio/snapshots", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      profileSummary: snapshotDraft.profileSummary,
+      promptTemplateVersion: snapshotDraft.promptTemplateVersion,
+      modelConfigRef: snapshotDraft.modelConfigRef,
+      retrievalConfigRef: snapshotDraft.retrievalConfigRef,
+      permissionConfigRef: snapshotDraft.permissionConfigRef,
+      compiledPromptHash: await sha256(JSON.stringify({
+        profileSummary: snapshotDraft.profileSummary,
+        promptTemplateVersion: snapshotDraft.promptTemplateVersion,
+        assets: activeAssets,
+      })),
+      scope: { kind: "company" },
+      createdBy: "local-founder-studio",
+    },
+  }).then(
+    () => studioMessage.value = "不可变 Snapshot 已编译，明文 Prompt 未持久化。",
+    () => studioMessage.value = "Snapshot 未编译，请确认已有激活资产和完整 Profile。",
+  )
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+async function enqueueCalibration() {
+  if (
+    !calibrationDraft.prompt.trim()
+    || !calibrationDraft.firstArtifactId.trim()
+    || !calibrationDraft.firstLabel.trim()
+    || (
+      calibrationDraft.kind === "ab"
+      && (!calibrationDraft.secondArtifactId.trim() || !calibrationDraft.secondLabel.trim())
+    )
+    || studioLoading.value
+  )
+    return
+  studioLoading.value = true
+  await $fetch("/api/agent-company/founder-studio/calibrations", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      kind: calibrationDraft.kind,
+      scope: { kind: "company" },
+      prompt: calibrationDraft.prompt,
+      candidates: [
+        { artifactId: calibrationDraft.firstArtifactId, label: calibrationDraft.firstLabel },
+        ...(calibrationDraft.kind === "ab"
+          ? [{ artifactId: calibrationDraft.secondArtifactId, label: calibrationDraft.secondLabel }]
+          : []),
+      ],
+      createdBy: "local-founder-studio",
+    },
+  }).then(
+    () => {
+      calibrationDraft.prompt = ""
+      calibrationDraft.firstArtifactId = ""
+      calibrationDraft.firstLabel = ""
+      calibrationDraft.secondArtifactId = ""
+      calibrationDraft.secondLabel = ""
+      studioMessage.value = "校准项已进入人工队列。"
+    },
+    () => studioMessage.value = "校准项未写入，请检查候选 Artifact。",
+  )
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
+async function respondCalibration(
+  item: FounderCalibrationItem,
+  response: "accept" | "reject" | "prefer_first" | "prefer_second",
+) {
+  const reason = window.prompt("输入本次人工选择的原因")
+  if (!reason?.trim()) return
+  studioLoading.value = true
+  await $fetch("/api/agent-company/founder-studio/calibration-responses", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      requestId: item.id,
+      response,
+      reason,
+      actorKind: "human",
+      confirmationEventId: `founder-calibration:${crypto.randomUUID()}`,
+      confirmedBy: "local_user",
+    },
+  }).then(
+    () => studioMessage.value = "人工校准已追加，不会自动激活治理资产。",
+    () => studioMessage.value = "校准响应未写入。",
+  )
+  studioLoading.value = false
+  await loadFounderStudio()
+}
+
 async function selectStudioSnapshot(snapshotId: string) {
   if (studioLoading.value) return
   studioLoading.value = true
-  await $fetch("/api/agent-company/founder-studio-select", {
+  await $fetch("/api/agent-company/founder-studio/snapshot-selection", {
     method: "POST",
     body: {
       companyId: snapshot.value.company.id,
@@ -139,6 +427,7 @@ watch(() => snapshot.value.company.id, (companyId) => {
   if (!companyId) return
   loadFounderStudio()
   loadFounderControl()
+  loadFounderModes()
 })
 
 function persistOnboarding(next: OnboardingState) {
@@ -361,8 +650,61 @@ async function saveProvider() {
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
+                <h2>Founder OS 模式</h2>
+                <p>这里写入 Company 级原始模式，实际能力始终取全局上限与公司设置中更严格的一项。</p>
+              </div>
+              <span class="ac-studio-status">effective {{ founderModes?.effective.founderTwinMode ?? "off" }}</span>
+            </div>
+
+            <div class="company-provider-form company-provider-form__grid">
+              <label>
+                <span>Founder Twin</span>
+                <select v-model="modeDraft.founderTwinMode">
+                  <option
+                    v-for="option in founderModeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                    :disabled="option.disabled"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+                <small>Advisor 与 Green/Yellow 只能通过各自的 Delegation Readiness 受控路径开启。</small>
+              </label>
+              <label>
+                <span>Company Commons</span>
+                <select v-model="modeDraft.companyCommonsMode">
+                  <option
+                    v-for="option in commonsModeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                    :disabled="option.disabled"
+                  >
+                    {{ option.value === "reading" ? "interpreting" : option.value }}
+                  </option>
+                </select>
+                <small>belief-loop 不在此入口开放。</small>
+              </label>
+              <div class="company-provider-form__actions company-provider-form__wide">
+                <span>
+                  全局上限：
+                  {{ founderModes?.globalMaximum.founderTwinMode ?? "off" }}
+                  /
+                  {{ founderModes?.globalMaximum.companyCommonsMode ?? "off" }}
+                </span>
+                <UButton color="neutral" :loading="modeLoading" @click="saveFounderModes">
+                  保存公司模式
+                </UButton>
+              </div>
+            </div>
+            <p v-if="modeMessage" class="company-provider-form__message" role="status">{{ modeMessage }}</p>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
                 <h2>Founder Studio</h2>
-                <p>治理资产与不可变 Snapshot 来自本地 Control Plane；authority 与 status 不会被隐藏。</p>
+                <p>Profile、治理资产、品味校准与不可变 Snapshot 共享同一条本地事实链。</p>
               </div>
               <UButton
                 color="neutral"
@@ -378,68 +720,249 @@ async function saveProvider() {
               人工确认：{{ founderStudio?.authorization.status ?? "not_confirmed" }} · 弱门禁，不自动提升 authority
             </p>
 
-            <div class="company-provider-form company-provider-form__grid">
-              <label>
-                <span>资产类型</span>
-                <select v-model="assetDraft.type">
-                  <option value="principle">Principle</option>
-                  <option value="heuristic">Heuristic</option>
-                  <option value="boundary">Boundary</option>
-                  <option value="rubric">Rubric</option>
-                </select>
-              </label>
-              <label class="company-provider-form__wide">
-                <span>候选内容</span>
-                <textarea v-model="assetDraft.content" rows="3" />
-              </label>
-              <label class="company-provider-form__wide">
-                <span>判断依据</span>
-                <textarea v-model="assetDraft.rationale" rows="2" />
-              </label>
-              <div class="company-provider-form__actions company-provider-form__wide">
-                <span>写入身份：ai_proposed · 状态：draft</span>
-                <UButton
-                  color="neutral"
-                  :loading="studioLoading"
-                  :disabled="!assetDraft.content.trim() || !assetDraft.rationale.trim()"
-                  @click="createAssetDraft"
-                >
-                  保存候选资产
-                </UButton>
-              </div>
+            <div class="ac-studio-workbench">
+              <section class="ac-studio-pane">
+                <div class="ac-studio-pane__heading">
+                  <div>
+                    <span>01 · Governance assets</span>
+                    <h3>候选规则与品味案例</h3>
+                  </div>
+                  <strong>{{ studioAssets.length }}</strong>
+                </div>
+
+                <div class="company-provider-form company-provider-form__grid">
+                  <label>
+                    <span>资产类型</span>
+                    <select v-model="assetDraft.type">
+                      <option value="constitution">Constitution</option>
+                      <option value="principle">Principle</option>
+                      <option value="heuristic">Heuristic</option>
+                      <option value="boundary">Boundary</option>
+                      <option value="taste_reference">Taste reference</option>
+                      <option value="taste_anti_reference">Taste anti-reference</option>
+                      <option value="rubric">Rubric</option>
+                      <option value="decision_case">Decision case</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>草稿来源</span>
+                    <select v-model="assetDraft.authority">
+                      <option value="ai_proposed">AI proposal</option>
+                      <option value="external_source">External source</option>
+                    </select>
+                  </label>
+                  <label class="company-provider-form__wide">
+                    <span>候选内容</span>
+                    <textarea v-model="assetDraft.content" rows="4" />
+                  </label>
+                  <label class="company-provider-form__wide">
+                    <span>判断依据</span>
+                    <textarea v-model="assetDraft.rationale" rows="3" />
+                  </label>
+                  <label>
+                    <span>原始 Artifact ID</span>
+                    <input v-model="assetDraft.sourceRefId" placeholder="品味与案例必填">
+                  </label>
+                  <label v-if="['taste_reference', 'taste_anti_reference', 'decision_case', 'rubric'].includes(assetDraft.type)">
+                    <span>评估维度</span>
+                    <input v-model="assetDraft.dimensions" placeholder="逗号分隔">
+                  </label>
+                  <label v-else>
+                    <span>标签</span>
+                    <input v-model="assetDraft.tags" placeholder="逗号分隔">
+                  </label>
+                  <div class="company-provider-form__actions company-provider-form__wide">
+                    <span>所有新内容先进入 draft。</span>
+                    <UButton
+                      color="neutral"
+                      :loading="studioLoading"
+                      :disabled="!assetDraft.content.trim() || !assetDraft.rationale.trim()"
+                      @click="createAssetDraft"
+                    >
+                      保存候选资产
+                    </UButton>
+                  </div>
+                </div>
+
+                <div v-if="studioAssets.length" class="ac-founder-studio-list">
+                  <article v-for="asset in studioAssets" :key="`${asset.id}:${asset.version}`">
+                    <div>
+                      <strong>{{ asset.type }}</strong>
+                      <span>{{ asset.authority }} · {{ asset.status }} · v{{ asset.version }}</span>
+                    </div>
+                    <p>{{ asset.content }}</p>
+                    <small>
+                      {{ asset.current ? "当前激活版本" : "候选或历史版本" }}
+                      <template v-if="asset.approvedAt"> · approved {{ new Date(asset.approvedAt).toLocaleDateString("zh-CN") }}</template>
+                    </small>
+                    <div class="ac-studio-row-actions">
+                      <UButton
+                        color="neutral"
+                        variant="ghost"
+                        :loading="studioLoading"
+                        :disabled="!isLatestAssetVersion(asset)"
+                        @click="reviseAsset(asset)"
+                      >
+                        修订为草稿
+                      </UButton>
+                      <UButton
+                        v-if="asset.status === 'draft' && isLatestAssetVersion(asset)"
+                        color="neutral"
+                        variant="soft"
+                        :loading="studioLoading"
+                        @click="confirmAsset(asset)"
+                      >
+                        人工确认并激活
+                      </UButton>
+                    </div>
+                  </article>
+                </div>
+                <p v-else class="company-provider-form__message">尚无治理资产。</p>
+              </section>
+
+              <section class="ac-studio-pane">
+                <div class="ac-studio-pane__heading">
+                  <div>
+                    <span>02 · Founder profile</span>
+                    <h3>编译不可变 Snapshot</h3>
+                  </div>
+                  <strong>{{ founderStudio?.snapshots.length ?? 0 }}</strong>
+                </div>
+
+                <div class="company-provider-form company-provider-form__grid">
+                  <label class="company-provider-form__wide">
+                    <span>Founder Profile</span>
+                    <textarea
+                      v-model="snapshotDraft.profileSummary"
+                      rows="5"
+                      placeholder="只写稳定的创始人判断方式与边界，不放入无关私密上下文"
+                    />
+                  </label>
+                  <label>
+                    <span>Prompt template</span>
+                    <input v-model="snapshotDraft.promptTemplateVersion">
+                  </label>
+                  <label>
+                    <span>Model config</span>
+                    <input v-model="snapshotDraft.modelConfigRef">
+                  </label>
+                  <label>
+                    <span>Retrieval config</span>
+                    <input v-model="snapshotDraft.retrievalConfigRef">
+                  </label>
+                  <label>
+                    <span>Permission config</span>
+                    <input v-model="snapshotDraft.permissionConfigRef">
+                  </label>
+                  <div class="company-provider-form__actions company-provider-form__wide">
+                    <span>Snapshot 只引用已激活资产，不保存编译 Prompt 明文。</span>
+                    <UButton
+                      color="neutral"
+                      :loading="studioLoading"
+                      :disabled="!snapshotDraft.profileSummary.trim()"
+                      @click="compileStudioSnapshot"
+                    >
+                      编译 Snapshot
+                    </UButton>
+                  </div>
+                </div>
+
+                <div v-if="founderStudio?.snapshots.length" class="ac-founder-studio-list">
+                  <article v-for="item in founderStudio.snapshots" :key="item.id">
+                    <div>
+                      <strong>Snapshot v{{ item.version }}</strong>
+                      <span>{{ item.selected ? "当前选择" : "历史版本" }}</span>
+                    </div>
+                    <p class="ac-studio-snapshot-hash">{{ item.checksum }}</p>
+                    <small>
+                      principles {{ item.activePrincipleIds.length }}
+                      · heuristics {{ item.activeHeuristicIds.length }}
+                      · cases {{ item.decisionCaseIds.length }}
+                      · taste {{ item.tasteExampleIds.length }}
+                      · rubrics {{ item.rubricIds.length }}
+                    </small>
+                    <UButton
+                      v-if="!item.selected"
+                      color="neutral"
+                      variant="soft"
+                      :loading="studioLoading"
+                      @click="selectStudioSnapshot(item.id)"
+                    >
+                      选择此版本
+                    </UButton>
+                  </article>
+                </div>
+              </section>
+
+              <section class="ac-studio-pane ac-studio-pane--wide">
+                <div class="ac-studio-pane__heading">
+                  <div>
+                    <span>03 · Calibration queue</span>
+                    <h3>记录接受、拒绝与 A/B 偏好</h3>
+                  </div>
+                  <strong>{{ founderStudio?.calibrationQueue.filter(item => item.status === "pending").length ?? 0 }}</strong>
+                </div>
+
+                <div class="company-provider-form company-provider-form__grid">
+                  <label>
+                    <span>校准类型</span>
+                    <select v-model="calibrationDraft.kind">
+                      <option value="accept">接受</option>
+                      <option value="reject">拒绝</option>
+                      <option value="ab">A/B</option>
+                    </select>
+                  </label>
+                  <label class="company-provider-form__wide">
+                    <span>判断问题</span>
+                    <textarea v-model="calibrationDraft.prompt" rows="2" />
+                  </label>
+                  <label>
+                    <span>候选 A Artifact ID</span>
+                    <input v-model="calibrationDraft.firstArtifactId">
+                  </label>
+                  <label>
+                    <span>候选 A 标签</span>
+                    <input v-model="calibrationDraft.firstLabel">
+                  </label>
+                  <label v-if="calibrationDraft.kind === 'ab'">
+                    <span>候选 B Artifact ID</span>
+                    <input v-model="calibrationDraft.secondArtifactId">
+                  </label>
+                  <label v-if="calibrationDraft.kind === 'ab'">
+                    <span>候选 B 标签</span>
+                    <input v-model="calibrationDraft.secondLabel">
+                  </label>
+                  <div class="company-provider-form__actions company-provider-form__wide">
+                    <span>AI 只能排队，选择必须由本地用户确认。</span>
+                    <UButton color="neutral" :loading="studioLoading" @click="enqueueCalibration">
+                      加入校准队列
+                    </UButton>
+                  </div>
+                </div>
+
+                <div v-if="founderStudio?.calibrationQueue.length" class="ac-calibration-list">
+                  <article v-for="item in founderStudio.calibrationQueue" :key="item.id">
+                    <div>
+                      <strong>{{ item.prompt }}</strong>
+                      <span>{{ item.kind }} · {{ item.status }}</span>
+                    </div>
+                    <p>{{ item.candidates.map(candidate => candidate.label).join(" / ") }}</p>
+                    <div v-if="item.status === 'pending'" class="ac-studio-row-actions">
+                      <template v-if="item.kind === 'ab'">
+                        <UButton color="neutral" variant="soft" @click="respondCalibration(item, 'prefer_first')">选择 A</UButton>
+                        <UButton color="neutral" variant="soft" @click="respondCalibration(item, 'prefer_second')">选择 B</UButton>
+                      </template>
+                      <template v-else>
+                        <UButton color="neutral" variant="soft" @click="respondCalibration(item, 'accept')">接受</UButton>
+                        <UButton color="neutral" variant="outline" @click="respondCalibration(item, 'reject')">拒绝</UButton>
+                      </template>
+                    </div>
+                    <small v-else>{{ item.response }} · {{ item.reason }}</small>
+                  </article>
+                </div>
+              </section>
             </div>
             <p v-if="studioMessage" class="company-provider-form__message" role="status">{{ studioMessage }}</p>
-
-            <div v-if="founderStudio?.assets.length" class="ac-founder-studio-list">
-              <article v-for="asset in founderStudio.assets" :key="`${asset.id}:${asset.version}`">
-                <div>
-                  <strong>{{ asset.type }}</strong>
-                  <span>{{ asset.authority }} · {{ asset.status }} · v{{ asset.version }}</span>
-                </div>
-                <p>{{ asset.content }}</p>
-                <small>{{ asset.current ? "当前有效版本" : "历史或未生效版本" }}</small>
-              </article>
-            </div>
-            <p v-else class="company-provider-form__message">尚无治理资产。</p>
-
-            <div v-if="founderStudio?.snapshots.length" class="ac-founder-studio-list">
-              <article v-for="item in founderStudio.snapshots" :key="item.id">
-                <div>
-                  <strong>Snapshot v{{ item.version }}</strong>
-                  <span>{{ item.selected ? "当前选择" : "历史版本" }}</span>
-                </div>
-                <p>checksum {{ item.checksum }}</p>
-                <UButton
-                  v-if="!item.selected"
-                  color="neutral"
-                  variant="soft"
-                  :loading="studioLoading"
-                  @click="selectStudioSnapshot(item.id)"
-                >
-                  选择此版本
-                </UButton>
-              </article>
-            </div>
           </section>
 
           <section class="company-settings-section">

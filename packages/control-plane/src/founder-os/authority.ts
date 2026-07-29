@@ -39,6 +39,7 @@ import {
 import { ensureDefaultPolicies, recordFromRow } from "./decision-ledger"
 import { GovernanceAssetSelectionTable, GovernanceAssetTable } from "./asset.sql"
 import * as FounderOSMode from "./mode"
+import * as FounderOSAsset from "./asset"
 
 const authorityRank = { green: 0, yellow: 1, red: 2 } as const
 const modeRank = { off: -1, shadow: -1, advisor: -1, "green-delegated": 0, "yellow-delegated": 1 } as const
@@ -756,6 +757,12 @@ export const founderCorrectionLayer = Layer.succeed(
                   existing.actor_id !== input.actorId
                 )
                   throw new Error("Correction idempotency key has different facts")
+                FounderOSAsset.materializeCorrectionProposals(db, {
+                  companyId: decision.company_id,
+                  decisionId: decision.id,
+                  correctionId: existing.id,
+                  proposals: input.proposedAssetUpdates,
+                })
                 return correctionFromRow(existing)
               }
               const row = {
@@ -772,6 +779,12 @@ export const founderCorrectionLayer = Layer.succeed(
                 created_at: Date.now(),
               }
               db.insert(FounderCorrectionTable).values(row).run()
+              FounderOSAsset.materializeCorrectionProposals(db, {
+                companyId: decision.company_id,
+                decisionId: decision.id,
+                correctionId: row.id,
+                proposals: input.proposedAssetUpdates,
+              })
               if (input.kind === "override")
                 transition(db, {
                   decisionId: decision.id,

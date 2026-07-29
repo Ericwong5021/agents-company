@@ -462,6 +462,7 @@ export const CompanyRoutes = lazy(() =>
               kind: query.scope_kind,
               ...(query.scope_ref ? { ref: query.scope_ref } : {}),
             }),
+            FounderOSTaste.calibrationItems(query.company_id),
           ),
         )
       },

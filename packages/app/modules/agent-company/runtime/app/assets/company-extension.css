@@ -423,6 +423,131 @@
   margin-top: 16px;
 }
 
+.ac-studio-status {
+  border-radius: 999px;
+  background: var(--ui-bg-accented);
+  padding: 5px 9px;
+  color: var(--ui-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.company-provider-form label small {
+  color: var(--ui-text-dimmed);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ac-studio-workbench {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.ac-studio-pane {
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--ui-bg-muted);
+  padding: 16px;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.08);
+}
+
+.ac-studio-pane--wide {
+  grid-column: 1 / -1;
+}
+
+.ac-studio-pane__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.ac-studio-pane__heading span {
+  color: var(--ui-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ac-studio-pane__heading h3 {
+  margin-top: 3px;
+  color: var(--ui-text-highlighted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ac-studio-pane__heading > strong {
+  color: var(--ui-text-muted);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.ac-studio-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ac-studio-snapshot-hash {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.ac-calibration-list {
+  display: grid;
+  gap: 1px;
+  margin-top: 16px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ui-border);
+}
+
+.ac-calibration-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+  background: var(--ui-bg);
+  padding: 12px 14px;
+}
+
+.ac-calibration-list article > div:first-child {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ac-calibration-list strong {
+  color: var(--ui-text-highlighted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ac-calibration-list span,
+.ac-calibration-list p,
+.ac-calibration-list small {
+  color: var(--ui-text-muted);
+  font-size: 10px;
+}
+
+.ac-calibration-list p,
+.ac-calibration-list small {
+  margin: 0;
+}
+
+.ac-calibration-list .ac-studio-row-actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
 .founder-board-page {
   width: min(100%, 1120px);
 }
@@ -1153,6 +1278,24 @@
 
   .company-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ac-studio-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-studio-pane--wide {
+    grid-column: auto;
+  }
+
+  .ac-calibration-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-calibration-list .ac-studio-row-actions {
+    grid-column: auto;
+    grid-row: auto;
+    justify-content: flex-start;
   }
 
   .company-module-nav,

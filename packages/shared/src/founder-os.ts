@@ -267,9 +267,20 @@ export const GovernanceAsset = z
     createdBy: Identifier,
     approvedBy: Identifier.optional(),
     createdAt: z.number().int().nonnegative(),
+    approvedAt: z.number().int().nonnegative().optional(),
     current: z.boolean(),
   })
   .strict()
+  .refine(
+    (asset) =>
+      asset.status !== "active"
+      || (
+        ["human_explicit", "human_confirmed"].includes(asset.authority)
+        && asset.approvedBy !== undefined
+        && asset.approvedAt !== undefined
+      ),
+    { message: "Active assets require human authority, approvedBy, and approvedAt" },
+  )
   .meta({ ref: "GovernanceAsset" })
 export type GovernanceAsset = z.infer<typeof GovernanceAsset>
 
@@ -335,6 +346,11 @@ export const FounderTwinSnapshot = z
     version: z.number().int().positive(),
     profileSummary: z.string().max(4_000),
     assetRefs: z.array(FounderAssetReference),
+    activePrincipleIds: z.array(Identifier),
+    activeHeuristicIds: z.array(Identifier),
+    decisionCaseIds: z.array(Identifier),
+    tasteExampleIds: z.array(Identifier),
+    rubricIds: z.array(Identifier),
     promptTemplateVersion: Identifier,
     modelConfigRef: Identifier,
     retrievalConfigRef: Identifier,
@@ -360,6 +376,26 @@ export const FounderSnapshotSelectInput = z
   .meta({ ref: "FounderSnapshotSelectInput" })
 export type FounderSnapshotSelectInput = z.infer<typeof FounderSnapshotSelectInput>
 
+export const FounderCalibrationItem = z
+  .object({
+    id: Identifier,
+    companyId: Identifier,
+    kind: z.enum(["ab", "accept", "reject"]),
+    scope: GovernanceAssetScope,
+    prompt: LongText,
+    candidates: z.array(z.object({ artifactId: Identifier, label: ShortText }).strict()).min(1).max(2),
+    status: z.enum(["pending", "responded"]),
+    response: z.enum(["accept", "reject", "prefer_first", "prefer_second"]).optional(),
+    reason: LongText.optional(),
+    confirmationEventId: Identifier.optional(),
+    confirmedBy: Identifier.optional(),
+    createdBy: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderCalibrationItem" })
+export type FounderCalibrationItem = z.infer<typeof FounderCalibrationItem>
+
 export const FounderStudioProjection = z
   .object({
     schemaVersion: z.literal(1),
@@ -367,6 +403,7 @@ export const FounderStudioProjection = z
     assets: z.array(GovernanceAsset),
     snapshots: z.array(FounderTwinSnapshot),
     selectedSnapshotId: Identifier.optional(),
+    calibrationQueue: z.array(FounderCalibrationItem).default([]),
     authorization: z
       .object({
         status: z.literal("not_confirmed"),
@@ -789,26 +826,6 @@ export const FounderCalibrationResponseInput = z
   .meta({ ref: "FounderCalibrationResponseInput" })
 export type FounderCalibrationResponseInput = z.infer<typeof FounderCalibrationResponseInput>
 
-export const FounderCalibrationItem = z
-  .object({
-    id: Identifier,
-    companyId: Identifier,
-    kind: z.enum(["ab", "accept", "reject"]),
-    scope: GovernanceAssetScope,
-    prompt: LongText,
-    candidates: z.array(z.object({ artifactId: Identifier, label: ShortText }).strict()).min(1).max(2),
-    status: z.enum(["pending", "responded"]),
-    response: z.enum(["accept", "reject", "prefer_first", "prefer_second"]).optional(),
-    reason: LongText.optional(),
-    confirmationEventId: Identifier.optional(),
-    confirmedBy: Identifier.optional(),
-    createdBy: Identifier,
-    createdAt: z.number().int().nonnegative(),
-  })
-  .strict()
-  .meta({ ref: "FounderCalibrationItem" })
-export type FounderCalibrationItem = z.infer<typeof FounderCalibrationItem>
-
 export const FounderRubricValidationInput = z
   .object({
     companyId: Identifier,
@@ -1053,11 +1070,40 @@ export type FounderCorrectionKind = z.infer<typeof FounderCorrectionKind>
 
 export const FounderAssetUpdateProposal = z
   .object({
-    assetId: Identifier.nullable(),
-    change: LongText,
+    target: z
+      .object({
+        assetId: Identifier.nullable(),
+        type: GovernanceAssetType,
+        scope: GovernanceAssetScope,
+      })
+      .strict(),
+    baseRevision: z
+      .object({
+        assetId: Identifier,
+        version: z.number().int().positive(),
+      })
+      .strict()
+      .nullable(),
+    typedDiff: z
+      .object({
+        operation: z.enum(["create", "revise"]),
+        content: LongText,
+        rationale: LongText,
+        tags: z.array(ShortText).max(100),
+        sourceRefs: z.array(GovernanceAssetSourceRef).max(100),
+      })
+      .strict(),
     authority: z.literal("ai_proposed"),
   })
   .strict()
+  .refine(
+    (proposal) =>
+      proposal.typedDiff.operation === "create"
+        ? proposal.target.assetId === null && proposal.baseRevision === null
+        : proposal.target.assetId !== null
+          && proposal.baseRevision?.assetId === proposal.target.assetId,
+    { message: "Asset proposal target, baseRevision, and operation do not agree" },
+  )
   .meta({ ref: "FounderAssetUpdateProposal" })
 export type FounderAssetUpdateProposal = z.infer<typeof FounderAssetUpdateProposal>
 

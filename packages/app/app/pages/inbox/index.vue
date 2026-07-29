@@ -3,6 +3,7 @@ import type { GoalBrief } from "@agents-company/shared/experience";
 import type {
   DecisionCenterItem,
   DecisionCenterProjection,
+  GovernanceAsset,
 } from "@agents-company/sdk/v2/founder-os";
 import {
   goalDraftRequest,
@@ -150,6 +151,41 @@ async function correctDecision(item: DecisionCenterItem, kind: "override" | "cor
   if (!humanDecision) return;
   const reason = window.prompt("输入纠正原因");
   if (!reason) return;
+  const learningScope = window.prompt("这次纠偏是“个例”还是“长期规则”？", "个例");
+  if (learningScope !== "个例" && learningScope !== "长期规则") return;
+  const proposedAssetUpdates = (() => {
+    if (learningScope === "个例") return [];
+    const targetAssetId = window.prompt("目标资产 ID，创建新规则时留空")?.trim() || null;
+    const type = window.prompt(
+      "规则类型：constitution / principle / heuristic / boundary / taste_reference / taste_anti_reference / rubric / decision_case",
+      "heuristic",
+    )?.trim() as GovernanceAsset["type"] | undefined;
+    if (
+      !type
+      || !["constitution", "principle", "heuristic", "boundary", "taste_reference", "taste_anti_reference", "rubric", "decision_case"].includes(type)
+    )
+      return;
+    const baseVersion = targetAssetId
+      ? Number(window.prompt("目标资产当前版本", "1"))
+      : null;
+    if (targetAssetId && (!Number.isInteger(baseVersion) || Number(baseVersion) < 1)) return;
+    const scope = item.decision.scope.type === "project"
+      ? { kind: "project" as const, ref: item.decision.scope.projectId }
+      : { kind: "company" as const };
+    return [{
+      target: { assetId: targetAssetId, type, scope },
+      baseRevision: targetAssetId ? { assetId: targetAssetId, version: Number(baseVersion) } : null,
+      typedDiff: {
+        operation: targetAssetId ? "revise" as const : "create" as const,
+        content: humanDecision,
+        rationale: reason,
+        tags: ["founder-correction"],
+        sourceRefs: [{ kind: "decision" as const, id: item.decision.id }],
+      },
+      authority: "ai_proposed" as const,
+    }];
+  })();
+  if (!proposedAssetUpdates) return;
   decisionCenterPending.value = true;
   await $fetch("/api/agent-company/decision-center-correction", {
     method: "POST",
@@ -160,13 +196,17 @@ async function correctDecision(item: DecisionCenterItem, kind: "override" | "cor
       kind,
       humanDecision,
       reason,
-      proposedAssetUpdates: [],
+      proposedAssetUpdates,
       actorKind: "human",
       actorId: "user",
     },
   }).then(
     () => {
-      decisionCenterFeedback.value = kind === "override" ? "Override 已追加记录。" : "Correction 已追加记录。";
+      decisionCenterFeedback.value = learningScope === "长期规则"
+        ? "纠偏已追加，长期规则已生成 ai_proposed / draft。"
+        : kind === "override"
+          ? "Override 已追加记录。"
+          : "Correction 已追加记录。";
       return refreshDecisionCenter();
     },
     () => decisionCenterFeedback.value = "纠正未写入，请刷新后重试。",
