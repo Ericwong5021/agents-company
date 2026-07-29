@@ -289,6 +289,58 @@ export const CompanyGraphMutationTable = sqliteTable(
   ],
 )
 
+export const CompanyValidationGateTable = sqliteTable(
+  "company_validation_gate",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    kind: text().notNull(),
+    status: text().notNull(),
+    criteria_json: text().notNull(),
+    criteria_sha256: text().notNull(),
+    blocking_work_item_ids_json: text().notNull(),
+    evidence_refs_json: text().notNull(),
+    evaluator: text().notNull(),
+    repair_round: integer().notNull().default(0),
+    max_repair_rounds: integer().notNull().default(3),
+    failure_summary: text(),
+    supersedes_gate_id: text(),
+    created_at: integer().notNull(),
+    evaluated_at: integer(),
+  },
+  (table) => [
+    index("company_validation_gate_project_status_idx").on(table.project_id, table.status),
+    index("company_validation_gate_work_item_idx").on(table.work_item_id),
+  ],
+)
+
+export const CompanyValidationRepairTable = sqliteTable(
+  "company_validation_repair",
+  {
+    id: text().primaryKey(),
+    gate_id: text()
+      .notNull()
+      .references(() => CompanyValidationGateTable.id, { onDelete: "cascade" }),
+    round: integer().notNull(),
+    idempotency_key: text().notNull(),
+    input_sha256: text().notNull(),
+    failure_kind: text().notNull(),
+    diagnosis_json: text().notNull(),
+    fix_summary: text().notNull(),
+    repair_diff_json: text().notNull(),
+    reverify_evidence_json: text().notNull(),
+    result: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("company_validation_repair_gate_round_idx").on(table.gate_id, table.round),
+    uniqueIndex("company_validation_repair_gate_idempotency_idx").on(table.gate_id, table.idempotency_key),
+  ],
+)
+
 export const CompanyApprovalGateTable = sqliteTable(
   "company_approval_gate",
   {

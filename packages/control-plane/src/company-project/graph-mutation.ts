@@ -11,6 +11,7 @@ import {
   CompanyPlanTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyValidationGateTable,
   CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
@@ -299,6 +300,40 @@ function applyOperations(
       return
     }
     if (operation.type === "add_validation_gate") {
+      const criteria = [
+        {
+          id: `${operation.gate.id}:policy`,
+          statement: operation.gate.summary,
+          anchor: {
+            kind: "policy",
+            reference: `graph:${mutation_id}:${operation.gate.work_item_id}`,
+          },
+          operator: "equals",
+          expected: true,
+        },
+      ]
+      db.insert(CompanyValidationGateTable)
+        .values({
+          id: operation.gate.id,
+          project_id: proposal.project_id,
+          work_item_id: operation.gate.work_item_id,
+          kind: "policy",
+          status: "pending",
+          criteria_json: JSON.stringify(criteria),
+          criteria_sha256: new Bun.CryptoHasher("sha256")
+            .update(JSON.stringify(criteria))
+            .digest("hex"),
+          blocking_work_item_ids_json: JSON.stringify([operation.gate.work_item_id]),
+          evidence_refs_json: "[]",
+          evaluator: "policy_invariant_v1",
+          repair_round: 0,
+          max_repair_rounds: 3,
+          failure_summary: null,
+          supersedes_gate_id: null,
+          created_at: now,
+          evaluated_at: null,
+        })
+        .run()
       insertEvent(
         db,
         proposal.project_id,

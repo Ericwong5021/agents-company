@@ -22,6 +22,8 @@ const prefixes = {
   workAttempt: "wat",
   workReceipt: "wrc",
   graphMutation: "gmut",
+  validationGate: "vgat",
+  validationRepair: "vrep",
   projectCharter: "cchr",
   worktreeRun: "wrun",
   artifact: "art",

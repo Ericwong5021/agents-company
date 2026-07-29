@@ -308,6 +308,140 @@ export const WorkReceipt = WorkReceiptSubmission.extend({
 })
 export type WorkReceipt = z.infer<typeof WorkReceipt>
 
+export const ValidationGateKind = z.enum([
+  "prerequisite",
+  "unit_test",
+  "integration_test",
+  "device",
+  "runtime",
+  "artifact",
+  "source",
+  "policy",
+])
+export type ValidationGateKind = z.infer<typeof ValidationGateKind>
+
+export const ValidationGateStatus = z.enum(["pending", "running", "passed", "failed", "superseded"])
+export type ValidationGateStatus = z.infer<typeof ValidationGateStatus>
+
+export const ValidationEvaluator = z.enum([
+  "fact_match_v1",
+  "command_exit_v1",
+  "artifact_digest_v1",
+  "source_reachability_v1",
+  "runtime_state_v1",
+  "policy_invariant_v1",
+])
+export type ValidationEvaluator = z.infer<typeof ValidationEvaluator>
+
+export const ValidationScalar = z.union([z.string(), z.number(), z.boolean()])
+export type ValidationScalar = z.infer<typeof ValidationScalar>
+
+export const ValidationCriterion = z
+  .object({
+    id: z.string().trim().min(1).max(200),
+    statement: z.string().trim().min(1).max(8_000),
+    anchor: z
+      .object({
+        kind: ValidationGateKind,
+        reference: z.string().trim().min(1).max(2_000),
+      })
+      .strict(),
+    operator: z.enum(["exists", "equals", "exit_code", "digest"]),
+    expected: ValidationScalar,
+  })
+  .strict()
+export type ValidationCriterion = z.infer<typeof ValidationCriterion>
+
+export const ValidationEvidence = z
+  .object({
+    criterion_id: z.string().trim().min(1).max(200),
+    anchor: ValidationGateKind,
+    reference: z.string().trim().min(1).max(2_000),
+    observed: ValidationScalar,
+    evidence_ref: WorkReceiptEvidenceRef,
+    warning: z.string().trim().min(1).max(8_000).optional(),
+  })
+  .strict()
+export type ValidationEvidence = z.infer<typeof ValidationEvidence>
+
+export const ValidationGateCreate = z
+  .object({
+    id: z.string().trim().min(1).max(200).optional(),
+    project_id: z.string().trim().min(1),
+    work_item_id: z.string().trim().min(1).optional(),
+    kind: ValidationGateKind,
+    criteria: z.array(ValidationCriterion).min(1).max(500),
+    blocking_work_item_ids: z.array(z.string().trim().min(1)).min(1).max(500),
+    evaluator: ValidationEvaluator,
+    max_repair_rounds: z.number().int().positive().max(10).default(3),
+    supersedes_gate_id: z.string().trim().min(1).optional(),
+  })
+  .strict()
+export type ValidationGateCreate = z.infer<typeof ValidationGateCreate>
+
+export const ValidationGate = ValidationGateCreate.omit({ id: true }).extend({
+  id: z.string(),
+  status: ValidationGateStatus,
+  criteria_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  evidence_refs: z.array(WorkReceiptEvidenceRef),
+  repair_round: z.number().int().nonnegative(),
+  failure_summary: z.string().optional(),
+  created_at: z.number(),
+  evaluated_at: z.number().optional(),
+})
+export type ValidationGate = z.infer<typeof ValidationGate>
+
+export const ValidationEvaluation = z
+  .object({
+    gate_id: z.string().trim().min(1),
+    evaluator: ValidationEvaluator,
+    evidence: z.array(ValidationEvidence).max(500),
+  })
+  .strict()
+export type ValidationEvaluation = z.infer<typeof ValidationEvaluation>
+
+export const FailureDiagnosis = z
+  .object({
+    kind: WorkAttemptFailureKind,
+    finding: z.string().trim().min(1).max(8_000),
+    affected_work_item_ids: z.array(z.string().trim().min(1)).max(500),
+    suggested_fix: z.string().trim().min(1).max(8_000),
+    evidence_refs: z.array(WorkReceiptEvidenceRef).min(1).max(1_000),
+  })
+  .strict()
+export type FailureDiagnosis = z.infer<typeof FailureDiagnosis>
+
+export const ValidationRepairInput = z
+  .object({
+    gate_id: z.string().trim().min(1),
+    idempotency_key: z.string().trim().min(1).max(500),
+    diagnosis: FailureDiagnosis,
+    fix_summary: z.string().trim().min(1).max(8_000),
+    repair_diff: z.array(z.string().trim().min(1)).min(1).max(500),
+    evaluator: ValidationEvaluator,
+    evidence: z.array(ValidationEvidence).max(500),
+  })
+  .strict()
+export type ValidationRepairInput = z.infer<typeof ValidationRepairInput>
+
+export const ValidationPolicyInput = z
+  .object({
+    risk_level: z.enum(["low", "medium", "high"]),
+    external_side_effect: z.boolean().default(false),
+    deterministic_anchors: z.boolean(),
+  })
+  .strict()
+export type ValidationPolicyInput = z.infer<typeof ValidationPolicyInput>
+
+export const ValidationPolicyDecision = z
+  .object({
+    validation_mode: z.enum(["machine", "independent_review", "review_and_user_gate"]),
+    reviewer_required: z.boolean(),
+    user_gate_required: z.boolean(),
+  })
+  .strict()
+export type ValidationPolicyDecision = z.infer<typeof ValidationPolicyDecision>
+
 export const GraphMutationDecision = z.enum([
   "accept",
   "retry",
@@ -351,6 +485,17 @@ export const NewGraphWorkItem = z
   })
   .strict()
 export type NewGraphWorkItem = z.infer<typeof NewGraphWorkItem>
+
+export const PrerequisiteRepairRequest = z
+  .object({
+    gate_id: z.string().trim().min(1),
+    trigger_receipt_id: z.string().trim().min(1),
+    recovery_item: NewGraphWorkItem,
+    idempotency_key: z.string().trim().min(1).max(500),
+    orchestrator_version: z.number().int().positive(),
+  })
+  .strict()
+export type PrerequisiteRepairRequest = z.infer<typeof PrerequisiteRepairRequest>
 
 export const GraphValidationGateProposal = z
   .object({

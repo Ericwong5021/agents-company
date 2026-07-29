@@ -14,6 +14,7 @@ import {
   CompanyProjectCharterTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyValidationGateTable,
   CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
   CompanyWorktreeRunTable,
@@ -1106,6 +1107,24 @@ export const layer = Layer.effect(
         dependencies
           .filter((dependency) => incomplete.has(dependency.depends_on_id))
           .map((dependency) => dependency.work_item_id),
+      )
+      ;(
+        yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select({ blocking_work_item_ids_json: CompanyValidationGateTable.blocking_work_item_ids_json })
+              .from(CompanyValidationGateTable)
+              .where(
+                and(
+                  eq(CompanyValidationGateTable.project_id, project_id),
+                  notInArray(CompanyValidationGateTable.status, ["passed", "superseded"]),
+                ),
+              )
+              .all(),
+          ),
+        )
+      ).forEach((gate) =>
+        parseList(gate.blocking_work_item_ids_json).forEach((work_item_id) => blocked.add(work_item_id)),
       )
       return pending
         .filter((item) => !blocked.has(item.id))
