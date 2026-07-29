@@ -80,6 +80,13 @@ export {
   CompanyPatchEventTable,
   CompanyPatchTargetVersionTable,
   CompanySkillCandidateSnapshotTable,
+  CompanyLearningBenchmarkTargetVersionTable,
+  CompanyLearningBenchmarkTargetSelectionTable,
+  CompanyLearningInterestTargetVersionTable,
+  CompanyLearningInterestTargetSelectionTable,
+  CompanyLearningWorkflowTargetVersionTable,
+  CompanyLearningWorkflowTargetSelectionTable,
+  CompanyWorkReceiptLearningTargetRefTable,
 } from "../company-learning/company-learning.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {

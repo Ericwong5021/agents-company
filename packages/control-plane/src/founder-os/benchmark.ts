@@ -11,6 +11,7 @@ import {
   type FounderBenchmarkRunInput as FounderBenchmarkRunInputValue,
 } from "@agents-company/shared/founder-os"
 import { Identifier } from "@/id/id"
+import { activeBenchmarkTarget } from "@/company-learning/target-adapters"
 import { Database } from "@/storage"
 import { FounderTwinSnapshotTable, GovernanceAssetTable } from "./asset.sql"
 import { FounderBenchmarkCaseTable, FounderBenchmarkReportTable } from "./shadow.sql"
@@ -141,6 +142,21 @@ function ratio(numerator: number, denominator: number) {
 export function run(raw: FounderBenchmarkRunInputValue) {
   const input = FounderBenchmarkRunInput.parse(raw)
   return Effect.gen(function* () {
+    const target = Database.use((db) => activeBenchmarkTarget(db, input.companyId, input.datasetVersion))
+    if (target && (
+      target.payload.benchmark_type !== input.benchmarkType
+      || target.payload.dataset_version !== input.datasetVersion
+    ))
+      throw new Error("Active Benchmark target does not match the requested benchmark")
+    const thresholds = target?.payload ?? {
+      benchmark_type: input.benchmarkType,
+      dataset_version: input.datasetVersion,
+      minimum_sample_count: 1,
+      minimum_agreement_rate: input.benchmarkType === "founder_decision" ? 0.7 : 0.8,
+      minimum_traceability_rate: 1,
+      required_red_recall: input.benchmarkType === "founder_decision" ? 1 : null,
+      affects_authority_or_release_gate: false,
+    }
     const snapshot = Database.use((db) =>
       db
         .select()
@@ -308,16 +324,20 @@ export function run(raw: FounderBenchmarkRunInputValue) {
     }
     const status = blockReasons.length > 0
       ? "blocked"
-      : traceabilityRate === 1
+      : holdout.length >= thresholds.minimum_sample_count
+        && traceabilityRate !== null
+        && traceabilityRate >= thresholds.minimum_traceability_rate
         && agreementRate !== null
-        && agreementRate >= (input.benchmarkType === "founder_decision" ? 0.7 : 0.8)
-        && (input.benchmarkType === "taste" || redRecall === 1)
+        && agreementRate >= thresholds.minimum_agreement_rate
+        && (thresholds.required_red_recall === null
+          || redRecall !== null && redRecall >= thresholds.required_red_recall)
         ? "pass"
         : "fail"
     const inputChecksum = digest({
       benchmarkType: input.benchmarkType,
       datasetVersion: input.datasetVersion,
       snapshotId: input.snapshotId,
+      targetVersionId: target?.id ?? null,
       cases: holdout.map((item) => ({
         id: item.id,
         sourceAsset: item.sourceAsset,

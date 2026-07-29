@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyTable } from "@/company/company.sql"
 import { AgentRunTable, SkillSnapshotTable } from "@/agent-run/agent-run.sql"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
@@ -36,7 +37,14 @@ import {
   CompanyPatchEventTable,
   CompanyPatchTargetVersionTable,
   CompanySkillCandidateSnapshotTable,
+  CompanyWorkReceiptLearningTargetRefTable,
 } from "./company-learning.sql"
+import {
+  activateRealTarget,
+  resolveRealTargetPayload,
+  rollbackRealTarget,
+  validateRealTarget,
+} from "./target-adapters"
 import {
   Belief,
   BeliefAdoptionInput,
@@ -228,15 +236,13 @@ function validateBeliefEvidenceRef(
 
 function validatePatchAdapter(
   db: TxOrDb,
+  company_id: string,
   target_type: LearningPatchTargetType,
   target_id: string,
   proposed_diff: Record<string, unknown>,
 ) {
-  if (target_type === "governance_asset") {
-    const assetType = z.enum(["founder_profile", "founder_taste", "company_constitution", "company_belief"])
-      .parse(proposed_diff.asset_type)
-    return { asset_type: assetType }
-  }
+  if (["governance_asset", "benchmark", "agent_interest", "workflow"].includes(target_type))
+    return validateRealTarget(db, company_id, target_type, target_id, proposed_diff)
   if (target_type === "delegation_policy") {
     const current = db
       .select()
@@ -260,19 +266,7 @@ function validatePatchAdapter(
       candidate_content: z.string().trim().min(1).max(200_000).parse(proposed_diff.candidate_content),
     }
   }
-  if (target_type === "benchmark") {
-    return {
-      affects_authority_or_release_gate: z.boolean().parse(proposed_diff.affects_authority_or_release_gate),
-    }
-  }
-  if (target_type === "agent_interest") {
-    return {
-      topics: z.array(z.string().trim().min(1).max(200)).max(200).parse(proposed_diff.topics),
-    }
-  }
-  return {
-    validator_ref: z.string().trim().min(1).parse(proposed_diff.validator_ref),
-  }
+  return proposed_diff
 }
 
 function targetAuthority(target_type: LearningPatchTargetType, proposed_diff: Record<string, unknown>) {
@@ -770,7 +764,7 @@ export const layer = Layer.effect(
           throw new Error("Learning Patch evidence must include its source Outcome Signal")
         if (input.evidence.some((ref) => !persistedEvidenceRef(db, ref, input.company_id)))
           throw new Error("Learning Patch evidence must resolve to persisted execution facts")
-        validatePatchAdapter(db, input.target_type, input.target_id, input.proposed_diff)
+        validatePatchAdapter(db, input.company_id, input.target_type, input.target_id, input.proposed_diff)
         const now = Date.now()
         const id = Identifier.ascending("learningPatch")
         db.insert(CompanyLearningPatchTable).values({
@@ -820,7 +814,7 @@ export const layer = Layer.effect(
           if (!row) throw new Error("Learning Patch was not found")
           requireBeliefLoopMode(db, row.company_id)
           const diff = json<Record<string, unknown>>(row.proposed_diff_json)
-          validatePatchAdapter(db, row.target_type as LearningPatchTargetType, row.target_id, diff)
+          validatePatchAdapter(db, row.company_id, row.target_type as LearningPatchTargetType, row.target_id, diff)
           const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decision_id)).get()
           if (!decision || decision.company_id !== row.company_id)
             throw new Error("Learning Patch approval decision does not belong to the company")
@@ -872,8 +866,21 @@ export const layer = Layer.effect(
           }
           if (input.action === "record_benchmark") {
             if (!["proposed", "approved"].includes(patch.status)) throw new Error("Benchmark cannot be recorded for this Patch state")
-            if (input.reviewer_id === input.author_id || input.reviewer_id === input.subject_id)
+            const subjectId = input.subject_id
+              ?? (patch.target_type === "agent_interest" ? patch.target_id : undefined)
+            if (
+              input.reviewer_id === input.author_id
+              || input.reviewer_id === patch.created_by
+              || input.reviewer_id === subjectId
+              || input.reviewer_id === input.report_author_id
+            )
               throw new Error("Patch author or evaluated subject cannot review the Benchmark")
+            const principals = db.select().from(CompanyAgentTable).where(and(
+              eq(CompanyAgentTable.company_id, patch.company_id),
+              inArray(CompanyAgentTable.id, [input.reviewer_id, input.report_author_id]),
+            )).all()
+            if (principals.length !== new Set([input.reviewer_id, input.report_author_id]).size)
+              throw new Error("Benchmark reviewer and report author must be persisted company principals")
             if (!Object.keys(input.holdout_manifest).length)
               throw new Error("Benchmark holdout manifest cannot be empty")
             if (input.result === "passed" && (!input.evidence_refs.length || input.real_sample_count < 1))
@@ -892,8 +899,10 @@ export const layer = Layer.effect(
               holdout_sha256: createHash("sha256").update(holdout).digest("hex"),
               frozen_at: Date.now(),
               author_id: input.author_id,
-              subject_id: input.subject_id ?? null,
+              subject_id: subjectId ?? null,
               reviewer_id: input.reviewer_id,
+              reviewer_principal_id: input.reviewer_id,
+              report_author_id: input.report_author_id,
               result: input.result,
               evidence_refs_json: JSON.stringify([...new Set(input.evidence_refs)]),
               real_sample_count: input.real_sample_count,
@@ -981,6 +990,9 @@ export const layer = Layer.effect(
               .orderBy(desc(CompanyPatchCanaryTable.started_at)).get()
             if (!canary || canary.status !== "passed" || !json<string[]>(canary.metric_evidence_refs_json).length)
               throw new Error("Patch activation requires a passed Canary with real metric evidence")
+            const realTarget = ["governance_asset", "benchmark", "agent_interest", "workflow"].includes(patch.target_type)
+              ? activateRealTarget(db, patch, input.actor_id)
+              : undefined
             const latest = db.select().from(CompanyPatchTargetVersionTable).where(and(
               eq(CompanyPatchTargetVersionTable.company_id, patch.company_id),
               eq(CompanyPatchTargetVersionTable.target_type, patch.target_type),
@@ -996,8 +1008,11 @@ export const layer = Layer.effect(
               target_type: patch.target_type,
               target_id: patch.target_id,
               version: (latest?.version ?? 0) + 1,
-              payload_json: patch.proposed_diff_json,
+              payload_json: realTarget
+                ? JSON.stringify({ target_version_ref: realTarget.ref })
+                : patch.proposed_diff_json,
               previous_version_ref: canary.previous_version_ref,
+              target_version_ref: realTarget?.ref ?? null,
               status: "active",
               created_at: Date.now(),
             }).run()
@@ -1028,11 +1043,13 @@ export const layer = Layer.effect(
               eq(CompanyPatchTargetVersionTable.patch_id, patch_id),
               eq(CompanyPatchTargetVersionTable.status, "active"),
             )).get()
-            if (!project || !receipt || !target) throw new Error("Planning read evidence must resolve to the active Patch target and real WorkReceipt")
-            if (!JSON.stringify({
-              evidence: json(receipt.evidence_refs_json),
-              facts: json(receipt.confirmed_facts_json),
-            }).includes(input.target_version_id))
+            const receiptTarget = db.select().from(CompanyWorkReceiptLearningTargetRefTable).where(and(
+              eq(CompanyWorkReceiptLearningTargetRefTable.receipt_id, input.work_receipt_id),
+              eq(CompanyWorkReceiptLearningTargetRefTable.target_version_id, input.target_version_id),
+              eq(CompanyWorkReceiptLearningTargetRefTable.target_type, patch.target_type),
+              eq(CompanyWorkReceiptLearningTargetRefTable.target_id, patch.target_id),
+            )).get()
+            if (!project || !receipt || !target || !receiptTarget)
               throw new Error("WorkReceipt does not prove that planning read the active target version")
             patchEvent(db, patch_id, "planning_read_confirmed", input.actor_id, {
               project_id: input.project_id,
@@ -1053,9 +1070,13 @@ export const layer = Layer.effect(
           const appliedVersion = db.select().from(CompanyPatchTargetVersionTable)
             .where(eq(CompanyPatchTargetVersionTable.patch_id, patch_id))
             .orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
+          const realTarget = ["governance_asset", "benchmark", "agent_interest", "workflow"].includes(patch.target_type)
+          const realRollback = patch.status === "active" && realTarget
+            ? rollbackRealTarget(db, patch, input.actor_id)
+            : undefined
           db.update(CompanyPatchTargetVersionTable).set({ status: "rolled_back" })
             .where(eq(CompanyPatchTargetVersionTable.patch_id, patch_id)).run()
-          if (appliedVersion)
+          if (appliedVersion && (!realTarget || realRollback?.ref))
             db.insert(CompanyPatchTargetVersionTable).values({
               id: Identifier.ascending("patchTargetVersion"),
               patch_id,
@@ -1063,8 +1084,12 @@ export const layer = Layer.effect(
               target_type: patch.target_type,
               target_id: patch.target_id,
               version: appliedVersion.version + 1,
-              payload_json: JSON.stringify({ rollback_to: appliedVersion.previous_version_ref, reason: input.reason }),
+              payload_json: JSON.stringify({
+                rollback_to: realTarget ? realRollback!.ref : appliedVersion.previous_version_ref,
+                reason: input.reason,
+              }),
               previous_version_ref: appliedVersion.id,
+              target_version_ref: realTarget ? realRollback!.ref : appliedVersion.previous_version_ref,
               status: "active",
               created_at: Date.now(),
             }).run()
@@ -1180,10 +1205,24 @@ export const layer = Layer.effect(
           eq(CompanyPatchTargetVersionTable.target_id, target_id),
           eq(CompanyPatchTargetVersionTable.status, "active"),
         )).orderBy(desc(CompanyPatchTargetVersionTable.version)).get()
-        return row ? ActiveLearningTarget.parse({
-          ...row,
-          payload: json(row.payload_json),
-        }) : undefined
+        if (!row) return
+        return ActiveLearningTarget.parse({
+          id: row.id,
+          patch_id: row.patch_id,
+          company_id: row.company_id,
+          target_type: row.target_type,
+          target_id: row.target_id,
+          version: row.version,
+          payload: resolveRealTargetPayload(
+            db,
+            row.target_type as LearningPatchTargetType,
+            row.target_version_ref,
+          ) ?? json(row.payload_json),
+          previous_version_ref: row.previous_version_ref,
+          target_version_ref: row.target_version_ref,
+          status: row.status,
+          created_at: row.created_at,
+        })
       })
     })
 

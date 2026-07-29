@@ -234,6 +234,7 @@ export type GovernanceAssetScope = z.infer<typeof GovernanceAssetScope>
 export const GovernanceAssetAuthority = z.enum([
   "human_explicit",
   "human_confirmed",
+  "board_confirmed",
   "ai_proposed",
   "external_source",
 ])
@@ -276,7 +277,7 @@ export const GovernanceAsset = z
     (asset) =>
       asset.status !== "active"
       || (
-        ["human_explicit", "human_confirmed"].includes(asset.authority)
+        ["human_explicit", "human_confirmed", "board_confirmed"].includes(asset.authority)
         && asset.approvedBy !== undefined
         && asset.approvedAt !== undefined
       ),

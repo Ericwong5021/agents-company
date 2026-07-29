@@ -286,12 +286,19 @@ export type WorkReceiptOutcome = z.infer<typeof WorkReceiptOutcome>
 export const WorkReceiptProcessingStatus = z.enum(["pending", "processing", "processed", "rejected"])
 export type WorkReceiptProcessingStatus = z.infer<typeof WorkReceiptProcessingStatus>
 
-export const WorkReceiptEvidenceRef = z
-  .object({
+export const WorkReceiptEvidenceRef = z.union([
+  z.object({
     kind: z.enum(["agent_run", "artifact", "project_event"]),
     id: z.string().trim().min(1),
-  })
-  .strict()
+  }).strict(),
+  z.object({
+    kind: z.literal("learning_target_version"),
+    id: z.string().trim().min(1),
+    target_type: z.enum(["governance_asset", "delegation_policy", "skill", "benchmark", "agent_interest", "workflow"]),
+    target_id: z.string().trim().min(1),
+    version: z.number().int().positive(),
+  }).strict(),
+])
 export type WorkReceiptEvidenceRef = z.infer<typeof WorkReceiptEvidenceRef>
 
 export const WorkReceiptTypedPayload = z.discriminatedUnion("kind", [

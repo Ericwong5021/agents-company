@@ -6,6 +6,7 @@ import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql
 import { CompanyInterpretationTable } from "@/company-reading/company-reading.sql"
 import { DecisionRecordTable } from "@/founder-os/decision-ledger.sql"
 import { SkillSnapshotTable } from "@/agent-run/agent-run.sql"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 
 export const CompanyBeliefTable = sqliteTable("company_belief", {
   id: text().primaryKey(),
@@ -136,6 +137,8 @@ export const CompanyPatchBenchmarkTable = sqliteTable("company_patch_benchmark",
   author_id: text().notNull(),
   subject_id: text(),
   reviewer_id: text().notNull(),
+  reviewer_principal_id: text().references(() => CompanyAgentTable.id, { onDelete: "restrict" }),
+  report_author_id: text().references(() => CompanyAgentTable.id, { onDelete: "restrict" }),
   result: text().notNull(),
   evidence_refs_json: text().notNull(),
   real_sample_count: integer().notNull(),
@@ -146,6 +149,8 @@ export const CompanyPatchBenchmarkTable = sqliteTable("company_patch_benchmark",
   check("company_patch_benchmark_result_check", sql`${table.result} IN ('passed','failed','not_confirmed')`),
   check("company_patch_benchmark_sample_check", sql`${table.real_sample_count} >= 0`),
   check("company_patch_benchmark_reviewer_check", sql`${table.reviewer_id} != ${table.author_id} AND (${table.subject_id} IS NULL OR ${table.reviewer_id} != ${table.subject_id})`),
+  check("company_patch_benchmark_reviewer_principal_check", sql`${table.reviewer_principal_id} IS NULL OR ${table.reviewer_principal_id} = ${table.reviewer_id}`),
+  check("company_patch_benchmark_report_author_check", sql`${table.report_author_id} IS NULL OR ${table.reviewer_id} != ${table.report_author_id}`),
 ])
 
 export const CompanyPatchCanaryTable = sqliteTable("company_patch_canary", {
@@ -182,12 +187,104 @@ export const CompanyPatchTargetVersionTable = sqliteTable("company_patch_target_
   version: integer().notNull(),
   payload_json: text().notNull(),
   previous_version_ref: text(),
+  target_version_ref: text(),
   status: text().notNull(),
   created_at: integer().notNull(),
 }, (table) => [
   uniqueIndex("company_patch_target_version_idx").on(table.company_id, table.target_type, table.target_id, table.version),
   index("company_patch_target_current_idx").on(table.company_id, table.target_type, table.target_id, table.status),
   check("company_patch_target_version_status_check", sql`${table.status} IN ('candidate','active','superseded','rolled_back')`),
+])
+
+export const CompanyLearningBenchmarkTargetVersionTable = sqliteTable("company_learning_benchmark_target_version", {
+  id: text().primaryKey(),
+  patch_id: text().notNull().references(() => CompanyLearningPatchTable.id, { onDelete: "restrict" }),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  target_id: text().notNull(),
+  version: integer().notNull(),
+  payload_json: text().notNull(),
+  created_by: text().notNull(),
+  created_at: integer().notNull(),
+}, (table) => [
+  uniqueIndex("company_learning_benchmark_target_patch_idx").on(table.patch_id),
+  uniqueIndex("company_learning_benchmark_target_version_idx").on(table.company_id, table.target_id, table.version),
+])
+
+export const CompanyLearningBenchmarkTargetSelectionTable = sqliteTable("company_learning_benchmark_target_selection", {
+  id: text().primaryKey(),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  target_id: text().notNull(),
+  version_id: text().references(() => CompanyLearningBenchmarkTargetVersionTable.id, { onDelete: "restrict" }),
+  previous_version_id: text().references(() => CompanyLearningBenchmarkTargetVersionTable.id, { onDelete: "restrict" }),
+  selected_by: text().notNull(),
+  selected_at: integer().notNull(),
+}, (table) => [
+  index("company_learning_benchmark_target_current_idx").on(table.company_id, table.target_id, table.selected_at),
+])
+
+export const CompanyLearningInterestTargetVersionTable = sqliteTable("company_learning_interest_target_version", {
+  id: text().primaryKey(),
+  patch_id: text().notNull().references(() => CompanyLearningPatchTable.id, { onDelete: "restrict" }),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  agent_id: text().notNull().references(() => CompanyAgentTable.id, { onDelete: "restrict" }),
+  version: integer().notNull(),
+  payload_json: text().notNull(),
+  created_by: text().notNull(),
+  created_at: integer().notNull(),
+}, (table) => [
+  index("company_learning_interest_target_patch_idx").on(table.patch_id),
+  uniqueIndex("company_learning_interest_target_version_idx").on(table.company_id, table.agent_id, table.version),
+])
+
+export const CompanyLearningInterestTargetSelectionTable = sqliteTable("company_learning_interest_target_selection", {
+  id: text().primaryKey(),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  agent_id: text().notNull().references(() => CompanyAgentTable.id, { onDelete: "restrict" }),
+  version_id: text().references(() => CompanyLearningInterestTargetVersionTable.id, { onDelete: "restrict" }),
+  previous_version_id: text().references(() => CompanyLearningInterestTargetVersionTable.id, { onDelete: "restrict" }),
+  selected_by: text().notNull(),
+  selected_at: integer().notNull(),
+}, (table) => [
+  index("company_learning_interest_target_current_idx").on(table.company_id, table.agent_id, table.selected_at),
+])
+
+export const CompanyLearningWorkflowTargetVersionTable = sqliteTable("company_learning_workflow_target_version", {
+  id: text().primaryKey(),
+  patch_id: text().notNull().references(() => CompanyLearningPatchTable.id, { onDelete: "restrict" }),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  target_id: text().notNull(),
+  version: integer().notNull(),
+  payload_json: text().notNull(),
+  created_by: text().notNull(),
+  created_at: integer().notNull(),
+}, (table) => [
+  uniqueIndex("company_learning_workflow_target_patch_idx").on(table.patch_id),
+  uniqueIndex("company_learning_workflow_target_version_idx").on(table.company_id, table.target_id, table.version),
+])
+
+export const CompanyLearningWorkflowTargetSelectionTable = sqliteTable("company_learning_workflow_target_selection", {
+  id: text().primaryKey(),
+  company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
+  target_id: text().notNull(),
+  version_id: text().references(() => CompanyLearningWorkflowTargetVersionTable.id, { onDelete: "restrict" }),
+  previous_version_id: text().references(() => CompanyLearningWorkflowTargetVersionTable.id, { onDelete: "restrict" }),
+  selected_by: text().notNull(),
+  selected_at: integer().notNull(),
+}, (table) => [
+  index("company_learning_workflow_target_current_idx").on(table.company_id, table.target_id, table.selected_at),
+])
+
+export const CompanyWorkReceiptLearningTargetRefTable = sqliteTable("company_work_receipt_learning_target_ref", {
+  receipt_id: text().notNull().references(() => CompanyWorkReceiptTable.id, { onDelete: "cascade" }),
+  target_version_id: text().notNull().references(() => CompanyPatchTargetVersionTable.id, { onDelete: "restrict" }),
+  target_type: text().notNull(),
+  target_id: text().notNull(),
+  version: integer().notNull(),
+  created_at: integer().notNull(),
+}, (table) => [
+  uniqueIndex("company_work_receipt_learning_target_ref_idx").on(table.receipt_id, table.target_version_id),
+  index("company_work_receipt_learning_target_version_idx").on(table.target_version_id, table.receipt_id),
+  check("company_work_receipt_learning_target_type_check", sql`${table.target_type} IN ('governance_asset','delegation_policy','skill','benchmark','agent_interest','workflow')`),
 ])
 
 export const CompanySkillCandidateSnapshotTable = sqliteTable("company_skill_candidate_snapshot", {

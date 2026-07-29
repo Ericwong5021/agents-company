@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { FirstSliceCandidate } from "@agents-company/shared/project-orchestration"
 import type { RolloutShadowEvaluation } from "@agents-company/shared/rollout"
+import { attachPlanningTargetRefs } from "@/company-learning/target-adapters"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { CompanyProject } from "@/company-project/company-project"
 import {
@@ -914,7 +915,21 @@ export function makeLayer(hooks: Hooks = {}) {
         Effect.gen(function* () {
           const claim = yield* facts.claimNextPending(project_id)
           if (!claim) return []
-          const result = yield* processClaim(claim, mode, recovered)
+          const planningClaim = mode === "active"
+            ? yield* Effect.gen(function* () {
+                yield* Effect.sync(() =>
+                  Database.transaction(
+                    (db) => attachPlanningTargetRefs(db, claim.receipt.id),
+                    { behavior: "immediate" },
+                  ),
+                )
+                const receipt = (yield* facts.listReceipts(project_id))
+                  .find((candidate) => candidate.id === claim.receipt.id)
+                if (!receipt) throw new Error(`Work Receipt not found: ${claim.receipt.id}`)
+                return { ...claim, receipt }
+              })
+            : claim
+          const result = yield* processClaim(planningClaim, mode, recovered)
           if (claim.receipt.id === stop_receipt_id) return [result]
           return [result, ...(yield* drainUnlocked(project_id, mode, stop_receipt_id, recovered))]
         })

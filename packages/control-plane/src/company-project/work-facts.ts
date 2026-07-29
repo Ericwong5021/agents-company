@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
+import { CompanyWorkReceiptLearningTargetRefTable } from "@/company-learning/company-learning.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -43,7 +44,22 @@ const receiptFromRow = (row: typeof CompanyWorkReceiptTable.$inferSelect) =>
     outcome: row.outcome,
     summary: row.summary,
     artifact_ids: parseList(row.artifact_ids_json),
-    evidence_refs: parseList(row.evidence_refs_json),
+    evidence_refs: [
+      ...parseList(row.evidence_refs_json),
+      ...Database.use((db) =>
+        db.select().from(CompanyWorkReceiptLearningTargetRefTable)
+          .where(eq(CompanyWorkReceiptLearningTargetRefTable.receipt_id, row.id))
+          .orderBy(asc(CompanyWorkReceiptLearningTargetRefTable.created_at))
+          .all()
+          .map((reference) => ({
+            kind: "learning_target_version",
+            id: reference.target_version_id,
+            target_type: reference.target_type,
+            target_id: reference.target_id,
+            version: reference.version,
+          })),
+      ),
+    ],
     confirmed_facts: parseList(row.confirmed_facts_json),
     invalidated_assumptions: parseList(row.invalidated_assumptions_json),
     unknowns: parseList(row.unknowns_json),
@@ -145,6 +161,8 @@ function validateReferences(
     throw new Error("Work Receipt references an unavailable Artifact")
   }
   for (const reference of input.evidence_refs) {
+    if (reference.kind === "learning_target_version")
+      throw new Error("Learning target references are written by the active planner")
     if (reference.kind === "artifact") {
       if (!input.artifact_ids.includes(reference.id)) {
         throw new Error("Work Receipt Artifact evidence must appear in artifact_ids")

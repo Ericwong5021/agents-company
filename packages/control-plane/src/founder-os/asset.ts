@@ -220,6 +220,7 @@ export function revise(assetId: string, raw: GovernanceAssetRevisionInputValue) 
   const authorityRank = {
     external_source: 0,
     ai_proposed: 0,
+    board_confirmed: 1,
     human_confirmed: 1,
     human_explicit: 2,
   } as const
