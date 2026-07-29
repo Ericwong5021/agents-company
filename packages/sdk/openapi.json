@@ -143,6 +143,41 @@
         ]
       }
     },
+    "/company/recruitment/capabilities": {
+      "get": {
+        "operationId": "company.recruitment.capabilities",
+        "summary": "List capability evidence with declared/verified/expired status and runtime availability",
+        "responses": {
+          "200": {
+            "description": "Capability evidence projections"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.recruitment.capabilities({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company/recruitment/needs": {
       "post": {
         "operationId": "company.recruitment.need.create",
@@ -11005,6 +11040,357 @@
                       },
                       "action": {
                         "type": "string",
+                        "const": "adjust_brief"
+                      },
+                      "attentionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "briefId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "expectedBriefVersion": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "expectedPlanVersion": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "user_input",
+                          "system_suggestion",
+                          "user_confirmation"
+                        ]
+                      },
+                      "brief": {
+                        "type": "object",
+                        "properties": {
+                          "goal": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          },
+                          "deliverables": {
+                            "minItems": 1,
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "title",
+                                "description"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "acceptanceCriteria": {
+                            "minItems": 1,
+                            "maxItems": 200,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                },
+                                "verification": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "description",
+                                "verification"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "constraints": {
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "nonGoals": {
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "assumptions": {
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                },
+                                "confirmed": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "description",
+                                "confirmed"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "openQuestions": {
+                            "maxItems": 100,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "question": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                },
+                                "impact": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                },
+                                "blocking": {
+                                  "type": "boolean"
+                                },
+                                "defaultAssumption": {
+                                  "description": "若用户不回答，系统将采用的默认假设",
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 8000
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "question",
+                                "impact",
+                                "blocking",
+                                "defaultAssumption"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "riskLevel": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high",
+                              "critical"
+                            ]
+                          },
+                          "recommendedPlan": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 8000
+                              },
+                              "steps": {
+                                "minItems": 1,
+                                "maxItems": 100,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "outcome": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 8000
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "title",
+                                    "outcome"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "steps"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "approvalMode": {
+                            "type": "string",
+                            "enum": [
+                              "autonomous",
+                              "balanced",
+                              "strict"
+                            ]
+                          },
+                          "sourceRefs": {
+                            "minItems": 1,
+                            "maxItems": 500,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "project",
+                                    "project_event",
+                                    "goal_brief",
+                                    "legacy_charter",
+                                    "work_item",
+                                    "approval_gate",
+                                    "artifact",
+                                    "delivery",
+                                    "conversation",
+                                    "goal_request",
+                                    "user",
+                                    "work_attempt",
+                                    "work_receipt",
+                                    "graph_mutation",
+                                    "project_assignment",
+                                    "validation_gate"
+                                  ]
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "eventType": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "goal",
+                          "deliverables",
+                          "acceptanceCriteria",
+                          "constraints",
+                          "nonGoals",
+                          "assumptions",
+                          "openQuestions",
+                          "riskLevel",
+                          "recommendedPlan",
+                          "approvalMode",
+                          "sourceRefs"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "changeReason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 8000
+                      }
+                    },
+                    "required": [
+                      "idempotencyKey",
+                      "expectedGraphRevision",
+                      "action",
+                      "briefId",
+                      "expectedBriefVersion",
+                      "expectedPlanVersion",
+                      "source",
+                      "brief",
+                      "changeReason"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "expectedGraphRevision": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "action": {
+                        "type": "string",
                         "const": "pause_work"
                       },
                       "reason": {
@@ -11232,6 +11618,7 @@
                     "action": {
                       "type": "string",
                       "enum": [
+                        "adjust_brief",
                         "pause_work",
                         "resume_work",
                         "stop_work",
@@ -27105,6 +27492,134 @@
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
+                          },
+                          "derivedMetricResult": {
+                            "type": "object",
+                            "properties": {
+                              "metricId": {
+                                "type": "string",
+                                "const": "consecutive_reproducible_candidate_count"
+                              },
+                              "blocking": {
+                                "type": "boolean",
+                                "const": true
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pass",
+                                  "failed",
+                                  "blocked"
+                                ]
+                              },
+                              "value": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 2
+                              },
+                              "numerator": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 2
+                              },
+                              "denominator": {
+                                "type": "number",
+                                "const": 2
+                              },
+                              "sampleSize": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4
+                              },
+                              "meetsThreshold": {
+                                "type": "boolean"
+                              },
+                              "threshold": {
+                                "type": "object",
+                                "properties": {
+                                  "gate": {
+                                    "type": "string",
+                                    "const": "R4"
+                                  },
+                                  "operator": {
+                                    "type": "string",
+                                    "const": ">="
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "const": 2
+                                  }
+                                },
+                                "required": [
+                                  "gate",
+                                  "operator",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "reasons": {
+                                "maxItems": 100,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 500
+                                }
+                              },
+                              "sourceRefs": {
+                                "maxItems": 4,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "gate_report"
+                                    },
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 500
+                                    },
+                                    "candidateSha": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{40}$"
+                                    },
+                                    "runId": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 500
+                                    },
+                                    "digest": {
+                                      "type": "string",
+                                      "pattern": "^[a-f0-9]{64}$"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "id",
+                                    "candidateSha",
+                                    "runId",
+                                    "digest"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "metricId",
+                              "blocking",
+                              "status",
+                              "value",
+                              "numerator",
+                              "denominator",
+                              "sampleSize",
+                              "meetsThreshold",
+                              "threshold",
+                              "reasons",
+                              "sourceRefs"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -27121,7 +27636,8 @@
                           "inputSha256",
                           "status",
                           "reasons",
-                          "createdAt"
+                          "createdAt",
+                          "derivedMetricResult"
                         ],
                         "additionalProperties": false
                       }
@@ -34992,7 +35508,10 @@
               },
               "lifecycle": {
                 "type": "string",
-                "const": "employee"
+                "enum": [
+                  "employee",
+                  "assigned"
+                ]
               },
               "department": {
                 "type": "string"
@@ -35011,6 +35530,13 @@
               "responsibilities"
             ],
             "additionalProperties": false
+          },
+          "employment": {
+            "type": "string",
+            "enum": [
+              "employee",
+              "temporary"
+            ]
           },
           "presence": {
             "type": "string",
@@ -35068,6 +35594,52 @@
               "type": "string"
             }
           },
+          "workload": {
+            "type": "object",
+            "properties": {
+              "active": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "blocked": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "recent_delivery": {
+                "type": "object",
+                "properties": {
+                  "work_item_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "review_status": {
+                    "type": "string"
+                  },
+                  "time_completed": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "work_item_id",
+                  "title",
+                  "review_status",
+                  "time_completed"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "active",
+              "blocked"
+            ],
+            "additionalProperties": false
+          },
           "evidence": {
             "type": "object",
             "properties": {
@@ -35097,12 +35669,14 @@
         },
         "required": [
           "agent",
+          "employment",
           "presence",
           "attention",
           "activity",
           "since",
           "interruptibility",
-          "collaborators"
+          "collaborators",
+          "workload"
         ],
         "additionalProperties": false
       },

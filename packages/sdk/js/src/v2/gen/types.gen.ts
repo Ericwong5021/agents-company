@@ -147,10 +147,11 @@ export type AgentActivityProjection = {
     name: string
     role?: string
     description?: string
-    lifecycle: "employee"
+    lifecycle: "employee" | "assigned"
     department?: string
     responsibilities: Array<string>
   }
+  employment: "employee" | "temporary"
   presence: "online" | "offline"
   attention: "none" | "available" | "focused" | "urgent"
   activity: "idle" | "waiting" | "working" | "recovering" | "completed" | "failed" | "interrupted"
@@ -160,6 +161,16 @@ export type AgentActivityProjection = {
   interruptibility: "interruptible" | "coordinate_first" | "needs_intervention"
   risk?: string
   collaborators: Array<string>
+  workload: {
+    active: number
+    blocked: number
+    recent_delivery?: {
+      work_item_id: string
+      title: string
+      review_status: string
+      time_completed: number
+    }
+  }
   evidence?: {
     kind: "agent_run"
     runID: string
@@ -4259,6 +4270,23 @@ export type CompanyRecruitmentSnapshotResponses = {
   200: unknown
 }
 
+export type CompanyRecruitmentCapabilitiesData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+    agent_id?: string
+  }
+  url: "/company/recruitment/capabilities"
+}
+
+export type CompanyRecruitmentCapabilitiesResponses = {
+  /**
+   * Capability evidence projections
+   */
+  200: unknown
+}
+
 export type CompanyRecruitmentNeedCreateData = {
   body?: {
     company_id?: CompanyId
@@ -7781,6 +7809,79 @@ export type ExperienceWorkActionData = {
     | {
         idempotencyKey: string
         expectedGraphRevision: number
+        action: "adjust_brief"
+        attentionId?: string
+        briefId: string
+        expectedBriefVersion: number
+        expectedPlanVersion: number
+        source: "user_input" | "system_suggestion" | "user_confirmation"
+        brief: {
+          goal: string
+          deliverables: Array<{
+            id: string
+            title: string
+            description: string
+          }>
+          acceptanceCriteria: Array<{
+            id: string
+            description: string
+            verification: string
+          }>
+          constraints: Array<string>
+          nonGoals: Array<string>
+          assumptions: Array<{
+            id: string
+            description: string
+            confirmed: boolean
+          }>
+          openQuestions: Array<{
+            id: string
+            question: string
+            impact: string
+            blocking: boolean
+            /**
+             * 若用户不回答，系统将采用的默认假设
+             */
+            defaultAssumption: string
+          }>
+          riskLevel: "low" | "medium" | "high" | "critical"
+          recommendedPlan: {
+            summary: string
+            steps: Array<{
+              id: string
+              title: string
+              outcome: string
+            }>
+          }
+          approvalMode: "autonomous" | "balanced" | "strict"
+          sourceRefs: Array<{
+            kind:
+              | "project"
+              | "project_event"
+              | "goal_brief"
+              | "legacy_charter"
+              | "work_item"
+              | "approval_gate"
+              | "artifact"
+              | "delivery"
+              | "conversation"
+              | "goal_request"
+              | "user"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+            id: string
+            version?: number
+            eventType?: string
+          }>
+        }
+        changeReason: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
         action: "pause_work"
         reason?: string
       }
@@ -7900,7 +8001,7 @@ export type ExperienceWorkActionResponses = {
   200: {
     actionId: string
     projectId: string
-    action: "pause_work" | "resume_work" | "stop_work" | "retry" | "resolve_blocker"
+    action: "adjust_brief" | "pause_work" | "resume_work" | "stop_work" | "retry" | "resolve_blocker"
     status: "applied" | "rejected"
     replayed: boolean
     result?: {
@@ -13169,6 +13270,29 @@ export type RolloutEvidenceResponses = {
       status: "pass" | "failed" | "blocked"
       reasons: Array<string>
       createdAt: number
+      derivedMetricResult: {
+        metricId: "consecutive_reproducible_candidate_count"
+        blocking: true
+        status: "pass" | "failed" | "blocked"
+        value: number
+        numerator: number
+        denominator: 2
+        sampleSize: number
+        meetsThreshold: boolean
+        threshold: {
+          gate: "R4"
+          operator: ">="
+          value: 2
+        }
+        reasons: Array<string>
+        sourceRefs: Array<{
+          kind: "gate_report"
+          id: string
+          candidateSha: string
+          runId: string
+          digest: string
+        }>
+      }
     }>
   }
 }

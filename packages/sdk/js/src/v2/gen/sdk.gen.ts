@@ -95,6 +95,7 @@ import type {
   CompanyProviderSetErrors,
   CompanyProviderSetResponses,
   CompanyProvidersResponses,
+  CompanyRecruitmentCapabilitiesResponses,
   CompanyRecruitmentDepartmentEnsureErrors,
   CompanyRecruitmentDepartmentEnsureResponses,
   CompanyRecruitmentEmploymentReviewResponses,
@@ -1035,6 +1036,34 @@ export class Recruitment extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<CompanyRecruitmentSnapshotResponses, unknown, ThrowOnError>({
       url: "/company/recruitment",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List capability evidence with declared/verified/expired status and runtime availability
+   */
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      agent_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "agent_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyRecruitmentCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/company/recruitment/capabilities",
       ...options,
       ...params,
     })
@@ -2094,6 +2123,79 @@ export class Work extends HeyApiClient {
     parameters: {
       projectID: string
       body:
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "adjust_brief"
+            attentionId?: string
+            briefId: string
+            expectedBriefVersion: number
+            expectedPlanVersion: number
+            source: "user_input" | "system_suggestion" | "user_confirmation"
+            brief: {
+              goal: string
+              deliverables: Array<{
+                id: string
+                title: string
+                description: string
+              }>
+              acceptanceCriteria: Array<{
+                id: string
+                description: string
+                verification: string
+              }>
+              constraints: Array<string>
+              nonGoals: Array<string>
+              assumptions: Array<{
+                id: string
+                description: string
+                confirmed: boolean
+              }>
+              openQuestions: Array<{
+                id: string
+                question: string
+                impact: string
+                blocking: boolean
+                /**
+                 * 若用户不回答，系统将采用的默认假设
+                 */
+                defaultAssumption: string
+              }>
+              riskLevel: "low" | "medium" | "high" | "critical"
+              recommendedPlan: {
+                summary: string
+                steps: Array<{
+                  id: string
+                  title: string
+                  outcome: string
+                }>
+              }
+              approvalMode: "autonomous" | "balanced" | "strict"
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+            }
+            changeReason: string
+          }
         | {
             idempotencyKey: string
             expectedGraphRevision: number
