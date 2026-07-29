@@ -42,6 +42,9 @@ const BoundaryResult = z
     atomicState: z.enum(["old", "new"]),
     replayed: z.boolean(),
     duplicateSideEffects: z.number().int().nonnegative(),
+    crashedPid: z.number().int().positive(),
+    recoveryPid: z.number().int().positive(),
+    signal: z.literal("SIGKILL"),
     beforeDatabaseSha256: Digest,
     afterDatabaseSha256: Digest,
     beforeBusinessSha256: Digest,
@@ -97,6 +100,12 @@ export const B5CandidateRecoveryResult = z
         reconciledAt: z.number().int().nonnegative(),
         dispatchProbedAt: z.number().int().nonnegative(),
         dispatchAfterReconcile: z.boolean(),
+        phases: z.tuple([
+          z.literal("company_project"),
+          z.literal("receipt_graph"),
+          z.literal("project_orchestrator"),
+          z.literal("projection"),
+        ]),
         projectionWatermarkBefore: z.string(),
         projectionWatermarkAfter: z.string(),
         projectionConverged: z.boolean(),
@@ -133,6 +142,12 @@ const ChildOutput = z
         reconciledAt: z.number().int().nonnegative(),
         dispatchProbedAt: z.number().int().nonnegative(),
         dispatchAfterReconcile: z.boolean(),
+        phases: z.tuple([
+          z.literal("company_project"),
+          z.literal("receipt_graph"),
+          z.literal("project_orchestrator"),
+          z.literal("projection"),
+        ]),
         projectionWatermarkBefore: z.string(),
         projectionWatermarkAfter: z.string(),
         projectionConverged: z.boolean(),
@@ -230,7 +245,7 @@ async function crashAtBoundary(input: B5CandidateRecoveryChildRequest) {
   ])
   if (exitCode === 0)
     throw new Error(`B5 mutation child did not terminate at ${input.boundary}: ${stderr || stdout}`)
-  return Date.now()
+  return { lostAt: Date.now(), crashedPid: child.pid }
 }
 
 async function writeReport(input: B5CandidateRecoveryInput, value: Omit<B5CandidateRecoveryResult, "report">) {
@@ -294,41 +309,43 @@ export async function produceB5CandidateRecovery(raw: B5CandidateRecoveryInput):
   }
 
   const boundaries = Boundary.options
-  const results = await Promise.all(
-    boundaries.map(async (boundary) => {
-      const request = childRequest(input, "prepare", boundary)
-      const prepared = await run(request)
-      const lostAt = await crashAtBoundary({ ...request, mode: "crash" })
-      const recovered = await run({ ...request, mode: "recover" })
-      if (
-        recovered.beforeRevision === undefined ||
-        recovered.afterRevision === undefined ||
-        !recovered.atomicState ||
-        recovered.replayed === undefined ||
-        !recovered.recoveredAt ||
-        recovered.recoveredAt <= lostAt
-      )
-        throw new Error(`S20 ${boundary} recovery report is incomplete`)
-      return {
-        boundary,
-        projectId: recovered.projectId,
-        receiptId: recovered.receiptIds[0]!,
-        mutationId: recovered.mutationIds[0]!,
-        beforeRevision: recovered.beforeRevision,
-        afterRevision: recovered.afterRevision,
-        atomicState: recovered.atomicState,
-        replayed: recovered.replayed,
-        duplicateSideEffects: recovered.duplicateSideEffects,
-        beforeDatabaseSha256: prepared.databaseSha256,
-        afterDatabaseSha256: recovered.databaseSha256,
-        beforeBusinessSha256: prepared.businessSha256,
-        afterBusinessSha256: recovered.businessSha256,
-        lostAt,
-        recoveredAt: recovered.recoveredAt,
-        workItemIds: recovered.workItemIds,
-      }
-    }),
-  )
+  const results = []
+  for (const boundary of boundaries) {
+    const request = childRequest(input, "prepare", boundary)
+    const prepared = await run(request)
+    const crashed = await crashAtBoundary({ ...request, mode: "crash" })
+    const recovered = await run({ ...request, mode: "recover" })
+    if (
+      recovered.beforeRevision === undefined ||
+      recovered.afterRevision === undefined ||
+      !recovered.atomicState ||
+      recovered.replayed === undefined ||
+      !recovered.recoveredAt ||
+      recovered.recoveredAt <= crashed.lostAt
+    )
+      throw new Error(`S20 ${boundary} recovery report is incomplete`)
+    results.push({
+      boundary,
+      projectId: recovered.projectId,
+      receiptId: recovered.receiptIds[0]!,
+      mutationId: recovered.mutationIds[0]!,
+      beforeRevision: recovered.beforeRevision,
+      afterRevision: recovered.afterRevision,
+      atomicState: recovered.atomicState,
+      replayed: recovered.replayed,
+      duplicateSideEffects: recovered.duplicateSideEffects,
+      crashedPid: crashed.crashedPid,
+      recoveryPid: recovered.pid,
+      signal: "SIGKILL" as const,
+      beforeDatabaseSha256: prepared.databaseSha256,
+      afterDatabaseSha256: recovered.databaseSha256,
+      beforeBusinessSha256: prepared.businessSha256,
+      afterBusinessSha256: recovered.businessSha256,
+      lostAt: crashed.lostAt,
+      recoveredAt: recovered.recoveredAt,
+      workItemIds: recovered.workItemIds,
+    })
+  }
   const primary = results.find((item) => item.boundary === "after_commit")!
   const value = {
     schemaVersion: 1 as const,

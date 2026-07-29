@@ -545,6 +545,7 @@ async function s27() {
         startup.dispatchProbedAt >= startup.reconciledAt &&
         startup.dispatch.dispatched_work_item_ids.length === 0 &&
         startup.orchestrator.dispatches.every((item) => item.dispatched_work_item_ids.length === 0),
+      phases: ["company_project", "receipt_graph", "project_orchestrator", "projection"],
       projectionWatermarkBefore: projectionBefore,
       projectionWatermarkAfter: projectionAfter?.source_watermark ?? "missing",
       projectionConverged:
