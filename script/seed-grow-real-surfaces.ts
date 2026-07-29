@@ -620,13 +620,9 @@ try {
   })
   const page = await context.newPage()
   let eventStreamRequests = 0
-  const coordinatedRequests = { detail: 0, seedGrow: 0, messages: 0 }
   page.on("request", (request: { url: () => string }) => {
     const pathname = new URL(request.url()).pathname
     if (pathname === "/api/agent-company/events") eventStreamRequests += 1
-    if (/^\/api\/agent-company\/projects\/[^/]+$/.test(pathname)) coordinatedRequests.detail += 1
-    if (/^\/api\/agent-company\/projects\/[^/]+\/seed-grow$/.test(pathname)) coordinatedRequests.seedGrow += 1
-    if (/^\/api\/agent-company\/projects\/[^/]+\/messages$/.test(pathname)) coordinatedRequests.messages += 1
   })
   await page.goto(`${webUIURL}/login`, { waitUntil: "domcontentloaded" })
   await page.waitForURL((url: URL) => url.pathname === "/inbox", { timeout: 60_000 })
@@ -851,8 +847,13 @@ try {
     : undefined
   if (!projectChannel || typeof projectChannel.id !== "string")
     throw new Error("SDK project channel is unavailable.")
-  const beforeCoordinatedRequests = { ...coordinatedRequests }
   const convergenceMessage = "B4 事件后 DOM 协同刷新已收敛"
+  const projectPath = `/api/agent-company/projects/${encodeURIComponent(projectID)}`
+  const coordinatedResponses = Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === projectPath),
+    page.waitForResponse((response) => new URL(response.url()).pathname === `${projectPath}/seed-grow`),
+    page.waitForResponse((response) => new URL(response.url()).pathname === `${projectPath}/messages`),
+  ])
   await sdkValue(
     "SDK company.channelSend",
     controlPlaneClient.company.channelSend({
@@ -865,18 +866,59 @@ try {
       },
     }),
   )
-  await waitForValue(
-    async () => ({ ...coordinatedRequests }),
-    (value) =>
-      value.detail > beforeCoordinatedRequests.detail &&
-      value.seedGrow > beforeCoordinatedRequests.seedGrow &&
-      value.messages > beforeCoordinatedRequests.messages,
-    30_000,
-    "SSE did not coordinate project detail, Seed-and-Grow, and message refresh",
-  )
+  const [detailResponse, seedGrowResponse, messagesResponse] = await coordinatedResponses
+  if (![detailResponse, seedGrowResponse, messagesResponse].every((response) => response.ok()))
+    throw new Error(
+      `SSE coordinated refresh failed: ${JSON.stringify({
+        detail: detailResponse.status(),
+        seedGrow: seedGrowResponse.status(),
+        messages: messagesResponse.status(),
+      })}`,
+    )
+  const coordinatedDetail = asRecord(await detailResponse.json(), "SSE detail response is invalid.")
+  const coordinatedProject = asRecord(coordinatedDetail.project, "SSE detail project is invalid.")
+  if (coordinatedProject.id !== projectID) throw new Error("SSE detail response belongs to a different project.")
+  const coordinatedSeedGrow = asRecord(await seedGrowResponse.json(), "SSE Seed-and-Grow response is invalid.")
+  const coordinatedMessages = await messagesResponse.json()
+  if (!Array.isArray(coordinatedMessages)) throw new Error("SSE messages response is invalid.")
+  const coordinatedMessage = coordinatedMessages
+    .map((message) => asRecord(message, "SSE project message is invalid."))
+    .find((message) => message.body === convergenceMessage)
+  if (!coordinatedMessage || typeof coordinatedMessage.id !== "string")
+    throw new Error("SSE messages response does not contain the convergence message.")
+  const expectedDOMWatermarks = {
+    detailProjectID: projectID,
+    organization: watermark(coordinatedSeedGrow.organization, "SSE Organization projection"),
+    graph: watermark(coordinatedSeedGrow.graph, "SSE Graph projection"),
+    validation: watermark(coordinatedSeedGrow.validation, "SSE Validation projection"),
+    message: coordinatedMessage.id,
+  }
   await page.getByRole("tab", { name: "讨论", exact: true }).click()
   await page.getByText(convergenceMessage, { exact: true }).waitFor({ state: "visible", timeout: 30_000 })
-  const browserEventAfterDOMConverged = true
+  const browserEventAfterDOM = await waitForValue(
+    () =>
+      page.locator(".ac-work3").evaluate((element: Element) => ({
+        detailProjectID: element.getAttribute("data-detail-project-id"),
+        organization: element.getAttribute("data-organization-watermark"),
+        graph: element.getAttribute("data-graph-watermark"),
+        validation: element.getAttribute("data-validation-watermark"),
+        message: element.getAttribute("data-message-watermark"),
+      })),
+    (value) =>
+      value.detailProjectID === expectedDOMWatermarks.detailProjectID &&
+      value.organization === expectedDOMWatermarks.organization &&
+      value.graph === expectedDOMWatermarks.graph &&
+      value.validation === expectedDOMWatermarks.validation &&
+      value.message?.split(",").includes(expectedDOMWatermarks.message) === true,
+    30_000,
+    "SSE responses succeeded but their watermarks did not converge in the Work DOM",
+  )
+  const browserEventAfterDOMConverged =
+    browserEventAfterDOM.detailProjectID === expectedDOMWatermarks.detailProjectID &&
+    browserEventAfterDOM.organization === expectedDOMWatermarks.organization &&
+    browserEventAfterDOM.graph === expectedDOMWatermarks.graph &&
+    browserEventAfterDOM.validation === expectedDOMWatermarks.validation &&
+    browserEventAfterDOM.message?.split(",").includes(expectedDOMWatermarks.message) === true
 
   await page.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
   await page.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
@@ -1315,7 +1357,7 @@ try {
       eventAfterDOMConverged: browserEventAfterDOMConverged,
       eventSourceRequests: eventStreamRequests,
       sseReconnected: true,
-      refreshConverged: true,
+      refreshConverged: browserEventAfterDOMConverged,
       states: {
         loading: loadingStateVisible,
         empty: true,

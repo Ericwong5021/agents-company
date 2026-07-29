@@ -154,6 +154,8 @@ export function useCompanySnapshot() {
   const reconnectAttempt = useState("agent-company-reconnect-attempt", () => 0)
   const signalVersion = useState("agent-company-signal-version", () => 0)
   const reconnectTimer = ref<ReturnType<typeof setTimeout>>()
+  const snapshotRefreshRunning = ref(false)
+  const snapshotRefreshDirty = ref(false)
 
   watch(
     [request.data, request.error],
@@ -178,11 +180,35 @@ export function useCompanySnapshot() {
     { immediate: true },
   )
 
-  async function refresh() {
-    if (request.pending.value) return
-    connection.value = transitionCompanyConnection(connection.value, { type: "request_started" })
-    await request.refresh()
+  async function refreshSnapshot(updateConnection: boolean) {
+    if (snapshotRefreshRunning.value || request.pending.value) {
+      snapshotRefreshDirty.value = true
+      return
+    }
+    snapshotRefreshRunning.value = true
+    if (updateConnection)
+      connection.value = transitionCompanyConnection(connection.value, { type: "request_started" })
+    await (async () => {
+      do {
+        snapshotRefreshDirty.value = false
+        await request.refresh()
+      } while (snapshotRefreshDirty.value)
+    })().finally(() => {
+      snapshotRefreshRunning.value = false
+    })
   }
+
+  async function refresh() {
+    await refreshSnapshot(true)
+  }
+
+  watch(
+    () => request.pending.value,
+    (value) => {
+      if (value || !snapshotRefreshDirty.value || snapshotRefreshRunning.value) return
+      void refreshSnapshot(false)
+    },
+  )
 
   function scheduleReconnect() {
     if (reconnectTimer.value) clearTimeout(reconnectTimer.value)
@@ -194,7 +220,7 @@ export function useCompanySnapshot() {
     reconnectTimer.value = setTimeout(() => {
       reconnectAttempt.value += 1
       if (connection.value === "degraded") {
-        void request.refresh()
+        void refreshSnapshot(false)
         return
       }
       void refresh()
@@ -213,7 +239,7 @@ export function useCompanySnapshot() {
   // 事件都闪现 recovering），结果到达后由快照 watcher 统一更新状态。
   const sseRefresh = (signal: boolean) => {
     if (signal) signalVersion.value += 1
-    if (!request.pending.value) void request.refresh()
+    void refreshSnapshot(false)
   }
 
   onMounted(() => {

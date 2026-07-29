@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type {
   AttentionItem,
+  ExperienceWorkActionRequest,
+  ExperienceWorkActionResult,
   GoalBriefProjectView,
 } from "@agents-company/shared/experience"
 import type {
@@ -97,17 +99,23 @@ const {
 )
 const seedProject = computed(() => detail.value?.project.executionStrategy === "seed_and_grow")
 const seedGrowPending = computed(() => seedGrowStatus.value === "pending")
-const coordinatedRefreshPending = ref(false)
-const coordinatedRefreshDirty = ref(false)
+const coordinatedRefreshPendingProject = ref<string>()
+const coordinatedRefreshDirty = ref<Record<string, boolean>>({})
+
+function clearCoordinatedRefreshDirty(projectID: string) {
+  const next = { ...coordinatedRefreshDirty.value }
+  delete next[projectID]
+  coordinatedRefreshDirty.value = next
+}
 
 async function refreshProjectExperience(projectID = workID.value) {
   if (!projectID) return
-  if (coordinatedRefreshPending.value) {
-    coordinatedRefreshDirty.value = true
+  if (coordinatedRefreshPendingProject.value) {
+    coordinatedRefreshDirty.value = { ...coordinatedRefreshDirty.value, [projectID]: true }
     return
   }
-  coordinatedRefreshPending.value = true
-  coordinatedRefreshDirty.value = false
+  coordinatedRefreshPendingProject.value = projectID
+  clearCoordinatedRefreshDirty(projectID)
   await Promise.all([
     refresh(),
     refreshGoalBrief(),
@@ -115,13 +123,11 @@ async function refreshProjectExperience(projectID = workID.value) {
     refreshSeedGrow(),
     refreshProjectMessages(),
   ])
-  coordinatedRefreshPending.value = false
-  if (!coordinatedRefreshDirty.value || workID.value !== projectID) {
-    coordinatedRefreshDirty.value = false
-    return
-  }
-  coordinatedRefreshDirty.value = false
-  await refreshProjectExperience(projectID)
+  coordinatedRefreshPendingProject.value = undefined
+  const nextProjectID = workID.value
+  if (!nextProjectID || !coordinatedRefreshDirty.value[nextProjectID]) return
+  clearCoordinatedRefreshDirty(nextProjectID)
+  await refreshProjectExperience(nextProjectID)
 }
 
 watch(signalVersion, (version, previous) => {
@@ -139,13 +145,7 @@ const acceptanceItems = computed(() =>
   goalBrief.value?.kind === "goal_brief" ? acceptanceChecklist(goalBrief.value.brief.acceptanceCriteria) : [],
 )
 
-const workDiagnostics = computed(() =>
-  work.value?.availability === "available"
-    ? work.value.diagnostics
-    : work.value?.availability === "unavailable"
-      ? work.value.diagnostics
-      : [],
-)
+const workDiagnostics = computed(() => work.value?.diagnostics ?? [])
 
 // WORK-04：工作区 Composer 只在项目可用时挂载，发送目标固定为当前项目频道。
 const composerTarget = computed<ComposerTarget | undefined>(() =>
@@ -276,6 +276,10 @@ const decisionNote = ref("")
 const actionPending = ref<string>()
 const actionNote = ref("")
 const actionError = ref("")
+const pendingActionIntents = useState<Record<string, ExperienceWorkActionRequest>>(
+  "work-pending-action-intents",
+  () => ({}),
+)
 
 function currentBriefDraft() {
   if (goalBrief.value?.kind !== "goal_brief") return
@@ -294,14 +298,16 @@ function currentBriefDraft() {
   }
 }
 
-function actionPayload(action: ControlAction, attention?: AttentionItem) {
+function actionIntentKey(action: ControlAction, attentionID?: string) {
+  return `${workID.value ?? ""}:${action.id}:${attentionID ?? ""}`
+}
+
+function actionPayload(
+  action: ControlAction,
+  attention?: AttentionItem,
+): { key: string; body: ExperienceWorkActionRequest } | undefined {
   const graphRevision = detail.value?.project.graphRevision
   if (graphRevision === undefined) return
-  const base = {
-    idempotencyKey: crypto.randomUUID(),
-    expectedGraphRevision: graphRevision,
-    action: action.id,
-  }
   if (action.id === "resolve_blocker") {
     const target =
       attention ??
@@ -311,25 +317,85 @@ function actionPayload(action: ControlAction, attention?: AttentionItem) {
           )
         : undefined)
     if (!target || !actionNote.value.trim()) return
-    return { ...base, attentionId: target.id, resolution: actionNote.value.trim() }
+    const key = actionIntentKey(action, target.id)
+    return {
+      key,
+      body:
+        pendingActionIntents.value[key] ?? {
+          idempotencyKey: crypto.randomUUID(),
+          expectedGraphRevision: graphRevision,
+          action: "resolve_blocker",
+          attentionId: target.id,
+          resolution: actionNote.value.trim(),
+        },
+    }
   }
   if (action.id === "adjust_brief") {
     const brief = currentBriefDraft()
     const planVersion = detail.value?.project.activePlanVersion
     if (!brief || !planVersion || goalBrief.value?.kind !== "goal_brief" || !actionNote.value.trim()) return
+    const goal = actionNote.value.trim()
+    const key = actionIntentKey(action, attention?.id)
     return {
-      ...base,
-      attentionId: attention?.id,
-      briefId: goalBrief.value.brief.id,
-      expectedBriefVersion: goalBrief.value.brief.version,
-      expectedPlanVersion: planVersion,
-      source: "user_confirmation",
-      brief,
-      changeReason: actionNote.value.trim(),
+      key,
+      body:
+        pendingActionIntents.value[key] ?? {
+          idempotencyKey: crypto.randomUUID(),
+          expectedGraphRevision: graphRevision,
+          action: "adjust_brief",
+          attentionId: attention?.id,
+          briefId: goalBrief.value.brief.id,
+          expectedBriefVersion: goalBrief.value.brief.version,
+          expectedPlanVersion: planVersion,
+          source: "user_confirmation",
+          brief: { ...brief, goal },
+          changeReason: `目标从「${brief.goal}」调整为「${goal}」`.slice(0, 8_000),
+        },
     }
   }
-  if (!["pause_work", "resume_work", "stop_work", "retry"].includes(action.id)) return
-  return { ...base, reason: actionNote.value.trim() || undefined }
+  const key = actionIntentKey(action)
+  const idempotencyKey = crypto.randomUUID()
+  const reason = actionNote.value.trim() || undefined
+  if (action.id === "pause_work")
+    return {
+      key,
+      body: pendingActionIntents.value[key] ?? {
+        idempotencyKey,
+        expectedGraphRevision: graphRevision,
+        action: "pause_work",
+        reason,
+      },
+    }
+  if (action.id === "resume_work")
+    return {
+      key,
+      body: pendingActionIntents.value[key] ?? {
+        idempotencyKey,
+        expectedGraphRevision: graphRevision,
+        action: "resume_work",
+        reason,
+      },
+    }
+  if (action.id === "stop_work")
+    return {
+      key,
+      body: pendingActionIntents.value[key] ?? {
+        idempotencyKey,
+        expectedGraphRevision: graphRevision,
+        action: "stop_work",
+        reason,
+      },
+    }
+  if (action.id === "retry")
+    return {
+      key,
+      body: pendingActionIntents.value[key] ?? {
+        idempotencyKey,
+        expectedGraphRevision: graphRevision,
+        action: "retry",
+        reason,
+      },
+    }
 }
 
 async function invokeAction(action: ControlAction, attention?: AttentionItem) {
@@ -342,27 +408,45 @@ async function invokeAction(action: ControlAction, attention?: AttentionItem) {
   if (action.handler === "open_diagnostics") return selectPanel("diagnostics")
   if (action.handler === "open_evidence") return selectPanel("goal_brief")
   if (action.handler !== "action" || actionPending.value) return
-  const body = actionPayload(action, attention)
-  if (!body) {
+  if (
+    action.id === "adjust_brief" &&
+    goalBrief.value?.kind === "goal_brief" &&
+    actionNote.value.trim() === goalBrief.value.brief.goal.trim()
+  ) {
+    actionError.value = "新目标与当前目标相同，不会生成新的目标摘要与计划版本。"
+    return
+  }
+  const intent = actionPayload(action, attention)
+  if (!intent) {
     actionError.value =
       action.id === "resolve_blocker" || action.id === "adjust_brief"
         ? "请填写处理说明，并确认目标摘要与版本信息可用。"
         : "当前 Graph 版本不可用，不能提交运行时动作。"
     return
   }
+  pendingActionIntents.value = { ...pendingActionIntents.value, [intent.key]: intent.body }
   actionPending.value = action.id
   actionError.value = ""
-  await $fetch(`/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/actions`, {
-    method: "POST",
-    body,
-  }).then(
-    () => {
-      actionNote.value = ""
+  const outcome = await $fetch<ExperienceWorkActionResult>(
+    `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/actions`,
+    {
+      method: "POST",
+      body: intent.body,
     },
-    () => {
-      actionError.value = "动作未被本地服务接受，当前工作状态没有被伪造为成功。"
-    },
+  ).then(
+    (value) => ({ status: "settled" as const, value }),
+    () => ({ status: "uncertain" as const }),
   )
+  if (outcome.status === "settled") {
+    const next = { ...pendingActionIntents.value }
+    delete next[intent.key]
+    pendingActionIntents.value = next
+    if (outcome.value.status === "applied") actionNote.value = ""
+    if (outcome.value.status === "rejected")
+      actionError.value = outcome.value.error ?? "动作被本地服务拒绝，请刷新状态后重试。"
+  }
+  if (outcome.status === "uncertain")
+    actionError.value = "动作结果暂不确定；再次提交将复用同一请求，不会重复执行业务动作。"
   actionPending.value = undefined
   await refreshProjectExperience()
 }
@@ -433,7 +517,15 @@ function artifactRoute(projectID: string, artifactID: string) {
     </template>
 
     <template #body>
-      <div class="ac-work3" :data-column="column">
+      <div
+        class="ac-work3"
+        :data-column="column"
+        :data-detail-project-id="detail?.project.id"
+        :data-organization-watermark="seedGrow?.organization.sourceWatermark"
+        :data-graph-watermark="seedGrow?.graph.sourceWatermark"
+        :data-validation-watermark="seedGrow?.validation.sourceWatermark"
+        :data-message-watermark="projectMessages.map((message) => message.id).join(',')"
+      >
         <!-- 左栏：选择工作与 Thread -->
         <aside class="ac-work3__col ac-work3__list" aria-label="工作列表">
           <div class="ac-work3__list-head">
@@ -519,13 +611,13 @@ function artifactRoute(projectID: string, artifactID: string) {
               v-if="controlActions.some((action) => action.handler === 'action' && action.enabled)"
               class="ac-approval-decision"
             >
-              <label for="runtime-action-note">动作说明</label>
+              <label for="runtime-action-note">动作说明 / 新目标方向</label>
               <textarea
                 id="runtime-action-note"
                 v-model="actionNote"
                 rows="3"
                 maxlength="8000"
-                placeholder="暂停、停止、重试可选填；处理阻塞或调整方向时必须填写。"
+                placeholder="点击“调整方向”时，此处内容将作为新目标；暂停、停止、重试时作为可选说明。"
               />
               <p v-if="actionError" class="ac-brief-state ac-brief-state--error" role="alert">{{ actionError }}</p>
             </div>

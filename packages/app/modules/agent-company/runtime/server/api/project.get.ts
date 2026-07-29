@@ -53,7 +53,17 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
     requestControlPlaneSDK<unknown>(client.companyProject.attempts({ projectID })),
     requestControlPlaneSDK<unknown>(client.companyProject.receipts({ projectID })),
   ])
-  if (!rawResult.ok) throw createError({ statusCode: 404, statusMessage: "Project was not found" })
+  if (!rawResult.ok) {
+    if (rawResult.failure.statusCode === 404)
+      throw createError({ statusCode: 404, statusMessage: "Project was not found" })
+    throw createError({
+      statusCode: rawResult.failure.statusCode ?? 503,
+      statusMessage:
+        rawResult.failure.kind === "authorization_required"
+          ? "Control Plane authorization is required"
+          : "Project is temporarily unavailable",
+    })
+  }
   const raw = rawResult.value
   const recruitmentRaw = recruitmentResult.ok ? recruitmentResult.value : {}
   const agentsRaw = agentsResult.ok ? agentsResult.value : []
