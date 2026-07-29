@@ -37,7 +37,7 @@ import { CompanyOutcomeSignal, CompanyProjectRecovery } from "@/company-project"
 import { CompanyCommons } from "@/company-commons"
 import { CompanyReading } from "@/company-reading"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
-import { FounderYellowDelegation } from "@/founder-os"
+import { FounderOSAdvisor, FounderYellowDelegation } from "@/founder-os"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 import { DecisionLedger } from "@/founder-os"
 
@@ -179,6 +179,7 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   await AppRuntime.runPromise(ProjectActionExecutor.Service.use((executor) => executor.recover()))
   await AppRuntime.runPromise(ProjectOrchestrator.Service.use((orchestrator) => orchestrator.recover()))
   await AppRuntime.runPromise(FounderYellowDelegation.Service.use((yellow) => yellow.recover()))
+  FounderOSAdvisor.recover()
   const server = await built.runtime.listen({ port: opts.port, hostname: opts.hostname })
 
   const next = new URL("http://localhost")

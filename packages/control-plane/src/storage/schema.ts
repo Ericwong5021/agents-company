@@ -110,3 +110,25 @@ export {
   FounderYellowReadinessTable,
   FounderYellowRunTable,
 } from "../founder-os/yellow.sql"
+export {
+  FounderTwinSnapshotSelectionTable,
+  FounderTwinSnapshotTable,
+  GovernanceAssetSelectionTable,
+  GovernanceAssetTable,
+} from "../founder-os/asset.sql"
+export {
+  FounderBenchmarkCaseTable,
+  FounderBenchmarkReportTable,
+  FounderCalibrationRequestTable,
+  FounderCalibrationResponseTable,
+  FounderShadowComparisonTable,
+  FounderShadowDecisionTable,
+} from "../founder-os/shadow.sql"
+export {
+  FounderAdvisorConvergenceEventTable,
+  FounderAdvisorConvergenceTable,
+  FounderAdvisorReadinessTable,
+  FounderInterventionEffectTable,
+  FounderInterventionFenceTable,
+  FounderInterventionTable,
+} from "../founder-os/advisor.sql"

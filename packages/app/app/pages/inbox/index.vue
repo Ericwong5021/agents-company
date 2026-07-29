@@ -160,6 +160,34 @@ async function decisionAction(item: DecisionCenterItem, action: "accept" | "reje
   decisionCenterPending.value = false;
 }
 
+async function rollbackYellow(item: DecisionCenterItem) {
+  if (!item.yellowSummary) return;
+  const reason = window.prompt("输入 Yellow 回滚原因");
+  if (!reason?.trim()) return;
+  decisionCenterPending.value = true;
+  decisionCenterFeedback.value = "";
+  await $fetch("/api/agent-company/decision-center-yellow-rollback", {
+    method: "POST",
+    body: {
+      runId: item.yellowSummary.runId,
+      rollback: {
+        schemaVersion: 1,
+        idempotencyKey: crypto.randomUUID(),
+        trigger: "human_decision",
+        reason,
+        actor: { kind: "human", id: "local_user" },
+      },
+    },
+  }).then(
+    () => {
+      decisionCenterFeedback.value = "Yellow 回滚请求已写入 checkpoint 链。";
+      return refreshDecisionCenter();
+    },
+    () => decisionCenterFeedback.value = "Yellow 回滚未完成，请检查 checkpoint 与回滚处理器。",
+  );
+  decisionCenterPending.value = false;
+}
+
 async function correctDecision(item: DecisionCenterItem, kind: "override" | "correction") {
   const humanDecision = window.prompt(kind === "override" ? "输入新的最终决定" : "输入纠正内容");
   if (!humanDecision) return;
@@ -544,7 +572,50 @@ async function editGoalDraft() {
             </div>
             <p>{{ item.decision.finalDecision }}</p>
             <p v-for="outcome in item.outcomes" :key="outcome.id">{{ outcome.result }} · {{ outcome.summary }}</p>
+            <details v-if="item.yellowSummary" class="ac-decision-references">
+              <summary>Yellow 成本、checkpoint 与 Outcome</summary>
+              <div>
+                <section>
+                  <strong>成本</strong>
+                  <span>
+                    {{ item.yellowSummary.cost.actual }} / {{ item.yellowSummary.cost.limit }}
+                    {{ item.yellowSummary.cost.unit }}
+                  </span>
+                  <span>状态 {{ item.yellowSummary.status }}</span>
+                </section>
+                <section>
+                  <strong>Checkpoint</strong>
+                  <span>{{ item.yellowSummary.checkpointId ?? "缺失" }}</span>
+                  <span>回滚处理器 {{ item.yellowSummary.rollbackHandlerId ?? "缺失" }}</span>
+                </section>
+                <section>
+                  <strong>Outcome</strong>
+                  <span v-for="outcomeId in item.yellowSummary.outcomeIds" :key="outcomeId">{{ outcomeId }}</span>
+                  <span v-for="outcome in item.outcomes" :key="`result-${outcome.id}`">
+                    {{ outcome.result }} · {{ outcome.summary }}
+                  </span>
+                  <span v-if="!item.yellowSummary.outcomeIds.length">尚未记录</span>
+                </section>
+                <section>
+                  <strong>回滚记录</strong>
+                  <span v-for="rollback in item.yellowSummary.rollbacks" :key="rollback.id">
+                    {{ rollback.status }} · {{ rollback.reason }}<template v-if="rollback.result"> · {{ rollback.result }}</template>
+                  </span>
+                  <span v-if="!item.yellowSummary.rollbacks.length">尚未回滚</span>
+                </section>
+              </div>
+            </details>
             <UButton
+              v-if="item.yellowSummary"
+              color="error"
+              variant="soft"
+              :disabled="decisionCenterPending || !item.yellowSummary.checkpointId || item.yellowSummary.status === 'rolled_back'"
+              @click="rollbackYellow(item)"
+            >
+              Yellow Rollback
+            </UButton>
+            <UButton
+              v-else
               color="neutral"
               variant="outline"
               :disabled="decisionCenterPending"
@@ -567,6 +638,39 @@ async function editGoalDraft() {
             </div>
             <p>{{ item.decision.finalDecision ?? item.decision.recommendation }}</p>
             <p>Snapshot {{ item.decision.founderTwinSnapshot?.id ?? "缺失" }} · {{ item.decision.evidenceRefs?.length ?? 0 }} 条证据</p>
+            <details v-if="item.yellowSummary" class="ac-decision-references">
+              <summary>Yellow 成本、checkpoint 与 Outcome</summary>
+              <div>
+                <section>
+                  <strong>成本</strong>
+                  <span>
+                    {{ item.yellowSummary.cost.actual }} / {{ item.yellowSummary.cost.limit }}
+                    {{ item.yellowSummary.cost.unit }}
+                  </span>
+                  <span>状态 {{ item.yellowSummary.status }}</span>
+                </section>
+                <section>
+                  <strong>Checkpoint</strong>
+                  <span>{{ item.yellowSummary.checkpointId ?? "缺失" }}</span>
+                  <span>回滚处理器 {{ item.yellowSummary.rollbackHandlerId ?? "缺失" }}</span>
+                </section>
+                <section>
+                  <strong>Outcome</strong>
+                  <span v-for="outcomeId in item.yellowSummary.outcomeIds" :key="outcomeId">{{ outcomeId }}</span>
+                  <span v-for="outcome in item.outcomes" :key="`result-${outcome.id}`">
+                    {{ outcome.result }} · {{ outcome.summary }}
+                  </span>
+                  <span v-if="!item.yellowSummary.outcomeIds.length">尚未记录</span>
+                </section>
+                <section>
+                  <strong>回滚记录</strong>
+                  <span v-for="rollback in item.yellowSummary.rollbacks" :key="rollback.id">
+                    {{ rollback.status }} · {{ rollback.reason }}<template v-if="rollback.result"> · {{ rollback.result }}</template>
+                  </span>
+                  <span v-if="!item.yellowSummary.rollbacks.length">尚未回滚</span>
+                </section>
+              </div>
+            </details>
             <details class="ac-decision-references">
               <summary>原则、案例与 evidence</summary>
               <div>
@@ -602,6 +706,15 @@ async function editGoalDraft() {
                 </section>
               </div>
             </details>
+            <UButton
+              v-if="item.yellowSummary"
+              color="error"
+              variant="soft"
+              :disabled="decisionCenterPending || !item.yellowSummary.checkpointId || item.yellowSummary.status === 'rolled_back'"
+              @click="rollbackYellow(item)"
+            >
+              Yellow Rollback
+            </UButton>
           </article>
           <article
             v-for="item in decisionCenter.overridden"

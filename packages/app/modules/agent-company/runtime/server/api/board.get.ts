@@ -65,6 +65,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyBoardThre
     status: thread.status === "completed" || thread.status === "interrupted" ? thread.status : "active",
     run: run
       ? {
+          id: text(run.id) || undefined,
           state:
             run.state === "queued" ||
             run.state === "projecting" ||

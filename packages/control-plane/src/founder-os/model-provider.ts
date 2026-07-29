@@ -1,6 +1,7 @@
 import { Context, Effect } from "effect"
 import type {
   FounderBenchmarkCase,
+  FounderBenchmarkSourcePayload,
   FounderContextProjection,
   FounderShadowEvidenceRef,
   GovernanceAssetScope,
@@ -33,7 +34,7 @@ export type FounderBenchmarkGenerationRequest = {
     id: string
     sourceAsset: FounderBenchmarkCase["sourceAsset"]
     scope: GovernanceAssetScope
-    content: string
+    prompt: FounderBenchmarkSourcePayload["prompt"]
     tags: string[]
     evidenceRefs: FounderShadowEvidenceRef[]
   }>

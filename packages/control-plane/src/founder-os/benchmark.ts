@@ -7,6 +7,7 @@ import {
   FounderBenchmarkPrediction,
   FounderBenchmarkReport,
   FounderBenchmarkRunInput,
+  FounderBenchmarkSourcePayload,
   type FounderBenchmarkCaseInput as FounderBenchmarkCaseInputValue,
   type FounderBenchmarkRunInput as FounderBenchmarkRunInputValue,
 } from "@agents-company/shared/founder-os"
@@ -29,6 +30,14 @@ function normalized(value: unknown): unknown {
 
 function digest(value: unknown) {
   return new Bun.CryptoHasher("sha256").update(JSON.stringify(normalized(value))).digest("hex")
+}
+
+function sourcePayload(content: string) {
+  try {
+    return FounderBenchmarkSourcePayload.safeParse(JSON.parse(content)).data
+  } catch {
+    return undefined
+  }
 }
 
 function caseFromRow(row: typeof FounderBenchmarkCaseTable.$inferSelect) {
@@ -95,8 +104,18 @@ export function registerCase(raw: FounderBenchmarkCaseInputValue) {
     asset.status !== "active"
     || (asset.authority !== "human_explicit" && asset.authority !== "human_confirmed")
     || !asset.confirmation_event_id
+    || !asset.approved_by
   )
     throw new Error("Benchmark source asset requires verifiable human authority")
+  const payload = sourcePayload(asset.content)
+  if (!payload || payload.benchmarkType !== input.benchmarkType)
+    throw new Error("Benchmark source asset requires a typed payload matching the benchmark type")
+  if (
+    input.confirmationEventId !== asset.confirmation_event_id
+    || input.confirmedBy !== asset.approved_by
+    || digest(input.expected) !== digest(payload.expected)
+  )
+    throw new Error("Benchmark case facts must exactly match the human-confirmed source asset")
   const id = Identifier.create("fbcase", "ascending")
   Database.transaction((db) =>
     db.insert(FounderBenchmarkCaseTable)
@@ -108,9 +127,9 @@ export function registerCase(raw: FounderBenchmarkCaseInputValue) {
         split: input.split,
         source_asset_id: input.sourceAsset.assetId,
         source_asset_version: input.sourceAsset.version,
-        expected_json: JSON.stringify(input.expected),
-        confirmation_event_id: input.confirmationEventId,
-        confirmed_by: input.confirmedBy,
+        expected_json: JSON.stringify(payload.expected),
+        confirmation_event_id: asset.confirmation_event_id,
+        confirmed_by: asset.approved_by,
         created_at: Date.now(),
       })
       .run(),
@@ -201,12 +220,18 @@ export function run(raw: FounderBenchmarkRunInputValue) {
           ))
           .get(),
       ),
+    })).map((entry) => ({
+      ...entry,
+      payload: entry.asset ? sourcePayload(entry.asset.content) : undefined,
     }))
     const initialReasons: FounderBenchmarkReport["blockReasons"] = [
       ...(!snapshot ? ["snapshot_missing" as const] : []),
       ...(snapshot && !validSnapshot ? ["snapshot_checksum_invalid" as const] : []),
       ...(holdout.length === 0 ? ["holdout_empty" as const] : []),
-      ...(sourceAssets.some((entry) => !entry.asset) ? ["model_output_invalid" as const] : []),
+      ...(sourceAssets.some((entry) =>
+        !entry.asset || !entry.payload || entry.payload.benchmarkType !== input.benchmarkType)
+        ? ["model_output_invalid" as const]
+        : []),
       ...(holdout.some((item) =>
         snapshotRefs.has(`${item.sourceAsset.assetId}:${item.sourceAsset.version}`))
         ? ["training_holdout_leakage" as const]
@@ -227,7 +252,7 @@ export function run(raw: FounderBenchmarkRunInputValue) {
               kind: entry.asset!.scope_kind,
               ...(entry.asset!.scope_ref ? { ref: entry.asset!.scope_ref } : {}),
             },
-            content: entry.asset!.content,
+            prompt: entry.payload!.prompt,
             tags: JSON.parse(entry.asset!.tags_json),
             evidenceRefs: JSON.parse(entry.asset!.source_refs_json).map(
               (reference: { kind: string; id: string }) => ({

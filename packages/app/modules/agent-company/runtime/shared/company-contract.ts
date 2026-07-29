@@ -139,6 +139,7 @@ export type CompanyBoardThread = {
   projectID?: string
   status: "active" | "completed" | "interrupted"
   run?: {
+    id?: string
     state: "queued" | "running" | "projecting" | "completed" | "failed" | "interrupted"
     retryable: boolean
     error?: string

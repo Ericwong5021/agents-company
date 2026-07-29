@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, lte } from "drizzle-orm"
 import {
   classifyFounderRequestedAction,
   DecisionIntent,
@@ -21,14 +21,28 @@ import {
   type FounderStudioProjection,
 } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyID } from "@/company/schema"
+import {
+  ChannelMessageTable,
+  ChannelTable,
+  ConversationRunTable,
+  ConversationThreadTable,
+} from "@/conversation/conversation.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import type { TxOrDb } from "@/storage/db"
 import { submitGovernanceInTransaction } from "./authority"
 import { FounderTwinSnapshotTable } from "./asset.sql"
-import { appendDecisionInTransaction } from "./decision-ledger"
 import {
+  appendDecisionInTransaction,
+  appendDecisionTransitionInTransaction,
+} from "./decision-ledger"
+import { DecisionCurrentProjectionTable } from "./decision-ledger.sql"
+import {
+  FounderAdvisorConvergenceEventTable,
   FounderAdvisorConvergenceTable,
+  FounderAdvisorReadinessTable,
   FounderInterventionEffectTable,
   FounderInterventionFenceTable,
   FounderInterventionTable,
@@ -96,7 +110,13 @@ function evidenceReference(reference: FounderShadowEvidenceRef) {
   }
 }
 
-function convergenceFromRow(row: typeof FounderAdvisorConvergenceTable.$inferSelect) {
+function convergenceFromRow(db: TxOrDb, row: typeof FounderAdvisorConvergenceTable.$inferSelect) {
+  const events = db
+    .select()
+    .from(FounderAdvisorConvergenceEventTable)
+    .where(eq(FounderAdvisorConvergenceEventTable.convergence_id, row.id))
+    .orderBy(asc(FounderAdvisorConvergenceEventTable.sequence))
+    .all()
   return FounderAdvisorConvergence.parse({
     id: row.id,
     companyId: row.company_id,
@@ -107,8 +127,16 @@ function convergenceFromRow(row: typeof FounderAdvisorConvergenceTable.$inferSel
       channelMessageId: row.channel_message_id,
       shadowDecisionId: row.shadow_decision_id,
     },
+    currentRequestKey: row.current_request_key,
     principal,
-    status: row.status,
+    status: events.at(-1)!.status,
+    events: events.map((event) => ({
+      id: event.id,
+      sequence: event.sequence,
+      status: event.status,
+      reason: event.reason,
+      createdAt: event.created_at,
+    })),
     ...(row.decision_intent_json ? { decisionIntent: JSON.parse(row.decision_intent_json) } : {}),
     ...(row.ledger_decision_id ? { ledgerDecisionId: row.ledger_decision_id } : {}),
     authority: {
@@ -165,147 +193,278 @@ function interventionFromRow(row: typeof FounderInterventionTable.$inferSelect) 
   })
 }
 
+function appendConvergenceEvent(
+  db: TxOrDb,
+  input: {
+    convergenceId: string
+    sequence: number
+    idempotencyKey: string
+    status: "intent_recorded" | "blocked" | "timed_out"
+    reason: string
+    createdAt: number
+  },
+) {
+  db.insert(FounderAdvisorConvergenceEventTable)
+    .values({
+      id: Identifier.create("fadve", "ascending"),
+      convergence_id: input.convergenceId,
+      sequence: input.sequence,
+      idempotency_key: input.idempotencyKey,
+      status: input.status,
+      reason: input.reason,
+      created_at: input.createdAt,
+    })
+    .run()
+}
+
+function blockedCurrentRequestKey(input: FounderAdvisorConvergenceInputValue) {
+  return `frequest_${digest({
+    companyId: input.companyId,
+    boardThreadId: input.source.boardThreadId,
+  }).slice(0, 32)}`
+}
+
 function saveBlocked(
-  input: FounderAdvisorConvergenceInput,
+  db: TxOrDb,
+  input: FounderAdvisorConvergenceInputValue,
   inputSha256: string,
+  currentRequestKey: string,
   authority: { status: "blocked" | "unavailable"; reason: string },
 ) {
   const id = Identifier.create("fadv", "ascending")
-  Database.transaction((db) =>
-    db.insert(FounderAdvisorConvergenceTable)
-      .values({
-        id,
-        company_id: input.companyId,
-        idempotency_key: input.idempotencyKey,
-        input_sha256: inputSha256,
-        board_thread_id: input.source.boardThreadId,
-        board_run_id: input.source.boardRunId ?? null,
-        channel_message_id: input.source.channelMessageId,
-        shadow_decision_id: input.source.shadowDecisionId,
-        status: "blocked",
-        decision_intent_json: null,
-        ledger_decision_id: null,
-        authority_status: authority.status,
-        authority_reason: authority.reason,
-        governance_ref: null,
-        reversible: null,
-        external_impact: null,
-        risk_level: null,
-        dri_agent_id: input.driAgentId,
-        timeout_at: input.timeoutAt,
-        dissent_json: JSON.stringify(input.dissent),
-        created_at: Date.now(),
-      })
-      .run(),
-  )
-  return convergenceFromRow(Database.use((db) =>
+  const createdAt = Date.now()
+  db.insert(FounderAdvisorConvergenceTable)
+    .values({
+      id,
+      company_id: input.companyId,
+      idempotency_key: input.idempotencyKey,
+      input_sha256: inputSha256,
+      board_thread_id: input.source.boardThreadId,
+      board_run_id: input.source.boardRunId ?? null,
+      channel_message_id: input.source.channelMessageId,
+      shadow_decision_id: input.source.shadowDecisionId,
+      current_request_key: currentRequestKey,
+      status: "blocked",
+      decision_intent_json: null,
+      ledger_decision_id: null,
+      authority_status: authority.status,
+      authority_reason: authority.reason,
+      governance_ref: null,
+      reversible: null,
+      external_impact: null,
+      risk_level: null,
+      dri_agent_id: input.driAgentId,
+      timeout_at: input.timeoutAt,
+      dissent_json: JSON.stringify(input.dissent),
+      created_at: createdAt,
+    })
+    .run()
+  appendConvergenceEvent(db, {
+    convergenceId: id,
+    sequence: 1,
+    idempotencyKey: "blocked",
+    status: "blocked",
+    reason: authority.reason,
+    createdAt,
+  })
+  return convergenceFromRow(
+    db,
     db.select().from(FounderAdvisorConvergenceTable).where(eq(FounderAdvisorConvergenceTable.id, id)).get()!,
-  ))
+  )
 }
 
 export function converge(raw: FounderAdvisorConvergenceInputValue) {
   const input = FounderAdvisorConvergenceInput.parse(raw)
   const inputSha256 = digest(input)
-  const existing = Database.use((db) =>
-    db
+  return Database.transaction((db) => {
+    const existing = db
       .select()
       .from(FounderAdvisorConvergenceTable)
       .where(and(
         eq(FounderAdvisorConvergenceTable.company_id, input.companyId),
         eq(FounderAdvisorConvergenceTable.idempotency_key, input.idempotencyKey),
       ))
-      .get(),
-  )
-  if (existing) {
-    if (existing.input_sha256 !== inputSha256)
-      throw new Error("Advisor convergence idempotency key has different facts")
-    return convergenceFromRow(existing)
-  }
-  const shadow = Database.use((db) =>
-    db
+      .get()
+    if (existing) {
+      if (existing.input_sha256 !== inputSha256)
+        throw new Error("Advisor convergence idempotency key has different facts")
+      return convergenceFromRow(db, existing)
+    }
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    if (!company) throw new Error("Company was not found")
+    const thread = db
+      .select()
+      .from(ConversationThreadTable)
+      .where(eq(ConversationThreadTable.id, input.source.boardThreadId))
+      .get()
+    const channel = thread
+      ? db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
+      : undefined
+    const message = db
+      .select()
+      .from(ChannelMessageTable)
+      .where(eq(ChannelMessageTable.id, input.source.channelMessageId))
+      .get()
+    const run = input.source.boardRunId
+      ? db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, input.source.boardRunId)).get()
+      : undefined
+    const shadow = db
       .select()
       .from(FounderShadowDecisionTable)
+      .where(eq(FounderShadowDecisionTable.id, input.source.shadowDecisionId))
+      .get()
+    const dri = db.select().from(CompanyAgentTable).where(eq(CompanyAgentTable.id, input.driAgentId)).get()
+    const sourceReason = [
+      !thread || thread.company_id !== input.companyId
+        ? "Board Thread must belong to the requested Company."
+        : undefined,
+      !channel || channel.company_id !== input.companyId || channel.kind !== "board"
+        ? "Board Thread must belong to the Company's Board Channel."
+        : undefined,
+      !message
+      || message.channel_id !== channel?.id
+      || message.source_thread_id !== thread?.id
+      || !message.request_id
+        ? "Channel Message must be the current request in the verified Board Thread."
+        : undefined,
+      !run
+      || run.conversation_thread_id !== thread?.id
+      || run.channel_message_id !== message?.id
+        ? "Conversation Run must reference the verified Board Thread and Channel Message."
+        : undefined,
+      !shadow || shadow.company_id !== input.companyId || shadow.status !== "suggested"
+        ? "A traceable suggested Shadow decision from the same Company is required."
+        : undefined,
+      thread?.project_scope_id && (
+        shadow?.scope_kind !== "project"
+        || shadow.scope_ref !== thread.project_scope_id
+      )
+        ? "Shadow scope must match the Board Thread project scope."
+        : undefined,
+      thread && !thread.project_scope_id && (
+        shadow?.scope_kind !== "company"
+        || shadow.scope_ref !== null
+      )
+        ? "Company Board Threads require a company-scoped Shadow decision."
+        : undefined,
+      !dri || dri.company_id !== input.companyId || dri.lifecycle !== "employee"
+        ? "DRI must be an employee Agent of the same Company."
+        : undefined,
+    ].find((reason): reason is string => reason !== undefined)
+    const currentRequestKey = message?.request_id
+      && thread?.company_id === input.companyId
+      && channel?.company_id === input.companyId
+      && channel.kind === "board"
+      && message.channel_id === channel.id
+      && message.source_thread_id === thread.id
+      && run?.conversation_thread_id === thread.id
+      && run.channel_message_id === message.id
+      ? message.request_id
+      : blockedCurrentRequestKey(input)
+    const current = db
+      .select()
+      .from(FounderAdvisorConvergenceTable)
       .where(and(
-        eq(FounderShadowDecisionTable.id, input.source.shadowDecisionId),
-        eq(FounderShadowDecisionTable.company_id, input.companyId),
+        eq(FounderAdvisorConvergenceTable.company_id, input.companyId),
+        eq(FounderAdvisorConvergenceTable.board_thread_id, input.source.boardThreadId),
+        eq(FounderAdvisorConvergenceTable.current_request_key, currentRequestKey),
       ))
-      .get(),
-  )
-  if (!shadow || shadow.status !== "suggested")
-    return saveBlocked(input, inputSha256, {
-      status: "blocked",
-      reason: "A traceable suggested Shadow decision is required.",
+      .get()
+    if (current) return convergenceFromRow(db, current)
+    if (sourceReason)
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: sourceReason,
+      })
+    if (input.timeoutAt <= Date.now())
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: "Advisor convergence timeoutAt must be in the future.",
+      })
+    if (db
+      .select({ id: FounderInterventionFenceTable.id })
+      .from(FounderInterventionFenceTable)
+      .where(and(
+        eq(FounderInterventionFenceTable.company_id, input.companyId),
+        eq(FounderInterventionFenceTable.board_thread_id, input.source.boardThreadId),
+      ))
+      .get())
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: "Human intervention fence is active; the Founder proxy cannot speak.",
+      })
+    const currentMode = FounderOSMode.resolve({
+      founderTwinMode: company.founder_twin_mode,
+      companyCommonsMode: company.company_commons_mode,
     })
-  if (isFenced(input.companyId, input.source.boardThreadId))
-    return saveBlocked(input, inputSha256, {
-      status: "blocked",
-      reason: "Human intervention fence is active; the Founder proxy cannot speak.",
-    })
-  const currentMode = modes(input.companyId)
-  if (!["advisor", "green-delegated", "yellow-delegated"].includes(currentMode.effective.founderTwinMode))
-    return saveBlocked(input, inputSha256, {
-      status: "blocked",
-      reason: "Effective Founder Twin mode cannot produce Advisor intents.",
-    })
-  if (FounderAdvisorReadiness.readiness(input.companyId).status !== "ready")
-    return saveBlocked(input, inputSha256, {
-      status: "blocked",
-      reason: "Advisor readiness is not confirmed.",
-    })
-  const snapshot = Database.use((db) =>
-    db
+    if (!["advisor", "green-delegated", "yellow-delegated"].includes(currentMode.effective.founderTwinMode))
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: "Effective Founder Twin mode cannot produce Advisor intents.",
+      })
+    if (!db
+      .select({ id: FounderAdvisorReadinessTable.id })
+      .from(FounderAdvisorReadinessTable)
+      .where(eq(FounderAdvisorReadinessTable.company_id, input.companyId))
+      .orderBy(desc(FounderAdvisorReadinessTable.created_at), desc(FounderAdvisorReadinessTable.id))
+      .get())
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: "Advisor readiness is not confirmed.",
+      })
+    const verifiedShadow = shadow!
+    const snapshot = db
       .select()
       .from(FounderTwinSnapshotTable)
       .where(and(
-        eq(FounderTwinSnapshotTable.id, shadow.snapshot_id!),
+        eq(FounderTwinSnapshotTable.id, verifiedShadow.snapshot_id!),
         eq(FounderTwinSnapshotTable.company_id, input.companyId),
       ))
-      .get(),
-  )
-  if (!snapshot)
-    return saveBlocked(input, inputSha256, {
-      status: "blocked",
-      reason: "Founder Twin Snapshot reference is unavailable.",
+      .get()
+    if (!snapshot)
+      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+        status: "blocked",
+        reason: "Founder Twin Snapshot reference is unavailable.",
+      })
+    const decisionId = Identifier.ascending("founderDecision")
+    const intent = DecisionIntent.parse({
+      schemaVersion: 1,
+      decisionId,
+      recommendation: verifiedShadow.recommendation,
+      alternatives: JSON.parse(verifiedShadow.alternatives_json),
+      authorityClass: verifiedShadow.authority_class,
+      confidence: verifiedShadow.confidence! / 1_000_000,
+      principlesApplied: JSON.parse(verifiedShadow.principle_refs_json),
+      evidenceRefs: FounderShadowEvidenceRef.array()
+        .parse(JSON.parse(verifiedShadow.evidence_refs_json))
+        .map(evidenceReference),
+      dissent: input.dissent,
+      missingInformation: JSON.parse(verifiedShadow.missing_information_json),
+      ...(input.requestedAction ? { requestedAction: input.requestedAction } : {}),
     })
-  const decisionId = Identifier.ascending("founderDecision")
-  const intent = DecisionIntent.parse({
-    schemaVersion: 1,
-    decisionId,
-    recommendation: shadow.recommendation,
-    alternatives: JSON.parse(shadow.alternatives_json),
-    authorityClass: shadow.authority_class,
-    confidence: shadow.confidence! / 1_000_000,
-    principlesApplied: JSON.parse(shadow.principle_refs_json),
-    evidenceRefs: FounderShadowEvidenceRef.array()
-      .parse(JSON.parse(shadow.evidence_refs_json))
-      .map(evidenceReference),
-    dissent: input.dissent,
-    missingInformation: JSON.parse(shadow.missing_information_json),
-    ...(input.requestedAction ? { requestedAction: input.requestedAction } : {}),
-  })
-  const requestedAction = input.requestedAction ?? {
-    schemaVersion: 1 as const,
-    idempotencyKey: `farev_${inputSha256}`,
-    type: "governance.review.request" as const,
-    payload: {
-      subject: input.subject.slice(0, 1_000),
-      question: input.context,
-    },
-  }
-  const policyFacts = classifyFounderRequestedAction(requestedAction)
-  const riskLevel = intent.authorityClass === "red"
-    ? "high"
-    : intent.authorityClass === "yellow" && policyFacts.riskLevel === "low"
-      ? "medium"
-      : policyFacts.riskLevel
-  const id = Identifier.create("fadv", "ascending")
-  Database.transaction((db) => {
+    const requestedAction = input.requestedAction ?? {
+      schemaVersion: 1 as const,
+      idempotencyKey: `farev_${inputSha256}`,
+      type: "governance.review.request" as const,
+      payload: {
+        subject: input.subject.slice(0, 1_000),
+        question: input.context,
+      },
+    }
+    const policyFacts = classifyFounderRequestedAction(requestedAction)
+    const riskLevel = intent.authorityClass === "red"
+      ? "high"
+      : intent.authorityClass === "yellow" && policyFacts.riskLevel === "low"
+        ? "medium"
+        : policyFacts.riskLevel
+    const id = Identifier.create("fadv", "ascending")
+    const createdAt = Date.now()
     appendDecisionInTransaction(db, {
       id: decisionId,
       idempotencyKey: `advisor:${input.idempotencyKey}`,
       recordOrigin: "live",
-      scope: shadow.scope_kind === "project" && shadow.scope_ref
-        ? { type: "project", companyId: input.companyId, projectId: shadow.scope_ref }
+      scope: verifiedShadow.scope_kind === "project" && verifiedShadow.scope_ref
+        ? { type: "project", companyId: input.companyId, projectId: verifiedShadow.scope_ref }
         : { type: "company", companyId: input.companyId },
       source: {
         channelMessageId: input.source.channelMessageId,
@@ -334,12 +493,12 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       riskLevel,
       evidenceRefs: intent.evidenceRefs,
       principleRefs: intent.principlesApplied,
-      decisionCaseRefs: JSON.parse(shadow.decision_case_refs_json),
+      decisionCaseRefs: JSON.parse(verifiedShadow.decision_case_refs_json),
       initialStatus: "proposed",
       initialTransitionKind: "created",
       initialReason: "Advisor DecisionIntent recorded without execution.",
       overrideOf: null,
-      createdAt: Date.now(),
+      createdAt,
       decidedAt: null,
     })
     const governance = submitGovernanceInTransaction(db, {
@@ -373,6 +532,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         board_run_id: input.source.boardRunId ?? null,
         channel_message_id: input.source.channelMessageId,
         shadow_decision_id: input.source.shadowDecisionId,
+        current_request_key: currentRequestKey,
         status: "intent_recorded",
         decision_intent_json: JSON.stringify(intent),
         ledger_decision_id: decisionId,
@@ -385,13 +545,22 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         dri_agent_id: input.driAgentId,
         timeout_at: input.timeoutAt,
         dissent_json: JSON.stringify(input.dissent),
-        created_at: Date.now(),
+        created_at: createdAt,
       })
       .run()
+    appendConvergenceEvent(db, {
+      convergenceId: id,
+      sequence: 1,
+      idempotencyKey: "intent-recorded",
+      status: "intent_recorded",
+      reason: "Advisor DecisionIntent recorded without execution.",
+      createdAt,
+    })
+    return convergenceFromRow(
+      db,
+      db.select().from(FounderAdvisorConvergenceTable).where(eq(FounderAdvisorConvergenceTable.id, id)).get()!,
+    )
   }, { behavior: "immediate" })
-  return convergenceFromRow(Database.use((db) =>
-    db.select().from(FounderAdvisorConvergenceTable).where(eq(FounderAdvisorConvergenceTable.id, id)).get()!,
-  ))
 }
 
 export function beginIntervention(raw: FounderInterventionInputValue) {
@@ -524,16 +693,72 @@ export function interventions(companyId: string) {
   ).map(interventionFromRow)
 }
 
-export function convergences(companyId: string) {
-  return Database.use((db) =>
+export function recover() {
+  const now = Date.now()
+  return Database.transaction((db) =>
     db
+      .select()
+      .from(FounderAdvisorConvergenceTable)
+      .where(and(
+        eq(FounderAdvisorConvergenceTable.status, "intent_recorded"),
+        lte(FounderAdvisorConvergenceTable.timeout_at, now),
+      ))
+      .all()
+      .filter((row) => db
+        .select()
+        .from(FounderAdvisorConvergenceEventTable)
+        .where(eq(FounderAdvisorConvergenceEventTable.convergence_id, row.id))
+        .orderBy(desc(FounderAdvisorConvergenceEventTable.sequence))
+        .get()
+        ?.status === "intent_recorded")
+      .map((row) => {
+        const projection = row.ledger_decision_id
+          ? db
+            .select()
+            .from(DecisionCurrentProjectionTable)
+            .where(eq(DecisionCurrentProjectionTable.decision_id, row.ledger_decision_id))
+            .get()
+          : undefined
+        if (
+          row.ledger_decision_id
+          && projection
+          && ["proposed", "awaiting_approval", "accepted", "executed"].includes(projection.current_status)
+        )
+          appendDecisionTransitionInTransaction(db, row.ledger_decision_id, {
+            schemaVersion: 1,
+            idempotencyKey: `advisor-timeout:${row.id}`,
+            toStatus: "failed",
+            kind: "failed",
+            reason: "Advisor convergence timed out before a human-confirmed outcome.",
+            actorId: "board-ceo",
+            finalDecision:
+              projection.final_decision ??
+              "Advisor convergence timed out before a human-confirmed outcome.",
+            decidedAt: projection.decided_at ?? now,
+          })
+        appendConvergenceEvent(db, {
+          convergenceId: row.id,
+          sequence: 2,
+          idempotencyKey: "timeout",
+          status: "timed_out",
+          reason: "Advisor convergence timed out and failed closed.",
+          createdAt: now,
+        })
+        return row.id
+      }),
+  )
+}
+
+export function convergences(companyId: string) {
+  recover()
+  return Database.use((db) => db
       .select()
       .from(FounderAdvisorConvergenceTable)
       .where(eq(FounderAdvisorConvergenceTable.company_id, companyId))
       .orderBy(desc(FounderAdvisorConvergenceTable.created_at), desc(FounderAdvisorConvergenceTable.id))
       .limit(100)
-      .all(),
-  ).map(convergenceFromRow)
+      .all()
+      .map((row) => convergenceFromRow(db, row)))
 }
 
 export function boardProjection(input: {

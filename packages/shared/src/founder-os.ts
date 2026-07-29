@@ -1070,6 +1070,37 @@ export const FounderRubricValidation = z
   .meta({ ref: "FounderRubricValidation" })
 export type FounderRubricValidation = z.infer<typeof FounderRubricValidation>
 
+export const FounderBenchmarkSourcePayload = z
+  .discriminatedUnion("benchmarkType", [
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        benchmarkType: z.literal("founder_decision"),
+        prompt: z.object({ text: LongText }).strict(),
+        expected: z
+          .object({
+            authorityClass: FounderAuthorityClass,
+            decision: LongText,
+          })
+          .strict(),
+      })
+      .strict(),
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        benchmarkType: z.literal("taste"),
+        prompt: z.object({ text: LongText }).strict(),
+        expected: z
+          .object({
+            preference: z.enum(["accept", "reject", "first", "second"]),
+          })
+          .strict(),
+      })
+      .strict(),
+  ])
+  .meta({ ref: "FounderBenchmarkSourcePayload" })
+export type FounderBenchmarkSourcePayload = z.infer<typeof FounderBenchmarkSourcePayload>
+
 export const FounderBenchmarkCaseInput = z
   .object({
     companyId: Identifier,
@@ -1553,8 +1584,22 @@ export const FounderAdvisorConvergence = z
     companyId: Identifier,
     idempotencyKey: Identifier,
     source: FounderAdvisorSource,
+    currentRequestKey: Identifier,
     principal: FounderAdvisorPrincipal,
-    status: z.enum(["intent_recorded", "blocked"]),
+    status: z.enum(["intent_recorded", "blocked", "timed_out"]),
+    events: z
+      .array(
+        z
+          .object({
+            id: Identifier,
+            sequence: z.number().int().positive(),
+            status: z.enum(["intent_recorded", "blocked", "timed_out"]),
+            reason: ShortText,
+            createdAt: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .min(1),
     decisionIntent: DecisionIntent.optional(),
     ledgerDecisionId: Identifier.optional(),
     authority: FounderAdvisorAuthorityResult,

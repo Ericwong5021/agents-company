@@ -1,7 +1,13 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import {
+  ChannelMessageTable,
+  ConversationRunTable,
+  ConversationThreadTable,
+} from "@/conversation/conversation.sql"
 import { DecisionRecordTable } from "./decision-ledger.sql"
-import { FounderBenchmarkReportTable } from "./shadow.sql"
+import { FounderBenchmarkReportTable, FounderShadowDecisionTable } from "./shadow.sql"
 
 export const FounderAdvisorReadinessTable = sqliteTable(
   "founder_advisor_readiness",
@@ -34,10 +40,11 @@ export const FounderAdvisorConvergenceTable = sqliteTable(
     company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
     idempotency_key: text().notNull(),
     input_sha256: text().notNull(),
-    board_thread_id: text().notNull(),
-    board_run_id: text(),
-    channel_message_id: text().notNull(),
-    shadow_decision_id: text().notNull(),
+    board_thread_id: text().notNull().references(() => ConversationThreadTable.id),
+    board_run_id: text().references(() => ConversationRunTable.id),
+    channel_message_id: text().notNull().references(() => ChannelMessageTable.id),
+    shadow_decision_id: text().notNull().references(() => FounderShadowDecisionTable.id),
+    current_request_key: text().notNull(),
     status: text().notNull(),
     decision_intent_json: text(),
     ledger_decision_id: text().references(() => DecisionRecordTable.id),
@@ -47,7 +54,7 @@ export const FounderAdvisorConvergenceTable = sqliteTable(
     reversible: integer({ mode: "boolean" }),
     external_impact: integer({ mode: "boolean" }),
     risk_level: text(),
-    dri_agent_id: text().notNull(),
+    dri_agent_id: text().notNull().references(() => CompanyAgentTable.id),
     timeout_at: integer().notNull(),
     dissent_json: text().notNull(),
     created_at: integer().notNull(),
@@ -59,7 +66,35 @@ export const FounderAdvisorConvergenceTable = sqliteTable(
       table.board_thread_id,
       table.channel_message_id,
     ),
+    uniqueIndex("founder_advisor_convergence_current_request_idx").on(
+      table.company_id,
+      table.board_thread_id,
+      table.current_request_key,
+    ),
     index("founder_advisor_convergence_company_created_idx").on(table.company_id, table.created_at),
+  ],
+)
+
+export const FounderAdvisorConvergenceEventTable = sqliteTable(
+  "founder_advisor_convergence_event",
+  {
+    id: text().primaryKey(),
+    convergence_id: text()
+      .notNull()
+      .references(() => FounderAdvisorConvergenceTable.id, { onDelete: "cascade" }),
+    sequence: integer().notNull(),
+    idempotency_key: text().notNull(),
+    status: text().notNull(),
+    reason: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_advisor_convergence_event_sequence_idx").on(table.convergence_id, table.sequence),
+    uniqueIndex("founder_advisor_convergence_event_idempotency_idx").on(
+      table.convergence_id,
+      table.idempotency_key,
+    ),
+    index("founder_advisor_convergence_event_created_idx").on(table.convergence_id, table.created_at),
   ],
 )
 

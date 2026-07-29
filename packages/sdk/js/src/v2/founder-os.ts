@@ -1426,8 +1426,16 @@ export type FounderAdvisorConvergence = {
     channelMessageId: string
     shadowDecisionId: string
   }
+  currentRequestKey: string
   principal: FounderAdvisorPrincipal
-  status: "intent_recorded" | "blocked"
+  status: "intent_recorded" | "blocked" | "timed_out"
+  events: Array<{
+    id: string
+    sequence: number
+    status: "intent_recorded" | "blocked" | "timed_out"
+    reason: string
+    createdAt: number
+  }>
   decisionIntent?: DecisionIntent
   ledgerDecisionId?: string
   authority: {
@@ -1444,6 +1452,23 @@ export type FounderAdvisorConvergence = {
   workItemCreated: false
   executionCreated: false
   createdAt: number
+}
+
+export type FounderAdvisorConvergenceInput = {
+  companyId: string
+  idempotencyKey: string
+  source: {
+    boardThreadId: string
+    boardRunId?: string
+    channelMessageId: string
+    shadowDecisionId: string
+  }
+  subject: string
+  context: string
+  driAgentId: string
+  timeoutAt: number
+  dissent: string[]
+  requestedAction?: FounderRequestedAction
 }
 
 export type FounderIntervention = {
@@ -1554,17 +1579,7 @@ export function createFounderAdvisorClient(config: FounderStudioClientConfig) {
     recordReadiness(input: FounderAdvisorReadinessRecordInput) {
       return post<FounderAdvisorReadiness>("/company/board/readiness", input)
     },
-    converge(input: {
-      companyId: string
-      idempotencyKey: string
-      source: { boardThreadId: string; boardRunId?: string; channelMessageId: string; shadowDecisionId: string }
-      subject: string
-      context: string
-      driAgentId: string
-      timeoutAt: number
-      dissent: string[]
-      requestedAction?: FounderRequestedAction
-    }) {
+    converge(input: FounderAdvisorConvergenceInput) {
       return post<FounderAdvisorConvergence>("/company/board/convergences", input)
     },
     intervene(input: FounderInterventionInput) {

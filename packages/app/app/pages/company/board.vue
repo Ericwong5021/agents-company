@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue"
-import type { FounderBoardGovernanceProjection } from "@agents-company/sdk/v2/founder-os"
+import type {
+  FounderAdvisorConvergence,
+  FounderBoardGovernanceProjection,
+  FounderShadowComparison,
+  FounderShadowDecision,
+} from "@agents-company/sdk/v2/founder-os"
+import type { CompanyBoardThread } from "../../../modules/agent-company/runtime/shared/company-contract"
 
 const { data: snapshot, refresh } = useCompanySnapshot()
 const board = ref<FounderBoardGovernanceProjection | null>(null)
+const thread = ref<CompanyBoardThread | null>(null)
 const loading = ref(false)
 const actionMessage = ref("")
 const intervention = reactive({
@@ -12,15 +19,181 @@ const intervention = reactive({
   reason: "",
   newGoal: "",
 })
-const boardThreadId = computed(() => snapshot.value.messages.find((message) => message.threadID)?.threadID)
+const shadowRun = reactive({
+  projectId: "",
+  currentGoal: "",
+})
+const comparison = reactive({
+  shadowDecisionId: "",
+  actualDecisionId: "",
+  actualDecision: "",
+  alignment: "partial" as "match" | "partial" | "mismatch",
+  rationale: "",
+})
+const convergence = reactive({
+  shadowDecisionId: "",
+  channelMessageId: "",
+  driAgentId: "",
+  subject: "",
+  context: "",
+  timeoutMinutes: 30,
+})
+const boardThreadId = computed(() =>
+  [...snapshot.value.messages].reverse().find((message) => message.threadID)?.threadID)
+const boardMessages = computed(() =>
+  snapshot.value.messages.filter((message) => message.threadID === boardThreadId.value))
+const currentRequest = computed(() =>
+  [...boardMessages.value].reverse().find((message) => message.kind === "user") ?? boardMessages.value.at(-1))
+
+function seedForms() {
+  shadowRun.currentGoal ||= snapshot.value.company.setupGoal
+    ?? snapshot.value.projects.at(0)?.title
+    ?? "评估当前公司目标与讨论"
+  comparison.shadowDecisionId ||= board.value?.shadow.decisions.at(0)?.id ?? ""
+  comparison.actualDecisionId ||= board.value?.decisions.at(0)?.id ?? ""
+  comparison.actualDecision ||= board.value?.decisions.at(0)?.finalDecision
+    ?? board.value?.decisions.at(0)?.recommendation
+    ?? ""
+  convergence.shadowDecisionId ||= board.value?.shadow.decisions.at(0)?.id ?? ""
+  convergence.channelMessageId ||= currentRequest.value?.id ?? ""
+  convergence.driAgentId ||= snapshot.value.agents.at(0)?.id ?? ""
+  convergence.subject ||= currentRequest.value?.body ?? ""
+  convergence.context ||= boardMessages.value.map((message) => `${message.author}: ${message.body}`).join("\n")
+}
 
 async function loadBoard() {
   if (!snapshot.value.company.id || loading.value) return
   loading.value = true
-  board.value = await $fetch<FounderBoardGovernanceProjection>("/api/agent-company/founder-board", {
-    query: { companyId: snapshot.value.company.id },
-  }).catch(() => null)
+  const [projection, boardThread] = await Promise.all([
+    $fetch<FounderBoardGovernanceProjection>("/api/agent-company/founder-board", {
+      query: { companyId: snapshot.value.company.id },
+    }).catch(() => null),
+    boardThreadId.value
+      ? $fetch<CompanyBoardThread>("/api/agent-company/board", {
+          query: { thread_id: boardThreadId.value },
+        }).catch(() => null)
+      : Promise.resolve(null),
+  ])
+  board.value = projection
+  thread.value = boardThread
+  seedForms()
   loading.value = false
+}
+
+async function runShadow() {
+  if (!shadowRun.currentGoal.trim() || loading.value) return
+  loading.value = true
+  actionMessage.value = ""
+  const source = currentRequest.value
+  await $fetch<FounderShadowDecision>("/api/agent-company/founder-shadow/run", {
+    method: "POST",
+    body: {
+      context: {
+        companyId: snapshot.value.company.id,
+        scope: shadowRun.projectId
+          ? { kind: "project", ref: shadowRun.projectId }
+          : { kind: "company" },
+        currentGoal: shadowRun.currentGoal,
+        discussion: boardMessages.value.map((message) => `${message.author}: ${message.body}`).join("\n")
+          || "当前 Board 尚无可用讨论记录。",
+        authorizationBoundary: "Shadow 只生成建议，不发言、不建 Gate、不执行。",
+        currentFacts: [
+          `Provider: ${snapshot.value.company.provider}`,
+          `Approval policy: ${snapshot.value.company.approvalPolicy}`,
+        ],
+        evidenceRefs: source
+          ? [{ kind: "conversation", id: source.id, validity: "verified" }]
+          : [],
+      },
+      createdBy: "local_user",
+    },
+  }).then(
+    (result) => {
+      actionMessage.value = result.status === "suggested"
+        ? "Shadow 建议已写入只读投影。"
+        : `Shadow 保持阻断：${result.blockReasons.join("、")}`
+    },
+    () => actionMessage.value = "Shadow 请求未写入，请检查上下文与 Control Plane 状态。",
+  )
+  loading.value = false
+  await loadBoard()
+}
+
+async function compareShadow() {
+  if (
+    !comparison.shadowDecisionId
+    || !comparison.actualDecisionId
+    || !comparison.actualDecision.trim()
+    || !comparison.rationale.trim()
+    || loading.value
+  ) return
+  loading.value = true
+  actionMessage.value = ""
+  await $fetch<FounderShadowComparison>("/api/agent-company/founder-shadow/compare", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      shadowDecisionId: comparison.shadowDecisionId,
+      actualDecision: comparison.actualDecision,
+      actualDecisionRef: {
+        kind: "decision",
+        id: comparison.actualDecisionId,
+        validity: "verified",
+      },
+      alignment: comparison.alignment,
+      rationale: comparison.rationale,
+      comparedBy: "local_user",
+    },
+  }).then(
+    () => {
+      actionMessage.value = "Shadow 对照已写入，未冒充人工确认样本。"
+      comparison.rationale = ""
+    },
+    () => actionMessage.value = "Shadow 对照未写入，请检查 Ledger 引用。",
+  )
+  loading.value = false
+  await loadBoard()
+}
+
+async function convergeAdvisor() {
+  const boardRunId = thread.value?.run?.id
+  if (
+    !boardThreadId.value
+    || !boardRunId
+    || !convergence.channelMessageId
+    || !convergence.shadowDecisionId
+    || !convergence.driAgentId
+    || !convergence.subject.trim()
+    || !convergence.context.trim()
+    || loading.value
+  ) return
+  loading.value = true
+  actionMessage.value = ""
+  await $fetch<FounderAdvisorConvergence>("/api/agent-company/founder-board/converge", {
+    method: "POST",
+    body: {
+      companyId: snapshot.value.company.id,
+      idempotencyKey: crypto.randomUUID(),
+      source: {
+        boardThreadId: boardThreadId.value,
+        boardRunId,
+        channelMessageId: convergence.channelMessageId,
+        shadowDecisionId: convergence.shadowDecisionId,
+      },
+      subject: convergence.subject,
+      context: convergence.context,
+      driAgentId: convergence.driAgentId,
+      timeoutAt: Date.now() + convergence.timeoutMinutes * 60_000,
+      dissent: [],
+    },
+  }).then(
+    (result) => actionMessage.value = result.status === "intent_recorded"
+      ? "Advisor DecisionIntent 已写入 Ledger，未创建执行。"
+      : `Advisor 保持 ${result.status}：${result.events.at(-1)?.reason ?? result.authority.reason}`,
+    () => actionMessage.value = "Advisor 收敛未写入，请检查 Board 来源链。",
+  )
+  loading.value = false
+  await loadBoard()
 }
 
 async function intervene() {
@@ -111,6 +284,150 @@ watch(() => snapshot.value.company.id, (companyId) => {
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
           当前模式或真实授权尚未满足，Advisor 收敛保持 fail-closed，页面不能提高模式。
         </p>
+
+        <div class="founder-board-layout">
+          <section class="company-section founder-board-takeover">
+            <div class="company-section__heading">
+              <div>
+                <p class="company-eyebrow">Shadow run</p>
+                <h2>生成只读建议</h2>
+              </div>
+            </div>
+            <label>
+              <span>目标</span>
+              <textarea v-model="shadowRun.currentGoal" rows="3" />
+            </label>
+            <label>
+              <span>项目范围</span>
+              <select v-model="shadowRun.projectId">
+                <option value="">公司范围</option>
+                <option v-for="project in snapshot.projects" :key="project.id" :value="project.id">
+                  {{ project.title }}
+                </option>
+              </select>
+            </label>
+            <UButton
+              color="neutral"
+              :loading="loading"
+              :disabled="!shadowRun.currentGoal.trim()"
+              @click="runShadow"
+            >
+              运行 Shadow
+            </UButton>
+          </section>
+
+          <section class="company-section founder-board-takeover">
+            <div class="company-section__heading">
+              <div>
+                <p class="company-eyebrow">Shadow compare</p>
+                <h2>对照真实决定</h2>
+              </div>
+            </div>
+            <label>
+              <span>Shadow</span>
+              <select v-model="comparison.shadowDecisionId">
+                <option value="">选择建议</option>
+                <option v-for="decision in board?.shadow.decisions ?? []" :key="decision.id" :value="decision.id">
+                  {{ decision.recommendation || decision.id }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>Ledger 决定</span>
+              <select v-model="comparison.actualDecisionId">
+                <option value="">选择决定</option>
+                <option v-for="decision in board?.decisions ?? []" :key="decision.id" :value="decision.id">
+                  {{ decision.subject || decision.id }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>真实决定</span>
+              <textarea v-model="comparison.actualDecision" rows="3" />
+            </label>
+            <label>
+              <span>一致性</span>
+              <select v-model="comparison.alignment">
+                <option value="match">一致</option>
+                <option value="partial">部分一致</option>
+                <option value="mismatch">不一致</option>
+              </select>
+            </label>
+            <label>
+              <span>对照依据</span>
+              <textarea v-model="comparison.rationale" rows="2" />
+            </label>
+            <UButton
+              color="neutral"
+              variant="outline"
+              :loading="loading"
+              :disabled="!comparison.shadowDecisionId || !comparison.actualDecisionId || !comparison.actualDecision.trim() || !comparison.rationale.trim()"
+              @click="compareShadow"
+            >
+              写入对照
+            </UButton>
+          </section>
+        </div>
+
+        <section class="company-section founder-board-takeover">
+          <div class="company-section__heading">
+            <div>
+              <p class="company-eyebrow">Advisor converge</p>
+              <h2>收敛为 DecisionIntent</h2>
+            </div>
+            <span>{{ thread?.run?.id ?? "缺少 Board Run" }}</span>
+          </div>
+          <div class="founder-board-layout">
+            <label>
+              <span>Shadow</span>
+              <select v-model="convergence.shadowDecisionId">
+                <option value="">选择建议</option>
+                <option v-for="decision in board?.shadow.decisions ?? []" :key="decision.id" :value="decision.id">
+                  {{ decision.recommendation || decision.id }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>当前请求消息</span>
+              <select v-model="convergence.channelMessageId">
+                <option value="">选择消息</option>
+                <option v-for="message in boardMessages" :key="message.id" :value="message.id">
+                  {{ message.author }} · {{ message.body }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>DRI Agent</span>
+              <select v-model="convergence.driAgentId">
+                <option value="">选择 Agent</option>
+                <option v-for="agent in snapshot.agents" :key="agent.id" :value="agent.id">
+                  {{ agent.name }} · {{ agent.role }}
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>超时分钟</span>
+              <input v-model.number="convergence.timeoutMinutes" type="number" min="1" max="1440">
+            </label>
+          </div>
+          <label>
+            <span>主题</span>
+            <textarea v-model="convergence.subject" rows="2" />
+          </label>
+          <label>
+            <span>上下文</span>
+            <textarea v-model="convergence.context" rows="4" />
+          </label>
+          <UButton
+            color="neutral"
+            :loading="loading"
+            :disabled="!board?.advisorCanSpeak || !thread?.run?.id || !convergence.channelMessageId || !convergence.shadowDecisionId || !convergence.driAgentId || !convergence.subject.trim() || !convergence.context.trim()"
+            @click="convergeAdvisor"
+          >
+            写入 Advisor Intent
+          </UButton>
+          <p class="company-provider-form__message">只写入治理意图与 Ledger，不创建 WorkItem 或执行。</p>
+        </section>
 
         <div class="founder-board-layout">
           <section class="company-section founder-board-discussion">

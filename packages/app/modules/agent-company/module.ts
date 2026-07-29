@@ -84,6 +84,21 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/founder-board-intervene.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/founder-board/converge",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-board-converge.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-shadow/run",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-shadow-run.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/founder-shadow/compare",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/founder-shadow-compare.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/founder-advisor-readiness",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/founder-advisor-readiness.get"),
@@ -152,6 +167,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/decision-center-correction",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/decision-center-correction.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/decision-center-yellow-rollback",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/decision-center-yellow-rollback.post"),
     })
     addServerHandler({
       route: "/api/agent-company/messages",
