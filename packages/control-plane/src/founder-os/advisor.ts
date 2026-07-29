@@ -21,6 +21,7 @@ import {
   type FounderStudioProjection,
 } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { FounderTwinSnapshotTable } from "./asset.sql"
@@ -78,7 +79,7 @@ export const unavailableGovernanceAdapter: GovernanceAdapter = {
 
 function modes(companyId: string) {
   const company = Database.use((db) =>
-    db.select().from(CompanyTable).where(eq(CompanyTable.id, companyId)).get(),
+    db.select().from(CompanyTable).where(eq(CompanyTable.id, CompanyID.parse(companyId))).get(),
   )
   if (!company) throw new Error("Company was not found")
   return FounderOSMode.resolve({

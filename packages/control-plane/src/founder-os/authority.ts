@@ -23,6 +23,7 @@ import { Context, Effect, Layer } from "effect"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { ApprovalPolicyTable, CompanyTable } from "@/company/company.sql"
+import { CompanyID } from "@/company/schema"
 import { CompanyApprovalGateTable, CompanyOutcomeSignalTable } from "@/company-project/company-project.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
@@ -442,11 +443,12 @@ export const governanceLayer = Layer.succeed(
               const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
               if (!row) throw new Error("Governance requests require an existing DecisionRecord")
               const decision = recordFromRow(db, row)
-              const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, decision.scope.companyId)).get()
+              const companyID = CompanyID.parse(decision.scope.companyId)
+              const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyID)).get()
               const preset = db
                 .select()
                 .from(ApprovalPolicyTable)
-                .where(eq(ApprovalPolicyTable.company_id, decision.scope.companyId))
+                .where(eq(ApprovalPolicyTable.company_id, companyID))
                 .get()
               if (!company || !preset) throw new Error("Company governance settings were not found")
               const authority = evaluateInTransaction(db, {
