@@ -5,6 +5,7 @@ import {
   GoalBriefDraft,
   GoalBriefUserSource,
   type GoalBrief as GoalBriefValue,
+  type GoalBriefSource,
 } from "@agents-company/shared/experience"
 import { GoalBriefStore } from "@/goal-brief"
 import { GoalBriefTable, GoalBriefVersionTable } from "@/goal-brief/goal-brief.sql"
@@ -50,6 +51,53 @@ export const AdjustDirectionPayload = AdjustDirectionRequest.pick({
   brief: true,
   change_reason: true,
 }).strict()
+
+export const RestoreDirectionCheckpointRequest = z
+  .object({
+    project_id: z.string().trim().min(1),
+    action_id: z.string().trim().min(1),
+    checkpoint_id: z.string().trim().min(1),
+    brief_id: z.string().trim().min(1),
+    expected_graph_revision: z.number().int().nonnegative(),
+    expected_brief_version: z.number().int().positive(),
+    expected_plan_version: z.number().int().positive(),
+    brief: GoalBriefDraft,
+    change_reason: z.string().trim().min(1).max(8_000),
+  })
+  .strict()
+export type RestoreDirectionCheckpointRequest = z.infer<typeof RestoreDirectionCheckpointRequest>
+
+export const RestoreDirectionCheckpointPayload = RestoreDirectionCheckpointRequest.omit({
+  project_id: true,
+  action_id: true,
+  expected_graph_revision: true,
+}).strict()
+
+export const ApplyFounderDirectionRequest = z
+  .object({
+    project_id: z.string().trim().min(1),
+    action_id: z.string().trim().min(1),
+    checkpoint_id: z.string().trim().min(1),
+    brief_id: z.string().trim().min(1),
+    expected_graph_revision: z.number().int().nonnegative(),
+    expected_brief_version: z.number().int().positive(),
+    expected_plan_version: z.number().int().positive(),
+    brief: GoalBriefDraft,
+    change_reason: z.string().trim().min(1).max(8_000),
+  })
+  .strict()
+export type ApplyFounderDirectionRequest = z.infer<typeof ApplyFounderDirectionRequest>
+
+export const ApplyFounderDirectionPayload = ApplyFounderDirectionRequest.omit({
+  project_id: true,
+  action_id: true,
+  expected_graph_revision: true,
+}).strict()
+export type ApplyFounderDirectionPayload = z.infer<typeof ApplyFounderDirectionPayload>
+
+type DirectionChangeRequest = Omit<AdjustDirectionRequest, "source"> & {
+  source: GoalBriefSource
+}
 
 const AppliedBinding = z
   .object({
@@ -178,7 +226,7 @@ function rejectWithDatabase(
 }
 
 function applyWithDatabase(
-  input: AdjustDirectionRequest,
+  input: DirectionChangeRequest,
   action_id: string,
   replayed: boolean,
   hooks: Hooks,
@@ -479,6 +527,12 @@ function applyWithDatabase(
 
 export interface Interface {
   readonly adjust: (input: AdjustDirectionRequest) => Effect.Effect<AdjustDirectionResult>
+  readonly restoreCheckpoint: (
+    input: RestoreDirectionCheckpointRequest,
+  ) => Effect.Effect<AdjustDirectionResult>
+  readonly applyFounderDirection: (
+    input: ApplyFounderDirectionRequest,
+  ) => Effect.Effect<AdjustDirectionResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -524,6 +578,58 @@ export function makeLayer(hooks: Hooks = {}) {
                 hooks,
               ),
             )
+            hooks.onBoundary?.("after_commit")
+            return result
+          }),
+        restoreCheckpoint: (raw) =>
+          Effect.gen(function* () {
+            const input = RestoreDirectionCheckpointRequest.parse(raw)
+            const result = yield* Effect.sync(() =>
+              applyWithDatabase(
+                {
+                  project_id: input.project_id,
+                  brief_id: input.brief_id,
+                  idempotency_key: `restore-direction:${input.checkpoint_id}`,
+                  expected_graph_revision: input.expected_graph_revision,
+                  expected_brief_version: input.expected_brief_version,
+                  expected_plan_version: input.expected_plan_version,
+                  source: "system_suggestion",
+                  brief: input.brief,
+                  change_reason: input.change_reason,
+                },
+                input.action_id,
+                false,
+                hooks,
+              ),
+            )
+            if (result.status === "applied" && result.brief.goal !== input.brief.goal)
+              throw new Error("Direction checkpoint restore did not reproduce the checkpoint goal")
+            hooks.onBoundary?.("after_commit")
+            return result
+          }),
+        applyFounderDirection: (raw) =>
+          Effect.gen(function* () {
+            const input = ApplyFounderDirectionRequest.parse(raw)
+            const result = yield* Effect.sync(() =>
+              applyWithDatabase(
+                {
+                  project_id: input.project_id,
+                  brief_id: input.brief_id,
+                  idempotency_key: `apply-founder-direction:${input.checkpoint_id}`,
+                  expected_graph_revision: input.expected_graph_revision,
+                  expected_brief_version: input.expected_brief_version,
+                  expected_plan_version: input.expected_plan_version,
+                  source: "system_suggestion",
+                  brief: input.brief,
+                  change_reason: input.change_reason,
+                },
+                input.action_id,
+                false,
+                hooks,
+              ),
+            )
+            if (result.status === "applied" && result.brief.goal !== input.brief.goal)
+              throw new Error("Founder direction handler did not apply the requested goal")
             hooks.onBoundary?.("after_commit")
             return result
           }),

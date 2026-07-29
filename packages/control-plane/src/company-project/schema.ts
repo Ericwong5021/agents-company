@@ -711,6 +711,8 @@ export const ProjectActionKind = z.enum([
   "retry",
   "resolve_blocker",
   "adjust_brief",
+  "apply_founder_direction",
+  "restore_direction_checkpoint",
 ])
 export type ProjectActionKind = z.infer<typeof ProjectActionKind>
 

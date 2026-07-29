@@ -93,3 +93,10 @@ export {
   FounderGreenDelegationRunTable,
   FounderGreenReadinessTable,
 } from "../project-orchestrator/founder-delegation.sql"
+export {
+  FounderYellowCheckpointTable,
+  FounderYellowDispatchOutboxTable,
+  FounderYellowEventTable,
+  FounderYellowReadinessTable,
+  FounderYellowRunTable,
+} from "../founder-os/yellow.sql"

@@ -1,4 +1,5 @@
 import z from "zod"
+import { GoalBriefDraft } from "./experience"
 
 const Identifier = z.string().trim().min(1).max(240)
 const ShortText = z.string().trim().min(1).max(1_000)
@@ -1162,6 +1163,7 @@ export const DecisionCenterItem = z
         })
         .strict(),
     ),
+    yellowSummary: z.lazy(() => FounderYellowSummary).nullable(),
   })
   .strict()
   .meta({ ref: "DecisionCenterItem" })
@@ -1469,6 +1471,23 @@ export const FounderGreenReadiness = z
     status: z.enum(["ready", "blocked"]),
     b3: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
     e0: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
+    w5Observation: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
+    takeoverFence: z.object({ status: z.enum(["passed", "missing"]), evidenceRef: Identifier.nullable() }).strict(),
+    preferenceHoldout: z
+      .object({
+        status: z.enum(["passed", "missing"]),
+        reportRef: Identifier.nullable(),
+        agreementRate: z.number().min(0).max(1).nullable(),
+      })
+      .strict(),
+    metricContract: z
+      .object({
+        status: z.enum(["passed", "missing"]),
+        evidenceRef: Identifier.nullable(),
+        windowDays: z.number().int().positive().nullable(),
+        sampleContractMet: z.boolean(),
+      })
+      .strict(),
     authorization: z
       .object({
         status: z.enum(["human_confirmed", "missing"]),
@@ -1498,6 +1517,10 @@ export const FounderGreenReadinessRecordInput = z
     idempotencyKey: Identifier,
     b3ArtifactId: Identifier,
     e0ArtifactId: Identifier,
+    w5ObservationArtifactId: Identifier,
+    takeoverFenceArtifactId: Identifier,
+    preferenceBenchmarkReportId: Identifier,
+    metricContractArtifactId: Identifier,
     authorizationEventId: Identifier,
     exactCommit: z
       .object({
@@ -1605,3 +1628,191 @@ export const FounderGreenDelegationProjection = z
   .strict()
   .meta({ ref: "FounderGreenDelegationProjection" })
 export type FounderGreenDelegationProjection = z.infer<typeof FounderGreenDelegationProjection>
+
+export const FounderYellowDelegationAction = z.enum(["project.goal.propose"])
+export type FounderYellowDelegationAction = z.infer<typeof FounderYellowDelegationAction>
+
+export const FounderYellowActionContract = z
+  .object({
+    schemaVersion: z.literal(1),
+    actionType: FounderYellowDelegationAction,
+    costLimit: z.object({ unit: z.literal("receipt"), maximum: z.literal(1) }).strict(),
+    reversible: z.literal(true),
+    externalImpact: z.literal(false),
+    rollbackHandlerId: z.literal("company-project-direction.restore_checkpoint"),
+    outcomeDeadlineMs: z.literal(3_600_000),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowActionContract" })
+export type FounderYellowActionContract = z.infer<typeof FounderYellowActionContract>
+
+export const FounderYellowActionContracts = {
+  "project.goal.propose": {
+    schemaVersion: 1,
+    actionType: "project.goal.propose",
+    costLimit: { unit: "receipt", maximum: 1 },
+    reversible: true,
+    externalImpact: false,
+    rollbackHandlerId: "company-project-direction.restore_checkpoint",
+    outcomeDeadlineMs: 3_600_000,
+  },
+} as const satisfies Record<FounderYellowDelegationAction, FounderYellowActionContract>
+
+export const FounderYellowReadiness = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    status: z.enum(["not_confirmed", "confirmed"]),
+    greenReadinessRef: Identifier.nullable(),
+    w6ObservationEvidenceRef: Identifier.nullable(),
+    e0EvidenceRef: Identifier.nullable(),
+    outcomeSignalRef: Identifier.nullable(),
+    authorizationEventRef: Identifier.nullable(),
+    confirmedBy: Identifier.nullable(),
+    failClosedReasons: z.array(ShortText).max(20),
+    autoPromotionAllowed: z.literal(false),
+    recordedAt: z.number().int().nonnegative().nullable(),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowReadiness" })
+export type FounderYellowReadiness = z.infer<typeof FounderYellowReadiness>
+
+export const FounderYellowReadinessRecordInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    w6ObservationArtifactId: Identifier,
+    e0ArtifactId: Identifier,
+    outcomeSignalId: Identifier,
+    authorizationEventId: Identifier,
+    actor: z.object({ kind: z.literal("human"), id: Identifier }).strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowReadinessRecordInput" })
+export type FounderYellowReadinessRecordInput = z.infer<typeof FounderYellowReadinessRecordInput>
+
+export const FounderYellowDelegationInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    idempotencyKey: Identifier,
+    decisionId: Identifier,
+    projectId: Identifier,
+    boardThreadId: Identifier,
+    receiptId: Identifier,
+    actionType: z.literal("project.goal.propose"),
+    estimatedCost: z.object({ unit: z.literal("receipt"), amount: z.number().positive() }).strict(),
+    direction: z.object({
+      briefId: Identifier,
+      expectedBriefVersion: z.number().int().positive(),
+      expectedPlanVersion: z.number().int().positive(),
+      brief: GoalBriefDraft,
+    }).strict(),
+    requestedBy: z.object({ kind: z.literal("ai_founder"), id: z.literal("board-ceo") }).strict(),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowDelegationInput" })
+export type FounderYellowDelegationInput = z.infer<typeof FounderYellowDelegationInput>
+
+export const FounderYellowRollbackInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    idempotencyKey: Identifier,
+    trigger: z.enum(["failure_condition", "human_decision"]),
+    reason: LongText,
+    actor: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("human"), id: Identifier }).strict(),
+      z.object({ kind: z.literal("policy_engine"), id: z.literal("yellow-circuit-breaker") }).strict(),
+    ]),
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if (input.trigger === "human_decision" && input.actor.kind !== "human")
+      context.addIssue({
+        code: "custom",
+        path: ["actor"],
+        message: "Human rollback decisions require a human actor",
+      })
+    if (input.trigger === "failure_condition" && input.actor.kind !== "policy_engine")
+      context.addIssue({
+        code: "custom",
+        path: ["actor"],
+        message: "Failure-condition rollback requires the circuit breaker actor",
+      })
+  })
+  .meta({ ref: "FounderYellowRollbackInput" })
+export type FounderYellowRollbackInput = z.infer<typeof FounderYellowRollbackInput>
+
+export const FounderYellowRollbackRecord = z
+  .object({
+    id: Identifier,
+    trigger: z.enum(["failure_condition", "human_decision"]),
+    handlerId: Identifier,
+    status: z.enum(["requested", "completed", "failed"]),
+    reason: LongText,
+    result: LongText.nullable(),
+    actorKind: z.enum(["human", "policy_engine"]),
+    actorId: Identifier,
+    createdAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowRollbackRecord" })
+export type FounderYellowRollbackRecord = z.infer<typeof FounderYellowRollbackRecord>
+
+export const FounderYellowSummary = z
+  .object({
+    schemaVersion: z.literal(1),
+    runId: Identifier,
+    status: z.enum(["blocked", "authorized", "outcome_pending", "completed", "failed", "rolled_back"]),
+    actionType: FounderYellowDelegationAction,
+    decisionId: Identifier,
+    governanceRef: Identifier.nullable(),
+    mutationId: Identifier.nullable(),
+    workItemIds: z.array(Identifier).max(500),
+    receiptIds: z.array(Identifier).max(500),
+    outcomeIds: z.array(Identifier).max(500),
+    cost: z.object({ unit: z.literal("receipt"), limit: z.number().positive(), actual: z.number().nonnegative() }).strict(),
+    checkpointId: Identifier.nullable(),
+    rollbackHandlerId: Identifier.nullable(),
+    rollbacks: z.array(FounderYellowRollbackRecord).max(100),
+    overrideIds: z.array(Identifier).max(100),
+    circuitBreakerOpen: z.boolean(),
+    failClosedReasons: z.array(ShortText).max(30),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowSummary" })
+export type FounderYellowSummary = z.infer<typeof FounderYellowSummary>
+
+export const FounderYellowDelegationProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    readiness: FounderYellowReadiness,
+    mode: FounderOSModeState,
+    effectiveDelegationMode: z.enum(["advisor", "green-delegated", "yellow-delegated"]),
+    contracts: z.array(FounderYellowActionContract),
+    redInvariants: z.array(z.enum([
+      "external.communication.propose",
+      "external.payment.propose",
+      "production.operation.propose",
+      "data.delete.propose",
+      "privacy.change.propose",
+      "security.change.propose",
+      "child_safety.change.propose",
+    ])),
+    circuitBreakerOpen: z.boolean(),
+    outcomeConsumer: z
+      .object({
+        baseline: z.literal("v1"),
+        validatedOutcomeRequired: z.literal(true),
+      })
+      .strict(),
+    summaries: z.array(FounderYellowSummary).max(100),
+    autoPromotionAllowed: z.literal(false),
+  })
+  .strict()
+  .meta({ ref: "FounderYellowDelegationProjection" })
+export type FounderYellowDelegationProjection = z.infer<typeof FounderYellowDelegationProjection>

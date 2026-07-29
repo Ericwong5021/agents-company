@@ -32,7 +32,16 @@ import { WorkflowRuntime } from "@/workflow/runtime"
 import { DispatchCoordinator } from "./dispatch"
 import { authorizeDiscoveryBuilder } from "./seed-team"
 
-const RuntimeAction = z.enum(["pause_work", "resume_work", "stop_work", "retry", "resolve_blocker", "adjust_brief"])
+const RuntimeAction = z.enum([
+  "pause_work",
+  "resume_work",
+  "stop_work",
+  "retry",
+  "resolve_blocker",
+  "adjust_brief",
+  "apply_founder_direction",
+  "restore_direction_checkpoint",
+])
 type RuntimeAction = z.infer<typeof RuntimeAction>
 
 const ReasonPayload = z
@@ -499,6 +508,22 @@ export function makeLayer(hooks: Hooks = {}) {
         Effect.gen(function* () {
           const direction = yield* CompanyProjectDirection.Service
           return yield* direction.adjust(input)
+        }).pipe(Effect.provide(CompanyProjectDirection.defaultLayer))
+
+      const restoreDirectionCheckpoint = (
+        input: CompanyProjectDirection.RestoreDirectionCheckpointRequest,
+      ) =>
+        Effect.gen(function* () {
+          const direction = yield* CompanyProjectDirection.Service
+          return yield* direction.restoreCheckpoint(input)
+        }).pipe(Effect.provide(CompanyProjectDirection.defaultLayer))
+
+      const applyFounderDirection = (
+        input: CompanyProjectDirection.ApplyFounderDirectionRequest,
+      ) =>
+        Effect.gen(function* () {
+          const direction = yield* CompanyProjectDirection.Service
+          return yield* direction.applyFounderDirection(input)
         }).pipe(Effect.provide(CompanyProjectDirection.defaultLayer))
 
       const pause = Effect.fn("ProjectActionExecutor.pause")(function* (action: ProjectActionRecordValue) {
@@ -1135,6 +1160,38 @@ export function makeLayer(hooks: Hooks = {}) {
             ...payload,
           })
           return { action: result.action, replayed: replayed || result.replayed }
+        }
+        if (action.action === "restore_direction_checkpoint") {
+          if (action.status === "applied" || action.status === "rejected") return { action, replayed: true }
+          const claimed =
+            action.status === "claimed" ? { record: action, replayed: true } : yield* attention.claimAction(action.id)
+          if (claimed.record.status === "rejected") return { action: claimed.record, replayed }
+          if (claimed.record.status !== "claimed")
+            throw new Error(`Project action ${action.id} cannot execute from ${claimed.record.status}`)
+          const payload = CompanyProjectDirection.RestoreDirectionCheckpointPayload.parse(claimed.record.payload)
+          const result = yield* restoreDirectionCheckpoint({
+            project_id: claimed.record.project_id,
+            action_id: claimed.record.id,
+            expected_graph_revision: claimed.record.expected_revision!,
+            ...payload,
+          })
+          return { action: result.action, replayed: replayed || claimed.replayed || result.replayed }
+        }
+        if (action.action === "apply_founder_direction") {
+          if (action.status === "applied" || action.status === "rejected") return { action, replayed: true }
+          const claimed =
+            action.status === "claimed" ? { record: action, replayed: true } : yield* attention.claimAction(action.id)
+          if (claimed.record.status === "rejected") return { action: claimed.record, replayed }
+          if (claimed.record.status !== "claimed")
+            throw new Error(`Project action ${action.id} cannot execute from ${claimed.record.status}`)
+          const payload = CompanyProjectDirection.ApplyFounderDirectionPayload.parse(claimed.record.payload)
+          const result = yield* applyFounderDirection({
+            project_id: claimed.record.project_id,
+            action_id: claimed.record.id,
+            expected_graph_revision: claimed.record.expected_revision!,
+            ...payload,
+          })
+          return { action: result.action, replayed: replayed || claimed.replayed || result.replayed }
         }
         if (action.status === "applied" || action.status === "rejected") return { action, replayed: true }
         const claimed =

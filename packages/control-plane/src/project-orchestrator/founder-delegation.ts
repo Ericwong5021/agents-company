@@ -36,7 +36,11 @@ import {
   FounderGovernanceEventTable,
 } from "@/founder-os/decision-ledger.sql"
 import * as FounderOSMode from "@/founder-os/mode"
-import { FounderShadowComparisonTable } from "@/founder-os/shadow.sql"
+import { metricContract } from "@/founder-os/metric"
+import {
+  FounderBenchmarkReportTable,
+  FounderShadowComparisonTable,
+} from "@/founder-os/shadow.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { ProjectOrchestrator } from "./project-orchestrator"
@@ -52,6 +56,61 @@ const GateArtifactEvidence = z
     authority: z.enum(["control_plane", "human", "external_system", "independent_reviewer"]),
   })
   .catchall(z.unknown())
+
+const W5ObservationEvidence = z
+  .object({
+    verified: z.literal(true),
+    gate: z.literal("W5"),
+    authority: z.enum(["control_plane", "human", "external_system", "independent_reviewer"]),
+    observationWindowDays: z.literal(30),
+    sampleSize: z.number().int().min(20),
+  })
+  .catchall(z.unknown())
+
+const TakeoverFenceEvidence = z
+  .object({
+    verified: z.literal(true),
+    gate: z.literal("TAKEOVER_FENCE"),
+    authority: z.enum(["control_plane", "human", "external_system", "independent_reviewer"]),
+    postFenceAuthorizationCount: z.literal(0),
+    postFenceDispatchCount: z.literal(0),
+    inFlightReconciled: z.literal(true),
+  })
+  .catchall(z.unknown())
+
+const MetricContractEvidence = z
+  .object({
+    verified: z.literal(true),
+    gate: z.literal("FOS_METRIC_001"),
+    authority: z.enum(["control_plane", "human", "external_system", "independent_reviewer"]),
+    contractVersion: z.literal("founder-os-w2-v1"),
+    observationWindowDays: z.literal(30),
+    metrics: z.array(z.object({
+      id: z.string(),
+      sampleSize: z.number().int().nonnegative(),
+      value: z.number(),
+    }).strict()),
+  })
+  .catchall(z.unknown())
+
+function metricTargetMet(id: string, value: number) {
+  if (["red_recall", "evidence_traceability", "ai_decision_outcome_traceability"].includes(id))
+    return value === 1
+  if (id === "historical_choice_consistency") return value >= 0.7
+  if (id === "unauthorized_red_actions") return value === 0
+  return false
+}
+
+function metricEvidenceMeetsContract(value: z.infer<typeof MetricContractEvidence>) {
+  return metricContract.metrics.every((required) => {
+    const observed = value.metrics.find((metric) => metric.id === required.id)
+    return Boolean(
+      observed
+      && observed.sampleSize >= required.minimumSampleSize
+      && metricTargetMet(required.id, observed.value),
+    )
+  })
+}
 
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized)
@@ -96,11 +155,24 @@ function readiness(companyId: string) {
         status: "blocked",
         b3: { status: "missing", evidenceRef: null },
         e0: { status: "missing", evidenceRef: null },
+        w5Observation: { status: "missing", evidenceRef: null },
+        takeoverFence: { status: "missing", evidenceRef: null },
+        preferenceHoldout: { status: "missing", reportRef: null, agreementRate: null },
+        metricContract: {
+          status: "missing",
+          evidenceRef: null,
+          windowDays: null,
+          sampleContractMet: false,
+        },
         authorization: { status: "missing", eventId: null, confirmedBy: null },
         exactCommit: { status: "missing", sha: null, evidenceRef: null },
         failClosedReasons: [
           "B3 evidence is missing.",
           "E0 evidence is missing.",
+          "W5 observation evidence is missing.",
+          "Takeover fence evidence is missing.",
+          "Preference holdout benchmark is missing.",
+          "FOS-METRIC-001 sample and window evidence is missing.",
           "Human authorization is missing.",
           "Exact commit submission evidence is missing.",
         ],
@@ -111,6 +183,24 @@ function readiness(companyId: string) {
   const reasons = [
     ...(row.b3_status === "passed" && row.b3_evidence_ref ? [] : ["B3 evidence is missing."]),
     ...(row.e0_status === "passed" && row.e0_evidence_ref ? [] : ["E0 evidence is missing."]),
+    ...(row.w5_observation_status === "passed" && row.w5_observation_evidence_ref
+      ? []
+      : ["W5 observation evidence is missing."]),
+    ...(row.takeover_fence_status === "passed" && row.takeover_fence_evidence_ref
+      ? []
+      : ["Takeover fence evidence is missing."]),
+    ...(row.preference_holdout_status === "passed"
+      && row.preference_benchmark_report_id
+      && row.preference_agreement_rate !== null
+      && row.preference_agreement_rate >= 0.8
+      ? []
+      : ["Preference holdout agreement is missing or below 80%."]),
+    ...(row.metric_contract_status === "passed"
+      && row.metric_contract_evidence_ref
+      && row.metric_window_days === 30
+      && row.metric_sample_contract_met
+      ? []
+      : ["FOS-METRIC-001 sample and window contract is missing."]),
     ...(row.authorization_status === "human_confirmed" && row.authorization_event_id && row.confirmed_by
       ? []
       : ["Human authorization is missing."]),
@@ -126,6 +216,25 @@ function readiness(companyId: string) {
       status: reasons.length ? "blocked" : "ready",
       b3: { status: row.b3_status, evidenceRef: row.b3_evidence_ref },
       e0: { status: row.e0_status, evidenceRef: row.e0_evidence_ref },
+      w5Observation: {
+        status: row.w5_observation_status,
+        evidenceRef: row.w5_observation_evidence_ref,
+      },
+      takeoverFence: {
+        status: row.takeover_fence_status,
+        evidenceRef: row.takeover_fence_evidence_ref,
+      },
+      preferenceHoldout: {
+        status: row.preference_holdout_status,
+        reportRef: row.preference_benchmark_report_id,
+        agreementRate: row.preference_agreement_rate,
+      },
+      metricContract: {
+        status: row.metric_contract_status,
+        evidenceRef: row.metric_contract_evidence_ref,
+        windowDays: row.metric_window_days,
+        sampleContractMet: row.metric_sample_contract_met,
+      },
       authorization: {
         status: row.authorization_status,
         eventId: row.authorization_event_id,
@@ -417,6 +526,53 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
     }
     const b3 = artifact(input.b3ArtifactId, "B3")
     const e0 = artifact(input.e0ArtifactId, "E0")
+    const typedArtifact = <T>(
+      id: string,
+      schema: z.ZodType<T>,
+      label: string,
+    ) => {
+      const row = db.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, id)).get()
+      const project = row?.project_id
+        ? db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, row.project_id)).get()
+        : undefined
+      const evidence = row ? schema.safeParse(JSON.parse(row.evidence_json)) : undefined
+      if (
+        !row
+        || (row.company_id !== input.companyId && project?.company_id !== input.companyId)
+        || !evidence?.success
+      )
+        throw new Error(`${label} requires verified company-scoped typed evidence`)
+      return { row, evidence: evidence.data }
+    }
+    const w5 = typedArtifact(input.w5ObservationArtifactId, W5ObservationEvidence, "W5 observation")
+    const takeover = typedArtifact(input.takeoverFenceArtifactId, TakeoverFenceEvidence, "Takeover fence")
+    const metric = typedArtifact(input.metricContractArtifactId, MetricContractEvidence, "FOS-METRIC-001")
+    if (!metricEvidenceMeetsContract(metric.evidence))
+      throw new Error("FOS-METRIC-001 evidence does not meet every minimum sample and target")
+    const preference = db
+      .select()
+      .from(FounderBenchmarkReportTable)
+      .where(and(
+        eq(FounderBenchmarkReportTable.id, input.preferenceBenchmarkReportId),
+        eq(FounderBenchmarkReportTable.company_id, input.companyId),
+      ))
+      .get()
+    const preferenceMetrics = preference
+      ? z
+          .object({ agreementRate: z.number().min(0).max(1).nullable() })
+          .catchall(z.unknown())
+          .safeParse(JSON.parse(preference.metrics_json))
+      : undefined
+    if (
+      !preference
+      || preference.benchmark_type !== "taste"
+      || preference.status !== "pass"
+      || preference.confirmed_sample_count < 20
+      || !preferenceMetrics?.success
+      || preferenceMetrics.data.agreementRate === null
+      || preferenceMetrics.data.agreementRate < 0.8
+    )
+      throw new Error("Green readiness requires a passing taste holdout benchmark with at least 80% agreement")
     const authorization = db
       .select()
       .from(FounderGovernanceEventTable)
@@ -461,6 +617,17 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
         b3_evidence_ref: b3.id,
         e0_status: "passed",
         e0_evidence_ref: e0.id,
+        w5_observation_status: "passed",
+        w5_observation_evidence_ref: w5.row.id,
+        takeover_fence_status: "passed",
+        takeover_fence_evidence_ref: takeover.row.id,
+        preference_holdout_status: "passed",
+        preference_benchmark_report_id: preference.id,
+        preference_agreement_rate: preferenceMetrics.data.agreementRate,
+        metric_contract_status: "passed",
+        metric_contract_evidence_ref: metric.row.id,
+        metric_window_days: metric.evidence.observationWindowDays,
+        metric_sample_contract_met: true,
         authorization_status: "human_confirmed",
         authorization_event_id: authorization.id,
         confirmed_by: input.actor.id,

@@ -812,6 +812,7 @@ export type DecisionCenterItem = {
   gate: FounderApprovalGate | null
   corrections: FounderCorrectionRecord[]
   outcomes: { id: string; result: "succeeded" | "failed" | "inconclusive"; summary: string; observedAt: number }[]
+  yellowSummary: FounderYellowSummary | null
 }
 
 export type DecisionCenterProjection = {
@@ -847,6 +848,19 @@ export type FounderGreenReadiness = {
   status: "ready" | "blocked"
   b3: { status: "passed" | "missing"; evidenceRef: string | null }
   e0: { status: "passed" | "missing"; evidenceRef: string | null }
+  w5Observation: { status: "passed" | "missing"; evidenceRef: string | null }
+  takeoverFence: { status: "passed" | "missing"; evidenceRef: string | null }
+  preferenceHoldout: {
+    status: "passed" | "missing"
+    reportRef: string | null
+    agreementRate: number | null
+  }
+  metricContract: {
+    status: "passed" | "missing"
+    evidenceRef: string | null
+    windowDays: number | null
+    sampleContractMet: boolean
+  }
   authorization: {
     status: "human_confirmed" | "missing"
     eventId: string | null
@@ -880,6 +894,10 @@ export type FounderGreenReadinessRecordInput = {
   idempotencyKey: string
   b3ArtifactId: string
   e0ArtifactId: string
+  w5ObservationArtifactId: string
+  takeoverFenceArtifactId: string
+  preferenceBenchmarkReportId: string
+  metricContractArtifactId: string
   authorizationEventId: string
   exactCommit: { sha: string; worktreeRunId: string }
   actor: { kind: "human"; id: string }
@@ -937,6 +955,171 @@ export type FounderGreenDelegationProjection = {
     selfEvaluations: 0
   }
   runs: FounderGreenDelegationRun[]
+  autoPromotionAllowed: false
+}
+
+export type FounderYellowGoalBriefDraft = {
+  goal: string
+  deliverables: { id: string; title: string; description: string }[]
+  acceptanceCriteria: { id: string; description: string; verification: string }[]
+  constraints: string[]
+  nonGoals: string[]
+  assumptions: { id: string; description: string; confirmed: boolean }[]
+  openQuestions: {
+    id: string
+    question: string
+    impact: string
+    blocking: boolean
+    defaultAssumption: string
+  }[]
+  riskLevel: "low" | "medium" | "high" | "critical"
+  recommendedPlan: {
+    summary: string
+    steps: { id: string; title: string; outcome: string }[]
+  }
+  approvalMode: "autonomous" | "balanced" | "strict"
+  sourceRefs: {
+    kind:
+      | "project"
+      | "project_event"
+      | "goal_brief"
+      | "legacy_charter"
+      | "work_item"
+      | "approval_gate"
+      | "artifact"
+      | "delivery"
+      | "conversation"
+      | "goal_request"
+      | "user"
+      | "work_attempt"
+      | "work_receipt"
+      | "graph_mutation"
+      | "project_assignment"
+      | "validation_gate"
+    id: string
+    version?: number
+    eventType?: string
+  }[]
+}
+
+export type FounderYellowActionContract = {
+  schemaVersion: 1
+  actionType: "project.goal.propose"
+  costLimit: { unit: "receipt"; maximum: 1 }
+  reversible: true
+  externalImpact: false
+  rollbackHandlerId: "company-project-direction.restore_checkpoint"
+  outcomeDeadlineMs: 3_600_000
+}
+
+export type FounderYellowReadiness = {
+  schemaVersion: 1
+  companyId: string
+  status: "not_confirmed" | "confirmed"
+  greenReadinessRef: string | null
+  w6ObservationEvidenceRef: string | null
+  e0EvidenceRef: string | null
+  outcomeSignalRef: string | null
+  authorizationEventRef: string | null
+  confirmedBy: string | null
+  failClosedReasons: string[]
+  autoPromotionAllowed: false
+  recordedAt: number | null
+}
+
+export type FounderYellowReadinessRecordInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  w6ObservationArtifactId: string
+  e0ArtifactId: string
+  outcomeSignalId: string
+  authorizationEventId: string
+  actor: { kind: "human"; id: string }
+}
+
+export type FounderYellowDelegationInput = {
+  schemaVersion: 1
+  companyId: string
+  idempotencyKey: string
+  decisionId: string
+  projectId: string
+  boardThreadId: string
+  receiptId: string
+  actionType: "project.goal.propose"
+  estimatedCost: { unit: "receipt"; amount: number }
+  direction: {
+    briefId: string
+    expectedBriefVersion: number
+    expectedPlanVersion: number
+    brief: FounderYellowGoalBriefDraft
+  }
+  requestedBy: { kind: "ai_founder"; id: "board-ceo" }
+}
+
+export type FounderYellowRollbackInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  trigger: "failure_condition" | "human_decision"
+  reason: string
+  actor:
+    | { kind: "human"; id: string }
+    | { kind: "policy_engine"; id: "yellow-circuit-breaker" }
+}
+
+export type FounderYellowRollbackRecord = {
+  id: string
+  trigger: "failure_condition" | "human_decision"
+  handlerId: string
+  status: "requested" | "completed" | "failed"
+  reason: string
+  result: string | null
+  actorKind: "human" | "policy_engine"
+  actorId: string
+  createdAt: number
+}
+
+export type FounderYellowSummary = {
+  schemaVersion: 1
+  runId: string
+  status: "blocked" | "authorized" | "outcome_pending" | "completed" | "failed" | "rolled_back"
+  actionType: "project.goal.propose"
+  decisionId: string
+  governanceRef: string | null
+  mutationId: string | null
+  workItemIds: string[]
+  receiptIds: string[]
+  outcomeIds: string[]
+  cost: { unit: "receipt"; limit: number; actual: number }
+  checkpointId: string | null
+  rollbackHandlerId: string | null
+  rollbacks: FounderYellowRollbackRecord[]
+  overrideIds: string[]
+  circuitBreakerOpen: boolean
+  failClosedReasons: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type FounderYellowDelegationProjection = {
+  schemaVersion: 1
+  companyId: string
+  readiness: FounderYellowReadiness
+  mode: FounderOSModeState
+  effectiveDelegationMode: "advisor" | "green-delegated" | "yellow-delegated"
+  contracts: FounderYellowActionContract[]
+  redInvariants: Array<
+    | "external.communication.propose"
+    | "external.payment.propose"
+    | "production.operation.propose"
+    | "data.delete.propose"
+    | "privacy.change.propose"
+    | "security.change.propose"
+    | "child_safety.change.propose"
+  >
+  circuitBreakerOpen: boolean
+  outcomeConsumer: { baseline: "v1"; validatedOutcomeRequired: true }
+  summaries: FounderYellowSummary[]
   autoPromotionAllowed: false
 }
 
@@ -998,6 +1181,23 @@ export function createFounderOSGovernanceClient(config: FounderStudioClientConfi
     },
     recordGreenReadiness(input: FounderGreenReadinessRecordInput) {
       return request<FounderGreenReadiness>("/company/founder-os/green-readiness", json(input))
+    },
+    yellowDelegations(companyId: string) {
+      return request<FounderYellowDelegationProjection>(
+        `/company/founder-os/yellow-delegations?${new URLSearchParams({ company_id: companyId })}`,
+      )
+    },
+    delegateYellow(input: FounderYellowDelegationInput) {
+      return request<FounderYellowSummary>("/company/founder-os/yellow-delegations", json(input))
+    },
+    recordYellowReadiness(input: FounderYellowReadinessRecordInput) {
+      return request<FounderYellowReadiness>("/company/founder-os/yellow-readiness", json(input))
+    },
+    rollbackYellow(runId: string, input: FounderYellowRollbackInput) {
+      return request<FounderYellowSummary>(
+        `/company/founder-os/yellow-delegations/${encodeURIComponent(runId)}/rollback`,
+        json(input),
+      )
     },
   }
 }

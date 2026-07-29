@@ -44,6 +44,8 @@ import { ensureDefaultPolicies, recordFromRow } from "./decision-ledger"
 import { GovernanceAssetSelectionTable, GovernanceAssetTable } from "./asset.sql"
 import * as FounderOSMode from "./mode"
 import * as FounderOSAsset from "./asset"
+import { yellowSummaryForDecision } from "./yellow-projection"
+import { FounderYellowEventTable, FounderYellowRunTable } from "./yellow.sql"
 
 const authorityRank = { green: 0, yellow: 1, red: 2 } as const
 const modeRank = { off: -1, shadow: -1, advisor: -1, "green-delegated": 0, "yellow-delegated": 1 } as const
@@ -495,6 +497,7 @@ function decisionCenterProjection(db: TxOrDb, companyId: string) {
         gate: gate?.kind === "founder_red" ? gateFromRow(gate) : null,
         corrections,
         outcomes,
+        yellowSummary: yellowSummaryForDecision(db, decision.id),
       }
     })
   return DecisionCenterProjection.parse({
@@ -807,6 +810,34 @@ export const founderCorrectionLayer = Layer.succeed(
                   reason: input.reason,
                   actorId: input.actorId,
                 })
+              if (input.kind === "override") {
+                const yellowRun = db
+                  .select()
+                  .from(FounderYellowRunTable)
+                  .where(eq(FounderYellowRunTable.decision_id, decision.id))
+                  .orderBy(desc(FounderYellowRunTable.created_at), desc(FounderYellowRunTable.id))
+                  .get()
+                if (yellowRun)
+                  db
+                    .insert(FounderYellowEventTable)
+                    .values({
+                      id: Identifier.create("fyevt", "ascending"),
+                      company_id: decision.company_id,
+                      run_id: yellowRun.id,
+                      decision_id: decision.id,
+                      idempotency_key: `${input.idempotencyKey}:yellow-override`,
+                      type: "override_recorded",
+                      actor_kind: "human",
+                      actor_id: input.actorId,
+                      data_json: JSON.stringify({
+                        correctionId: row.id,
+                        reason: input.reason,
+                      }),
+                      created_at: row.created_at,
+                    })
+                    .onConflictDoNothing()
+                    .run()
+              }
               return correctionFromRow(row)
             },
             { behavior: "immediate" },

@@ -63,7 +63,7 @@ import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { Company } from "@/company"
-import { DecisionLedger, FounderAuthority } from "@/founder-os"
+import { DecisionLedger, FounderAuthority, FounderYellowDelegation } from "@/founder-os"
 import * as FounderModelProviderAdapter from "@/founder-model-provider/adapter"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
@@ -190,6 +190,7 @@ export const AppLayer = Layer.suspend(() => {
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     FounderGreenDelegation.defaultLayer,
+    FounderYellowDelegation.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     AgentRun.defaultLayer,

@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { CompanyProjectTable, CompanyWorkReceiptTable } from "@/company-project/company-project.sql"
 import { CompanyTable } from "@/company/company.sql"
 import { DecisionRecordTable } from "@/founder-os/decision-ledger.sql"
@@ -14,6 +14,17 @@ export const FounderGreenReadinessTable = sqliteTable(
     b3_evidence_ref: text(),
     e0_status: text().notNull(),
     e0_evidence_ref: text(),
+    w5_observation_status: text().notNull().default("missing"),
+    w5_observation_evidence_ref: text(),
+    takeover_fence_status: text().notNull().default("missing"),
+    takeover_fence_evidence_ref: text(),
+    preference_holdout_status: text().notNull().default("missing"),
+    preference_benchmark_report_id: text(),
+    preference_agreement_rate: real(),
+    metric_contract_status: text().notNull().default("missing"),
+    metric_contract_evidence_ref: text(),
+    metric_window_days: integer(),
+    metric_sample_contract_met: integer({ mode: "boolean" }).notNull().default(false),
     authorization_status: text().notNull(),
     authorization_event_id: text(),
     confirmed_by: text(),

@@ -4,6 +4,7 @@ import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-rec
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
 import type { WorkItem } from "@/company-project/schema"
 import type { KnowledgeReadingReceipt } from "@/company-reading/schema"
+import * as CompanyProjectDirection from "@/company-project/direction"
 import { CompanyValidationGate } from "@/company-project/validation-gate"
 import { Database } from "@/storage"
 import { CapabilityMaterializer } from "./capability-materializer"
@@ -31,6 +32,12 @@ export type RecoveryResult = {
 
 export interface Interface {
   readonly processReceipt: (receipt_id: string) => Effect.Effect<ReceiptProcessingResult>
+  readonly applyFounderDirection: (input: {
+    project_id: string
+    idempotency_key: string
+    expected_revision: number
+    payload: CompanyProjectDirection.ApplyFounderDirectionPayload
+  }) => Effect.Effect<ProjectActionExecutor.ExecutionResult>
   readonly dispatchReady: (project_id: string) => Effect.Effect<DispatchResult>
   readonly checkQuiescence: (project_id: string) => Effect.Effect<QuiescenceResult>
   readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
@@ -80,6 +87,22 @@ const serviceLayer = Layer.effect(
             ? undefined
             : yield* dispatch.dispatchReady(result.processing.project_id),
       }
+    })
+
+    const applyFounderDirection = Effect.fn("ProjectOrchestrator.applyFounderDirection")(function* (input: {
+      project_id: string
+      idempotency_key: string
+      expected_revision: number
+      payload: CompanyProjectDirection.ApplyFounderDirectionPayload
+    }) {
+      if (!actionExecutor) throw new Error("Project Action Executor is unavailable")
+      return yield* actionExecutor.execute({
+        project_id: input.project_id,
+        action: "apply_founder_direction",
+        idempotency_key: input.idempotency_key,
+        expected_revision: input.expected_revision,
+        payload: input.payload,
+      })
     })
 
     const recover = Effect.fn("ProjectOrchestrator.recover")(function* (input: { project_id?: string } = {}) {
@@ -159,6 +182,7 @@ const serviceLayer = Layer.effect(
 
     return Service.of({
       processReceipt,
+      applyFounderDirection,
       dispatchReady: dispatch.dispatchReady,
       checkQuiescence: quiescence.check,
       pauseDispatch: dispatch.pauseDispatch,
