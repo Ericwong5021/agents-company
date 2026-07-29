@@ -599,6 +599,7 @@ export type BoardDecisionResult = {
     active_run_id?: string
     output_dir: string
     active_plan_version?: number
+    graph_revision: number
     created_at: number
     updated_at: number
     completed_at?: number
@@ -670,7 +671,13 @@ export type BoardDecisionResult = {
     model_group: "ultra" | "standard" | "lite"
     risk_level: "low" | "medium" | "high"
     review_status: "pending" | "running" | "accepted" | "rejected" | "not_required"
-    status: "pending" | "running" | "blocked" | "failed" | "completed" | "cancelled"
+    status: "pending" | "running" | "blocked" | "failed" | "completed" | "superseded" | "cancelled"
+    purpose: "discovery" | "first_slice" | "delivery" | "verification" | "recovery" | "closeout"
+    origin_kind: "legacy" | "seed" | "receipt" | "graph_mutation" | "user"
+    origin_ref_id?: string
+    graph_revision_created: number
+    validation_mode: "self_check" | "machine" | "independent_review" | "review_and_user_gate"
+    superseded_by_id?: string
     owner_agent_id?: string
     workflow_run_id?: string
     acceptance_criteria: Array<string>
@@ -1020,6 +1027,15 @@ export type EventCompanyConversationRunUpdated = {
   properties: {
     thread_id: ConversationThreadId
     state: ConversationRunState
+  }
+}
+
+export type EventCompanyProjectGraphInvalidated = {
+  type: "company.project.graph.invalidated"
+  properties: {
+    project_id: string
+    mutation_id: string
+    graph_revision: number
   }
 }
 
@@ -2678,6 +2694,7 @@ export type GlobalEvent = {
     | EventCompanyAgentActivityInvalidated
     | EventCompanyChannelInvalidated
     | EventCompanyConversationRunUpdated
+    | EventCompanyProjectGraphInvalidated
     | EventCompanyThreadInvalidated
     | EventCompanyAgentCreated
     | EventCompanyAgentDeleted
@@ -3952,6 +3969,7 @@ export type Event =
   | EventCompanyAgentActivityInvalidated
   | EventCompanyChannelInvalidated
   | EventCompanyConversationRunUpdated
+  | EventCompanyProjectGraphInvalidated
   | EventCompanyThreadInvalidated
   | EventCompanyAgentCreated
   | EventCompanyAgentDeleted
