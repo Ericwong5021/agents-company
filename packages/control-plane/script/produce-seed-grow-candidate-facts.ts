@@ -562,7 +562,10 @@ export const B5ScenarioObservationReport = z
       },
       {
         path: "reviewer",
-        required: ["S14", "S18"].includes(value.binding.scenarioId),
+        required:
+          value.binding.scenarioId === "S18" ||
+          (value.binding.scenarioId === "S14" &&
+            value.binding.strategy === "legacy_full_plan"),
         present: Boolean(value.reviewer),
       },
       {
