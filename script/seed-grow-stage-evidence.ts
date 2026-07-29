@@ -406,7 +406,33 @@ export async function generateSeedGrowAllStageEvidence(options: { buildSha: stri
       2,
     )}\n`,
   )
-  return { manifestPath, status, stages }
+  const finalRun = await existingBinding(output, "final-run.json", "application/json")
+  const finalDecisionPath = path.join(output, "final-decision.json")
+  await Bun.write(
+    finalDecisionPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        id: "agent-company-seed-grow-final-decision",
+        buildSha: options.buildSha,
+        buildTreeSha: governance.buildTreeSha,
+        finalRun,
+        required: [...stageIDs],
+        passed: stages.filter((stage) => stage.status === "pass").map((stage) => stage.stage),
+        failed: stages.filter((stage) => stage.status === "failed").map((stage) => stage.stage),
+        blocked: stages.filter((stage) => stage.status === "blocked").map((stage) => stage.stage),
+        invalid: stages.filter((stage) => stage.status === "invalid").map((stage) => stage.stage),
+        missing: stageIDs.filter((stage) => !stages.some((item) => item.stage === stage)),
+        stages,
+        decidedAt: finishedAt,
+        status,
+        advisory: ["github_actions_unavailable", `local_platform_only:${process.platform}-${process.arch}`],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  return { manifestPath, finalDecisionPath, status, stages }
 }
 
 export async function runSeedGrowEvidenceSelfTest() {
