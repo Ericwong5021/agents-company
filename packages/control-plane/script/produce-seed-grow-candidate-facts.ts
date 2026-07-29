@@ -1317,7 +1317,7 @@ type ScenarioRecord = {
     pendingGateCount: number
   }
   quiescenceBlockers: { kind: string; id: string }[]
-  recovery?: Record<string, unknown>
+  recovery?: B5CandidateRecoveryResult
 }
 
 export async function produceB5CandidateFacts(input: B5ProducerArguments) {
@@ -1929,9 +1929,15 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
                 )
                 if (files.length !== 1)
                   throw new Error(`${snapshot.scenario.id} recovery emitted ${files.length} reports`)
-                return JSON.parse(
-                  await Bun.file(path.join(recoveryOutputDirectory, files[0]!)).text(),
-                ) as Record<string, unknown>
+                const reportPath = path.join(recoveryOutputDirectory, files[0]!)
+                const source = new Uint8Array(await Bun.file(reportPath).arrayBuffer())
+                return B5CandidateRecoveryResult.parse({
+                  ...(JSON.parse(new TextDecoder().decode(source)) as Record<string, unknown>),
+                  report: {
+                    path: reportPath,
+                    sha256: sha256(source),
+                  },
+                })
               })
             : undefined
           const terminal = yield* Effect.sync(() =>
