@@ -165,9 +165,15 @@ const ChildOutput = z
   })
   .strict()
 
-const packageRoot = path.resolve(import.meta.dir, "../..")
-const childScript = path.join(packageRoot, "script/b5-candidate-recovery-child.ts")
 const childTimeoutMs = 20_000
+
+function childPaths() {
+  const packageRoot = path.resolve(import.meta.dir, "../..")
+  return {
+    packageRoot,
+    childScript: path.join(packageRoot, "script/b5-candidate-recovery-child.ts"),
+  }
+}
 
 function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
@@ -192,9 +198,10 @@ function spawn(input: B5CandidateRecoveryChildRequest) {
   const database = process.env.AGENTCOMPANY_DB
   const home = process.env.AGENTCOMPANY_HOME
   if (!database || !home) throw new Error("B5 recovery requires AGENTCOMPANY_DB and AGENTCOMPANY_HOME")
+  const paths = childPaths()
   return Bun.spawn({
-    cmd: [process.execPath, childScript, Buffer.from(JSON.stringify(input)).toString("base64url")],
-    cwd: packageRoot,
+    cmd: [process.execPath, paths.childScript, Buffer.from(JSON.stringify(input)).toString("base64url")],
+    cwd: paths.packageRoot,
     env: {
       ...process.env,
       AGENTCOMPANY_DB: database,

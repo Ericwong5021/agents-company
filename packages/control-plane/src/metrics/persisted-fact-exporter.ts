@@ -58,6 +58,7 @@ import {
   B5BenchmarkScenario,
   B5LegacyBaselineOracleContract,
   B5ScenarioId,
+  B5ScenarioIds,
   B5Strategy,
   b5LegacyScenarioExpectation,
   b5LegacyScenarioTask,
@@ -414,11 +415,9 @@ function sha256(value: string | Uint8Array) {
   return createHash("sha256").update(value).digest("hex")
 }
 
-const RepositoryRoot = path.resolve(import.meta.dir, "../../../..")
 const ProducerPath = "packages/control-plane/script/produce-seed-grow-candidate-facts.ts"
 const ScenarioContractPath = "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json"
 const MetricContractPath = "docs/product-design/experience-refactor/metric-contract.v1.json"
-const B5ScenarioIds = Array.from({ length: 15 }, (_, index) => `S${index + 13}`)
 const RuntimeDependencyPaths = [
   ProducerPath,
   "packages/control-plane/src/metrics/b5-candidate-scenarios.ts",
@@ -434,9 +433,13 @@ function metricApplies(metricId: keyof typeof PrePublicScenarioApplicability, sc
   return (PrePublicScenarioApplicability[metricId] as readonly string[]).includes(scenarioId)
 }
 
+function repositoryRoot() {
+  return path.resolve(import.meta.dir, "../../../..")
+}
+
 async function candidateBlob(candidateSha: string, filePath: string) {
   const process = Bun.spawn(["git", "show", `${candidateSha}:${filePath}`], {
-    cwd: RepositoryRoot,
+    cwd: repositoryRoot(),
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -488,7 +491,7 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
   for (const dependencyPath of RuntimeDependencyPaths) {
     const candidateSha256 = sha256(await candidateBlob(raw.candidateSha, dependencyPath))
     const runtimeSha256 = sha256(
-      new Uint8Array(await Bun.file(path.join(RepositoryRoot, dependencyPath)).arrayBuffer()),
+      new Uint8Array(await Bun.file(path.join(repositoryRoot(), dependencyPath)).arrayBuffer()),
     )
     if (candidateSha256 !== runtimeSha256)
       throw new Error(`B5 runtime dependency differs from candidate Git blob: ${dependencyPath}`)
@@ -616,7 +619,7 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
       const properties = ScenarioFixtureObservation.parse(JSON.parse(observation.properties_json) as unknown)
       if (
         properties.scenarioId !== binding.scenarioId ||
-        properties.snapshotSha256 !== scenarioDigests.get(binding.scenarioId)
+        properties.snapshotSha256 !== scenarioDigests.get(B5ScenarioId.parse(binding.scenarioId))
       )
         throw new Error(`B5 observation ${observation.id} has a non-canonical scenario snapshot`)
     }
@@ -856,9 +859,9 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
       const properties = GitBlobObservation.parse(JSON.parse(observation.properties_json) as unknown)
       const blobSha256 = sha256(await candidateBlob(raw.candidateSha, properties.path))
       await validateObservationFile(
-        path.join(RepositoryRoot, properties.path),
+        path.join(repositoryRoot(), properties.path),
         properties.runtimeSha256,
-        RepositoryRoot,
+        repositoryRoot(),
       )
       if (
         properties.candidateBlobSha256 !== blobSha256 ||

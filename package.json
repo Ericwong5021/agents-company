@@ -94,6 +94,8 @@
   },
   "dependencies": {
     "@agents-company/script": "workspace:*",
+    "@agents-company/shared": "workspace:*",
+    "effect": "catalog:",
     "typescript": "catalog:"
   },
   "repository": {
