@@ -330,7 +330,7 @@ describe.serial("Seed-and-Grow Pre-Public gate security", () => {
       path.join(worktree, "packages/control-plane/node_modules"),
       "dir",
     )
-    const verifier = path.join(worktree, "script/seed-grow-stage-gate.ts")
+    const verifier = path.join(worktree, "script/experience-automatic-evidence.ts")
     await writeFile(verifier, `${await readFile(verifier, "utf8")}\n`)
     const requestPath = path.join(directory, "request.json")
     const candidateSha = git("rev-parse", "HEAD")

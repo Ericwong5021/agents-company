@@ -41,6 +41,9 @@ type Governance = {
 const runnerPath = "packages/control-plane/script/seed-grow-pre-public-gate.ts"
 const runtimeBindingPaths = [
   runnerPath,
+  "script/experience-automatic-evidence.ts",
+  "script/experience-benchmark.ts",
+  "script/seed-grow-stage-evidence.ts",
   "script/seed-grow-stage-gate.ts",
   "script/seed-grow-stage-core.ts",
   "packages/control-plane/src/metrics/persisted-fact-artifact.ts",
@@ -48,6 +51,11 @@ const runtimeBindingPaths = [
   "packages/control-plane/src/metrics/seed-grow-reporter.ts",
   "packages/shared/src/seed-grow-metrics.ts",
   "packages/shared/src/seed-grow-shadow.ts",
+  "docs/product-design/experience-refactor/automatic-evidence-package.v1.json",
+  "docs/product-design/experience-refactor/automatic-evidence-requirements.v1.json",
+  "docs/product-design/experience-refactor/seed-grow-benchmark-scenarios.v1.json",
+  "docs/product-design/experience-refactor/seed-grow-stage-contract.v1.json",
+  "docs/product-design/experience-refactor/seed-grow-stage-evidence.v1.json",
   "docs/product-design/experience-refactor/metric-contract.v1.json",
 ] as const
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
