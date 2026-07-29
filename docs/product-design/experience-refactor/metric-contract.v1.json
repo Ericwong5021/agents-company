@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "agent-company-experience-metrics",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "queryVersion": "seed-grow-metric-query.v1",
   "privacy": {
     "storage": "local_first",
     "externalUploadDefault": false,
@@ -133,6 +134,42 @@
       "requiredProperties": ["acceptedDeliveryId", "tokens", "cost"]
     },
     {
+      "id": "model.usage_recorded",
+      "requiredProperties": ["runId", "strategy", "purpose", "modelCalls", "tokens", "cost"]
+    },
+    {
+      "id": "project.completed",
+      "requiredProperties": ["projectId", "strategy"]
+    },
+    {
+      "id": "work_attempt.finished",
+      "requiredProperties": ["attemptId", "outcome", "retry", "diagnosed", "cost", "reusableKnowledge"]
+    },
+    {
+      "id": "attention.opened",
+      "requiredProperties": ["attentionId", "materiality", "interruptsUser"]
+    },
+    {
+      "id": "attention.judged",
+      "requiredProperties": ["attentionId", "valid"]
+    },
+    {
+      "id": "attention.resolved",
+      "requiredProperties": ["attentionId", "latencyMs"]
+    },
+    {
+      "id": "delivery.accepted",
+      "requiredProperties": ["deliveryId"]
+    },
+    {
+      "id": "candidate.terminal_checked",
+      "requiredProperties": ["candidateSha", "isolatedRunIndex", "localGate", "deployment", "rollback", "reproducible"]
+    },
+    {
+      "id": "shadow.compared",
+      "requiredProperties": ["comparisonId", "legacyRunId", "seedGrowRunId"]
+    },
+    {
       "id": "research.sus_recorded",
       "requiredProperties": ["studyId", "participantId", "score"]
     },
@@ -192,6 +229,11 @@
       "label": "Delivery consumability rate",
       "definition": "Share of Delivered work with at least one successfully opened artifact or an explicit valid no-file reason.",
       "formula": "consumable_deliveries / presented_deliveries",
+      "numerator": "deliveries with an opened artifact or a valid no-file reason",
+      "denominator": "presented deliveries",
+      "eventSource": ["delivery.presented", "delivery.artifact_opened"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
       "unit": "ratio",
       "aggregation": "ratio",
       "collectionMode": "automated",
@@ -207,6 +249,11 @@
       "label": "Acceptance determinability rate",
       "definition": "Share of delivery criteria with an explicit status and at least one evidence item or an explicit evidence-not-applicable reason.",
       "formula": "determinable_criteria / delivery_criteria",
+      "numerator": "criteria with a deterministic status and admissible evidence",
+      "denominator": "delivery criteria",
+      "eventSource": ["delivery.criterion_evaluated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
       "unit": "ratio",
       "aggregation": "ratio",
       "collectionMode": "automated",
@@ -222,6 +269,11 @@
       "label": "Core task completion rate",
       "definition": "Share of benchmark runs that pass every blocking criterion and produce an acceptable result.",
       "formula": "benchmark_runs(finalDecision = pass) / eligible_benchmark_runs",
+      "numerator": "eligible benchmark runs with finalDecision = pass",
+      "denominator": "eligible benchmark runs",
+      "eventSource": ["benchmark.completed"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
       "unit": "ratio",
       "aggregation": "ratio",
       "collectionMode": "hybrid",
@@ -252,6 +304,11 @@
       "label": "Recovery success rate",
       "definition": "Share of injected disconnect or restart runs that restore context without data loss or duplicate side effects.",
       "formula": "recoveries(contextPreserved = true AND duplicateSideEffects = 0) / eligible_recovery_injections",
+      "numerator": "recoveries preserving context without duplicate side effects",
+      "denominator": "eligible recovery injections",
+      "eventSource": ["connection.lost", "connection.recovered"],
+      "timeWindow": "candidate recovery matrix",
+      "minimumSampleSize": 2,
       "unit": "ratio",
       "aggregation": "ratio",
       "collectionMode": "automated",
@@ -275,6 +332,46 @@
         "gate": "R0",
         "operator": "=",
         "value": 0
+      }
+    },
+    {
+      "id": "false_completion_count",
+      "label": "False completion count",
+      "definition": "Count of completed project or delivery states whose blocking work, Receipt, Mutation, Gate, or acceptance facts were not terminal.",
+      "formula": "count(trust.false_state_detected where kind = false_completion)",
+      "numerator": "false completion detections",
+      "denominator": "eligible completed project and delivery states",
+      "eventSource": ["trust.false_state_detected", "project.completed", "benchmark.completed"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["trust.false_state_detected", "project terminal invariant report", "benchmark.completed"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 0
+      }
+    },
+    {
+      "id": "acceptance_criterion_evidence_coverage",
+      "label": "Acceptance criterion evidence coverage",
+      "definition": "Share of acceptance criteria backed by at least one current deterministic evidence reference.",
+      "formula": "criteria(evidenceCount > 0 AND evidenceCurrent = true) / eligible_acceptance_criteria",
+      "numerator": "criteria with current deterministic evidence",
+      "denominator": "eligible acceptance criteria",
+      "eventSource": ["delivery.criterion_evaluated", "validation_gate.evaluated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["delivery.criterion_evaluated", "validation gate evidence refs"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 1
       }
     },
     {
@@ -315,6 +412,46 @@
         "gate": "R4",
         "operator": "=",
         "value": 0
+      }
+    },
+    {
+      "id": "agent_count_before_first_receipt",
+      "label": "Agent count before first Receipt",
+      "definition": "Median distinct active Agent count observed before the first Receipt in each eligible project.",
+      "formula": "median(distinct active agents before first work_receipt.submitted)",
+      "numerator": "distinct active Agent count before first Receipt per project",
+      "denominator": "eligible projects with a first Receipt",
+      "eventSource": ["project_assignment.activated", "project_assignment.released", "work_receipt.submitted"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "assignments",
+      "aggregation": "median",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Assignment history", "first Receipt binding"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
+      "id": "agent_count_added_after_receipt",
+      "label": "Agent count added after Receipt",
+      "definition": "Median distinct Agent count added only after an evidence-bearing Receipt establishes a new need.",
+      "formula": "median(distinct agents first activated after work_receipt.submitted)",
+      "numerator": "distinct post-Receipt Agent additions per project",
+      "denominator": "eligible projects with an evidence-bearing Receipt",
+      "eventSource": ["work_receipt.submitted", "project_assignment.activated"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "assignments",
+      "aggregation": "median",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Receipt source refs", "Assignment activation history"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
       }
     },
     {
@@ -438,6 +575,26 @@
       }
     },
     {
+      "id": "candidate_reuse_delta_vs_legacy",
+      "label": "Candidate reuse delta versus legacy",
+      "definition": "Seed-and-grow Candidate reuse rate minus the matched legacy Candidate reuse rate.",
+      "formula": "seed_grow_candidate_reuse_rate - legacy_candidate_reuse_rate",
+      "numerator": "matched Candidate reuse-rate delta",
+      "denominator": "matched legacy and seed_and_grow shadow comparison pairs",
+      "eventSource": ["candidate.selected", "shadow.compared"],
+      "timeWindow": "matched shadow comparison across two candidates",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["candidate.selected", "shadow source binding", "strategy binding"],
+      "target": {
+        "gate": "R4",
+        "operator": ">",
+        "value": 0
+      }
+    },
+    {
       "id": "new_candidate_per_completed_project",
       "label": "New Candidate per completed project",
       "definition": "New Candidates created for Needs divided by completed eligible projects.",
@@ -558,6 +715,26 @@
       }
     },
     {
+      "id": "user_attention_count",
+      "label": "User Attention count",
+      "definition": "Count of material Attention items that actually interrupted the user.",
+      "formula": "count(attention.opened where interruptsUser = true)",
+      "numerator": "user-interrupting Attention items",
+      "denominator": "eligible benchmark runs",
+      "eventSource": ["attention.opened"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Attention row", "attention.opened"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
       "id": "invalid_interruption_rate",
       "label": "Invalid interruption rate",
       "definition": "Share of presented interruptions not justified by permission, scope, external effect or unresolved material risk.",
@@ -575,6 +752,46 @@
         "gate": "R4",
         "operator": "<",
         "value": 0.2
+      }
+    },
+    {
+      "id": "material_attention_precision",
+      "label": "Material Attention precision",
+      "definition": "Share of scope, permission, external-effect, and unresolved-risk interruptions confirmed as valid by deterministic scenario or policy facts.",
+      "formula": "attention.judged(valid = true) / judged material attention",
+      "numerator": "valid material Attention interruptions",
+      "denominator": "judged material Attention interruptions",
+      "eventSource": ["attention.opened", "attention.judged"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Attention materiality", "attention.judged", "scenario oracle or policy fact"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
+      "id": "unresolved_ask_latency_ms",
+      "label": "Unresolved ask latency",
+      "definition": "P95 elapsed time from a user-interrupting unresolved ask opening until its persisted resolution.",
+      "formula": "p95(attention.resolved.latencyMs)",
+      "numerator": "resolved Attention latency samples",
+      "denominator": "resolved user-interrupting Attention items",
+      "eventSource": ["attention.opened", "attention.resolved"],
+      "timeWindow": "candidate benchmark run",
+      "minimumSampleSize": 2,
+      "unit": "milliseconds",
+      "aggregation": "p95",
+      "collectionMode": "automated",
+      "minimumEvidence": ["attention.opened", "attention.resolved", "monotonic latency"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
       }
     },
     {
@@ -638,6 +855,87 @@
       }
     },
     {
+      "id": "wayfinder_cost",
+      "label": "Wayfinder cost",
+      "definition": "Recorded model cost divided by completed Wayfinder runs.",
+      "formula": "sum(model.usage_recorded.cost where purpose = wayfinder) / completed_wayfinder_runs",
+      "numerator": "recorded Wayfinder model cost",
+      "denominator": "completed Wayfinder runs",
+      "eventSource": ["model.usage_recorded", "project_assignment.released"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "currency_per_delivery",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["model usage ledger", "Wayfinder Assignment binding"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
+      "id": "reviewer_cost",
+      "label": "Reviewer cost",
+      "definition": "Recorded model cost divided by completed Reviewer invocations.",
+      "formula": "sum(model.usage_recorded.cost where purpose = reviewer) / completed_reviewer_invocations",
+      "numerator": "recorded Reviewer model cost",
+      "denominator": "completed Reviewer invocations",
+      "eventSource": ["model.usage_recorded", "review.completed"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "currency_per_delivery",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["model usage ledger", "Reviewer run binding"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
+      "id": "total_model_calls_by_strategy",
+      "label": "Total model calls by strategy",
+      "definition": "Total bound model calls for one execution strategy in matched benchmark runs.",
+      "formula": "sum(model.usage_recorded.modelCalls grouped by strategy)",
+      "numerator": "bound model calls",
+      "denominator": "eligible matched benchmark runs",
+      "eventSource": ["model.usage_recorded", "benchmark.completed"],
+      "timeWindow": "matched shadow comparison across two candidates",
+      "minimumSampleSize": 2,
+      "requiredDimensions": ["strategy"],
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["model usage ledger", "strategy binding", "run binding"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
+      "id": "failed_attempt_cost_reuse_rate",
+      "label": "Failed-attempt cost retained as reusable knowledge",
+      "definition": "Share of failed-attempt model cost whose persisted facts are referenced by a later decision, repair, or Assignment.",
+      "formula": "failed_attempt_cost(reusableKnowledge = true) / failed_attempt_cost",
+      "numerator": "failed-attempt cost with later reusable-knowledge references",
+      "denominator": "recorded failed-attempt cost",
+      "eventSource": ["work_attempt.finished", "model.usage_recorded"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["Attempt ledger", "model usage ledger", "later sourceRefs"],
+      "target": {
+        "gate": "R4",
+        "operator": "observe",
+        "value": null
+      }
+    },
+    {
       "id": "low_risk_quality_ratio_vs_legacy",
       "label": "Low-risk quality ratio versus legacy",
       "definition": "Seed-and-grow deterministic criterion pass rate for matched low-risk work divided by legacy.",
@@ -655,6 +953,46 @@
         "gate": "R4",
         "operator": ">=",
         "value": 1
+      }
+    },
+    {
+      "id": "exact_sha_terminal_success_rate",
+      "label": "Exact-SHA terminal success rate",
+      "definition": "Share of required isolated runs for one exact candidate SHA whose local Gate, temporary deployment, and rollback all reach successful terminal states.",
+      "formula": "candidate.terminal_checked(all terminal checks successful) / required isolated candidate runs",
+      "numerator": "isolated runs with successful local Gate, deployment, rollback, and reproduction",
+      "denominator": "required isolated runs for the exact candidate SHA",
+      "eventSource": ["candidate.terminal_checked"],
+      "timeWindow": "two isolated runs for one exact candidate",
+      "minimumSampleSize": 2,
+      "unit": "ratio",
+      "aggregation": "ratio",
+      "collectionMode": "automated",
+      "minimumEvidence": ["candidate.terminal_checked", "gate report", "deployment report", "rollback report"],
+      "target": {
+        "gate": "R4",
+        "operator": "=",
+        "value": 1
+      }
+    },
+    {
+      "id": "consecutive_reproducible_candidate_count",
+      "label": "Consecutive reproducible candidate count",
+      "definition": "Count of consecutive candidate SHAs that each completed two isolated full benchmark runs with matching normalized results.",
+      "formula": "count(consecutive candidates with two reproducible isolated runs)",
+      "numerator": "consecutive reproducible candidates",
+      "denominator": "eligible consecutive candidate sequence",
+      "eventSource": ["candidate.terminal_checked", "benchmark.completed"],
+      "timeWindow": "two consecutive candidate benchmark runs",
+      "minimumSampleSize": 2,
+      "unit": "count",
+      "aggregation": "sum",
+      "collectionMode": "automated",
+      "minimumEvidence": ["candidate.terminal_checked", "normalized report digest", "candidate SHA binding"],
+      "target": {
+        "gate": "R4",
+        "operator": ">=",
+        "value": 2
       }
     },
     {
@@ -700,6 +1038,31 @@
       "cannotBeInferredFrom": ["string consistency", "copy review", "agent judgment"]
     }
   ],
+  "prePublicGate": {
+    "id": "pre_public_default",
+    "requiredMetricIds": [
+      "false_completion_count",
+      "graph_mutation_without_evidence_rate",
+      "complex_initial_assignment_median",
+      "receipt_recovery_success_rate",
+      "graph_mutation_recovery_success_rate",
+      "delivery_consumability_rate",
+      "acceptance_determinability_rate",
+      "validation_gate_false_pass_rate",
+      "blind_retry_rate",
+      "invalid_interruption_rate",
+      "reviewer_invocation_ratio_vs_legacy",
+      "candidate_reuse_rate",
+      "candidate_reuse_delta_vs_legacy",
+      "new_candidate_per_completed_project",
+      "low_risk_quality_ratio_vs_legacy",
+      "core_task_completion_rate",
+      "exact_sha_terminal_success_rate",
+      "consecutive_reproducible_candidate_count"
+    ],
+    "minimumConsecutiveCandidates": 2,
+    "minimumIsolatedRunsPerCandidate": 2
+  },
   "releaseGates": [
     {
       "id": "R0",
@@ -863,6 +1226,11 @@
           "value": 0
         },
         {
+          "metricId": "false_completion_count",
+          "operator": "=",
+          "value": 0
+        },
+        {
           "metricId": "graph_mutation_without_evidence_rate",
           "operator": "=",
           "value": 0
@@ -908,6 +1276,11 @@
           "value": 0.5
         },
         {
+          "metricId": "candidate_reuse_delta_vs_legacy",
+          "operator": ">",
+          "value": 0
+        },
+        {
           "metricId": "new_candidate_per_completed_project",
           "operator": "<=",
           "value": 0.5
@@ -921,6 +1294,16 @@
           "metricId": "core_task_completion_rate",
           "operator": ">=",
           "value": 0.7
+        },
+        {
+          "metricId": "exact_sha_terminal_success_rate",
+          "operator": "=",
+          "value": 1
+        },
+        {
+          "metricId": "consecutive_reproducible_candidate_count",
+          "operator": ">=",
+          "value": 2
         }
       ],
       "requiredStructuralEvidence": [
