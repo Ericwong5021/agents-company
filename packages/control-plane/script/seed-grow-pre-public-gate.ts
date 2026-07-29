@@ -39,6 +39,17 @@ type Governance = {
   automaticCommandIDs: string[]
 }
 const runnerPath = "packages/control-plane/script/seed-grow-pre-public-gate.ts"
+const runtimeBindingPaths = [
+  runnerPath,
+  "script/seed-grow-stage-gate.ts",
+  "script/seed-grow-stage-core.ts",
+  "packages/control-plane/src/metrics/persisted-fact-artifact.ts",
+  "packages/control-plane/src/metrics/persisted-fact-exporter.ts",
+  "packages/control-plane/src/metrics/seed-grow-reporter.ts",
+  "packages/shared/src/seed-grow-metrics.ts",
+  "packages/shared/src/seed-grow-shadow.ts",
+  "docs/product-design/experience-refactor/metric-contract.v1.json",
+] as const
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
 const commitSha = z.string().regex(/^[a-f0-9]{40}$/)
 const identifier = z.string().trim().min(1).max(240)
@@ -313,6 +324,34 @@ const RollbackArtifact = z
         businessStateSha256After: digest,
       })
       .strict(),
+    process: z
+      .object({
+        pid: z.number().int().positive(),
+        producerPath: z.literal("packages/control-plane/script/produce-seed-grow-candidate-facts.ts"),
+        producerSha256: digest,
+        startedAt: timestamp,
+      })
+      .strict(),
+    dispatch: z
+      .object({
+        coordinator: z.literal("DispatchCoordinator"),
+        action: z.enum(["kill_switch", "legacy_fallback"]),
+        projectId: identifier,
+        resultSha256: digest,
+        observedAt: timestamp,
+      })
+      .strict(),
+    businessRows: z
+      .object({
+        beforeSha256: digest,
+        afterSha256: digest,
+        newProjectId: identifier,
+        newProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
+        existingProjectId: identifier,
+        existingProjectStrategyBefore: z.literal("seed_and_grow"),
+        existingProjectStrategyAfter: z.literal("seed_and_grow"),
+      })
+      .strict(),
     resolvedNewProjectStrategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
     resolvedExplicitFallbackStrategy: z.literal("legacy_full_plan"),
     isolation: z
@@ -346,6 +385,19 @@ const RollbackArtifact = z
         code: "custom",
         path: ["inFlightProject"],
         message: "Rollback changed the in-flight project",
+      })
+    if (
+      value.dispatch.action !== value.target ||
+      value.dispatch.projectId !== value.inFlightProject.id ||
+      value.businessRows.existingProjectId !== value.inFlightProject.id ||
+      value.businessRows.existingProjectStrategyBefore !== value.inFlightProject.strategyBefore ||
+      value.businessRows.existingProjectStrategyAfter !== value.inFlightProject.strategyAfter ||
+      value.businessRows.newProjectStrategy !== value.resolvedNewProjectStrategy
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["dispatch"],
+        message: "Rollback process, dispatch, and business row observations are inconsistent",
       })
   })
 
@@ -456,6 +508,12 @@ function verifyCurrentCandidate(candidate: z.infer<typeof CandidateInput>) {
   const target = resolveCommit(candidate.targetRef)
   if (head !== candidate.candidateSha) fail("invalid", "Checked-out HEAD does not match the candidate SHA")
   if (target !== candidate.candidateSha) fail("invalid", "Target ref does not resolve to the candidate SHA")
+  runtimeBindingPaths.forEach((relativePath) => {
+    const candidateBlob = git(["rev-parse", "--verify", `${candidate.candidateSha}:${relativePath}`])
+    const workingBlob = git(["hash-object", "--", relativePath])
+    if (candidateBlob !== workingBlob)
+      fail("invalid", `Runtime dependency is dirty and differs from the candidate Git blob: ${relativePath}`)
+  })
 }
 
 export function verifyDirectParent(previousCandidateSha: string, currentCandidateSha: string) {
@@ -1267,6 +1325,7 @@ async function execute(requestPath: string) {
   const parsed = Request.safeParse(raw)
   if (!parsed.success)
     fail(requestErrorStatus(parsed.error), `Pre-Public gate request is malformed: ${z.prettifyError(parsed.error)}`)
+  verifyCurrentCandidate(parsed.data.mode === "bootstrap" ? parsed.data.candidate : parsed.data.current)
   const outputDirectory = await emptyDirectory(parsed.data.outputDirectory, "Gate output directory")
   const result = await (
     parsed.data.mode === "bootstrap"

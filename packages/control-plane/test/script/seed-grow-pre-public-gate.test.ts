@@ -90,6 +90,28 @@ function rollback(input: {
       businessStateSha256Before: sha256("project-state"),
       businessStateSha256After: sha256("project-state"),
     },
+    process: {
+      pid: 1,
+      producerPath: "packages/control-plane/script/produce-seed-grow-candidate-facts.ts",
+      producerSha256: sha256("producer"),
+      startedAt: 1,
+    },
+    dispatch: {
+      coordinator: "DispatchCoordinator",
+      action: input.target,
+      projectId: "isolated-probe-project",
+      resultSha256: sha256(`dispatch-${input.target}`),
+      observedAt: 2,
+    },
+    businessRows: {
+      beforeSha256: sha256(`before-${input.target}`),
+      afterSha256: sha256(`after-${input.target}`),
+      newProjectId: `new-${input.target}`,
+      newProjectStrategy: afterDefault,
+      existingProjectId: "isolated-probe-project",
+      existingProjectStrategyBefore: "seed_and_grow",
+      existingProjectStrategyAfter: "seed_and_grow",
+    },
     resolvedNewProjectStrategy: afterDefault,
     resolvedExplicitFallbackStrategy: "legacy_full_plan",
     isolation: {

@@ -233,6 +233,16 @@ export async function loadPersistedFactArtifact(raw: unknown) {
   const artifact = PersistedFactArtifact.parse(JSON.parse(new TextDecoder().decode(bytes)) as unknown)
   if (persistedFactSnapshotDigest(artifact) !== artifact.snapshotDigest)
     throw new Error(`Metric fact snapshot digest mismatch: ${reference.path}`)
+  if (
+    artifact.producer.commandId !== "seed-grow-persisted-fact-exporter" ||
+    artifact.producer.version !== "v1"
+  )
+    throw new Error(`Metric fact artifact producer is not trusted: ${reference.path}`)
+  const executable = new Uint8Array(
+    await Bun.file(path.join(import.meta.dir, "persisted-fact-exporter.ts")).arrayBuffer(),
+  )
+  if (sha256(executable) !== artifact.producer.executableDigest)
+    throw new Error(`Metric fact artifact executable digest is not trusted: ${reference.path}`)
   return artifact
 }
 

@@ -27,6 +27,13 @@ const candidateSha = "a".repeat(40)
 const previousCandidateSha = "b".repeat(40)
 const snapshotDigest = "c".repeat(64)
 const now = Date.now()
+const exporterDigest = createHash("sha256")
+  .update(
+    new Uint8Array(
+      await Bun.file(path.resolve(import.meta.dir, "../../src/metrics/persisted-fact-exporter.ts")).arrayBuffer(),
+    ),
+  )
+  .digest("hex")
 const contract = MetricContract.parse(
   JSON.parse(
     await Bun.file(
@@ -83,9 +90,9 @@ async function reportMetric(
     id: `negative-${metricId}`,
     producer: {
       kind: "local_gate",
-      commandId: "negative-regression",
+      commandId: "seed-grow-persisted-fact-exporter",
       version: "v1",
-      executableDigest: "d".repeat(64),
+      executableDigest: exporterDigest,
     },
     candidateSha,
     metricContractDigest: metricContractDigest(contract),

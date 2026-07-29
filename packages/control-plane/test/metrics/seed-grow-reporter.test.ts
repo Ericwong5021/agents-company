@@ -24,6 +24,9 @@ import { testEffect } from "../lib/effect"
 const candidateSha = "a".repeat(40)
 const previousCandidateSha = "d".repeat(40)
 const snapshotDigest = "b".repeat(64)
+const exporterDigest = createHash("sha256")
+  .update(readFileSync(path.resolve(import.meta.dir, "../../src/metrics/persisted-fact-exporter.ts")))
+  .digest("hex")
 const contract = MetricContract.parse(
   JSON.parse(
     readFileSync(
@@ -268,9 +271,9 @@ function artifactCore(): PersistedFactArtifactCore {
     id: "persisted-facts-001",
     producer: {
       kind: "local_gate",
-      commandId: "seed-grow-persisted-fact-collector",
+      commandId: "seed-grow-persisted-fact-exporter",
       version: "v1",
-      executableDigest: "c".repeat(64),
+      executableDigest: exporterDigest,
     },
     candidateSha,
     metricContractDigest: persistedMetricContractDigest(contract),
