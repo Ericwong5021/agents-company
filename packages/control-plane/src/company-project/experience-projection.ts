@@ -118,6 +118,7 @@ function selectionFromRow(row: typeof CompanyTeamSelectionTable.$inferSelect) {
   return TeamSelection.safeParse({
     ...row,
     company_id: row.company_id ?? undefined,
+    gaps: parseJSON(row.gaps_json),
     score: parseJSON(row.score_json),
     constraint_results: parseJSON(row.constraint_results_json),
     time_released: row.time_released ?? undefined,
