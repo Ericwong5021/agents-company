@@ -578,7 +578,7 @@ function observation(
   const coveredEventTypes = metric.eventSource.filter((eventType) =>
     runIds.every((runId) => sources.some((event) => event.runId === runId && event.eventType === eventType)),
   )
-  if (!coveredEventTypes.length) return undefined
+  if (coveredEventTypes.length !== metric.eventSource.length) return undefined
   return MetricObservation.parse({
     metricId: metric.id,
     aggregation: metric.aggregation,

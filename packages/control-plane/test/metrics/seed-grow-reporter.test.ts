@@ -240,7 +240,33 @@ describe("SeedGrowMetricReporter", () => {
         },
       )
       expect(report.results.find((result) => result.metricId === "receipt_recovery_success_rate")).toMatchObject({
-        blockedReasons: expect.arrayContaining(["missing_source_event", "zero_denominator"]),
+        blockedReasons: ["missing_observation"],
+      })
+    }),
+  )
+
+  it.live("blocks a metric when any contracted source event is absent", () =>
+    Effect.gen(function* () {
+      const directory = yield* tmpdirScoped()
+      const core = artifactCore()
+      const facts = yield* Effect.promise(() =>
+        adapter(directory, {
+          core: {
+            ...core,
+            events: core.events.filter((event) => event.eventType !== "trust.false_state_detected"),
+          },
+        }),
+      )
+      const report = yield* reportWith(facts, ["false_completion_count"])
+      expect(report).toMatchObject({
+        status: "blocked",
+        results: [
+          {
+            metricId: "false_completion_count",
+            status: "blocked",
+            blockedReasons: ["missing_observation"],
+          },
+        ],
       })
     }),
   )
