@@ -7,6 +7,7 @@ import type {
   Info as CompanyAgentInfo,
   Interface as CompanyAgentInterface,
 } from "@/company-agent/company-agent"
+import { CompanyAgentID } from "@/company-agent/schema"
 import type { Interface as CompanyGraphMutationInterface } from "@/company-project/graph-mutation"
 import type { Interface as CompanyProjectInterface } from "@/company-project/company-project"
 import type { Interface as CompanyProjectExecutionInterface } from "@/company-project/execution"
@@ -687,6 +688,12 @@ const legacyBaseline = Effect.fn("B5CandidateScenarios.legacyBaseline")(function
   })
   const items = yield* runtime.projects.listWorkItems(started.project.id)
   const assignments = yield* runtime.recruitment.listAssignments({ project_id: started.project.id })
+  yield* runtime.recruitment.releaseProject({ project_id: started.project.id })
+  yield* Effect.forEach(
+    [...new Set(assignments.map((assignment) => assignment.agent_id))],
+    (agentId) => runtime.agents.archive(CompanyAgentID.make(agentId)),
+    { concurrency: 1 },
+  )
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: started.project.id,
@@ -1125,6 +1132,20 @@ const runS17 = Effect.fn("B5CandidateScenarios.S17")(function* (
   runtime: B5ScenarioRuntime,
 ) {
   const companyId = CompanyID.parse("cmp_local")
+  yield* Effect.forEach(
+    ["wayfinder", "builder"] as const,
+    (purpose) =>
+      runtime.agents.create({
+        id: stableEntityId(`b5-s17-${purpose}`, input.runId).replaceAll("_", "-"),
+        company_id: companyId,
+        name: `B5 S17 ${purpose}`,
+        lifecycle: "employee",
+        role_key: `${purpose}-evidence-analyst`,
+        preferred_runtime: "codex",
+        responsibilities: [`${purpose} evidence analyst`, "analysis", "research-analysis"],
+      }),
+    { concurrency: 1 },
+  )
   const project = yield* runtime.projects.create({
     company_id: companyId,
     goal: "Grow the project graph only after a verified capability gap",
@@ -1240,6 +1261,13 @@ const runS17 = Effect.fn("B5CandidateScenarios.S17")(function* (
     new Set(assignments.map((assignment) => assignment.agent_id)).size !== 3
   )
     throw new Error("S17 did not materialize exactly one independent third Assignment")
+  yield* completeSeedProject(
+    runtime,
+    project.id,
+    [initialItems[1]!.id],
+    input.runId,
+    ["Exactly one third independent Assignment is persisted"],
+  )
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: project.id,
@@ -1876,15 +1904,13 @@ const runS23 = Effect.fn("B5CandidateScenarios.S23")(function* (
     replacement?.origin_kind !== "graph_mutation"
   )
     throw new Error("S23 did not retain the superseded WorkItem and its replacement link")
-  yield* runtime.projects.startWorkItem(replacement.id)
-  yield* runtime.projects.addArtifact({
-    project_id: project.id,
-    work_item_id: replacement.id,
-    kind: "replacement_evidence",
-    title: "S23 replacement evidence",
-    content: JSON.stringify({ replacementPathValid: true }),
-  })
-  yield* runtime.projects.completeWorkItem(replacement.id)
+  yield* completeSeedProject(
+    runtime,
+    project.id,
+    [replacement.id],
+    input.runId,
+    ["Original history remains queryable and replacement completes"],
+  )
   const event = (yield* runtime.projects.listEvents(project.id)).find(
     (candidate) => candidate.type === "work_item.superseded",
   )
@@ -1931,6 +1957,66 @@ const identityDigest = (agent: CompanyAgentInfo | undefined) => {
     responsibilities: agent.responsibilities,
   })
 }
+
+const completeSeedProject = Effect.fn("B5CandidateScenarios.completeSeedProject")(function* (
+  runtime: B5ScenarioRuntime,
+  projectId: string,
+  workItemIds: string[],
+  runId: string,
+  acceptanceCriteria: string[] = [],
+) {
+  const project = yield* runtime.projects.get(projectId)
+  if (!project) throw new Error(`B5 terminal project is unavailable: ${projectId}`)
+  if (project.status === "planning")
+    yield* runtime.projects.transition({ id: projectId, status: "executing" })
+  yield* Effect.forEach(
+    workItemIds,
+    (workItemId, index) =>
+      Effect.gen(function* () {
+        yield* runtime.projects.startWorkItem(workItemId)
+        const artifact = yield* runtime.projects.addArtifact({
+          project_id: projectId,
+          work_item_id: workItemId,
+          kind: "b5_terminal_evidence",
+          title: `B5 terminal evidence ${index + 1}`,
+          content: JSON.stringify({ projectId, workItemId, terminal: true }),
+          ...(index === workItemIds.length - 1 && acceptanceCriteria.length
+            ? { evidence: { acceptance_criteria: acceptanceCriteria } }
+            : {}),
+        })
+        yield* runtime.projects.completeWorkItemWithReceipt({
+          id: workItemId,
+          receipt: {
+            idempotency_key: `b5-terminal-${runId}-${index + 1}`,
+            outcome: "completed",
+            summary: "The bounded B5 work item reached its persisted terminal state",
+            artifact_ids: [artifact.id],
+            evidence_refs: [{ kind: "artifact", id: artifact.id }],
+            confirmed_facts: ["bounded work item completed"],
+            invalidated_assumptions: [],
+            unknowns: [],
+            blockers: [],
+            capability_gaps: [],
+            task_proposals: [],
+            dependency_proposals: [],
+            questions: [],
+          },
+        })
+        const receipt = (yield* runtime.projects.listWorkReceipts(projectId)).findLast(
+          (candidate) => candidate.work_item_id === workItemId,
+        )
+        if (!receipt) throw new Error(`B5 terminal WorkItem ${workItemId} produced no Work Receipt`)
+        const processed = yield* runtime.supervisor.processReceipt(receipt.id)
+        if (processed.status !== "processed")
+          throw new Error(`B5 terminal WorkItem ${workItemId} Receipt was not processed`)
+      }),
+    { concurrency: 1 },
+  )
+  const completed = yield* runtime.quiescence.check(projectId)
+  if (completed.status !== "completed")
+    throw new Error(`B5 Project ${projectId} did not reach terminal quiescence: ${completed.blocker_codes.join(",")}`)
+  return completed
+})
 
 const runS25 = Effect.fn("B5CandidateScenarios.S25")(function* (
   input: B5ScenarioRunInput,
@@ -2007,16 +2093,19 @@ const runS25 = Effect.fn("B5CandidateScenarios.S25")(function* (
   })
   if (selected.agent.id !== agent.id)
     throw new Error("S25 did not select the persisted permanent Agent")
-  const released = yield* runtime.recruitment.releaseProject({
-    company_id: companyId,
-    project_id: project.id,
-  })
+  const completed = yield* completeSeedProject(
+    runtime,
+    project.id,
+    [item.id],
+    input.runId,
+    ["Assignment releases and Agent identity remains unchanged"],
+  )
   const assignment = (yield* runtime.recruitment.listAssignments({ project_id: project.id })).find(
     (candidate) => candidate.id === selected.assignment.id,
   )
   const identityAfterSha256 = identityDigest(yield* runtime.agents.get(agent.id))
   if (
-    !released.some((selection) => selection.id === selected.assignment.selection_id) ||
+    !completed.released_selection_ids.includes(selected.assignment.selection_id) ||
     assignment?.status !== "released" ||
     identityAfterSha256 !== identityBeforeSha256
   )
@@ -2115,10 +2204,7 @@ const runS26 = Effect.fn("B5CandidateScenarios.S26")(function* (
     capability_need_id: firstNeed.id,
     permission_mode: "read_only",
   })
-  yield* runtime.recruitment.releaseProject({
-    company_id: companyId,
-    project_id: first.project.id,
-  })
+  yield* completeSeedProject(runtime, first.project.id, [first.item.id], `${input.runId}-first`)
   const candidateCountBeforeSecond = (
     yield* runtime.agents.list({ company_id: companyId, lifecycle: "candidate" })
   ).length
@@ -2152,6 +2238,7 @@ const runS26 = Effect.fn("B5CandidateScenarios.S26")(function* (
     candidateCountAfterSecond !== candidateCountBeforeSecond
   )
     throw new Error("S26 equivalent Need did not reuse the company pool without candidate growth")
+  yield* completeSeedProject(runtime, second.project.id, [second.item.id], `${input.runId}-second`)
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: second.project.id,

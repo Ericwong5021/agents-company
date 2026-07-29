@@ -394,10 +394,11 @@ function metricAggregate(
     const values = groupedByRun(assignments, runIds).map(
       (items) => items.filter((event) => booleanProperty(event, "initial") === true).length,
     )
+    const sampleSize = assignments.filter((event) => booleanProperty(event, "initial") === true).length
     return {
       numerator: values.reduce((total, value) => total + value, 0),
       denominator: values.length,
-      sampleSize: values.length,
+      sampleSize,
       values,
     }
   }
@@ -599,7 +600,9 @@ function metricAggregate(
     return ratio(mutations.filter((event) => numberProperty(event, "evidenceCount") === 0).length, mutations.length)
   }
   if (metricId === "receipt_recovery_success_rate") {
-    const losses = eventsOf(events, "connection.lost")
+    const losses = eventsOf(events, "connection.lost").filter(
+      (event) => !stringProperty(event, "boundaryKind") || stringProperty(event, "boundaryKind") === "receipt",
+    )
     return ratio(
       eventsOf(events, "work_receipt.processed").filter(
         (event) => booleanProperty(event, "recovered") === true && booleanProperty(event, "duplicate") === false,
@@ -608,7 +611,9 @@ function metricAggregate(
     )
   }
   if (metricId === "graph_mutation_recovery_success_rate") {
-    const losses = eventsOf(events, "connection.lost")
+    const losses = eventsOf(events, "connection.lost").filter(
+      (event) => !stringProperty(event, "boundaryKind") || stringProperty(event, "boundaryKind") === "graph_mutation",
+    )
     return ratio(
       eventsOf(events, "graph_mutation.recovered").filter(
         (event) => booleanProperty(event, "consistent") === true && numberProperty(event, "duplicateSideEffects") === 0,
@@ -633,7 +638,7 @@ function metricAggregate(
     return {
       numerator: seed.filter((event) => stringProperty(event, "status") === "pass").length / seed.length,
       denominator: legacy.filter((event) => stringProperty(event, "status") === "pass").length / legacy.length,
-      sampleSize: pairCount,
+      sampleSize: lowRisk.length,
     }
   }
   if (metricId === "core_task_completion_rate")

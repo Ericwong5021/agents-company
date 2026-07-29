@@ -595,6 +595,7 @@ export function makeLayer(hooks: Hooks = {}) {
       const processClaim = Effect.fn("GraphSupervisor.processClaim")(function* (
         claim: ReceiptClaim,
         mode: "shadow" | "active",
+        recovered = false,
       ) {
         const resumed = yield* latestResolved(claim.receipt.id)
         if (resumed) {
@@ -692,6 +693,7 @@ export function makeLayer(hooks: Hooks = {}) {
                 id: claim.receipt.id,
                 claim_id: claim.claim_id,
                 decision_id: resolved.id,
+                recovered,
               })
               return {
                 status: "processed" as const,
@@ -733,6 +735,7 @@ export function makeLayer(hooks: Hooks = {}) {
               claim_id: claim.claim_id,
               decision_id: resolved.id,
               mutation_id: resolved.mutation_id,
+              recovered,
             })
             return {
               status: "processed" as const,
@@ -757,13 +760,14 @@ export function makeLayer(hooks: Hooks = {}) {
         project_id: string,
         mode: "shadow" | "active",
         stop_receipt_id?: string,
+        recovered = false,
       ): Effect.Effect<ProcessResult[]> =>
         Effect.gen(function* () {
           const claim = yield* facts.claimNextPending(project_id)
           if (!claim) return []
-          const result = yield* processClaim(claim, mode)
+          const result = yield* processClaim(claim, mode, recovered)
           if (claim.receipt.id === stop_receipt_id) return [result]
-          return [result, ...(yield* drainUnlocked(project_id, mode, stop_receipt_id))]
+          return [result, ...(yield* drainUnlocked(project_id, mode, stop_receipt_id, recovered))]
         })
 
       const processReceipt = Effect.fn("GraphSupervisor.processReceipt")(function* (receipt_id: string) {
@@ -915,7 +919,20 @@ export function makeLayer(hooks: Hooks = {}) {
               .map((project) => project.id),
           ),
         )
-        const results = (yield* Effect.forEach(project_ids, drain, { concurrency: 1 })).flat()
+        const results = (
+          yield* Effect.forEach(
+            project_ids,
+            (project_id) =>
+              Effect.gen(function* () {
+                const project = yield* projects.get(project_id)
+                if (!project) throw new Error(`Company project not found: ${project_id}`)
+                const mode = hooks.mode ?? Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+                if (mode === "off") return yield* drain(project_id)
+                return yield* lock(project_id).withPermits(1)(drainUnlocked(project_id, mode, undefined, true))
+              }),
+            { concurrency: 1 },
+          )
+        ).flat()
         return {
           project_ids,
           processed_receipt_ids: results.flatMap((result) =>

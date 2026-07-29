@@ -1259,7 +1259,7 @@ function gateObservationFacts(
         !value.consistent
       )
         throw new Error(`B5 receipt recovery observation ${row.id} does not match terminal receipt facts`)
-      emit(row, "connection.lost", { reasonKind: "process_restart" }, "lost")
+      emit(row, "connection.lost", { reasonKind: "process_restart", boundaryKind: "receipt" }, "lost")
       emit(
         row,
         "connection.recovered",
@@ -1285,7 +1285,7 @@ function gateObservationFacts(
         value.duplicateSideEffects !== 0
       )
         throw new Error(`B5 mutation recovery observation ${row.id} does not match graph facts`)
-      emit(row, "connection.lost", { reasonKind: "process_restart" }, "lost")
+      emit(row, "connection.lost", { reasonKind: "process_restart", boundaryKind: "graph_mutation" }, "lost")
       emit(
         row,
         "connection.recovered",
