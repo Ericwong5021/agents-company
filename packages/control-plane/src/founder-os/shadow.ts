@@ -132,23 +132,40 @@ function evidenceExists(
       if (message.projectId === null) return true
       return projectVisible(companyId, scope, message.projectId)
     }
-    const projectId =
-      db
-        .select({ projectId: CompanyWorkReceiptTable.project_id })
-        .from(CompanyWorkReceiptTable)
-        .where(eq(CompanyWorkReceiptTable.id, reference.id))
-        .get()?.projectId ??
-      db
-        .select({ projectId: CompanyValidationGateTable.project_id })
-        .from(CompanyValidationGateTable)
-        .where(eq(CompanyValidationGateTable.id, reference.id))
-        .get()?.projectId ??
-      db
-        .select({ projectId: CompanyProjectEventTable.project_id })
-        .from(CompanyProjectEventTable)
-        .where(eq(CompanyProjectEventTable.id, reference.id))
-        .get()?.projectId
-    return Boolean(projectId && projectVisible(companyId, scope, projectId))
+    const receipt = db
+      .select({
+        projectId: CompanyWorkReceiptTable.project_id,
+        status: CompanyWorkReceiptTable.processing_status,
+      })
+      .from(CompanyWorkReceiptTable)
+      .where(eq(CompanyWorkReceiptTable.id, reference.id))
+      .get()
+    if (
+      receipt &&
+      ["processed", "rejected"].includes(receipt.status) &&
+      projectVisible(companyId, scope, receipt.projectId)
+    )
+      return true
+    const gate = db
+      .select({
+        projectId: CompanyValidationGateTable.project_id,
+        status: CompanyValidationGateTable.status,
+      })
+      .from(CompanyValidationGateTable)
+      .where(eq(CompanyValidationGateTable.id, reference.id))
+      .get()
+    if (
+      gate &&
+      ["passed", "failed"].includes(gate.status) &&
+      projectVisible(companyId, scope, gate.projectId)
+    )
+      return true
+    const event = db
+      .select({ projectId: CompanyProjectEventTable.project_id })
+      .from(CompanyProjectEventTable)
+      .where(eq(CompanyProjectEventTable.id, reference.id))
+      .get()
+    return Boolean(event && projectVisible(companyId, scope, event.projectId))
   })
 }
 
