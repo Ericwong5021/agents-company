@@ -6,6 +6,7 @@ import {
   MetricObservation,
   MetricQueryCore,
   MetricSourceRef,
+  metricContractDigest,
   type MetricDefinition,
 } from "@agents-company/shared/seed-grow-metrics"
 import {
@@ -182,7 +183,7 @@ export function persistedFactSnapshotDigest(raw: unknown) {
 }
 
 export function persistedMetricContractDigest(raw: unknown) {
-  return sha256(canonical(MetricContract.parse(raw)))
+  return metricContractDigest(raw)
 }
 
 export function bindPersistedFactArtifact(raw: unknown) {

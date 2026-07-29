@@ -1,13 +1,37 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { eq } from "drizzle-orm"
-import { RolloutActionRequest } from "@agents-company/shared/rollout"
+import {
+  RolloutActionRequest,
+  RolloutPromotionEvaluationRequest,
+  RolloutTransitionRequest,
+} from "@agents-company/shared/rollout"
+import {
+  MetricContract,
+  PrePublicBlockingMetricIds,
+  PrePublicMetricContractSha256,
+} from "@agents-company/shared/seed-grow-metrics"
+import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
 import * as CompanyRollout from "../../src/company-rollout/company-rollout"
-import { CompanyRolloutJournalTable, CompanyRolloutStateTable } from "../../src/company-rollout/company-rollout.sql"
+import {
+  CompanyRolloutJournalTable,
+  CompanyRolloutPromotionDecisionTable,
+  CompanyRolloutStateTable,
+} from "../../src/company-rollout/company-rollout.sql"
 import { CompanyProjectTable } from "../../src/company-project/company-project.sql"
 import { Database } from "../../src/storage"
 import { resetDatabase } from "../fixture/db"
 
 let previousExecutionMode: string | undefined
+const metricContract = MetricContract.parse(
+  JSON.parse(
+    readFileSync(
+      path.resolve(import.meta.dir, "../../../../docs/product-design/experience-refactor/metric-contract.v1.json"),
+      "utf8",
+    ),
+  ) as unknown,
+)
 
 beforeEach(async () => {
   previousExecutionMode = process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
@@ -29,6 +53,157 @@ function storeError(operation: () => unknown) {
     throw error
   }
   throw new Error("Expected RolloutStoreError")
+}
+
+function passingValue(operator: string, target: number) {
+  if (operator === "<") return target - 1
+  if (operator === ">") return target + 1
+  return target
+}
+
+function metricReport(candidateSha: string) {
+  const runIds = [`${candidateSha.slice(0, 8)}-metric-1`, `${candidateSha.slice(0, 8)}-metric-2`]
+  return {
+    schemaVersion: 1 as const,
+    queryVersion: metricContract.queryVersion,
+    candidateSha,
+    inputDigest: "1".repeat(64),
+    runIds,
+    status: "pass" as const,
+    results: PrePublicBlockingMetricIds.map((metricId) => {
+      const metric = metricContract.metrics.find((item) => item.id === metricId)
+      if (!metric || metric.target.value === null) throw new Error(`Missing blocking metric ${metricId}`)
+      const value = passingValue(metric.target.operator, metric.target.value)
+      return {
+        metricId,
+        blocking: true,
+        status: "pass" as const,
+        value,
+        numerator: value,
+        denominator: 1,
+        sampleSize: 2,
+        meetsThreshold: true,
+        threshold: metric.target,
+        blockedReasons: [],
+        sourceRefs: runIds.map((runId, index) => ({
+          kind: "gate_report" as const,
+          id: `${metricId}-${index}`,
+          candidateSha,
+          runId,
+          digest: String(index + 2).repeat(64),
+        })),
+      }
+    }),
+  }
+}
+
+function shadowReport(candidateSha: string) {
+  if (!metricContract.shadowComparison) throw new Error("Missing shadow comparison policy")
+  const values = Object.fromEntries(
+    metricContract.shadowComparison.checks.map((check) => [check.field, passingValue(check.operator, check.value)]),
+  )
+  const legacyRunIds = [`${candidateSha.slice(0, 8)}-legacy-1`, `${candidateSha.slice(0, 8)}-legacy-2`]
+  const seedAndGrowRunIds = [`${candidateSha.slice(0, 8)}-seed-1`, `${candidateSha.slice(0, 8)}-seed-2`]
+  return ShadowComparisonReport.parse({
+    schemaVersion: 1,
+    queryVersion: metricContract.shadowComparison.queryVersion,
+    comparisonId: `comparison-${candidateSha.slice(0, 8)}`,
+    candidateSha,
+    inputDigest: "3".repeat(64),
+    snapshotDigest: "4".repeat(64),
+    scenarioIds: ["S13", "S18"],
+    legacyRunIds,
+    seedAndGrowRunIds,
+    status: "pass",
+    blockedReasons: [],
+    deltas: {
+      completenessRateDelta: values.completenessRateDelta,
+      modelCallsPerUnitDelta: -1,
+      costPerUnitDelta: -1,
+      reviewerInvocationRatio: values.reviewerInvocationRatio,
+      unknownDiscoveryRateDelta: 1,
+      errorRateDelta: values.errorRateDelta,
+      candidateReuseRateDelta: values.candidateReuseRateDelta,
+      lowRiskQualityRatio: values.lowRiskQualityRatio,
+    },
+    checks: metricContract.shadowComparison.checks.map((check) => ({
+      id: check.id,
+      field: check.field,
+      operator: check.operator,
+      target: check.value,
+      blocking: check.blocking,
+      status: "pass",
+      value: values[check.field],
+    })),
+    sourceRefs: [...legacyRunIds, ...seedAndGrowRunIds].map((runId, index) => ({
+      kind: "shadow_report",
+      id: `shadow-source-${candidateSha.slice(0, 8)}-${index}`,
+      candidateSha,
+      runId,
+      digest: String(index + 5).repeat(64),
+    })),
+  })
+}
+
+function advanceToDogfood() {
+  for (const [to, id] of [
+    ["shadow", "phase-shadow"],
+    ["opt_in", "phase-opt-in"],
+    ["dogfood_default", "phase-dogfood"],
+  ] as const)
+    CompanyRollout.transition({
+      idempotencyKey: id,
+      to,
+      reason: `advance to ${to}`,
+    })
+}
+
+function registerPromotionCandidate(id: string, candidateSha: string) {
+  CompanyRollout.recordAction({
+    kind: "register_candidate",
+    idempotencyKey: `register-${id}`,
+    candidate: {
+      id,
+      candidateSha,
+      targetRef: "refs/heads/main",
+    },
+  })
+  for (const ordinal of [1, 2] as const)
+    CompanyRollout.recordAction({
+      kind: "record_local_repeat",
+      idempotencyKey: `repeat-${id}-${ordinal}`,
+      repeat: {
+        id: `repeat-${id}-${ordinal}`,
+        candidateId: id,
+        runId: `run-${id}-${ordinal}`,
+        ordinal,
+        outcome: "completed",
+        environmentSha256: "8".repeat(64),
+        evidenceSha256: (ordinal === 1 ? "9" : "a").repeat(64),
+        normalizedResultSha256: candidateSha.slice(0, 1).repeat(64),
+        startedAt: ordinal * 100,
+        finishedAt: ordinal * 100 + 50,
+      },
+    })
+}
+
+function promotionRequest(id: string, previousSha: string, currentSha: string) {
+  return RolloutPromotionEvaluationRequest.parse({
+    id,
+    candidateIds: ["candidate-previous", "candidate-current"],
+    metricContract,
+    metricContractSha256: PrePublicMetricContractSha256,
+    metricReports: [metricReport(previousSha), metricReport(currentSha)],
+    shadowReports: [shadowReport(previousSha), shadowReport(currentSha)],
+    ancestry: {
+      previousCandidateSha: previousSha,
+      currentCandidateSha: currentSha,
+      parentSha: previousSha,
+      targetRef: "refs/heads/main",
+      verified: true,
+      commandEvidenceSha256: "f".repeat(64),
+    },
+  })
 }
 
 describe("company rollout", () => {
@@ -188,23 +363,144 @@ describe("company rollout", () => {
         reason: "enable dogfood default",
       }).state.phase,
     ).toBe("dogfood_default")
+    expect(() =>
+      RolloutTransitionRequest.parse({
+        idempotencyKey: "phase-pre-public",
+        to: "pre_public_default",
+        reason: "missing promotion decision",
+      }),
+    ).toThrow()
+    expect(CompanyRollout.listJournal().items).toHaveLength(3)
+  })
+
+  test("promotes only the latest two reproducible candidates with machine evidence and both rollbacks", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    advanceToDogfood()
+    registerPromotionCandidate("candidate-previous", previousSha)
+    registerPromotionCandidate("candidate-current", currentSha)
+    CompanyRollout.recordAction({
+      kind: "record_rollback",
+      idempotencyKey: "rollback-kill-switch",
+      rollback: {
+        id: "rollback-kill-switch",
+        candidateId: "candidate-current",
+        target: "kill_switch",
+        phaseAtAction: "dogfood_default",
+        executionModeAfter: "off",
+        outcome: "completed",
+        evidenceSha256: "c".repeat(64),
+        observedAt: 500,
+      },
+    })
+    process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "active"
+    CompanyRollout.recordAction({
+      kind: "record_rollback",
+      idempotencyKey: "rollback-legacy-fallback",
+      rollback: {
+        id: "rollback-legacy-fallback",
+        candidateId: "candidate-current",
+        target: "legacy_fallback",
+        phaseAtAction: "dogfood_default",
+        executionModeAfter: "active",
+        outcome: "completed",
+        evidenceSha256: "d".repeat(64),
+        observedAt: 600,
+      },
+    })
+
+    const request = promotionRequest("promotion-pass", previousSha, currentSha)
+    const decision = CompanyRollout.evaluatePrePublicPromotion(request)
+    expect(decision).toMatchObject({
+      id: "promotion-pass",
+      candidateIds: ["candidate-previous", "candidate-current"],
+      repeatIds: [
+        "repeat-candidate-current-1",
+        "repeat-candidate-current-2",
+        "repeat-candidate-previous-1",
+        "repeat-candidate-previous-2",
+      ],
+      rollbackIds: ["rollback-kill-switch", "rollback-legacy-fallback"],
+      status: "pass",
+      reasons: [],
+    })
+    expect(CompanyRollout.evaluatePrePublicPromotion(request)).toEqual(decision)
+    expect(
+      storeError(() =>
+        CompanyRollout.evaluatePrePublicPromotion({
+          ...request,
+          ancestry: { ...request.ancestry, commandEvidenceSha256: "e".repeat(64) },
+        }),
+      ).code,
+    ).toBe("idempotency_collision")
     expect(
       CompanyRollout.transition({
         idempotencyKey: "phase-pre-public",
         to: "pre_public_default",
-        reason: "enable pre-public default",
-      }).state.phase,
-    ).toBe("pre_public_default")
+        reason: "machine promotion gate passed",
+        promotionDecisionId: decision.id,
+      }),
+    ).toMatchObject({
+      state: { phase: "pre_public_default", version: 5 },
+      transition: { promotionDecisionId: decision.id },
+    })
+    expect(CompanyRollout.evidence().promotionDecisions).toEqual([decision])
+
+    Database.use((db) =>
+      db
+        .update(CompanyRolloutPromotionDecisionTable)
+        .set({ status: "failed", reasons_json: '["tampered"]' })
+        .where(eq(CompanyRolloutPromotionDecisionTable.id, decision.id))
+        .run(),
+    )
+    expect(storeError(() => CompanyRollout.evidence()).code).toBe("invalid_persisted_fact")
+  })
+
+  test("persists a blocked promotion decision without advancing the rollout", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    advanceToDogfood()
+    CompanyRollout.recordAction({
+      kind: "register_candidate",
+      idempotencyKey: "register-candidate-previous",
+      candidate: {
+        id: "candidate-previous",
+        candidateSha: previousSha,
+        targetRef: "refs/heads/main",
+      },
+    })
+    CompanyRollout.recordAction({
+      kind: "register_candidate",
+      idempotencyKey: "register-candidate-current",
+      candidate: {
+        id: "candidate-current",
+        candidateSha: currentSha,
+        targetRef: "refs/heads/main",
+      },
+    })
+    const decision = CompanyRollout.evaluatePrePublicPromotion(
+      promotionRequest("promotion-blocked", previousSha, currentSha),
+    )
+    expect(decision.status).toBe("blocked")
+    expect(decision.reasons).toEqual(
+      expect.arrayContaining([
+        "candidate_repeats_missing:candidate-current",
+        "candidate_repeats_missing:candidate-previous",
+        "rollback_missing:kill_switch",
+        "rollback_missing:legacy_fallback",
+      ]),
+    )
     expect(
       storeError(() =>
         CompanyRollout.transition({
-          idempotencyKey: "phase-after-final",
+          idempotencyKey: "phase-pre-public-blocked",
           to: "pre_public_default",
-          reason: "cannot advance past final phase",
+          reason: "blocked evidence cannot promote",
+          promotionDecisionId: decision.id,
         }),
       ).code,
-    ).toBe("invalid_transition")
-    expect(CompanyRollout.listJournal().items).toHaveLength(4)
+    ).toBe("promotion_gate_required")
+    expect(CompanyRollout.status().state.phase).toBe("dogfood_default")
   })
 
   test("persists candidate, local repeat, and rollback facts without a pass decision", () => {

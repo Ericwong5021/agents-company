@@ -97,6 +97,8 @@ export const PrePublicBlockingMetricIds = [
   "consecutive_reproducible_candidate_count",
 ] as const satisfies readonly SeedGrowMetricId[]
 
+export const PrePublicMetricContractSha256 = "8992ac2beee19c69597b1a8c00ff27d781877a796faf4d518990f3f346cc90bf"
+
 export const MetricOperator = z.enum(["=", "<", "<=", ">", ">=", "observe"])
 export type MetricOperator = z.infer<typeof MetricOperator>
 
@@ -426,6 +428,12 @@ function normalized(value: unknown): unknown {
 
 function canonical(value: unknown) {
   return JSON.stringify(normalized(value))
+}
+
+export function metricContractDigest(raw: unknown) {
+  return createHash("sha256")
+    .update(canonical(MetricContract.parse(raw)))
+    .digest("hex")
 }
 
 function normalizedQuery(raw: unknown) {

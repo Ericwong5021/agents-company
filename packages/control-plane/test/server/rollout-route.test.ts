@@ -129,6 +129,7 @@ describe.serial("/rollout", () => {
         { method: "get", path: "/rollout", request: false, statuses: ["200", "500"] },
         { method: "post", path: "/rollout/transitions", request: true, statuses: ["200", "409", "500"] },
         { method: "post", path: "/rollout/actions", request: true, statuses: ["200", "409", "500"] },
+        { method: "post", path: "/rollout/promotion-evaluations", request: true, statuses: ["200", "409", "500"] },
         { method: "get", path: "/rollout/journal", request: false, statuses: ["200", "500"] },
         { method: "get", path: "/rollout/evidence", request: false, statuses: ["200", "500"] },
       ] as const

@@ -116,3 +116,29 @@ export const CompanyRolloutShadowEvaluationTable = sqliteTable(
     index("company_rollout_shadow_receipt_idx").on(table.receipt_id),
   ],
 )
+
+export const CompanyRolloutPromotionDecisionTable = sqliteTable(
+  "company_rollout_promotion_decision",
+  {
+    id: text().primaryKey(),
+    target_phase: text().notNull(),
+    candidate_ids_json: text().notNull(),
+    candidate_shas_json: text().notNull(),
+    repeat_ids_json: text().notNull(),
+    rollback_ids_json: text().notNull(),
+    metric_contract_sha256: text().notNull(),
+    metric_report_sha256s_json: text().notNull(),
+    shadow_report_sha256s_json: text().notNull(),
+    ancestry_json: text().notNull(),
+    input_sha256: text().notNull(),
+    input_json: text().notNull(),
+    output_sha256: text().notNull(),
+    status: text().notNull(),
+    reasons_json: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    index("company_rollout_promotion_status_idx").on(table.status, table.created_at),
+    index("company_rollout_promotion_created_idx").on(table.created_at),
+  ],
+)

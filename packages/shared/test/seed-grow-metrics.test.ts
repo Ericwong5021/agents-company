@@ -4,9 +4,11 @@ import path from "node:path"
 import {
   MetricContract,
   PrePublicBlockingMetricIds,
+  PrePublicMetricContractSha256,
   SeedGrowMetricId,
   bindMetricQuery,
   evaluateMetrics,
+  metricContractDigest,
   type MetricObservation,
   type MetricQueryCore,
 } from "../src/seed-grow-metrics"
@@ -83,6 +85,7 @@ function evaluate(query = bindMetricQuery(core()), expectedCandidateSha = candid
 
 describe("Seed-and-Grow metric contract", () => {
   test("strictly covers every planned and Pre-Public metric", () => {
+    expect(metricContractDigest(contract)).toBe(PrePublicMetricContractSha256)
     expect(contract.metrics).toHaveLength(44)
     expect(SeedGrowMetricId.options.every((id) => contract.metrics.some((metric) => metric.id === id))).toBe(true)
     expect(contract.prePublicGate.requiredMetricIds).toEqual([...PrePublicBlockingMetricIds])

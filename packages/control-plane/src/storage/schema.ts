@@ -51,5 +51,6 @@ export {
   CompanyRolloutLocalRepeatTable,
   CompanyRolloutRollbackTable,
   CompanyRolloutShadowEvaluationTable,
+  CompanyRolloutPromotionDecisionTable,
 } from "../company-rollout/company-rollout.sql"
 export { GoalBriefGenerationRequestTable, GoalBriefTable, GoalBriefVersionTable } from "../goal-brief/goal-brief.sql"

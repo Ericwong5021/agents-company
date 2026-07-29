@@ -9,6 +9,8 @@ import {
   RolloutJournal,
   RolloutJournalEntry,
   RolloutLocalRepeatFact,
+  RolloutPromotionDecision,
+  RolloutPromotionEvaluationRequest,
   RolloutRollbackFact,
   RolloutShadowEvaluation,
   RolloutState,
@@ -19,6 +21,13 @@ import {
   type RolloutActionRequest as RolloutActionRequestValue,
   type RolloutPhase as RolloutPhaseValue,
 } from "@agents-company/shared/rollout"
+import {
+  MetricEvaluationReport,
+  PrePublicBlockingMetricIds,
+  PrePublicMetricContractSha256,
+  metricContractDigest,
+} from "@agents-company/shared/seed-grow-metrics"
+import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
 import {
   ProjectExecutionStrategy,
   type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
@@ -45,6 +54,7 @@ import {
   CompanyRolloutCandidateTable,
   CompanyRolloutJournalTable,
   CompanyRolloutLocalRepeatTable,
+  CompanyRolloutPromotionDecisionTable,
   CompanyRolloutRollbackTable,
   CompanyRolloutShadowEvaluationTable,
   CompanyRolloutStateTable,
@@ -226,6 +236,55 @@ function shadowFromRow(row: typeof CompanyRolloutShadowEvaluationTable.$inferSel
     },
     "Persisted rollout shadow evaluation cannot be parsed safely.",
   )
+}
+
+function promotionFromRow(row: typeof CompanyRolloutPromotionDecisionTable.$inferSelect) {
+  const request = parsePersistedJSON(RolloutPromotionEvaluationRequest, row.input_json)
+  if (digest(request) !== row.input_sha256)
+    throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout promotion input digest does not match.")
+  if (metricContractDigest(request.metricContract) !== request.metricContractSha256)
+    throw new RolloutStoreError(
+      "invalid_persisted_fact",
+      "Persisted rollout promotion metric contract is inconsistent.",
+    )
+  const decision = parsePersistedValue(
+    RolloutPromotionDecision,
+    {
+      id: row.id,
+      targetPhase: row.target_phase,
+      candidateIds: parsePersistedJSON(z.unknown(), row.candidate_ids_json),
+      candidateShas: parsePersistedJSON(z.unknown(), row.candidate_shas_json),
+      repeatIds: parsePersistedJSON(z.unknown(), row.repeat_ids_json),
+      rollbackIds: parsePersistedJSON(z.unknown(), row.rollback_ids_json),
+      metricContractSha256: row.metric_contract_sha256,
+      metricReportSha256s: parsePersistedJSON(z.unknown(), row.metric_report_sha256s_json),
+      shadowReportSha256s: parsePersistedJSON(z.unknown(), row.shadow_report_sha256s_json),
+      ancestry: parsePersistedJSON(z.unknown(), row.ancestry_json),
+      inputSha256: row.input_sha256,
+      status: row.status,
+      reasons: parsePersistedJSON(z.unknown(), row.reasons_json),
+      createdAt: row.created_at,
+    },
+    "Persisted rollout promotion decision cannot be parsed safely.",
+  )
+  if (digest(decision) !== row.output_sha256)
+    throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout promotion output digest does not match.")
+  if (
+    request.id !== decision.id ||
+    !same(request.candidateIds, decision.candidateIds) ||
+    request.metricContractSha256 !== decision.metricContractSha256 ||
+    !same(request.ancestry, decision.ancestry) ||
+    !same(
+      request.metricReports.map((report) => digest(report)),
+      decision.metricReportSha256s,
+    ) ||
+    !same(
+      request.shadowReports.map((report) => digest(report)),
+      decision.shadowReportSha256s,
+    )
+  )
+    throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout promotion decision is inconsistent.")
+  return decision
 }
 
 function executionMode() {
@@ -453,6 +512,276 @@ export function getShadowEvaluation(sourceKey: string) {
   return row ? shadowFromRow(row) : undefined
 }
 
+function metricReportReasons(
+  report: z.infer<typeof MetricEvaluationReport>,
+  candidateSha: string,
+  contract: z.infer<typeof RolloutPromotionEvaluationRequest>["metricContract"],
+) {
+  const blocked: string[] = []
+  const failed: string[] = []
+  if (report.candidateSha !== candidateSha) failed.push(`metric_candidate_mismatch:${candidateSha}`)
+  if (report.queryVersion !== contract.queryVersion) blocked.push(`metric_query_version_mismatch:${candidateSha}`)
+  if (report.runIds.length < 2) blocked.push(`metric_runs_missing:${candidateSha}`)
+  if (report.status === "blocked") blocked.push(`metric_report_blocked:${candidateSha}`)
+  if (report.status === "failed" || report.status === "observed") failed.push(`metric_report_not_pass:${candidateSha}`)
+  PrePublicBlockingMetricIds.forEach((metricId) => {
+    const metric = contract.metrics.find((item) => item.id === metricId)
+    const results = report.results.filter((result) => result.metricId === metricId)
+    if (!metric || results.length !== 1) {
+      blocked.push(`metric_result_missing_or_duplicate:${candidateSha}:${metricId}`)
+      return
+    }
+    const result = results[0]
+    if (
+      !result.blocking ||
+      !same(result.threshold, metric.target) ||
+      result.meetsThreshold !== true ||
+      result.value === null ||
+      metric.target.value === null ||
+      !passesThreshold(result.value, metric.target.operator, metric.target.value) ||
+      result.blockedReasons.length ||
+      !result.sourceRefs.length
+    )
+      failed.push(`metric_result_binding_invalid:${candidateSha}:${metricId}`)
+    if (
+      result.sourceRefs.some((source) => source.candidateSha !== candidateSha || !report.runIds.includes(source.runId))
+    )
+      failed.push(`metric_source_binding_invalid:${candidateSha}:${metricId}`)
+    if (result.status === "blocked") {
+      blocked.push(`metric_blocked:${candidateSha}:${metricId}`)
+      return
+    }
+    if (result.status !== "pass") failed.push(`metric_failed:${candidateSha}:${metricId}`)
+  })
+  return { blocked, failed }
+}
+
+function passesThreshold(value: number, operator: string, target: number) {
+  if (operator === "=") return value === target
+  if (operator === "<") return value < target
+  if (operator === "<=") return value <= target
+  if (operator === ">") return value > target
+  if (operator === ">=") return value >= target
+  return false
+}
+
+function shadowReportReasons(
+  report: z.infer<typeof ShadowComparisonReport>,
+  candidateSha: string,
+  contract: z.infer<typeof RolloutPromotionEvaluationRequest>["metricContract"],
+) {
+  const blocked: string[] = []
+  const failed: string[] = []
+  const policy = contract.shadowComparison
+  if (report.candidateSha !== candidateSha) failed.push(`shadow_candidate_mismatch:${candidateSha}`)
+  if (!policy || report.queryVersion !== policy.queryVersion) blocked.push(`shadow_policy_mismatch:${candidateSha}`)
+  if (
+    report.scenarioIds.length < 2 ||
+    report.legacyRunIds.length < 2 ||
+    report.seedAndGrowRunIds.length < 2 ||
+    !report.sourceRefs.length ||
+    !report.deltas
+  )
+    blocked.push(`shadow_evidence_missing:${candidateSha}`)
+  if (report.status === "blocked" || report.blockedReasons.length) blocked.push(`shadow_report_blocked:${candidateSha}`)
+  if (report.status === "failed") failed.push(`shadow_report_failed:${candidateSha}`)
+  policy?.checks.forEach((expected) => {
+    const checks = report.checks.filter((check) => check.id === expected.id)
+    if (checks.length !== 1) {
+      blocked.push(`shadow_check_missing_or_duplicate:${candidateSha}:${expected.id}`)
+      return
+    }
+    const check = checks[0]
+    if (
+      check.field !== expected.field ||
+      check.operator !== expected.operator ||
+      check.target !== expected.value ||
+      check.blocking !== expected.blocking ||
+      check.value === null ||
+      check.value !== report.deltas?.[check.field] ||
+      !passesThreshold(check.value, check.operator, check.target)
+    )
+      failed.push(`shadow_check_binding_invalid:${candidateSha}:${expected.id}`)
+    if (check.blocking && check.status !== "pass") failed.push(`shadow_check_not_pass:${candidateSha}:${expected.id}`)
+  })
+  const runIds = [...report.legacyRunIds, ...report.seedAndGrowRunIds]
+  if (report.sourceRefs.some((source) => source.candidateSha !== candidateSha || !runIds.includes(source.runId)))
+    failed.push(`shadow_source_binding_invalid:${candidateSha}`)
+  return { blocked, failed }
+}
+
+function latestCandidateIds(db: TxOrDb) {
+  return db
+    .select({ id: CompanyRolloutJournalTable.result_ref_id })
+    .from(CompanyRolloutJournalTable)
+    .where(
+      and(
+        eq(CompanyRolloutJournalTable.kind, "action"),
+        eq(CompanyRolloutJournalTable.action_kind, "register_candidate"),
+      ),
+    )
+    .orderBy(desc(CompanyRolloutJournalTable.created_at), desc(CompanyRolloutJournalTable.id))
+    .limit(2)
+    .all()
+    .reverse()
+    .map((item) => item.id)
+}
+
+export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotionEvaluationRequest>) {
+  const request = RolloutPromotionEvaluationRequest.parse(input)
+  const inputSha256 = digest(request)
+  return Database.transaction(
+    (db) => {
+      const existing = db
+        .select()
+        .from(CompanyRolloutPromotionDecisionTable)
+        .where(eq(CompanyRolloutPromotionDecisionTable.id, request.id))
+        .get()
+      if (existing) {
+        const decision = promotionFromRow(existing)
+        if (decision.inputSha256 !== inputSha256)
+          throw new RolloutStoreError(
+            "idempotency_collision",
+            "The rollout promotion decision id is already bound to different evidence.",
+          )
+        return decision
+      }
+      const state = readState(db)
+      if (state.phase !== "dogfood_default")
+        throw new RolloutStoreError(
+          "entity_conflict",
+          "Pre-Public promotion can only be evaluated from dogfood_default.",
+        )
+      const candidates = request.candidateIds.map((id) =>
+        db.select().from(CompanyRolloutCandidateTable).where(eq(CompanyRolloutCandidateTable.id, id)).get(),
+      )
+      const blocked: string[] = []
+      const failed: string[] = []
+      if (metricContractDigest(request.metricContract) !== request.metricContractSha256)
+        blocked.push("metric_contract_digest_mismatch")
+      if (request.metricContractSha256 !== PrePublicMetricContractSha256) blocked.push("metric_contract_unsupported")
+      if (candidates.some((candidate) => !candidate)) blocked.push("candidate_missing")
+      const candidateFacts = candidates.map((candidate) => (candidate ? candidateFromRow(candidate) : undefined))
+      if (!same(latestCandidateIds(db), request.candidateIds)) failed.push("candidates_not_latest_consecutive")
+      if (candidateFacts.some((candidate) => candidate && candidate.targetRef !== request.ancestry.targetRef))
+        failed.push("candidate_target_ref_mismatch")
+      if (
+        !request.ancestry.verified ||
+        request.ancestry.parentSha !== request.ancestry.previousCandidateSha ||
+        (candidateFacts[0] && request.ancestry.previousCandidateSha !== candidateFacts[0].candidateSha) ||
+        (candidateFacts[1] && request.ancestry.currentCandidateSha !== candidateFacts[1].candidateSha)
+      )
+        failed.push("candidate_ancestry_invalid")
+      const repeats = db
+        .select()
+        .from(CompanyRolloutLocalRepeatTable)
+        .where(inArray(CompanyRolloutLocalRepeatTable.candidate_id, request.candidateIds))
+        .orderBy(asc(CompanyRolloutLocalRepeatTable.candidate_id), asc(CompanyRolloutLocalRepeatTable.ordinal))
+        .all()
+        .map(repeatFromRow)
+      request.candidateIds.forEach((candidateId) => {
+        const candidateRepeats = repeats
+          .filter((repeat) => repeat.candidateId === candidateId)
+          .sort((left, right) => left.ordinal - right.ordinal)
+        if (candidateRepeats.length !== 2 || candidateRepeats.some((repeat, index) => repeat.ordinal !== index + 1)) {
+          blocked.push(`candidate_repeats_missing:${candidateId}`)
+          return
+        }
+        if (candidateRepeats.some((repeat) => repeat.outcome !== "completed"))
+          failed.push(`candidate_repeat_failed:${candidateId}`)
+        if (
+          candidateRepeats.some((repeat) => !repeat.normalizedResultSha256) ||
+          new Set(candidateRepeats.map((repeat) => repeat.normalizedResultSha256)).size !== 1
+        )
+          failed.push(`candidate_repeat_not_reproducible:${candidateId}`)
+      })
+      request.candidateIds.forEach((_, index) => {
+        const candidateSha =
+          candidateFacts[index]?.candidateSha ??
+          (index === 0 ? request.ancestry.previousCandidateSha : request.ancestry.currentCandidateSha)
+        const metric = metricReportReasons(request.metricReports[index], candidateSha, request.metricContract)
+        const shadow = shadowReportReasons(request.shadowReports[index], candidateSha, request.metricContract)
+        blocked.push(...metric.blocked, ...shadow.blocked)
+        failed.push(...metric.failed, ...shadow.failed)
+      })
+      const rollbacks = candidateFacts[1]
+        ? db
+            .select()
+            .from(CompanyRolloutRollbackTable)
+            .where(eq(CompanyRolloutRollbackTable.candidate_id, candidateFacts[1].id))
+            .orderBy(asc(CompanyRolloutRollbackTable.recorded_at), asc(CompanyRolloutRollbackTable.id))
+            .all()
+            .map(rollbackFromRow)
+        : []
+      const rollbackEvidence: z.infer<typeof RolloutRollbackFact>[] = []
+      for (const target of ["kill_switch", "legacy_fallback"] as const) {
+        const facts = rollbacks.filter((rollback) => rollback.target === target)
+        if (!facts.length) {
+          blocked.push(`rollback_missing:${target}`)
+          continue
+        }
+        const completed = facts.find(
+          (rollback) =>
+            rollback.outcome === "completed" &&
+            rollback.executionModeAfter === (target === "kill_switch" ? "off" : "active"),
+        )
+        if (!completed) failed.push(`rollback_failed:${target}`)
+        if (completed) rollbackEvidence.push(completed)
+      }
+      const reasons = [...new Set([...blocked, ...failed])].sort()
+      const status = blocked.length ? "blocked" : failed.length ? "failed" : "pass"
+      const decision = RolloutPromotionDecision.parse({
+        id: request.id,
+        targetPhase: "pre_public_default",
+        candidateIds: request.candidateIds,
+        candidateShas: [
+          candidateFacts[0]?.candidateSha ?? request.ancestry.previousCandidateSha,
+          candidateFacts[1]?.candidateSha ?? request.ancestry.currentCandidateSha,
+        ],
+        repeatIds: repeats.map((repeat) => repeat.id),
+        rollbackIds: rollbackEvidence.map((rollback) => rollback.id),
+        metricContractSha256: request.metricContractSha256,
+        metricReportSha256s: request.metricReports.map((report) => digest(report)),
+        shadowReportSha256s: request.shadowReports.map((report) => digest(report)),
+        ancestry: request.ancestry,
+        inputSha256,
+        status,
+        reasons,
+        createdAt: Date.now(),
+      })
+      db.insert(CompanyRolloutPromotionDecisionTable)
+        .values({
+          id: decision.id,
+          target_phase: decision.targetPhase,
+          candidate_ids_json: payloadJSON(decision.candidateIds),
+          candidate_shas_json: payloadJSON(decision.candidateShas),
+          repeat_ids_json: payloadJSON(decision.repeatIds),
+          rollback_ids_json: payloadJSON(decision.rollbackIds),
+          metric_contract_sha256: decision.metricContractSha256,
+          metric_report_sha256s_json: payloadJSON(decision.metricReportSha256s),
+          shadow_report_sha256s_json: payloadJSON(decision.shadowReportSha256s),
+          ancestry_json: payloadJSON(decision.ancestry),
+          input_sha256: decision.inputSha256,
+          input_json: payloadJSON(request),
+          output_sha256: digest(decision),
+          status: decision.status,
+          reasons_json: payloadJSON(decision.reasons),
+          created_at: decision.createdAt,
+        })
+        .run()
+      return decision
+    },
+    { behavior: "immediate" },
+  )
+}
+
+export function getPromotionDecision(id: string) {
+  const row = Database.use((db) =>
+    db.select().from(CompanyRolloutPromotionDecisionTable).where(eq(CompanyRolloutPromotionDecisionTable.id, id)).get(),
+  )
+  return row ? promotionFromRow(row) : undefined
+}
+
 function existingJournal(db: TxOrDb, kind: "transition" | "action", idempotencyKey: string) {
   return db
     .select()
@@ -505,7 +834,8 @@ function transitionRecord(row: typeof CompanyRolloutJournalTable.$inferSelect) {
     result.transition.id !== journal.resultRefId ||
     result.transition.to !== request.to ||
     result.transition.reason !== request.reason ||
-    result.transition.actorId !== request.actorId
+    result.transition.actorId !== request.actorId ||
+    result.transition.promotionDecisionId !== request.promotionDecisionId
   )
     throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout transition journal is inconsistent.")
   return { journal, request, result }
@@ -698,6 +1028,21 @@ export function transition(input: z.input<typeof RolloutTransitionRequest>) {
           "running_projects",
           "Rollout phase cannot change while company projects are still active.",
         )
+      if (request.to === "pre_public_default") {
+        const promotion = request.promotionDecisionId
+          ? db
+              .select()
+              .from(CompanyRolloutPromotionDecisionTable)
+              .where(eq(CompanyRolloutPromotionDecisionTable.id, request.promotionDecisionId))
+              .get()
+          : undefined
+        const decision = promotion ? promotionFromRow(promotion) : undefined
+        if (!decision || decision.status !== "pass" || !same(latestCandidateIds(db), decision.candidateIds))
+          throw new RolloutStoreError(
+            "promotion_gate_required",
+            "Pre-Public default requires a passing persisted promotion decision.",
+          )
+      }
 
       const now = Date.now()
       const transitionId = Identifier.ascending("rolloutTransition")
@@ -716,6 +1061,7 @@ export function transition(input: z.input<typeof RolloutTransitionRequest>) {
         version: state.version,
         reason: request.reason,
         actorId: request.actorId,
+        promotionDecisionId: request.promotionDecisionId,
         createdAt: now,
       }
       const journal = RolloutJournalEntry.parse({
@@ -1009,10 +1355,23 @@ export function evidence(limit = 500) {
           .limit(bounded)
           .all()
           .map(shadowFromRow)
+        const promotionDecisions = db
+          .select()
+          .from(CompanyRolloutPromotionDecisionTable)
+          .orderBy(asc(CompanyRolloutPromotionDecisionTable.created_at), asc(CompanyRolloutPromotionDecisionTable.id))
+          .limit(bounded)
+          .all()
+          .map(promotionFromRow)
         candidates.forEach((candidate) => validateFactJournal(db, "register_candidate", candidate.id))
         localRepeats.forEach((repeat) => validateFactJournal(db, "record_local_repeat", repeat.id))
         rollbacks.forEach((rollback) => validateFactJournal(db, "record_rollback", rollback.id))
-        return { candidates, localRepeats, rollbacks, shadowEvaluations }
+        return {
+          candidates,
+          localRepeats,
+          rollbacks,
+          shadowEvaluations,
+          promotionDecisions,
+        }
       }),
     )
   } catch (error) {

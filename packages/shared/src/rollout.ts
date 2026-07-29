@@ -1,5 +1,7 @@
 import z from "zod"
 import { ProjectExecutionStrategy } from "./project-orchestration"
+import { MetricContract, MetricEvaluationReport } from "./seed-grow-metrics"
+import { ShadowComparisonReport } from "./seed-grow-shadow"
 
 const Identifier = z.string().trim().min(1).max(240)
 const ShortText = z.string().trim().min(1).max(500)
@@ -71,8 +73,17 @@ export const RolloutTransitionRequest = z
     to: RolloutPhase,
     reason: LongText,
     actorId: Identifier.optional(),
+    promotionDecisionId: Identifier.optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if ((value.to === "pre_public_default") !== Boolean(value.promotionDecisionId))
+      context.addIssue({
+        code: "custom",
+        path: ["promotionDecisionId"],
+        message: "only the pre-public transition requires a promotion decision",
+      })
+  })
 export type RolloutTransitionRequest = z.infer<typeof RolloutTransitionRequest>
 
 export const RolloutTransition = z
@@ -83,6 +94,7 @@ export const RolloutTransition = z
     version: z.number().int().positive(),
     reason: LongText,
     actorId: Identifier.optional(),
+    promotionDecisionId: Identifier.optional(),
     createdAt: Timestamp,
   })
   .strict()
@@ -99,6 +111,12 @@ export const RolloutTransition = z
         code: "custom",
         path: ["version"],
         message: "rollout transition version must match its destination phase",
+      })
+    if ((value.to === "pre_public_default") !== Boolean(value.promotionDecisionId))
+      context.addIssue({
+        code: "custom",
+        path: ["promotionDecisionId"],
+        message: "only the pre-public transition can bind a promotion decision",
       })
   })
 export type RolloutTransition = z.infer<typeof RolloutTransition>
@@ -409,12 +427,85 @@ export const RolloutShadowEvaluation = z
   })
 export type RolloutShadowEvaluation = z.infer<typeof RolloutShadowEvaluation>
 
+export const RolloutPromotionAncestry = z
+  .object({
+    previousCandidateSha: CommitSha,
+    currentCandidateSha: CommitSha,
+    parentSha: CommitSha,
+    targetRef: ShortText,
+    verified: z.boolean(),
+    commandEvidenceSha256: Sha256,
+  })
+  .strict()
+export type RolloutPromotionAncestry = z.infer<typeof RolloutPromotionAncestry>
+
+export const RolloutPromotionEvaluationRequest = z
+  .object({
+    id: Identifier,
+    candidateIds: z.tuple([Identifier, Identifier]),
+    metricContract: MetricContract,
+    metricContractSha256: Sha256,
+    metricReports: z.tuple([MetricEvaluationReport, MetricEvaluationReport]),
+    shadowReports: z.tuple([ShadowComparisonReport, ShadowComparisonReport]),
+    ancestry: RolloutPromotionAncestry,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.candidateIds[0] === value.candidateIds[1])
+      context.addIssue({ code: "custom", path: ["candidateIds"], message: "promotion candidates must be distinct" })
+  })
+export type RolloutPromotionEvaluationRequest = z.infer<typeof RolloutPromotionEvaluationRequest>
+
+export const RolloutPromotionDecision = z
+  .object({
+    id: Identifier,
+    targetPhase: z.literal("pre_public_default"),
+    candidateIds: z.tuple([Identifier, Identifier]),
+    candidateShas: z.tuple([CommitSha, CommitSha]),
+    repeatIds: z.array(Identifier).max(4),
+    rollbackIds: z.array(Identifier).max(2),
+    metricContractSha256: Sha256,
+    metricReportSha256s: z.tuple([Sha256, Sha256]),
+    shadowReportSha256s: z.tuple([Sha256, Sha256]),
+    ancestry: RolloutPromotionAncestry,
+    inputSha256: Sha256,
+    status: z.enum(["pass", "failed", "blocked"]),
+    reasons: z.array(z.string().trim().min(1).max(500)).max(500),
+    createdAt: Timestamp,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.status === "pass") !== (value.reasons.length === 0))
+      context.addIssue({
+        code: "custom",
+        path: ["reasons"],
+        message: "passing promotion decisions cannot contain reasons and non-passing decisions require them",
+      })
+    if (value.status === "pass" && (value.repeatIds.length !== 4 || value.rollbackIds.length < 2))
+      context.addIssue({
+        code: "custom",
+        path: ["repeatIds"],
+        message: "passing promotion decisions require four repeats and both rollback targets",
+      })
+    if (
+      value.ancestry.previousCandidateSha !== value.candidateShas[0] ||
+      value.ancestry.currentCandidateSha !== value.candidateShas[1]
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["ancestry"],
+        message: "promotion ancestry must bind the evaluated candidates",
+      })
+  })
+export type RolloutPromotionDecision = z.infer<typeof RolloutPromotionDecision>
+
 export const RolloutEvidence = z
   .object({
     candidates: z.array(RolloutCandidateFact).max(500),
     localRepeats: z.array(RolloutLocalRepeatFact).max(500),
     rollbacks: z.array(RolloutRollbackFact).max(500),
     shadowEvaluations: z.array(RolloutShadowEvaluation).max(10_000),
+    promotionDecisions: z.array(RolloutPromotionDecision).max(500),
   })
   .strict()
 export type RolloutEvidence = z.infer<typeof RolloutEvidence>
@@ -427,6 +518,7 @@ export const RolloutApiError = z
       "running_projects",
       "entity_conflict",
       "missing_candidate",
+      "promotion_gate_required",
       "invalid_persisted_fact",
     ]),
     message: LongText,
