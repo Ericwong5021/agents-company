@@ -540,10 +540,20 @@ export const layer = Layer.effect(
           .where(eq(DecisionCurrentProjectionTable.decision_id, input.board_decision_id)).get()
         if (!belief) throw new Error("Belief was not found")
         requireBeliefLoopMode(db, belief.company_id)
-        if (!decision || decision.company_id !== belief.company_id || decision.decision_maker !== "board")
+        if (
+          !decision ||
+          decision.company_id !== belief.company_id ||
+          decision.record_origin !== "live" ||
+          decision.decision_maker !== "board" ||
+          decision.decision_maker_id !== input.approved_by
+        )
           throw new Error("Belief adoption requires a Board DecisionRecord from the same company")
-        if (!projection || !["accepted", "executed"].includes(projection.current_status))
-          throw new Error("Belief adoption requires an accepted Board decision")
+        if (
+          !projection ||
+          !["accepted", "executed"].includes(projection.current_status) ||
+          projection.final_decision !== belief.statement
+        )
+          throw new Error("Belief adoption requires an accepted Board decision for the exact belief statement")
         const now = Date.now()
         db.update(CompanyBeliefTable).set({
           status: "adopted",
