@@ -10,15 +10,23 @@ import { Database } from "@/storage"
 export type DispatchResult = {
   project_id: string
   status: "paused" | "gated" | "idle" | "dispatched"
+  barrier: "open" | "paused"
   eligible_work_item_ids: string[]
   dispatched_work_item_ids: string[]
   run_id?: string
 }
 
+export type DispatchBarrierResult = DispatchResult & {
+  barrier_changed: boolean
+  barrier_event_id?: string
+  idempotency_key: string
+  replayed: boolean
+}
+
 export interface Interface {
   readonly dispatchReady: (project_id: string) => Effect.Effect<DispatchResult>
-  readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchResult>
-  readonly resumeDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchResult>
+  readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
+  readonly resumeDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/DispatchCoordinator") {}
@@ -35,7 +43,7 @@ export const layer = Layer.effect(
       paused: boolean
       reason?: string
     }) {
-      yield* Effect.sync(() =>
+      return yield* Effect.sync(() =>
         Database.transaction(
           (db) => {
             const project = db
@@ -44,8 +52,18 @@ export const layer = Layer.effect(
               .where(eq(CompanyProjectTable.id, input.project_id))
               .get()
             if (!project) throw new Error(`Company project not found: ${input.project_id}`)
-            if (project.dispatch_paused === input.paused) return
+            if (project.dispatch_paused === input.paused) {
+              const event = db
+                .select()
+                .from(CompanyProjectEventTable)
+                .where(eq(CompanyProjectEventTable.project_id, input.project_id))
+                .orderBy(CompanyProjectEventTable.created_at, CompanyProjectEventTable.id)
+                .all()
+                .findLast((candidate) => candidate.type === (input.paused ? "dispatch.paused" : "dispatch.resumed"))
+              return { changed: false, event_id: event?.id }
+            }
             const now = Date.now()
+            const event_id = Identifier.ascending("event")
             db.update(CompanyProjectTable)
               .set({
                 dispatch_paused: input.paused,
@@ -56,7 +74,7 @@ export const layer = Layer.effect(
               .run()
             db.insert(CompanyProjectEventTable)
               .values({
-                id: Identifier.ascending("event"),
+                id: event_id,
                 project_id: input.project_id,
                 type: input.paused ? "dispatch.paused" : "dispatch.resumed",
                 actor_id: null,
@@ -64,6 +82,7 @@ export const layer = Layer.effect(
                 created_at: now,
               })
               .run()
+            return { changed: true, event_id }
           },
           { behavior: "immediate" },
         ),
@@ -77,6 +96,7 @@ export const layer = Layer.effect(
         return {
           project_id,
           status: "paused" as const,
+          barrier: "paused" as const,
           eligible_work_item_ids: [],
           dispatched_work_item_ids: [],
         }
@@ -85,6 +105,7 @@ export const layer = Layer.effect(
         return {
           project_id,
           status: "gated" as const,
+          barrier: "open" as const,
           eligible_work_item_ids: [],
           dispatched_work_item_ids: [],
         }
@@ -103,6 +124,7 @@ export const layer = Layer.effect(
         return {
           project_id,
           status: "idle" as const,
+          barrier: "open" as const,
           eligible_work_item_ids: [],
           dispatched_work_item_ids: [],
         }
@@ -131,6 +153,7 @@ export const layer = Layer.effect(
       return {
         project_id,
         status: dispatched_work_item_ids.length ? ("dispatched" as const) : ("idle" as const),
+        barrier: "open" as const,
         eligible_work_item_ids: eligible.map((item) => item.id),
         dispatched_work_item_ids,
         run_id,
@@ -141,16 +164,28 @@ export const layer = Layer.effect(
       project_id: string,
       reason?: string,
     ) {
-      yield* setBarrier({ project_id, paused: true, reason })
-      return yield* dispatchReady(project_id)
+      const barrier = yield* setBarrier({ project_id, paused: true, reason })
+      return {
+        ...(yield* dispatchReady(project_id)),
+        barrier_changed: barrier.changed,
+        barrier_event_id: barrier.event_id,
+        idempotency_key: `dispatch-barrier:${project_id}:paused`,
+        replayed: !barrier.changed,
+      }
     })
 
     const resumeDispatch = Effect.fn("DispatchCoordinator.resumeDispatch")(function* (
       project_id: string,
       reason?: string,
     ) {
-      yield* setBarrier({ project_id, paused: false, reason })
-      return yield* dispatchReady(project_id)
+      const barrier = yield* setBarrier({ project_id, paused: false, reason })
+      return {
+        ...(yield* dispatchReady(project_id)),
+        barrier_changed: barrier.changed,
+        barrier_event_id: barrier.event_id,
+        idempotency_key: `dispatch-barrier:${project_id}:open`,
+        replayed: !barrier.changed,
+      }
     })
 
     return Service.of({ dispatchReady, pauseDispatch, resumeDispatch })

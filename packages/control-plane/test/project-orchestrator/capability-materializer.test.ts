@@ -9,12 +9,12 @@ import {
 import { CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
-import { Instance } from "../../src/project/instance"
 import { CapabilityMaterializer } from "../../src/project-orchestrator/capability-materializer"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Database } from "../../src/storage"
 import { provideTmpdirInstance } from "../fixture/fixture"
+import { resetDatabase } from "../fixture/db"
 import { testEffect } from "../lib/effect"
 
 const dependencies = Layer.mergeAll(
@@ -33,7 +33,7 @@ const it = testEffect(
 )
 
 afterEach(async () => {
-  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 describe("Capability gap materialization", () => {

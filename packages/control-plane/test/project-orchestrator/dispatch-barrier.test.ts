@@ -32,13 +32,37 @@ describe("Dispatch barrier", () => {
         })
         yield* projects.transition({ id: project.id, status: "planning" })
         const paused = yield* dispatch.pauseDispatch(project.id, "test barrier")
-        expect(paused.status).toBe("paused")
+        const pausedReplay = yield* dispatch.pauseDispatch(project.id, "test barrier replay")
+        expect(paused).toMatchObject({
+          status: "paused",
+          barrier: "paused",
+          barrier_changed: true,
+          replayed: false,
+        })
+        expect(pausedReplay).toMatchObject({
+          barrier_changed: false,
+          barrier_event_id: paused.barrier_event_id,
+          idempotency_key: paused.idempotency_key,
+          replayed: true,
+        })
         expect(yield* projects.get(project.id)).toMatchObject({
           dispatch_paused: true,
           orchestration_state: "paused",
         })
         const resumed = yield* dispatch.resumeDispatch(project.id, "resume test")
-        expect(resumed.status).toBe("idle")
+        const resumedReplay = yield* dispatch.resumeDispatch(project.id, "resume test replay")
+        expect(resumed).toMatchObject({
+          status: "idle",
+          barrier: "open",
+          barrier_changed: true,
+          replayed: false,
+        })
+        expect(resumedReplay).toMatchObject({
+          barrier_changed: false,
+          barrier_event_id: resumed.barrier_event_id,
+          idempotency_key: resumed.idempotency_key,
+          replayed: true,
+        })
         const plan = yield* projects.createPlan({
           project_id: project.id,
           phase: "execution",

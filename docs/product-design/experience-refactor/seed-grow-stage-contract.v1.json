@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0", "A1", "A2", "A3", "A4", "B0"],
+  "implementedStages": ["A0", "A1", "A2", "A3", "A4", "B0", "B1", "B2"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -72,6 +72,11 @@
       "b0-assignment-lifecycle",
       "b0-selection-constraints",
       "b0-reassign-recovery",
+      "b1-seed-policy",
+      "b1-benchmark-s13-s15",
+      "b1-flag-fallback",
+      "b2-supervisor-benchmarks",
+      "b2-quiescence",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -91,11 +96,6 @@
       "desktop-e2e"
     ],
     "plannedStageCommands": [
-      "b1-seed-policy",
-      "b1-benchmark-s13-s15",
-      "b1-flag-fallback",
-      "b2-supervisor-benchmarks",
-      "b2-quiescence",
       "b3-attention-actions",
       "b3-recovery-matrix",
       "b4-real-browser-desktop",

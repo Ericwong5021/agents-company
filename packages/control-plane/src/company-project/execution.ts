@@ -27,6 +27,7 @@ import {
 import { SeedPolicyVerdict, WayfinderReceipt } from "@/project-orchestrator/schema"
 import { evaluateSeedPolicy } from "@/project-orchestrator/seed-policy"
 import { startSeedProject, wayfinderWorkflow } from "@/project-orchestrator/seed-team"
+import { ReceiptProcessor } from "@/project-orchestrator/receipt-processor"
 import { CompanyProject } from "./company-project"
 import {
   BoardProjectCharter,
@@ -511,6 +512,7 @@ export const layer = Layer.effect(
     const sessions = yield* Session.Service
     const runtime = yield* WorkflowRuntime.Service
     const workType = yield* WorkType.Service
+    const receiptProcessor = yield* ReceiptProcessor.Service
     const scope = yield* Scope.Scope
 
     const resolveModel = Effect.fn("CompanyProjectExecution.resolveModel")(function* (input: {
@@ -1033,23 +1035,6 @@ export const layer = Layer.effect(
         const items = yield* projects.listWorkItems(project_id)
         if (items.some((item) => item.status === "blocked" || item.status === "failed")) {
           yield* blockProject(project_id, "Seed project has exhausted a work-item retry budget")
-          return
-        }
-        if (
-          items.length &&
-          items.every(
-            (item) => item.status === "completed" || item.status === "superseded" || item.status === "cancelled",
-          )
-        ) {
-          yield* recruitment.releaseProject({
-            ...(project.company_id ? { company_id: CompanyID.parse(project.company_id) } : {}),
-            project_id: project.id,
-          })
-          yield* projects.transition({
-            id: project_id,
-            status: "completed",
-            actor_id: project.owner_agent_id ?? "system",
-          })
         }
         return
       }
@@ -1230,9 +1215,17 @@ export const layer = Layer.effect(
             ),
           { concurrency: "unbounded", discard: true },
         )
+        yield* Effect.forEach(
+          (yield* projects.listWorkReceipts(project.id)).filter((receipt) =>
+            ["pending", "processing"].includes(receipt.processing_status),
+          ),
+          (receipt) => receiptProcessor.processReceipt(receipt.id),
+          { concurrency: 1, discard: true },
+        )
         yield* projects.setActiveRun({ id: project.id })
         const current = yield* projects.get(project.id)
-        if (current?.status !== "awaiting_approval") yield* startSeedWave(project.id)
+        if (current && !["awaiting_approval", "completed"].includes(current.status))
+          yield* startSeedWave(project.id)
       }).pipe(
         Effect.catchCause((cause) => blockProject(project.id, String(cause))),
         Effect.forkIn(scope),
@@ -2251,7 +2244,7 @@ export const layer = Layer.effect(
 
     return Service.of({ start, startFromCharter, retry, resolveGate, cancel, dispatchReady: startReadyWave })
   }),
-)
+).pipe(Layer.provide(ReceiptProcessor.defaultLayer))
 
 export const defaultLayer = layer.pipe(
   Layer.provide(CompanyProject.defaultLayer),
