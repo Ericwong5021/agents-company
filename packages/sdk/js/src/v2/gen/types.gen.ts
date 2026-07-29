@@ -12724,6 +12724,7 @@ export type RolloutGetErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -12760,6 +12761,7 @@ export type RolloutTransitionData = {
     to: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
     reason: string
     actorId?: string
+    promotionDecisionId?: string
   }
   path?: never
   query?: {
@@ -12780,6 +12782,7 @@ export type RolloutTransitionErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -12793,6 +12796,7 @@ export type RolloutTransitionErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -12819,6 +12823,7 @@ export type RolloutTransitionResponses = {
       version: number
       reason: string
       actorId?: string
+      promotionDecisionId?: string
       createdAt: number
     }
     journal: {
@@ -12896,6 +12901,7 @@ export type RolloutActionErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -12909,6 +12915,7 @@ export type RolloutActionErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -12995,6 +13002,761 @@ export type RolloutActionResponses = {
 
 export type RolloutActionResponse = RolloutActionResponses[keyof RolloutActionResponses]
 
+export type RolloutEvaluatePromotionData = {
+  body: {
+    id: string
+    candidateIds: [string, string]
+    metricContract: {
+      schemaVersion: 1
+      id: "agent-company-experience-metrics"
+      version: string
+      queryVersion: "seed-grow-metric-query.v1"
+      privacy: {
+        storage: "local_first"
+        externalUploadDefault: false
+        prohibitedProperties: Array<string>
+        retention: string
+      }
+      eventEnvelope: {
+        requiredFields: {
+          [key: string]: string
+        }
+        requiredOrdering: Array<string>
+        duplicateKey: string
+        clockPolicy: string
+      }
+      eventTypes: Array<{
+        id: string
+        requiredProperties: Array<string>
+      }>
+      metrics: Array<{
+        id: string
+        label: string
+        definition: string
+        formula: string
+        numerator?: string
+        denominator?: string
+        eventSource?: Array<string>
+        timeWindow?: string
+        minimumSampleSize?: number
+        requiredDimensions?: Array<string>
+        unit: string
+        aggregation: "ratio" | "median" | "p95" | "sum" | "max"
+        collectionMode: "automated" | "hybrid" | "human_research"
+        minimumEvidence: Array<string>
+        target: {
+          gate: "R0" | "R1" | "R2" | "R3" | "R4"
+          operator: "=" | "<" | "<=" | ">" | ">=" | "observe"
+          value: number | null
+        }
+        cannotBeInferredFrom?: Array<string>
+      }>
+      prePublicGate: {
+        id: "pre_public_default"
+        requiredMetricIds: Array<
+          | "false_completion_count"
+          | "acceptance_criterion_evidence_coverage"
+          | "graph_repair_success_rate"
+          | "blind_retry_rate"
+          | "validation_gate_false_pass_rate"
+          | "delivery_consumability_rate"
+          | "recovery_success_rate"
+          | "complex_initial_assignment_median"
+          | "agent_count_before_first_receipt"
+          | "agent_count_added_after_receipt"
+          | "candidate_reuse_rate"
+          | "candidate_reuse_delta_vs_legacy"
+          | "new_candidate_per_completed_project"
+          | "unnecessary_reviewer_rate"
+          | "reviewer_rejection_precision"
+          | "reviewer_invocation_ratio_vs_legacy"
+          | "agent_load_balance"
+          | "automated_graph_decision_rate"
+          | "user_attention_count"
+          | "invalid_interruption_rate"
+          | "material_attention_precision"
+          | "unresolved_ask_latency_ms"
+          | "three_round_circuit_breaker_count"
+          | "accepted_delivery_cost"
+          | "wayfinder_cost"
+          | "reviewer_cost"
+          | "total_model_calls_by_strategy"
+          | "failed_attempt_cost_reuse_rate"
+          | "graph_growth_node_count"
+          | "graph_mutation_without_evidence_rate"
+          | "receipt_recovery_success_rate"
+          | "graph_mutation_recovery_success_rate"
+          | "acceptance_determinability_rate"
+          | "low_risk_quality_ratio_vs_legacy"
+          | "core_task_completion_rate"
+          | "exact_sha_terminal_success_rate"
+          | "consecutive_reproducible_candidate_count"
+        >
+        minimumConsecutiveCandidates: number
+        minimumIsolatedRunsPerCandidate: number
+      }
+      shadowComparison?: {
+        queryVersion: "seed-grow-shadow-query.v1"
+        minimumSampleSize: number
+        checks: [
+          {
+            id:
+              | "completeness_not_lower"
+              | "reviewer_invocations_lower"
+              | "error_rate_not_higher"
+              | "candidate_reuse_higher"
+              | "low_risk_quality_not_lower"
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            blocking: boolean
+          },
+          {
+            id:
+              | "completeness_not_lower"
+              | "reviewer_invocations_lower"
+              | "error_rate_not_higher"
+              | "candidate_reuse_higher"
+              | "low_risk_quality_not_lower"
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            blocking: boolean
+          },
+          {
+            id:
+              | "completeness_not_lower"
+              | "reviewer_invocations_lower"
+              | "error_rate_not_higher"
+              | "candidate_reuse_higher"
+              | "low_risk_quality_not_lower"
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            blocking: boolean
+          },
+          {
+            id:
+              | "completeness_not_lower"
+              | "reviewer_invocations_lower"
+              | "error_rate_not_higher"
+              | "candidate_reuse_higher"
+              | "low_risk_quality_not_lower"
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            blocking: boolean
+          },
+          {
+            id:
+              | "completeness_not_lower"
+              | "reviewer_invocations_lower"
+              | "error_rate_not_higher"
+              | "candidate_reuse_higher"
+              | "low_risk_quality_not_lower"
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            blocking: boolean
+          },
+        ]
+      }
+      releaseGates: [
+        {
+          id: "R0" | "R1" | "R2" | "R3" | "R4"
+          currentStatus?: string
+          requiredThresholds: Array<{
+            metricId: string
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            evidenceStatus?: string
+            scope?: string
+          }>
+          requiredHumanEvidence?: Array<{
+            id: string
+            name: string
+            status: string
+            automationSubstituteAllowed: boolean
+            blocking: boolean
+          }>
+          requiredStructuralEvidence: Array<string>
+        },
+        {
+          id: "R0" | "R1" | "R2" | "R3" | "R4"
+          currentStatus?: string
+          requiredThresholds: Array<{
+            metricId: string
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            evidenceStatus?: string
+            scope?: string
+          }>
+          requiredHumanEvidence?: Array<{
+            id: string
+            name: string
+            status: string
+            automationSubstituteAllowed: boolean
+            blocking: boolean
+          }>
+          requiredStructuralEvidence: Array<string>
+        },
+        {
+          id: "R0" | "R1" | "R2" | "R3" | "R4"
+          currentStatus?: string
+          requiredThresholds: Array<{
+            metricId: string
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            evidenceStatus?: string
+            scope?: string
+          }>
+          requiredHumanEvidence?: Array<{
+            id: string
+            name: string
+            status: string
+            automationSubstituteAllowed: boolean
+            blocking: boolean
+          }>
+          requiredStructuralEvidence: Array<string>
+        },
+        {
+          id: "R0" | "R1" | "R2" | "R3" | "R4"
+          currentStatus?: string
+          requiredThresholds: Array<{
+            metricId: string
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            evidenceStatus?: string
+            scope?: string
+          }>
+          requiredHumanEvidence?: Array<{
+            id: string
+            name: string
+            status: string
+            automationSubstituteAllowed: boolean
+            blocking: boolean
+          }>
+          requiredStructuralEvidence: Array<string>
+        },
+        {
+          id: "R0" | "R1" | "R2" | "R3" | "R4"
+          currentStatus?: string
+          requiredThresholds: Array<{
+            metricId: string
+            operator: "=" | "<" | "<=" | ">" | ">="
+            value: number
+            evidenceStatus?: string
+            scope?: string
+          }>
+          requiredHumanEvidence?: Array<{
+            id: string
+            name: string
+            status: string
+            automationSubstituteAllowed: boolean
+            blocking: boolean
+          }>
+          requiredStructuralEvidence: Array<string>
+        },
+      ]
+      currentCollectionStatus: {
+        buildRef: string
+        automatedProductMetrics: "not_collectable" | "collectable"
+        humanResearchMetrics: "not_scheduled" | "scheduled" | "in_progress" | "completed"
+        reason: string
+      }
+    }
+    metricContractSha256: string
+    metricReports: [
+      {
+        schemaVersion: 1
+        queryVersion: string
+        candidateSha: string
+        inputDigest: string
+        runIds: Array<string>
+        status: "pass" | "failed" | "blocked" | "observed"
+        results: Array<{
+          metricId: string
+          blocking: boolean
+          status: "pass" | "failed" | "blocked" | "observed"
+          value: number | null
+          numerator: number | null
+          denominator: number | null
+          sampleSize: number | null
+          meetsThreshold: boolean | null
+          threshold: {
+            gate: "R0" | "R1" | "R2" | "R3" | "R4"
+            operator: "=" | "<" | "<=" | ">" | ">=" | "observe"
+            value: number | null
+          } | null
+          blockedReasons: Array<
+            | "unknown_metric"
+            | "missing_observation"
+            | "duplicate_observation"
+            | "missing_source_event"
+            | "zero_denominator"
+            | "insufficient_sample"
+            | "aggregation_mismatch"
+            | "missing_values"
+            | "sample_size_mismatch"
+            | "time_window_mismatch"
+            | "missing_dimension"
+            | "query_version_mismatch"
+            | "input_digest_mismatch"
+            | "candidate_sha_mismatch"
+            | "missing_run"
+            | "run_binding_mismatch"
+            | "source_binding_mismatch"
+          >
+          sourceRefs: Array<{
+            kind:
+              | "project_event"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+              | "attention"
+              | "agent_run"
+              | "benchmark_report"
+              | "gate_report"
+              | "deployment_report"
+              | "rollback_report"
+              | "shadow_report"
+            id: string
+            candidateSha: string
+            runId: string
+            digest: string
+          }>
+        }>
+      },
+      {
+        schemaVersion: 1
+        queryVersion: string
+        candidateSha: string
+        inputDigest: string
+        runIds: Array<string>
+        status: "pass" | "failed" | "blocked" | "observed"
+        results: Array<{
+          metricId: string
+          blocking: boolean
+          status: "pass" | "failed" | "blocked" | "observed"
+          value: number | null
+          numerator: number | null
+          denominator: number | null
+          sampleSize: number | null
+          meetsThreshold: boolean | null
+          threshold: {
+            gate: "R0" | "R1" | "R2" | "R3" | "R4"
+            operator: "=" | "<" | "<=" | ">" | ">=" | "observe"
+            value: number | null
+          } | null
+          blockedReasons: Array<
+            | "unknown_metric"
+            | "missing_observation"
+            | "duplicate_observation"
+            | "missing_source_event"
+            | "zero_denominator"
+            | "insufficient_sample"
+            | "aggregation_mismatch"
+            | "missing_values"
+            | "sample_size_mismatch"
+            | "time_window_mismatch"
+            | "missing_dimension"
+            | "query_version_mismatch"
+            | "input_digest_mismatch"
+            | "candidate_sha_mismatch"
+            | "missing_run"
+            | "run_binding_mismatch"
+            | "source_binding_mismatch"
+          >
+          sourceRefs: Array<{
+            kind:
+              | "project_event"
+              | "work_attempt"
+              | "work_receipt"
+              | "graph_mutation"
+              | "project_assignment"
+              | "validation_gate"
+              | "attention"
+              | "agent_run"
+              | "benchmark_report"
+              | "gate_report"
+              | "deployment_report"
+              | "rollback_report"
+              | "shadow_report"
+            id: string
+            candidateSha: string
+            runId: string
+            digest: string
+          }>
+        }>
+      },
+    ]
+    shadowReports: [
+      {
+        schemaVersion: 1
+        queryVersion: string
+        comparisonId: string
+        candidateSha: string
+        inputDigest: string
+        snapshotDigest: string
+        scenarioIds: Array<string>
+        legacyRunIds: Array<string>
+        seedAndGrowRunIds: Array<string>
+        status: "pass" | "failed" | "blocked"
+        blockedReasons: Array<
+          | "query_version_mismatch"
+          | "input_digest_mismatch"
+          | "candidate_sha_mismatch"
+          | "strategy_binding_mismatch"
+          | "snapshot_binding_mismatch"
+          | "scenario_binding_mismatch"
+          | "missing_matched_run"
+          | "run_binding_mismatch"
+          | "source_binding_mismatch"
+          | "zero_denominator"
+          | "insufficient_sample"
+          | "comparison_baseline_zero"
+        >
+        deltas: {
+          completenessRateDelta: number
+          modelCallsPerUnitDelta: number
+          costPerUnitDelta: number
+          reviewerInvocationRatio: number
+          unknownDiscoveryRateDelta: number
+          errorRateDelta: number
+          candidateReuseRateDelta: number
+          lowRiskQualityRatio: number
+        } | null
+        checks: [
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+        ]
+        sourceRefs: Array<{
+          kind:
+            | "project_event"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+            | "attention"
+            | "agent_run"
+            | "benchmark_report"
+            | "gate_report"
+            | "deployment_report"
+            | "rollback_report"
+            | "shadow_report"
+          id: string
+          candidateSha: string
+          runId: string
+          digest: string
+        }>
+      },
+      {
+        schemaVersion: 1
+        queryVersion: string
+        comparisonId: string
+        candidateSha: string
+        inputDigest: string
+        snapshotDigest: string
+        scenarioIds: Array<string>
+        legacyRunIds: Array<string>
+        seedAndGrowRunIds: Array<string>
+        status: "pass" | "failed" | "blocked"
+        blockedReasons: Array<
+          | "query_version_mismatch"
+          | "input_digest_mismatch"
+          | "candidate_sha_mismatch"
+          | "strategy_binding_mismatch"
+          | "snapshot_binding_mismatch"
+          | "scenario_binding_mismatch"
+          | "missing_matched_run"
+          | "run_binding_mismatch"
+          | "source_binding_mismatch"
+          | "zero_denominator"
+          | "insufficient_sample"
+          | "comparison_baseline_zero"
+        >
+        deltas: {
+          completenessRateDelta: number
+          modelCallsPerUnitDelta: number
+          costPerUnitDelta: number
+          reviewerInvocationRatio: number
+          unknownDiscoveryRateDelta: number
+          errorRateDelta: number
+          candidateReuseRateDelta: number
+          lowRiskQualityRatio: number
+        } | null
+        checks: [
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+          {
+            id: string
+            field:
+              | "completenessRateDelta"
+              | "reviewerInvocationRatio"
+              | "errorRateDelta"
+              | "candidateReuseRateDelta"
+              | "lowRiskQualityRatio"
+            operator: "=" | "<" | "<=" | ">" | ">="
+            target: number
+            blocking: boolean
+            status: "pass" | "failed" | "blocked"
+            value: number | null
+          },
+        ]
+        sourceRefs: Array<{
+          kind:
+            | "project_event"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+            | "attention"
+            | "agent_run"
+            | "benchmark_report"
+            | "gate_report"
+            | "deployment_report"
+            | "rollback_report"
+            | "shadow_report"
+          id: string
+          candidateSha: string
+          runId: string
+          digest: string
+        }>
+      },
+    ]
+    ancestry: {
+      previousCandidateSha: string
+      currentCandidateSha: string
+      parentSha: string
+      targetRef: string
+      verified: boolean
+      commandEvidenceSha256: string
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/rollout/promotion-evaluations"
+}
+
+export type RolloutEvaluatePromotionErrors = {
+  /**
+   * Promotion evaluation conflict
+   */
+  409: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "promotion_gate_required"
+      | "invalid_persisted_fact"
+    message: string
+  }
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "promotion_gate_required"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutEvaluatePromotionError = RolloutEvaluatePromotionErrors[keyof RolloutEvaluatePromotionErrors]
+
+export type RolloutEvaluatePromotionResponses = {
+  /**
+   * Persisted deterministic promotion decision
+   */
+  200: {
+    id: string
+    targetPhase: "pre_public_default"
+    candidateIds: [string, string]
+    candidateShas: [string, string]
+    repeatIds: Array<string>
+    rollbackIds: Array<string>
+    metricContractSha256: string
+    metricReportSha256s: [string, string]
+    shadowReportSha256s: [string, string]
+    ancestry: {
+      previousCandidateSha: string
+      currentCandidateSha: string
+      parentSha: string
+      targetRef: string
+      verified: boolean
+      commandEvidenceSha256: string
+    }
+    inputSha256: string
+    status: "pass" | "failed" | "blocked"
+    reasons: Array<string>
+    createdAt: number
+  }
+}
+
+export type RolloutEvaluatePromotionResponse =
+  RolloutEvaluatePromotionResponses[keyof RolloutEvaluatePromotionResponses]
+
 export type RolloutJournalData = {
   body?: never
   path?: never
@@ -13017,6 +13779,7 @@ export type RolloutJournalErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -13075,6 +13838,7 @@ export type RolloutEvidenceErrors = {
       | "running_projects"
       | "entity_conflict"
       | "missing_candidate"
+      | "promotion_gate_required"
       | "invalid_persisted_fact"
     message: string
   }
@@ -13084,7 +13848,7 @@ export type RolloutEvidenceError = RolloutEvidenceErrors[keyof RolloutEvidenceEr
 
 export type RolloutEvidenceResponses = {
   /**
-   * Rollout evidence facts without a pass decision
+   * Persisted rollout evidence
    */
   200: {
     candidates: Array<{
@@ -13117,6 +13881,49 @@ export type RolloutEvidenceResponses = {
       evidenceSha256: string
       observedAt: number
       recordedAt: number
+    }>
+    shadowEvaluations: Array<{
+      id: string
+      projectId: string
+      sourceKey: string
+      kind: "seed_policy" | "supervisor"
+      receiptId?: string
+      snapshotSha256: string
+      inputSha256: string
+      outputSha256: string
+      businessStateBeforeSha256: string
+      businessStateAfterSha256: string
+      input: {
+        [key: string]: unknown
+      }
+      output: {
+        [key: string]: unknown
+      }
+      status: "evaluated" | "validated" | "rejected"
+      createdAt: number
+    }>
+    promotionDecisions: Array<{
+      id: string
+      targetPhase: "pre_public_default"
+      candidateIds: [string, string]
+      candidateShas: [string, string]
+      repeatIds: Array<string>
+      rollbackIds: Array<string>
+      metricContractSha256: string
+      metricReportSha256s: [string, string]
+      shadowReportSha256s: [string, string]
+      ancestry: {
+        previousCandidateSha: string
+        currentCandidateSha: string
+        parentSha: string
+        targetRef: string
+        verified: boolean
+        commandEvidenceSha256: string
+      }
+      inputSha256: string
+      status: "pass" | "failed" | "blocked"
+      reasons: Array<string>
+      createdAt: number
     }>
   }
 }
