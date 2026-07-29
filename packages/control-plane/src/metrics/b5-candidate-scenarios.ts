@@ -15,6 +15,7 @@ import {
   GraphMutationProposal,
   NewGraphWorkItem,
 } from "@/company-project/schema"
+import { validationPolicy } from "@/company-project/validation-policy"
 import type { Interface as CompanyRecruitmentInterface } from "@/company-recruitment/company-recruitment"
 import { CompanyID } from "@/company/schema"
 import type { Interface as CapabilityMaterializerInterface } from "@/project-orchestrator/capability-materializer"
@@ -23,7 +24,6 @@ import type { Interface as GraphSupervisorInterface } from "@/project-orchestrat
 import type { Interface as QuiescenceServiceInterface } from "@/project-orchestrator/quiescence"
 import { evaluateSeedPolicy } from "@/project-orchestrator/seed-policy"
 import { SeedPolicyFacts, type SeedPolicyFactsValue } from "@/project-orchestrator/schema"
-import { validationPolicy } from "@/company-project/validation-gate"
 import { produceB5CandidateRecovery } from "./b5-candidate-recovery"
 
 export const B5ScenarioIds = [

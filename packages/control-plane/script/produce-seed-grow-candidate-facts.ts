@@ -631,6 +631,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     PersistedFactArtifactReader,
     SeedGrowMetricReporter,
     Database,
+    ProjectInstance,
     ProjectTables,
     RecruitmentTables,
     scenarioModule,
@@ -653,6 +654,7 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     import("../src/metrics/persisted-fact-artifact"),
     import("../src/metrics/seed-grow-reporter"),
     import("../src/storage"),
+    import("../src/project/instance"),
     import("../src/company-project/company-project.sql"),
     import("../src/company-recruitment/company-recruitment.sql"),
     import("../src/metrics/b5-candidate-scenarios"),
@@ -676,8 +678,11 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
     QuiescenceService.defaultLayer,
     GateObservation.defaultLayer,
   )
-  const run = await Effect.runPromise(
-    Effect.gen(function* () {
+  const run = await ProjectInstance.Instance.provide({
+    directory: prepared.paths.worktree,
+    fn: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
       const agentRuns = yield* AgentRun.Service
       const agents = yield* CompanyAgent.Service
       const execution = yield* CompanyProjectExecution.Service
@@ -1734,8 +1739,9 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
         rollbackKillSwitch,
         rollbackLegacyFallback,
       }
-    }).pipe(Effect.provide(layer)),
-  )
+        }).pipe(Effect.provide(layer)),
+      ),
+  })
   await rm(path.join(prepared.paths.isolationRoot, "recovery"), {
     recursive: true,
     force: true,

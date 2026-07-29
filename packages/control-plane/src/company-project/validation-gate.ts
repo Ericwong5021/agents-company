@@ -21,8 +21,6 @@ import {
   ValidationEvaluation,
   ValidationGate,
   ValidationGateCreate,
-  ValidationPolicyDecision,
-  ValidationPolicyInput,
   ValidationRepairInput,
   WorkReceiptEvidenceRef,
   type GraphMutationProposal as GraphMutationProposalType,
@@ -32,9 +30,9 @@ import {
   type ValidationEvaluator as ValidationEvaluatorType,
   type ValidationGate as ValidationGateType,
   type ValidationGateCreate as ValidationGateCreateType,
-  type ValidationPolicyInput as ValidationPolicyInputType,
   type ValidationRepairInput as ValidationRepairInputType,
 } from "./schema"
+export { validationPolicy } from "./validation-policy"
 
 export type EvaluationResult = {
   status: "passed" | "failed"
@@ -252,29 +250,6 @@ function sameGate(
     row.max_repair_rounds === input.max_repair_rounds &&
     row.supersedes_gate_id === (input.supersedes_gate_id ?? null)
   )
-}
-
-export function validationPolicy(raw: ValidationPolicyInputType) {
-  const input = ValidationPolicyInput.parse(raw)
-  if (input.external_side_effect) {
-    return ValidationPolicyDecision.parse({
-      validation_mode: "review_and_user_gate",
-      reviewer_required: true,
-      user_gate_required: true,
-    })
-  }
-  if (input.risk_level === "high" || !input.deterministic_anchors) {
-    return ValidationPolicyDecision.parse({
-      validation_mode: "independent_review",
-      reviewer_required: true,
-      user_gate_required: false,
-    })
-  }
-  return ValidationPolicyDecision.parse({
-    validation_mode: "machine",
-    reviewer_required: false,
-    user_gate_required: false,
-  })
 }
 
 export interface Interface {
