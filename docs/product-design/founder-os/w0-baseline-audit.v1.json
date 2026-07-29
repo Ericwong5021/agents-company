@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-founder-os-w0-baseline-audit",
+  "version": "1.0.0",
+  "auditedAt": "2026-07-30T00:00:00.000Z",
+  "snapshotCommit": "a2c96925f39c233bb21e44fb6a3f5e3c0b5b5e49",
+  "snapshotTree": "0b193e46f14b3fa62ac57f18fc2cea9ddeb01d98",
+  "plan": {
+    "path": "docs/AgentCompany-Founder-OS-Development-Plan-v1.0.md",
+    "sha256": "19948baeb7be2fe7616998c8e6004762f9c7b6382264d5e2ce4955a1b46061e9",
+    "repositoryStatusAtAudit": "untracked_in_primary_worktree",
+    "drift": "The plan used for this audit was not present in snapshotCommit and must be committed before an exact-candidate Gate can pass."
+  },
+  "facts": [
+    {
+      "id": "FND-FACT-001",
+      "statement": "Project, Plan, WorkItem, Artifact, ApprovalGate and ProjectEvent already exist.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company-project/company-project.sql.ts",
+          "sha256": "8e578299eef60571fbfeea165460b1ef14416ae224f15d1b9f6eaa5e66a3638f"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-002",
+      "statement": "Company Project execution orchestration is concentrated in execution.ts.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company-project/execution.ts",
+          "sha256": "1beb078bc02483a012e3d2e96d12f158510e08415b75caa28cfea7373eb28e3a"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-003",
+      "statement": "Risk-driven verification-strength rules already exist.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company-project/orchestration.ts",
+          "sha256": "58c060db56acd1d14f3449faecf810d9a993af60bd7775a086eb8a6bbbd79b29"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-004",
+      "statement": "Seed-and-Grow has an independent off, shadow and active flag.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/flag/flag.ts",
+          "sha256": "3e903b7429f05501553d50742c1152515ab9cf264b4b7cd4e571d4f15bd32bbe"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-005",
+      "statement": "The Seed-and-Grow machine contract records only A0 as implemented.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "docs/product-design/experience-refactor/seed-grow-stage-contract.v1.json",
+          "sha256": "8034f48ef621a377b3591aa87123cd3bd6be04a51269c59fdd5431d9772d7ee5"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-006",
+      "statement": "Production source has no WorkReceipt, GraphMutation or GraphSupervisor implementation.",
+      "status": "absent_at_snapshot",
+      "evidence": [
+        {
+          "query": "\\b(WorkReceipt|GraphMutation|GraphSupervisor)\\b",
+          "scope": "packages/control-plane/src excluding company-agent/templates",
+          "matchCount": 0
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-007",
+      "statement": "Production source has no independent OutcomeSignal implementation.",
+      "status": "absent_at_snapshot",
+      "evidence": [
+        {
+          "query": "\\bOutcomeSignal\\b",
+          "scope": "packages/control-plane/src excluding company-agent/templates",
+          "matchCount": 0
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-008",
+      "statement": "Artifact and ApprovalGate are project-scoped and ApprovalGate has only risk and merge categories.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company-project/company-project.sql.ts",
+          "sha256": "8e578299eef60571fbfeea165460b1ef14416ae224f15d1b9f6eaa5e66a3638f"
+        },
+        {
+          "path": "packages/control-plane/src/company-project/schema.ts",
+          "sha256": "3e84830de8a89aa1d86877f2c7d908180fd536f1d05195bc98a38d58e97cd354"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-009",
+      "statement": "The Board has CEO, CTO and Product Lead identities and board-ceo is the top reporting identity.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company/company.ts",
+          "sha256": "421b5f87a8c36bcbb908cf9c6f57bdd3006fd7f12c692fbc25891b94c758adc1"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-010",
+      "statement": "The current Board page redirects to Work.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/app/app/pages/company/board.vue",
+          "sha256": "47bcd17742595bbc6d18133f83ac51b3892cc55a30673f3b4477b954368c90dc"
+        }
+      ]
+    },
+    {
+      "id": "FND-FACT-011",
+      "statement": "Board decisions are currently recorded as decision ChannelMessages without a Decision Ledger.",
+      "status": "confirmed_at_snapshot",
+      "evidence": [
+        {
+          "path": "packages/control-plane/src/company-project/execution.ts",
+          "sha256": "1beb078bc02483a012e3d2e96d12f158510e08415b75caa28cfea7373eb28e3a"
+        }
+      ]
+    }
+  ],
+  "authorization": {
+    "blocking": false,
+    "status": "not_confirmed",
+    "confirmedBy": null,
+    "confirmedAt": null
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-company-founder-os-w0-gate",
+  "version": "1.0.0",
+  "planBinding": {
+    "path": "docs/AgentCompany-Founder-OS-Development-Plan-v1.0.md"
+  },
+  "baselineBinding": {
+    "path": "docs/product-design/founder-os/w0-baseline-audit.v1.json",
+    "snapshotCommit": "a2c96925f39c233bb21e44fb6a3f5e3c0b5b5e49"
+  },
+  "taskIds": [
+    "FOS-FND-001",
+    "FOS-ADR-001",
+    "FOS-ADR-002",
+    "FOS-ADR-003",
+    "FOS-ADR-004",
+    "FOS-ADR-005",
+    "FOS-ADR-006",
+    "FOS-BOUNDARY-001",
+    "FOS-BOUNDARY-002",
+    "FOS-IA-001",
+    "FOS-QA-001"
+  ],
+  "governedPaths": [
+    "docs/README.md",
+    "docs/AgentCompany-Founder-OS-Development-Plan-v1.0.md",
+    "docs/product-design/ADR-Founder-OS-Governance-v1.0.md",
+    "docs/product-design/Founder-OS-IA-v1.0.md",
+    "docs/product-design/founder-os/w0-baseline-audit.v1.json",
+    "docs/product-design/founder-os/w0-evidence.v1.json",
+    "docs/product-design/founder-os/w0-gate-contract.v1.json",
+    "script/founder-os-boundary.ts",
+    "script/founder-os-evidence.ts",
+    "script/founder-os-gate.ts"
+  ],
+  "boundary": {
+    "sourceRoots": [
+      "packages/control-plane/src/founder-os/",
+      "packages/control-plane/src/founder-twin/"
+    ],
+    "sourceExtensions": [
+      ".ts",
+      ".tsx",
+      ".mts",
+      ".cts"
+    ],
+    "founderTwinForbiddenSpecifierPrefixes": [
+      "@/runtime",
+      "@/tool",
+      "@/company-recruitment",
+      "@/company-project/execution",
+      "@/company-project/company-project",
+      "@/agent-run",
+      "@/workflow/runtime"
+    ],
+    "founderTwinForbiddenPathPrefixes": [
+      "packages/control-plane/src/runtime/",
+      "packages/control-plane/src/tool/",
+      "packages/control-plane/src/company-recruitment/",
+      "packages/control-plane/src/company-project/execution.ts",
+      "packages/control-plane/src/company-project/company-project.ts",
+      "packages/control-plane/src/agent-run/",
+      "packages/control-plane/src/workflow/runtime.ts",
+      "packages/control-plane/src/workflow/runtime-ref.ts"
+    ],
+    "graphMutationSpecifierFragments": [
+      "graph-supervisor",
+      "graph_supervisor",
+      "graph-mutation",
+      "graph_mutation"
+    ],
+    "workerPathFragments": [
+      "/worker/",
+      "/workers/",
+      "/worker.",
+      "-worker.",
+      "_worker."
+    ],
+    "sharedContractPath": "packages/shared/src/founder-os.ts",
+    "sharedContractForbiddenSpecifierPrefixes": [
+      "@/",
+      "packages/control-plane",
+      "@agents-company/control-plane"
+    ]
+  },
+  "exactCommitGate": {
+    "attempts": [
+      "attempt-01",
+      "attempt-02"
+    ],
+    "isolation": "detached_exact_commit_worktree",
+    "requireCleanTrackedFiles": true,
+    "requireSameNormalizedDigest": true,
+    "githubActions": {
+      "status": "unavailable",
+      "blocking": false,
+      "replacement": "two_local_exact_sha_runs"
+    },
+    "humanAuthorization": {
+      "blocking": false,
+      "mode": "advisory_only",
+      "allowedStatuses": [
+        "not_confirmed",
+        "confirmed",
+        "rejected"
+      ],
+      "defaultStatus": "not_confirmed"
+    }
+  }
+}

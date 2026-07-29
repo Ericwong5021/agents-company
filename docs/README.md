@@ -12,6 +12,7 @@
 4. [体验重构计划](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前 R0-R4 的执行顺序、任务依赖和发布门槛。
 5. [实施计划](product-design/implementation-plan.md)：基于当前代码事实的架构收敛路径。
 6. [Seed-and-Grow 计划](AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md)：在 R3/R4 允许窗口内实施动态组织能力，不覆盖体验重构计划的发布顺序。
+7. [Founder OS 计划](AgentCompany-Founder-OS-Development-Plan-v1.0.md)：实施创始人治理、公司认知与学习闭环，不覆盖上位产品边界。
 冲突时以上位文档为准，并应在同一次文档变更中消除下位冲突。
 
 ## 两套计划的分工（2026-07-25 起）
@@ -37,6 +38,9 @@
 | [07-work-types.md](product-design/07-work-types.md) | 领域中立工作契约、动态能力组合与软件深度适配器 | 当前 |
 | [Agent-Company-Experience-Refactor-Plan-v1.0.md](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) | Goal 到 Verified Delivery 的体验重构执行清单 | 执行中 / 决定当前排期 |
 | [AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md](AgentCompany-Seed-and-Grow-Development-Plan-v1.0.md) | R3/R4 动态组织能力包、实施波次与本地精确 SHA 自动 Gate | 执行中 / 受体验重构阶段窗口约束 |
+| [AgentCompany-Founder-OS-Development-Plan-v1.0.md](AgentCompany-Founder-OS-Development-Plan-v1.0.md) | Founder OS、Company Commons 与 Learning Loop 开发波次 | 执行中 |
+| [ADR-Founder-OS-Governance-v1.0.md](product-design/ADR-Founder-OS-Governance-v1.0.md) | Founder Twin 治理、权限、来源、Ledger 与身份边界 | Proposed / 待人工确认 |
+| [Founder-OS-IA-v1.0.md](product-design/Founder-OS-IA-v1.0.md) | Founder OS 页面在现有五项一级导航中的归属 | Frozen |
 | [experience-refactor/manifest.v1.json](product-design/experience-refactor/manifest.v1.json) | 体验重构机器可读语言契约、基准、指标、基线与验证入口 | 执行中 |
 | [implementation-plan.md](product-design/implementation-plan.md) | 架构收敛路径、里程碑退出标准与 PRD 覆盖自审 | 当前 / 不决定排期 |
 | [CODEX-DESIGN-LANGUAGE.md](product-design/CODEX-DESIGN-LANGUAGE.md) | WebUI 视觉语言：色板、字号、圆角、Phosphor、设置 IA | 当前 |
