@@ -1,7 +1,9 @@
 import { Context, Effect, Layer } from "effect"
 import z from "zod"
+import { DecisionRiskLevel, FounderEvidenceReference } from "@agents-company/shared/founder-os"
 import { CompanyTable } from "@/company/company.sql"
 import { CompanyID } from "@/company/schema"
+import { appendBoardDecisionInTransaction } from "@/founder-os/decision-ledger"
 import { Identifier } from "@/id/id"
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
@@ -353,6 +355,15 @@ export const RecordBoardDecisionInput = z
     projectScopeID: z.string().min(1),
     driAgentID: z.string().min(1),
     body: z.string().trim().min(1).max(20_000),
+    ledger: z
+      .object({
+        subject: z.string().trim().min(1).max(20_000).optional(),
+        context: z.string().trim().min(1).max(20_000).optional(),
+        riskLevel: DecisionRiskLevel.optional(),
+        evidenceRefs: z.array(FounderEvidenceReference).max(500).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 export type RecordBoardDecisionInput = z.infer<typeof RecordBoardDecisionInput>
@@ -1206,6 +1217,12 @@ export const layer: Layer.Layer<Service> = Layer.effect(
             if (!thread?.root_need_id) return { type: "not_found" as const }
             const channel = db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
             if (!channel || channel.kind !== "board") return { type: "not_found" as const }
+            const latestRun = db
+              .select()
+              .from(ConversationRunTable)
+              .where(eq(ConversationRunTable.conversation_thread_id, thread.id))
+              .orderBy(desc(ConversationRunTable.time_created), desc(ConversationRunTable.id))
+              .get()
             const existing = db
               .select()
               .from(ChannelMessageTable)
@@ -1217,6 +1234,18 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               )
               .get()
             if (existing) {
+              const projection = db
+                .select()
+                .from(SignalProjectionTable)
+                .where(eq(SignalProjectionTable.channel_message_id, existing.id))
+                .get()
+              const sourceRun = projection?.conversation_run_id
+                ? db
+                    .select()
+                    .from(ConversationRunTable)
+                    .where(eq(ConversationRunTable.id, projection.conversation_run_id))
+                    .get()
+                : undefined
               const same =
                 existing.source_thread_id === thread.id &&
                 existing.root_need_id === thread.root_need_id &&
@@ -1227,18 +1256,28 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                 existing.signal_type === "decision" &&
                 existing.body === input.body &&
                 thread.project_scope_id === input.projectScopeID
+              if (same)
+                appendBoardDecisionInTransaction(db, {
+                  companyId: input.companyID,
+                  projectId: input.projectScopeID,
+                  channelMessageId: existing.id,
+                  boardThreadId: thread.id,
+                  boardRunId: sourceRun?.id,
+                  runtimeId: sourceRun?.runtime_id ?? undefined,
+                  decisionMakerId: input.driAgentID,
+                  subject: input.ledger?.subject,
+                  context: input.ledger?.context,
+                  finalDecision: input.body,
+                  riskLevel: input.ledger?.riskLevel,
+                  evidenceRefs: input.ledger?.evidenceRefs,
+                  createdAt: existing.time_created,
+                })
               return same ? { type: "accepted" as const, message: existing } : { type: "conflict" as const }
             }
 
             const now = Date.now()
             const messageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
             const projectionID = SignalProjectionID.parse(Identifier.ascending("signalProjection"))
-            const run = db
-              .select({ id: ConversationRunTable.id })
-              .from(ConversationRunTable)
-              .where(eq(ConversationRunTable.conversation_thread_id, thread.id))
-              .orderBy(desc(ConversationRunTable.time_created), desc(ConversationRunTable.id))
-              .get()
             const message = {
               id: messageID,
               channel_id: channel.id,
@@ -1275,7 +1314,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                 id: projectionID,
                 channel_message_id: messageID,
                 conversation_thread_id: thread.id,
-                conversation_run_id: run?.id ?? null,
+                conversation_run_id: latestRun?.id ?? null,
                 projector_version: 2,
                 source_watermark: `decision:${input.projectScopeID}:${input.requestID}`,
                 time_created: now,
@@ -1292,6 +1331,21 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                 time_updated: now,
               })
               .run()
+            appendBoardDecisionInTransaction(db, {
+              companyId: input.companyID,
+              projectId: input.projectScopeID,
+              channelMessageId: message.id,
+              boardThreadId: thread.id,
+              boardRunId: latestRun?.id,
+              runtimeId: latestRun?.runtime_id ?? undefined,
+              decisionMakerId: input.driAgentID,
+              subject: input.ledger?.subject,
+              context: input.ledger?.context,
+              finalDecision: input.body,
+              riskLevel: input.ledger?.riskLevel,
+              evidenceRefs: input.ledger?.evidenceRefs,
+              createdAt: now,
+            })
             db.update(ChannelTable).set({ time_updated: now }).where(eq(ChannelTable.id, channel.id)).run()
             return { type: "accepted" as const, message }
           },

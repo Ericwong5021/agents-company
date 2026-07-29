@@ -55,6 +55,8 @@ const prefixes = {
   rolloutTransition: "rtrn",
   rolloutJournal: "rjnl",
   rolloutShadow: "rshd",
+  founderDecision: "fdec",
+  founderDecisionTransition: "fdtr",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {

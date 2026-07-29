@@ -10,6 +10,13 @@ export {
   CompanyDepartmentTable,
 } from "../company-recruitment/company-recruitment.sql"
 export { CompanyTable, ApprovalPolicyTable, RepositoryBindingTable } from "../company/company.sql"
+export {
+  DecisionRecordTable,
+  DecisionTransitionTable,
+  DecisionCurrentProjectionTable,
+  DecisionSourceMappingTable,
+  DelegationPolicyTable,
+} from "../founder-os/decision-ledger.sql"
 export { LocalClientCredentialTable } from "../local-auth/local-auth.sql"
 export { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"
 export { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable } from "../group-session/group-session.sql"

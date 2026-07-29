@@ -1034,6 +1034,12 @@ const serviceLayer = Layer.effect(
         projectScopeID: input.project.id,
         driAgentID: input.project.owner_agent_id!,
         body,
+        ledger: {
+          subject: "项目最终收口决策",
+          context: input.summary,
+          riskLevel: input.item.risk_level,
+          evidenceRefs: [{ kind: "artifact", id: input.artifact.id }],
+        },
       })
       yield* projects.recordEvent({
         project_id: input.project.id,

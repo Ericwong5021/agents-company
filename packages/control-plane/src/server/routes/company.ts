@@ -47,6 +47,7 @@ import {
 import { Config } from "@/config"
 import { AppRuntime } from "@/effect/app-runtime"
 import { FounderOSAsset } from "@/founder-os"
+import { FounderOSRoutes } from "@/founder-os/routes"
 import { Provider, ProviderAuth, ModelsDev } from "@/provider"
 import { ProviderID } from "@/provider/schema"
 import { Database } from "@/storage"
@@ -934,6 +935,7 @@ export const CompanyRoutes = lazy(() =>
         return c.json(result.work_item)
       },
     )
+    .route("/founder-os", FounderOSRoutes())
     .route("/channels", CompanyChannelRoutes())
     .route("/threads", CompanyThreadRoutes()),
 )

@@ -442,6 +442,11 @@ export const CompanyThreadRoutes = lazy(() =>
                 `DRI：${input.charter.dri_agent_id}`,
                 `验收：${input.charter.acceptance_criteria.join("；")}`,
               ].join("\n"),
+              ledger: {
+                subject: `正式立项：${input.charter.title}`,
+                context: rootNeed.body,
+                evidenceRefs: [{ kind: "conversation", id: threadID }],
+              },
             })
             return {
               kind: "decide" as const,

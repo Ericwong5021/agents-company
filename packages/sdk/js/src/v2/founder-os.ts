@@ -256,4 +256,140 @@ export function createFounderStudioClient(config: FounderStudioClientConfig) {
       })
     },
   }
+export type DecisionScope =
+  | { type: "company"; companyId: string }
+  | { type: "project"; companyId: string; projectId: string }
+  | { type: "pre_project"; companyId: string; preProjectId: string }
+
+export type DecisionMaker = "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
+
+export type FounderOperatingMode = "shadow" | "advisor" | "green_delegated" | "yellow_delegated"
+
+export type DecisionRiskLevel = "low" | "medium" | "high" | "critical"
+
+export type DecisionStatus =
+  | "unknown"
+  | "proposed"
+  | "awaiting_approval"
+  | "accepted"
+  | "executed"
+  | "overridden"
+  | "failed"
+  | "rolled_back"
+
+export type DecisionTransitionKind =
+  | "created"
+  | "historical_imported"
+  | "submitted_for_approval"
+  | "accepted"
+  | "executed"
+  | "overridden"
+  | "failed"
+  | "rolled_back"
+
+export type FounderTwinSnapshotReference = {
+  id: string
+  version: number
+}
+
+export type DecisionSourceMapping = {
+  channelMessageId: string | null
+  boardThreadId: string | null
+  boardRunId: string | null
+  runtimeId: string | null
+  sourceCompleteness: "complete" | "partial"
+}
+
+export type DecisionRecord = {
+  schemaVersion: 1
+  id: string
+  scope: DecisionScope
+  source: DecisionSourceMapping | null
+  founderTwinSnapshot: FounderTwinSnapshotReference | null
+  subject: string | null
+  context: string | null
+  options: string[] | null
+  recommendation: string | null
+  finalDecision: string | null
+  decisionMaker: DecisionMaker
+  decisionMakerId: string
+  authorityClass: FounderAuthorityClass | null
+  operatingMode: FounderOperatingMode | null
+  confidence: number | null
+  reversible: boolean | null
+  externalImpact: boolean | null
+  riskLevel: DecisionRiskLevel | null
+  evidenceRefs: FounderEvidenceReference[] | null
+  principleRefs: FounderAssetReference[] | null
+  decisionCaseRefs: FounderAssetReference[] | null
+  currentStatus: DecisionStatus
+  overrideOf: string | null
+  outcomeRefIds: string[]
+  transitionCount: number
+  createdAt: number
+  decidedAt: number | null
+  updatedAt: number
+}
+
+export type DecisionRecordAppendInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  scope: DecisionScope
+  founderTwinSnapshot: FounderTwinSnapshotReference | null
+  subject: string
+  context: string
+  options: string[]
+  recommendation: string
+  finalDecision: string | null
+  decisionMaker: Exclude<DecisionMaker, "unknown">
+  decisionMakerId: string
+  authorityClass: FounderAuthorityClass
+  operatingMode: FounderOperatingMode | null
+  confidence: number
+  reversible: boolean
+  externalImpact: boolean
+  riskLevel: DecisionRiskLevel
+  evidenceRefs: FounderEvidenceReference[]
+  principleRefs: FounderAssetReference[]
+  decisionCaseRefs: FounderAssetReference[]
+  initialStatus?: "proposed" | "awaiting_approval" | "accepted"
+  overrideOf?: string | null
+  decidedAt?: number | null
+}
+
+export type DecisionTransitionAppendInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  toStatus: Exclude<DecisionStatus, "unknown">
+  kind: Exclude<DecisionTransitionKind, "created" | "historical_imported">
+  reason: string
+  actorId: string
+}
+
+export type DecisionTransition = {
+  schemaVersion: 1
+  id: string
+  decisionId: string
+  sequence: number
+  fromStatus: DecisionStatus | null
+  toStatus: DecisionStatus
+  kind: DecisionTransitionKind
+  reason: string
+  actorId: string
+  createdAt: number
+}
+
+export type DelegationPolicy = {
+  schemaVersion: 1
+  id: string
+  actionType: string
+  riskLevel: FounderAuthorityClass
+  reversible: boolean
+  externalImpact: boolean
+  budgetLimit: Record<string, unknown> | null
+  requiresApproval: boolean
+  allowedMode: "advisor" | "green_delegated" | "yellow_delegated" | "none"
+  version: number
+  scope: DecisionScope
+  createdAt: number
 }
