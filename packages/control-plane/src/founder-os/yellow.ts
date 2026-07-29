@@ -41,10 +41,12 @@ import {
   appendDecisionDispatchInTransaction,
   appendDecisionTransitionInTransaction,
   defaultLayer as decisionLedgerLayer,
+  recordFromRow,
   Service as DecisionLedgerService,
 } from "./decision-ledger"
 import {
   DecisionCurrentProjectionTable,
+  DecisionRecordTable,
   FounderGovernanceEventTable,
 } from "./decision-ledger.sql"
 import * as FounderOSMode from "./mode"
@@ -971,6 +973,7 @@ export const layer = Layer.effect(
           kind: "rolled_back",
           reason: input.reason,
           actorId: input.actor.id,
+          finalDecision: decision.finalDecision ?? input.reason,
         })
       return Database.use((db) =>
         yellowSummaryFromRow(
@@ -1116,7 +1119,10 @@ export const layer = Layer.effect(
           .select()
           .from(DecisionCurrentProjectionTable)
           .where(eq(DecisionCurrentProjectionTable.decision_id, run.decision_id))
-          .get()
+            .get()
+        const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, run.decision_id)).get()
+        if (!decision) return
+        const currentDecision = recordFromRow(db, decision)
         const transition = projection?.current_status === "proposed"
           ? appendDecisionTransitionInTransaction(db, run.decision_id, {
               schemaVersion: 1,
@@ -1125,6 +1131,8 @@ export const layer = Layer.effect(
               kind: "accepted",
               reason: "Recovered Yellow authorization and rollback checkpoint.",
               actorId: "board-ceo",
+              finalDecision:
+                currentDecision.recommendation ?? "Yellow authorization and rollback checkpoint accepted.",
             })
           : null
         const decisionDispatch = appendDecisionDispatchInTransaction(db, {
@@ -1181,6 +1189,7 @@ export const layer = Layer.effect(
             kind: "executed",
             reason: "Recovered completed Yellow dispatch from the durable Decision outbox.",
             actorId: "board-ceo",
+            finalDecision: decision.finalDecision ?? "Recovered completed Yellow dispatch.",
           })
         if (recoveredStatus === "failed" && decision.currentStatus === "accepted")
           yield* ledger.appendTransition(run.decision_id, {
@@ -1190,6 +1199,7 @@ export const layer = Layer.effect(
             kind: "failed",
             reason: "Recovered terminal Yellow dispatch failure from the durable Decision outbox.",
             actorId: "board-ceo",
+            finalDecision: decision.finalDecision ?? "Recovered terminal Yellow dispatch failure.",
           })
         return
       }
@@ -1212,6 +1222,7 @@ export const layer = Layer.effect(
               kind: "failed",
               reason,
               actorId: "board-ceo",
+              finalDecision: decision.finalDecision ?? reason,
             })
           yield* ledger.completeDispatch(claimed.id, {
             consumerId,
@@ -1359,6 +1370,7 @@ export const layer = Layer.effect(
         kind: "executed",
         reason: "Yellow mutation applied; independent Outcome Signal remains required.",
         actorId: "board-ceo",
+        finalDecision: decision.finalDecision ?? "Yellow mutation applied.",
       })
       const refreshed = Database.use((db) =>
         db.select().from(FounderYellowRunTable).where(eq(FounderYellowRunTable.id, run.id)).get()!,
@@ -1451,6 +1463,9 @@ export const layer = Layer.effect(
         ...(decision.decisionMaker === "ai_founder" && decision.decisionMakerId === "board-ceo"
           ? []
           : ["Yellow delegation requires a board-ceo AI Founder decision."]),
+        ...(decision.recordOrigin === "live"
+          ? []
+          : ["Historical DecisionRecords cannot enter Yellow delegation."]),
         ...(["proposed", "accepted"].includes(decision.currentStatus)
           ? []
           : [`Decision status ${decision.currentStatus} cannot enter Yellow dispatch.`]),
@@ -1500,6 +1515,7 @@ export const layer = Layer.effect(
               kind: "accepted",
               reason: "Yellow Governance authorization and rollback checkpoint persisted.",
               actorId: "board-ceo",
+              finalDecision: decision.recommendation ?? "Yellow delegation authorized.",
             })
           : null
         const decisionDispatch = appendDecisionDispatchInTransaction(db, {

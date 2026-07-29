@@ -18,6 +18,8 @@ import {
   FounderGreenDelegationAction,
   FounderTwinSnapshotReference,
   type DecisionMaker,
+  type DecisionOperatingMode,
+  type DecisionRecordOrigin,
   type DecisionRiskLevel,
   type DecisionScope as DecisionScopeValue,
   type DecisionSourceMapping as DecisionSourceMappingValue,
@@ -25,7 +27,6 @@ import {
   type FounderAuthorityClass,
   type FounderAssetReference as FounderAssetReferenceValue,
   type FounderEvidenceReference as FounderEvidenceReferenceValue,
-  type FounderOperatingMode as FounderOperatingModeValue,
   type FounderTwinSnapshotReference as FounderTwinSnapshotReferenceValue,
 } from "@agents-company/shared/founder-os"
 import { NamedError } from "@agents-company/shared/util/error"
@@ -92,6 +93,7 @@ export const DecisionLedgerCorrupt = NamedError.create(
 type AppendCommand = {
   id?: string
   idempotencyKey: string
+  recordOrigin: DecisionRecordOrigin
   scope: DecisionScopeValue
   source: DecisionSourceMappingValue | null
   founderTwinSnapshot: FounderTwinSnapshotReferenceValue | null
@@ -103,7 +105,7 @@ type AppendCommand = {
   decisionMaker: DecisionMaker
   decisionMakerId: string
   authorityClass: FounderAuthorityClass | null
-  operatingMode: FounderOperatingModeValue | null
+  operatingMode: DecisionOperatingMode | null
   confidence: number | null
   reversible: boolean | null
   externalImpact: boolean | null
@@ -286,7 +288,8 @@ export function recordFromRow(db: TxOrDb, row: typeof DecisionRecordTable.$infer
     context: row.context,
     options: json(z.array(z.string()), row.options_json),
     recommendation: row.recommendation,
-    finalDecision: row.final_decision,
+    finalDecision: projection.final_decision,
+    recordOrigin: row.record_origin,
     decisionMaker: row.decision_maker,
     decisionMakerId: row.decision_maker_id,
     authorityClass: row.authority_class,
@@ -303,7 +306,7 @@ export function recordFromRow(db: TxOrDb, row: typeof DecisionRecordTable.$infer
     outcomeRefIds: json(z.array(z.string()), projection.outcome_ref_ids_json) ?? [],
     transitionCount: projection.transition_count,
     createdAt: row.created_at,
-    decidedAt: row.decided_at,
+    decidedAt: projection.decided_at,
     updatedAt: projection.updated_at,
   })
 }
@@ -319,6 +322,8 @@ function transitionFromRow(row: typeof DecisionTransitionTable.$inferSelect) {
     kind: row.kind,
     reason: row.reason,
     actorId: row.actor_id,
+    finalDecision: row.final_decision,
+    decidedAt: row.decided_at,
     createdAt: row.created_at,
   })
 }
@@ -374,7 +379,8 @@ export function appendDecisionTransitionInTransaction(
   decisionId: string,
   raw: z.input<typeof DecisionTransitionAppendInput>,
 ) {
-  const input = DecisionTransitionAppendInput.parse(raw)
+  const parsed = DecisionTransitionAppendInput.parse(raw)
+  const createdAt = Date.now()
   const record = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
   if (!record) throw new DecisionLedgerNotFound({ decision_id: decisionId })
   const projection = db
@@ -383,7 +389,29 @@ export function appendDecisionTransitionInTransaction(
     .where(eq(DecisionCurrentProjectionTable.decision_id, decisionId))
     .get()
   if (!projection) throw new DecisionLedgerCorrupt({ decision_id: decisionId })
-  const inputSha256 = sha256(input)
+  if (
+    parsed.toStatus !== "awaiting_approval" &&
+    parsed.toStatus !== "overridden" &&
+    projection.final_decision &&
+    parsed.finalDecision !== projection.final_decision
+  )
+    throw new Error("Decision finalization is immutable outside an explicit override")
+  const input = {
+    ...parsed,
+    finalDecision:
+      parsed.toStatus === "awaiting_approval"
+        ? null
+        : parsed.toStatus !== "overridden" && projection.final_decision
+          ? projection.final_decision
+          : parsed.finalDecision,
+    decidedAt:
+      parsed.toStatus === "awaiting_approval"
+        ? null
+        : parsed.toStatus !== "overridden" && projection.decided_at
+          ? projection.decided_at
+          : parsed.decidedAt ?? createdAt,
+  }
+  const inputSha256 = sha256({ ...input, decidedAt: undefined })
   const existing = db
     .select()
     .from(DecisionTransitionTable)
@@ -409,7 +437,6 @@ export function appendDecisionTransitionInTransaction(
       to_status: input.toStatus,
     })
   const id = Identifier.ascending("founderDecisionTransition")
-  const createdAt = Date.now()
   db.insert(DecisionTransitionTable)
     .values({
       id,
@@ -422,6 +449,8 @@ export function appendDecisionTransitionInTransaction(
       kind: input.kind,
       reason: input.reason,
       actor_id: input.actorId,
+      final_decision: input.finalDecision,
+      decided_at: input.decidedAt,
       created_at: createdAt,
     })
     .run()
@@ -431,6 +460,8 @@ export function appendDecisionTransitionInTransaction(
       current_status: input.toStatus,
       latest_transition_id: id,
       transition_count: projection.transition_count + 1,
+      final_decision: input.finalDecision,
+      decided_at: input.decidedAt,
       updated_at: createdAt,
     })
     .where(
@@ -622,7 +653,12 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
       ? command.decisionCaseRefs.map((item) => FounderAssetReference.parse(item))
       : null,
   }
-  const inputSha256 = sha256({ ...normalized, id: undefined })
+  const inputSha256 = sha256({
+    ...normalized,
+    id: undefined,
+    createdAt: undefined,
+    decidedAt: normalized.initialStatus === "accepted" ? "terminal" : null,
+  })
   const existing = db
     .select()
     .from(DecisionRecordTable)
@@ -647,6 +683,7 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
       ...scopeColumns(normalized.scope),
       idempotency_key: normalized.idempotencyKey,
       input_sha256: inputSha256,
+      record_origin: normalized.recordOrigin,
       source_completeness: normalized.source?.sourceCompleteness ?? "complete",
       founder_snapshot_id: normalized.founderTwinSnapshot?.id ?? null,
       founder_snapshot_version: normalized.founderTwinSnapshot?.version ?? null,
@@ -654,7 +691,7 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
       context: normalized.context,
       options_json: normalized.options === null ? null : JSON.stringify(normalized.options),
       recommendation: normalized.recommendation,
-      final_decision: normalized.finalDecision,
+      final_decision: null,
       decision_maker: normalized.decisionMaker,
       decision_maker_id: normalized.decisionMakerId,
       authority_class: normalized.authorityClass,
@@ -669,7 +706,7 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
         normalized.decisionCaseRefs === null ? null : JSON.stringify(normalized.decisionCaseRefs),
       override_of: normalized.overrideOf,
       created_at: normalized.createdAt,
-      decided_at: normalized.decidedAt,
+      decided_at: null,
     })
     .run()
   db.insert(DecisionTransitionTable)
@@ -689,6 +726,8 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
       kind: normalized.initialTransitionKind,
       reason: normalized.initialReason,
       actor_id: normalized.decisionMakerId,
+      final_decision: normalized.initialStatus === "accepted" ? normalized.finalDecision : null,
+      decided_at: normalized.initialStatus === "accepted" ? normalized.decidedAt : null,
       created_at: normalized.createdAt,
     })
     .run()
@@ -699,6 +738,8 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
       latest_transition_id: transitionID,
       transition_count: 1,
       outcome_ref_ids_json: "[]",
+      final_decision: normalized.initialStatus === "accepted" ? normalized.finalDecision : null,
+      decided_at: normalized.initialStatus === "accepted" ? normalized.decidedAt : null,
       updated_at: normalized.createdAt,
     })
     .run()
@@ -722,6 +763,7 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
 export function appendBoardDecisionInTransaction(db: TxOrDb, input: BoardDecisionInput) {
   const decision = appendDecisionInTransaction(db, {
     idempotencyKey: `board-channel-message:${input.channelMessageId}`,
+    recordOrigin: "live",
     scope: input.preProjectId
       ? { type: "pre_project", companyId: input.companyId, preProjectId: input.preProjectId }
       : { type: "project", companyId: input.companyId, projectId: input.projectId },
@@ -941,6 +983,7 @@ function recoverHistoricalBoardDecisions(db: TxOrDb) {
         : undefined
       appendDecisionInTransaction(db, {
         idempotencyKey: `historical-board-channel-message:${message.id}`,
+        recordOrigin: "historical_import",
         scope: thread.project_scope_id
           ? { type: "project", companyId: channel.company_id, projectId: thread.project_scope_id }
           : thread.root_need_id
@@ -1177,10 +1220,12 @@ export const layer = Layer.succeed(
     append: (raw) =>
       database(() => {
         const input = DecisionRecordAppendInput.parse(raw)
+        const createdAt = Date.now()
         return Database.transaction(
           (db) =>
             appendDecisionInTransaction(db, {
               idempotencyKey: input.idempotencyKey,
+              recordOrigin: "live",
               scope: input.scope,
               source: null,
               founderTwinSnapshot: input.founderTwinSnapshot,
@@ -1209,8 +1254,8 @@ export const layer = Layer.succeed(
                     : "created",
               initialReason: "Decision record appended.",
               overrideOf: input.overrideOf,
-              createdAt: Date.now(),
-              decidedAt: input.decidedAt,
+              createdAt,
+              decidedAt: input.initialStatus === "accepted" ? input.decidedAt ?? createdAt : null,
             }),
           { behavior: "immediate" },
         )
@@ -1236,6 +1281,12 @@ export const layer = Layer.succeed(
             const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
             if (!row) throw new DecisionLedgerNotFound({ decision_id: decisionId })
             const decision = recordFromRow(db, row)
+            if (decision.recordOrigin === "historical_import")
+              throw new DecisionLedgerIllegalTransition({
+                decision_id: decisionId,
+                from_status: decision.currentStatus,
+                to_status: "accepted",
+              })
             const transition =
               decision.currentStatus === "proposed"
                 ? appendDecisionTransitionInTransaction(db, decisionId, {
@@ -1245,6 +1296,7 @@ export const layer = Layer.succeed(
                     kind: "accepted",
                     reason: input.reason,
                     actorId: input.actorId,
+                    finalDecision: decision.recommendation ?? input.reason,
                   })
                 : null
             if (!["proposed", "accepted"].includes(decision.currentStatus))

@@ -729,6 +729,7 @@ export const layer = Layer.effect(
         decision.scope.type !== "project"
         || decision.scope.companyId !== input.companyId
         || decision.scope.projectId !== input.projectId
+        || decision.recordOrigin !== "live"
         || decision.decisionMaker !== "ai_founder"
         || decision.decisionMakerId !== "board-ceo"
       )
@@ -844,6 +845,7 @@ export const layer = Layer.effect(
           kind: "executed",
           reason: "Recovered completed Green delegation dispatch from the durable outbox.",
           actorId: "board-ceo",
+          finalDecision: decision.recommendation,
         })
         return save({
           id,
@@ -959,6 +961,7 @@ export const layer = Layer.effect(
           ? "Green delegation completed through Project Orchestrator and Graph Supervisor."
           : "Graph Supervisor rejected the delegated mutation.",
         actorId: "board-ceo",
+        finalDecision: decision.recommendation,
       })
       return save({
         id,

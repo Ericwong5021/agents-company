@@ -303,6 +303,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
     appendDecisionInTransaction(db, {
       id: decisionId,
       idempotencyKey: `advisor:${input.idempotencyKey}`,
+      recordOrigin: "live",
       scope: shadow.scope_kind === "project" && shadow.scope_ref
         ? { type: "project", companyId: input.companyId, projectId: shadow.scope_ref }
         : { type: "company", companyId: input.companyId },
@@ -418,6 +419,7 @@ export function beginIntervention(raw: FounderInterventionInputValue) {
     appendDecisionInTransaction(db, {
       id: ledgerDecisionId,
       idempotencyKey: `intervention:${input.idempotencyKey}`,
+      recordOrigin: "live",
       scope: input.projectId
         ? { type: "project", companyId: input.companyId, projectId: input.projectId }
         : { type: "company", companyId: input.companyId },

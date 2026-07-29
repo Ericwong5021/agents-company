@@ -428,8 +428,22 @@ export type DecisionScope = z.infer<typeof DecisionScope>
 export const DecisionMaker = z.enum(["human", "ai_founder", "board", "policy_engine", "unknown"])
 export type DecisionMaker = z.infer<typeof DecisionMaker>
 
+export const DecisionRecordOrigin = z.enum(["live", "historical_import"])
+export type DecisionRecordOrigin = z.infer<typeof DecisionRecordOrigin>
+
 export const FounderOperatingMode = z.enum(["shadow", "advisor", "green_delegated", "yellow_delegated"])
 export type FounderOperatingMode = z.infer<typeof FounderOperatingMode>
+
+export const DecisionOperatingMode = z.enum([
+  "off",
+  "shadow",
+  "advisor",
+  "green_delegated",
+  "yellow_delegated",
+  "not_applicable",
+  "unknown",
+])
+export type DecisionOperatingMode = z.infer<typeof DecisionOperatingMode>
 
 export const DecisionRiskLevel = z.enum(["low", "medium", "high", "critical"])
 export type DecisionRiskLevel = z.infer<typeof DecisionRiskLevel>
@@ -479,79 +493,165 @@ export const DecisionSourceMapping = z
   .meta({ ref: "DecisionSourceMapping" })
 export type DecisionSourceMapping = z.infer<typeof DecisionSourceMapping>
 
-export const DecisionRecord = z
-  .object({
+const DecisionRecordCommon = {
     schemaVersion: z.literal(1),
     id: Identifier,
     scope: DecisionScope,
     source: DecisionSourceMapping.nullable(),
-    founderTwinSnapshot: FounderTwinSnapshotReference.nullable(),
     subject: LongText.nullable(),
     context: LongText.nullable(),
     options: z.array(LongText).max(100).nullable(),
-    recommendation: LongText.nullable(),
-    finalDecision: LongText.nullable(),
-    decisionMaker: DecisionMaker,
     decisionMakerId: Identifier,
-    authorityClass: FounderAuthorityClass.nullable(),
-    operatingMode: FounderOperatingMode.nullable(),
-    confidence: z.number().min(0).max(1).nullable(),
-    reversible: z.boolean().nullable(),
-    externalImpact: z.boolean().nullable(),
-    riskLevel: DecisionRiskLevel.nullable(),
     evidenceRefs: z.array(FounderEvidenceReference).max(500).nullable(),
     principleRefs: z.array(FounderAssetReference).max(500).nullable(),
     decisionCaseRefs: z.array(FounderAssetReference).max(500).nullable(),
-    currentStatus: DecisionStatus,
     overrideOf: Identifier.nullable(),
     outcomeRefIds: z.array(Identifier).max(500),
     transitionCount: z.number().int().positive(),
     createdAt: z.number().int().nonnegative(),
-    decidedAt: z.number().int().nonnegative().nullable(),
     updatedAt: z.number().int().nonnegative(),
+}
+
+const DecisionRecordLiveAI = {
+  recordOrigin: z.literal("live"),
+  decisionMaker: z.literal("ai_founder"),
+  founderTwinSnapshot: FounderTwinSnapshotReference,
+  recommendation: LongText,
+  authorityClass: FounderAuthorityClass,
+  operatingMode: FounderOperatingMode,
+  confidence: z.number().min(0).max(1),
+  reversible: z.boolean(),
+  externalImpact: z.boolean(),
+  riskLevel: DecisionRiskLevel,
+}
+
+const DecisionRecordLiveNonAI = {
+  recordOrigin: z.literal("live"),
+  decisionMaker: z.enum(["human", "board", "policy_engine"]),
+  founderTwinSnapshot: FounderTwinSnapshotReference.nullable(),
+  recommendation: LongText.nullable(),
+  authorityClass: FounderAuthorityClass.nullable(),
+  operatingMode: DecisionOperatingMode.nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  reversible: z.boolean().nullable(),
+  externalImpact: z.boolean().nullable(),
+  riskLevel: DecisionRiskLevel.nullable(),
+}
+
+const DecisionRecordHistorical = {
+  recordOrigin: z.literal("historical_import"),
+  decisionMaker: DecisionMaker,
+  founderTwinSnapshot: FounderTwinSnapshotReference.nullable(),
+  recommendation: LongText.nullable(),
+  authorityClass: FounderAuthorityClass.nullable(),
+  operatingMode: DecisionOperatingMode.nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  reversible: z.boolean().nullable(),
+  externalImpact: z.boolean().nullable(),
+  riskLevel: DecisionRiskLevel.nullable(),
+}
+
+const DecisionRecordOpenStatus = {
+  currentStatus: z.enum(["proposed", "awaiting_approval"]),
+  finalDecision: z.null(),
+  decidedAt: z.null(),
+}
+
+const DecisionRecordTerminalStatus = {
+  currentStatus: z.enum(["accepted", "executed", "overridden", "failed", "rolled_back"]),
+  finalDecision: LongText,
+  decidedAt: z.number().int().nonnegative(),
+}
+
+const DecisionRecordHistoricalUnknownStatus = {
+  currentStatus: z.literal("unknown"),
+  finalDecision: z.null(),
+  decidedAt: z.null(),
+}
+
+export const DecisionRecord = z
+  .union([
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordLiveAI, ...DecisionRecordOpenStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordLiveAI, ...DecisionRecordTerminalStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordLiveNonAI, ...DecisionRecordOpenStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordLiveNonAI, ...DecisionRecordTerminalStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordHistorical, ...DecisionRecordHistoricalUnknownStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordHistorical, ...DecisionRecordOpenStatus }).strict(),
+    z.object({ ...DecisionRecordCommon, ...DecisionRecordHistorical, ...DecisionRecordTerminalStatus }).strict(),
+  ])
+  .superRefine((value, context) => {
+    if (value.decisionMaker === "unknown" && value.recordOrigin !== "historical_import")
+      context.addIssue({
+        code: "custom",
+        message: "Only historical imports may have an unknown decision maker.",
+        path: ["decisionMaker"],
+      })
   })
-  .strict()
   .meta({ ref: "DecisionRecord" })
 export type DecisionRecord = z.infer<typeof DecisionRecord>
 
-export const DecisionRecordAppendInput = z
-  .object({
+const DecisionRecordAppendCommon = {
     schemaVersion: z.literal(1),
     idempotencyKey: Identifier,
     scope: DecisionScope,
-    founderTwinSnapshot: FounderTwinSnapshotReference.nullable(),
     subject: LongText,
     context: LongText,
     options: z.array(LongText).max(100),
-    recommendation: LongText,
     finalDecision: LongText.nullable(),
-    decisionMaker: z.enum(["human", "ai_founder", "board", "policy_engine"]),
     decisionMakerId: Identifier,
-    authorityClass: FounderAuthorityClass,
-    operatingMode: FounderOperatingMode.nullable(),
-    confidence: z.number().min(0).max(1),
-    reversible: z.boolean(),
-    externalImpact: z.boolean(),
-    riskLevel: DecisionRiskLevel,
     evidenceRefs: z.array(FounderEvidenceReference).max(500),
     principleRefs: z.array(FounderAssetReference).max(500),
     decisionCaseRefs: z.array(FounderAssetReference).max(500),
     initialStatus: z.enum(["proposed", "awaiting_approval", "accepted"]).default("proposed"),
     overrideOf: Identifier.nullable().default(null),
     decidedAt: z.number().int().nonnegative().nullable().default(null),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.decisionMaker === "ai_founder" && !value.founderTwinSnapshot)
-      context.addIssue({
-        code: "custom",
-        message: "AI founder decisions require a Founder Twin snapshot reference.",
-        path: ["founderTwinSnapshot"],
+}
+
+export const DecisionRecordAppendInput = z
+  .union([
+    z
+      .object({
+        ...DecisionRecordAppendCommon,
+        decisionMaker: z.literal("ai_founder"),
+        founderTwinSnapshot: FounderTwinSnapshotReference,
+        recommendation: LongText,
+        authorityClass: FounderAuthorityClass,
+        operatingMode: FounderOperatingMode,
+        confidence: z.number().min(0).max(1),
+        reversible: z.boolean(),
+        externalImpact: z.boolean(),
+        riskLevel: DecisionRiskLevel,
       })
+      .strict(),
+    z
+      .object({
+        ...DecisionRecordAppendCommon,
+        decisionMaker: z.enum(["human", "board", "policy_engine"]),
+        founderTwinSnapshot: FounderTwinSnapshotReference.nullable().default(null),
+        recommendation: LongText.nullable().default(null),
+        authorityClass: FounderAuthorityClass.nullable().default(null),
+        operatingMode: DecisionOperatingMode.nullable().default("not_applicable"),
+        confidence: z.number().min(0).max(1).nullable().default(null),
+        reversible: z.boolean().nullable().default(null),
+        externalImpact: z.boolean().nullable().default(null),
+        riskLevel: DecisionRiskLevel.nullable().default(null),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
     if (value.initialStatus === "accepted" && !value.finalDecision)
       context.addIssue({
         code: "custom",
-        message: "Accepted decisions require a final decision.",
+        message: "Accepted decisions require finalDecision.",
+        path: ["finalDecision"],
+      })
+    if (
+      value.initialStatus !== "accepted" &&
+      (value.finalDecision !== null || value.decidedAt !== null)
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Pending decisions cannot be finalized.",
         path: ["finalDecision"],
       })
   })
@@ -559,32 +659,70 @@ export const DecisionRecordAppendInput = z
 export type DecisionRecordAppendInput = z.infer<typeof DecisionRecordAppendInput>
 
 export const DecisionTransitionAppendInput = z
-  .object({
-    schemaVersion: z.literal(1),
-    idempotencyKey: Identifier,
-    toStatus: DecisionStatus.exclude(["unknown"]),
-    kind: DecisionTransitionKind.exclude(["created", "historical_imported"]),
-    reason: LongText,
-    actorId: Identifier,
-  })
-  .strict()
+  .union([
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        idempotencyKey: Identifier,
+        toStatus: z.literal("awaiting_approval"),
+        kind: z.literal("submitted_for_approval"),
+        reason: LongText,
+        actorId: Identifier,
+        finalDecision: z.null().default(null),
+        decidedAt: z.null().default(null),
+      })
+      .strict(),
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        idempotencyKey: Identifier,
+        toStatus: z.enum(["accepted", "executed", "overridden", "failed", "rolled_back"]),
+        kind: z.enum(["accepted", "executed", "overridden", "failed", "rolled_back"]),
+        reason: LongText,
+        actorId: Identifier,
+        finalDecision: LongText,
+        decidedAt: z.number().int().nonnegative().optional(),
+      })
+      .strict(),
+  ])
   .meta({ ref: "DecisionTransitionAppendInput" })
 export type DecisionTransitionAppendInput = z.infer<typeof DecisionTransitionAppendInput>
 
 export const DecisionTransition = z
-  .object({
-    schemaVersion: z.literal(1),
-    id: Identifier,
-    decisionId: Identifier,
-    sequence: z.number().int().positive(),
-    fromStatus: DecisionStatus.nullable(),
-    toStatus: DecisionStatus,
-    kind: DecisionTransitionKind,
-    reason: LongText,
-    actorId: Identifier,
-    createdAt: z.number().int().nonnegative(),
-  })
-  .strict()
+  .union([
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        id: Identifier,
+        decisionId: Identifier,
+        sequence: z.number().int().positive(),
+        fromStatus: DecisionStatus.nullable(),
+        toStatus: z.enum(["unknown", "proposed", "awaiting_approval"]),
+        kind: z.enum(["created", "historical_imported", "submitted_for_approval"]),
+        reason: LongText,
+        actorId: Identifier,
+        finalDecision: z.null(),
+        decidedAt: z.null(),
+        createdAt: z.number().int().nonnegative(),
+      })
+      .strict(),
+    z
+      .object({
+        schemaVersion: z.literal(1),
+        id: Identifier,
+        decisionId: Identifier,
+        sequence: z.number().int().positive(),
+        fromStatus: DecisionStatus.nullable(),
+        toStatus: z.enum(["accepted", "executed", "overridden", "failed", "rolled_back"]),
+        kind: z.enum(["accepted", "executed", "overridden", "failed", "rolled_back"]),
+        reason: LongText,
+        actorId: Identifier,
+        finalDecision: LongText,
+        decidedAt: z.number().int().nonnegative(),
+        createdAt: z.number().int().nonnegative(),
+      })
+      .strict(),
+  ])
   .meta({ ref: "DecisionTransition" })
 export type DecisionTransition = z.infer<typeof DecisionTransition>
 

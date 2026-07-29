@@ -195,6 +195,8 @@ function evaluateInTransaction(db: TxOrDb, raw: z.input<typeof DecisionAuthority
   const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
   if (!row) throw new Error("Governance requests require an existing DecisionRecord")
   const decision = recordFromRow(db, row)
+  if (decision.recordOrigin === "historical_import")
+    throw new Error("Historical DecisionRecords cannot enter delegated Governance")
   const policy = policyFor(db, decision.scope, input.actionType)
   const constitution = constitutionFor(db, decision.scope.companyId, input.actionType)
   const facts = [
@@ -466,6 +468,8 @@ export function submitGovernanceInTransaction(db: TxOrDb, raw: GovernanceRequest
   const row = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
   if (!row) throw new Error("Governance requests require an existing DecisionRecord")
   const decision = recordFromRow(db, row)
+  if (decision.recordOrigin === "historical_import")
+    throw new Error("Historical DecisionRecords cannot enter delegated Governance")
   const companyID = CompanyID.parse(decision.scope.companyId)
   const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyID)).get()
   const preset = db
@@ -664,6 +668,7 @@ export const governanceLayer = Layer.succeed(
                   kind: input.decision === "approve" ? "accepted" : "failed",
                   reason: input.note,
                   actorId: input.actor.id,
+                  finalDecision: input.decision === "approve" ? before.recommendation ?? input.note : input.note,
                 })
                   : null
               governanceEvent(db, {
@@ -749,6 +754,7 @@ export const founderCorrectionLayer = Layer.succeed(
               const input = FounderCorrectionAppendInput.parse(raw)
               const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, input.decisionId)).get()
               if (!decision) throw new Error("Correction requires an existing DecisionRecord")
+              const currentDecision = recordFromRow(db, decision)
               const existing = db
                 .select()
                 .from(FounderCorrectionTable)
@@ -783,7 +789,7 @@ export const founderCorrectionLayer = Layer.succeed(
                 decision_id: decision.id,
                 idempotency_key: input.idempotencyKey,
                 kind: input.kind,
-                original_decision: decision.final_decision,
+                original_decision: currentDecision.finalDecision,
                 human_decision: input.humanDecision,
                 reason: input.reason,
                 proposed_asset_updates_json: JSON.stringify(input.proposedAssetUpdates),
@@ -805,6 +811,7 @@ export const founderCorrectionLayer = Layer.succeed(
                   kind: "overridden",
                   reason: input.reason,
                   actorId: input.actorId,
+                  finalDecision: input.humanDecision,
                 })
               if (input.kind === "override") {
                 const yellowRun = db
@@ -859,6 +866,9 @@ export const decisionCenterLayer = Layer.succeed(
               const input = DecisionCenterActionInput.parse(raw)
               const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decisionId)).get()
               if (!decision) throw new Error("DecisionRecord was not found")
+              const currentDecision = recordFromRow(db, decision)
+              if (currentDecision.recordOrigin === "historical_import")
+                throw new Error("Historical DecisionRecords cannot enter delegated execution")
               if (
                 input.action === "accept" &&
                 (
@@ -893,6 +903,12 @@ export const decisionCenterLayer = Layer.succeed(
                 kind: target,
                 reason: input.reason,
                 actorId: input.actorId,
+                finalDecision:
+                  input.action === "accept"
+                    ? currentDecision.recommendation ?? input.reason
+                    : input.action === "reject"
+                      ? input.reason
+                      : currentDecision.finalDecision ?? input.reason,
               })
               if (input.action === "accept")
                 appendDecisionDispatchInTransaction(db, {

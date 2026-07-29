@@ -14,6 +14,7 @@ export const DecisionRecordTable = sqliteTable(
     pre_project_id: text(),
     idempotency_key: text().notNull(),
     input_sha256: text().notNull(),
+    record_origin: text().notNull(),
     source_completeness: text().notNull(),
     founder_snapshot_id: text(),
     founder_snapshot_version: integer(),
@@ -53,7 +54,20 @@ export const DecisionRecordTable = sqliteTable(
     ),
     check(
       "founder_decision_record_ai_snapshot_check",
-      sql`${table.decision_maker} != 'ai_founder' OR ${table.founder_snapshot_id} IS NOT NULL`,
+      sql`${table.record_origin} != 'live' OR ${table.decision_maker} != 'ai_founder'
+        OR (${table.founder_snapshot_id} IS NOT NULL
+          AND ${table.recommendation} IS NOT NULL
+          AND ${table.authority_class} IS NOT NULL
+          AND ${table.operating_mode} IS NOT NULL
+          AND ${table.confidence} IS NOT NULL
+          AND ${table.reversible} IS NOT NULL
+          AND ${table.external_impact} IS NOT NULL
+          AND ${table.risk_level} IS NOT NULL)`,
+    ),
+    check(
+      "founder_decision_record_origin_check",
+      sql`(${table.record_origin} = 'live' AND ${table.decision_maker} != 'unknown')
+        OR ${table.record_origin} = 'historical_import'`,
     ),
   ],
 )
@@ -73,27 +87,50 @@ export const DecisionTransitionTable = sqliteTable(
     kind: text().notNull(),
     reason: text().notNull(),
     actor_id: text().notNull(),
+    final_decision: text(),
+    decided_at: integer(),
     created_at: integer().notNull(),
   },
   (table) => [
     uniqueIndex("founder_decision_transition_sequence_idx").on(table.decision_id, table.sequence),
     uniqueIndex("founder_decision_transition_idempotency_idx").on(table.decision_id, table.idempotency_key),
     index("founder_decision_transition_time_idx").on(table.decision_id, table.created_at),
+    check(
+      "founder_decision_transition_finalization_check",
+      sql`(${table.to_status} IN ('accepted', 'executed', 'overridden', 'failed', 'rolled_back')
+        AND ${table.final_decision} IS NOT NULL AND ${table.decided_at} IS NOT NULL)
+        OR (${table.to_status} NOT IN ('accepted', 'executed', 'overridden', 'failed', 'rolled_back')
+          AND ${table.final_decision} IS NULL AND ${table.decided_at} IS NULL)`,
+    ),
   ],
 )
 
-export const DecisionCurrentProjectionTable = sqliteTable("founder_decision_current", {
-  decision_id: text()
-    .primaryKey()
-    .references(() => DecisionRecordTable.id, { onDelete: "cascade" }),
-  current_status: text().notNull(),
-  latest_transition_id: text()
-    .notNull()
-    .references(() => DecisionTransitionTable.id),
-  transition_count: integer().notNull(),
-  outcome_ref_ids_json: text().notNull().default("[]"),
-  updated_at: integer().notNull(),
-})
+export const DecisionCurrentProjectionTable = sqliteTable(
+  "founder_decision_current",
+  {
+    decision_id: text()
+      .primaryKey()
+      .references(() => DecisionRecordTable.id, { onDelete: "cascade" }),
+    current_status: text().notNull(),
+    latest_transition_id: text()
+      .notNull()
+      .references(() => DecisionTransitionTable.id),
+    transition_count: integer().notNull(),
+    outcome_ref_ids_json: text().notNull().default("[]"),
+    final_decision: text(),
+    decided_at: integer(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    check(
+      "founder_decision_current_finalization_check",
+      sql`(${table.current_status} IN ('accepted', 'executed', 'overridden', 'failed', 'rolled_back')
+        AND ${table.final_decision} IS NOT NULL AND ${table.decided_at} IS NOT NULL)
+        OR (${table.current_status} NOT IN ('accepted', 'executed', 'overridden', 'failed', 'rolled_back')
+          AND ${table.final_decision} IS NULL AND ${table.decided_at} IS NULL)`,
+    ),
+  ],
+)
 
 export const DecisionDispatchOutboxTable = sqliteTable(
   "founder_decision_dispatch_outbox",

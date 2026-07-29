@@ -300,7 +300,18 @@ export type DecisionScope =
 
 export type DecisionMaker = "human" | "ai_founder" | "board" | "policy_engine" | "unknown"
 
+export type DecisionRecordOrigin = "live" | "historical_import"
+
 export type FounderOperatingMode = "shadow" | "advisor" | "green_delegated" | "yellow_delegated"
+
+export type DecisionOperatingMode =
+  | "off"
+  | "shadow"
+  | "advisor"
+  | "green_delegated"
+  | "yellow_delegated"
+  | "not_applicable"
+  | "unknown"
 
 export type DecisionRiskLevel = "low" | "medium" | "high" | "critical"
 
@@ -337,55 +348,95 @@ export type DecisionSourceMapping = {
   sourceCompleteness: "complete" | "partial"
 }
 
-export type DecisionRecord = {
+type DecisionRecordCommon = {
   schemaVersion: 1
   id: string
   scope: DecisionScope
   source: DecisionSourceMapping | null
-  founderTwinSnapshot: FounderTwinSnapshotReference | null
   subject: string | null
   context: string | null
   options: string[] | null
-  recommendation: string | null
-  finalDecision: string | null
-  decisionMaker: DecisionMaker
   decisionMakerId: string
-  authorityClass: FounderAuthorityClass | null
-  operatingMode: FounderOperatingMode | null
-  confidence: number | null
-  reversible: boolean | null
-  externalImpact: boolean | null
-  riskLevel: DecisionRiskLevel | null
   evidenceRefs: FounderEvidenceReference[] | null
   principleRefs: FounderAssetReference[] | null
   decisionCaseRefs: FounderAssetReference[] | null
-  currentStatus: DecisionStatus
   overrideOf: string | null
   outcomeRefIds: string[]
   transitionCount: number
   createdAt: number
-  decidedAt: number | null
   updatedAt: number
 }
 
-export type DecisionRecordAppendInput = {
+type DecisionRecordStatus =
+  | {
+      currentStatus: "proposed" | "awaiting_approval"
+      finalDecision: null
+      decidedAt: null
+    }
+  | {
+      currentStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+      finalDecision: string
+      decidedAt: number
+    }
+
+type DecisionRecordHistoricalStatus =
+  | DecisionRecordStatus
+  | {
+      currentStatus: "unknown"
+      finalDecision: null
+      decidedAt: null
+    }
+
+export type DecisionRecord =
+  DecisionRecordCommon
+  & (
+    | ({
+        recordOrigin: Extract<DecisionRecordOrigin, "live">
+        decisionMaker: "ai_founder"
+        founderTwinSnapshot: FounderTwinSnapshotReference
+        recommendation: string
+        authorityClass: FounderAuthorityClass
+        operatingMode: FounderOperatingMode
+        confidence: number
+        reversible: boolean
+        externalImpact: boolean
+        riskLevel: DecisionRiskLevel
+      } & DecisionRecordStatus)
+    | ({
+        recordOrigin: Extract<DecisionRecordOrigin, "live">
+        decisionMaker: "human" | "board" | "policy_engine"
+        founderTwinSnapshot: FounderTwinSnapshotReference | null
+        recommendation: string | null
+        authorityClass: FounderAuthorityClass | null
+        operatingMode: DecisionOperatingMode | null
+        confidence: number | null
+        reversible: boolean | null
+        externalImpact: boolean | null
+        riskLevel: DecisionRiskLevel | null
+      } & DecisionRecordStatus)
+    | ({
+        recordOrigin: Extract<DecisionRecordOrigin, "historical_import">
+        decisionMaker: DecisionMaker
+        founderTwinSnapshot: FounderTwinSnapshotReference | null
+        recommendation: string | null
+        authorityClass: FounderAuthorityClass | null
+        operatingMode: DecisionOperatingMode | null
+        confidence: number | null
+        reversible: boolean | null
+        externalImpact: boolean | null
+        riskLevel: DecisionRiskLevel | null
+      } & DecisionRecordHistoricalStatus)
+  )
+
+type DecisionRecordAppendCommon = {
   schemaVersion: 1
   idempotencyKey: string
   scope: DecisionScope
-  founderTwinSnapshot: FounderTwinSnapshotReference | null
   subject: string
   context: string
   options: string[]
-  recommendation: string
   finalDecision: string | null
-  decisionMaker: Exclude<DecisionMaker, "unknown">
   decisionMakerId: string
-  authorityClass: FounderAuthorityClass
-  operatingMode: FounderOperatingMode | null
-  confidence: number
-  reversible: boolean
-  externalImpact: boolean
-  riskLevel: DecisionRiskLevel
   evidenceRefs: FounderEvidenceReference[]
   principleRefs: FounderAssetReference[]
   decisionCaseRefs: FounderAssetReference[]
@@ -394,27 +445,84 @@ export type DecisionRecordAppendInput = {
   decidedAt?: number | null
 }
 
-export type DecisionTransitionAppendInput = {
+export type DecisionRecordAppendInput =
+  DecisionRecordAppendCommon
+  & (
+    | {
+        decisionMaker: "ai_founder"
+        founderTwinSnapshot: FounderTwinSnapshotReference
+        recommendation: string
+        authorityClass: FounderAuthorityClass
+        operatingMode: FounderOperatingMode
+        confidence: number
+        reversible: boolean
+        externalImpact: boolean
+        riskLevel: DecisionRiskLevel
+      }
+    | {
+        decisionMaker: "human" | "board" | "policy_engine"
+        founderTwinSnapshot?: FounderTwinSnapshotReference | null
+        recommendation?: string | null
+        authorityClass?: FounderAuthorityClass | null
+        operatingMode?: DecisionOperatingMode | null
+        confidence?: number | null
+        reversible?: boolean | null
+        externalImpact?: boolean | null
+        riskLevel?: DecisionRiskLevel | null
+      }
+  )
+
+type DecisionTransitionInputCommon = {
   schemaVersion: 1
   idempotencyKey: string
-  toStatus: Exclude<DecisionStatus, "unknown">
-  kind: Exclude<DecisionTransitionKind, "created" | "historical_imported">
   reason: string
   actorId: string
 }
 
-export type DecisionTransition = {
+export type DecisionTransitionAppendInput =
+  DecisionTransitionInputCommon
+  & (
+    | {
+        toStatus: "awaiting_approval"
+        kind: "submitted_for_approval"
+        finalDecision?: null
+        decidedAt?: null
+      }
+    | {
+        toStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+        kind: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+        finalDecision: string
+        decidedAt?: number
+      }
+  )
+
+type DecisionTransitionCommon = {
   schemaVersion: 1
   id: string
   decisionId: string
   sequence: number
   fromStatus: DecisionStatus | null
-  toStatus: DecisionStatus
-  kind: DecisionTransitionKind
   reason: string
   actorId: string
   createdAt: number
 }
+
+export type DecisionTransition =
+  DecisionTransitionCommon
+  & (
+    | {
+        toStatus: "unknown" | "proposed" | "awaiting_approval"
+        kind: "created" | "historical_imported" | "submitted_for_approval"
+        finalDecision: null
+        decidedAt: null
+      }
+    | {
+        toStatus: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+        kind: "accepted" | "executed" | "overridden" | "failed" | "rolled_back"
+        finalDecision: string
+        decidedAt: number
+      }
+  )
 
 export type DecisionDispatchStatus = "committed" | "claimed" | "completed" | "failed"
 
