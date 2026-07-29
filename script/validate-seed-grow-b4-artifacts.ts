@@ -52,7 +52,12 @@ export async function validateSeedGrowB4Artifacts() {
     project.workProjectionAvailability !== "available" ||
     project.independentAgents !== true ||
     !Array.isArray(project.realProviderCalls) ||
-    project.realProviderCalls.length !== 2
+    !project.realProviderCalls.some(
+      (request) => record(request, "B4 provider request").kind === "wayfinder",
+    ) ||
+    !project.realProviderCalls.some(
+      (request) => record(request, "B4 provider request").kind === "builder",
+    )
   )
     throw new Error("B4 Seed Pair project result is incomplete.")
 
@@ -62,6 +67,7 @@ export async function validateSeedGrowB4Artifacts() {
     "seedPairVisible",
     "assignmentReasonAndSourceRefs",
     "graphValidationDiagnostics",
+    "eventAfterDOMConverged",
     "sseReconnected",
     "refreshConverged",
   ])
@@ -82,8 +88,10 @@ export async function validateSeedGrowB4Artifacts() {
     "productionWebUIProjectionConverged",
     "seedPairVisible",
     "assignmentEvidenceVisible",
+    "diagnosticsVisible",
   ])
     if (desktop[key] !== true) throw new Error(`B4 Desktop check failed: ${key}`)
+  allTrue(desktop.accessibility, "B4 Desktop accessibility")
   if (
     Object.values(record(desktop.projectionStatuses, "B4 Desktop projection statuses")).some((status) => status !== 200)
   )

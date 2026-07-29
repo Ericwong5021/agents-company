@@ -4,6 +4,7 @@ import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 import sharp from "sharp"
+import { createControlPlaneClient } from "../packages/sdk/js/src/v2/client"
 import { validateSeedGrowB4Artifacts } from "./validate-seed-grow-b4-artifacts"
 
 const root = path.resolve(import.meta.dir, "..")
@@ -192,6 +193,29 @@ async function json<T>(url: string, init?: RequestInit) {
   if (!response.ok)
     throw new Error(`${init?.method ?? "GET"} ${url} returned ${response.status}: ${await response.text()}`)
   return (await response.json()) as T
+}
+
+async function sdkValue<T>(
+  label: string,
+  request: Promise<{ data?: T; error?: unknown; response: Response }>,
+) {
+  const result = await request
+  if (result.data !== undefined) return result.data
+  throw new Error(`${label} returned ${result.response.status}: ${JSON.stringify(result.error)}`)
+}
+
+async function screenReaderGate(
+  page: { locator: (selector: string) => { ariaSnapshot: () => Promise<string> } },
+  required: string[],
+  label: string,
+) {
+  const snapshot = await page.locator("body").ariaSnapshot()
+  const missing = required.filter((token) => !snapshot.includes(token))
+  if (missing.length) throw new Error(`${label} accessibility tree is missing: ${missing.join(", ")}`)
+  return {
+    captured: true,
+    sha256: crypto.createHash("sha256").update(snapshot).digest("hex"),
+  }
 }
 
 function assertReadiness(readiness: { ready?: boolean; checks?: Array<{ status?: string }> }, message: string) {
@@ -411,6 +435,15 @@ const providerURL = `http://127.0.0.1:${providerServer.port}`
 const controlPlaneURL = `http://127.0.0.1:${controlPlanePort}`
 const controlPlaneProxyURL = `http://127.0.0.1:${controlPlaneProxyPort}`
 const webUIURL = `http://127.0.0.1:${webUIPort}`
+const controlPlaneClient = createControlPlaneClient({
+  baseUrl: controlPlaneURL,
+  fetch: (input, init) => {
+    const request = new Request(input, init)
+    return fetch(new Request(request, {
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
+    }))
+  },
+})
 let projectionFault: "none" | "delay" | "error" = "none"
 let releaseProjectionDelay = () => undefined
 let projectionDelayGate = Promise.resolve()
@@ -587,8 +620,13 @@ try {
   })
   const page = await context.newPage()
   let eventStreamRequests = 0
+  const coordinatedRequests = { detail: 0, seedGrow: 0, messages: 0 }
   page.on("request", (request: { url: () => string }) => {
-    if (new URL(request.url()).pathname === "/api/agent-company/events") eventStreamRequests += 1
+    const pathname = new URL(request.url()).pathname
+    if (pathname === "/api/agent-company/events") eventStreamRequests += 1
+    if (/^\/api\/agent-company\/projects\/[^/]+$/.test(pathname)) coordinatedRequests.detail += 1
+    if (/^\/api\/agent-company\/projects\/[^/]+\/seed-grow$/.test(pathname)) coordinatedRequests.seedGrow += 1
+    if (/^\/api\/agent-company\/projects\/[^/]+\/messages$/.test(pathname)) coordinatedRequests.messages += 1
   })
   await page.goto(`${webUIURL}/login`, { waitUntil: "domcontentloaded" })
   await page.waitForURL((url: URL) => url.pathname === "/inbox", { timeout: 60_000 })
@@ -602,13 +640,9 @@ try {
   await page.getByRole("heading", { name: "Work", exact: true }).waitFor({ state: "visible" })
   await page.getByRole("heading", { name: "还没有可展示的工作", exact: true }).waitFor({ state: "visible" })
 
-  const started = await json<{
-    project?: { id?: string; execution_strategy?: string; seed_mode?: string }
-    run_id?: string
-  }>(`${controlPlaneURL}/company-project`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+  const started = await sdkValue(
+    "SDK companyProject.start",
+    controlPlaneClient.companyProject.start({
       title: projectTitle,
       goal: projectGoal,
       provider_id: providerID,
@@ -626,7 +660,7 @@ try {
         slice_candidates: [firstSlice],
       },
     }),
-  })
+  )
   if (
     typeof started.project?.id !== "string" ||
     started.project.execution_strategy !== "seed_and_grow" ||
@@ -637,7 +671,7 @@ try {
   const projectID = started.project.id
   const detail = await waitForValue(
     () =>
-      json<{
+      sdkValue<{
         project?: { id?: string; status?: string; execution_strategy?: string; seed_mode?: string }
         work_items?: Array<{
           id?: string
@@ -648,7 +682,7 @@ try {
           status?: string
         }>
         work_receipts?: Array<{ outcome?: string; summary?: string; unknowns?: string[] }>
-      }>(`${controlPlaneURL}/company-project/${encodeURIComponent(projectID)}`),
+      }>("SDK companyProject.get", controlPlaneClient.companyProject.get({ projectID })),
     (value) => value.project?.status === "completed",
     120_000,
     "Seed Pair did not complete through the real provider",
@@ -789,6 +823,60 @@ try {
     await page.getByText("状态不可用", { exact: true }).first().waitFor({ state: "visible" })
     uncovered.push("Work cannot render Wayfinder, Builder, Graph, Validation, diagnostics, or Assignment source trace.")
   }
+  const browserWorkScreenReader = await screenReaderGate(
+    page,
+    [
+      `heading "${projectTitle}"`,
+      'tab "诊断" [selected]',
+      "tabpanel",
+      'heading "运行时与能力证据"',
+      'heading "执行尝试与回执"',
+    ],
+    "Browser Work diagnostics",
+  )
+  const companyState = asRecord(
+    await sdkValue<unknown>("SDK company.current", controlPlaneClient.company.current()),
+    "SDK company state is invalid.",
+  )
+  const company = asRecord(companyState.company, "SDK company identity is invalid.")
+  if (typeof company.id !== "string") throw new Error("SDK company ID is invalid.")
+  const channels = await sdkValue<unknown>(
+    "SDK company.channels",
+    controlPlaneClient.company.channels({ company_id: company.id }),
+  )
+  const projectChannel = Array.isArray(channels)
+    ? channels
+        .map((channel) => asRecord(channel, "SDK company channel is invalid."))
+        .find((channel) => channel.kind === "project" && channel.scopeID === projectID)
+    : undefined
+  if (!projectChannel || typeof projectChannel.id !== "string")
+    throw new Error("SDK project channel is unavailable.")
+  const beforeCoordinatedRequests = { ...coordinatedRequests }
+  const convergenceMessage = "B4 事件后 DOM 协同刷新已收敛"
+  await sdkValue(
+    "SDK company.channelSend",
+    controlPlaneClient.company.channelSend({
+      channelID: projectChannel.id,
+      company_id: company.id,
+      channelSendInput: {
+        request_id: crypto.randomUUID(),
+        body: convergenceMessage,
+        mentions: [],
+      },
+    }),
+  )
+  await waitForValue(
+    async () => ({ ...coordinatedRequests }),
+    (value) =>
+      value.detail > beforeCoordinatedRequests.detail &&
+      value.seedGrow > beforeCoordinatedRequests.seedGrow &&
+      value.messages > beforeCoordinatedRequests.messages,
+    30_000,
+    "SSE did not coordinate project detail, Seed-and-Grow, and message refresh",
+  )
+  await page.getByRole("tab", { name: "讨论", exact: true }).click()
+  await page.getByText(convergenceMessage, { exact: true }).waitFor({ state: "visible", timeout: 30_000 })
+  const browserEventAfterDOMConverged = true
 
   await page.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
   await page.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
@@ -814,6 +902,11 @@ try {
   } else {
     uncovered.push("Team omits Assignment evidence because organization-list excludes unavailable Work projections.")
   }
+  const browserTeamScreenReader = await screenReaderGate(
+    page,
+    ['heading "Team"', "Assignment evidence", "查看选择事实", "evidence analyst"],
+    "Browser Team",
+  )
 
   const directBefore = await Promise.all([
     json<unknown>(`${controlPlaneURL}/experience/work/${encodeURIComponent(projectID)}`),
@@ -1065,6 +1158,46 @@ try {
     (target) => target.type === "page" && target.url?.startsWith(webUIURL) && new URL(target.url).pathname === "/inbox",
   )
   if (!desktopTarget?.url) throw new Error("Desktop authenticated Company target is unavailable.")
+  const desktopBrowser = await chromium.connectOverCDP(`http://127.0.0.1:${desktopDebugPort}`)
+  const desktopRenderer = desktopBrowser
+    .contexts()
+    .flatMap((desktopContext) => desktopContext.pages())
+    .find((candidate) => candidate.url().startsWith(webUIURL))
+  if (!desktopRenderer) throw new Error("Desktop native renderer page is unavailable.")
+  await desktopRenderer.goto(`${webUIURL}/work/${encodeURIComponent(projectID)}`, { waitUntil: "domcontentloaded" })
+  await desktopRenderer.getByRole("heading", { name: projectTitle, exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByRole("heading", { name: "动态组织进展", exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByText("Wayfinder", { exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByText("First slice", { exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByRole("tab", { name: "诊断", exact: true }).click()
+  await desktopRenderer.getByText("Graph revision", { exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByRole("heading", { name: "执行尝试与回执", exact: true }).waitFor({ state: "visible" })
+  const desktopWorkScreenReader = await screenReaderGate(
+    desktopRenderer,
+    [
+      `heading "${projectTitle}"`,
+      'tab "诊断" [selected]',
+      "tabpanel",
+      'heading "执行尝试与回执"',
+    ],
+    "Desktop Work diagnostics",
+  )
+  const desktopSeedPairVisible = true
+  await desktopRenderer.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
+  await desktopRenderer.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
+  await desktopRenderer.getByText("Assignment evidence", { exact: true }).first().waitFor({ state: "visible" })
+  await desktopRenderer.getByText("加入原因", { exact: true }).first().waitFor({ state: "visible" })
+  const desktopTrace = desktopRenderer.getByText("查看选择事实", { exact: true }).first()
+  await desktopTrace.focus()
+  await desktopTrace.press("Enter")
+  if ((await desktopTrace.locator("..").locator("li").count()) === 0)
+    throw new Error("Desktop native Team Assignment sourceRefs are not visible.")
+  const desktopTeamScreenReader = await screenReaderGate(
+    desktopRenderer,
+    ['heading "Team"', "Assignment evidence", "查看选择事实", "evidence analyst"],
+    "Desktop Team",
+  )
+  const desktopAssignmentEvidenceVisible = true
   const desktopSnapshotResponse = await context.request.get(`${webUIURL}/api/agent-company/snapshot`)
   if (!desktopSnapshotResponse.ok())
     throw new Error(`Desktop-backed WebUI snapshot returned ${desktopSnapshotResponse.status()}.`)
@@ -1144,6 +1277,7 @@ try {
         body: desktopSeedGrowBody,
       })}`,
     )
+  await desktopBrowser.close()
   await terminate(desktop)
   desktop = undefined
   if (!(await portClosed(`${controlPlaneURL}/global/health`)))
@@ -1178,6 +1312,7 @@ try {
       seedPairVisible: workProjectionAvailable,
       assignmentReasonAndSourceRefs: workProjectionAvailable && teamAssignmentVisible,
       graphValidationDiagnostics: workProjectionAvailable,
+      eventAfterDOMConverged: browserEventAfterDOMConverged,
       eventSourceRequests: eventStreamRequests,
       sseReconnected: true,
       refreshConverged: true,
@@ -1193,6 +1328,12 @@ try {
         contextTabsKeyboard: workProjectionAvailable,
         tabpanelRelationship: workProjectionAvailable,
         sourceTraceKeyboard: workProjectionAvailable && teamAssignmentVisible,
+        workAccessibilityTree: browserWorkScreenReader.captured,
+        teamAccessibilityTree: browserTeamScreenReader.captured,
+      },
+      accessibilityTreeDigests: {
+        work: browserWorkScreenReader.sha256,
+        team: browserTeamScreenReader.sha256,
       },
     },
     desktop: {
@@ -1205,8 +1346,17 @@ try {
         desktopDirectResponses.map((response) => [response.name, response.status]),
       ),
       rendererURL: desktopTarget.url,
-      seedPairVisible: workProjectionAvailable,
-      assignmentEvidenceVisible: teamAssignmentVisible,
+      seedPairVisible: desktopSeedPairVisible,
+      assignmentEvidenceVisible: desktopAssignmentEvidenceVisible,
+      diagnosticsVisible: desktopSeedPairVisible,
+      accessibility: {
+        workAccessibilityTree: desktopWorkScreenReader.captured,
+        teamAccessibilityTree: desktopTeamScreenReader.captured,
+      },
+      accessibilityTreeDigests: {
+        work: desktopWorkScreenReader.sha256,
+        team: desktopTeamScreenReader.sha256,
+      },
     },
     screenshotDiff: deterministicScreenshot,
     visualQA: "pass",
