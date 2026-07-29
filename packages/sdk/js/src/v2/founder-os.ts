@@ -1517,19 +1517,7 @@ export type FounderBoardGovernanceProjection = {
   authorization: { status: "authorized" | "not_confirmed" | "unavailable"; canRaiseModeFromUI: false }
   convergences: FounderAdvisorConvergence[]
   interventions: FounderIntervention[]
-  decisions: Array<{
-    id: string
-    subject: string | null
-    recommendation: string | null
-    finalDecision: string | null
-    authorityClass: FounderAuthorityClass | null
-    confidence: number | null
-    principleRefs: FounderAssetReference[] | null
-    decisionCaseRefs: FounderAssetReference[] | null
-    evidenceRefs: FounderEvidenceReference[] | null
-    currentStatus: string
-    createdAt: number
-  }>
+  decisions: DecisionRecord[]
   shadow: FounderBoardShadowProjection
   assets: GovernanceAsset[]
   readOnlyEvidence: true
@@ -1548,8 +1536,19 @@ export type FounderControlCenterProjection = {
     confirmedCalibrations: number
     takeoverEvents: number
   }
+  todayDelegatedDecisions: DecisionRecord[]
+  yellowSummaries: FounderYellowSummary[]
+  redPendingDecisions: DecisionRecord[]
+  overrideRecords: FounderCorrectionRecord[]
+  calibrationTrend: {
+    pending: number
+    responded: number
+    accepted: number
+    rejected: number
+    preferences: number
+  }
   recentInterventions: FounderIntervention[]
-  recentDecisions: FounderBoardGovernanceProjection["decisions"]
+  recentDecisions: DecisionRecord[]
 }
 
 export function createFounderAdvisorClient(config: FounderStudioClientConfig) {

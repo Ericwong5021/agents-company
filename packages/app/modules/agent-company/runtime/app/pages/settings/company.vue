@@ -159,6 +159,27 @@ async function loadFounderControl() {
   controlLoading.value = false
 }
 
+function founderDecisionTitle(
+  decision: FounderControlCenterProjection["todayDelegatedDecisions"][number],
+) {
+  return decision.subject ?? decision.finalDecision ?? decision.recommendation ?? decision.id
+}
+
+function founderDecisionSummary(
+  decision: FounderControlCenterProjection["todayDelegatedDecisions"][number],
+) {
+  return decision.finalDecision ?? decision.recommendation ?? decision.context ?? "尚无决定摘要"
+}
+
+function founderControlTime(timestamp: number) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(timestamp)
+}
+
 async function loadFounderModes() {
   if (!snapshot.value.company.id || modeLoading.value) return
   modeLoading.value = true
@@ -693,28 +714,158 @@ async function saveProvider() {
                 <dd>{{ founderControl?.mode.effective.founderTwinMode ?? "off" }}</dd>
               </div>
               <div>
-                <dt>待处理决定</dt>
-                <dd>{{ founderControl?.pending.proposedDecisions ?? 0 }}</dd>
+                <dt>今日代理决定</dt>
+                <dd>{{ founderControl?.todayDelegatedDecisions.length ?? 0 }}</dd>
+              </div>
+              <div>
+                <dt>最近黄灯摘要</dt>
+                <dd>{{ founderControl?.yellowSummaries.length ?? 0 }}</dd>
               </div>
               <div>
                 <dt>红灯待办</dt>
-                <dd>{{ founderControl?.pending.redDecisions ?? 0 }}</dd>
+                <dd>{{ founderControl?.redPendingDecisions.length ?? 0 }}</dd>
               </div>
               <div>
-                <dt>停止失败</dt>
-                <dd>{{ founderControl?.pending.failedStops ?? 0 }}</dd>
+                <dt>最近推翻记录</dt>
+                <dd>{{ founderControl?.overrideRecords.length ?? 0 }}</dd>
               </div>
               <div>
-                <dt>Shadow 对比</dt>
-                <dd>{{ founderControl?.trends.shadowComparisons ?? 0 }}</dd>
-              </div>
-              <div>
-                <dt>真实接管</dt>
-                <dd>{{ founderControl?.trends.takeoverEvents ?? 0 }}</dd>
+                <dt>校准进度</dt>
+                <dd>
+                  {{ founderControl?.calibrationTrend.responded ?? 0 }}
+                  / {{ (founderControl?.calibrationTrend.responded ?? 0) + (founderControl?.calibrationTrend.pending ?? 0) }}
+                </dd>
               </div>
             </dl>
 
-            <NuxtLink to="/company/board" class="company-text-link">打开董事会治理承载面</NuxtLink>
+            <div class="mt-5 grid gap-x-6 gap-y-5 lg:grid-cols-2">
+              <div class="min-w-0 border-t border-default pt-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-xs font-semibold text-highlighted">今日代理决定</h3>
+                  <span class="ac-studio-status">{{ founderControl?.todayDelegatedDecisions.length ?? 0 }}</span>
+                </div>
+                <div v-if="founderControl?.todayDelegatedDecisions.length" class="ac-founder-studio-list">
+                  <article
+                    v-for="decision in founderControl.todayDelegatedDecisions.slice(0, 5)"
+                    :key="decision.id"
+                  >
+                    <div>
+                      <strong>{{ founderDecisionTitle(decision) }}</strong>
+                      <span>{{ decision.authorityClass ?? "未分类" }} · {{ decision.currentStatus }}</span>
+                    </div>
+                    <p>{{ founderDecisionSummary(decision) }}</p>
+                    <small>{{ founderControlTime(decision.createdAt) }}</small>
+                  </article>
+                </div>
+                <p v-else class="company-provider-form__message">今天尚无创始人代理决定。</p>
+              </div>
+
+              <div class="min-w-0 border-t border-default pt-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-xs font-semibold text-highlighted">黄灯摘要</h3>
+                  <span class="ac-studio-status">{{ founderControl?.yellowSummaries.length ?? 0 }}</span>
+                </div>
+                <div v-if="founderControl?.yellowSummaries.length" class="ac-founder-studio-list">
+                  <article
+                    v-for="summary in founderControl.yellowSummaries.slice(0, 5)"
+                    :key="summary.runId"
+                  >
+                    <div>
+                      <strong>{{ summary.status }}</strong>
+                      <span>{{ summary.cost.actual }} / {{ summary.cost.limit }} receipt</span>
+                    </div>
+                    <p>
+                      {{ summary.failClosedReasons.length
+                        ? summary.failClosedReasons.join("；")
+                        : `${summary.workItemIds.length} 个工作项，${summary.outcomeIds.length} 个 Outcome` }}
+                    </p>
+                    <small>{{ founderControlTime(summary.updatedAt) }}</small>
+                  </article>
+                </div>
+                <p v-else class="company-provider-form__message">尚无黄灯执行摘要。</p>
+              </div>
+
+              <div class="min-w-0 border-t border-default pt-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-xs font-semibold text-highlighted">红灯待办</h3>
+                  <span class="ac-studio-status">{{ founderControl?.redPendingDecisions.length ?? 0 }}</span>
+                </div>
+                <div v-if="founderControl?.redPendingDecisions.length" class="ac-founder-studio-list">
+                  <article
+                    v-for="decision in founderControl.redPendingDecisions.slice(0, 5)"
+                    :key="decision.id"
+                  >
+                    <div>
+                      <strong>{{ founderDecisionTitle(decision) }}</strong>
+                      <span>{{ decision.currentStatus }}</span>
+                    </div>
+                    <p>{{ founderDecisionSummary(decision) }}</p>
+                    <small>{{ founderControlTime(decision.createdAt) }}</small>
+                  </article>
+                </div>
+                <p v-else class="company-provider-form__message">当前没有待处理红灯决定。</p>
+              </div>
+
+              <div class="min-w-0 border-t border-default pt-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-xs font-semibold text-highlighted">推翻记录</h3>
+                  <span class="ac-studio-status">{{ founderControl?.overrideRecords.length ?? 0 }}</span>
+                </div>
+                <div v-if="founderControl?.overrideRecords.length" class="ac-founder-studio-list">
+                  <article
+                    v-for="record in founderControl.overrideRecords.slice(0, 5)"
+                    :key="record.id"
+                  >
+                    <div>
+                      <strong>{{ record.humanDecision }}</strong>
+                      <span>{{ record.actorId }}</span>
+                    </div>
+                    <p>{{ record.reason }}</p>
+                    <small>{{ founderControlTime(record.createdAt) }}</small>
+                  </article>
+                </div>
+                <p v-else class="company-provider-form__message">尚无人工推翻记录。</p>
+              </div>
+
+              <div class="min-w-0 border-t border-default pt-4 lg:col-span-2">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-xs font-semibold text-highlighted">校准趋势</h3>
+                  <span class="ac-studio-status">
+                    {{ founderControl?.trends.confirmedCalibrations ?? 0 }} confirmed
+                  </span>
+                </div>
+                <dl>
+                  <div>
+                    <dt>待校准</dt>
+                    <dd>{{ founderControl?.calibrationTrend.pending ?? 0 }}</dd>
+                  </div>
+                  <div>
+                    <dt>已回应</dt>
+                    <dd>{{ founderControl?.calibrationTrend.responded ?? 0 }}</dd>
+                  </div>
+                  <div>
+                    <dt>接受 / 拒绝</dt>
+                    <dd>
+                      {{ founderControl?.calibrationTrend.accepted ?? 0 }}
+                      / {{ founderControl?.calibrationTrend.rejected ?? 0 }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>A/B 偏好</dt>
+                    <dd>{{ founderControl?.calibrationTrend.preferences ?? 0 }}</dd>
+                  </div>
+                  <div>
+                    <dt>Shadow 匹配 / 推翻</dt>
+                    <dd>
+                      {{ founderControl?.trends.shadowComparisons ?? 0 }}
+                      / {{ founderControl?.trends.shadowOverrides ?? 0 }}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+
+            <NuxtLink to="/company/board" class="company-text-link mt-5 inline-block">打开董事会治理承载面</NuxtLink>
           </section>
 
           <section class="company-settings-section">

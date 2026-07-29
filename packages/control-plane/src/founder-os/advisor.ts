@@ -38,7 +38,7 @@ import {
   appendDecisionInTransaction,
   appendDecisionTransitionInTransaction,
 } from "./decision-ledger"
-import { DecisionCurrentProjectionTable } from "./decision-ledger.sql"
+import { DecisionCurrentProjectionTable, FounderCorrectionTable } from "./decision-ledger.sql"
 import {
   FounderAdvisorConvergenceEventTable,
   FounderAdvisorConvergenceTable,
@@ -52,6 +52,9 @@ import {
   FounderShadowComparisonTable,
   FounderShadowDecisionTable,
 } from "./shadow.sql"
+import { calibrationItems } from "./taste"
+import { yellowSummaryFromRow } from "./yellow-projection"
+import { FounderYellowRunTable } from "./yellow.sql"
 import * as FounderAdvisorReadiness from "./advisor-readiness"
 import * as FounderOSMode from "./mode"
 
@@ -821,6 +824,7 @@ export function controlCenter(input: {
   decisions: DecisionRecord[]
 }) {
   const events = interventions(input.companyId)
+  const recentDecisions = input.decisions.toReversed()
   const advisorMode = ["advisor", "green-delegated", "yellow-delegated"].includes(
     input.modes.effective.founderTwinMode,
   ) && FounderAdvisorReadiness.readiness(input.companyId).status === "ready"
@@ -836,6 +840,47 @@ export function controlCenter(input: {
       .where(eq(FounderShadowComparisonTable.company_id, input.companyId))
       .all(),
   )
+  const yellowSummaries = Database.use((db) =>
+    db
+      .select()
+      .from(FounderYellowRunTable)
+      .where(eq(FounderYellowRunTable.company_id, input.companyId))
+      .orderBy(desc(FounderYellowRunTable.created_at), desc(FounderYellowRunTable.id))
+      .limit(20)
+      .all()
+      .map((row) => yellowSummaryFromRow(db, row)),
+  )
+  const overrideRecords = Database.use((db) =>
+    db
+      .select()
+      .from(FounderCorrectionTable)
+      .where(and(
+        eq(FounderCorrectionTable.company_id, input.companyId),
+        eq(FounderCorrectionTable.kind, "override"),
+      ))
+      .orderBy(desc(FounderCorrectionTable.created_at), desc(FounderCorrectionTable.id))
+      .limit(20)
+      .all()
+      .map((row) => ({
+        schemaVersion: 1,
+        id: row.id,
+        decisionId: row.decision_id,
+        kind: row.kind,
+        originalDecision: row.original_decision,
+        humanDecision: row.human_decision,
+        reason: row.reason,
+        proposedAssetUpdates: JSON.parse(row.proposed_asset_updates_json),
+        actorKind: "human",
+        actorId: row.actor_id,
+        createdAt: row.created_at,
+      })),
+  )
+  const calibrations = calibrationItems(input.companyId)
+  const todayStartedAt = new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+  const redPendingDecisions = recentDecisions.filter((decision) =>
+    decision.authorityClass === "red"
+    && (decision.currentStatus === "proposed" || decision.currentStatus === "awaiting_approval"),
+  ).slice(0, 100)
   return FounderControlCenterProjection.parse({
     schemaVersion: 1,
     companyId: input.companyId,
@@ -869,7 +914,24 @@ export function controlCenter(input: {
       ).length,
       takeoverEvents: events.filter((event) => event.kind === "takeover").length,
     },
+    todayDelegatedDecisions: recentDecisions.filter((decision) =>
+      decision.recordOrigin === "live"
+      && decision.decisionMaker === "ai_founder"
+      && decision.createdAt >= todayStartedAt
+    ).slice(0, 100),
+    yellowSummaries,
+    redPendingDecisions,
+    overrideRecords,
+    calibrationTrend: {
+      pending: calibrations.filter((item) => item.status === "pending").length,
+      responded: calibrations.filter((item) => item.status === "responded").length,
+      accepted: calibrations.filter((item) => item.response === "accept").length,
+      rejected: calibrations.filter((item) => item.response === "reject").length,
+      preferences: calibrations.filter((item) =>
+        item.response === "prefer_first" || item.response === "prefer_second"
+      ).length,
+    },
     recentInterventions: events.slice(0, 20),
-    recentDecisions: input.decisions.toReversed().slice(0, 20),
+    recentDecisions: recentDecisions.slice(0, 20),
   })
 }

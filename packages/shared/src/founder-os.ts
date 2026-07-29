@@ -1720,6 +1720,19 @@ export const FounderControlCenterProjection = z
         takeoverEvents: z.number().int().nonnegative(),
       })
       .strict(),
+    todayDelegatedDecisions: z.array(DecisionRecord).max(100),
+    yellowSummaries: z.array(z.lazy(() => FounderYellowSummary)).max(20),
+    redPendingDecisions: z.array(DecisionRecord).max(100),
+    overrideRecords: z.array(FounderCorrectionRecord).max(20),
+    calibrationTrend: z
+      .object({
+        pending: z.number().int().nonnegative(),
+        responded: z.number().int().nonnegative(),
+        accepted: z.number().int().nonnegative(),
+        rejected: z.number().int().nonnegative(),
+        preferences: z.number().int().nonnegative(),
+      })
+      .strict(),
     recentInterventions: z.array(FounderIntervention).max(20),
     recentDecisions: z.array(DecisionRecord).max(20),
   })
