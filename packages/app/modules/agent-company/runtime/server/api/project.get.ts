@@ -1,9 +1,11 @@
 import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
-import { ofetch } from "ofetch"
 import type { CompanyProjectDetail } from "../../shared/company-contract"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
-import { controlPlaneURL } from "../utils/control-plane-client"
+import {
+  controlPlaneSDK,
+  requestControlPlaneSDK,
+} from "../utils/control-plane-client"
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -30,24 +32,31 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
   if (!projectID) throw createError({ statusCode: 400, statusMessage: "Project ID is required" })
 
   const config = useRuntimeConfig(event)
-  const baseURL = controlPlaneURL(config.agentCompanyControlPlaneUrl)
-  if (!baseURL) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
-  const headers = config.agentCompanyControlPlaneAuthorization
-    ? { authorization: config.agentCompanyControlPlaneAuthorization }
-    : undefined
-  const request = (path: string) => ofetch<unknown>(new URL(path, baseURL).toString(), { headers })
-  const state = await request("/company")
+  const client = controlPlaneSDK(
+    config.agentCompanyControlPlaneUrl,
+    config.agentCompanyControlPlaneAuthorization || undefined,
+  )
+  if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
+  const stateResult = await requestControlPlaneSDK<unknown>(client.company.current())
+  if (!stateResult.ok) throw createError({ statusCode: 503, statusMessage: "Company is not ready" })
+  const state = stateResult.value
   if (!record(state) || !record(state.company) || typeof state.company.id !== "string") {
     throw createError({ statusCode: 503, statusMessage: "Company is not ready" })
   }
 
-  const [raw, recruitmentRaw, agentsRaw] = await Promise.all([
-    request(`/company-project/${encodeURIComponent(projectID)}`),
-    request(
-      `/company/recruitment?company_id=${encodeURIComponent(state.company.id)}&project_id=${encodeURIComponent(projectID)}`,
+  const [rawResult, recruitmentResult, agentsResult, attemptsResult, receiptsResult] = await Promise.all([
+    requestControlPlaneSDK<unknown>(client.companyProject.get({ projectID })),
+    requestControlPlaneSDK<unknown>(
+      client.company.recruitment.snapshot({ company_id: state.company.id, project_id: projectID }),
     ),
-    request(`/company/agents?company_id=${encodeURIComponent(state.company.id)}`),
+    requestControlPlaneSDK<unknown>(client.company.agents({ company_id: state.company.id })),
+    requestControlPlaneSDK<unknown>(client.companyProject.attempts({ projectID })),
+    requestControlPlaneSDK<unknown>(client.companyProject.receipts({ projectID })),
   ])
+  if (!rawResult.ok) throw createError({ statusCode: 404, statusMessage: "Project was not found" })
+  const raw = rawResult.value
+  const recruitmentRaw = recruitmentResult.ok ? recruitmentResult.value : {}
+  const agentsRaw = agentsResult.ok ? agentsResult.value : []
   if (!record(raw) || !record(raw.project)) {
     throw createError({ statusCode: 404, statusMessage: "Project was not found" })
   }
@@ -99,6 +108,10 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
         typeof raw.project.graph_revision === "number" && Number.isInteger(raw.project.graph_revision)
           ? raw.project.graph_revision
           : undefined,
+      activePlanVersion:
+        typeof raw.project.active_plan_version === "number" && Number.isInteger(raw.project.active_plan_version)
+          ? raw.project.active_plan_version
+          : undefined,
     },
     charter: charter
       ? {
@@ -144,6 +157,69 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       kind: text(gate.kind),
       status: text(gate.status),
     })),
+    workAttempts: records(attemptsResult.ok ? attemptsResult.value : raw.work_attempts).map((attempt) => ({
+      id: text(attempt.id),
+      workItemID: text(attempt.work_item_id),
+      agentRunID: text(attempt.agent_run_id) || undefined,
+      ordinal: number(attempt.ordinal),
+      status: text(attempt.status),
+      failureKind: text(attempt.failure_kind) || undefined,
+      summary: text(attempt.safe_summary) || undefined,
+      startedAt: number(attempt.started_at),
+      finishedAt: typeof attempt.finished_at === "number" ? attempt.finished_at : undefined,
+    })),
+    workReceipts: records(receiptsResult.ok ? receiptsResult.value : raw.work_receipts).map((receipt) => ({
+      id: text(receipt.id),
+      workItemID: text(receipt.work_item_id),
+      attemptID: text(receipt.attempt_id),
+      outcome: text(receipt.outcome),
+      summary: text(receipt.summary),
+      processingStatus: text(receipt.processing_status),
+      artifactIDs: list(receipt.artifact_ids),
+      evidenceRefs: records(receipt.evidence_refs).map((reference) => ({
+        kind: text(reference.kind),
+        id: text(reference.id),
+      })),
+      confirmedFacts: list(receipt.confirmed_facts),
+      unknowns: list(receipt.unknowns),
+      blockers: list(receipt.blockers),
+      capabilityGaps: list(receipt.capability_gaps),
+      createdAt: number(receipt.created_at),
+      processedAt: typeof receipt.processed_at === "number" ? receipt.processed_at : undefined,
+    })),
+    agentRuns: records(raw.agent_runs).map((run) => ({
+      id: text(run.id),
+      agentID: text(run.agentID),
+      workItemID: text(run.workItemID) || undefined,
+      runtime: text(run.runtime),
+      runtimeVersion: text(run.runtimeVersion) || undefined,
+      capabilityChecksum: text(run.capabilityChecksum) || undefined,
+      model: text(run.model) || undefined,
+      state: text(run.state),
+      permissionMode: text(run.permissionMode),
+      safeErrorSummary: text(run.safeErrorSummary) || undefined,
+      startedAt: record(run.time) && typeof run.time.started === "number" ? run.time.started : undefined,
+      finishedAt: record(run.time) && typeof run.time.finished === "number" ? run.time.finished : undefined,
+    })),
+    usage: record(raw.usage) && record(raw.usage.observedTokens)
+      ? {
+          runCount: number(raw.usage.runCount),
+          total: number(raw.usage.observedTokens.total),
+          input: number(raw.usage.observedTokens.input),
+          output: number(raw.usage.observedTokens.output),
+          reasoning: number(raw.usage.observedTokens.reasoning),
+          cacheRead: number(raw.usage.observedTokens.cacheRead),
+          cacheWrite: number(raw.usage.observedTokens.cacheWrite),
+          cost: number(raw.usage.observedTokens.cost),
+          workItems: records(raw.usage.workItems).map((item) => ({
+            workItemID: text(item.workItemID),
+            runIDs: list(item.runIDs),
+            models: list(item.models),
+            total: record(item.observedTokens) ? number(item.observedTokens.total) : 0,
+            cost: record(item.observedTokens) ? number(item.observedTokens.cost) : 0,
+          })),
+        }
+      : undefined,
     recruitment: {
       needs: records(recruitment.needs).map((need) => ({
         id: text(need.id),

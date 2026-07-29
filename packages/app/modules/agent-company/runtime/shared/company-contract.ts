@@ -118,6 +118,15 @@ export type CompanyMessage = {
   threadID?: string
 }
 
+export type CompanyProjectMessage = {
+  id: string
+  author: string
+  body: string
+  createdAt: number
+  signalType?: string
+  sourceThreadID?: string
+}
+
 export type CompanyProject = {
   id: string
   title: string
@@ -159,6 +168,7 @@ export type CompanyProjectDetail = {
     executionStrategy?: "legacy_full_plan" | "seed_and_grow"
     seedMode?: "seed_pair" | "discovery_first" | "direct_single"
     graphRevision?: number
+    activePlanVersion?: number
   }
   charter?: {
     value: string
@@ -199,6 +209,64 @@ export type CompanyProjectDetail = {
     kind: string
     status: string
   }[]
+  workAttempts: {
+    id: string
+    workItemID: string
+    agentRunID?: string
+    ordinal: number
+    status: string
+    failureKind?: string
+    summary?: string
+    startedAt: number
+    finishedAt?: number
+  }[]
+  workReceipts: {
+    id: string
+    workItemID: string
+    attemptID: string
+    outcome: string
+    summary: string
+    processingStatus: string
+    artifactIDs: string[]
+    evidenceRefs: { kind: string; id: string }[]
+    confirmedFacts: string[]
+    unknowns: string[]
+    blockers: string[]
+    capabilityGaps: string[]
+    createdAt: number
+    processedAt?: number
+  }[]
+  agentRuns: {
+    id: string
+    agentID: string
+    workItemID?: string
+    runtime: string
+    runtimeVersion?: string
+    capabilityChecksum?: string
+    model?: string
+    state: string
+    permissionMode: string
+    safeErrorSummary?: string
+    startedAt?: number
+    finishedAt?: number
+  }[]
+  usage?: {
+    runCount: number
+    total: number
+    input: number
+    output: number
+    reasoning: number
+    cacheRead: number
+    cacheWrite: number
+    cost: number
+    workItems: {
+      workItemID: string
+      runIDs: string[]
+      models: string[]
+      total: number
+      cost: number
+    }[]
+  }
   recruitment: {
     needs: {
       id: string

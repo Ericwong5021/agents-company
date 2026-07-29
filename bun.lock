@@ -27,6 +27,7 @@
       "name": "@agents-company/app",
       "version": "0.1.2",
       "dependencies": {
+        "@agents-company/sdk": "workspace:*",
         "@agents-company/shared": "workspace:*",
         "@comark/nuxt": "^0.5.0",
         "@github-tools/sdk": "^1.7.0",

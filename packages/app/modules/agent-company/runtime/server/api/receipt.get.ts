@@ -5,7 +5,10 @@ import {
 import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
-import { controlPlaneURL, requestControlPlane } from "../utils/control-plane-client"
+import {
+  controlPlaneSDK,
+  requestControlPlaneSDK,
+} from "../utils/control-plane-client"
 
 export default defineAgentCompanyHandler(async (event): Promise<DiscoverySummaryValue> => {
   const projectID = getRouterParam(event, "projectID")
@@ -14,13 +17,13 @@ export default defineAgentCompanyHandler(async (event): Promise<DiscoverySummary
     throw createError({ statusCode: 400, statusMessage: "工作或 Receipt ID 无效" })
 
   const config = useRuntimeConfig(event)
-  if (!controlPlaneURL(config.agentCompanyControlPlaneUrl))
-    throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
-
-  const result = await requestControlPlane<unknown>(
+  const client = controlPlaneSDK(
     config.agentCompanyControlPlaneUrl,
-    `/experience/work/${encodeURIComponent(projectID)}/receipts/${encodeURIComponent(receiptID)}`,
     config.agentCompanyControlPlaneAuthorization || undefined,
+  )
+  if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
+  const result = await requestControlPlaneSDK<unknown>(
+    client.experience.work.receipt({ projectID, receiptID }),
   )
   if (!result.ok) {
     if (result.failure.statusCode === 404)

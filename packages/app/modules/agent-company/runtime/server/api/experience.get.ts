@@ -9,7 +9,10 @@ import {
 import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
-import { controlPlaneURL, requestControlPlane } from "../utils/control-plane-client"
+import {
+  controlPlaneSDK,
+  requestControlPlaneSDK,
+} from "../utils/control-plane-client"
 
 const projections = {
   organization: OrganizationProjection,
@@ -28,13 +31,17 @@ export default defineAgentCompanyHandler(
       throw createError({ statusCode: 404, statusMessage: "体验投影不存在" })
 
     const config = useRuntimeConfig(event)
-    if (!controlPlaneURL(config.agentCompanyControlPlaneUrl))
-      throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
-
-    const result = await requestControlPlane<unknown>(
+    const client = controlPlaneSDK(
       config.agentCompanyControlPlaneUrl,
-      `/experience/work/${encodeURIComponent(projectID)}/${projection}`,
       config.agentCompanyControlPlaneAuthorization || undefined,
+    )
+    if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
+    const result = await requestControlPlaneSDK<unknown>(
+      projection === "organization"
+        ? client.experience.work.organization({ projectID })
+        : projection === "graph"
+          ? client.experience.work.graph({ projectID })
+          : client.experience.work.validation({ projectID }),
     )
     if (!result.ok) {
       if (result.failure.statusCode === 404)

@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import type { GoalBriefProjectView } from "@agents-company/shared/experience"
+import type {
+  AttentionItem,
+  GoalBriefProjectView,
+} from "@agents-company/shared/experience"
 import type {
   CompanyProjectDetail,
+  CompanyProjectMessage,
   SeedGrowProjectExperience,
 } from "../../../modules/agent-company/runtime/shared/company-contract"
 import {
@@ -31,7 +35,7 @@ import { diagnosticsCount } from "../../../modules/agent-company/runtime/shared/
 
 const route = useRoute()
 const appConfig = useAppConfig()
-const { data: snapshot, pending, refresh } = useCompanySnapshot()
+const { data: snapshot, pending, refresh, signalVersion } = useCompanySnapshot()
 const workID = computed(() =>
   Array.isArray(route.params.projectID) ? route.params.projectID[0] : route.params.projectID,
 )
@@ -63,7 +67,12 @@ const goalBrief = computed(() =>
   goalBriefResult.value && "kind" in goalBriefResult.value ? goalBriefResult.value : undefined,
 )
 
-const { data: detailResult, error: detailError } = useFetch<CompanyProjectDetail>(
+const {
+  data: detailResult,
+  status: detailStatus,
+  error: detailError,
+  refresh: refreshDetail,
+} = useFetch<CompanyProjectDetail>(
   () => `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}`,
 )
 const detail = computed(() => detailResult.value ?? undefined)
@@ -77,8 +86,48 @@ const {
   { lazy: true },
 )
 const seedGrow = computed(() => seedGrowResult.value ?? undefined)
+const {
+  data: projectMessages,
+  status: projectMessagesStatus,
+  error: projectMessagesError,
+  refresh: refreshProjectMessages,
+} = useFetch<CompanyProjectMessage[]>(
+  () => `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/messages`,
+  { default: () => [] },
+)
 const seedProject = computed(() => detail.value?.project.executionStrategy === "seed_and_grow")
 const seedGrowPending = computed(() => seedGrowStatus.value === "pending")
+const coordinatedRefreshPending = ref(false)
+const coordinatedRefreshDirty = ref(false)
+
+async function refreshProjectExperience(projectID = workID.value) {
+  if (!projectID) return
+  if (coordinatedRefreshPending.value) {
+    coordinatedRefreshDirty.value = true
+    return
+  }
+  coordinatedRefreshPending.value = true
+  coordinatedRefreshDirty.value = false
+  await Promise.all([
+    refresh(),
+    refreshGoalBrief(),
+    refreshDetail(),
+    refreshSeedGrow(),
+    refreshProjectMessages(),
+  ])
+  coordinatedRefreshPending.value = false
+  if (!coordinatedRefreshDirty.value || workID.value !== projectID) {
+    coordinatedRefreshDirty.value = false
+    return
+  }
+  coordinatedRefreshDirty.value = false
+  await refreshProjectExperience(projectID)
+}
+
+watch(signalVersion, (version, previous) => {
+  if (version <= previous || !workID.value) return
+  void refreshProjectExperience(workID.value)
+})
 
 // DELIV-05：区分 Delivered / Accepted，并用最初的验收标准构建核对清单（逐项状态待后端下发）。
 const deliveryView = computed(() =>
@@ -117,7 +166,11 @@ const panels = computed(() =>
     gates: detail.value?.gates.length ?? 0,
     artifacts: detail.value?.artifacts.length ?? 0,
     agents: detail.value?.recruitment.candidates.length ?? 0,
-    threadAvailable: false,
+    threadAvailable:
+      projectMessagesStatus.value === "pending" ||
+      projectMessagesStatus.value === "success" ||
+      Boolean(projectMessagesError.value) ||
+      projectMessages.value.length > 0,
     diagnostics:
       workDiagnostics.value.length +
       diagnosticsCount(seedGrow.value?.graph, seedGrow.value?.validation) +
@@ -220,8 +273,66 @@ const decisionActionIDs = new Set(["approve", "reject", "request_change"])
 const decisionActions = computed(() => controlActions.value.filter((action) => decisionActionIDs.has(action.id)))
 const decisionNote = ref("")
 
-const retrying = ref(false)
-async function invokeAction(action: ControlAction) {
+const actionPending = ref<string>()
+const actionNote = ref("")
+const actionError = ref("")
+
+function currentBriefDraft() {
+  if (goalBrief.value?.kind !== "goal_brief") return
+  return {
+    goal: goalBrief.value.brief.goal,
+    deliverables: goalBrief.value.brief.deliverables,
+    acceptanceCriteria: goalBrief.value.brief.acceptanceCriteria,
+    constraints: goalBrief.value.brief.constraints,
+    nonGoals: goalBrief.value.brief.nonGoals,
+    assumptions: goalBrief.value.brief.assumptions,
+    openQuestions: goalBrief.value.brief.openQuestions,
+    riskLevel: goalBrief.value.brief.riskLevel,
+    recommendedPlan: goalBrief.value.brief.recommendedPlan,
+    approvalMode: goalBrief.value.brief.approvalMode,
+    sourceRefs: goalBrief.value.brief.sourceRefs,
+  }
+}
+
+function actionPayload(action: ControlAction, attention?: AttentionItem) {
+  const graphRevision = detail.value?.project.graphRevision
+  if (graphRevision === undefined) return
+  const base = {
+    idempotencyKey: crypto.randomUUID(),
+    expectedGraphRevision: graphRevision,
+    action: action.id,
+  }
+  if (action.id === "resolve_blocker") {
+    const target =
+      attention ??
+      (work.value?.availability === "available"
+        ? work.value.attentionItems.find((item) =>
+            item.allowedActions.some((allowed) => allowed.id === "resolve_blocker" && allowed.enabled),
+          )
+        : undefined)
+    if (!target || !actionNote.value.trim()) return
+    return { ...base, attentionId: target.id, resolution: actionNote.value.trim() }
+  }
+  if (action.id === "adjust_brief") {
+    const brief = currentBriefDraft()
+    const planVersion = detail.value?.project.activePlanVersion
+    if (!brief || !planVersion || goalBrief.value?.kind !== "goal_brief" || !actionNote.value.trim()) return
+    return {
+      ...base,
+      attentionId: attention?.id,
+      briefId: goalBrief.value.brief.id,
+      expectedBriefVersion: goalBrief.value.brief.version,
+      expectedPlanVersion: planVersion,
+      source: "user_confirmation",
+      brief,
+      changeReason: actionNote.value.trim(),
+    }
+  }
+  if (!["pause_work", "resume_work", "stop_work", "retry"].includes(action.id)) return
+  return { ...base, reason: actionNote.value.trim() || undefined }
+}
+
+async function invokeAction(action: ControlAction, attention?: AttentionItem) {
   if (!canInvoke(action)) return
   if (action.handler === "navigate_progress" || action.handler === "open_delivery") {
     column.value = "main"
@@ -230,16 +341,30 @@ async function invokeAction(action: ControlAction) {
   }
   if (action.handler === "open_diagnostics") return selectPanel("diagnostics")
   if (action.handler === "open_evidence") return selectPanel("goal_brief")
-  if (action.handler === "retry") {
-    if (retrying.value) return
-    retrying.value = true
-    await $fetch(`/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/retry`, {
-      method: "POST",
-      body: {},
-    }).catch(() => undefined)
-    retrying.value = false
-    await Promise.all([refresh(), refreshGoalBrief(), refreshSeedGrow()])
+  if (action.handler !== "action" || actionPending.value) return
+  const body = actionPayload(action, attention)
+  if (!body) {
+    actionError.value =
+      action.id === "resolve_blocker" || action.id === "adjust_brief"
+        ? "请填写处理说明，并确认目标摘要与版本信息可用。"
+        : "当前 Graph 版本不可用，不能提交运行时动作。"
+    return
   }
+  actionPending.value = action.id
+  actionError.value = ""
+  await $fetch(`/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/actions`, {
+    method: "POST",
+    body,
+  }).then(
+    () => {
+      actionNote.value = ""
+    },
+    () => {
+      actionError.value = "动作未被本地服务接受，当前工作状态没有被伪造为成功。"
+    },
+  )
+  actionPending.value = undefined
+  await refreshProjectExperience()
 }
 
 const dateTime = new Intl.DateTimeFormat("zh-CN", {
@@ -382,16 +507,38 @@ function artifactRoute(projectID: string, artifactID: string) {
                 type="button"
                 class="ac-work3__action"
                 :data-primary="action.id === nextActionID"
-                :disabled="!canInvoke(action) || (action.handler === 'retry' && retrying)"
+                :disabled="!canInvoke(action) || Boolean(actionPending)"
                 :title="action.disabledReason"
                 :aria-disabled="!canInvoke(action)"
                 @click="invokeAction(action)"
               >
-                {{ action.label }}<template v-if="action.handler === 'retry' && retrying">…</template>
+                {{ action.label }}<template v-if="actionPending === action.id">…</template>
               </button>
+            </div>
+            <div
+              v-if="controlActions.some((action) => action.handler === 'action' && action.enabled)"
+              class="ac-approval-decision"
+            >
+              <label for="runtime-action-note">动作说明</label>
+              <textarea
+                id="runtime-action-note"
+                v-model="actionNote"
+                rows="3"
+                maxlength="8000"
+                placeholder="暂停、停止、重试可选填；处理阻塞或调整方向时必须填写。"
+              />
+              <p v-if="actionError" class="ac-brief-state ac-brief-state--error" role="alert">{{ actionError }}</p>
             </div>
 
             <div class="ac-detail-stack">
+              <p v-if="detailStatus === 'pending' && !detail" class="ac-brief-state" role="status">
+                正在读取项目详情…
+              </p>
+              <div v-else-if="detailError" class="ac-brief-state ac-brief-state--error" role="alert">
+                <h2>项目详情暂时不可用</h2>
+                <p>工作摘要仍可查看，但计划、运行记录和诊断证据可能不完整。</p>
+                <UButton color="neutral" variant="outline" @click="refreshProjectExperience()">重新读取</UButton>
+              </div>
               <section class="ac-detail-panel">
                 <div class="ac-detail-heading">
                   <div>
@@ -453,6 +600,20 @@ function artifactRoute(projectID: string, artifactID: string) {
                 <article v-for="item in work.attentionItems" :key="item.id" class="ac-inline-item">
                   <h3>{{ item.title }}</h3>
                   <p>{{ item.reason.text }}</p>
+                  <div class="ac-work3__actions" role="group" :aria-label="`${item.title} 可用动作`">
+                    <button
+                      v-for="action in toControlActions(item.allowedActions)"
+                      :key="action.id"
+                      type="button"
+                      class="ac-work3__action"
+                      :disabled="!canInvoke(action) || Boolean(actionPending)"
+                      :title="action.disabledReason"
+                      :aria-disabled="!canInvoke(action)"
+                      @click="invokeAction(action, item)"
+                    >
+                      {{ action.label }}<template v-if="actionPending === action.id">…</template>
+                    </button>
+                  </div>
                 </article>
               </section>
 
@@ -509,7 +670,7 @@ function artifactRoute(projectID: string, artifactID: string) {
               v-if="composerTarget"
               :target="composerTarget"
               :agents="snapshot.agents"
-              @sent="refresh()"
+              @sent="refreshProjectExperience()"
             />
           </template>
 
@@ -666,6 +827,39 @@ function artifactRoute(projectID: string, artifactID: string) {
               </article>
             </template>
 
+            <template v-else-if="activePanel === 'thread'">
+              <p v-if="projectMessagesStatus === 'pending'" class="ac-brief-state" role="status">
+                正在读取项目讨论…
+              </p>
+              <div v-else-if="projectMessagesError" class="ac-brief-state ac-brief-state--error" role="alert">
+                <h3>项目讨论暂时不可用</h3>
+                <p>发送入口仍会如实返回本地服务结果，读取失败不会显示为真实空讨论。</p>
+                <UButton color="neutral" variant="outline" @click="refreshProjectMessages()">重新读取</UButton>
+              </div>
+              <template v-else>
+                <article
+                  v-for="message in projectMessages"
+                  :key="message.id"
+                  class="ac-inline-item"
+                >
+                  <div class="ac-card-footer">
+                    <strong>{{ message.author }}</strong>
+                    <time :datetime="new Date(message.createdAt).toISOString()">
+                      {{ dateTime.format(new Date(message.createdAt)) }}
+                    </time>
+                  </div>
+                  <p>{{ message.body }}</p>
+                  <span v-if="message.signalType">{{ message.signalType }}</span>
+                </article>
+              </template>
+              <p
+                v-if="projectMessagesStatus !== 'pending' && !projectMessagesError && !projectMessages.length"
+                class="ac-brief-state"
+              >
+                当前项目频道还没有消息。
+              </p>
+            </template>
+
             <!-- Diagnostics -->
             <template v-else-if="activePanel === 'diagnostics'">
               <SeedGrowDiagnostics
@@ -673,6 +867,8 @@ function artifactRoute(projectID: string, artifactID: string) {
                 :graph="seedGrow?.graph"
                 :validation="seedGrow?.validation"
                 :discoveries="seedGrow?.discoveries ?? []"
+                :organization="seedGrow?.organization"
+                :detail="detail"
                 :diagnostics="workDiagnostics"
                 :pending="seedGrowPending"
                 :failed="Boolean(seedGrowError)"

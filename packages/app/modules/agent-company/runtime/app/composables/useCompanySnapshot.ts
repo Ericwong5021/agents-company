@@ -16,20 +16,23 @@ const allResources = ["company", "agents", "work", "channels", "messages"] as co
 const SIGNAL_REFRESH_MIN_INTERVAL_MS = 1_000
 const SSE_HEARTBEAT_INTERVAL_MS = 10_000
 
-const sseListeners = new Set<() => void>()
+const sseListeners = new Set<(signal: boolean) => void>()
 let sseSource: EventSource | undefined
 let sseLastEventAt: number | undefined
 let sseLastRefreshAt: number | undefined
 let sseRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let sseStallTimer: ReturnType<typeof setInterval> | undefined
+let sseEverConnected = false
+let ssePendingSignal = false
 
-function notifySseRefresh() {
+function notifySseRefresh(signal: boolean) {
   // 快照状态经 useState 共享，只需触发一个存活实例的后台刷新。
   const listener = sseListeners.values().next().value
-  listener?.()
+  listener?.(signal)
 }
 
-function scheduleSseRefresh() {
+function scheduleSseRefresh(signal = false) {
+  ssePendingSignal ||= signal
   if (sseRefreshTimer) return
   const delay = nextSignalRefreshDelay({
     now: Date.now(),
@@ -39,7 +42,9 @@ function scheduleSseRefresh() {
   sseRefreshTimer = setTimeout(() => {
     sseRefreshTimer = undefined
     sseLastRefreshAt = Date.now()
-    notifySseRefresh()
+    const pendingSignal = ssePendingSignal
+    ssePendingSignal = false
+    notifySseRefresh(pendingSignal)
   }, delay)
 }
 
@@ -50,8 +55,11 @@ function ensureSseSource() {
   source.onmessage = (event) => {
     sseLastEventAt = Date.now()
     const kind = classifyGlobalEvent(String(event.data))
-    // connected（含断线重连成功）与业务事件都收敛到节流后的全量快照校准。
-    if (kind === "connected" || kind === "signal") scheduleSseRefresh()
+    if (kind === "connected") {
+      scheduleSseRefresh(sseEverConnected)
+      sseEverConnected = true
+    }
+    if (kind === "signal") scheduleSseRefresh(true)
   }
   source.onerror = () => scheduleSseRefresh()
   // 连接错误由 EventSource 自动重试；持续不可用时既有 reconnect 轮询兜底。
@@ -84,6 +92,8 @@ function releaseSseSource() {
   sseStallTimer = undefined
   sseLastEventAt = undefined
   sseLastRefreshAt = undefined
+  sseEverConnected = false
+  ssePendingSignal = false
 }
 
 const loadingSnapshot: CompanySnapshot = {
@@ -142,6 +152,7 @@ export function useCompanySnapshot() {
   const snapshot = useState<CompanySnapshot>("agent-company-snapshot-value", () => loadingSnapshot)
   const connection = useState("agent-company-connection", () => snapshot.value.connection)
   const reconnectAttempt = useState("agent-company-reconnect-attempt", () => 0)
+  const signalVersion = useState("agent-company-signal-version", () => 0)
   const reconnectTimer = ref<ReturnType<typeof setTimeout>>()
 
   watch(
@@ -200,7 +211,8 @@ export function useCompanySnapshot() {
 
   // SSE 订阅与既有重连轮询并存：事件驱动的后台刷新不改写连接态（避免每次
   // 事件都闪现 recovering），结果到达后由快照 watcher 统一更新状态。
-  const sseRefresh = () => {
+  const sseRefresh = (signal: boolean) => {
+    if (signal) signalVersion.value += 1
     if (!request.pending.value) void request.refresh()
   }
 
@@ -218,6 +230,7 @@ export function useCompanySnapshot() {
   return {
     ...request,
     refresh,
+    signalVersion,
     data: computed(() => ({
       ...snapshot.value,
       connection: connection.value,

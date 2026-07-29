@@ -1,3 +1,4 @@
+import { createControlPlaneClient } from "@agents-company/sdk/v2"
 import { ofetch } from "ofetch"
 
 export type ControlPlaneFailure = {
@@ -6,6 +7,12 @@ export type ControlPlaneFailure = {
 }
 
 export type ControlPlaneResult<T> = { ok: true; value: T } | { ok: false; failure: ControlPlaneFailure }
+
+type SDKResponse<T> = {
+  data?: T
+  error?: unknown
+  response: Response
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -48,6 +55,22 @@ export function publicControlPlaneEndpoint(url: URL) {
   return `${url.protocol}//${url.host}`
 }
 
+export function controlPlaneSDK(baseURL: string, authorization?: string) {
+  const url = controlPlaneURL(baseURL)
+  if (!url) return
+  const sdkFetch: typeof fetch = (input, init) => {
+    const request = new Request(input, init)
+    return fetch(new Request(request, {
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]),
+    }))
+  }
+  return createControlPlaneClient({
+    baseUrl: url.origin,
+    fetch: sdkFetch,
+    headers: authorization ? { authorization } : undefined,
+  })
+}
+
 export function controlPlaneRequestURL(value: string, path: string): URL | undefined {
   const baseURL = controlPlaneURL(value)
   if (!baseURL) return undefined
@@ -61,6 +84,21 @@ export function classifyControlPlaneFailure(error: unknown): ControlPlaneFailure
   if (status === 401 || status === 403) return { kind: "authorization_required", statusCode: status }
   if (status !== undefined) return { kind: "service_error", statusCode: status }
   return { kind: "service_unreachable" }
+}
+
+export async function requestControlPlaneSDK<T>(
+  operation: Promise<SDKResponse<T>>,
+): Promise<ControlPlaneResult<T>> {
+  return operation.then(
+    (result) => {
+      if (result.data !== undefined) return { ok: true as const, value: result.data }
+      return {
+        ok: false as const,
+        failure: classifyControlPlaneFailure({ statusCode: result.response.status }),
+      }
+    },
+    (error: unknown) => ({ ok: false as const, failure: classifyControlPlaneFailure(error) }),
+  )
 }
 
 export async function requestControlPlane<T>(

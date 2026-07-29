@@ -79,6 +79,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/message.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/projects/:projectID/messages",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/project-messages.get"),
+    })
+    addServerHandler({
       route: "/api/agent-company/events",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/events.get"),
@@ -147,6 +152,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/projects/:projectID/retry",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/project-retry.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID/actions",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/project-action.post"),
     })
 
     extendPages((pages) => {

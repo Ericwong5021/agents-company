@@ -38,7 +38,7 @@ export type ClientActionHandler =
   | "open_diagnostics"
   | "open_delivery"
   | "open_evidence"
-  | "retry"
+  | "action"
   | "none"
 
 export function clientHandlerFor(id: ExperienceActionType): ClientActionHandler {
@@ -46,7 +46,8 @@ export function clientHandlerFor(id: ExperienceActionType): ClientActionHandler 
   if (id === "open_diagnostics") return "open_diagnostics"
   if (id === "open_delivery") return "open_delivery"
   if (id === "view_evidence") return "open_evidence"
-  if (id === "retry") return "retry"
+  if (["pause_work", "resume_work", "stop_work", "resolve_blocker", "retry", "adjust_brief"].includes(id))
+    return "action"
   return "none"
 }
 

@@ -23,6 +23,9 @@ const workUnavailable = computed(() => snapshot.value.issue?.unavailable.include
 const unavailableWorkCount = computed(
   () => snapshot.value.work.filter((work) => work.availability === "unavailable").length,
 )
+const unavailableOrganizationCount = computed(
+  () => organizationResult.value.filter((organization) => organization.availability === "unavailable").length,
+)
 const assignments = computed(() => organizationResult.value.flatMap(availableAssignments))
 const projectedAssignments = computed(() =>
   assignments.value.filter((assignment) => snapshot.value.agents.every((agent) => agent.id !== assignment.agent.id)),
@@ -84,15 +87,30 @@ async function retry() {
           @retry="retry()"
         />
 
+        <p
+          v-else-if="organizationStatus === 'pending' && !organizationResult.length"
+          class="ac-resource-notice"
+          role="status"
+        >
+          正在读取 Assignment 责任证据…
+        </p>
+        <div v-else-if="organizationError" class="ac-empty-state" role="alert">
+          <div class="ac-empty-state__content">
+            <span class="ac-empty-state__icon" aria-hidden="true">
+              <UIcon name="i-lucide-triangle-alert" />
+            </span>
+            <h2>团队责任证据暂时不可用</h2>
+            <p>页面不会把读取失败显示为零成员或零分配。</p>
+            <UButton class="ac-empty-state__action" color="neutral" @click="retry()">重新读取</UButton>
+          </div>
+        </div>
+
         <template v-else-if="snapshot.agents.length || projectedAssignments.length">
           <p v-if="workUnavailable || unavailableWorkCount" class="ac-resource-notice">
             成员活动可用，但部分工作关联状态不可用，不会显示为零负载。
           </p>
-          <p v-if="organizationStatus === 'pending'" class="ac-resource-notice" role="status">
-            正在读取 Assignment 责任证据…
-          </p>
-          <p v-else-if="organizationError" class="ac-resource-notice" role="alert">
-            Assignment 责任证据暂时不可用，不会显示为零分配。
+          <p v-if="unavailableOrganizationCount" class="ac-resource-notice" role="alert">
+            {{ unavailableOrganizationCount }} 个项目的 Assignment 投影不可用，不会显示为零分配。
           </p>
 
           <template
@@ -304,13 +322,22 @@ async function retry() {
           </section>
         </template>
 
-        <section v-else class="ac-empty-state">
+        <section v-else-if="!unavailableOrganizationCount" class="ac-empty-state">
           <div class="ac-empty-state__content">
             <span class="ac-empty-state__icon" aria-hidden="true">
               <UIcon name="i-lucide-users-round" />
             </span>
             <h2>还没有可见团队成员</h2>
             <p>这是来自本地运行时的真实空结果，成员出现后会展示责任与活动证据。</p>
+          </div>
+        </section>
+        <section v-else class="ac-empty-state" role="alert">
+          <div class="ac-empty-state__content">
+            <span class="ac-empty-state__icon" aria-hidden="true">
+              <UIcon name="i-lucide-triangle-alert" />
+            </span>
+            <h2>团队投影不可用</h2>
+            <p>当前没有可确认的成员与 Assignment 事实，页面不会把不可用状态显示为真实空结果。</p>
           </div>
         </section>
       </div>

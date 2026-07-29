@@ -6,29 +6,29 @@ import {
 import { createError } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
-import { controlPlaneURL, requestControlPlane } from "../utils/control-plane-client"
+import {
+  controlPlaneSDK,
+  requestControlPlaneSDK,
+} from "../utils/control-plane-client"
 
 export default defineAgentCompanyHandler(async (event): Promise<OrganizationProjectionValue[]> => {
   const config = useRuntimeConfig(event)
-  if (!controlPlaneURL(config.agentCompanyControlPlaneUrl))
-    throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
-  const read = (path: string) =>
-    requestControlPlane<unknown>(
-      config.agentCompanyControlPlaneUrl,
-      path,
-      config.agentCompanyControlPlaneAuthorization || undefined,
-    )
-  const workResult = await read("/experience/work")
+  const client = controlPlaneSDK(
+    config.agentCompanyControlPlaneUrl,
+    config.agentCompanyControlPlaneAuthorization || undefined,
+  )
+  if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
+  const workResult = await requestControlPlaneSDK<unknown>(client.experience.work.list())
   if (!workResult.ok) throw createError({ statusCode: 503, statusMessage: "Work 投影暂时不可用" })
   const work = WorkProjectionList.safeParse(workResult.value)
   if (!work.success) throw createError({ statusCode: 502, statusMessage: "Work 投影响应无法识别" })
 
-  const projectIDs = work.data.items.flatMap((item) =>
-    item.availability === "available" ? [item.summary.workId] : [],
+  const projectIDs = work.data.items.map((item) =>
+    item.availability === "available" ? item.summary.workId : item.workId,
   )
   const results = await Promise.all(
     projectIDs.map((projectID) =>
-      read(`/experience/work/${encodeURIComponent(projectID)}/organization`),
+      requestControlPlaneSDK<unknown>(client.experience.work.organization({ projectID })),
     ),
   )
   if (results.some((result) => !result.ok))
