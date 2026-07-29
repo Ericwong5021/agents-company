@@ -88,6 +88,8 @@ const ObservationReport = z
       "graph_mutation_recovery",
       "delivery",
       "validation",
+      "approval",
+      "quiescence",
       "interruption",
       "review",
       "quality_pair",
@@ -117,6 +119,8 @@ const ObservationReportClass = {
   "graph_mutation.recovery_checked": "graph_mutation_recovery",
   "delivery.checked": "delivery",
   "validation_anchor.checked": "validation",
+  "approval_gate.checked": "approval",
+  "quiescence.checked": "quiescence",
   "interruption.checked": "interruption",
   "review_presence.checked": "review",
   "quality_pair.checked": "quality_pair",
@@ -171,6 +175,24 @@ const ValidationObservation = z
     anchorPassed: z.boolean(),
   })
   .strict()
+export const ApprovalGateObservation = z
+  .object({
+    gateId: Identifier,
+    status: z.enum(["pending", "approved", "rejected"]),
+    dispatchPaused: z.boolean(),
+    anchorPassed: z.boolean(),
+  })
+  .strict()
+export const QuiescenceObservation = z
+  .object({
+    status: z.literal("blocked"),
+    ready: z.literal(false),
+    criterionId: Identifier,
+    criterionStatus: z.literal("fail"),
+    risk: z.enum(["low", "medium", "high"]),
+    blockerEntityIds: z.array(Identifier).min(1).max(10_000),
+  })
+  .strict()
 const InterruptionObservation = z
   .object({
     attentionId: Identifier.nullable(),
@@ -178,10 +200,11 @@ const InterruptionObservation = z
     needed: z.boolean(),
   })
   .strict()
-const ReviewObservation = z
+export const ReviewObservation = z
   .object({
     risk: z.enum(["low", "medium", "high"]),
     invoked: z.boolean(),
+    independent: z.boolean(),
     rejected: z.boolean(),
     findingConfirmed: z.boolean(),
   })
@@ -197,11 +220,11 @@ const BenchmarkObservation = z
     finalDecision: z.enum(["pass", "fail"]),
   })
   .strict()
-const RepairCircuitObservation = z
+export const RepairCircuitObservation = z
   .object({
     workItemId: Identifier,
     attentionId: Identifier,
-    attemptCount: z.number().int().min(3),
+    attemptCount: z.literal(3),
   })
   .strict()
 const ModelUsageObservation = z
@@ -807,8 +830,10 @@ const ObservationRequiredSourceKinds = {
   "graph_mutation.recovery_checked": ["graph_mutation"],
   "delivery.checked": ["artifact"],
   "validation_anchor.checked": ["validation_gate"],
+  "approval_gate.checked": ["approval_gate"],
+  "quiescence.checked": ["project"],
   "interruption.checked": ["project"],
-  "review_presence.checked": ["agent_run"],
+  "review_presence.checked": ["project"],
   "quality_pair.checked": ["project"],
   "benchmark.checked": ["project"],
   "shadow_pair.checked": ["project"],
@@ -869,6 +894,188 @@ function validateObservationSources(
   return references
 }
 
+export function requireExactB5CheckedObservations(eventTypes: string[], required: string[], runId: string) {
+  const unexpected = eventTypes.find((eventType) => !required.includes(eventType))
+  if (unexpected) throw new Error(`B5 run ${runId} contains non-required ${unexpected} evidence`)
+  required.forEach((eventType) => {
+    const count = eventTypes.filter((candidate) => candidate === eventType).length
+    if (count !== 1)
+      throw new Error(`B5 run ${runId} requires exactly one ${eventType} observation, received ${count}`)
+  })
+}
+
+export function validateB5RepairCircuitEvidence(raw: {
+  attemptCount: number
+  repairCount: number
+  repairRound: number
+  maxRepairRounds: number
+  attentionId: string
+  circuitAttentionIds: string[]
+}) {
+  const value = z
+    .object({
+      attemptCount: z.literal(3),
+      repairCount: z.literal(3),
+      repairRound: z.literal(3),
+      maxRepairRounds: z.literal(3),
+      attentionId: Identifier,
+      circuitAttentionIds: z.array(Identifier).length(1),
+    })
+    .strict()
+    .parse(raw)
+  if (value.circuitAttentionIds[0] !== value.attentionId)
+    throw new Error("B5 repair circuit requires exactly one bound Attention")
+  return value
+}
+
+export function validateB5ReviewPresenceEvidence(raw: {
+  claimed: z.infer<typeof ReviewObservation>
+  chains: { workItemId: string; assignmentId: string; runId: string; independent: boolean }[]
+  unboundReviewerRunIds: string[]
+  rejected: boolean
+  references: { kind: string; id: string }[]
+}) {
+  if (raw.unboundReviewerRunIds.length)
+    throw new Error(`B5 review observation has no persisted Reviewer WorkItem, Assignment, and AgentRun chain`)
+  const invoked = raw.chains.length > 0
+  const independent = invoked && raw.chains.every((chain) => chain.independent)
+  if (
+    raw.claimed.invoked !== invoked ||
+    raw.claimed.independent !== independent ||
+    raw.claimed.rejected !== raw.rejected
+  )
+    throw new Error(`B5 review observation does not match persisted Reviewer facts`)
+  if (
+    invoked &&
+    raw.chains.some(
+      (chain) =>
+        !raw.references.some((reference) => reference.kind === "work_item" && reference.id === chain.workItemId) ||
+        !raw.references.some(
+          (reference) => reference.kind === "project_assignment" && reference.id === chain.assignmentId,
+        ) ||
+        !raw.references.some((reference) => reference.kind === "agent_run" && reference.id === chain.runId),
+    )
+  )
+    throw new Error(`B5 review observation is missing its exact Reviewer source chain`)
+  if (!invoked && raw.references.some((reference) => reference.kind === "agent_run"))
+    throw new Error(`B5 review absence observation cannot cite an unrelated AgentRun`)
+  return { ...raw.claimed, invoked, independent, rejected: raw.rejected }
+}
+
+function quiescenceBlockers(db: TxOrDb, projectId: string) {
+  return [
+    ...db
+      .select()
+      .from(CompanyWorkItemTable)
+      .where(eq(CompanyWorkItemTable.project_id, projectId))
+      .all()
+      .filter((item) => !["completed", "superseded", "cancelled"].includes(item.status))
+      .map((item) => ({ kind: "work_item", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyWorkAttemptTable)
+      .where(eq(CompanyWorkAttemptTable.project_id, projectId))
+      .all()
+      .filter((item) => item.status === "running")
+      .map((item) => ({ kind: "work_attempt", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyWorkReceiptTable)
+      .where(eq(CompanyWorkReceiptTable.project_id, projectId))
+      .all()
+      .filter((item) => item.processing_status !== "processed")
+      .map((item) => ({ kind: "work_receipt", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyGraphMutationTable)
+      .where(eq(CompanyGraphMutationTable.project_id, projectId))
+      .all()
+      .filter((item) => ["proposed", "validated"].includes(item.status))
+      .map((item) => ({ kind: "graph_mutation", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyValidationGateTable)
+      .where(eq(CompanyValidationGateTable.project_id, projectId))
+      .all()
+      .filter((item) => ["pending", "running", "failed"].includes(item.status))
+      .map((item) => ({ kind: "validation_gate", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyApprovalGateTable)
+      .where(eq(CompanyApprovalGateTable.project_id, projectId))
+      .all()
+      .filter((item) => item.status === "pending")
+      .map((item) => ({ kind: "approval_gate", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyAttentionTable)
+      .where(eq(CompanyAttentionTable.project_id, projectId))
+      .all()
+      .filter((item) => item.status === "open" && item.material)
+      .map((item) => ({ kind: "attention", id: item.id })),
+    ...db
+      .select()
+      .from(CompanyProjectActionTable)
+      .where(eq(CompanyProjectActionTable.project_id, projectId))
+      .all()
+      .filter((item) => item.status === "claimed")
+      .map((item) => ({ kind: "project_action", id: item.id })),
+  ].sort((left, right) => `${left.kind}:${left.id}`.localeCompare(`${right.kind}:${right.id}`))
+}
+
+function reconcileReviewPresence(
+  db: TxOrDb,
+  binding: PersistedFactRunBindingValue,
+  value: z.infer<typeof ReviewObservation>,
+  references: z.infer<typeof SourceReference>[],
+) {
+  const items = db
+    .select()
+    .from(CompanyWorkItemTable)
+    .where(eq(CompanyWorkItemTable.project_id, binding.projectId))
+    .all()
+  const reviewers = items.filter((item) => item.kind === "reviewer")
+  const reviewerIds = new Set(reviewers.map((item) => item.id))
+  const assignments = db
+    .select()
+    .from(CompanyProjectAssignmentTable)
+    .where(eq(CompanyProjectAssignmentTable.project_id, binding.projectId))
+    .all()
+  const runs = db
+    .select()
+    .from(AgentRunTable)
+    .where(eq(AgentRunTable.company_project_id, binding.projectId))
+    .all()
+  const reviewerRuns = runs.filter((run) => run.work_item_id && reviewerIds.has(run.work_item_id))
+  const chains = reviewerRuns.flatMap((run) => {
+    const reviewer = reviewers.find((item) => item.id === run.work_item_id)!
+    const assignment = assignments.find(
+      (candidate) => candidate.work_item_id === reviewer.id && candidate.agent_id === run.agent_id,
+    )
+    const parentAssignments = assignments.filter((candidate) => candidate.work_item_id === reviewer.parent_id)
+    if (!assignment || !reviewer.parent_id || !parentAssignments.length) return []
+    return [{
+      workItemId: reviewer.id,
+      assignmentId: assignment.id,
+      runId: run.id,
+      independent: parentAssignments.every((candidate) => candidate.agent_id !== run.agent_id),
+    }]
+  })
+  const rejected = reviewers.some((reviewer) => {
+    const parent = items.find((item) => item.id === reviewer.parent_id)
+    return parent?.review_status === "rejected"
+  })
+  return validateB5ReviewPresenceEvidence({
+    claimed: value,
+    chains,
+    unboundReviewerRunIds: reviewerRuns
+      .filter((run) => !chains.some((chain) => chain.runId === run.id))
+      .map((run) => run.id),
+    rejected,
+    references,
+  })
+}
+
 function gateObservationFacts(
   db: TxOrDb,
   binding: PersistedFactRunBindingValue,
@@ -898,8 +1105,9 @@ function gateObservationFacts(
       ? ["graph_mutation.recovery_checked"]
       : []),
     ...(metricApplies("validation_gate_false_pass_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
-      ? ["validation_anchor.checked"]
+      ? [binding.scenarioId === "S15" ? "approval_gate.checked" : "validation_anchor.checked"]
       : []),
+    ...(binding.scenarioId === "S24" && binding.strategy === "seed_and_grow" ? ["quiescence.checked"] : []),
     ...(metricApplies("invalid_interruption_rate", binding.scenarioId) && binding.strategy === "seed_and_grow"
       ? ["interruption.checked"]
       : []),
@@ -909,9 +1117,11 @@ function gateObservationFacts(
       : []),
     ...(binding.scenarioId === "S22" && binding.strategy === "seed_and_grow" ? ["repair.circuit_checked"] : []),
   ]
-  required.forEach((eventType) => {
-    if (!byType(eventType).length) throw new Error(`B5 run ${binding.runId} is missing required ${eventType} evidence`)
-  })
+  requireExactB5CheckedObservations(
+    rows.map((row) => row.event_type),
+    required,
+    binding.runId,
+  )
   const output: PersistedMetricEvent[] = []
   const emit = (
     row: typeof CompanyGateObservationTable.$inferSelect,
@@ -1001,7 +1211,13 @@ function gateObservationFacts(
         .from(CompanyValidationGateTable)
         .where(eq(CompanyValidationGateTable.project_id, binding.projectId))
         .all()
-        .filter((item) => ["pending", "running"].includes(item.status)).length
+        .filter((item) => ["pending", "running"].includes(item.status)).length +
+        db
+          .select()
+          .from(CompanyApprovalGateTable)
+          .where(eq(CompanyApprovalGateTable.project_id, binding.projectId))
+          .all()
+          .filter((item) => item.status === "pending").length
       const falseCompletion =
         project.status === "completed" &&
         pendingWorkItemCount + pendingReceiptCount + pendingMutationCount + pendingGateCount > 0
@@ -1128,6 +1344,59 @@ function gateObservationFacts(
       })
       return
     }
+    if (row.event_type === "approval_gate.checked") {
+      const value = ApprovalGateObservation.parse(properties)
+      const gate = db
+        .select()
+        .from(CompanyApprovalGateTable)
+        .where(eq(CompanyApprovalGateTable.id, value.gateId))
+        .get()
+      if (
+        binding.scenarioId !== "S15" ||
+        !gate ||
+        gate.project_id !== binding.projectId ||
+        gate.status !== value.status ||
+        value.status !== "pending" ||
+        !project.dispatch_paused ||
+        value.dispatchPaused !== project.dispatch_paused ||
+        value.anchorPassed
+      )
+        throw new Error(`B5 approval observation ${row.id} does not match its pending ApprovalGate anchor`)
+      emit(row, "validation_gate.evaluated", {
+        gateId: gate.id,
+        gateType: "approval",
+        passed: false,
+        anchorPassed: false,
+        falsePass: false,
+      })
+      return
+    }
+    if (row.event_type === "quiescence.checked") {
+      const value = QuiescenceObservation.parse(properties)
+      const blockers = quiescenceBlockers(db, binding.projectId)
+      const blockerIds = blockers.map((blocker) => blocker.id).sort()
+      if (
+        binding.scenarioId !== "S24" ||
+        project.status === "completed" ||
+        !blockers.length ||
+        canonical(blockerIds) !== canonical([...value.blockerEntityIds].sort()) ||
+        blockers.some(
+          (blocker) =>
+            !references.some((reference) => reference.kind === blocker.kind && reference.id === blocker.id),
+        )
+      )
+        throw new Error(`B5 quiescence observation ${row.id} does not match persisted completion blockers`)
+      emit(row, "delivery.criterion_evaluated", {
+        deliveryId: `quiescence:${binding.projectId}`,
+        criterionId: value.criterionId,
+        status: value.criterionStatus,
+        evidenceCount: blockers.length + 1,
+        evidenceNotApplicableReason: "completion_rejected_by_quiescence",
+        risk: value.risk,
+        strategy: binding.strategy,
+      })
+      return
+    }
     if (row.event_type === "interruption.checked") {
       const value = InterruptionObservation.parse(properties)
       const attention = value.attentionId
@@ -1154,7 +1423,7 @@ function gateObservationFacts(
     }
     if (row.event_type === "review_presence.checked") {
       const value = ReviewObservation.parse(properties)
-      emit(row, "review.completed", value)
+      emit(row, "review.completed", reconcileReviewPresence(db, binding, value, references))
       return
     }
     if (row.event_type === "benchmark.checked") {
@@ -1236,8 +1505,37 @@ function gateObservationFacts(
         .from(CompanyValidationRepairTable)
         .where(eq(CompanyValidationRepairTable.gate_id, gate.id))
         .get()!.value
-      if (repairCount < 3 || gate.repair_round < 3 || value.attemptCount !== repairCount)
+      const attentionRef = references.find((item) => item.kind === "attention")!
+      const attention = db
+        .select()
+        .from(CompanyAttentionTable)
+        .where(eq(CompanyAttentionTable.id, attentionRef.id))
+        .get()
+      const circuitAttentions = db
+        .select()
+        .from(CompanyAttentionTable)
+        .where(eq(CompanyAttentionTable.project_id, binding.projectId))
+        .all()
+        .filter((candidate) =>
+          (JSON.parse(candidate.source_refs_json) as unknown[]).some(
+            (reference) =>
+              SourceReference.safeParse(reference).success &&
+              (reference as { kind: string; id: string }).kind === "validation_gate" &&
+              (reference as { kind: string; id: string }).id === gate.id,
+          ),
+        )
+      if (!attention || attention.project_id !== binding.projectId)
         throw new Error(`B5 repair circuit observation ${row.id} has no three-round persisted repair history`)
+      if (gate.work_item_id !== value.workItemId)
+        throw new Error(`B5 repair circuit observation ${row.id} has a mismatched WorkItem`)
+      validateB5RepairCircuitEvidence({
+        attemptCount: value.attemptCount,
+        repairCount,
+        repairRound: gate.repair_round,
+        maxRepairRounds: gate.max_repair_rounds,
+        attentionId: value.attentionId,
+        circuitAttentionIds: circuitAttentions.map((candidate) => candidate.id),
+      })
       emit(row, "repair.circuit_opened", {
         workItemId: value.workItemId,
         attemptCount: value.attemptCount,

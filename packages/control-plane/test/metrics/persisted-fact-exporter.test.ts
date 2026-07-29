@@ -9,7 +9,16 @@ import {
   CompanyProjectEventTable,
   CompanyProjectTable,
 } from "../../src/company-project/company-project.sql"
-import { exportPersistedFactArtifact, type PersistedFactExportRequest } from "../../src/metrics/persisted-fact-exporter"
+import {
+  ApprovalGateObservation,
+  exportPersistedFactArtifact,
+  QuiescenceObservation,
+  RepairCircuitObservation,
+  requireExactB5CheckedObservations,
+  validateB5RepairCircuitEvidence,
+  validateB5ReviewPresenceEvidence,
+  type PersistedFactExportRequest,
+} from "../../src/metrics/persisted-fact-exporter"
 import { loadPersistedFactArtifact, PersistedFactArtifactReference } from "../../src/metrics/persisted-fact-artifact"
 import { Database, eq } from "../../src/storage"
 import { GateObservationEventType } from "../../src/metrics/gate-observation"
@@ -151,8 +160,138 @@ describe("PersistedFactExporter", () => {
   test("only accepts raw checked observation types for the trusted B5 exporter", () => {
     expect(GateObservationEventType.safeParse("terminal.invariant_checked").success).toBe(true)
     expect(GateObservationEventType.safeParse("quality_pair.checked").success).toBe(true)
+    expect(GateObservationEventType.safeParse("approval_gate.checked").success).toBe(true)
+    expect(GateObservationEventType.safeParse("quiescence.checked").success).toBe(true)
     expect(GateObservationEventType.safeParse("benchmark.completed").success).toBe(false)
     expect(GateObservationEventType.safeParse("candidate.terminal_checked").success).toBe(false)
+  })
+
+  test("requires exactly one observation for every checked B5 oracle", () => {
+    expect(() =>
+      requireExactB5CheckedObservations(
+        ["terminal.invariant_checked", "terminal.invariant_checked"],
+        ["terminal.invariant_checked"],
+        "run-1",
+      ),
+    ).toThrow("exactly one")
+    expect(() => requireExactB5CheckedObservations([], ["approval_gate.checked"], "run-s15")).toThrow(
+      "received 0",
+    )
+    expect(() =>
+      requireExactB5CheckedObservations(
+        ["approval_gate.checked", "validation_anchor.checked"],
+        ["approval_gate.checked"],
+        "run-s15",
+      ),
+    ).toThrow("non-required validation_anchor.checked")
+  })
+
+  test("keeps Approval and Quiescence checks distinct from synthetic delivery evidence", () => {
+    expect(
+      ApprovalGateObservation.parse({
+        gateId: "approval-s15",
+        status: "pending",
+        dispatchPaused: true,
+        anchorPassed: false,
+      }),
+    ).toMatchObject({ status: "pending", dispatchPaused: true })
+    expect(
+      QuiescenceObservation.parse({
+        status: "blocked",
+        ready: false,
+        criterionId: "criterion-s24",
+        criterionStatus: "fail",
+        risk: "medium",
+        blockerEntityIds: ["receipt-s24"],
+      }),
+    ).toMatchObject({ status: "blocked", criterionStatus: "fail" })
+    expect(() =>
+      QuiescenceObservation.parse({
+        status: "completed",
+        ready: true,
+        criterionId: "criterion-s24",
+        criterionStatus: "pass",
+        risk: "medium",
+        blockerEntityIds: [],
+      }),
+    ).toThrow()
+  })
+
+  test("requires exactly three persisted repairs and one bound Attention for S22", () => {
+    expect(() =>
+      RepairCircuitObservation.parse({
+        workItemId: "work-s22",
+        attentionId: "attention-s22",
+        attemptCount: 4,
+      }),
+    ).toThrow()
+    expect(() =>
+      validateB5RepairCircuitEvidence({
+        attemptCount: 3,
+        repairCount: 4,
+        repairRound: 3,
+        maxRepairRounds: 3,
+        attentionId: "attention-s22",
+        circuitAttentionIds: ["attention-s22"],
+      }),
+    ).toThrow()
+    expect(() =>
+      validateB5RepairCircuitEvidence({
+        attemptCount: 3,
+        repairCount: 3,
+        repairRound: 3,
+        maxRepairRounds: 3,
+        attentionId: "attention-s22",
+        circuitAttentionIds: ["attention-s22", "attention-duplicate"],
+      }),
+    ).toThrow()
+  })
+
+  test("recomputes Reviewer invocation and rejects unrelated builder runs as absence evidence", () => {
+    const claimed = {
+      risk: "low" as const,
+      invoked: false,
+      independent: false,
+      rejected: false,
+      findingConfirmed: false,
+    }
+    expect(
+      validateB5ReviewPresenceEvidence({
+        claimed,
+        chains: [],
+        unboundReviewerRunIds: [],
+        rejected: false,
+        references: [{ kind: "project", id: "project-1" }],
+      }),
+    ).toMatchObject({ invoked: false, independent: false })
+    expect(() =>
+      validateB5ReviewPresenceEvidence({
+        claimed,
+        chains: [],
+        unboundReviewerRunIds: [],
+        rejected: false,
+        references: [
+          { kind: "project", id: "project-1" },
+          { kind: "agent_run", id: "builder-run" },
+        ],
+      }),
+    ).toThrow("unrelated AgentRun")
+    expect(() =>
+      validateB5ReviewPresenceEvidence({
+        claimed: { ...claimed, invoked: true, independent: true },
+        chains: [
+          {
+            workItemId: "reviewer-work",
+            assignmentId: "reviewer-assignment",
+            runId: "reviewer-run",
+            independent: true,
+          },
+        ],
+        unboundReviewerRunIds: [],
+        rejected: false,
+        references: [{ kind: "project", id: "project-1" }],
+      }),
+    ).toThrow("exact Reviewer source chain")
   })
 
   test("exports digest-bound facts from an isolated persisted database", async () => {
