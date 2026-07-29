@@ -232,7 +232,7 @@ function sourceFromRow(row: typeof DecisionSourceMappingTable.$inferSelect | und
   })
 }
 
-function recordFromRow(db: TxOrDb, row: typeof DecisionRecordTable.$inferSelect) {
+export function recordFromRow(db: TxOrDb, row: typeof DecisionRecordTable.$inferSelect) {
   const projection = db
     .select()
     .from(DecisionCurrentProjectionTable)
@@ -531,7 +531,7 @@ function scopeKey(scope: DecisionScopeValue) {
   return "company"
 }
 
-function ensureDefaultPolicies(db: TxOrDb, companyId: string) {
+export function ensureDefaultPolicies(db: TxOrDb, companyId: string) {
   const createdAt = Date.now()
   policyDefaults.map((policy) =>
     db

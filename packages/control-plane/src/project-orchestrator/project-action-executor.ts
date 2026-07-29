@@ -1188,18 +1188,21 @@ export function makeLayer(hooks: Hooks = {}) {
                   ),
                 )
                 .all()
-                .filter((gate) => {
-                  const project = db
-                    .select()
-                    .from(CompanyProjectTable)
-                    .where(eq(CompanyProjectTable.id, gate.project_id))
-                    .get()
-                  return (
-                    Boolean(gate.work_item_id) &&
-                    project?.execution_strategy === "seed_and_grow" &&
-                    project.seed_mode === "discovery_first"
-                  )
-                }),
+                .filter(
+                  (gate): gate is typeof CompanyApprovalGateTable.$inferSelect & { project_id: string } => {
+                    if (!gate.project_id) return false
+                    const project = db
+                      .select()
+                      .from(CompanyProjectTable)
+                      .where(eq(CompanyProjectTable.id, gate.project_id))
+                      .get()
+                    return (
+                      Boolean(gate.work_item_id) &&
+                      project?.execution_strategy === "seed_and_grow" &&
+                      project.seed_mode === "discovery_first"
+                    )
+                  },
+                ),
             ),
           ),
           (gate) =>

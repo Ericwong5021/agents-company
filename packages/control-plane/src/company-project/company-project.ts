@@ -2,7 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { Context, Effect, Layer } from "effect"
-import { and, asc, desc, eq, gte, inArray, notInArray } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, isNotNull, notInArray } from "drizzle-orm"
 import { Database } from "@/storage"
 import { Global } from "@/global"
 import { Identifier } from "@/id/id"
@@ -139,7 +139,13 @@ const eventFromRow = (row: typeof CompanyProjectEventTable.$inferSelect) =>
 const gateFromRow = (row: typeof CompanyApprovalGateTable.$inferSelect) =>
   ApprovalGate.parse({
     ...row,
+    project_id: row.project_id ?? undefined,
+    company_id: row.company_id ?? undefined,
+    pre_project_id: row.pre_project_id ?? undefined,
+    decision_id: row.decision_id ?? undefined,
     requested_by_agent_id: row.requested_by_agent_id ?? undefined,
+    requested_by_actor_kind: row.requested_by_actor_kind ?? undefined,
+    requested_by_actor_id: row.requested_by_actor_id ?? undefined,
     work_item_id: row.work_item_id ?? undefined,
     resource_scope: parseList(row.resource_scope_json),
     worktree_run_id: row.worktree_run_id ?? undefined,
@@ -1426,6 +1432,7 @@ export const layer = Layer.effect(
       resource_scope?: string[]
       worktree_run_id?: string
     }) {
+      if (input.kind === "founder_red") throw new Error("Founder red gates must be requested through Governance Service")
       const current = yield* get(input.project_id)
       if (!current) throw new Error(`Company project not found: ${input.project_id}`)
       if (["completed", "rejected", "blocked"].includes(current.status))
@@ -1477,11 +1484,17 @@ export const layer = Layer.effect(
       const row = {
         id,
         project_id: input.project_id,
+        company_id: current.company_id ?? null,
+        scope_type: "project" as const,
+        pre_project_id: null,
+        decision_id: null,
         kind: input.kind,
         status: "pending" as const,
         title: input.title,
         summary: input.summary,
         requested_by_agent_id: input.requested_by_agent_id ?? null,
+        requested_by_actor_kind: null,
+        requested_by_actor_id: null,
         work_item_id: input.work_item_id ?? null,
         resource_scope_json: JSON.stringify(input.resource_scope ?? []),
         worktree_run_id: input.worktree_run_id ?? null,
@@ -1522,6 +1535,8 @@ export const layer = Layer.effect(
       )
       if (!gate) throw new Error(`Approval gate not found: ${input.id}`)
       if (gate.status !== "pending") throw new Error(`Approval gate ${input.id} is already ${gate.status}`)
+      if (!gate.project_id) throw new Error(`Founder approval gate ${input.id} must be resolved through Governance Service`)
+      const projectID = gate.project_id
       if (gate.kind === "risk_approval" && input.decision === "approve") {
         const item = yield* Effect.sync(() =>
           Database.use((db) =>
@@ -1539,7 +1554,7 @@ export const layer = Layer.effect(
           : undefined
         if (
           !item ||
-          item.project_id !== gate.project_id ||
+          item.project_id !== projectID ||
           item.resource_scope_json !== gate.resource_scope_json ||
           ["completed", "superseded", "cancelled"].includes(item.status) ||
           plan?.status !== "active"
@@ -1582,13 +1597,13 @@ export const layer = Layer.effect(
         )
       if (gate.kind === "risk_approval")
         yield* transition({
-          id: gate.project_id,
+          id: projectID,
           status: input.decision === "reject" ? "rejected" : "executing",
           actor_id: "user",
           reason: input.note,
         })
       yield* event(
-        gate.project_id,
+        projectID,
         "gate.resolved",
         { gate_id: input.id, kind: gate.kind, decision: input.decision, note: input.note },
         "user",
@@ -1601,7 +1616,9 @@ export const layer = Layer.effect(
       status?: "pending" | "approved" | "rejected",
     ) {
       const conditions = [
-        project_id ? eq(CompanyApprovalGateTable.project_id, project_id) : undefined,
+        project_id
+          ? eq(CompanyApprovalGateTable.project_id, project_id)
+          : isNotNull(CompanyApprovalGateTable.project_id),
         status ? eq(CompanyApprovalGateTable.status, status) : undefined,
       ].filter((condition): condition is NonNullable<typeof condition> => !!condition)
       return (yield* Effect.sync(() =>

@@ -16,6 +16,8 @@ export {
   DecisionCurrentProjectionTable,
   DecisionSourceMappingTable,
   DelegationPolicyTable,
+  FounderCorrectionTable,
+  FounderGovernanceEventTable,
 } from "../founder-os/decision-ledger.sql"
 export { LocalClientCredentialTable } from "../local-auth/local-auth.sql"
 export { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../session/session.sql"

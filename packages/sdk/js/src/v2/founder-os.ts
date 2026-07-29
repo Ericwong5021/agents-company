@@ -673,3 +673,174 @@ export function createFounderShadowClient(config: FounderStudioClientConfig) {
     },
   }
 }
+
+export type FounderApprovalActorKind = "human" | "ai_founder" | "board" | "policy_engine"
+
+export type DecisionAuthorityInput = {
+  decisionId: string
+  actionType: string
+  proposedAuthorityClass: FounderAuthorityClass
+  evidenceSufficient: boolean
+  requestedMode: FounderTwinMode
+  approvalPreset: "autonomous" | "balanced" | "strict"
+}
+
+export type DecisionAuthorityEvaluation = {
+  schemaVersion: 1
+  decisionId: string
+  authorityClass: FounderAuthorityClass
+  policyId: string | null
+  requiresApproval: boolean
+  allowed: boolean
+  reasons: string[]
+}
+
+export type FounderApprovalGate = {
+  id: string
+  scope: DecisionScope
+  decisionId: string
+  kind: "founder_red"
+  status: "pending" | "approved" | "rejected"
+  title: string
+  summary: string
+  requestedBy: { kind: FounderApprovalActorKind; id: string }
+  decisionNote: string | null
+  requestedAt: number
+  decidedAt: number | null
+}
+
+export type GovernanceRequest = {
+  schemaVersion: 1
+  idempotencyKey: string
+  decisionId: string
+  actionType: string
+  proposedAuthorityClass: FounderAuthorityClass
+  evidenceSufficient: boolean
+  requestedBy: { kind: FounderApprovalActorKind; id: string }
+}
+
+export type GovernanceDecision = {
+  schemaVersion: 1
+  decision: DecisionRecord
+  authority: DecisionAuthorityEvaluation
+  gate: FounderApprovalGate | null
+  dispatchAllowed: boolean
+}
+
+export type FounderAssetUpdateProposal = {
+  assetId: string | null
+  change: string
+  authority: "ai_proposed"
+}
+
+export type FounderCorrectionAppendInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  decisionId: string
+  kind: "override" | "correction"
+  humanDecision: string
+  reason: string
+  proposedAssetUpdates: FounderAssetUpdateProposal[]
+  actorKind?: "human"
+  actorId: string
+}
+
+export type FounderCorrectionRecord = Omit<FounderCorrectionAppendInput, "idempotencyKey"> & {
+  id: string
+  originalDecision: string | null
+  createdAt: number
+}
+
+export type DecisionCenterActionInput = {
+  schemaVersion: 1
+  idempotencyKey: string
+  action: "accept" | "reject" | "rollback"
+  reason: string
+  actorId: string
+}
+
+export type DecisionCenterItem = {
+  decision: DecisionRecord
+  sourceLabel: DecisionMaker
+  gate: FounderApprovalGate | null
+  corrections: FounderCorrectionRecord[]
+  outcomes: { id: string; result: "succeeded" | "failed" | "inconclusive"; summary: string; observedAt: number }[]
+}
+
+export type DecisionCenterProjection = {
+  schemaVersion: 1
+  companyId: string
+  pending: DecisionCenterItem[]
+  delegated: DecisionCenterItem[]
+  executed: DecisionCenterItem[]
+  overridden: DecisionCenterItem[]
+  withOutcomes: DecisionCenterItem[]
+}
+
+export type FounderOSMetricContract = {
+  schemaVersion: 1
+  version: "founder-os-w2-v1"
+  observationWindow: { days: 30; clock: "observed_at" }
+  metrics: {
+    id: string
+    numerator: string
+    denominator: string
+    minimumSampleSize: number
+    sourceKinds: string[]
+    target: string
+  }[]
+  failClosedWhen: string[]
+  humanSampleGate: { strength: "weak"; blockingDevelopment: false }
+  selfEvaluationAcceptedAsTruth: false
+}
+
+export function createFounderOSGovernanceClient(config: FounderStudioClientConfig) {
+  const request = async <T>(path: string, init?: RequestInit) => {
+    const response = await (config.fetch ?? fetch)(new URL(path, config.baseUrl), {
+      ...init,
+      headers: { ...Object.fromEntries(new Headers(config.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
+    })
+    if (!response.ok) throw new Error(`Founder OS governance request failed with HTTP ${response.status}`)
+    return response.json() as Promise<T>
+  }
+  const json = (body: unknown): RequestInit => ({
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  return {
+    authority(input: DecisionAuthorityInput) {
+      return request<DecisionAuthorityEvaluation>("/company/founder-os/authority/evaluate", json(input))
+    },
+    govern(input: GovernanceRequest) {
+      return request<GovernanceDecision>("/company/founder-os/governance", json(input))
+    },
+    resolveGate(gateId: string, input: {
+      decision: "approve" | "reject"
+      note: string
+      actor: { kind: FounderApprovalActorKind; id: string }
+    }) {
+      return request<GovernanceDecision>(
+        `/company/founder-os/approval-gates/${encodeURIComponent(gateId)}/resolve`,
+        json(input),
+      )
+    },
+    correct(input: FounderCorrectionAppendInput) {
+      return request<FounderCorrectionRecord>("/company/founder-os/corrections", json(input))
+    },
+    decisionCenter(companyId: string) {
+      return request<DecisionCenterProjection>(
+        `/company/founder-os/decision-center?${new URLSearchParams({ company_id: companyId })}`,
+      )
+    },
+    action(decisionId: string, input: DecisionCenterActionInput) {
+      return request<DecisionCenterProjection>(
+        `/company/founder-os/decision-center/${encodeURIComponent(decisionId)}/actions`,
+        json(input),
+      )
+    },
+    metricContract() {
+      return request<FounderOSMetricContract>("/company/founder-os/metrics/contract")
+    },
+  }
+}

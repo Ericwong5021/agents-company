@@ -2757,8 +2757,10 @@ const serviceLayer = Layer.effect(
       note?: string
     }) {
       const gate = yield* projects.resolveGate({ id: input.gate_id, decision: input.decision, note: input.note })
-      const project = yield* projects.get(gate.project_id)
-      if (!project) throw new Error(`Company project not found: ${gate.project_id}`)
+      if (!gate.project_id) throw new Error(`Founder approval gate ${gate.id} cannot enter project execution`)
+      const projectID = gate.project_id
+      const project = yield* projects.get(projectID)
+      if (!project) throw new Error(`Company project not found: ${projectID}`)
       if (input.decision === "reject") {
         if (gate.kind === "merge_approval") {
           yield* recruitment.releaseProject({

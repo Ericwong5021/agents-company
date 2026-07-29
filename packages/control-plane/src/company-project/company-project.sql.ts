@@ -430,13 +430,18 @@ export const CompanyApprovalGateTable = sqliteTable(
   {
     id: text().primaryKey(),
     project_id: text()
-      .notNull()
       .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    company_id: text(),
+    scope_type: text().notNull().default("project"),
+    pre_project_id: text(),
+    decision_id: text(),
     kind: text().notNull(),
     status: text().notNull(),
     title: text().notNull(),
     summary: text().notNull(),
     requested_by_agent_id: text(),
+    requested_by_actor_kind: text(),
+    requested_by_actor_id: text(),
     work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
     resource_scope_json: text().notNull().default("[]"),
     worktree_run_id: text().references(() => CompanyWorktreeRunTable.id, { onDelete: "set null" }),
@@ -448,6 +453,10 @@ export const CompanyApprovalGateTable = sqliteTable(
     index("company_approval_gate_project_idx").on(table.project_id, table.status),
     index("company_approval_gate_project_kind_status_idx").on(table.project_id, table.kind, table.status),
     index("company_approval_gate_work_item_idx").on(table.work_item_id, table.status),
+    index("company_approval_gate_company_scope_idx").on(table.company_id, table.scope_type, table.status),
+    uniqueIndex("company_approval_gate_pending_decision_idx")
+      .on(table.decision_id)
+      .where(sql.raw("status = 'pending' AND decision_id IS NOT NULL")),
   ],
 )
 

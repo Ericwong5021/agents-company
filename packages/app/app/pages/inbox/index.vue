@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { GoalBrief } from "@agents-company/shared/experience";
+import type {
+  DecisionCenterItem,
+  DecisionCenterProjection,
+} from "@agents-company/sdk/v2/founder-os";
 import {
   goalDraftRequest,
   isCurrentGoalDraftRequest,
@@ -70,6 +74,105 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const decisionCenter = ref<DecisionCenterProjection>();
+const decisionCenterPending = ref(false);
+const decisionCenterFeedback = ref("");
+const decisionSourceLabels = {
+  human: "大东本人",
+  ai_founder: "AI 大东 · 创始人代理",
+  board: "董事会",
+  policy_engine: "Policy Engine",
+  unknown: "历史来源未确认",
+} as const;
+
+async function refreshDecisionCenter() {
+  if (!available.value || !snapshot.value.company.id) return;
+  decisionCenterPending.value = true;
+  decisionCenterFeedback.value = "";
+  await $fetch<DecisionCenterProjection>("/api/agent-company/decision-center", {
+    query: { companyId: snapshot.value.company.id },
+  }).then(
+    value => decisionCenter.value = value,
+    () => decisionCenterFeedback.value = "Decision Center 暂时无法读取，未显示缓存状态。",
+  );
+  decisionCenterPending.value = false;
+}
+
+async function refreshInbox() {
+  await Promise.all([refresh(), refreshDecisionCenter()]);
+}
+
+watch(
+  [available, () => snapshot.value.company.id],
+  ([ready, companyId]) => {
+    if (ready && companyId) void refreshDecisionCenter();
+  },
+  { immediate: true },
+);
+
+async function decisionAction(item: DecisionCenterItem, action: "accept" | "reject" | "rollback") {
+  const reason = window.prompt(action === "accept" ? "接受说明" : action === "reject" ? "否决原因" : "回滚原因");
+  if (!reason) return;
+  decisionCenterPending.value = true;
+  decisionCenterFeedback.value = "";
+  const endpoint = item.gate && action !== "rollback"
+    ? "/api/agent-company/decision-center-gate"
+    : "/api/agent-company/decision-center-action";
+  const body = item.gate && action !== "rollback"
+    ? {
+        gateId: item.gate.id,
+        decision: action === "accept" ? "approve" : "reject",
+        note: reason,
+        actor: { kind: "human", id: "user" },
+      }
+    : {
+        decisionId: item.decision.id,
+        action: {
+          schemaVersion: 1,
+          idempotencyKey: crypto.randomUUID(),
+          action,
+          reason,
+          actorId: "user",
+        },
+      };
+  await $fetch(endpoint, { method: "POST", body }).then(
+    () => {
+      decisionCenterFeedback.value = action === "accept" ? "决定已接受。" : action === "reject" ? "决定已否决。" : "回滚已记录。";
+      return refreshDecisionCenter();
+    },
+    () => decisionCenterFeedback.value = "操作未写入，请刷新后重试。",
+  );
+  decisionCenterPending.value = false;
+}
+
+async function correctDecision(item: DecisionCenterItem, kind: "override" | "correction") {
+  const humanDecision = window.prompt(kind === "override" ? "输入新的最终决定" : "输入纠正内容");
+  if (!humanDecision) return;
+  const reason = window.prompt("输入纠正原因");
+  if (!reason) return;
+  decisionCenterPending.value = true;
+  await $fetch("/api/agent-company/decision-center-correction", {
+    method: "POST",
+    body: {
+      schemaVersion: 1,
+      idempotencyKey: crypto.randomUUID(),
+      decisionId: item.decision.id,
+      kind,
+      humanDecision,
+      reason,
+      proposedAssetUpdates: [],
+      actorKind: "human",
+      actorId: "user",
+    },
+  }).then(
+    () => {
+      decisionCenterFeedback.value = kind === "override" ? "Override 已追加记录。" : "Correction 已追加记录。";
+      return refreshDecisionCenter();
+    },
+    () => decisionCenterFeedback.value = "纠正未写入，请刷新后重试。",
+  );
+  decisionCenterPending.value = false;
+}
 
 onMounted(async () => {
   const stored = (() => {
@@ -220,9 +323,154 @@ async function editGoalDraft() {
             icon="i-lucide-refresh-cw"
             aria-label="刷新 Inbox"
             :loading="pending"
-            @click="refresh()"
+            @click="refreshInbox"
           />
         </header>
+
+        <section
+          v-if="available && decisionCenter"
+          class="ac-card-list"
+          aria-label="Decision Center"
+        >
+          <div class="ac-card-heading">
+            <div>
+              <p class="ac-card-kicker">Decision Center</p>
+              <h2>创始人治理决定</h2>
+            </div>
+            <span>{{ decisionCenter.pending.length }} 项待决定</span>
+          </div>
+          <p
+            v-if="decisionCenterFeedback"
+            aria-live="polite"
+          >
+            {{ decisionCenterFeedback }}
+          </p>
+          <article
+            v-for="item in decisionCenter.pending"
+            :key="item.decision.id"
+            class="ac-attention-card"
+            :data-priority="item.decision.authorityClass === 'red' ? 'critical' : 'normal'"
+          >
+            <div class="ac-card-heading">
+              <div>
+                <p class="ac-card-kicker">{{ decisionSourceLabels[item.sourceLabel] }}</p>
+                <h2>{{ item.decision.subject ?? "未命名决定" }}</h2>
+              </div>
+              <span class="ac-status-badge">{{ item.decision.currentStatus }}</span>
+            </div>
+            <p class="ac-card-reason">{{ item.decision.recommendation ?? item.decision.context ?? "历史记录没有可确认的建议内容。" }}</p>
+            <p class="ac-card-impact">
+              权限 {{ item.decision.authorityClass ?? "unknown" }}
+              · 置信度 {{ item.decision.confidence === null ? "unknown" : `${Math.round(item.decision.confidence * 100)}%` }}
+              · {{ item.decision.reversible === null ? "可逆性未知" : item.decision.reversible ? "可逆" : "不可逆" }}
+            </p>
+            <p v-if="item.decision.options?.length">备选：{{ item.decision.options.join("；") }}</p>
+            <p v-if="item.gate">红灯审批：{{ item.gate.status }} · 请求方 {{ decisionSourceLabels[item.gate.requestedBy.kind] }}</p>
+            <div class="ac-goal-generation-state__actions">
+              <UButton
+                color="neutral"
+                :disabled="decisionCenterPending"
+                @click="decisionAction(item, 'accept')"
+              >
+                接受
+              </UButton>
+              <UButton
+                color="neutral"
+                variant="outline"
+                :disabled="decisionCenterPending"
+                @click="decisionAction(item, 'reject')"
+              >
+                否决
+              </UButton>
+              <UButton
+                color="neutral"
+                variant="outline"
+                :disabled="decisionCenterPending"
+                @click="correctDecision(item, 'override')"
+              >
+                Override
+              </UButton>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                :disabled="decisionCenterPending"
+                @click="correctDecision(item, 'correction')"
+              >
+                Correction
+              </UButton>
+            </div>
+          </article>
+          <article
+            v-for="item in decisionCenter.executed"
+            :key="`executed-${item.decision.id}`"
+            class="ac-attention-card"
+          >
+            <div class="ac-card-heading">
+              <div>
+                <p class="ac-card-kicker">{{ decisionSourceLabels[item.sourceLabel] }} · 已执行</p>
+                <h2>{{ item.decision.subject ?? "未命名决定" }}</h2>
+              </div>
+              <span>{{ item.outcomes.length }} 个 Outcome</span>
+            </div>
+            <p>{{ item.decision.finalDecision }}</p>
+            <p v-for="outcome in item.outcomes" :key="outcome.id">{{ outcome.result }} · {{ outcome.summary }}</p>
+            <UButton
+              color="neutral"
+              variant="outline"
+              :disabled="decisionCenterPending"
+              @click="decisionAction(item, 'rollback')"
+            >
+              Rollback
+            </UButton>
+          </article>
+          <article
+            v-for="item in decisionCenter.delegated"
+            :key="`delegated-${item.decision.id}`"
+            class="ac-attention-card"
+          >
+            <div class="ac-card-heading">
+              <div>
+                <p class="ac-card-kicker">AI 代理决定</p>
+                <h2>{{ item.decision.subject ?? "未命名决定" }}</h2>
+              </div>
+              <span class="ac-status-badge">{{ item.decision.currentStatus }}</span>
+            </div>
+            <p>{{ item.decision.finalDecision ?? item.decision.recommendation }}</p>
+            <p>Snapshot {{ item.decision.founderTwinSnapshot?.id ?? "缺失" }} · {{ item.decision.evidenceRefs?.length ?? 0 }} 条证据</p>
+          </article>
+          <article
+            v-for="item in decisionCenter.overridden"
+            :key="`overridden-${item.decision.id}`"
+            class="ac-attention-card"
+          >
+            <div class="ac-card-heading">
+              <div>
+                <p class="ac-card-kicker">推翻与纠偏</p>
+                <h2>{{ item.decision.subject ?? "未命名决定" }}</h2>
+              </div>
+              <span>{{ item.corrections.length }} 条追加记录</span>
+            </div>
+            <p v-for="correction in item.corrections" :key="correction.id">
+              {{ correction.kind }} · {{ correction.humanDecision }} · {{ correction.reason }}
+            </p>
+          </article>
+          <article
+            v-for="item in decisionCenter.withOutcomes"
+            :key="`outcome-${item.decision.id}`"
+            class="ac-attention-card"
+          >
+            <div class="ac-card-heading">
+              <div>
+                <p class="ac-card-kicker">Decision Outcome</p>
+                <h2>{{ item.decision.subject ?? "未命名决定" }}</h2>
+              </div>
+              <span>{{ item.outcomes.length }} 个独立信号</span>
+            </div>
+            <p v-for="outcome in item.outcomes" :key="outcome.id">
+              {{ outcome.result }} · {{ outcome.summary }}
+            </p>
+          </article>
+        </section>
 
         <!-- DELIV-01 — 分类计数概览：按真实事项的五类分布展示，count 为 0 的类别不出现 -->
         <div

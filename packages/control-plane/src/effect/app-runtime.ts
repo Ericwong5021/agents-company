@@ -63,7 +63,7 @@ import { History } from "@/history"
 import { Memory } from "@/memory"
 import { CompanyAgent } from "@/company-agent"
 import { Company } from "@/company"
-import { DecisionLedger } from "@/founder-os"
+import { DecisionLedger, FounderAuthority } from "@/founder-os"
 import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
@@ -156,6 +156,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyAgent.defaultLayer,
     Company.defaultLayer,
     DecisionLedger.defaultLayer,
+    ...FounderAuthority.defaultLayers,
     LocalAuth.defaultLayer,
     groupSession,
     conversation,

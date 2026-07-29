@@ -157,3 +157,53 @@ export const DelegationPolicyTable = sqliteTable(
     ),
   ],
 )
+
+export const FounderCorrectionTable = sqliteTable(
+  "founder_decision_correction",
+  {
+    id: text().primaryKey(),
+    company_id: text()
+      .notNull()
+      .references(() => CompanyTable.id, { onDelete: "cascade" }),
+    decision_id: text()
+      .notNull()
+      .references(() => DecisionRecordTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    kind: text().notNull(),
+    original_decision: text(),
+    human_decision: text().notNull(),
+    reason: text().notNull(),
+    proposed_asset_updates_json: text().notNull(),
+    actor_id: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("founder_decision_correction_idempotency_idx").on(table.company_id, table.idempotency_key),
+    index("founder_decision_correction_decision_idx").on(table.decision_id, table.created_at),
+  ],
+)
+
+export const FounderGovernanceEventTable = sqliteTable(
+  "founder_governance_event",
+  {
+    id: text().primaryKey(),
+    company_id: text()
+      .notNull()
+      .references(() => CompanyTable.id, { onDelete: "cascade" }),
+    scope_type: text().notNull(),
+    scope_key: text().notNull(),
+    decision_id: text()
+      .notNull()
+      .references(() => DecisionRecordTable.id, { onDelete: "cascade" }),
+    gate_id: text(),
+    type: text().notNull(),
+    actor_kind: text().notNull(),
+    actor_id: text().notNull(),
+    data_json: text().notNull(),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    index("founder_governance_event_decision_idx").on(table.decision_id, table.created_at),
+    index("founder_governance_event_scope_idx").on(table.company_id, table.scope_type, table.scope_key),
+  ],
+)

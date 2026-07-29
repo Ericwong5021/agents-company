@@ -37,7 +37,7 @@ export const DeliveryPolicy = z
   .strict()
 export type DeliveryPolicy = z.infer<typeof DeliveryPolicy>
 
-export const GateKind = z.enum(["risk_approval", "merge_approval"])
+export const GateKind = z.enum(["risk_approval", "merge_approval", "founder_red"])
 export type GateKind = z.infer<typeof GateKind>
 
 export const GateStatus = z.enum(["pending", "approved", "rejected"])
@@ -915,12 +915,18 @@ export type ProjectEvent = z.infer<typeof ProjectEvent>
 
 export const ApprovalGate = z.object({
   id: z.string(),
-  project_id: z.string(),
+  project_id: z.string().optional(),
+  company_id: z.string().optional(),
+  scope_type: z.enum(["company", "project", "pre_project"]),
+  pre_project_id: z.string().optional(),
+  decision_id: z.string().optional(),
   kind: GateKind,
   status: GateStatus,
   title: z.string(),
   summary: z.string(),
   requested_by_agent_id: z.string().optional(),
+  requested_by_actor_kind: z.enum(["human", "ai_founder", "board", "policy_engine"]).optional(),
+  requested_by_actor_id: z.string().optional(),
   work_item_id: z.string().optional(),
   resource_scope: z.array(z.string()),
   worktree_run_id: z.string().optional(),

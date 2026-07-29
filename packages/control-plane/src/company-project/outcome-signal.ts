@@ -4,6 +4,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
+import { DecisionCurrentProjectionTable, DecisionRecordTable } from "@/founder-os/decision-ledger.sql"
 import {
   CompanyArtifactTable,
   CompanyOutcomeSignalTable,
@@ -116,6 +117,32 @@ function validateValidator(db: TxOrDb, project_id: string, validator: OutcomeSig
     throw new Error(`Outcome Signal requires an independently verified Artifact: ${validator.id}`)
 }
 
+function validateDecisionReference(db: TxOrDb, project_id: string, decision_id?: string) {
+  if (!decision_id) return
+  const decision = db.select().from(DecisionRecordTable).where(eq(DecisionRecordTable.id, decision_id)).get()
+  if (!decision || decision.scope_type !== "project" || decision.project_id !== project_id)
+    throw new Error(`Outcome Signal references an unavailable project DecisionRecord: ${decision_id}`)
+}
+
+function linkDecisionOutcome(db: TxOrDb, decision_id: string | undefined, outcome_id: string) {
+  if (!decision_id) return
+  const projection = db
+    .select()
+    .from(DecisionCurrentProjectionTable)
+    .where(eq(DecisionCurrentProjectionTable.decision_id, decision_id))
+    .get()
+  if (!projection) throw new Error(`Decision projection was not found: ${decision_id}`)
+  const outcome_ids = z.array(z.string()).parse(JSON.parse(projection.outcome_ref_ids_json))
+  if (outcome_ids.includes(outcome_id)) return
+  db.update(DecisionCurrentProjectionTable)
+    .set({
+      outcome_ref_ids_json: JSON.stringify([...outcome_ids, outcome_id]),
+      updated_at: Date.now(),
+    })
+    .where(eq(DecisionCurrentProjectionTable.decision_id, decision_id))
+    .run()
+}
+
 function insertEvent(db: TxOrDb, project_id: string, signal: OutcomeSignalValue) {
   db.insert(CompanyProjectEventTable)
     .values({
@@ -208,6 +235,7 @@ export const layer = Layer.effect(
           (db) => {
             if (!db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, project_id)).get())
               throw new Error(`Company project not found: ${project_id}`)
+            validateDecisionReference(db, project_id, input.decision_id)
             const existing = db
               .select()
               .from(CompanyOutcomeSignalTable)
@@ -246,6 +274,7 @@ export const layer = Layer.effect(
             const signal = signalFromRow(
               db.select().from(CompanyOutcomeSignalTable).where(eq(CompanyOutcomeSignalTable.id, id)).get()!,
             )
+            linkDecisionOutcome(db, input.decision_id, id)
             insertEvent(db, project_id, signal)
             return { signal, replayed: false }
           },
@@ -264,8 +293,10 @@ export const layer = Layer.effect(
             .all()
             .map((row) => {
               const signal = signalFromRow(row)
+              validateDecisionReference(db, signal.project_id, signal.decision_id)
               signal.source_refs.forEach((reference) => validateSourceReference(db, signal.project_id, reference))
               validateValidator(db, signal.project_id, signal.validator_ref)
+              linkDecisionOutcome(db, signal.decision_id, signal.id)
               return signal.id
             }),
         ),

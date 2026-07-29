@@ -948,3 +948,197 @@ export const FounderBoardShadowProjection = z
   .strict()
   .meta({ ref: "FounderBoardShadowProjection" })
 export type FounderBoardShadowProjection = z.infer<typeof FounderBoardShadowProjection>
+
+export const FounderApprovalActorKind = z.enum(["human", "ai_founder", "board", "policy_engine"])
+export type FounderApprovalActorKind = z.infer<typeof FounderApprovalActorKind>
+
+export const DecisionAuthorityInput = z
+  .object({
+    decisionId: Identifier,
+    actionType: Identifier,
+    proposedAuthorityClass: FounderAuthorityClass,
+    evidenceSufficient: z.boolean(),
+    requestedMode: FounderTwinMode,
+    approvalPreset: z.enum(["autonomous", "balanced", "strict"]),
+  })
+  .strict()
+  .meta({ ref: "DecisionAuthorityInput" })
+export type DecisionAuthorityInput = z.infer<typeof DecisionAuthorityInput>
+
+export const DecisionAuthorityEvaluation = z
+  .object({
+    schemaVersion: z.literal(1),
+    decisionId: Identifier,
+    authorityClass: FounderAuthorityClass,
+    policyId: Identifier.nullable(),
+    requiresApproval: z.boolean(),
+    allowed: z.boolean(),
+    reasons: z.array(ShortText).min(1),
+  })
+  .strict()
+  .meta({ ref: "DecisionAuthorityEvaluation" })
+export type DecisionAuthorityEvaluation = z.infer<typeof DecisionAuthorityEvaluation>
+
+export const GovernanceRequest = z
+  .object({
+    schemaVersion: z.literal(1),
+    idempotencyKey: Identifier,
+    decisionId: Identifier,
+    actionType: Identifier,
+    proposedAuthorityClass: FounderAuthorityClass,
+    evidenceSufficient: z.boolean(),
+    requestedBy: z
+      .object({
+        kind: FounderApprovalActorKind,
+        id: Identifier,
+      })
+      .strict(),
+  })
+  .strict()
+  .meta({ ref: "GovernanceRequest" })
+export type GovernanceRequest = z.infer<typeof GovernanceRequest>
+
+export const FounderApprovalGate = z
+  .object({
+    id: Identifier,
+    scope: DecisionScope,
+    decisionId: Identifier,
+    kind: z.literal("founder_red"),
+    status: z.enum(["pending", "approved", "rejected"]),
+    title: LongText,
+    summary: LongText,
+    requestedBy: z
+      .object({
+        kind: FounderApprovalActorKind,
+        id: Identifier,
+      })
+      .strict(),
+    decisionNote: LongText.nullable(),
+    requestedAt: z.number().int().nonnegative(),
+    decidedAt: z.number().int().nonnegative().nullable(),
+  })
+  .strict()
+  .meta({ ref: "FounderApprovalGate" })
+export type FounderApprovalGate = z.infer<typeof FounderApprovalGate>
+
+export const GovernanceDecision = z
+  .object({
+    schemaVersion: z.literal(1),
+    decision: DecisionRecord,
+    authority: DecisionAuthorityEvaluation,
+    gate: FounderApprovalGate.nullable(),
+    dispatchAllowed: z.boolean(),
+  })
+  .strict()
+  .meta({ ref: "GovernanceDecision" })
+export type GovernanceDecision = z.infer<typeof GovernanceDecision>
+
+export const FounderCorrectionKind = z.enum(["override", "correction"])
+export type FounderCorrectionKind = z.infer<typeof FounderCorrectionKind>
+
+export const FounderAssetUpdateProposal = z
+  .object({
+    assetId: Identifier.nullable(),
+    change: LongText,
+    authority: z.literal("ai_proposed"),
+  })
+  .strict()
+  .meta({ ref: "FounderAssetUpdateProposal" })
+export type FounderAssetUpdateProposal = z.infer<typeof FounderAssetUpdateProposal>
+
+export const FounderCorrectionAppendInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    idempotencyKey: Identifier,
+    decisionId: Identifier,
+    kind: FounderCorrectionKind,
+    humanDecision: LongText,
+    reason: LongText,
+    proposedAssetUpdates: z.array(FounderAssetUpdateProposal).max(100),
+    actorKind: z.literal("human").default("human"),
+    actorId: Identifier,
+  })
+  .strict()
+  .meta({ ref: "FounderCorrectionAppendInput" })
+export type FounderCorrectionAppendInput = z.infer<typeof FounderCorrectionAppendInput>
+
+export const FounderCorrectionRecord = FounderCorrectionAppendInput.omit({ idempotencyKey: true }).extend({
+  id: Identifier,
+  originalDecision: LongText.nullable(),
+  createdAt: z.number().int().nonnegative(),
+})
+  .strict()
+  .meta({ ref: "FounderCorrectionRecord" })
+export type FounderCorrectionRecord = z.infer<typeof FounderCorrectionRecord>
+
+export const DecisionCenterActionInput = z
+  .object({
+    schemaVersion: z.literal(1),
+    idempotencyKey: Identifier,
+    action: z.enum(["accept", "reject", "rollback"]),
+    reason: LongText,
+    actorId: Identifier,
+  })
+  .strict()
+  .meta({ ref: "DecisionCenterActionInput" })
+export type DecisionCenterActionInput = z.infer<typeof DecisionCenterActionInput>
+
+export const DecisionCenterItem = z
+  .object({
+    decision: DecisionRecord,
+    sourceLabel: z.enum(["human", "ai_founder", "board", "policy_engine", "unknown"]),
+    gate: FounderApprovalGate.nullable(),
+    corrections: z.array(FounderCorrectionRecord),
+    outcomes: z.array(
+      z
+        .object({
+          id: Identifier,
+          result: z.enum(["succeeded", "failed", "inconclusive"]),
+          summary: LongText,
+          observedAt: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+  .meta({ ref: "DecisionCenterItem" })
+export type DecisionCenterItem = z.infer<typeof DecisionCenterItem>
+
+export const DecisionCenterProjection = z
+  .object({
+    schemaVersion: z.literal(1),
+    companyId: Identifier,
+    pending: z.array(DecisionCenterItem),
+    delegated: z.array(DecisionCenterItem),
+    executed: z.array(DecisionCenterItem),
+    overridden: z.array(DecisionCenterItem),
+    withOutcomes: z.array(DecisionCenterItem),
+  })
+  .strict()
+  .meta({ ref: "DecisionCenterProjection" })
+export type DecisionCenterProjection = z.infer<typeof DecisionCenterProjection>
+
+export const FounderOSMetricContract = z
+  .object({
+    schemaVersion: z.literal(1),
+    version: z.literal("founder-os-w2-v1"),
+    observationWindow: z.object({ days: z.literal(30), clock: z.literal("observed_at") }).strict(),
+    metrics: z.array(
+      z
+        .object({
+          id: Identifier,
+          numerator: ShortText,
+          denominator: ShortText,
+          minimumSampleSize: z.number().int().positive(),
+          sourceKinds: z.array(Identifier).min(1),
+          target: ShortText,
+        })
+        .strict(),
+    ),
+    failClosedWhen: z.array(ShortText).min(1),
+    humanSampleGate: z.object({ strength: z.literal("weak"), blockingDevelopment: z.literal(false) }).strict(),
+    selfEvaluationAcceptedAsTruth: z.literal(false),
+  })
+  .strict()
+  .meta({ ref: "FounderOSMetricContract" })
+export type FounderOSMetricContract = z.infer<typeof FounderOSMetricContract>

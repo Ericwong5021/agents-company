@@ -1,9 +1,18 @@
 import {
+  DecisionAuthorityEvaluation,
+  DecisionAuthorityInput,
+  DecisionCenterActionInput,
+  DecisionCenterProjection,
   DecisionRecord,
   DecisionRecordAppendInput,
   DecisionTransition,
   DecisionTransitionAppendInput,
   DelegationPolicy,
+  FounderCorrectionAppendInput,
+  FounderCorrectionRecord,
+  FounderOSMetricContract,
+  GovernanceDecision,
+  GovernanceRequest,
 } from "@agents-company/shared/founder-os"
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
@@ -25,6 +34,13 @@ import {
   DecisionLedgerNotFound,
   Service,
 } from "./decision-ledger"
+import {
+  DecisionAuthorityService,
+  DecisionCenterService,
+  FounderCorrectionService,
+  GovernanceService,
+} from "./authority"
+import { metricContract } from "./metric"
 
 const DecisionParam = z.object({ decisionID: z.string().min(1) }).strict()
 const DecisionListQuery = z
@@ -36,6 +52,14 @@ const DecisionListQuery = z
   })
   .strict()
 const PolicyListQuery = z.object({ company_id: CompanyID }).strict()
+const GateParam = z.object({ gateID: z.string().min(1) }).strict()
+const GateResolveInput = z
+  .object({
+    decision: z.enum(["approve", "reject"]),
+    note: z.string().trim().min(1).max(20_000),
+    actor: z.object({ kind: z.enum(["human", "ai_founder", "board", "policy_engine"]), id: z.string().min(1) }).strict(),
+  })
+  .strict()
 
 const badRequest = namedErrorResponse("Invalid Founder OS ledger request", [ProductValidationError] as const)
 const notFound = namedErrorResponse("Decision record not found", [DecisionLedgerNotFound.Schema] as const)
@@ -202,5 +226,165 @@ export const FounderOSRoutes = lazy(() =>
             Service.use((service) => service.policies(c.req.valid("query").company_id)),
           ),
         ),
+    )
+    .post(
+      "/authority/evaluate",
+      describeRoute({
+        operationId: "founderOS.authorityEvaluate",
+        summary: "Evaluate deterministic Founder OS authority",
+        responses: {
+          200: {
+            description: "Authority evaluation",
+            content: { "application/json": { schema: resolver(DecisionAuthorityEvaluation) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", DecisionAuthorityInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            DecisionAuthorityService.use((service) => service.evaluate(c.req.valid("json"))),
+          ),
+        ),
+    )
+    .post(
+      "/governance",
+      describeRoute({
+        operationId: "founderOS.governance",
+        summary: "Enter the single Founder OS governance path",
+        responses: {
+          200: {
+            description: "Governance verdict",
+            content: { "application/json": { schema: resolver(GovernanceDecision) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", GovernanceRequest, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(GovernanceService.use((service) => service.submit(c.req.valid("json")))),
+        ),
+    )
+    .post(
+      "/approval-gates/:gateID/resolve",
+      describeRoute({
+        operationId: "founderOS.approvalGateResolve",
+        summary: "Resolve a Founder OS red approval gate",
+        responses: {
+          200: {
+            description: "Governance verdict",
+            content: { "application/json": { schema: resolver(GovernanceDecision) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("param", GateParam, productValidationHook),
+      validator("json", GateResolveInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            GovernanceService.use((service) =>
+              service.resolveGate({
+                gateId: c.req.valid("param").gateID,
+                ...c.req.valid("json"),
+              }),
+            ),
+          ),
+        ),
+    )
+    .post(
+      "/corrections",
+      describeRoute({
+        operationId: "founderOS.correctionAppend",
+        summary: "Append an immutable Founder OS correction or override",
+        responses: {
+          200: {
+            description: "Correction record",
+            content: { "application/json": { schema: resolver(FounderCorrectionRecord) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("json", FounderCorrectionAppendInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            FounderCorrectionService.use((service) => service.append(c.req.valid("json"))),
+          ),
+        ),
+    )
+    .get(
+      "/decision-center",
+      describeRoute({
+        operationId: "founderOS.decisionCenter",
+        summary: "Read the persistent Decision Center projection",
+        responses: {
+          200: {
+            description: "Decision Center projection",
+            content: { "application/json": { schema: resolver(DecisionCenterProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("query", PolicyListQuery, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            DecisionCenterService.use((service) => service.projection(c.req.valid("query").company_id)),
+          ),
+        ),
+    )
+    .post(
+      "/decision-center/:decisionID/actions",
+      describeRoute({
+        operationId: "founderOS.decisionCenterAction",
+        summary: "Append a Decision Center accept, reject or rollback action",
+        responses: {
+          200: {
+            description: "Updated Decision Center projection",
+            content: { "application/json": { schema: resolver(DecisionCenterProjection) } },
+          },
+          400: badRequest,
+          401: localAuthUnauthorizedResponse,
+          500: internalError,
+        },
+      }),
+      validator("param", DecisionParam, productValidationHook),
+      validator("json", DecisionCenterActionInput, productValidationHook),
+      async (c) =>
+        c.json(
+          await AppRuntime.runPromise(
+            DecisionCenterService.use((service) =>
+              service.action(c.req.valid("param").decisionID, c.req.valid("json")),
+            ),
+          ),
+        ),
+    )
+    .get(
+      "/metrics/contract",
+      describeRoute({
+        operationId: "founderOS.metricContract",
+        summary: "Read the frozen Founder OS metric contract",
+        responses: {
+          200: {
+            description: "Metric contract",
+            content: { "application/json": { schema: resolver(FounderOSMetricContract) } },
+          },
+          401: localAuthUnauthorizedResponse,
+        },
+      }),
+      (c) => c.json(metricContract),
     ),
 )
