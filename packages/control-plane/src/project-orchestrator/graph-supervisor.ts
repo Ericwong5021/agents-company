@@ -24,7 +24,6 @@ import {
   type WorkReceipt,
 } from "@/company-project/schema"
 import { CompanyWorkFacts, type ReceiptClaim } from "@/company-project/work-facts"
-import { Flag } from "@/flag/flag"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
@@ -281,7 +280,19 @@ export function defaultDecision(input: DecisionInput): SupervisorDecision {
         operations: [],
       }
     return {
-      kind: "expand",
+      kind: boundedOperations.some((operation) => operation.type === "add_work_item")
+        ? "expand"
+        : boundedOperations.some((operation) => operation.type === "request_capability")
+          ? "request_capability"
+          : boundedOperations.some(
+                (operation) =>
+                  operation.type === "request_user_decision" ||
+                  operation.type === "add_validation_gate",
+              )
+            ? "request_attention"
+            : boundedOperations.some((operation) => operation.type === "supersede_work_item")
+              ? "supersede"
+              : "rewire",
       reason_code: "receipt_task_proposal",
       summary: `Receipt ${input.receipt.id} proposed ${boundedOperations.filter((operation) => operation.type === "add_work_item").length} bounded WorkItem additions.`,
       operations: boundedOperations,
@@ -927,7 +938,7 @@ export function makeLayer(hooks: Hooks = {}) {
               Effect.gen(function* () {
                 const project = yield* projects.get(project_id)
                 if (!project) throw new Error(`Company project not found: ${project_id}`)
-                const mode = hooks.mode ?? Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+                const mode = hooks.mode ?? CompanyRollout.executionMode()
                 if (mode === "off") return yield* drain(project_id)
                 return yield* lock(project_id).withPermits(1)(drainUnlocked(project_id, mode, undefined, true))
               }),

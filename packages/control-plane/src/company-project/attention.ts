@@ -4,6 +4,7 @@ import { Context, Effect, Layer } from "effect"
 import z from "zod"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import type { TxOrDb } from "@/storage/db"
 import {
   CompanyAttentionTable,
   CompanyProjectActionTable,
@@ -98,88 +99,94 @@ export function actionFromRow(row: typeof CompanyProjectActionTable.$inferSelect
 }
 
 function insertEvent(project_id: string, type: string, data: Record<string, unknown>, actor_id?: string) {
-  Database.use((db) =>
-    db
-      .insert(CompanyProjectEventTable)
-      .values({
-        id: Identifier.ascending("event"),
-        project_id,
-        type,
-        actor_id: actor_id ?? null,
-        data_json: JSON.stringify(data),
-        created_at: Date.now(),
-      })
-      .run(),
-  )
+  Database.use((db) => insertEventWithDatabase(db, project_id, type, data, actor_id))
 }
 
-function createAttention(raw: AttentionCreateValue) {
+function insertEventWithDatabase(
+  db: TxOrDb,
+  project_id: string,
+  type: string,
+  data: Record<string, unknown>,
+  actor_id?: string,
+) {
+  db.insert(CompanyProjectEventTable)
+    .values({
+      id: Identifier.ascending("event"),
+      project_id,
+      type,
+      actor_id: actor_id ?? null,
+      data_json: JSON.stringify(data),
+      created_at: Date.now(),
+    })
+    .run()
+}
+
+export function createWithDatabase(db: TxOrDb, raw: AttentionCreateValue) {
   const input = AttentionCreate.parse(raw)
   const decision = AttentionRouter.route(input.issue)
   const source_refs = normalizedRefs(input.source_refs)
   const input_sha256 = digest({ ...input, source_refs, decision })
-  return Database.transaction(
-    (db) => {
-      if (!db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.project_id)).get())
-        throw new Error(`Company project not found: ${input.project_id}`)
-      const existing = db
-        .select()
-        .from(CompanyAttentionTable)
-        .where(
-          and(
-            eq(CompanyAttentionTable.project_id, input.project_id),
-            eq(CompanyAttentionTable.idempotency_key, input.idempotency_key),
-          ),
-        )
-        .get()
-      if (existing) {
-        if (existing.input_sha256 !== input_sha256)
-          throw new Error(`Attention idempotency key ${input.idempotency_key} has different facts`)
-        return { record: attentionFromRow(existing), replayed: true }
-      }
-      const id = Identifier.ascending("attention")
-      const now = Date.now()
-      db.insert(CompanyAttentionTable)
-        .values({
-          id,
-          project_id: input.project_id,
-          idempotency_key: input.idempotency_key,
-          issue_kind: decision.issue_kind,
-          risk: decision.risk,
-          materiality: decision.materiality,
-          route: decision.route,
-          material: decision.material,
-          interrupts_user: decision.interrupts_user,
-          title: input.title,
-          summary: input.summary,
-          required_decision: input.required_decision ?? null,
-          allowed_actions_json: JSON.stringify(decision.allowed_actions),
-          source_refs_json: JSON.stringify(source_refs),
-          input_sha256,
-          status: "open",
-          resolution: null,
-          version: 1,
-          created_at: now,
-          updated_at: now,
-          resolved_at: null,
-        })
-        .run()
-      insertEvent(input.project_id, "attention.opened", {
-        attention_id: id,
-        issue_kind: decision.issue_kind,
-        materiality: decision.materiality,
-        route: decision.route,
-        interrupts_user: decision.interrupts_user,
-      })
-      return {
-        record: attentionFromRow(
-          db.select().from(CompanyAttentionTable).where(eq(CompanyAttentionTable.id, id)).get()!,
-        ),
-        replayed: false,
-      }
-    },
-    { behavior: "immediate" },
-  )
+  if (!db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.project_id)).get())
+    throw new Error(`Company project not found: ${input.project_id}`)
+  const existing = db
+    .select()
+    .from(CompanyAttentionTable)
+    .where(
+      and(
+        eq(CompanyAttentionTable.project_id, input.project_id),
+        eq(CompanyAttentionTable.idempotency_key, input.idempotency_key),
+      ),
+    )
+    .get()
+  if (existing) {
+    if (existing.input_sha256 !== input_sha256)
+      throw new Error(`Attention idempotency key ${input.idempotency_key} has different facts`)
+    return { record: attentionFromRow(existing), replayed: true }
+  }
+  const id = Identifier.ascending("attention")
+  const now = Date.now()
+  db.insert(CompanyAttentionTable)
+    .values({
+      id,
+      project_id: input.project_id,
+      idempotency_key: input.idempotency_key,
+      issue_kind: decision.issue_kind,
+      risk: decision.risk,
+      materiality: decision.materiality,
+      route: decision.route,
+      material: decision.material,
+      interrupts_user: decision.interrupts_user,
+      title: input.title,
+      summary: input.summary,
+      required_decision: input.required_decision ?? null,
+      allowed_actions_json: JSON.stringify(decision.allowed_actions),
+      source_refs_json: JSON.stringify(source_refs),
+      input_sha256,
+      status: "open",
+      resolution: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      resolved_at: null,
+    })
+    .run()
+  insertEventWithDatabase(db, input.project_id, "attention.opened", {
+    attention_id: id,
+    issue_kind: decision.issue_kind,
+    materiality: decision.materiality,
+    route: decision.route,
+    interrupts_user: decision.interrupts_user,
+  })
+  return {
+    record: attentionFromRow(
+      db.select().from(CompanyAttentionTable).where(eq(CompanyAttentionTable.id, id)).get()!,
+    ),
+    replayed: false,
+  }
+}
+
+function createAttention(raw: AttentionCreateValue) {
+  return Database.transaction((db) => createWithDatabase(db, raw), { behavior: "immediate" })
 }
 
 export type ReplayResult<T> = { record: T; replayed: boolean }

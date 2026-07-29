@@ -69,9 +69,9 @@ function reconcileWorkItems() {
             : undefined
           const now = Date.now()
           const nextStatus =
-            receipt?.processing_status === "processed" && attempt?.status === "completed"
+            receipt && attempt?.status === "completed"
               ? "completed"
-              : receipt?.processing_status === "processed" && attempt?.status !== "running"
+              : receipt && attempt?.status !== "running"
                 ? "blocked"
                 : run && ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(run.state)
                   ? "running"

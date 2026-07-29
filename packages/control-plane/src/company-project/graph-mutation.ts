@@ -6,6 +6,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
+import { createWithDatabase as createAttentionWithDatabase } from "./attention"
 import {
   CompanyGraphMutationTable,
   CompanyPlanTable,
@@ -374,11 +375,47 @@ function applyOperations(
       )
       return
     }
+    const issue_kind =
+      operation.request.materiality === "scope"
+        ? "scope_change"
+        : operation.request.materiality === "permission"
+          ? "permission_required"
+          : operation.request.materiality === "acceptance"
+            ? "acceptance_change"
+            : operation.request.materiality === "budget"
+              ? "budget_change"
+              : "external_side_effect"
+    const attention = createAttentionWithDatabase(db, {
+      project_id: proposal.project_id,
+      idempotency_key: `graph-attention:${mutation_id}:${operation.request.id}`,
+      issue: {
+        issue_kind,
+        risk:
+          operation.request.materiality === "permission" ||
+          operation.request.materiality === "external_side_effect"
+            ? "high"
+            : "medium",
+        materiality: operation.request.materiality,
+      },
+      title: operation.request.title,
+      summary: operation.request.summary,
+      required_decision: operation.request.required_decision,
+      source_refs: [
+        { kind: "project", id: proposal.project_id },
+        { kind: "work_receipt", id: proposal.trigger_receipt_id },
+        { kind: "graph_mutation", id: mutation_id },
+      ],
+    })
     insertEvent(
       db,
       proposal.project_id,
       "graph.user_decision.requested",
-      { mutation_id, graph_revision: applied_revision, request: operation.request },
+      {
+        mutation_id,
+        graph_revision: applied_revision,
+        request: operation.request,
+        attention_id: attention.record.id,
+      },
       now,
     )
   })

@@ -1,9 +1,10 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, inArray } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
+import { createWithDatabase as createAttentionWithDatabase } from "./attention"
 import {
   CompanyArtifactTable,
   CompanyProjectEventTable,
@@ -692,20 +693,22 @@ export function makeLayer() {
                 now,
               )
               if (result.status === "failed" && round === row.max_repair_rounds) {
-                insertEvent(
-                  db,
-                  row.project_id,
-                  "attention.requested",
-                  {
-                    attention_id: `validation-gate-${row.id}`,
-                    gate_id: row.id,
+                createAttentionWithDatabase(db, {
+                  project_id: row.project_id,
+                  idempotency_key: `validation-circuit:${row.id}`,
+                  issue: {
+                    issue_kind: "acceptance_change",
+                    risk: "high",
                     materiality: "acceptance",
-                    repair_rounds: round,
-                    failure_summary: result.failure_summary,
-                    required_decision: "Resolve the failed Gate or supersede its scope",
                   },
-                  now,
-                )
+                  title: "Validation Gate requires a decision",
+                  summary: result.failure_summary ?? `Validation Gate ${row.id} failed`,
+                  required_decision: "Resolve the failed Gate or supersede its scope",
+                  source_refs: [
+                    { kind: "project", id: row.project_id },
+                    { kind: "validation_gate", id: row.id },
+                  ],
+                })
               }
               const gate = gateFromRow(
                 db
@@ -778,37 +781,24 @@ export function makeLayer() {
                     reset_gate_ids.push(row.id)
                     return
                   }
-                  if (
-                    row.status === "failed" &&
-                    row.repair_round >= row.max_repair_rounds &&
-                    !db
-                      .select({ id: CompanyProjectEventTable.id })
-                      .from(CompanyProjectEventTable)
-                      .where(
-                        and(
-                          eq(CompanyProjectEventTable.project_id, row.project_id),
-                          eq(CompanyProjectEventTable.type, "attention.requested"),
-                          sql`json_extract(${CompanyProjectEventTable.data_json}, '$.gate_id') = ${row.id}`,
-                        ),
-                      )
-                      .get()
-                  ) {
-                    insertEvent(
-                      db,
-                      row.project_id,
-                      "attention.requested",
-                      {
-                        attention_id: `validation-gate-${row.id}`,
-                        gate_id: row.id,
+                  if (row.status === "failed" && row.repair_round >= row.max_repair_rounds) {
+                    const attention = createAttentionWithDatabase(db, {
+                      project_id: row.project_id,
+                      idempotency_key: `validation-circuit:${row.id}`,
+                      issue: {
+                        issue_kind: "acceptance_change",
+                        risk: "high",
                         materiality: "acceptance",
-                        repair_rounds: row.repair_round,
-                        failure_summary: row.failure_summary,
-                        required_decision: "Resolve the failed Gate or supersede its scope",
-                        recovered: true,
                       },
-                      Date.now(),
-                    )
-                    attention_gate_ids.push(row.id)
+                      title: "Validation Gate requires a decision",
+                      summary: row.failure_summary ?? `Validation Gate ${row.id} failed`,
+                      required_decision: "Resolve the failed Gate or supersede its scope",
+                      source_refs: [
+                        { kind: "project", id: row.project_id },
+                        { kind: "validation_gate", id: row.id },
+                      ],
+                    })
+                    if (!attention.replayed) attention_gate_ids.push(row.id)
                   }
                   confirmed_gate_ids.push(row.id)
                 })

@@ -1,10 +1,9 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq, isNull, sql } from "drizzle-orm"
+import { and, asc, eq, sql } from "drizzle-orm"
 import z from "zod"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Company } from "@/company"
 import { CompanyAgent } from "@/company-agent"
-import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyAgentID } from "@/company-agent/schema"
 import {
   CompanyProjectEventTable,
@@ -490,37 +489,6 @@ export const layer = Layer.effect(
       } satisfies CandidateFacts
     })
 
-    const ensureRoleKey = Effect.fn("CompanyRecruitment.ensureRoleKey")(function* (
-      need: CapabilityNeed,
-      agent: CompanyAgent.Info,
-    ) {
-      if (!need.company_id || agent.role_key) return agent
-      yield* Effect.sync(() =>
-        Database.use((db) => {
-          const existing = db
-            .select()
-            .from(CompanyAgentTable)
-            .where(
-              and(
-                eq(CompanyAgentTable.company_id, need.company_id!),
-                eq(CompanyAgentTable.role_key, need.role),
-              ),
-            )
-            .get()
-          db.update(CompanyAgentTable)
-            .set({
-              role_key: existing && existing.id !== agent.id ? `${need.role} (${agent.id})` : need.role,
-              time_updated: Date.now(),
-            })
-            .where(and(eq(CompanyAgentTable.id, agent.id), isNull(CompanyAgentTable.role_key)))
-            .run()
-        }),
-      )
-      const updated = yield* agents.get(agent.id)
-      if (!updated) throw new Error(`Selected company agent not found: ${agent.id}`)
-      return updated
-    })
-
     const selectForNeed = Effect.fn("CompanyRecruitment.selectForNeed")(function* (raw: SelectForNeedInput) {
       const input = SelectForNeedInput.parse(raw)
       yield* company.current().pipe(Effect.ignore)
@@ -639,7 +607,6 @@ export const layer = Layer.effect(
             }
           })
 
-      yield* ensureRoleKey(need, chosen.agent)
       if (need.company_id)
         yield* seedDeclaredCapabilities(need.company_id, chosen.agent.id, need.capability_packs, "selection")
       const now = Date.now()
