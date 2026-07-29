@@ -5,6 +5,7 @@ CREATE TABLE `company_gate_observation` (
   `candidate_sha` text NOT NULL CHECK (length(`candidate_sha`) = 40 AND `candidate_sha` NOT GLOB '*[^0-9a-f]*'),
   `scenario_id` text NOT NULL,
   `run_id` text NOT NULL,
+  `subject_id` text NOT NULL,
   `strategy` text NOT NULL CHECK (`strategy` IN ('legacy_full_plan', 'seed_and_grow')),
   `snapshot_sha256` text NOT NULL CHECK (length(`snapshot_sha256`) = 64 AND `snapshot_sha256` NOT GLOB '*[^0-9a-f]*'),
   `event_type` text NOT NULL,
@@ -18,7 +19,7 @@ CREATE TABLE `company_gate_observation` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `company_gate_observation_run_event_idx`
-ON `company_gate_observation` (`run_id`, `event_type`);
+ON `company_gate_observation` (`run_id`, `event_type`, `subject_id`);
 --> statement-breakpoint
 CREATE INDEX `company_gate_observation_project_idx`
 ON `company_gate_observation` (`project_id`, `created_at`);

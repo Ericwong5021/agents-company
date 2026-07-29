@@ -31,6 +31,17 @@ const SourceReference = z
   .strict()
 
 export const GateObservationEventType = z.enum([
+  "terminal.invariant_checked",
+  "receipt.recovery_checked",
+  "graph_mutation.recovery_checked",
+  "delivery.checked",
+  "validation_anchor.checked",
+  "interruption.checked",
+  "review_presence.checked",
+  "quality_pair.checked",
+  "benchmark.checked",
+  "candidate_terminal.checked",
+  "shadow_pair.checked",
   "trust.false_state_detected",
   "connection.lost",
   "connection.recovered",
@@ -42,6 +53,8 @@ export const GateObservationEventType = z.enum([
   "user.interruption_presented",
   "user.interruption_judged",
   "review.completed",
+  "repair.circuit_opened",
+  "model.usage_recorded",
   "delivery.quality_compared",
   "benchmark.completed",
   "candidate.terminal_checked",
@@ -56,6 +69,7 @@ export const GateObservationInput = z
     candidateSha: z.string().regex(/^[a-f0-9]{40}$/),
     scenarioId: z.string().trim().min(1),
     runId: z.string().trim().min(1),
+    subjectId: z.string().trim().min(1),
     strategy: z.enum(["legacy_full_plan", "seed_and_grow"]),
     snapshotSha256: Digest,
     eventType: GateObservationEventType,
@@ -97,6 +111,7 @@ function fromRow(row: typeof CompanyGateObservationTable.$inferSelect) {
     candidateSha: row.candidate_sha,
     scenarioId: row.scenario_id,
     runId: row.run_id,
+    subjectId: row.subject_id,
     strategy: row.strategy,
     snapshotSha256: row.snapshot_sha256,
     eventType: row.event_type,
@@ -174,13 +189,21 @@ export const layer = Layer.effect(
         const paired = yield* Effect.sync(() =>
           Database.use((database) =>
             database
-              .select({ id: CompanyProjectTable.id })
+              .select({
+                id: CompanyProjectTable.id,
+                execution_strategy: CompanyProjectTable.execution_strategy,
+              })
               .from(CompanyProjectTable)
               .where(eq(CompanyProjectTable.id, input.pairedProjectId!))
               .get(),
           ),
         )
-        if (!paired) throw new Error("Gate observation paired project is unavailable")
+        if (
+          !paired ||
+          paired.execution_strategy === input.strategy ||
+          !["legacy_full_plan", "seed_and_grow"].includes(paired.execution_strategy)
+        )
+          throw new Error("Gate observation paired project must use the opposite strategy")
       }
       const source = {
         projectId: input.projectId,
@@ -188,6 +211,7 @@ export const layer = Layer.effect(
         candidateSha: input.candidateSha,
         scenarioId: input.scenarioId,
         runId: input.runId,
+        subjectId: input.subjectId,
         strategy: input.strategy,
         snapshotSha256: input.snapshotSha256,
         eventType: input.eventType,
@@ -199,7 +223,7 @@ export const layer = Layer.effect(
       }
       const inputSha256 = digest(source)
       const existing = (yield* list({ runId: input.runId })).find(
-        (item) => item.eventType === input.eventType,
+        (item) => item.eventType === input.eventType && item.subjectId === input.subjectId,
       )
       if (existing) {
         if (existing.inputSha256 !== inputSha256)
@@ -219,6 +243,7 @@ export const layer = Layer.effect(
               candidate_sha: input.candidateSha,
               scenario_id: input.scenarioId,
               run_id: input.runId,
+              subject_id: input.subjectId,
               strategy: input.strategy,
               snapshot_sha256: input.snapshotSha256,
               event_type: input.eventType,

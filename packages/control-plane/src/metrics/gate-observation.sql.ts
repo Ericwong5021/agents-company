@@ -12,6 +12,7 @@ export const CompanyGateObservationTable = sqliteTable(
     candidate_sha: text().notNull(),
     scenario_id: text().notNull(),
     run_id: text().notNull(),
+    subject_id: text().notNull(),
     strategy: text().notNull(),
     snapshot_sha256: text().notNull(),
     event_type: text().notNull(),
@@ -24,7 +25,11 @@ export const CompanyGateObservationTable = sqliteTable(
     created_at: integer().notNull(),
   },
   (table) => [
-    uniqueIndex("company_gate_observation_run_event_idx").on(table.run_id, table.event_type),
+    uniqueIndex("company_gate_observation_run_event_idx").on(
+      table.run_id,
+      table.event_type,
+      table.subject_id,
+    ),
     index("company_gate_observation_project_idx").on(table.project_id, table.created_at),
     index("company_gate_observation_candidate_idx").on(
       table.candidate_sha,
