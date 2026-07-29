@@ -378,3 +378,64 @@ export const CompanyProjectEventTable = sqliteTable(
   },
   (table) => [index("company_project_event_project_idx").on(table.project_id, table.created_at)],
 )
+
+export const CompanyAttentionTable = sqliteTable(
+  "company_attention",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    idempotency_key: text().notNull(),
+    issue_kind: text().notNull(),
+    risk: text().notNull(),
+    materiality: text().notNull(),
+    route: text().notNull(),
+    material: integer({ mode: "boolean" }).notNull(),
+    interrupts_user: integer({ mode: "boolean" }).notNull(),
+    title: text().notNull(),
+    summary: text().notNull(),
+    required_decision: text(),
+    allowed_actions_json: text().notNull(),
+    source_refs_json: text().notNull(),
+    input_sha256: text().notNull(),
+    status: text().notNull(),
+    resolution: text(),
+    version: integer().notNull().default(1),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+    resolved_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_attention_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    index("company_attention_project_status_idx").on(table.project_id, table.status, table.updated_at),
+  ],
+)
+
+export const CompanyProjectActionTable = sqliteTable(
+  "company_project_action",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    attention_id: text().references(() => CompanyAttentionTable.id, { onDelete: "set null" }),
+    action: text().notNull(),
+    idempotency_key: text().notNull(),
+    payload_json: text().notNull(),
+    payload_sha256: text().notNull(),
+    expected_revision: integer(),
+    status: text().notNull(),
+    result_json: text(),
+    error: text(),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+    claimed_at: integer(),
+    finished_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_project_action_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    index("company_project_action_project_status_idx").on(table.project_id, table.status, table.updated_at),
+    index("company_project_action_attention_idx").on(table.attention_id),
+  ],
+)
