@@ -1749,12 +1749,12 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
             },
           ],
           blocking_work_item_ids: [item.id],
-          evaluator: "fact_match_v1",
+          evaluator: "artifact_digest_v1",
           max_repair_rounds: 3,
         })
         const evaluated = yield* validation.evaluate({
           gate_id: gate.id,
-          evaluator: "fact_match_v1",
+          evaluator: "artifact_digest_v1",
           evidence: [
             {
               criterion_id: `b5-${result.binding.scenarioId.toLowerCase()}-artifact-exists`,
