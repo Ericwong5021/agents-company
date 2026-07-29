@@ -407,7 +407,7 @@ async function invokeAction(action: ControlAction, attention?: AttentionItem) {
   }
   if (action.handler === "open_diagnostics") return selectPanel("diagnostics")
   if (action.handler === "open_evidence") return selectPanel("goal_brief")
-  if (action.handler !== "action" || actionPending.value) return
+  if (!["action", "retry"].includes(action.handler) || actionPending.value) return
   if (
     action.id === "adjust_brief" &&
     goalBrief.value?.kind === "goal_brief" &&
@@ -608,7 +608,7 @@ function artifactRoute(projectID: string, artifactID: string) {
               </button>
             </div>
             <div
-              v-if="controlActions.some((action) => action.handler === 'action' && action.enabled)"
+              v-if="controlActions.some((action) => ['action', 'retry'].includes(action.handler) && action.enabled)"
               class="ac-approval-decision"
             >
               <label for="runtime-action-note">动作说明 / 新目标方向</label>

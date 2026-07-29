@@ -39,6 +39,7 @@ export type ClientActionHandler =
   | "open_delivery"
   | "open_evidence"
   | "action"
+  | "retry"
   | "none"
 
 export function clientHandlerFor(id: ExperienceActionType): ClientActionHandler {
@@ -46,8 +47,7 @@ export function clientHandlerFor(id: ExperienceActionType): ClientActionHandler 
   if (id === "open_diagnostics") return "open_diagnostics"
   if (id === "open_delivery") return "open_delivery"
   if (id === "view_evidence") return "open_evidence"
-  if (["pause_work", "resume_work", "stop_work", "resolve_blocker", "retry", "adjust_brief"].includes(id))
-    return "action"
+  if (id === "retry") return "retry"
   return "none"
 }
 
@@ -66,7 +66,11 @@ export function toControlActions(descriptors: ExperienceActionDescriptor[]): Con
     label: actionLabels[descriptor.id],
     enabled: descriptor.enabled,
     mutates: ExperienceActionMutatesBusinessState[descriptor.id],
-    handler: clientHandlerFor(descriptor.id),
+    handler: descriptor.enabled
+      ? ["pause_work", "resume_work", "stop_work", "resolve_blocker", "adjust_brief"].includes(descriptor.id)
+        ? "action"
+        : clientHandlerFor(descriptor.id)
+      : "none",
     disabledReason: descriptor.enabled ? undefined : descriptor.disabledReason,
   }))
 }

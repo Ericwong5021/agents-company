@@ -58,12 +58,15 @@ export function publicControlPlaneEndpoint(url: URL) {
 export function controlPlaneSDK(baseURL: string, authorization?: string) {
   const url = controlPlaneURL(baseURL)
   if (!url) return
-  const sdkFetch: typeof fetch = (input, init) => {
-    const request = new Request(input, init)
-    return fetch(new Request(request, {
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]),
-    }))
-  }
+  const sdkFetch = Object.assign(
+    (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const request = new Request(input, init)
+      return fetch(new Request(request, {
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]),
+      }))
+    },
+    { preconnect: fetch.preconnect },
+  )
   return createControlPlaneClient({
     baseUrl: url.origin,
     fetch: sdkFetch,
