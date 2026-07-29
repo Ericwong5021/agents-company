@@ -1264,7 +1264,9 @@ const runS17 = Effect.fn("B5CandidateScenarios.S17")(function* (
   yield* completeSeedProject(
     runtime,
     project.id,
-    [initialItems[1]!.id],
+    (yield* runtime.projects.listWorkItems(project.id))
+      .filter((item) => !["completed", "superseded", "cancelled"].includes(item.status))
+      .map((item) => item.id),
     input.runId,
     ["Exactly one third independent Assignment is persisted"],
   )
