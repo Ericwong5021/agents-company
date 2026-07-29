@@ -119,6 +119,7 @@ type AppendCommand = {
   overrideOf: string | null
   createdAt: number
   decidedAt: number | null
+  decidedAtIdempotencyValue?: number | "server_time" | null
 }
 
 type BoardDecisionInput = {
@@ -411,7 +412,13 @@ export function appendDecisionTransitionInTransaction(
           ? projection.decided_at
           : parsed.decidedAt ?? createdAt,
   }
-  const inputSha256 = sha256({ ...input, decidedAt: undefined })
+  const inputSha256 = sha256({
+    ...input,
+    decidedAt:
+      parsed.toStatus === "awaiting_approval"
+        ? null
+        : parsed.decidedAt ?? "server_time",
+  })
   const existing = db
     .select()
     .from(DecisionTransitionTable)
@@ -657,7 +664,11 @@ export function appendDecisionInTransaction(db: TxOrDb, command: AppendCommand) 
     ...normalized,
     id: undefined,
     createdAt: undefined,
-    decidedAt: normalized.initialStatus === "accepted" ? "terminal" : null,
+    decidedAt:
+      normalized.initialStatus === "accepted"
+        ? normalized.decidedAtIdempotencyValue ?? normalized.decidedAt
+        : null,
+    decidedAtIdempotencyValue: undefined,
   })
   const existing = db
     .select()
@@ -1256,6 +1267,8 @@ export const layer = Layer.succeed(
               overrideOf: input.overrideOf,
               createdAt,
               decidedAt: input.initialStatus === "accepted" ? input.decidedAt ?? createdAt : null,
+              decidedAtIdempotencyValue:
+                input.initialStatus === "accepted" ? input.decidedAt ?? "server_time" : null,
             }),
           { behavior: "immediate" },
         )
