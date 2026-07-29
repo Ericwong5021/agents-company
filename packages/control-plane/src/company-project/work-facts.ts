@@ -7,6 +7,7 @@ import type { TxOrDb } from "@/storage/db"
 import {
   CompanyArtifactTable,
   CompanyProjectEventTable,
+  CompanyProjectTable,
   CompanyWorkAttemptTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
@@ -51,6 +52,9 @@ const receiptFromRow = (row: typeof CompanyWorkReceiptTable.$inferSelect) =>
     dependency_proposals: parseList(row.dependency_proposals_json),
     questions: parseList(row.questions_json),
     processing_status: row.processing_status,
+    processing_claim_id: row.processing_claim_id ?? undefined,
+    claimed_at: row.claimed_at ?? undefined,
+    processed_decision_id: row.processed_decision_id ?? undefined,
     processed_mutation_id: row.processed_mutation_id ?? undefined,
     created_at: row.created_at,
     processed_at: row.processed_at ?? undefined,
@@ -151,6 +155,12 @@ function validateReferences(
   }
 }
 
+export type ReceiptClaim = {
+  receipt: WorkReceipt
+  claim_id: string
+  replayed: boolean
+}
+
 export interface Interface {
   readonly startAttempt: (input: {
     project_id: string
@@ -169,6 +179,21 @@ export interface Interface {
     receipt: WorkReceiptSubmissionType
   }) => Effect.Effect<{ attempt: WorkAttempt; receipt: WorkReceipt }>
   readonly processReceipt: (id: string) => Effect.Effect<WorkReceipt>
+  readonly claimReceipt: (id: string) => Effect.Effect<ReceiptClaim>
+  readonly claimNextPending: (project_id: string) => Effect.Effect<ReceiptClaim | undefined>
+  readonly finalizeReceipt: (input: {
+    id: string
+    claim_id: string
+    decision_id: string
+    mutation_id?: string
+    recovered?: boolean
+  }) => Effect.Effect<WorkReceipt>
+  readonly releaseReceipt: (input: {
+    id: string
+    claim_id: string
+    reason: string
+    recovered?: boolean
+  }) => Effect.Effect<WorkReceipt>
   readonly finalizeWorkItem: (input: {
     project_id: string
     work_item_id: string
@@ -183,6 +208,7 @@ export interface Interface {
   readonly recover: () => Effect.Effect<{
     reconciled_attempt_ids: string[]
     processed_receipt_ids: string[]
+    pending_seed_receipt_ids: string[]
   }>
   readonly listAttempts: (project_id: string) => Effect.Effect<WorkAttempt[]>
   readonly listReceipts: (project_id: string) => Effect.Effect<WorkReceipt[]>
@@ -380,6 +406,9 @@ function makeService(recoverOnStart: boolean) {
               dependency_proposals_json: JSON.stringify(receiptInput.dependency_proposals),
               questions_json: JSON.stringify(receiptInput.questions),
               processing_status: "pending",
+              processing_claim_id: null,
+              claimed_at: null,
+              processed_decision_id: null,
               processed_mutation_id: null,
               created_at: now,
               processed_at: null,
@@ -433,9 +462,22 @@ function makeService(recoverOnStart: boolean) {
             if (receipt.processing_status === "processed" || receipt.processing_status === "rejected") {
               return receiptFromRow(receipt)
             }
+            const project = db
+              .select({ execution_strategy: CompanyProjectTable.execution_strategy })
+              .from(CompanyProjectTable)
+              .where(eq(CompanyProjectTable.id, receipt.project_id))
+              .get()
+            if (!project) throw new Error(`Company project not found: ${receipt.project_id}`)
+            if (project.execution_strategy === "seed_and_grow")
+              throw new Error("Seed-and-Grow Work Receipts must be processed by GraphSupervisor")
             const processed_at = Date.now()
             db.update(CompanyWorkReceiptTable)
-              .set({ processing_status: "processed", processed_at })
+              .set({
+                processing_status: "processed",
+                processing_claim_id: null,
+                claimed_at: null,
+                processed_at,
+              })
               .where(eq(CompanyWorkReceiptTable.id, id))
               .run()
             insertEvent(
@@ -447,7 +489,239 @@ function makeService(recoverOnStart: boolean) {
             return receiptFromRow({
               ...receipt,
               processing_status: "processed",
+              processing_claim_id: null,
+              claimed_at: null,
               processed_at,
+            })
+          },
+          { behavior: "immediate" },
+        ),
+      )
+    })
+
+    const claimReceipt = Effect.fn("CompanyWorkFacts.claimReceipt")(function* (id: string) {
+      return yield* Effect.sync(() =>
+        Database.transaction(
+          (db): ReceiptClaim => {
+            const receipt = db
+              .select()
+              .from(CompanyWorkReceiptTable)
+              .where(eq(CompanyWorkReceiptTable.id, id))
+              .get()
+            if (!receipt) throw new Error(`Work Receipt not found: ${id}`)
+            const project = db
+              .select()
+              .from(CompanyProjectTable)
+              .where(eq(CompanyProjectTable.id, receipt.project_id))
+              .get()
+            if (!project) throw new Error(`Company project not found: ${receipt.project_id}`)
+            if (project.execution_strategy !== "seed_and_grow")
+              throw new Error("GraphSupervisor can only claim Seed-and-Grow Work Receipts")
+            if (receipt.processing_status === "processed" || receipt.processing_status === "rejected")
+              throw new Error(`Work Receipt ${id} is already ${receipt.processing_status}`)
+            if (receipt.processing_status === "processing") {
+              if (!receipt.processing_claim_id) throw new Error(`Work Receipt ${id} has no processing claim`)
+              return { receipt: receiptFromRow(receipt), claim_id: receipt.processing_claim_id, replayed: true }
+            }
+            const processing = db
+              .select()
+              .from(CompanyWorkReceiptTable)
+              .where(
+                and(
+                  eq(CompanyWorkReceiptTable.project_id, receipt.project_id),
+                  eq(CompanyWorkReceiptTable.processing_status, "processing"),
+                ),
+              )
+              .get()
+            if (processing)
+              throw new Error(`Project ${receipt.project_id} is already processing Work Receipt ${processing.id}`)
+            const next = db
+              .select({ id: CompanyWorkReceiptTable.id })
+              .from(CompanyWorkReceiptTable)
+              .where(
+                and(
+                  eq(CompanyWorkReceiptTable.project_id, receipt.project_id),
+                  eq(CompanyWorkReceiptTable.processing_status, "pending"),
+                ),
+              )
+              .orderBy(asc(CompanyWorkReceiptTable.created_at), asc(CompanyWorkReceiptTable.id))
+              .get()
+            if (next?.id !== id)
+              throw new Error(`Work Receipt ${id} cannot bypass earlier pending Work Receipt ${next?.id ?? "none"}`)
+            const claim_id = Identifier.ascending("receiptClaim")
+            const claimed_at = Date.now()
+            db.update(CompanyWorkReceiptTable)
+              .set({ processing_status: "processing", processing_claim_id: claim_id, claimed_at })
+              .where(eq(CompanyWorkReceiptTable.id, id))
+              .run()
+            insertEvent(db, receipt.project_id, "work_receipt.claimed", {
+              receipt_id: id,
+              work_item_id: receipt.work_item_id,
+              claim_id,
+            })
+            return {
+              receipt: receiptFromRow({
+                ...receipt,
+                processing_status: "processing",
+                processing_claim_id: claim_id,
+                claimed_at,
+              }),
+              claim_id,
+              replayed: false,
+            }
+          },
+          { behavior: "immediate" },
+        ),
+      )
+    })
+
+    const claimNextPending = Effect.fn("CompanyWorkFacts.claimNextPending")(function* (project_id: string) {
+      const current = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyWorkReceiptTable)
+            .where(
+              and(
+                eq(CompanyWorkReceiptTable.project_id, project_id),
+                eq(CompanyWorkReceiptTable.processing_status, "processing"),
+              ),
+            )
+            .get(),
+        ),
+      )
+      if (current) {
+        if (!current.processing_claim_id) throw new Error(`Work Receipt ${current.id} has no processing claim`)
+        return {
+          receipt: receiptFromRow(current),
+          claim_id: current.processing_claim_id,
+          replayed: true,
+        }
+      }
+      const next = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ id: CompanyWorkReceiptTable.id })
+            .from(CompanyWorkReceiptTable)
+            .where(
+              and(
+                eq(CompanyWorkReceiptTable.project_id, project_id),
+                eq(CompanyWorkReceiptTable.processing_status, "pending"),
+              ),
+            )
+            .orderBy(asc(CompanyWorkReceiptTable.created_at), asc(CompanyWorkReceiptTable.id))
+            .get(),
+        ),
+      )
+      if (!next) return
+      return yield* claimReceipt(next.id)
+    })
+
+    const finalizeReceipt = Effect.fn("CompanyWorkFacts.finalizeReceipt")(function* (input: {
+      id: string
+      claim_id: string
+      decision_id: string
+      mutation_id?: string
+      recovered?: boolean
+    }) {
+      return yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const receipt = db
+              .select()
+              .from(CompanyWorkReceiptTable)
+              .where(eq(CompanyWorkReceiptTable.id, input.id))
+              .get()
+            if (!receipt) throw new Error(`Work Receipt not found: ${input.id}`)
+            if (receipt.processing_status === "processed") {
+              if (
+                receipt.processed_decision_id !== input.decision_id ||
+                (receipt.processed_mutation_id ?? undefined) !== input.mutation_id
+              )
+                throw new Error("Work Receipt finalization conflicts with persisted facts")
+              return receiptFromRow(receipt)
+            }
+            if (
+              receipt.processing_status !== "processing" ||
+              receipt.processing_claim_id !== input.claim_id
+            )
+              throw new Error(`Work Receipt ${input.id} is not owned by claim ${input.claim_id}`)
+            const processed_at = Date.now()
+            db.update(CompanyWorkReceiptTable)
+              .set({
+                processing_status: "processed",
+                processing_claim_id: null,
+                claimed_at: null,
+                processed_decision_id: input.decision_id,
+                processed_mutation_id: input.mutation_id ?? null,
+                processed_at,
+              })
+              .where(eq(CompanyWorkReceiptTable.id, input.id))
+              .run()
+            insertEvent(db, receipt.project_id, "work_receipt.processed", {
+              receipt_id: receipt.id,
+              attempt_id: receipt.attempt_id,
+              work_item_id: receipt.work_item_id,
+              decision_id: input.decision_id,
+              mutation_id: input.mutation_id,
+              duplicate: false,
+              recovered: input.recovered ?? false,
+            })
+            return receiptFromRow({
+              ...receipt,
+              processing_status: "processed",
+              processing_claim_id: null,
+              claimed_at: null,
+              processed_decision_id: input.decision_id,
+              processed_mutation_id: input.mutation_id ?? null,
+              processed_at,
+            })
+          },
+          { behavior: "immediate" },
+        ),
+      )
+    })
+
+    const releaseReceipt = Effect.fn("CompanyWorkFacts.releaseReceipt")(function* (input: {
+      id: string
+      claim_id: string
+      reason: string
+      recovered?: boolean
+    }) {
+      return yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const receipt = db
+              .select()
+              .from(CompanyWorkReceiptTable)
+              .where(eq(CompanyWorkReceiptTable.id, input.id))
+              .get()
+            if (!receipt) throw new Error(`Work Receipt not found: ${input.id}`)
+            if (receipt.processing_status === "pending") return receiptFromRow(receipt)
+            if (
+              receipt.processing_status !== "processing" ||
+              receipt.processing_claim_id !== input.claim_id
+            )
+              throw new Error(`Work Receipt ${input.id} is not owned by claim ${input.claim_id}`)
+            db.update(CompanyWorkReceiptTable)
+              .set({
+                processing_status: "pending",
+                processing_claim_id: null,
+                claimed_at: null,
+              })
+              .where(eq(CompanyWorkReceiptTable.id, input.id))
+              .run()
+            insertEvent(db, receipt.project_id, "work_receipt.released", {
+              receipt_id: receipt.id,
+              claim_id: input.claim_id,
+              reason: input.reason.slice(0, 2_000),
+              recovered: input.recovered ?? false,
+            })
+            return receiptFromRow({
+              ...receipt,
+              processing_status: "pending",
+              processing_claim_id: null,
+              claimed_at: null,
             })
           },
           { behavior: "immediate" },
@@ -531,9 +805,22 @@ function makeService(recoverOnStart: boolean) {
           questions: [],
         },
       })
+      const project = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ execution_strategy: CompanyProjectTable.execution_strategy })
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.id, input.project_id))
+            .get(),
+        ),
+      )
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       return {
         attempt: finalized.attempt,
-        receipt: yield* processReceipt(finalized.receipt.id),
+        receipt:
+          project.execution_strategy === "seed_and_grow"
+            ? finalized.receipt
+            : yield* processReceipt(finalized.receipt.id),
       }
     })
 
@@ -589,8 +876,15 @@ function makeService(recoverOnStart: boolean) {
       const pending = yield* Effect.sync(() =>
         Database.use((db) =>
           db
-            .select({ id: CompanyWorkReceiptTable.id })
+            .select({
+              id: CompanyWorkReceiptTable.id,
+              project_id: CompanyWorkReceiptTable.project_id,
+              processing_status: CompanyWorkReceiptTable.processing_status,
+              processing_claim_id: CompanyWorkReceiptTable.processing_claim_id,
+              execution_strategy: CompanyProjectTable.execution_strategy,
+            })
             .from(CompanyWorkReceiptTable)
+            .innerJoin(CompanyProjectTable, eq(CompanyProjectTable.id, CompanyWorkReceiptTable.project_id))
             .where(
               inArray(CompanyWorkReceiptTable.processing_status, ["pending", "processing"]),
             )
@@ -599,11 +893,38 @@ function makeService(recoverOnStart: boolean) {
         ),
       )
       const processed_receipt_ids = yield* Effect.forEach(
-        pending,
+        pending.filter((receipt) => receipt.execution_strategy === "legacy_full_plan"),
         (receipt) => processReceipt(receipt.id).pipe(Effect.as(receipt.id)),
         { concurrency: 1 },
       )
-      return { reconciled_attempt_ids, processed_receipt_ids }
+      const pending_seed_receipt_ids = yield* Effect.forEach(
+        pending.filter(
+          (receipt) =>
+            receipt.execution_strategy === "seed_and_grow" &&
+            receipt.processing_status === "processing" &&
+            Boolean(receipt.processing_claim_id),
+        ),
+        (receipt) =>
+          releaseReceipt({
+            id: receipt.id,
+            claim_id: receipt.processing_claim_id!,
+            reason: "startup_recovery",
+            recovered: true,
+          }).pipe(Effect.as(receipt.id)),
+        { concurrency: 1 },
+      ).pipe(
+        Effect.map((released) => [
+          ...released,
+          ...pending
+            .filter(
+              (receipt) =>
+                receipt.execution_strategy === "seed_and_grow" &&
+                receipt.processing_status === "pending",
+            )
+            .map((receipt) => receipt.id),
+        ]),
+      )
+      return { reconciled_attempt_ids, processed_receipt_ids, pending_seed_receipt_ids }
     })
 
     const listAttempts = Effect.fn("CompanyWorkFacts.listAttempts")(function* (project_id: string) {
@@ -641,6 +962,10 @@ function makeService(recoverOnStart: boolean) {
       bindAgentRun,
       finishAttempt,
       processReceipt,
+      claimReceipt,
+      claimNextPending,
+      finalizeReceipt,
+      releaseReceipt,
       finalizeWorkItem,
       recover,
       listAttempts,

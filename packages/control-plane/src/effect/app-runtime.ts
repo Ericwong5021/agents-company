@@ -70,6 +70,7 @@ import { ConversationCommand } from "@/conversation/command"
 import { ConversationRuntime } from "@/conversation/runtime"
 import { CompanyProject, CompanyProjectExecution, CompanyProjectRecovery } from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
+import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
 import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
@@ -156,6 +157,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyProjectRecovery.defaultLayer,
     CompanyRecruitment.defaultLayer,
     CompanyProjectExecution.defaultLayer,
+    ProjectOrchestrator.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     AgentRun.defaultLayer,

@@ -24,7 +24,7 @@ const capabilities = {
   analysis: ["research-analysis@1"],
 }
 
-const assignmentConstraints = (references: string[]) => {
+export const assignmentConstraints = (references: string[]) => {
   const packs = references.map((reference) => CapabilityCatalog.resolve(reference))
   const permissionMode =
     packs

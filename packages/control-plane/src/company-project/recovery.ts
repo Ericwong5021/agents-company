@@ -31,6 +31,7 @@ export type RecoveryReport = {
   receipts: {
     reconciled_attempt_ids: string[]
     processed_receipt_ids: string[]
+    pending_seed_receipt_ids: string[]
   }
   mutations: CompanyGraphMutation.RecoveryResult
   gates: CompanyValidationGate.RecoveryResult

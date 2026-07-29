@@ -92,8 +92,10 @@ export function validateGraphPatch(input: {
   const graphChanges = input.proposal.operations.some((operation) =>
     ["add_work_item", "add_dependency", "remove_dependency", "supersede_work_item"].includes(operation.type),
   )
+  const addedNodeCount = input.proposal.operations.filter((operation) => operation.type === "add_work_item").length
 
   if (!decisionMatches(input.proposal)) violations.add("decision_operation_mismatch")
+  if (addedNodeCount > 3) violations.add("growth_budget_exceeded")
   if (
     graphChanges &&
     (!input.proposal.evidence_refs.length ||
@@ -215,11 +217,19 @@ export function validateGraphPatch(input: {
       }
       return
     }
-    if (
-      operation.type === "request_capability" &&
-      (!trigger || operation.need.resource_scope.some((scope) => !trigger.resource_scope.includes(scope)))
-    ) {
-      violations.add("scope_escalation")
+    if (operation.type === "request_capability") {
+      const item = nodes.get(operation.need.work_item_id)
+      if (!item) {
+        violations.add("missing_node")
+        return
+      }
+      if (
+        !trigger ||
+        operation.need.resource_scope.some(
+          (scope) => !trigger.resource_scope.includes(scope) || !item.resource_scope.includes(scope),
+        )
+      )
+        violations.add("scope_escalation")
     }
   })
 

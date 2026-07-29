@@ -548,6 +548,136 @@
       ]
     },
     {
+      "id": "b1-seed-policy",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/project-orchestrator/seed-policy.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b1-seed-policy-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b1-seed-policy-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b1-benchmark-s13-s15",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-project/seed-execution.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b1-benchmark-s13-s15-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b1-benchmark-s13-s15-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b1-flag-fallback",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-project/seed-execution.test.ts",
+        "-t",
+        "falls back to legacy",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b1-flag-fallback-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b1-flag-fallback-junit.xml",
+          "validator": "junit"
+        }
+      ]
+    },
+    {
+      "id": "b2-supervisor-benchmarks",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/project-orchestrator/graph-supervisor.test.ts",
+        "test/project-orchestrator/capability-materializer.test.ts",
+        "test/project-orchestrator/dispatch-barrier.test.ts",
+        "test/project-orchestrator/recovery.test.ts",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b2-supervisor-benchmarks-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b2-supervisor-benchmarks-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-b2/supervisor-benchmarks.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "b2-quiescence",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/project-orchestrator/quiescence.test.ts",
+        "-t",
+        "b2-quiescence",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/b2-quiescence-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/b2-quiescence-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-b2/quiescence.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -1136,6 +1266,21 @@
             "command:b0-assignment-lifecycle",
             "command:b0-selection-constraints",
             "command:b0-reassign-recovery"
+          ]
+        },
+        {
+          "id": "QA-02-SEED-STARTUP-SAFETY",
+          "evidenceRefs": [
+            "command:b1-seed-policy",
+            "command:b1-benchmark-s13-s15",
+            "command:b1-flag-fallback"
+          ]
+        },
+        {
+          "id": "QA-02-SUPERVISOR-AND-QUIESCENCE-SAFETY",
+          "evidenceRefs": [
+            "command:b2-supervisor-benchmarks",
+            "command:b2-quiescence"
           ]
         },
         {

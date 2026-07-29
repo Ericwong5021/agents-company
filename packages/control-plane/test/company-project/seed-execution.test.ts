@@ -124,12 +124,15 @@ const seedCompany = (companyID: CompanyID) =>
     )
   })
 
-const queueWayfinder = (llm: {
+const queueWayfinder = (
+  llm: {
   pushMatch: (
     match: (hit: { body: Record<string, unknown> }) => boolean,
     ...input: (Item | Reply)[]
   ) => Effect.Effect<void>
-}) =>
+  },
+  facts: { unknowns?: string[]; questions?: string[] } = {},
+) =>
   llm.pushMatch(
     (hit) => JSON.stringify(hit.body).includes("你是 Wayfinder，只读检查现实环境"),
     reply()
@@ -138,12 +141,12 @@ const queueWayfinder = (llm: {
           summary: "已完成只读现实检查",
           confirmed_facts: ["项目文件可读取", "First Slice 可在本地完成"],
           invalidated_assumptions: [],
-          unknowns: ["生产发布凭据未知"],
+          unknowns: facts.unknowns ?? [],
           blockers: [],
           capability_gaps: [],
           recommended_first_slice: candidate,
           dependency_proposals: [],
-          questions: ["是否允许后续生产发布"],
+          questions: facts.questions ?? [],
         }),
       )
       .stop(),
@@ -456,7 +459,10 @@ describe.serial("Seed-and-Grow project execution", () => {
           return yield* withSeedFlag(
             "active",
             Effect.gen(function* () {
-              yield* queueWayfinder(llm)
+              yield* queueWayfinder(llm, {
+                unknowns: ["生产发布凭据未知"],
+                questions: ["是否允许后续生产发布"],
+              })
               const execution = yield* CompanyProjectExecution.Service
               const projects = yield* CompanyProject.Service
               const started = yield* execution.start({

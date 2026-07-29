@@ -46,6 +46,16 @@ export type GateStatus = z.infer<typeof GateStatus>
 export const PlanPhase = z.enum(["planning", "execution", "replan"])
 export type PlanPhase = z.infer<typeof PlanPhase>
 
+export const ProjectOrchestrationState = z.enum([
+  "idle",
+  "processing_receipt",
+  "dispatching",
+  "paused",
+  "quiescent",
+  "blocked",
+])
+export type ProjectOrchestrationState = z.infer<typeof ProjectOrchestrationState>
+
 export const Project = z.object({
   id: z.string(),
   company_id: z.string().optional(),
@@ -64,6 +74,9 @@ export const Project = z.object({
   active_plan_version: z.number().int().optional(),
   execution_strategy: ProjectExecutionStrategy,
   seed_mode: SeedMode.optional(),
+  orchestration_state: ProjectOrchestrationState,
+  orchestrator_version: z.number().int().positive(),
+  dispatch_paused: z.boolean(),
   graph_revision: z.number().int().nonnegative(),
   created_at: z.number(),
   updated_at: z.number(),
@@ -305,6 +318,9 @@ export const WorkReceipt = WorkReceiptSubmission.extend({
   work_item_id: z.string(),
   attempt_id: z.string(),
   processing_status: WorkReceiptProcessingStatus,
+  processing_claim_id: z.string().optional(),
+  claimed_at: z.number().optional(),
+  processed_decision_id: z.string().optional(),
   processed_mutation_id: z.string().optional(),
   created_at: z.number(),
   processed_at: z.number().optional(),
@@ -457,6 +473,12 @@ export const GraphMutationDecision = z.enum([
 ])
 export type GraphMutationDecision = z.infer<typeof GraphMutationDecision>
 
+export const GraphDecisionMode = z.enum(["shadow", "active"])
+export type GraphDecisionMode = z.infer<typeof GraphDecisionMode>
+
+export const GraphDecisionStatus = z.enum(["recorded", "shadowed", "applied", "rejected", "superseded"])
+export type GraphDecisionStatus = z.infer<typeof GraphDecisionStatus>
+
 export const GraphMutationStatus = z.enum(["proposed", "validated", "applied", "rejected", "superseded"])
 export type GraphMutationStatus = z.infer<typeof GraphMutationStatus>
 
@@ -514,6 +536,7 @@ export const GraphValidationGateProposal = z
 export const GraphCapabilityNeedProposal = z
   .object({
     id: z.string().trim().min(1).max(200),
+    work_item_id: z.string().trim().min(1),
     capability: z.string().trim().min(1).max(500),
     reason: z.string().trim().min(1).max(8_000),
     allowed_permission_modes: z.array(z.enum(["read_only", "workspace_write"])).min(1),
@@ -743,6 +766,30 @@ export const GraphMutationProposal = z
   .strict()
 export type GraphMutationProposal = z.infer<typeof GraphMutationProposal>
 
+export const GraphDecision = z
+  .object({
+    id: z.string(),
+    project_id: z.string(),
+    receipt_id: z.string(),
+    mutation_id: z.string().optional(),
+    expected_revision: z.number().int().nonnegative(),
+    orchestrator_version: z.number().int().positive(),
+    idempotency_key: z.string().trim().min(1).max(500),
+    kind: GraphMutationDecision,
+    mode: GraphDecisionMode,
+    reason_code: z.string().trim().min(1).max(200),
+    summary: z.string().trim().min(1).max(2_000),
+    evidence_refs: z.array(WorkReceiptEvidenceRef).max(1_000),
+    operations: z.array(GraphOperation).max(500),
+    automated: z.boolean(),
+    added_node_count: z.number().int().nonnegative().max(3),
+    status: GraphDecisionStatus,
+    created_at: z.number(),
+    resolved_at: z.number().optional(),
+  })
+  .strict()
+export type GraphDecision = z.infer<typeof GraphDecision>
+
 export const GraphPolicyViolation = z.enum([
   "cycle",
   "self_dependency",
@@ -759,6 +806,7 @@ export const GraphPolicyViolation = z.enum([
   "duplicate_new_node",
   "dependency_exists",
   "dependency_missing",
+  "growth_budget_exceeded",
 ])
 export type GraphPolicyViolation = z.infer<typeof GraphPolicyViolation>
 
