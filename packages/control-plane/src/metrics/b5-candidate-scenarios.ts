@@ -1766,7 +1766,7 @@ const runS23 = Effect.fn("B5CandidateScenarios.S23")(function* (
     work_type: "analysis",
     role: "invalidation observer",
     capability_packs: ["research-analysis@1"],
-    decision_scope: ["invalidation evidence"],
+    decision_scope: ["invalidation evidence", "bounded delivery"],
     resource_scope: ["artifacts/b5/s23"],
     expected_outputs: ["Invalidation evidence"],
     validators: ["Invalidation fact is persisted"],
