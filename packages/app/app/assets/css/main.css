@@ -218,7 +218,11 @@ html.dark .shiki span {
   font-size: 13px;
   font-weight: 520;
   line-height: 1;
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 100ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
 }
 
 .ac-primary-nav__item--collapsed {
@@ -614,7 +618,9 @@ html.dark .shiki span {
   font-size: 13px;
   font-weight: 560;
   cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .ac-work-tab[data-active="true"] {
@@ -679,7 +685,10 @@ html.dark .shiki span {
   display: block;
   min-height: 40px;
   padding: 22px;
-  transition: background-color 140ms ease, border-color 140ms ease, transform 100ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 100ms ease;
 }
 
 .ac-work-card:active,
@@ -1220,6 +1229,76 @@ html.dark .shiki span {
   line-height: 1.5;
 }
 
+/* TEAM-01 — 团队分组：正式员工与在岗临时角色分区展示 */
+.ac-team-section {
+  margin-top: 26px;
+}
+
+.ac-team-section:first-of-type {
+  margin-top: 0;
+}
+
+.ac-team-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--ac-ink);
+  font-size: 14px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+}
+
+.ac-team-section__count {
+  display: inline-flex;
+  min-width: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  background: var(--ac-canvas);
+  padding: 1px 7px;
+  color: var(--ac-ink-muted);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.ac-team-badges {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ac-team-employment {
+  display: inline-flex;
+  min-height: 28px;
+  flex: none;
+  align-items: center;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  background: var(--ac-canvas);
+  padding: 5px 9px;
+  color: var(--ac-ink-muted);
+  font-size: 11px;
+  font-weight: 620;
+  white-space: nowrap;
+}
+
+.ac-team-employment[data-employment="temporary"] {
+  border-color: #80725b;
+  color: #6d5f49;
+}
+
+.dark .ac-team-employment[data-employment="temporary"] {
+  color: #cdbd9d;
+}
+
+.ac-team-card__link {
+  color: inherit;
+}
+
 .ac-team-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1539,7 +1618,9 @@ html.dark .shiki span {
   color: var(--ac-ink-muted);
   cursor: pointer;
   font-weight: 620;
-  transition: color 140ms ease, transform 100ms ease;
+  transition:
+    color 140ms ease,
+    transform 100ms ease;
 }
 
 .ac-source-trace summary:active {
@@ -1824,7 +1905,9 @@ html.dark .shiki span {
   color: var(--ac-ink);
   font-size: var(--ac-text-caption);
   font-weight: 650;
-  transition: color 140ms ease, transform 100ms ease;
+  transition:
+    color 140ms ease,
+    transform 100ms ease;
 }
 
 .ac-team-assignments__heading a:active {
@@ -1904,6 +1987,49 @@ html.dark .shiki span {
   .ac-receipt-facts {
     grid-template-columns: 1fr;
   }
+}
+
+/* TEAM-01 — Agent 详情页：能力证据 / 交付历史 / 选择历史 / 雇佣审计 */
+.ac-agent-panel {
+  margin-top: 16px;
+  padding: 22px;
+}
+
+.ac-agent-list {
+  display: grid;
+  margin-top: 12px;
+}
+
+.ac-agent-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  border-top: 1px solid var(--ac-line);
+  padding: 12px 0;
+  color: var(--ac-ink-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ac-agent-list li strong {
+  color: var(--ac-ink);
+  font-weight: 640;
+  overflow-wrap: anywhere;
+}
+
+.ac-agent-list__warning {
+  color: #7b312c;
+}
+
+.dark .ac-agent-list__warning {
+  color: #e7aaa4;
+}
+
+.ac-agent-empty {
+  margin-top: 12px;
+  color: var(--ac-ink-dimmed);
+  font-size: 12px;
 }
 
 .ac-back-link {
@@ -2182,7 +2308,9 @@ textarea:focus-visible {
   color: var(--ac-ink);
   font-size: var(--ac-text-caption);
   font-weight: 560;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .ac-work3__action:hover:not(:disabled) {

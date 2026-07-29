@@ -46,6 +46,8 @@ export type CompanyAgent = {
   role?: string
   department?: string
   responsibilities: string[]
+  // TEAM-01/TEAM-05：组织身份区分正式员工与在岗临时实例。
+  employment: "employee" | "temporary"
   attention: "none" | "available" | "focused" | "urgent"
   activity: "idle" | "waiting" | "working" | "recovering" | "completed" | "failed" | "interrupted"
   subject?: string
@@ -55,10 +57,55 @@ export type CompanyAgent = {
   interruptibility: "interruptible" | "coordinate_first" | "needs_intervention"
   risk?: string
   collaborators: string[]
+  // TEAM-01：负载与最近交付来自真实工作项事实。
+  workload: {
+    active: number
+    blocked: number
+    recentDelivery?: {
+      workItemID: string
+      title: string
+      reviewStatus: string
+      timeCompleted: number
+    }
+  }
   evidence?: {
     kind: "agent_run"
     timeUpdated: number
   }
+}
+
+// TEAM-01：Agent 详情 = 活动投影 + 能力证据 + 工作历史，全部来自真实事实。
+export type CompanyAgentDetail = {
+  agent: CompanyAgent
+  capabilities: {
+    pack: string
+    status: string
+    available: boolean
+    source: string
+    lastVerifiedAt?: number
+    failureCount: number
+    availabilityReasons: string[]
+  }[]
+  performances: {
+    projectID: string
+    outcome: string
+    qualityScore: number
+    reliabilityScore: number
+    reviewSummary: string
+    timeCreated: number
+  }[]
+  selections: {
+    projectID: string
+    decision: "selected" | "rejected"
+    reason: string
+    candidateRank: number
+    released: boolean
+  }[]
+  employmentReviews: {
+    status: string
+    rationale: string
+    timeDecided?: number
+  }[]
 }
 
 export type CompanyMessage = {

@@ -15,7 +15,7 @@ CREATE TABLE company_employment_review_normalized (
   time_decided integer,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  CONSTRAINT company_employment_review_status_check CHECK (status IN ('proposed', 'approved', 'rejected')),
+  CONSTRAINT company_employment_review_status_check CHECK (status IN ('proposed', 'approved', 'rejected', 'retired')),
   CONSTRAINT company_employment_review_counts_check CHECK (
     selected_project_count >= 0 AND successful_project_count >= 0 AND recurring_need_count >= 0
   ),
@@ -44,20 +44,14 @@ SELECT
   id,
   company_id,
   agent_id,
-  CASE status WHEN 'retired' THEN 'rejected' ELSE status END,
+  status,
   selected_project_count,
   successful_project_count,
   average_quality_score,
   average_reliability_score,
   recurring_need_count,
   rationale,
-  CASE
-    WHEN status = 'retired' AND decision_note IS NULL
-      THEN '[legacy_status=retired; normalized_by=20260729100000_employment_review_retired_normalization]'
-    WHEN status = 'retired'
-      THEN decision_note || char(10) || '[legacy_status=retired; normalized_by=20260729100000_employment_review_retired_normalization]'
-    ELSE decision_note
-  END,
+  decision_note,
   time_decided,
   time_created,
   time_updated

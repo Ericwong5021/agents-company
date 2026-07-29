@@ -6,7 +6,7 @@ import type {
   AgentRuntimePort,
   RuntimeMessage,
 } from "../interface"
-import { RuntimeCapabilityMatrix } from "../capabilities"
+import { RuntimeCapabilityMatrix } from "../capability-matrix"
 
 export type PiRuntimeEventType = "agent_start" | "agent_end" | "turn" | "message" | "tool"
 
@@ -25,7 +25,7 @@ export type PiRuntimeEngineFactory = (spec: AgentRunSpec) => Promise<PiRuntimeEn
 export class PiRuntimeAdapter implements AgentRuntimePort {
   readonly runtime = "pi" as const
   capabilities() {
-    return RuntimeCapabilityMatrix.pi
+    return RuntimeCapabilityMatrix[this.runtime]
   }
   private readonly active = new Map<string, PiRuntimeEngine>()
 

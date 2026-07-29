@@ -137,7 +137,7 @@ const queueAdaptiveAnalysis = (llm: {
             decisionScope: ["证据含义"],
             resourceScope: ["artifacts/evidence-analysis"],
             modelGroup: "lite",
-            riskLevel: "low",
+            riskLevel: "high",
             dependsOn: [],
           },
         ],
@@ -261,6 +261,127 @@ describe.serial("CompanyProject adaptive execution", () => {
   )
 
   it.live(
+    "executes a low-risk reversible task with a single self-checking agent and no reviewer",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* ({ dir, llm }) {
+          return yield* provideGlobalTestProvider(
+            dir,
+            llm.url,
+            Effect.gen(function* () {
+              yield* llm.pushMatch(
+                match("临时项目规划者"),
+                reply()
+                  .text(
+                    JSON.stringify({
+                      summary: "低风险证据清单整理",
+                      scope: ["整理给定证据"],
+                      success_criteria: ["清单可逐条自检"],
+                      constraints: ["不创建软件产品"],
+                      acceptance_criteria: ["方法、发现、结论与限制完整"],
+                      assumptions: [],
+                    }),
+                  )
+                  .stop(),
+              )
+              yield* llm.pushMatch(
+                match("task decomposition specialist"),
+                reply().tool("StructuredOutput", {
+                  subtasks: [
+                    {
+                      key: "low-risk-selfcheck",
+                      summary: "整理现有证据清单",
+                      acceptanceCriteria: "列出数据源、方法、发现、结论和限制",
+                      workType: "analysis",
+                      role: "evidence analyst",
+                      capabilityPacks: ["research-analysis@1"],
+                      decisionScope: ["证据清单"],
+                      resourceScope: ["artifacts/low-risk-selfcheck"],
+                      modelGroup: "lite",
+                      riskLevel: "low",
+                      dependsOn: [],
+                    },
+                  ],
+                }),
+              )
+              yield* llm.pushMatch(
+                (hit) => match("只执行这一个叶子任务")(hit) && match("本任务不设独立 Reviewer")(hit),
+                reply()
+                  .text(
+                    JSON.stringify({
+                      summary: "证据清单完成；自检：数据源、方法、发现、结论、限制均逐条核对通过",
+                      submission: {
+                        question: "证据清单包含什么",
+                        dataSources: ["Project Charter", "本地输入"],
+                        methodology: "对输入进行结构化归类，并逐条自检验收条件。",
+                        findings: ["证据清单完整覆盖了全部本地输入与项目章程证据。"],
+                        conclusions: ["低风险整理任务由单 Agent 自检完成。"],
+                        limitations: ["没有外部数据集"],
+                      },
+                    }),
+                  )
+                  .stop(),
+              )
+              const execution = yield* CompanyProjectExecution.Service
+              const projects = yield* CompanyProject.Service
+              const started = yield* execution.start({
+                goal: "整理本地证据清单",
+                provider_id: "test",
+                model_id: "test-model",
+              })
+              const completed = yield* Effect.gen(function* () {
+                for (let attempt = 0; attempt < 300; attempt++) {
+                  const current = yield* projects.get(started.project.id)
+                  if (current?.status === "completed") return current
+                  if (current?.status === "blocked") {
+                    const items = yield* projects.listWorkItems(current.id)
+                    throw new Error(
+                      `low-risk project blocked: ${JSON.stringify({
+                        pending: yield* llm.pending,
+                        items: items.map((item) => ({ title: item.title, review: item.review_status, error: item.error })),
+                      })}`,
+                    )
+                  }
+                  yield* Effect.sleep("50 millis")
+                }
+                const items = yield* projects.listWorkItems(started.project.id)
+                throw new Error(
+                  `low-risk project did not complete: ${JSON.stringify({
+                    items: items.map((item) => ({ kind: item.kind, status: item.status, error: item.error })),
+                    pending: yield* llm.pending,
+                    misses: (yield* llm.misses).map((hit) => JSON.stringify(hit.body).slice(0, 240)),
+                  })}`,
+                )
+              })
+              const items = yield* projects.listWorkItems(completed.id)
+              expect(items.map((item) => item.kind)).toEqual(["planner", "worker"])
+              expect(items.find((item) => item.kind === "worker")).toMatchObject({
+                risk_level: "low",
+                review_status: "not_required",
+                status: "completed",
+              })
+              const planned = (yield* projects.listEvents(completed.id)).find(
+                (event) => event.type === "work_item.orchestration_planned",
+              )!
+              expect(planned.data).toMatchObject({
+                declared_risk: "low",
+                risk_level: "low",
+                strength: "self_check",
+                reviewer: false,
+                gate: false,
+              })
+              expect(String(planned.data.reasons)).toContain("自检")
+              expect(String(planned.data.alternatives)).toContain("允许，但会为该风险等级增加不必要的延迟")
+              expect(yield* llm.pending).toBe(0)
+            }),
+          )
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
+  it.live(
     "reopens a rejected worker-reviewer pair and reviews the corrected artifact",
     () =>
       provideTmpdirServer(
@@ -299,7 +420,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                       decisionScope: ["证据含义"],
                       resourceScope: ["artifacts/review-rework"],
                       modelGroup: "lite",
-                      riskLevel: "low",
+                      riskLevel: "high",
                       dependsOn: [],
                     },
                   ],

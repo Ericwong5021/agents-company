@@ -46,6 +46,7 @@ const prefixes = {
   teamSelection: "tsel",
   projectAssignment: "pasn",
   agentPerformance: "aperf",
+  agentCapability: "acap",
   employmentReview: "erev",
   department: "dept",
   attention: "attn",

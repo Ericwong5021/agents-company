@@ -101,6 +101,39 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
     )
       ? entry.interruptibility as CompanyAgent["interruptibility"]
       : undefined
+    const employment = ["employee", "temporary"].includes(String(entry.employment))
+      ? entry.employment as CompanyAgent["employment"]
+      : undefined
+    const workloadRecord = isRecord(entry.workload) ? entry.workload : undefined
+    const recentDelivery = workloadRecord && isRecord(workloadRecord.recent_delivery)
+      ? {
+          workItemID: text(workloadRecord.recent_delivery.work_item_id),
+          title: text(workloadRecord.recent_delivery.title),
+          reviewStatus: text(workloadRecord.recent_delivery.review_status),
+          timeCompleted: number(workloadRecord.recent_delivery.time_completed),
+        }
+      : undefined
+    const workload = workloadRecord
+      && number(workloadRecord.active) !== undefined
+      && number(workloadRecord.blocked) !== undefined
+      && (recentDelivery === undefined
+        || (recentDelivery.workItemID && recentDelivery.title && recentDelivery.reviewStatus
+          && recentDelivery.timeCompleted !== undefined))
+      ? {
+          active: number(workloadRecord.active)!,
+          blocked: number(workloadRecord.blocked)!,
+          ...(recentDelivery
+            ? {
+                recentDelivery: {
+                  workItemID: recentDelivery.workItemID!,
+                  title: recentDelivery.title!,
+                  reviewStatus: recentDelivery.reviewStatus!,
+                  timeCompleted: recentDelivery.timeCompleted!,
+                },
+              }
+            : {}),
+        }
+      : undefined
     const location = text(entry.location)
     const since = number(entry.since)
     const responsibilities = Array.isArray(entry.agent.responsibilities)
@@ -123,6 +156,8 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
       || !activity
       || !attention
       || !interruptibility
+      || !employment
+      || !workload
       || since === undefined
       || !responsibilities
       || !collaborators
@@ -134,6 +169,7 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
       role: text(entry.agent.role),
       department: text(entry.agent.department),
       responsibilities,
+      employment,
       attention,
       activity,
       subject: text(entry.subject),
@@ -143,6 +179,7 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
       interruptibility,
       risk: text(entry.risk),
       collaborators,
+      workload,
       evidence,
     }
   })

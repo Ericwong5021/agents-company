@@ -1,9 +1,10 @@
 import { Context, Effect, Layer } from "effect"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import z from "zod"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Company } from "@/company"
 import { CompanyAgent } from "@/company-agent"
+import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import { CompanyAgentID } from "@/company-agent/schema"
 import {
   CompanyProjectEventTable,
@@ -17,6 +18,7 @@ import { CompanyID } from "@/company/schema"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import {
+  CompanyAgentCapabilityTable,
   CompanyAgentPerformanceTable,
   CompanyCapabilityNeedTable,
   CompanyDepartmentTable,
@@ -25,6 +27,8 @@ import {
   CompanyTeamSelectionTable,
 } from "./company-recruitment.sql"
 import {
+  AgentCapability,
+  AgentCapabilityQuery,
   AgentPerformance,
   CapabilityNeed,
   CreateCapabilityNeedInput,
@@ -37,11 +41,25 @@ import {
   RecordPerformanceInput,
   ReassignProjectAssignmentInput,
   ReviewEmploymentInput,
-  SelectionScore,
   SelectAndAssignInput,
   SelectForNeedInput,
   TeamSelection,
 } from "./schema"
+import {
+  capabilityAvailability,
+  declaredPacksFromProfile,
+  evidenceStatus,
+  runtimeCompatibility,
+} from "./capability-evidence"
+import {
+  compareCandidates,
+  hardGaps,
+  selectionScore,
+  softGaps,
+  unverifiedRequiredPacks,
+  verifiedPacks,
+  type CandidateFacts,
+} from "./selection-policy"
 import { stableCandidateAgentID } from "./identity"
 import {
   compatibleRuntimeForNeed,
@@ -68,6 +86,7 @@ const selectionFromRow = (row: typeof CompanyTeamSelectionTable.$inferSelect) =>
   TeamSelection.parse({
     ...row,
     company_id: row.company_id ?? undefined,
+    gaps: parseList(row.gaps_json),
     score: JSON.parse(row.score_json),
     constraint_results: JSON.parse(row.constraint_results_json),
     time_released: row.time_released ?? undefined,
@@ -96,6 +115,29 @@ const departmentFromRow = (row: typeof CompanyDepartmentTable.$inferSelect) =>
     ...row,
     evidence: JSON.parse(row.evidence_json),
   })
+const capabilityFromRow = (
+  row: typeof CompanyAgentCapabilityTable.$inferSelect,
+  preferredRuntime: string,
+  now: number,
+) => {
+  const facts = {
+    capability_pack: row.capability_pack,
+    declared_at: row.declared_at,
+    last_verified_at: row.last_verified_at ?? undefined,
+    last_success_selection_id: row.last_success_selection_id ?? undefined,
+    failure_count: row.failure_count,
+    last_failure_at: row.last_failure_at ?? undefined,
+  }
+  const availability = capabilityAvailability(facts, preferredRuntime)
+  return AgentCapability.parse({
+    ...row,
+    ...facts,
+    last_failure_summary: row.last_failure_summary ?? undefined,
+    status: evidenceStatus(facts, now),
+    available: availability.available,
+    availability_reasons: availability.reasons,
+  })
+}
 const normalizeCapabilityPacks = (values: string[]) => [...new Set(values)].toSorted()
 const normalizeList = (values: string[]) => [...new Set(values)].toSorted()
 const terms = (value: string) =>
@@ -126,6 +168,7 @@ export interface Interface {
     project_id: string
     work_item_id?: string
   }) => Effect.Effect<ProjectAssignment[]>
+  readonly listCapabilities: (input: AgentCapabilityQuery) => Effect.Effect<AgentCapability[]>
   readonly releaseProject: (input: { company_id?: CompanyID; project_id: string }) => Effect.Effect<TeamSelection[]>
   readonly recordPerformance: (input: RecordPerformanceInput) => Effect.Effect<AgentPerformance>
   readonly reviewEmployment: (
@@ -139,8 +182,16 @@ export interface Interface {
     performances: AgentPerformance[]
     employment_reviews: EmploymentReview[]
     departments: Department[]
+    capabilities: AgentCapability[]
     candidate_pool: CompanyAgent.Info[]
     assigned_candidates: CompanyAgent.Info[]
+    organization: {
+      board_members: CompanyAgent.Info[]
+      employees: CompanyAgent.Info[]
+      temporary_instances: CompanyAgent.Info[]
+      reused_candidates: CompanyAgent.Info[]
+      candidate_pool: CompanyAgent.Info[]
+    }
   }>
 }
 
@@ -201,6 +252,63 @@ export const layer = Layer.effect(
             .map(assignmentFromRow),
         ),
       )
+    })
+
+    const seedDeclaredCapabilities = (
+      companyID: CompanyID,
+      agentID: string,
+      packs: string[],
+      source: "profile" | "selection",
+    ) =>
+      Effect.sync(() =>
+        Database.transaction((tx) => {
+          const now = Date.now()
+          packs.forEach((pack) =>
+            tx
+              .insert(CompanyAgentCapabilityTable)
+              .values({
+                id: Identifier.ascending("agentCapability"),
+                company_id: companyID,
+                agent_id: agentID,
+                capability_pack: pack,
+                source,
+                declared_at: now,
+                failure_count: 0,
+                time_created: now,
+                time_updated: now,
+              })
+              .onConflictDoNothing()
+              .run(),
+          )
+        }),
+      )
+
+    const listCapabilities = Effect.fn("CompanyRecruitment.listCapabilities")(function* (
+      raw: AgentCapabilityQuery,
+    ) {
+      const input = AgentCapabilityQuery.parse(raw)
+      const rows = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyAgentCapabilityTable)
+            .where(eq(CompanyAgentCapabilityTable.company_id, input.company_id))
+            .orderBy(asc(CompanyAgentCapabilityTable.time_created), asc(CompanyAgentCapabilityTable.id))
+            .all(),
+        ),
+      )
+      const filtered = rows.filter((row) => !input.agent_id || row.agent_id === input.agent_id)
+      const runtimes = new Map<string, string>()
+      yield* Effect.forEach(
+        [...new Set(filtered.map((row) => row.agent_id))],
+        (agentID) =>
+          Effect.map(agents.get(CompanyAgentID.make(agentID)), (agent) => {
+            runtimes.set(agentID, agent?.preferred_runtime ?? "unknown")
+          }),
+        { discard: true },
+      )
+      const now = Date.now()
+      return filtered.map((row) => capabilityFromRow(row, runtimes.get(row.agent_id) ?? "unknown", now))
     })
 
     const createNeed = Effect.fn("CompanyRecruitment.createNeed")(function* (raw: CreateCapabilityNeedInput) {
@@ -321,9 +429,13 @@ export const layer = Layer.effect(
       )
     })
 
-    const candidateScore = Effect.fn("CompanyRecruitment.candidateScore")(function* (
+    // TEAM-04: gather verifiable facts only; scoring and hard constraints live
+    // in the pure selection-policy layer so they stay deterministic and testable.
+    const candidateFacts = Effect.fn("CompanyRecruitment.candidateFacts")(function* (
       need: CapabilityNeed,
       agent: CompanyAgent.Info,
+      excluded: boolean,
+      capabilities: AgentCapability[],
     ) {
       const wanted = terms([need.role, need.work_type, ...need.capability_packs].join(" "))
       const profile = terms(
@@ -331,7 +443,6 @@ export const layer = Layer.effect(
           " ",
         ),
       )
-      const capability_match = [...wanted].filter((term) => profile.has(term)).length
       const state = yield* Effect.sync(() =>
         Database.use((db) => {
           const active = db
@@ -364,33 +475,50 @@ export const layer = Layer.effect(
           }
         }),
       )
-      const riskFit =
-        need.risk_level === "high"
-          ? agent.lifecycle === "employee"
-            ? 100
-            : state.quality >= 80 && state.reliability >= 80
-              ? 80
-              : 40
-          : 80
-      return SelectionScore.parse({
-        capability_match,
-        availability: Math.max(0, 100 - state.active * 35),
-        historical_quality: state.quality,
-        historical_reliability: state.reliability,
-        cost_efficiency: state.cost,
-        speed: state.speed,
-        risk_fit: riskFit,
-        reuse_value: agent.lifecycle === "candidate" ? 100 : agent.lifecycle === "employee" ? 70 : 40,
-        total:
-          capability_match * 30 +
-          Math.max(0, 100 - state.active * 35) +
-          Math.round(state.quality / 3) +
-          Math.round(state.reliability / 4) +
-          Math.round(state.cost / 10) +
-          Math.round(state.speed / 10) +
-          Math.round(riskFit / 5) +
-          (agent.lifecycle === "candidate" ? 20 : agent.lifecycle === "employee" ? 10 : 0),
-      })
+      return {
+        agent_id: agent.id,
+        lifecycle: agent.lifecycle,
+        excluded,
+        compatibility: runtimeCompatibility(agent.preferred_runtime, need.capability_packs),
+        capability_match: [...wanted].filter((term) => profile.has(term)).length,
+        evidence: capabilities
+          .filter((item) => item.agent_id === agent.id && need.capability_packs.includes(item.capability_pack))
+          .map((item) => ({ capability_pack: item.capability_pack, status: item.status, available: item.available })),
+        required_packs: need.capability_packs,
+        risk_level: need.risk_level,
+        state,
+      } satisfies CandidateFacts
+    })
+
+    const ensureRoleKey = Effect.fn("CompanyRecruitment.ensureRoleKey")(function* (
+      need: CapabilityNeed,
+      agent: CompanyAgent.Info,
+    ) {
+      if (!need.company_id || agent.role_key) return agent
+      yield* Effect.sync(() =>
+        Database.use((db) => {
+          const existing = db
+            .select()
+            .from(CompanyAgentTable)
+            .where(
+              and(
+                eq(CompanyAgentTable.company_id, need.company_id!),
+                eq(CompanyAgentTable.role_key, need.role),
+              ),
+            )
+            .get()
+          db.update(CompanyAgentTable)
+            .set({
+              role_key: existing && existing.id !== agent.id ? `${need.role} (${agent.id})` : need.role,
+              time_updated: Date.now(),
+            })
+            .where(and(eq(CompanyAgentTable.id, agent.id), isNull(CompanyAgentTable.role_key)))
+            .run()
+        }),
+      )
+      const updated = yield* agents.get(agent.id)
+      if (!updated) throw new Error(`Selected company agent not found: ${agent.id}`)
+      return updated
     })
 
     const selectForNeed = Effect.fn("CompanyRecruitment.selectForNeed")(function* (raw: SelectForNeedInput) {
@@ -421,24 +549,50 @@ export const layer = Layer.effect(
           agent.lifecycle !== "archived" &&
           (agent.company_id ?? undefined) === need.company_id,
       )
+      if (need.company_id)
+        yield* Effect.forEach(
+          pool,
+          (agent) => seedDeclaredCapabilities(need.company_id!, agent.id, declaredPacksFromProfile(agent), "profile"),
+          { discard: true },
+        )
+      const capabilities = need.company_id ? yield* listCapabilities({ company_id: need.company_id }) : []
       const scored = yield* Effect.forEach(pool, (agent) =>
-        Effect.map(candidateScore(need, agent), (score) => {
-          const constraints = evaluateSelectionConstraints(need, agent)
-          return {
+        Effect.map(
+          candidateFacts(
+            need,
             agent,
-            score,
-            constraints,
-            excluded:
-              input.exclude_agent_ids.includes(agent.id) ||
+            input.exclude_agent_ids.includes(agent.id) ||
               Boolean(input.required_agent_id && input.required_agent_id !== agent.id),
-          }
-        }),
+            capabilities,
+          ),
+          (facts) => {
+            const constraints = evaluateSelectionConstraints(need, agent)
+            return {
+              agent,
+              facts,
+              score: selectionScore(facts),
+              constraints,
+              excluded: facts.excluded,
+              hard_gaps: [
+                ...new Set([
+                  ...hardGaps(facts),
+                  ...constraints.results.filter((result) => !result.passed).map((result) => result.reason),
+                ]),
+              ],
+            }
+          },
+        ),
       )
-      const selected = scored
-        .filter((item) => !item.excluded && item.constraints.eligible && item.score.capability_match > 0)
-        .toSorted(
-          (left, right) => right.score.total - left.score.total || left.agent.id.localeCompare(right.agent.id),
-        )[0]
+      const ranked = scored
+        .filter((item) => !item.excluded && item.constraints.eligible && item.hard_gaps.length === 0)
+        .toSorted((left, right) =>
+          compareCandidates(
+            { agent_id: left.agent.id, score: left.score },
+            { agent_id: right.agent.id, score: right.score },
+          ),
+        )
+      const rankOf = new Map(ranked.map((item, index) => [item.agent.id, index + 1]))
+      const selected = ranked[0]
       const chosen = selected
         ? { ...selected, source: "company_pool" as const }
         : yield* Effect.gen(function* () {
@@ -473,26 +627,25 @@ export const layer = Layer.effect(
             const constraints = evaluateSelectionConstraints(need, agent)
             if (!constraints.eligible)
               throw new Error(`Generated candidate ${agent.id} does not satisfy capability need ${need.id}`)
+            const facts = yield* candidateFacts(need, agent, false, capabilities)
             return {
               agent,
-              score: SelectionScore.parse({
-                capability_match: terms([need.role, need.work_type, ...need.capability_packs].join(" ")).size,
-                availability: 100,
-                historical_quality: 50,
-                historical_reliability: 50,
-                cost_efficiency: 50,
-                speed: 50,
-                risk_fit: need.risk_level === "high" ? 40 : 80,
-                reuse_value: 0,
-                total: 100,
-              }),
+              facts,
+              score: selectionScore(facts),
               constraints,
               excluded: false,
+              hard_gaps: [],
               source: "new_candidate" as const,
             }
           })
 
+      yield* ensureRoleKey(need, chosen.agent)
+      if (need.company_id)
+        yield* seedDeclaredCapabilities(need.company_id, chosen.agent.id, need.capability_packs, "selection")
       const now = Date.now()
+      const candidates = scored.some((item) => item.agent.id === chosen.agent.id)
+        ? scored
+        : [...scored, chosen]
       const persisted = yield* Effect.sync(() =>
         Database.transaction(
           (tx) => {
@@ -503,13 +656,14 @@ export const layer = Layer.effect(
               .all()
               .find((row) => row.decision === "selected" && row.time_released === null)
             const activeCandidate = active
-              ? scored.find((item) => item.agent.id === active.agent_id)
+              ? candidates.find((item) => item.agent.id === active.agent_id)
               : undefined
             if (
               active &&
               active.id !== previousSelected?.id &&
               activeCandidate?.constraints.eligible &&
-              !activeCandidate.excluded
+              !activeCandidate.excluded &&
+              activeCandidate.hard_gaps.length === 0
             )
               return { existing_selection_id: active.id }
             if (active)
@@ -528,38 +682,43 @@ export const layer = Layer.effect(
                   .all()
                   .map((row) => row.selection_round),
               ) + 1
-            const candidates = scored.some((item) => item.agent.id === chosen.agent.id)
-              ? scored
-              : [...scored, chosen]
-            const rows = candidates.map((item) => ({
-              id: Identifier.ascending("teamSelection"),
-              company_id: need.company_id ?? null,
-              project_id: need.project_id,
-              capability_need_id: need.id,
-              selection_round: selectionRound,
-              agent_id: item.agent.id,
-              decision: item.agent.id === chosen.agent.id ? "selected" : "rejected",
-              source: item.agent.id === chosen.agent.id ? chosen.source : "company_pool",
-              lifecycle_at_selection: item.agent.lifecycle,
-              reason:
-                item.agent.id === chosen.agent.id
-                  ? `入选：通过全部硬约束，能力匹配 ${item.score.capability_match} 项，总评 ${item.score.total}。`
-                  : item.excluded
-                    ? "未入选：与当前任务的显式候选或独立性边界冲突。"
-                    : !item.constraints.eligible
-                      ? `未入选：${item.constraints.results
-                          .filter((result) => !result.passed)
-                          .map((result) => result.reason)
-                          .join("；")}`
-                      : item.score.capability_match === 0
-                        ? `未入选：与“${need.role}”及其能力包没有可验证的能力匹配。`
-                        : `未入选：能力匹配 ${item.score.capability_match} 项、总评 ${item.score.total}，低于入选者 ${chosen.score.total}。`,
-              score_json: JSON.stringify(item.score),
-              constraint_results_json: JSON.stringify(item.constraints.results),
-              time_released: null,
-              time_created: now,
-              time_updated: now,
-            }))
+            const rows = candidates.map((item) => {
+              const rank = item.agent.id === chosen.agent.id ? 1 : (rankOf.get(item.agent.id) ?? 0)
+              const selected = item.agent.id === chosen.agent.id
+              const gaps = selected
+                ? unverifiedRequiredPacks(item.facts).map((pack) => `能力包 ${pack} 的证据尚未验证`)
+                : item.hard_gaps.length
+                  ? item.hard_gaps
+                  : softGaps(item, chosen)
+              const reason = selected
+                ? chosen.source === "new_candidate"
+                  ? `入选：现有池无人满足硬性条件，显式创建临时角色；覆盖 ${item.score.capability_match} 项能力。`
+                  : `入选：能力匹配 ${item.score.capability_match} 项，能力证据强度 ${item.score.evidence_strength}（已验证 ${verifiedPacks(item.facts).length}/${need.capability_packs.length} 项能力包），负载可用性 ${item.score.availability}，历史质量 ${item.score.historical_quality}，可靠性 ${item.score.historical_reliability}。`
+                : item.hard_gaps.length
+                  ? `未入选：${item.hard_gaps.join("；")}。`
+                  : rank === 2
+                    ? `未入选（第二候选）：总评 ${item.score.total} 仅次于入选者 ${chosen.score.total}${gaps.length ? `；缺口：${gaps.join("；")}` : "；按确定性同分规则排后"}。`
+                    : `未入选：总评 ${item.score.total} 排名第 ${rank}，低于入选者 ${chosen.score.total}${gaps.length ? `；缺口：${gaps.join("；")}` : ""}。`
+              return {
+                id: Identifier.ascending("teamSelection"),
+                company_id: need.company_id ?? null,
+                project_id: need.project_id,
+                capability_need_id: need.id,
+                selection_round: selectionRound,
+                agent_id: item.agent.id,
+                decision: selected ? ("selected" as const) : ("rejected" as const),
+                source: selected ? chosen.source : ("company_pool" as const),
+                lifecycle_at_selection: item.agent.lifecycle,
+                candidate_rank: rank,
+                reason,
+                gaps_json: JSON.stringify(gaps),
+                score_json: JSON.stringify(item.score),
+                constraint_results_json: JSON.stringify(item.constraints.results),
+                time_released: null,
+                time_created: now,
+                time_updated: now,
+              }
+            })
             tx.insert(CompanyTeamSelectionTable).values(rows).run()
             return {
               selected_selection_id: rows.find((row) => row.decision === "selected")!.id,
@@ -739,6 +898,7 @@ export const layer = Layer.effect(
           { behavior: "immediate" },
         ),
       )
+      yield* agents.assign(CompanyAgentID.make(assignment.agent_id))
       return assignmentFromRow(assignment)
     })
 
@@ -753,12 +913,16 @@ export const layer = Layer.effect(
         (item) => item.decision === "selected" && !item.time_released,
       )
       if (!selection) throw new Error(`Capability need ${input.capability_need_id} has no current selection`)
+      const assignment = yield* assignSelection({
+        selection_id: selection.id,
+        permission_mode: input.permission_mode,
+      })
+      const agent = yield* agents.get(selected.agent.id)
+      if (!agent) throw new Error(`Assigned company agent not found: ${selected.agent.id}`)
       return {
         ...selected,
-        assignment: yield* assignSelection({
-          selection_id: selection.id,
-          permission_mode: input.permission_mode,
-        }),
+        agent,
+        assignment,
       }
     })
 
@@ -868,6 +1032,80 @@ export const layer = Layer.effect(
             })
         }),
       )
+      const companyID = input.company_id
+      if (companyID)
+        yield* Effect.forEach(
+          [...new Set(selected.map((item) => item.agent_id))],
+          (agentID) =>
+            Effect.gen(function* () {
+            const facts = yield* Effect.sync(() =>
+              Database.use((db) => ({
+                selections: db
+                  .select()
+                  .from(CompanyTeamSelectionTable)
+                  .where(eq(CompanyTeamSelectionTable.agent_id, agentID))
+                  .all()
+                  .filter((item) => item.decision === "selected"),
+                // TEAM-05：真实任务证据 = 本项目已完成的工作项，或任意项目的成功交付记录。
+                completed_work_items: db
+                  .select({ id: CompanyWorkItemTable.id })
+                  .from(CompanyWorkItemTable)
+                  .where(
+                    and(
+                      eq(CompanyWorkItemTable.project_id, input.project_id),
+                      eq(CompanyWorkItemTable.owner_agent_id, agentID),
+                      eq(CompanyWorkItemTable.status, "completed"),
+                    ),
+                  )
+                  .all().length,
+                success_count: db
+                  .select()
+                  .from(CompanyAgentPerformanceTable)
+                  .where(eq(CompanyAgentPerformanceTable.agent_id, agentID))
+                  .all()
+                  .filter((item) => item.outcome === "success").length,
+              })),
+            )
+            const activeElsewhere = facts.selections.some(
+              (item) => item.time_released === null && item.project_id !== input.project_id,
+            )
+            if (activeElsewhere) return
+            const released = yield* agents.release(CompanyAgentID.make(agentID))
+            if (released.lifecycle !== "candidate") return
+            if (facts.completed_work_items > 0 || facts.success_count > 0) return
+            const temporary = selected.some(
+              (item) => item.agent_id === agentID && item.source === "new_candidate",
+            )
+            if (!temporary) return
+            // TEAM-05：临时角色实例未沉淀任何真实任务证据，不进入候选池，直接退役并留存审计记录。
+            yield* agents.archive(released.id)
+            const now = Date.now()
+            yield* Effect.sync(() =>
+              Database.use((db) =>
+                db
+                  .insert(CompanyEmploymentReviewTable)
+                  .values({
+                    id: Identifier.ascending("employmentReview"),
+                    company_id: companyID,
+                    agent_id: agentID,
+                    status: "retired",
+                    selected_project_count: new Set(facts.selections.map((item) => item.project_id)).size,
+                    successful_project_count: 0,
+                    average_quality_score: 0,
+                    average_reliability_score: 0,
+                    recurring_need_count: 0,
+                    rationale: `临时角色实例在项目 ${input.project_id} 释放时无已完成工作项与成功交付记录，不进入候选池，直接退役。`,
+                    decision_note: null,
+                    time_decided: now,
+                    time_created: now,
+                    time_updated: now,
+                  })
+                  .run(),
+              ),
+            )
+            }),
+          { discard: true },
+        )
       return (yield* listSelections(input)).filter((item) => item.decision === "selected")
     })
 
@@ -884,6 +1122,7 @@ export const layer = Layer.effect(
         throw new Error(`Selected team assignment not found: ${input.selection_id}`)
       if (!selection.company_id)
         throw new Error(`Standalone selection ${input.selection_id} cannot enter company performance review`)
+      const companyID = CompanyID.parse(selection.company_id)
       const project = yield* Effect.sync(() =>
         Database.use((db) =>
           db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, selection.project_id)).get(),
@@ -944,6 +1183,49 @@ export const layer = Layer.effect(
             .run(),
         ),
       )
+      // Delivery outcomes feed capability evidence: success refreshes verification,
+      // failure is recorded as a fact but never permanently revokes the capability.
+      const needForSelection = yield* getNeed(selection.capability_need_id)
+      const firstOutcomeRecord = !existing || existing.outcome !== input.outcome
+      if (needForSelection)
+        yield* Effect.sync(() =>
+          Database.transaction((tx) => {
+            needForSelection.capability_packs.forEach((pack) =>
+              tx
+                .insert(CompanyAgentCapabilityTable)
+                .values({
+                  id: Identifier.ascending("agentCapability"),
+                  company_id: companyID,
+                  agent_id: selection.agent_id,
+                  capability_pack: pack,
+                  source: "delivery",
+                  declared_at: now,
+                  last_verified_at: input.outcome === "success" ? now : null,
+                  last_success_selection_id: input.outcome === "success" ? selection.id : null,
+                  failure_count: input.outcome === "failure" ? 1 : 0,
+                  last_failure_at: input.outcome === "failure" ? now : null,
+                  last_failure_summary: input.outcome === "failure" ? input.review_summary : null,
+                  time_created: now,
+                  time_updated: now,
+                })
+                .onConflictDoUpdate({
+                  target: [CompanyAgentCapabilityTable.agent_id, CompanyAgentCapabilityTable.capability_pack],
+                  set:
+                    input.outcome === "success"
+                      ? { last_verified_at: now, last_success_selection_id: selection.id, time_updated: now }
+                      : {
+                          ...(firstOutcomeRecord
+                            ? { failure_count: sql`${CompanyAgentCapabilityTable.failure_count} + 1` }
+                            : {}),
+                          last_failure_at: now,
+                          last_failure_summary: input.review_summary,
+                          time_updated: now,
+                        },
+                })
+                .run(),
+            )
+          }),
+        )
       return performanceFromRow(row)
     })
 
@@ -1242,6 +1524,16 @@ export const layer = Layer.effect(
           .filter((assignment) => assignment.status === "assigned" || assignment.status === "active")
           .map((assignment) => assignment.agent_id),
       )
+      const candidatePool = yield* agents.list({ company_id: input.company_id, lifecycle: "candidate" })
+      const assignedCandidates = (yield* agents.list({ company_id: input.company_id })).filter((agent) =>
+        currentAgentIDs.has(agent.id),
+      )
+      const employees = yield* agents.list({ company_id: input.company_id, lifecycle: "employee" })
+      const temporaryIDs = new Set(
+        (yield* listSelections({ company_id: input.company_id }))
+          .filter((item) => item.decision === "selected" && !item.time_released && item.source === "new_candidate")
+          .map((item) => item.agent_id),
+      )
       return {
         needs,
         selections: (yield* listSelections(input)).filter((selection) =>
@@ -1253,10 +1545,16 @@ export const layer = Layer.effect(
           .map(performanceFromRow),
         employment_reviews: facts.reviews.map(reviewFromRow),
         departments: facts.departments.map(departmentFromRow),
-        candidate_pool: yield* agents.list({ company_id: input.company_id, lifecycle: "candidate" }),
-        assigned_candidates: (yield* agents.list({ company_id: input.company_id })).filter((agent) =>
-          currentAgentIDs.has(agent.id),
-        ),
+        capabilities: yield* listCapabilities({ company_id: input.company_id }),
+        candidate_pool: candidatePool,
+        assigned_candidates: assignedCandidates,
+        organization: {
+          board_members: employees.filter((agent) => agent.org_layer === "board"),
+          employees: employees.filter((agent) => agent.org_layer !== "board"),
+          temporary_instances: assignedCandidates.filter((agent) => temporaryIDs.has(agent.id)),
+          reused_candidates: assignedCandidates.filter((agent) => !temporaryIDs.has(agent.id)),
+          candidate_pool: candidatePool,
+        },
       }
     })
 
@@ -1266,6 +1564,7 @@ export const layer = Layer.effect(
       selectAndAssign,
       reassign,
       listAssignments,
+      listCapabilities,
       releaseProject,
       recordPerformance,
       reviewEmployment,

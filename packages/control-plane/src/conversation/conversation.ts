@@ -357,6 +357,16 @@ export const RecordBoardDecisionInput = z
   .strict()
 export type RecordBoardDecisionInput = z.infer<typeof RecordBoardDecisionInput>
 
+// TEAM-05：DRI 可由满足能力与权限的非 Board 角色承担；该输入用于按需授予其源 Thread 的成员资格。
+export const EnsureThreadAccessInput = z
+  .object({
+    companyID: CompanyID,
+    threadID: ConversationThreadID,
+    principal: ConversationPrincipal,
+  })
+  .strict()
+export type EnsureThreadAccessInput = z.infer<typeof EnsureThreadAccessInput>
+
 type ChannelAccess = Pick<PageMessagesInput, "companyID" | "channelID" | "principal">
 type ThreadAccess = Pick<GetThreadInput, "companyID" | "threadID" | "principal">
 
@@ -870,6 +880,7 @@ export interface Interface {
   readonly sendMessage: (input: Intake.SendMessageInput) => Effect.Effect<Intake.MessageAccepted, Intake.SendMessageError>
   readonly ensureCompanyChannels: (input: EnsureCompanyChannelsInput) => Effect.Effect<void>
   readonly ensureProjectChannel: (input: EnsureProjectChannelInput) => Effect.Effect<ChannelSummary, InstanceType<typeof CompanyNotFound>>
+  readonly ensureThreadAccess: (input: EnsureThreadAccessInput) => Effect.Effect<void, InstanceType<typeof ThreadNotVisible>>
   readonly recordBoardDecision: (
     input: RecordBoardDecisionInput,
   ) => Effect.Effect<ChannelMessage, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof RequestConflict>>
@@ -1104,6 +1115,74 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return channelFromRow(channel)
     })
 
+    // TEAM-05：非 Board 成员被指派为 DRI 时，授予其源 Thread 的 channel + thread 成员资格（幂等，可重入）。
+    const ensureThreadAccess = Effect.fn("Conversation.ensureThreadAccess")(function* (
+      input: EnsureThreadAccessInput,
+    ) {
+      const granted = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const thread = db
+              .select()
+              .from(ConversationThreadTable)
+              .where(
+                and(
+                  eq(ConversationThreadTable.company_id, input.companyID),
+                  eq(ConversationThreadTable.id, input.threadID),
+                ),
+              )
+              .get()
+            if (!thread) return false
+            const now = Date.now()
+            db.insert(ChannelMemberTable)
+              .values({
+                channel_id: thread.channel_id,
+                principal_kind: input.principal.kind,
+                principal_id: input.principal.id,
+                role: "member",
+                time_joined: now,
+                time_created: now,
+                time_updated: now,
+                time_left: null,
+              })
+              .onConflictDoUpdate({
+                target: [
+                  ChannelMemberTable.channel_id,
+                  ChannelMemberTable.principal_kind,
+                  ChannelMemberTable.principal_id,
+                ],
+                set: { time_left: null, time_updated: now },
+              })
+              .run()
+            db.insert(ConversationThreadMemberTable)
+              .values({
+                conversation_thread_id: thread.id,
+                principal_kind: input.principal.kind,
+                principal_id: input.principal.id,
+                time_joined: now,
+                time_created: now,
+                time_updated: now,
+                time_left: null,
+              })
+              .onConflictDoUpdate({
+                target: [
+                  ConversationThreadMemberTable.conversation_thread_id,
+                  ConversationThreadMemberTable.principal_kind,
+                  ConversationThreadMemberTable.principal_id,
+                ],
+                set: { time_left: null, time_updated: now },
+              })
+              .run()
+            return true
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      if (!granted) {
+        return yield* Effect.fail(new ThreadNotVisible({ company_id: input.companyID, thread_id: input.threadID }))
+      }
+    })
+
     const recordBoardDecision = Effect.fn("Conversation.recordBoardDecision")(function* (
       input: RecordBoardDecisionInput,
     ) {
@@ -1237,6 +1316,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       sendMessage,
       ensureCompanyChannels,
       ensureProjectChannel,
+      ensureThreadAccess,
       recordBoardDecision,
     })
   }),

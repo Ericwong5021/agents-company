@@ -7,6 +7,7 @@ import { CompanyRecruitment, stableLogicalKey } from "@/company-recruitment"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { CompanyID } from "@/company/schema"
 import { Conversation } from "@/conversation"
+import { orchestrationPlan } from "./orchestration"
 import { ConversationThreadID } from "@/conversation/schema"
 import { Delegation } from "@/delegation/delegation"
 import { SubTask } from "@/delegation/schema"
@@ -438,6 +439,9 @@ const workerScript = (
           `你独占的决策范围：${item.decision_scope.join("；") || "无"}`,
           `允许使用或修改的资源范围：${item.resource_scope.join("；") || "仅返回结构化交付物"}`,
           "只执行这一个叶子任务，不重新规划整个项目，不替其他子树做决定。",
+          item.review_status === "not_required"
+            ? "本任务不设独立 Reviewer：提交前必须逐条自检验收条件，并在 summary 中说明每条的自检结果。"
+            : undefined,
           "如果当前事实包含上一次独立复核的 findings，本次必须针对 findings 返工，并用已经发生的 Control Plane 实体、状态和内容交付证据；不得把计划中的后续动作写成已完成。",
           item.work_type === "coding"
             ? "在授权工作树内完成实现，并亲自运行测试、检查与构建；verificationCommands 必须填写可由宿主再次执行的真实命令。"
@@ -723,6 +727,8 @@ export const layer = Layer.effect(
               const companyID = CompanyID.parse(project.company_id!)
               const threadID = ConversationThreadID.parse(project.source_thread_id!)
               const principal = { kind: "agent" as const, id: project.owner_agent_id ?? "board-ceo" }
+              // TEAM-05：非 Board DRI 也需读取源 Thread 证据，先确保成员资格。
+              yield* conversation.ensureThreadAccess({ companyID, threadID, principal })
               return {
                 thread: yield* conversation.getThread({ companyID, threadID, principal }),
                 entries: (yield* conversation.pageEntries({ companyID, threadID, principal, limit: 100 })).items.map(
@@ -906,6 +912,12 @@ export const layer = Layer.effect(
         (event) => event.type === "board_closeout.recorded" && event.data.artifact_id === input.artifact.id,
       )
       if (existing) return
+      // TEAM-05：DRI 不强制为 Board 成员；签署前按需授予其源 Thread 成员资格。
+      yield* conversation.ensureThreadAccess({
+        companyID: CompanyID.parse(input.project.company_id!),
+        threadID: ConversationThreadID.parse(input.project.source_thread_id!),
+        principal: { kind: "agent", id: input.project.owner_agent_id! },
+      })
       const message = yield* conversation.recordBoardDecision({
         companyID: CompanyID.parse(input.project.company_id!),
         threadID: ConversationThreadID.parse(input.project.source_thread_id!),
@@ -1712,8 +1724,10 @@ export const layer = Layer.effect(
         })
       const plan = (yield* projects.listPlans(input.project.id)).at(-1)
       if (!plan) throw new Error("Project plan is missing")
+      const charterPolicy = (yield* projects.getCharter(input.project.id))?.policy
+      if (!charterPolicy) throw new Error("Project Charter policy is missing")
       const existingItems = yield* projects.listWorkItems(input.project.id)
-      const created = new Map<string, { worker: WorkItem; reviewer: WorkItem }>()
+      const created = new Map<string, { worker: WorkItem; reviewer?: WorkItem }>()
       for (const [index, task] of tasks.entries()) {
         const key = keys[index]!
         const sourceKey = sourceKeys[index]!
@@ -1721,10 +1735,22 @@ export const layer = Layer.effect(
         const role = task.role ?? `${type} specialist`
         const group = modelGroups.includes(task.modelGroup ?? "standard") ? (task.modelGroup ?? "standard") : "standard"
         const packs = executableCapabilityPacks(task.capabilityPacks ?? [], type)
-        const risk = task.riskLevel ?? (type === "coding" ? "high" : "medium")
+        // TEAM-03: the rule layer—not the planner label—decides risk and
+        // verification strength, so prompts cannot bypass review or gates.
+        const decision = orchestrationPlan({
+          work_type: type,
+          declared_risk: task.riskLevel,
+          approval_preset: charterPolicy.source_approval_preset,
+        })
+        const risk = decision.risk_level
         const dependencies = [
-          ...(task.dependsOn ?? []).map((dependency) => created.get(dependency)!.reviewer.id),
-          ...(task.parentKey ? [created.get(task.parentKey)!.reviewer.id] : []),
+          ...(task.dependsOn ?? []).map((dependency) => {
+            const upstream = created.get(dependency)!
+            return (upstream.reviewer ?? upstream.worker).id
+          }),
+          ...(task.parentKey
+            ? [(created.get(task.parentKey)!.reviewer ?? created.get(task.parentKey)!.worker).id]
+            : []),
         ].filter((value, position, values) => values.indexOf(value) === position)
         const parentID = task.parentKey ? created.get(task.parentKey)!.worker.id : input.item.id
         const keyedWorker = existingItems.find(
@@ -1762,7 +1788,7 @@ export const layer = Layer.effect(
           disposition: "retain",
           model_group: group,
           risk_level: risk,
-          review_status: "pending" as const,
+          review_status: decision.reviewer ? ("pending" as const) : ("not_required" as const),
           owner_agent_id: existingWorker?.owner_agent_id,
           acceptance_criteria: [task.acceptanceCriteria],
           max_attempts: 2,
@@ -1786,8 +1812,28 @@ export const layer = Layer.effect(
         })
         if (!worker.owner_agent_id) throw new Error(`Worker ${worker.id} has no current Assignment`)
         const ownerID = worker.owner_agent_id
+        yield* projects.recordEvent({
+          project_id: input.project.id,
+          type: "work_item.orchestration_planned",
+          actor_id: input.item.owner_agent_id,
+          data: {
+            key,
+            work_item_id: worker.id,
+            declared_risk: task.riskLevel,
+            risk_level: risk,
+            strength: decision.strength,
+            reviewer: decision.reviewer,
+            gate: decision.gate,
+            reasons: decision.reasons,
+            alternatives: decision.alternatives,
+          },
+        })
+        if (!decision.reviewer) {
+          created.set(key, { worker })
+          continue
+        }
         const reviewerRole = `${role} independent reviewer`
-        const reviewerGroup = task.riskLevel === "high" ? "ultra" : "standard"
+        const reviewerGroup = risk === "high" ? "ultra" : "standard"
         const keyedReviewer = existingItems.find(
           (item) => item.plan_id === plan.id && item.kind === "reviewer" && item.source_task_key === sourceKey,
         )

@@ -479,7 +479,7 @@ const startControlPlane = () =>
       "127.0.0.1",
       "--port",
       String(controlPlanePort),
-      "--no-auth=true",
+      "--no-auth",
     ],
     controlPlaneRoot,
     controlPlaneEnvironment,

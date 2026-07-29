@@ -66,7 +66,9 @@ export const CompanyTeamSelectionTable = sqliteTable(
     decision: text().notNull(),
     source: text().notNull(),
     lifecycle_at_selection: text().notNull(),
+    candidate_rank: integer().notNull().default(0),
     reason: text().notNull(),
+    gaps_json: text().notNull().default("[]"),
     score_json: text().notNull(),
     constraint_results_json: text().notNull().default("[]"),
     time_released: integer(),
@@ -189,6 +191,33 @@ export const CompanyEmploymentReviewTable = sqliteTable(
     ...Timestamps,
   },
   (table) => [index("company_employment_review_agent_status_idx").on(table.agent_id, table.status, table.time_created)],
+)
+
+export const CompanyAgentCapabilityTable = sqliteTable(
+  "company_agent_capability",
+  {
+    id: text().primaryKey(),
+    company_id: text()
+      .$type<CompanyID>()
+      .notNull()
+      .references(() => CompanyTable.id, { onDelete: "cascade" }),
+    agent_id: text()
+      .notNull()
+      .references(() => CompanyAgentTable.id, { onDelete: "cascade" }),
+    capability_pack: text().notNull(),
+    source: text().notNull(),
+    declared_at: integer().notNull(),
+    last_verified_at: integer(),
+    last_success_selection_id: text(),
+    failure_count: integer().notNull().default(0),
+    last_failure_at: integer(),
+    last_failure_summary: text(),
+    ...Timestamps,
+  },
+  (table) => [
+    uniqueIndex("company_agent_capability_agent_pack_idx").on(table.agent_id, table.capability_pack),
+    index("company_agent_capability_company_agent_idx").on(table.company_id, table.agent_id),
+  ],
 )
 
 export const CompanyDepartmentTable = sqliteTable(

@@ -884,6 +884,17 @@ const agents = [
       department: "Delivery",
       responsibilities: ["发布检查", "交付验收"],
     },
+    employment: "employee",
+    workload: {
+      active: 1,
+      blocked: 0,
+      recent_delivery: {
+        work_item_id: "work-item-release",
+        title: "发布前检查",
+        review_status: "accepted",
+        time_completed: 1_753_430_000_000,
+      },
+    },
     presence: "online",
     attention: "focused",
     activity: "working",
@@ -908,6 +919,8 @@ const agents = [
       department: "Research",
       responsibilities: ["事实核验"],
     },
+    employment: "employee",
+    workload: { active: 0, blocked: 0 },
     presence: "offline",
     attention: "none",
     activity: "idle",
@@ -1082,7 +1095,9 @@ Bun.serve({
         charter: null,
         work_items: [],
         artifacts: [],
-        gates: [],
+        gates: [
+          { id: "gate-release", title: "发布前人工审批", kind: "approval", status: "pending" },
+        ],
       })
     }
     if (url.pathname === "/company-project/project-gate/retry" && request.method === "POST") {

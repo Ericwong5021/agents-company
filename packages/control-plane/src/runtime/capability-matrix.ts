@@ -1,6 +1,9 @@
 import type { RuntimeCapabilities, RuntimeID } from "./interface"
 
-export const RuntimeCapabilityMatrix = {
+// Static, declarative capability facts per runtime. This is the single source of
+// truth consumed both by runtime adapters and by team selection (TEAM-02 runtime
+// compatibility gate), so compatibility can be checked without instantiating ports.
+export const RuntimeCapabilityMatrix: Record<RuntimeID, RuntimeCapabilities> = {
   pi: {
     resume: false,
     interrupt: true,
@@ -49,4 +52,8 @@ export const RuntimeCapabilityMatrix = {
     dynamicSkills: false,
     governanceSignals: false,
   },
-} satisfies Record<RuntimeID, RuntimeCapabilities>
+}
+
+export function missingRuntimeCapabilities(runtime: RuntimeID, required: Array<keyof RuntimeCapabilities>) {
+  return [...new Set(required)].filter((capability) => !RuntimeCapabilityMatrix[runtime][capability]).toSorted()
+}

@@ -9,7 +9,7 @@ import type {
   RuntimeID,
   RuntimeMessage,
 } from "./interface"
-import { RuntimeCapabilityMatrix } from "./capabilities"
+import { RuntimeCapabilityMatrix } from "./capability-matrix"
 
 type CliRuntimeID = Exclude<RuntimeID, "pi">
 

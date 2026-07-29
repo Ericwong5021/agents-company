@@ -106,6 +106,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await setControlPlaneMode(request, "empty-work")
   await open(page, "/inbox", true)
   await expect(page.getByRole("heading", { name: "用本地 AI 团队交付第一个目标" })).toBeVisible()
+  await expect(page.getByRole("group", { name: "选择开始方式" }).getByRole("button")).toHaveCount(2)
   await capture(page, "first-run")
 
   await setControlPlaneMode(request, "ready")
@@ -136,6 +137,8 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await expect(page.getByLabel("高信号工作流").getByText("已交付", { exact: true })).toBeVisible()
   const delivery = page.locator(".ac-detail-panel", { hasText: "交付版本 1" })
   await expect(delivery).toBeVisible()
+  await expect(delivery.getByRole("heading", { level: 2, name: "交付版本 1" })).toBeVisible()
+  await expect(delivery.getByText("1 项成果")).toBeVisible()
   await expect(delivery.locator(".ac-status-badge[data-stage]")).toHaveText("待验收")
   await expect(delivery.getByRole("link", { name: /体验审查报告/ })).toBeVisible()
   await capture(page, "delivery")

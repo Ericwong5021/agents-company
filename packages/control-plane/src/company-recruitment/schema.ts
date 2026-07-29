@@ -65,6 +65,7 @@ export type CreateCapabilityNeedInput = z.input<typeof CreateCapabilityNeedInput
 
 export const SelectionScore = z.object({
   capability_match: z.number().int().nonnegative(),
+  evidence_strength: z.number().int().min(0).max(100).default(0),
   availability: z.number().int().min(0).max(100),
   historical_quality: z.number().int().min(0).max(100),
   historical_reliability: z.number().int().min(0).max(100),
@@ -86,7 +87,10 @@ export const TeamSelection = z.object({
   decision: z.enum(["selected", "rejected"]),
   source: z.enum(["company_pool", "new_candidate"]),
   lifecycle_at_selection: AgentLifecycle,
+  // 1 = selected, 2 = runner-up, further ranks follow; 0 = failed a hard constraint
+  candidate_rank: z.number().int().nonnegative(),
   reason: z.string(),
+  gaps: z.array(z.string()),
   score: SelectionScore,
   constraint_results: z.array(
     z.object({
@@ -151,6 +155,37 @@ export const ReassignProjectAssignmentInput = z
   .strict()
 export type ReassignProjectAssignmentInput = z.infer<typeof ReassignProjectAssignmentInput>
 
+export const CapabilityEvidenceStatus = z.enum(["declared", "verified", "expired"])
+export type CapabilityEvidenceStatus = z.infer<typeof CapabilityEvidenceStatus>
+
+export const AgentCapability = z.object({
+  id: z.string(),
+  company_id: CompanyID,
+  agent_id: z.string(),
+  capability_pack: z.string(),
+  source: z.enum(["profile", "selection", "delivery"]),
+  status: CapabilityEvidenceStatus,
+  available: z.boolean(),
+  availability_reasons: z.array(z.string()),
+  declared_at: z.number().int(),
+  last_verified_at: z.number().int().optional(),
+  last_success_selection_id: z.string().optional(),
+  failure_count: z.number().int().nonnegative(),
+  last_failure_at: z.number().int().optional(),
+  last_failure_summary: z.string().optional(),
+  time_created: z.number().int(),
+  time_updated: z.number().int(),
+})
+export type AgentCapability = z.infer<typeof AgentCapability>
+
+export const AgentCapabilityQuery = z
+  .object({
+    company_id: CompanyID,
+    agent_id: z.string().min(1).optional(),
+  })
+  .strict()
+export type AgentCapabilityQuery = z.infer<typeof AgentCapabilityQuery>
+
 export const AgentPerformance = z.object({
   id: z.string(),
   company_id: CompanyID,
@@ -198,7 +233,7 @@ export const EmploymentReview = z.object({
   id: z.string(),
   company_id: CompanyID,
   agent_id: z.string(),
-  status: z.enum(["proposed", "approved", "rejected"]),
+  status: z.enum(["proposed", "approved", "rejected", "retired"]),
   selected_project_count: z.number().int().nonnegative(),
   successful_project_count: z.number().int().nonnegative(),
   average_quality_score: z.number().int().min(0).max(100),

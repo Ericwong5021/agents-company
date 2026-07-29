@@ -194,10 +194,7 @@ export async function migrateProjectMemory(projectID: ProjectID): Promise<void> 
     throw error
   })
   if (entries.includes("MEMORY.md")) return
-  const intermediate = path.join(dir, ".memory-migration.tmp")
-  const pending = entries
-    .filter((entry) => entry === path.basename(intermediate) || /^\.memory-[0-9a-f-]+\.tmp$/i.test(entry))
-    .toSorted()[0]
+  const pending = entries.filter((entry) => /^\.memory-[0-9a-f-]+\.tmp$/i.test(entry)).toSorted()[0]
   if (pending) {
     await fs.rename(path.join(dir, pending), upper).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
@@ -205,6 +202,7 @@ export async function migrateProjectMemory(projectID: ProjectID): Promise<void> 
     return
   }
   if (!entries.includes("memory.md")) return
+  const intermediate = path.join(dir, `.memory-${crypto.randomUUID()}.tmp`)
   const moved = await fs.rename(lower, intermediate).then(
     () => true,
     (error) => {
