@@ -2,7 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import type { FounderOSModeState } from "@agents-company/shared/founder-os"
 import { Context, Effect, Layer } from "effect"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNotNull } from "drizzle-orm"
 import z from "zod"
 import * as Database from "@/storage/db"
 import type { TxOrDb } from "@/storage/db"
@@ -13,10 +13,39 @@ import { ProjectID } from "@/project/schema"
 import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import {
+  CompanyCommonsChunkTable,
+  CompanyCommonsSourceTable,
+} from "@/company-commons/company-commons.sql"
+import {
+  CompanyBeliefInterpretationTable,
+  CompanyBeliefTable,
+  CompanyExperimentOutcomeTable,
+  CompanyExperimentTable,
+  CompanyLearningPatchTable,
+  CompanyPatchBenchmarkTable,
+  CompanyPatchCanaryTable,
+  CompanyPatchTargetVersionTable,
+} from "@/company-learning/company-learning.sql"
+import {
+  CompanyInterpretationEvidenceTable,
+  CompanyInterpretationTable,
+  CompanyReadingAssignmentTable,
+} from "@/company-reading/company-reading.sql"
 import { Flag } from "@/flag/flag"
 import { FounderOSMode } from "@/founder-os"
-import { FounderGovernanceEventTable } from "@/founder-os/decision-ledger.sql"
-import { CompanyArtifactTable, CompanyProjectTable } from "@/company-project/company-project.sql"
+import {
+  DecisionCurrentProjectionTable,
+  DecisionRecordTable,
+  FounderGovernanceEventTable,
+} from "@/founder-os/decision-ledger.sql"
+import {
+  CompanyArtifactTable,
+  CompanyOutcomeSignalCurrentTable,
+  CompanyOutcomeSignalTable,
+  CompanyProjectTable,
+  CompanyWorkReceiptTable,
+} from "@/company-project/company-project.sql"
 import { ensureCompanyChannels } from "@/conversation/conversation.sql"
 import { ApprovalPolicyTable, CompanySetupGoalTable, CompanyTable, RepositoryBindingTable } from "./company.sql"
 import * as CompanySetupInstance from "./setup-instance"
@@ -244,6 +273,207 @@ function founderOSModes(db: TxOrDb) {
   })
 }
 
+const commonsModeOrder = ["off", "ingest-only", "reading", "belief-loop"] as const
+
+function requireReadingActivationFacts(db: TxOrDb, companyId: string) {
+  const source = db
+    .select({ id: CompanyCommonsSourceTable.id })
+    .from(CompanyCommonsSourceTable)
+    .where(
+      and(
+        eq(CompanyCommonsSourceTable.company_id, companyId),
+        eq(CompanyCommonsSourceTable.capability_status, "supported"),
+        eq(CompanyCommonsSourceTable.ingestion_status, "ready"),
+        isNotNull(CompanyCommonsSourceTable.content_hash),
+        isNotNull(CompanyCommonsSourceTable.adapter_id),
+        isNotNull(CompanyCommonsSourceTable.adapter_version),
+      ),
+    )
+    .get()
+  if (
+    !source ||
+    !db
+      .select({ id: CompanyCommonsChunkTable.id })
+      .from(CompanyCommonsChunkTable)
+      .where(eq(CompanyCommonsChunkTable.source_id, source.id))
+      .get()
+  )
+    throw new Error("Reading mode requires a current supported Commons source with indexed source spans")
+}
+
+function requireBeliefLoopFacts(db: TxOrDb, companyId: string) {
+  const interpretation = db
+    .select({
+      id: CompanyInterpretationTable.id,
+      assignmentStatus: CompanyReadingAssignmentTable.status,
+      receiptId: CompanyInterpretationTable.work_receipt_id,
+    })
+    .from(CompanyInterpretationTable)
+    .innerJoin(
+      CompanyCommonsSourceTable,
+      eq(CompanyCommonsSourceTable.id, CompanyInterpretationTable.source_id),
+    )
+    .innerJoin(
+      CompanyReadingAssignmentTable,
+      and(
+        eq(CompanyReadingAssignmentTable.source_id, CompanyInterpretationTable.source_id),
+        eq(CompanyReadingAssignmentTable.agent_id, CompanyInterpretationTable.reader_agent_id),
+      ),
+    )
+    .where(
+      and(
+        eq(CompanyCommonsSourceTable.company_id, companyId),
+        eq(CompanyCommonsSourceTable.ingestion_status, "ready"),
+        eq(CompanyReadingAssignmentTable.status, "completed"),
+        isNotNull(CompanyInterpretationTable.work_receipt_id),
+      ),
+    )
+    .get()
+  if (
+    !interpretation ||
+    !interpretation.receiptId ||
+    !db
+      .select({ id: CompanyInterpretationEvidenceTable.interpretation_id })
+      .from(CompanyInterpretationEvidenceTable)
+      .where(eq(CompanyInterpretationEvidenceTable.interpretation_id, interpretation.id))
+      .get() ||
+    !db
+      .select({ id: CompanyWorkReceiptTable.id })
+      .from(CompanyWorkReceiptTable)
+      .where(eq(CompanyWorkReceiptTable.id, interpretation.receiptId))
+      .get()
+  )
+    throw new Error("Belief Loop activation requires a completed K1 reading with receipt-backed source evidence")
+
+  if (
+    !db
+      .select({ id: DecisionRecordTable.id })
+      .from(DecisionRecordTable)
+      .innerJoin(
+        DecisionCurrentProjectionTable,
+        eq(DecisionCurrentProjectionTable.decision_id, DecisionRecordTable.id),
+      )
+      .where(
+        and(
+          eq(DecisionRecordTable.company_id, companyId),
+          eq(DecisionCurrentProjectionTable.current_status, "executed"),
+        ),
+      )
+      .get()
+  )
+    throw new Error("Belief Loop activation requires a currently executed W2 DecisionRecord")
+
+  const patch = db
+    .select({
+      id: CompanyLearningPatchTable.id,
+      beliefId: CompanyExperimentTable.belief_id,
+      decisionId: CompanyExperimentTable.decision_id,
+      experimentId: CompanyExperimentTable.id,
+      outcomeId: CompanyLearningPatchTable.source_outcome_id,
+    })
+    .from(CompanyLearningPatchTable)
+    .innerJoin(
+      CompanyExperimentTable,
+      eq(CompanyExperimentTable.id, CompanyLearningPatchTable.source_experiment_id),
+    )
+    .innerJoin(CompanyBeliefTable, eq(CompanyBeliefTable.id, CompanyExperimentTable.belief_id))
+    .where(
+      and(
+        eq(CompanyLearningPatchTable.company_id, companyId),
+        eq(CompanyLearningPatchTable.status, "active"),
+        eq(CompanyExperimentTable.status, "evaluated"),
+        eq(CompanyBeliefTable.status, "adopted"),
+      ),
+    )
+    .get()
+  if (!patch) throw new Error("Belief Loop activation requires a currently active K2 learning chain")
+
+  const outcome = db
+    .select({ id: CompanyOutcomeSignalTable.id })
+    .from(CompanyOutcomeSignalTable)
+    .innerJoin(
+      CompanyOutcomeSignalCurrentTable,
+      eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+    )
+    .innerJoin(CompanyProjectTable, eq(CompanyProjectTable.id, CompanyOutcomeSignalTable.project_id))
+    .where(
+      and(
+        eq(CompanyOutcomeSignalTable.id, patch.outcomeId),
+        eq(CompanyProjectTable.company_id, companyId),
+        eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+        isNotNull(CompanyOutcomeSignalCurrentTable.validated_at),
+        isNotNull(CompanyOutcomeSignalTable.work_receipt_id),
+      ),
+    )
+    .get()
+  if (!outcome) throw new Error("Belief Loop activation requires a current receipt-backed E0 Outcome Signal")
+
+  const positions = db
+    .select({ position: CompanyBeliefInterpretationTable.position })
+    .from(CompanyBeliefInterpretationTable)
+    .where(eq(CompanyBeliefInterpretationTable.belief_id, patch.beliefId))
+    .all()
+  const benchmark = db
+    .select()
+    .from(CompanyPatchBenchmarkTable)
+    .where(
+      and(
+        eq(CompanyPatchBenchmarkTable.patch_id, patch.id),
+        eq(CompanyPatchBenchmarkTable.result, "passed"),
+      ),
+    )
+    .get()
+  const canary = db
+    .select()
+    .from(CompanyPatchCanaryTable)
+    .where(
+      and(
+        eq(CompanyPatchCanaryTable.patch_id, patch.id),
+        eq(CompanyPatchCanaryTable.status, "passed"),
+        isNotNull(CompanyPatchCanaryTable.finished_at),
+      ),
+    )
+    .get()
+  if (
+    !positions.some((item) => item.position === "supporting") ||
+    !positions.some((item) => item.position === "counter") ||
+    !db
+      .select()
+      .from(CompanyExperimentOutcomeTable)
+      .where(
+        and(
+          eq(CompanyExperimentOutcomeTable.experiment_id, patch.experimentId),
+          eq(CompanyExperimentOutcomeTable.outcome_signal_id, patch.outcomeId),
+        ),
+      )
+      .get() ||
+    !db
+      .select()
+      .from(DecisionCurrentProjectionTable)
+      .where(
+        and(
+          eq(DecisionCurrentProjectionTable.decision_id, patch.decisionId),
+          eq(DecisionCurrentProjectionTable.current_status, "executed"),
+        ),
+      )
+      .get() ||
+    !benchmark ||
+    benchmark.real_sample_count < 1 ||
+    !canary ||
+    !db
+      .select()
+      .from(CompanyPatchTargetVersionTable)
+      .where(
+        and(
+          eq(CompanyPatchTargetVersionTable.patch_id, patch.id),
+          eq(CompanyPatchTargetVersionTable.status, "active"),
+        ),
+      )
+      .get()
+  )
+    throw new Error("Belief Loop activation requires a complete current K2 benchmark, canary, outcome, and target chain")
+}
+
 function sameBusiness(record: ReadyRecord, input: BootstrapInputType) {
   const provider = record.state.company.provider
   if (!provider) return false
@@ -421,6 +651,13 @@ export const layer = Layer.effect(
             .get()!.mode
           if (input.companyCommonsMode === "belief-loop" && currentMode !== "belief-loop")
             throw new Error("Belief Loop mode requires the controlled activation endpoint")
+          if (
+            commonsModeOrder.indexOf(input.companyCommonsMode) >
+            commonsModeOrder.indexOf(currentMode) + 1
+          )
+            throw new Error("Company Commons modes must advance one stage at a time")
+          if (input.companyCommonsMode === "reading" && currentMode !== "reading")
+            requireReadingActivationFacts(tx, COMPANY_ID)
           tx.update(CompanyTable)
             .set({
               founder_twin_mode: input.founderTwinMode,
@@ -442,6 +679,9 @@ export const layer = Layer.effect(
         Database.transaction((tx) => {
           ensureDefaultCompany(tx as Database.Transaction)
           if (input.company_id !== COMPANY_ID) throw new Error("Belief Loop activation company does not match")
+          const company = tx.select().from(CompanyTable).where(eq(CompanyTable.id, input.company_id)).get()
+          if (!company || company.company_commons_mode !== "reading")
+            throw new Error("Belief Loop activation requires the current Company Commons mode to be reading")
           const artifact = (id: string, gate: "K1" | "W2" | "E0" | "K2") => {
             const row = tx.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, id)).get()
             const project = row?.project_id
@@ -449,27 +689,6 @@ export const layer = Layer.effect(
               : undefined
             if (!row || (row.company_id !== input.company_id && project?.company_id !== input.company_id))
               throw new Error(`${gate} activation evidence is not company-scoped`)
-            const evidence = z
-              .object({
-                verified: z.literal(true),
-                gate: z.literal(gate),
-                authority: z.enum(["control_plane", "external_system", "independent_reviewer"]),
-                evidence_package: z
-                  .object({
-                    weak_gate: z.literal("confirmed"),
-                    fixture_success_allowed: z.literal(false),
-                    complete_real_chain: z.literal(true),
-                    requirements: z
-                      .array(z.object({ status: z.literal("present") }).catchall(z.unknown()))
-                      .min(1),
-                  })
-                  .catchall(z.unknown())
-                  .optional(),
-              })
-              .catchall(z.unknown())
-              .parse(JSON.parse(row.evidence_json))
-            if (gate === "K2" && !evidence.evidence_package)
-              throw new Error("K2 activation requires a complete real-chain evidence package")
             return row
           }
           artifact(input.k1_artifact_id, "K1")
@@ -489,6 +708,7 @@ export const layer = Layer.effect(
           if (!authorization || authorization.type !== "approval_gate.resolved")
             throw new Error("Belief Loop activation requires a persisted human authorization event")
           z.object({ decision: z.literal("approve") }).catchall(z.unknown()).parse(JSON.parse(authorization.data_json))
+          requireBeliefLoopFacts(tx, input.company_id)
           tx.update(CompanyTable)
             .set({ company_commons_mode: "belief-loop", time_updated: Date.now() })
             .where(eq(CompanyTable.id, input.company_id))
