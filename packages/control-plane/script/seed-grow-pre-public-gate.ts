@@ -20,7 +20,7 @@ import {
   RolloutTransitionResult,
 } from "@agents-company/shared/rollout"
 import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import z from "zod"
 import {
   PersistedFactArtifact,
@@ -2232,6 +2232,11 @@ async function executePromotionChild(inputPath: string) {
     fail("invalid", "Promotion child candidate bindings are inconsistent")
   const CompanyRollout = await import("../src/company-rollout/company-rollout")
   const storage = await import("../src/storage")
+  const [ProjectInstance, CompanyProject, DispatchCoordinator] = await Promise.all([
+    import("../src/project/instance"),
+    import("../src/company-project/company-project"),
+    import("../src/project-orchestrator/dispatch"),
+  ])
   for (const [to, id] of [
     ["shadow", "shadow"],
     ["opt_in", "opt-in"],
@@ -2266,23 +2271,129 @@ async function executePromotionChild(inputPath: string) {
       }),
     )
   })
-  input.rollbacks.forEach((rollback, index) => {
-    process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = rollback.observation.target === "kill_switch" ? "off" : "active"
+  delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+  for (const target of ["kill_switch", "legacy_fallback"] as const) {
+    const rollback = input.rollbacks.find(
+      (candidate) => candidate.observation.target === target,
+    )!
+    const index = input.rollbacks.indexOf(rollback)
+    const replay = await ProjectInstance.Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const projects = yield* CompanyProject.Service
+            const dispatch = yield* DispatchCoordinator.Service
+            const existing = yield* projects.create({
+              goal: `Reproduce ${target} rollback behavior`,
+              title: `Pre-Public ${target} rollback replay`,
+              execution_strategy: "seed_and_grow",
+              seed_mode: "direct_single",
+            })
+            yield* projects.transition({ id: existing.id, status: "planning" })
+            yield* projects.transition({ id: existing.id, status: "executing" })
+            const existingBefore = (yield* projects.get(existing.id))!
+            const businessStateSha256Before =
+              CompanyRollout.projectBusinessStateSha256(existing.id)
+            const before = CompanyRollout.status()
+            process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION =
+              target === "kill_switch" ? "off" : "active"
+            const dispatchResult = yield* dispatch.dispatchReady(existing.id)
+            const after = CompanyRollout.status()
+            const resolvedNewProjectStrategy =
+              CompanyRollout.resolveNewProjectStrategy(
+                target === "legacy_fallback"
+                  ? "legacy_full_plan"
+                  : undefined,
+              )
+            const resolvedExplicitFallbackStrategy =
+              CompanyRollout.resolveNewProjectStrategy("legacy_full_plan")
+            const created = yield* projects.create({
+              goal: `Verify ${target} fallback strategy`,
+              title: `Pre-Public ${target} fallback project`,
+              execution_strategy: resolvedNewProjectStrategy,
+              ...(resolvedNewProjectStrategy === "seed_and_grow"
+                ? { seed_mode: "direct_single" as const }
+                : {}),
+            })
+            const existingAfter = (yield* projects.get(existing.id))!
+            return {
+              before,
+              after,
+              dispatchResult,
+              resolvedNewProjectStrategy,
+              resolvedExplicitFallbackStrategy,
+              existingStatus: existingAfter.status,
+              existingStrategyBefore: existingBefore.execution_strategy,
+              existingStrategyAfter: existingAfter.execution_strategy,
+              businessStateSha256Before,
+              businessStateSha256After:
+                CompanyRollout.projectBusinessStateSha256(existing.id),
+              newProjectStrategy: (yield* projects.get(created.id))!
+                .execution_strategy,
+            }
+          }).pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                CompanyProject.defaultLayer,
+                DispatchCoordinator.defaultLayer,
+              ),
+            ),
+          ),
+        ),
+    })
+    const dispatchSemantics = (value: {
+      status: string
+      barrier: string
+      eligible_work_item_ids: string[]
+      dispatched_work_item_ids: string[]
+      run_id?: string
+    }) => ({
+      status: value.status,
+      barrier: value.barrier,
+      eligibleWorkItemIds: value.eligible_work_item_ids,
+      dispatchedWorkItemIds: value.dispatched_work_item_ids,
+      runId: value.run_id ?? null,
+    })
+    if (
+      !same(replay.before, rollback.observation.before) ||
+      !same(replay.after, rollback.observation.after) ||
+      !same(
+        dispatchSemantics(replay.dispatchResult),
+        dispatchSemantics(rollback.observation.dispatch.result),
+      ) ||
+      replay.existingStatus !== rollback.observation.inFlightProject.status ||
+      replay.existingStrategyBefore !==
+        rollback.observation.inFlightProject.strategyBefore ||
+      replay.existingStrategyAfter !==
+        rollback.observation.inFlightProject.strategyAfter ||
+      replay.businessStateSha256Before !== replay.businessStateSha256After ||
+      replay.newProjectStrategy !==
+        rollback.observation.businessRows.newProjectStrategy ||
+      replay.resolvedNewProjectStrategy !==
+        rollback.observation.resolvedNewProjectStrategy ||
+      replay.resolvedExplicitFallbackStrategy !==
+        rollback.observation.resolvedExplicitFallbackStrategy
+    )
+      fail(
+        "failed",
+        `Fresh candidate rollback replay differs from ${target} evidence`,
+      )
     CompanyRollout.recordAction({
       kind: "record_rollback",
       idempotencyKey: `record-${rollback.id}`,
       rollback: {
         id: rollback.id,
         candidateId: input.candidateIds[1],
-        target: rollback.observation.target,
+        target,
         phaseAtAction: rollback.observation.phaseAtAction,
-        executionModeAfter: rollback.observation.after.executionMode,
-        outcome: rollback.observation.outcome,
+        executionModeAfter: replay.after.executionMode,
+        outcome: "completed",
         evidenceSha256: input.rollbackEvidenceSha256s[index],
         observedAt: rollback.observation.observedAt,
       },
     })
-  })
+  }
   delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
   const promotion = CompanyRollout.evaluatePrePublicPromotion(input.promotionRequest)
   if (promotion.status !== "pass") stageStatusError(promotion.status, "CompanyRollout promotion")

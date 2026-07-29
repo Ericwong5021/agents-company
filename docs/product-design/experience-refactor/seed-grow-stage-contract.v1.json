@@ -611,12 +611,12 @@
         },
         {
           "id": "B5-TWO-CANDIDATES",
-          "statement": "The current exact-SHA candidate produces one complete isolated S13-S27 legacy and seed_and_grow fact package in each of two automatic attempts; consecutive-candidate promotion remains a separate Pre-Public decision.",
+          "statement": "The current exact-SHA candidate produces two isolated S13-S27 legacy and seed_and_grow fact packages whose persisted facts, scenario verdicts, metrics and Shadow comparison are merged and recomputed; a blocked single-attempt report cannot pass B5, and two consecutive candidates must each pass this decision before Pre-Public promotion.",
           "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
           "id": "B5-METRIC-GATE",
-          "statement": "Every candidate-level Pre-Public metric is recomputed from the exact-SHA persisted facts and meets its registered sample, window and threshold.",
+          "statement": "Every B5 scenario metric and Shadow threshold is recomputed from both exact-SHA attempts and passes its registered sample, window and threshold.",
           "evidenceRefs": ["command:b5-candidate-facts"]
         },
         {
