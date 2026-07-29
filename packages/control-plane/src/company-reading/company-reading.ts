@@ -40,12 +40,16 @@ import {
 
 const profileFromRow = (row: typeof CompanyAgentInterestProfileTable.$inferSelect) =>
   AgentInterestProfile.parse({
-    ...row,
-    work_receipt_id: row.work_receipt_id ?? undefined,
+    company_id: row.company_id,
+    agent_id: row.agent_id,
     topics: JSON.parse(row.topics_json),
     preferred_lenses: JSON.parse(row.preferred_lenses_json),
     excluded_topics: JSON.parse(row.excluded_topics_json),
+    novelty_threshold: row.novelty_threshold,
+    weekly_reading_budget: row.weekly_reading_budget,
+    max_concurrency: row.max_concurrency,
     privacy_scopes: JSON.parse(row.privacy_scopes_json),
+    updated_at: row.updated_at,
   })
 
 const assignmentFromRow = (row: typeof CompanyReadingAssignmentTable.$inferSelect) =>
@@ -62,16 +66,26 @@ const interpretationFromRow = (
   reader_agent_name?: string,
 ) =>
   Interpretation.parse({
-    ...row,
+    id: row.id,
+    source_id: row.source_id,
+    reader_agent_id: row.reader_agent_id,
+    reader_role: row.reader_role,
+    work_receipt_id: row.work_receipt_id ?? undefined,
     work_item_id: row.work_item_id ?? undefined,
     reader_agent_name,
+    core_thesis: row.core_thesis,
     important_claims: JSON.parse(row.important_claims_json),
+    company_relevance: row.company_relevance,
     project_connections: JSON.parse(row.project_connections_json),
+    agreement: row.agreement,
     conflicts: JSON.parse(row.conflicts_json),
     counter_arguments: JSON.parse(row.counter_arguments_json),
     inspiration: JSON.parse(row.inspiration_json),
     experiment_ideas: JSON.parse(row.experiment_ideas_json),
+    disposition: row.disposition,
+    confidence: row.confidence,
     evidence_refs: JSON.parse(row.evidence_refs_json),
+    created_at: row.created_at,
   })
 
 const tokens = (values: string[]) =>
