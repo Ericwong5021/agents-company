@@ -50,10 +50,11 @@ const activeTab = ref<"commons" | "deliveries">("deliveries");
 const importOpen = ref(false);
 const importing = ref(false);
 const importError = ref("");
-const sourceType = ref<"text" | "markdown" | "url" | "conversation_export">("text");
+const sourceType = ref<CommonsSourceRecord["source_type"]>("text");
 const title = ref("");
 const content = ref("");
 const sourceURL = ref("");
+const selectedFile = ref<File>();
 const privacyScope = ref<"company" | "project" | "private">("company");
 const projectID = ref("");
 const author = ref("");
@@ -68,7 +69,11 @@ const displayedSources = computed(() =>
     : commons.value.sources);
 const canImport = computed(() =>
   title.value.trim()
-  && (sourceType.value === "url" ? sourceURL.value.trim() : content.value.trim())
+  && (sourceType.value === "url"
+    ? sourceURL.value.trim()
+    : ["pdf", "image", "podcast", "video"].includes(sourceType.value)
+      ? selectedFile.value
+      : content.value.trim())
   && (privacyScope.value !== "project" || projectID.value)
   && !importing.value);
 const statusLabel: Record<CommonsSourceRecord["ingestion_status"], string> = {
@@ -99,6 +104,7 @@ function resetImport() {
   title.value = "";
   content.value = "";
   sourceURL.value = "";
+  selectedFile.value = undefined;
   author.value = "";
   tags.value = "";
   projectID.value = "";
@@ -113,10 +119,67 @@ function closeImport() {
   importOpen.value = false;
 }
 
+function selectFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  selectedFile.value = file && file.size <= 20_000_000 ? file : undefined;
+  importError.value = file && file.size > 20_000_000 ? "文件超过 20 MB 本地导入上限。" : "";
+}
+
+function localMediaType(file: File) {
+  if ([
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/wav",
+    "audio/ogg",
+    "audio/webm",
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+  ].includes(file.type)) return file.type;
+  const extension = file.name.split(".").at(-1)?.toLowerCase();
+  return ({
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    weba: "audio/webm",
+    mp4: sourceType.value === "video" ? "video/mp4" : "audio/mp4",
+    webm: sourceType.value === "video" ? "video/webm" : "audio/webm",
+    mov: "video/quicktime",
+  } as Record<string, string>)[extension ?? ""];
+}
+
 async function importSource() {
   if (!canImport.value) return;
   importing.value = true;
   importError.value = "";
+  const media = selectedFile.value
+    ? await new Promise<{ content_base64: string; media_type: string }>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => resolve({
+          content_base64: String(reader.result).slice(String(reader.result).indexOf(",") + 1),
+          media_type: localMediaType(selectedFile.value!) ?? "",
+        });
+        reader.readAsDataURL(selectedFile.value!);
+      }).catch(() => undefined)
+    : undefined;
+  if (["pdf", "image", "podcast", "video"].includes(sourceType.value) && !media) {
+    importing.value = false;
+    importError.value = "文件读取失败，未写入 Commons。";
+    return;
+  }
   const result = await $fetch<CommonsSourceRecord>("/api/agent-company/commons", {
     method: "POST",
     body: {
@@ -124,6 +187,8 @@ async function importSource() {
       title: title.value.trim(),
       content: sourceType.value === "url" ? undefined : content.value,
       url: sourceType.value === "url" ? sourceURL.value.trim() : undefined,
+      content_base64: media?.content_base64,
+      media_type: media?.media_type,
       privacy_scope: privacyScope.value,
       project_id: privacyScope.value === "project" ? projectID.value : undefined,
       author: author.value.trim() || undefined,
@@ -259,7 +324,11 @@ function clearSearch() {
                   <option value="text">文本</option>
                   <option value="markdown">Markdown</option>
                   <option value="conversation_export">对话导出</option>
-                  <option value="url">URL，需配置抓取适配器</option>
+                  <option value="url">URL</option>
+                  <option value="pdf">PDF</option>
+                  <option value="image">图片 / 截图</option>
+                  <option value="podcast">播客 / 音频</option>
+                  <option value="video">视频</option>
                 </select>
               </label>
               <label>
@@ -295,6 +364,23 @@ function clearSearch() {
                 <span>URL</span>
                 <input v-model="sourceURL" type="url" maxlength="4000" placeholder="https://">
               </label>
+              <label
+                v-else-if="['pdf', 'image', 'podcast', 'video'].includes(sourceType)"
+                class="ac-commons-form-grid__wide"
+              >
+                <span>本地文件，最大 20 MB</span>
+                <input
+                  type="file"
+                  :accept="sourceType === 'pdf'
+                    ? 'application/pdf'
+                    : sourceType === 'image'
+                      ? 'image/png,image/jpeg,image/webp,image/gif'
+                      : sourceType === 'podcast'
+                        ? 'audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm'
+                        : 'video/mp4,video/webm,video/quicktime'"
+                  @change="selectFile"
+                >
+              </label>
               <label v-else class="ac-commons-form-grid__wide">
                 <span>原文</span>
                 <textarea
@@ -324,7 +410,13 @@ function clearSearch() {
               :data-available="capability.status === 'available'"
             >
               {{ sourceTypeLabel[capability.source_type] }}
-              <small>{{ capability.status === "available" ? "可用" : "需适配器" }}</small>
+              <small>
+                {{ capability.status === "available"
+                  ? "可用"
+                  : capability.status === "blocked"
+                    ? "本机阻断"
+                    : "不支持" }}
+              </small>
             </span>
           </div>
 

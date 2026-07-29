@@ -14,6 +14,7 @@ import {
   CompanyCommonsChunkTable,
   CompanyCommonsSourceTable,
 } from "./company-commons.sql"
+import { defaultAdapterRegistry } from "./adapters"
 import {
   CommonsAccess,
   CommonsCapability,
@@ -46,9 +47,9 @@ const URL_POLICY = {
 } as const
 
 const transcriptTypes = new Set<CommonsSourceType>(["image", "podcast", "video"])
-const builtInTypes = new Set<CommonsSourceType>(["text", "markdown", "conversation_export"])
+const builtInTypes = new Set<CommonsSourceType>(["text", "markdown"])
 
-class BlockedSourceError extends Error {}
+export class BlockedSourceError extends Error {}
 
 export type AdapterInput = {
   source: CommonsSourceValue
@@ -59,6 +60,7 @@ export type AdapterInput = {
 export type AdapterOutput = {
   text: string
   artifact_content?: string
+  artifact_encoding?: "utf8" | "base64"
   spans?: Array<{ start_offset: number; end_offset: number; locator: Record<string, unknown> }>
   fetch?: {
     final_url: string
@@ -182,7 +184,13 @@ const validateFetchEvidence = (output: AdapterOutput) => {
     throw new BlockedSourceError("URL adapter returned a blocked MIME type")
   if (output.fetch.byte_length < 0 || output.fetch.byte_length > URL_POLICY.max_bytes)
     throw new BlockedSourceError("URL adapter response exceeds the size limit")
-  if (output.fetch.byte_length !== Buffer.byteLength(output.artifact_content))
+  if (
+    output.fetch.byte_length !== (
+      output.artifact_encoding === "base64"
+        ? Buffer.from(output.artifact_content, "base64").byteLength
+        : Buffer.byteLength(output.artifact_content)
+    )
+  )
     throw new BlockedSourceError("URL adapter byte evidence does not match the preserved source")
   if (output.fetch.elapsed_ms < 0 || output.fetch.elapsed_ms > URL_POLICY.timeout_ms)
     throw new BlockedSourceError("URL adapter exceeded the timeout limit")
@@ -309,6 +317,12 @@ export class Service extends Context.Service<Service, Interface>()("@control-pla
 export function makeLayer(options: {
   adapters?: CommonsAdapter[]
   embedding?: EmbeddingAdapter
+  unavailable?: Partial<Record<CommonsSourceType, {
+    status: "blocked" | "unsupported"
+    reason_code: string
+    reason: string
+    requirements: string[]
+  }>>
 } = {}) {
   return Layer.effect(
     Service,
@@ -323,10 +337,17 @@ export function makeLayer(options: {
         return CommonsCapability.array().parse(
           CommonsSourceType.options.map((source_type) => {
             const adapter = adapters.get(source_type)
+            const unavailable = options.unavailable?.[source_type]
             return {
               source_type,
-              status: builtInTypes.has(source_type) || adapter ? "available" : "adapter_required",
+              status: builtInTypes.has(source_type) || adapter
+                ? "available"
+                : unavailable?.status ?? "unsupported",
               adapter_id: adapter?.id,
+              adapter_version: adapter?.version,
+              reason_code: unavailable?.reason_code,
+              reason: unavailable?.reason,
+              requirements: unavailable?.requirements ?? [],
               supports_transcript: transcriptTypes.has(source_type),
             }
           }),
@@ -439,12 +460,25 @@ export function makeLayer(options: {
         const rawHash = sha256(artifactContent)
         const normalized_content_hash = normalizedHash(content)
         Database.transaction((db) => {
-          if (output?.artifact_content !== undefined)
+          if (output?.artifact_content !== undefined) {
+            const artifact = db
+              .select({ evidence_json: CompanyArtifactTable.evidence_json })
+              .from(CompanyArtifactTable)
+              .where(eq(CompanyArtifactTable.id, source.artifact_id))
+              .get()!
             db
               .update(CompanyArtifactTable)
-              .set({ content: artifactContent })
+              .set({
+                content: artifactContent,
+                evidence_json: JSON.stringify({
+                  ...JSON.parse(artifact.evidence_json),
+                  adapter_artifact_encoding: output.artifact_encoding ?? "utf8",
+                  fetch: output.fetch,
+                }),
+              })
               .where(eq(CompanyArtifactTable.id, source.artifact_id))
               .run()
+          }
           const exact = db
             .select()
             .from(CompanyCommonsSourceTable)
@@ -503,11 +537,12 @@ export function makeLayer(options: {
         }
         const adapter = adapters.get(source.source_type)
         if (!adapter) {
+          const unavailable = options.unavailable?.[source.source_type]
           setFailure(
             source.id,
-            "unsupported",
-            "adapter_unavailable",
-            `No verified ${source.source_type} adapter is configured`,
+            unavailable?.status ?? "unsupported",
+            unavailable?.reason_code ?? "adapter_unavailable",
+            unavailable?.reason ?? `No verified ${source.source_type} adapter is configured`,
           )
           return
         }
@@ -839,4 +874,4 @@ export function makeLayer(options: {
   )
 }
 
-export const defaultLayer = makeLayer()
+export const defaultLayer = makeLayer(defaultAdapterRegistry())

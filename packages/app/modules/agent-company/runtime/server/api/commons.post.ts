@@ -11,10 +11,12 @@ import {
 
 const Submission = z
   .object({
-    source_type: z.enum(["text", "markdown", "url", "conversation_export"]),
+    source_type: z.enum(["text", "markdown", "url", "conversation_export", "pdf", "image", "podcast", "video"]),
     title: z.string().trim().min(1).max(500),
     content: z.string().max(10_000_000).optional(),
     url: z.string().trim().max(4_000).optional(),
+    content_base64: z.string().max(28_000_000).optional(),
+    media_type: z.string().trim().min(1).max(255).optional(),
     privacy_scope: z.enum(["company", "project", "private"]),
     project_id: z.string().trim().min(1).optional(),
     author: z.string().trim().min(1).max(500).optional(),
@@ -25,8 +27,13 @@ const Submission = z
   .superRefine((value, context) => {
     if (value.source_type === "url" && !value.url)
       context.addIssue({ code: "custom", message: "URL is required", path: ["url"] })
-    if (value.source_type !== "url" && !value.content?.trim())
+    if (["text", "markdown", "conversation_export"].includes(value.source_type) && !value.content?.trim())
       context.addIssue({ code: "custom", message: "Content is required", path: ["content"] })
+    if (
+      ["pdf", "image", "podcast", "video"].includes(value.source_type) &&
+      (!value.content_base64 || !value.media_type)
+    )
+      context.addIssue({ code: "custom", message: "Media payload is required", path: ["content_base64"] })
     if (value.privacy_scope === "project" && !value.project_id)
       context.addIssue({ code: "custom", message: "Project is required", path: ["project_id"] })
   })
@@ -53,8 +60,16 @@ export default defineAgentCompanyHandler(async (event): Promise<CommonsSourceRec
       project_id: input.privacy_scope === "project" ? input.project_id : undefined,
       private_owner_id: input.privacy_scope === "private" ? access.private_owner_id : undefined,
       source_type: input.source_type,
-      content: input.source_type === "url" ? undefined : input.content,
+      content: ["text", "markdown", "conversation_export"].includes(input.source_type)
+        ? input.content
+        : undefined,
       url: input.source_type === "url" ? input.url : undefined,
+      content_base64: ["pdf", "image", "podcast", "video"].includes(input.source_type)
+        ? input.content_base64
+        : undefined,
+      media_type: ["pdf", "image", "podcast", "video"].includes(input.source_type)
+        ? input.media_type
+        : undefined,
     }),
   )
   if (!result.ok)

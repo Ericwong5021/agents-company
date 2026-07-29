@@ -30,6 +30,7 @@ const textSourceTypes = new Set<CommonsSourceRecord["source_type"]>([
 const originalText = computed(() =>
   detail.value
   && detail.value.artifact.content
+  && detail.value.artifact.evidence.adapter_artifact_encoding !== "base64"
   && textSourceTypes.has(detail.value.source.source_type)
     ? detail.value.artifact.content
     : "");

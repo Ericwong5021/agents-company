@@ -158,8 +158,12 @@ export type CommonsSearchHit = z.infer<typeof CommonsSearchHit>
 
 export const CommonsCapability = z.object({
   source_type: CommonsSourceType,
-  status: z.enum(["available", "adapter_required"]),
+  status: z.enum(["available", "blocked", "unsupported"]),
   adapter_id: z.string().optional(),
+  adapter_version: z.string().optional(),
+  reason_code: z.string().optional(),
+  reason: z.string().optional(),
+  requirements: z.array(z.string()).default([]),
   supports_transcript: z.boolean(),
 })
 export type CommonsCapability = z.infer<typeof CommonsCapability>
