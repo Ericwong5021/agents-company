@@ -2420,7 +2420,7 @@ async function verifyPromotionDatabase(
 ) {
   const trustedPromotion = trustedPromotionDecision(input, child.promotion.createdAt)
   const trustedDatabase = await trustedRolloutDatabaseSchema()
-  const database = new SQLiteDatabase(databasePath, { create: false })
+  const database = new SQLiteDatabase(databasePath, { readwrite: true, create: false })
   try {
     database.exec("PRAGMA foreign_keys = ON")
     const journalMode = database.query("PRAGMA journal_mode").get() as Record<string, unknown> | null
@@ -2851,6 +2851,14 @@ async function verifyPromotionDatabase(
   } finally {
     database.close()
   }
+}
+
+export async function verifyPromotionDatabaseForTest(databasePath: string, input: unknown, child: unknown) {
+  return verifyPromotionDatabase(
+    databasePath,
+    parseOrInvalid(PromotionChildInput, input, "Promotion database input"),
+    parseOrInvalid(PromotionChildResult, child, "Promotion database child result"),
+  )
 }
 
 async function isolatedPromotion(

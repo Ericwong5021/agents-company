@@ -16,9 +16,11 @@ CREATE TABLE `company_rollout_promotion_decision` (
   `reasons_json` text NOT NULL,
   `created_at` integer NOT NULL
 );
+--> statement-breakpoint
 
 CREATE INDEX `company_rollout_promotion_status_idx`
 ON `company_rollout_promotion_decision` (`status`, `created_at`);
+--> statement-breakpoint
 
 CREATE INDEX `company_rollout_promotion_created_idx`
 ON `company_rollout_promotion_decision` (`created_at`);
