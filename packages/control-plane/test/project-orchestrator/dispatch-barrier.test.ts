@@ -2,8 +2,8 @@ import { afterEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { CompanyProject } from "../../src/company-project"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
-import { Instance } from "../../src/project/instance"
 import { DispatchCoordinator } from "../../src/project-orchestrator/dispatch"
+import { resetDatabase } from "../fixture/db"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -16,7 +16,7 @@ const it = testEffect(
 )
 
 afterEach(async () => {
-  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 describe("Dispatch barrier", () => {

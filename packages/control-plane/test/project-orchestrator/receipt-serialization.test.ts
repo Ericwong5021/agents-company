@@ -1,8 +1,9 @@
-import { describe, expect } from "bun:test"
+import { afterEach, describe, expect } from "bun:test"
 import { Effect, Exit, Layer } from "effect"
 import { Company } from "../../src/company"
 import { CompanyProject, CompanyWorkFacts } from "../../src/company-project"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
+import { resetDatabase } from "../fixture/db"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -14,6 +15,8 @@ const it = testEffect(
     CrossSpawnSpawner.defaultLayer,
   ),
 )
+
+afterEach(resetDatabase)
 
 describe("Seed receipt serialization", () => {
   it.live("claims one receipt per project and keeps legacy processing separate", () =>

@@ -19,9 +19,9 @@ import {
   CompanyWorkReceiptTable,
 } from "../../src/company-project/company-project.sql"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
-import { Instance } from "../../src/project/instance"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
 import { Database } from "../../src/storage"
+import { resetDatabase } from "../fixture/db"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -134,7 +134,7 @@ function newItem(plan_id: string, parent_id: string, id: string) {
 }
 
 afterEach(async () => {
-  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 describe("Graph Supervisor", () => {

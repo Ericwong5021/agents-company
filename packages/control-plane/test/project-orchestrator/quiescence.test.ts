@@ -9,9 +9,9 @@ import {
 } from "../../src/company-project"
 import { CompanyRecruitment } from "../../src/company-recruitment"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
-import { Instance } from "../../src/project/instance"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
 import { QuiescenceService } from "../../src/project-orchestrator/quiescence"
+import { resetDatabase } from "../fixture/db"
 import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -43,7 +43,7 @@ const it = testEffect(
 
 afterEach(async () => {
   releaseCalls = 0
-  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 describe("B2 quiescence", () => {
