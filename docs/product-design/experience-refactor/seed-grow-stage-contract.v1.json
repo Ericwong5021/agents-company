@@ -43,7 +43,7 @@
     "productionDataAllowed": false,
     "attempts": 2
   },
-  "implementedStages": ["A0", "A1", "A2", "A3"],
+  "implementedStages": ["A0", "A1", "A2", "A3", "A4"],
   "commandRegistry": {
     "automaticEvidenceCommands": [
       "root-lint",
@@ -68,6 +68,7 @@
       "a3-prerequisite-repair",
       "a3-repair-circuit",
       "a3-validation-policy",
+      "a4-recovery-matrix",
       "control-plane-r0-unit",
       "control-plane-all-unit",
       "control-plane-r0-branches",
@@ -87,7 +88,6 @@
       "desktop-e2e"
     ],
     "plannedStageCommands": [
-      "a4-recovery-matrix",
       "b0-assignment-lifecycle",
       "b0-selection-constraints",
       "b0-reassign-recovery",

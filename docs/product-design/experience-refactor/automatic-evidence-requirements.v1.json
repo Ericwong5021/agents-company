@@ -432,6 +432,35 @@
       ]
     },
     {
+      "id": "a4-recovery-matrix",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "60000",
+        "test/company-project/project-recovery.test.ts",
+        "-t",
+        "a4-recovery-matrix",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a4-recovery-matrix-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a4-recovery-matrix-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a4/recovery-matrix.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -1009,6 +1038,10 @@
             "command:a3-repair-circuit",
             "command:a3-validation-policy"
           ]
+        },
+        {
+          "id": "QA-02-STARTUP-RECOVERY-SAFETY",
+          "evidenceRefs": ["command:a4-recovery-matrix"]
         },
         {
           "id": "QA-02-KEY-BRANCH-COVERAGE",
