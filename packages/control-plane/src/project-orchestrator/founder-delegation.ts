@@ -511,6 +511,16 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
         throw new Error("Green readiness idempotency key has different facts")
       return
     }
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    if (!company) throw new Error("Company was not found")
+    const resolvedMode = FounderOSMode.resolve({
+      founderTwinMode: company.founder_twin_mode,
+      companyCommonsMode: company.company_commons_mode,
+    })
+    if (company.founder_twin_mode !== "advisor")
+      throw new Error("Green readiness promotion requires current company mode advisor")
+    if (!["green-delegated", "yellow-delegated"].includes(resolvedMode.globalMaximum.founderTwinMode))
+      throw new Error("Global Founder Twin mode does not allow Green delegation")
     const artifact = (id: string, gate: "B3" | "E0") => {
       const row = db.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, id)).get()
       const project = row?.project_id
@@ -636,6 +646,10 @@ function recordReadiness(raw: FounderGreenReadinessRecordInputValue) {
         exact_commit_evidence_ref: worktree.id,
         created_at: Date.now(),
       })
+      .run()
+    db.update(CompanyTable)
+      .set({ founder_twin_mode: "green-delegated", time_updated: Date.now() })
+      .where(eq(CompanyTable.id, input.companyId))
       .run()
   }, { behavior: "immediate" })
   return readiness(input.companyId).value

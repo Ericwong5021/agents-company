@@ -607,6 +607,16 @@ function recordReadiness(raw: FounderYellowReadinessRecordInputValue) {
         throw new Error("Yellow readiness idempotency key has different facts")
       return
     }
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
+    if (!company) throw new Error("Company was not found")
+    const resolvedMode = FounderOSMode.resolve({
+      founderTwinMode: company.founder_twin_mode,
+      companyCommonsMode: company.company_commons_mode,
+    })
+    if (company.founder_twin_mode !== "green-delegated")
+      throw new Error("Yellow readiness promotion requires current company mode green-delegated")
+    if (resolvedMode.globalMaximum.founderTwinMode !== "yellow-delegated")
+      throw new Error("Global Founder Twin mode does not allow Yellow delegation")
     const green = latestGreenReadiness(db, input.companyId)
     if (!green) throw new Error("Yellow readiness requires confirmed Green readiness")
     const artifact = (id: string, gate: "W6" | "E0") => {
@@ -661,6 +671,10 @@ function recordReadiness(raw: FounderYellowReadinessRecordInputValue) {
         confirmed_by: input.actor.id,
         created_at: Date.now(),
       })
+      .run()
+    db.update(CompanyTable)
+      .set({ founder_twin_mode: "yellow-delegated", time_updated: Date.now() })
+      .where(eq(CompanyTable.id, input.companyId))
       .run()
   }, { behavior: "immediate" })
   return readiness(input.companyId).value
