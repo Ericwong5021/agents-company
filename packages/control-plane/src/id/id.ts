@@ -30,6 +30,8 @@ const prefixes = {
   projectCharter: "cchr",
   worktreeRun: "wrun",
   artifact: "art",
+  commonsSource: "csrc",
+  commonsChunk: "cchk",
   gate: "gate",
   localCredential: "lcr",
   channel: "chn",

@@ -51,6 +51,10 @@ export {
   CompanyAttentionTable,
   CompanyProjectActionTable,
 } from "../company-project/company-project.sql"
+export {
+  CompanyCommonsSourceTable,
+  CompanyCommonsChunkTable,
+} from "../company-commons/company-commons.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {
   CompanyRolloutStateTable,

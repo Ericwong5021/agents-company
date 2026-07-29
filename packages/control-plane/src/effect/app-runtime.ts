@@ -77,6 +77,7 @@ import {
   CompanyProjectRecovery,
 } from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
+import { CompanyCommons } from "@/company-commons"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 import { Thread } from "@/thread/thread"
@@ -177,6 +178,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyProjectExecution.defaultLayer,
     CompanyProjectDirection.defaultLayer,
     CompanyOutcomeSignal.defaultLayer,
+    CompanyCommons.defaultLayer,
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     Thread.defaultLayer,

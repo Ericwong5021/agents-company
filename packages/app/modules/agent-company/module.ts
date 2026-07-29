@@ -158,6 +158,31 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       method: "post",
       handler: resolver.resolve("./runtime/server/api/project-action.post"),
     })
+    addServerHandler({
+      route: "/api/agent-company/commons",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/commons.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/commons",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/commons.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/commons/search",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/commons-search.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/commons/:sourceID",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/commons-source.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/commons/:sourceID/retry",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/commons-retry.post"),
+    })
 
     extendPages((pages) => {
       pages.push(

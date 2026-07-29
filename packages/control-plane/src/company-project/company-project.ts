@@ -1368,6 +1368,9 @@ export const layer = Layer.effect(
       const row = {
         id,
         project_id: input.project_id,
+        company_id: null,
+        scope_type: "project" as const,
+        private_owner_id: null,
         work_item_id: input.work_item_id ?? null,
         kind: input.kind,
         title: input.title,

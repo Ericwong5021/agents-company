@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 
 export const CompanyProjectTable = sqliteTable(
   "company_project",
@@ -185,8 +185,10 @@ export const CompanyArtifactTable = sqliteTable(
   {
     id: text().primaryKey(),
     project_id: text()
-      .notNull()
       .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    company_id: text(),
+    scope_type: text().notNull().default("project"),
+    private_owner_id: text(),
     work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
     kind: text().notNull(),
     title: text().notNull(),
@@ -198,7 +200,19 @@ export const CompanyArtifactTable = sqliteTable(
   },
   (table) => [
     index("company_artifact_project_idx").on(table.project_id),
+    index("company_artifact_company_scope_idx").on(table.company_id, table.scope_type),
+    index("company_artifact_private_owner_idx").on(table.private_owner_id),
     index("company_artifact_work_item_idx").on(table.work_item_id),
+    check(
+      "company_artifact_scope_check",
+      sql.raw(`(
+        scope_type = 'project' AND project_id IS NOT NULL AND private_owner_id IS NULL
+      ) OR (
+        scope_type = 'company' AND company_id IS NOT NULL AND project_id IS NULL AND private_owner_id IS NULL
+      ) OR (
+        scope_type = 'private' AND company_id IS NOT NULL AND project_id IS NULL AND private_owner_id IS NOT NULL
+      )`),
+    ),
   ],
 )
 

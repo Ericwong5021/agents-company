@@ -11449,6 +11449,212 @@ export type AgentRunStopResponses = {
   200: unknown
 }
 
+export type CommonsSourceType =
+  | "text"
+  | "markdown"
+  | "url"
+  | "conversation_export"
+  | "pdf"
+  | "image"
+  | "podcast"
+  | "video"
+
+export type CommonsSourceRecord = {
+  id: string
+  artifact_id: string
+  company_id: string
+  project_id?: string
+  private_owner_id?: string
+  source_type: CommonsSourceType
+  title: string
+  author?: string
+  origin?: string
+  published_at?: number
+  language?: string
+  tags: Array<string>
+  privacy_scope: "company" | "project" | "private"
+  ingestion_status: "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+  transcript_status: "not_applicable" | "queued" | "processing" | "ready" | "failed" | "blocked" | "unsupported"
+  content_hash?: string
+  normalized_content_hash?: string
+  duplicate_of_source_id?: string
+  deduplication_kind?: "exact" | "normalized"
+  metadata: Record<string, unknown>
+  adapter_id?: string
+  adapter_version?: string
+  error_code?: string
+  error_message?: string
+  created_at: number
+  updated_at: number
+}
+
+export type CommonsChunkRecord = {
+  id: string
+  source_id: string
+  ordinal: number
+  body: string
+  content_hash: string
+  start_offset: number
+  end_offset: number
+  source_span: Record<string, unknown>
+  trust_class: "untrusted_source"
+  created_at: number
+}
+
+export type CommonsAccess = {
+  company_id: string
+  project_ids?: Array<string>
+  private_owner_id?: string
+}
+
+export type CommonsCapabilityRecord = {
+  source_type: CommonsSourceType
+  status: "available" | "adapter_required"
+  adapter_id?: string
+  supports_transcript: boolean
+}
+
+export type CompanyCommonsCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/capabilities"
+}
+
+export type CompanyCommonsCapabilitiesResponses = {
+  200: Array<CommonsCapabilityRecord>
+}
+
+export type CompanyCommonsSourcesData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+    limit?: number
+    offset?: number
+  }
+  url: "/company-commons/sources"
+}
+
+export type CompanyCommonsSourcesResponses = {
+  200: Array<CommonsSourceRecord>
+}
+
+export type CompanyCommonsImportSourceData = {
+  body: {
+    company_id: string
+    title: string
+    author?: string
+    origin?: string
+    published_at?: number
+    language?: string
+    tags?: Array<string>
+    metadata?: Record<string, unknown>
+    privacy_scope: "company" | "project" | "private"
+    project_id?: string
+    private_owner_id?: string
+    source_type: CommonsSourceType
+    content?: string
+    url?: string
+    content_base64?: string
+    media_type?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/sources"
+}
+
+export type CompanyCommonsImportSourceResponses = {
+  200: CommonsSourceRecord
+}
+
+export type CompanyCommonsSourceData = {
+  body?: never
+  path: {
+    sourceID: string
+  }
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+  }
+  url: "/company-commons/sources/{sourceID}"
+}
+
+export type CompanyCommonsSourceResponses = {
+  200: {
+    source: CommonsSourceRecord
+    artifact: {
+      id: string
+      scope_type: "company" | "project" | "private"
+      project_id?: string
+      company_id?: string
+      private_owner_id?: string
+      kind: string
+      title: string
+      content?: string
+      evidence: Record<string, unknown>
+      created_at: number
+    }
+    chunks: Array<CommonsChunkRecord>
+  }
+}
+
+export type CompanyCommonsRetryData = {
+  body: CommonsAccess
+  path: {
+    sourceID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/company-commons/sources/{sourceID}/retry"
+}
+
+export type CompanyCommonsRetryResponses = {
+  200: CommonsSourceRecord
+}
+
+export type CompanyCommonsSearchData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    company_id: string
+    project_ids?: string
+    private_owner_id?: string
+    q: string
+    limit?: number
+  }
+  url: "/company-commons/search"
+}
+
+export type CompanyCommonsSearchResponses = {
+  200: Array<{
+    source: CommonsSourceRecord
+    chunk: CommonsChunkRecord
+    excerpt: string
+    score: number
+    retrieval: "sqlite_fts"
+    embedding_status: "unavailable" | "available"
+    instructions_allowed: false
+  }>
+}
+
 export type CompanyProjectListData = {
   body?: never
   path?: never

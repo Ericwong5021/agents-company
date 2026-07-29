@@ -67,6 +67,12 @@ import type {
   CompanyCurrentResponses,
   CompanyDeferSetupGoalErrors,
   CompanyDeferSetupGoalResponses,
+  CompanyCommonsCapabilitiesResponses,
+  CompanyCommonsImportSourceResponses,
+  CompanyCommonsRetryResponses,
+  CompanyCommonsSearchResponses,
+  CompanyCommonsSourceResponses,
+  CompanyCommonsSourcesResponses,
   CompanyId,
   CompanyProjectAttemptsResponses,
   CompanyProjectCancelResponses,
@@ -3875,6 +3881,236 @@ export class AgentRun extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<AgentRunStopResponses, unknown, ThrowOnError>({
       url: "/agent-run/{runID}/stop",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class CompanyCommons extends HeyApiClient {
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/company-commons/capabilities",
+      ...options,
+      ...params,
+    })
+  }
+
+  public sources<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      limit?: number
+      offset?: number
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "offset" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSourcesResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources",
+      ...options,
+      ...params,
+    })
+  }
+
+  public importSource<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      title: string
+      author?: string
+      origin?: string
+      published_at?: number
+      language?: string
+      tags?: Array<string>
+      metadata?: Record<string, unknown>
+      privacy_scope: "company" | "project" | "private"
+      project_id?: string
+      private_owner_id?: string
+      source_type: "text" | "markdown" | "url" | "conversation_export" | "pdf" | "image" | "podcast" | "video"
+      content?: string
+      url?: string
+      content_base64?: string
+      media_type?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "body", key: "company_id" },
+            { in: "body", key: "title" },
+            { in: "body", key: "author" },
+            { in: "body", key: "origin" },
+            { in: "body", key: "published_at" },
+            { in: "body", key: "language" },
+            { in: "body", key: "tags" },
+            { in: "body", key: "metadata" },
+            { in: "body", key: "privacy_scope" },
+            { in: "body", key: "project_id" },
+            { in: "body", key: "private_owner_id" },
+            { in: "body", key: "source_type" },
+            { in: "body", key: "content" },
+            { in: "body", key: "url" },
+            { in: "body", key: "content_base64" },
+            { in: "body", key: "media_type" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyCommonsImportSourceResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public source<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: string
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSourceResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources/{sourceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      sourceID: string
+      company_id: string
+      project_ids?: Array<string>
+      private_owner_id?: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sourceID" },
+            { in: "body", key: "company_id" },
+            { in: "body", key: "project_ids" },
+            { in: "body", key: "private_owner_id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<CompanyCommonsRetryResponses, unknown, ThrowOnError>({
+      url: "/company-commons/sources/{sourceID}/retry",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public search<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: string
+      project_ids?: string
+      private_owner_id?: string
+      q: string
+      limit?: number
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "project_ids" },
+            { in: "query", key: "private_owner_id" },
+            { in: "query", key: "q" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CompanyCommonsSearchResponses, unknown, ThrowOnError>({
+      url: "/company-commons/search",
       ...options,
       ...params,
     })
@@ -8777,6 +9013,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _companyProject?: CompanyProject
   get companyProject(): CompanyProject {
     return (this._companyProject ??= new CompanyProject({ client: this.client }))
+  }
+
+  private _companyCommons?: CompanyCommons
+  get companyCommons(): CompanyCommons {
+    return (this._companyCommons ??= new CompanyCommons({ client: this.client }))
   }
 
   private _groupSession?: GroupSession
