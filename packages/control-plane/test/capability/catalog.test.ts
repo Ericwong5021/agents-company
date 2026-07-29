@@ -12,6 +12,7 @@ describe("CapabilityCatalog", () => {
       "document-authoring",
       "independent-review",
       "product-charter",
+      "project-wayfinding",
       "research-analysis",
       "software-implementation",
       "technical-planning",

@@ -99,6 +99,18 @@ const definitions: CapabilityPackDefinition[] = [
     maxTurns: 16,
   },
   {
+    id: "project-wayfinding",
+    version: "1",
+    role: "Project Wayfinder",
+    instructions:
+      "Inspect the authorized workspace read-only, distinguish facts from unknowns and return a bounded first-slice recommendation without changing the workspace or task graph.",
+    tools: ["read", "grep", "glob", "bash"],
+    permissionMode: "read_only",
+    requiredRuntimeCapabilities: ["toolCalls", "structuredOutput", "workspaceRead"],
+    timeoutMs: 30 * 60_000,
+    maxTurns: 24,
+  },
+  {
     id: "research-analysis",
     version: "1",
     role: "Research and analysis specialist",

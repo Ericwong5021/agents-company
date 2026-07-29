@@ -18,6 +18,8 @@ export const CompanyProjectTable = sqliteTable(
     active_run_id: text(),
     output_dir: text().notNull(),
     active_plan_version: integer(),
+    execution_strategy: text().notNull().default("legacy_full_plan"),
+    seed_mode: text(),
     graph_revision: integer().notNull().default(0),
     created_at: integer().notNull(),
     updated_at: integer().notNull(),

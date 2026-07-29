@@ -9,6 +9,7 @@ import { Conversation } from "@/conversation"
 import { ConversationThreadID } from "@/conversation/schema"
 import { Delegation } from "@/delegation/delegation"
 import { SubTask } from "@/delegation/schema"
+import { Flag } from "@/flag/flag"
 import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import * as Reputation from "@/reputation/reputation"
@@ -17,6 +18,19 @@ import { SessionID } from "@/session/schema"
 import * as WorkType from "@/work-type/work-type"
 import type { WorkTypeID } from "@/work-type/schema"
 import { WorkflowRuntime } from "@/workflow/runtime"
+import {
+  ProjectExecutionStrategy,
+  SeedPolicyFacts,
+  type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
+  type SeedPolicyFacts as SeedPolicyFactsValue,
+} from "@agents-company/shared/project-orchestration"
+import {
+  SeedPolicyVerdict,
+  WayfinderReceipt,
+  evaluateSeedPolicy,
+  startSeedProject,
+  wayfinderWorkflow,
+} from "@/project-orchestrator"
 import { CompanyProject } from "./company-project"
 import {
   BoardProjectCharter,
@@ -448,6 +462,8 @@ export interface Interface {
     session_id?: string
     provider_id?: string
     model_id?: string
+    execution_strategy?: ProjectExecutionStrategyValue
+    seed_policy?: SeedPolicyFactsValue
   }) => Effect.Effect<{ project: Project; run_id: string }>
   readonly startFromCharter: (input: {
     company_id: string
@@ -458,6 +474,8 @@ export interface Interface {
     charter: BoardProjectCharter
     provider_id?: string
     model_id?: string
+    execution_strategy?: ProjectExecutionStrategyValue
+    seed_policy?: SeedPolicyFactsValue
   }) => Effect.Effect<
     {
       project: Project
@@ -516,6 +534,61 @@ export const layer = Layer.effect(
 
     const agentModelRef = (project: Project, group: "ultra" | "standard" | "lite") =>
       project.provider_id && project.model_id ? `${project.provider_id}/${project.model_id}` : group
+
+    const resolveNewExecution = (input: {
+      execution_strategy?: ProjectExecutionStrategyValue
+      seed_policy?: SeedPolicyFactsValue
+    }): {
+      execution_strategy: ProjectExecutionStrategyValue
+      seed_policy?: SeedPolicyFactsValue
+      verdict?: SeedPolicyVerdict
+    } => {
+      const rollout = Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+      const requested = ProjectExecutionStrategy.parse(input.execution_strategy ?? "legacy_full_plan")
+      if (requested !== "seed_and_grow" || rollout !== "active")
+        return { execution_strategy: "legacy_full_plan" as const }
+      const seed_policy = SeedPolicyFacts.parse(input.seed_policy)
+      return {
+        execution_strategy: "seed_and_grow" as const,
+        seed_policy,
+        verdict: evaluateSeedPolicy(seed_policy),
+      }
+    }
+
+    const persistSeedVerdict = Effect.fn("CompanyProjectExecution.persistSeedVerdict")(function* (
+      project: Project,
+      verdict: SeedPolicyVerdict,
+    ) {
+      const existing = (yield* projects.listArtifacts(project.id)).find(
+        (artifact) => artifact.kind === "seed_policy" && Boolean(artifact.content),
+      )
+      if (existing) {
+        const persisted = SeedPolicyVerdict.parse(JSON.parse(existing.content!))
+        if (JSON.stringify(persisted) !== JSON.stringify(verdict))
+          throw new Error(`Company project ${project.id} has a different persisted SeedPolicy verdict`)
+        return existing
+      }
+      return yield* projects.addArtifact({
+        project_id: project.id,
+        kind: "seed_policy",
+        title: "Seed Policy",
+        path: "artifacts/seed-policy.json",
+        content: `${JSON.stringify(verdict, null, 2)}\n`,
+        evidence: { mode: verdict.mode, reason_codes: verdict.reason_codes },
+        created_by_agent_id: project.owner_agent_id,
+      })
+    })
+
+    const seedVerdict = Effect.fn("CompanyProjectExecution.seedVerdict")(function* (project: Project) {
+      const artifact = (yield* projects.listArtifacts(project.id)).find(
+        (candidate) => candidate.kind === "seed_policy" && Boolean(candidate.content),
+      )
+      if (!artifact?.content) throw new Error(`Company project ${project.id} has no persisted SeedPolicy verdict`)
+      const verdict = SeedPolicyVerdict.parse(JSON.parse(artifact.content))
+      if (verdict.mode !== project.seed_mode)
+        throw new Error(`Company project ${project.id} SeedPolicy verdict differs from its pinned seed mode`)
+      return verdict
+    })
 
     const evidenceSnapshot = Effect.fn("CompanyProjectExecution.evidenceSnapshot")(function* (project: Project) {
       const [items, artifacts, gates, charter, events] = yield* Effect.all([
@@ -937,10 +1010,235 @@ export const layer = Layer.effect(
       return keys
     }
 
+    const startSeedWave: (project_id: string) => Effect.Effect<string | undefined> = Effect.fn(
+      "CompanyProjectExecution.startSeedWave",
+    )(function* (project_id: string) {
+      const project = yield* projects.get(project_id)
+      if (
+        !project ||
+        project.execution_strategy !== "seed_and_grow" ||
+        ["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)
+      )
+        return
+      const ready = (yield* projects.readyWorkItems(project_id)).filter(
+        (item) => item.kind === "worker" && Boolean(item.owner_agent_id),
+      )
+      if (!ready.length) {
+        const items = yield* projects.listWorkItems(project_id)
+        if (items.some((item) => item.status === "blocked" || item.status === "failed")) {
+          yield* blockProject(project_id, "Seed project has exhausted a work-item retry budget")
+          return
+        }
+        if (
+          items.length &&
+          items.every(
+            (item) => item.status === "completed" || item.status === "superseded" || item.status === "cancelled",
+          )
+        ) {
+          yield* recruitment.releaseProject({
+            ...(project.company_id ? { company_id: CompanyID.parse(project.company_id) } : {}),
+            project_id: project.id,
+          })
+          yield* projects.transition({
+            id: project_id,
+            status: "completed",
+            actor_id: project.owner_agent_id ?? "system",
+          })
+        }
+        return
+      }
+      const charter = yield* projects.getCharter(project.id)
+      if (!charter) throw new Error("Seed project Charter is missing")
+      const gates = yield* projects.listGates(project.id)
+      const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
+      const gated = ready.filter(
+        (item) =>
+          item.purpose === "first_slice" &&
+          item.work_type === "coding" &&
+          charter.policy.source_approval_preset === "strict" &&
+          !writeApproved,
+      )
+      const dispatchable = ready.filter((item) => !gated.some((candidate) => candidate.id === item.id))
+      if (project.status !== "executing")
+        yield* projects.transition({
+          id: project.id,
+          status: "executing",
+          actor_id: project.owner_agent_id ?? "system",
+        })
+      const verdict = yield* seedVerdict(project)
+      const evidence = yield* evidenceSnapshot(project)
+      const started = yield* Effect.forEach(
+        dispatchable,
+        (item) =>
+          Effect.gen(function* () {
+            const worktree =
+              item.work_type === "coding"
+                ? yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: item.id })
+                : undefined
+            if (worktree) yield* projects.startWorktreeRun({ id: worktree.id })
+            return {
+              item,
+              runID: yield* startRuntime({
+                project,
+                item,
+                script:
+                  item.purpose === "discovery"
+                    ? wayfinderWorkflow({
+                        project,
+                        item,
+                        verdict,
+                        model: agentModelRef(project, item.model_group),
+                      })
+                    : workerScript(
+                        project.goal,
+                        item,
+                        agentModelRef(project, item.model_group),
+                        charter.policy,
+                        writeApproved,
+                        evidence,
+                      ),
+                workspace: worktree?.directory,
+              }),
+              worktree,
+            }
+          }),
+        { concurrency: 4 },
+      )
+      if (gated.length && !gates.some((gate) => gate.kind === "risk_approval" && gate.status === "pending"))
+        yield* projects.requestGate({
+          project_id: project.id,
+          kind: "risk_approval",
+          title: "批准 First Slice 写入项目工作区",
+          summary: "Wayfinder 保持只读；继续后只允许 First Slice Builder 在隔离工作树内写入并运行验证。",
+          requested_by_agent_id: project.owner_agent_id,
+        })
+      yield* Effect.gen(function* () {
+        yield* Effect.forEach(
+          started,
+          ({ item, runID, worktree }) =>
+            Effect.gen(function* () {
+              const value = yield* outcome(runID)
+              if (item.purpose === "discovery") {
+                const parsed = WayfinderReceipt.parse(value)
+                const artifact = yield* projects.addArtifact({
+                  project_id: project.id,
+                  work_item_id: item.id,
+                  kind: "wayfinder_receipt",
+                  title: item.title,
+                  path: `artifacts/${item.id}-wayfinder.json`,
+                  content: `${JSON.stringify(parsed, null, 2)}\n`,
+                  evidence: {
+                    confirmed_facts: parsed.confirmed_facts.length,
+                    unknowns: parsed.unknowns.length,
+                    blockers: parsed.blockers.length,
+                  },
+                  created_by_agent_id: item.owner_agent_id,
+                })
+                yield* projects.completeWorkItemWithReceipt({
+                  id: item.id,
+                  receipt: {
+                    idempotency_key: `wayfinder:${item.id}:attempt:${item.attempt + 1}`,
+                    outcome: "completed",
+                    summary: parsed.summary,
+                    artifact_ids: [artifact.id],
+                    evidence_refs: [{ kind: "artifact", id: artifact.id }],
+                    confirmed_facts: parsed.confirmed_facts,
+                    invalidated_assumptions: parsed.invalidated_assumptions,
+                    unknowns: parsed.unknowns,
+                    blockers: parsed.blockers,
+                    capability_gaps: parsed.capability_gaps,
+                    task_proposals: [parsed.recommended_first_slice],
+                    dependency_proposals: parsed.dependency_proposals,
+                    questions: parsed.questions,
+                  },
+                })
+                yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+                return
+              }
+              const parsed = z.object({ summary: z.string(), submission: submissions[item.work_type] }).parse(value)
+              const verification = yield* workType.verify(item.work_type as WorkTypeID, {
+                submission: parsed.submission,
+                orgLayer: "project",
+              })
+              const artifact = yield* projects.addArtifact({
+                project_id: project.id,
+                work_item_id: item.id,
+                kind: item.work_type,
+                title: item.title,
+                path: `artifacts/${item.id}.json`,
+                content: `${JSON.stringify(parsed, null, 2)}\n`,
+                evidence: { work_type_verification: verification },
+                created_by_agent_id: item.owner_agent_id,
+              })
+              if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
+              if (item.work_type !== "coding" || !worktree) {
+                yield* projects.completeWorkItem(item.id)
+                yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+                return
+              }
+              const commands = submissions.coding.parse(parsed.submission).verificationCommands
+              const verified = yield* projects.verifyWorktreeRun({ id: worktree.id, commands })
+              if (verified.status !== "awaiting_merge_approval")
+                return yield* failure(item, verified.error ?? "Host worktree verification failed")
+              const gate = yield* projects.requestMergeApproval({
+                id: worktree.id,
+                title: `批准合并 First Slice：${item.title}`,
+                summary: `${parsed.summary}\n\nFirst Slice 已通过 Work Type 与宿主验证，未预建 Reviewer。`,
+                requested_by_agent_id: item.owner_agent_id,
+                review: { mode: "seed_first_slice", artifact_id: artifact.id },
+              })
+              yield* projects.completeWorkItem(item.id)
+              yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
+              if (charter.policy.require_human_merge) return
+              yield* projects.resolveGate({
+                id: gate.id,
+                decision: "approve",
+                note: "公司自主权限策略自动批准 Seed First Slice",
+              })
+              const merged = yield* projects.mergeWorktreeRun(worktree.id)
+              yield* projects.addArtifact({
+                project_id: project.id,
+                work_item_id: merged.work_item_id,
+                kind: "merge_report",
+                title: "Seed First Slice 合并与复验报告",
+                path: `artifacts/${merged.id}-merge.json`,
+                content: `${JSON.stringify(merged, null, 2)}\n`,
+                evidence: merged.verification,
+                created_by_agent_id: item.owner_agent_id,
+              })
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.gen(function* () {
+                  const state = yield* projects.get(project.id)
+                  if (!state || ["completed", "rejected", "blocked"].includes(state.status)) return
+                  const current = (yield* projects.listWorkItems(project.id)).find(
+                    (candidate) => candidate.id === item.id,
+                  )
+                  if (current?.status === "running") {
+                    yield* failure(item, String(cause))
+                    return
+                  }
+                  yield* blockProject(project.id, String(cause))
+                }),
+              ),
+            ),
+          { concurrency: "unbounded", discard: true },
+        )
+        yield* projects.setActiveRun({ id: project.id })
+        const current = yield* projects.get(project.id)
+        if (current?.status !== "awaiting_approval") yield* startSeedWave(project.id)
+      }).pipe(
+        Effect.catchCause((cause) => blockProject(project.id, String(cause))),
+        Effect.forkIn(scope),
+      )
+      return started[0]?.runID
+    })
+
     const startReadyWave: (project_id: string) => Effect.Effect<string | undefined> = Effect.fn(
       "CompanyProjectExecution.startReadyWave",
     )(function* (project_id: string) {
       const project = yield* projects.get(project_id)
+      if (project?.execution_strategy === "seed_and_grow") return yield* startSeedWave(project_id)
       if (!project || ["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)) return
       const ready = (yield* projects.readyWorkItems(project_id)).filter((item) => item.kind !== "planner")
       if (!ready.length) {
@@ -1544,7 +1842,10 @@ export const layer = Layer.effect(
       charter: BoardProjectCharter
       provider_id?: string
       model_id?: string
+      execution_strategy?: ProjectExecutionStrategyValue
+      seed_policy?: SeedPolicyFactsValue
     }) {
+      void Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
       const charterInput = BoardProjectCharter.parse(input.charter)
       const existing = yield* projects.findBySourceThread(input.source_thread_id)
       if (existing && existing.decision_request_id !== input.request_id) {
@@ -1561,6 +1862,7 @@ export const layer = Layer.effect(
         }
       }
 
+      const execution = existing ? undefined : resolveNewExecution(input)
       const selectedModel = existing ? undefined : yield* resolveModel(input)
       const session = existing
         ? yield* sessions.get(SessionID.make(existing.coordinator_session_id!))
@@ -1582,6 +1884,8 @@ export const layer = Layer.effect(
           coordinator_session_id: session.id,
           provider_id: selectedModel?.providerID,
           model_id: selectedModel?.modelID,
+          execution_strategy: execution!.execution_strategy,
+          seed_mode: execution?.verdict?.mode,
         }))
       const charter =
         existingCharter ??
@@ -1601,6 +1905,52 @@ export const layer = Layer.effect(
           open_decisions: charterInput.open_decisions,
           success_criteria: charterInput.deliverables,
         }))
+      if (project.execution_strategy === "seed_and_grow") {
+        const verdict = existing ? yield* seedVerdict(project) : execution!.verdict!
+        if (!existing) yield* persistSeedVerdict(project, verdict)
+        const team = yield* startSeedProject({
+          project,
+          verdict,
+          projects,
+          recruitment,
+        })
+        const planning =
+          project.status === "intake"
+            ? yield* projects.transition({
+                id: project.id,
+                status: "planning",
+                actor_id: charterInput.dri_agent_id,
+              })
+            : project
+        if (planning.status === "planning")
+          yield* projects.transition({
+            id: project.id,
+            status: "executing",
+            actor_id: charterInput.dri_agent_id,
+          })
+        const runID = (yield* startSeedWave(project.id)) ?? (yield* projects.get(project.id))?.active_run_id
+        if (
+          verdict.mode === "discovery_first" &&
+          !(yield* projects.listGates(project.id)).some(
+            (gate) => gate.kind === "risk_approval" && gate.status === "pending",
+          )
+        )
+          yield* projects.requestGate({
+            project_id: project.id,
+            kind: "risk_approval",
+            title: "批准 First Slice Builder",
+            summary: "Wayfinder 保持只读。批准后才会为 First Slice Builder 建立 Assignment 并启动执行。",
+            requested_by_agent_id: team.wayfinder?.owner_agent_id ?? project.owner_agent_id,
+          })
+        return {
+          project: (yield* projects.get(project.id))!,
+          charter: team.charter,
+          plan: team.plan,
+          work_item: team.wayfinder ?? team.builder,
+          run_id: runID,
+          replayed: Boolean(existing),
+        }
+      }
       const plan =
         (yield* projects.listPlans(project.id))[0] ??
         (yield* projects.createPlan({
@@ -1670,7 +2020,10 @@ export const layer = Layer.effect(
       session_id?: string
       provider_id?: string
       model_id?: string
+      execution_strategy?: ProjectExecutionStrategyValue
+      seed_policy?: SeedPolicyFactsValue
     }) {
+      const execution = resolveNewExecution(input)
       const selectedModel = yield* resolveModel(input)
       const session = input.session_id
         ? yield* sessions.get(SessionID.make(input.session_id))
@@ -1685,7 +2038,45 @@ export const layer = Layer.effect(
         coordinator_session_id: session.id,
         provider_id: selectedModel?.providerID,
         model_id: selectedModel?.modelID,
+        execution_strategy: execution.execution_strategy,
+        seed_mode: execution.verdict?.mode,
       })
+      if (project.execution_strategy === "seed_and_grow") {
+        const verdict = execution.verdict!
+        yield* persistSeedVerdict(project, verdict)
+        const team = yield* startSeedProject({
+          project,
+          verdict,
+          projects,
+          recruitment,
+        })
+        yield* projects.transition({
+          id: project.id,
+          status: "planning",
+          actor_id: team.wayfinder?.owner_agent_id ?? team.builder.owner_agent_id,
+        })
+        yield* projects.transition({
+          id: project.id,
+          status: "executing",
+          actor_id: team.wayfinder?.owner_agent_id ?? team.builder.owner_agent_id,
+        })
+        const run_id = yield* startSeedWave(project.id)
+        if (
+          verdict.mode === "discovery_first" &&
+          !(yield* projects.listGates(project.id)).some(
+            (gate) => gate.kind === "risk_approval" && gate.status === "pending",
+          )
+        )
+          yield* projects.requestGate({
+            project_id: project.id,
+            kind: "risk_approval",
+            title: "批准 First Slice Builder",
+            summary: "Wayfinder 保持只读。批准后才会为 First Slice Builder 建立 Assignment 并启动执行。",
+            requested_by_agent_id: team.wayfinder?.owner_agent_id ?? project.owner_agent_id,
+          })
+        if (!run_id) throw new Error(`Seed project ${project.id} has no dispatchable initial AgentRun`)
+        return { project: (yield* projects.get(project.id))!, run_id }
+      }
       const plan = yield* projects.createPlan({
         project_id: project.id,
         phase: "planning",
@@ -1734,6 +2125,7 @@ export const layer = Layer.effect(
       const project = yield* projects.get(input.project_id)
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       const reason = input.reason ?? "用户已取消当前执行"
+      if (project.execution_strategy === "seed_and_grow") yield* blockProject(project.id, reason)
       const items = yield* projects.listWorkItems(project.id)
       yield* Effect.forEach(
         items.filter((item) => item.status === "running" && item.workflow_run_id),
@@ -1821,6 +2213,16 @@ export const layer = Layer.effect(
         return { gate }
       }
       if (gate.kind === "risk_approval") {
+        if (project.execution_strategy === "seed_and_grow") {
+          const verdict = yield* seedVerdict(project)
+          yield* startSeedProject({
+            project,
+            verdict,
+            projects,
+            recruitment,
+            authorize_builder: true,
+          })
+        }
         const run_id = yield* startReadyWave(project.id)
         return run_id ? { gate, run_id } : { gate }
       }

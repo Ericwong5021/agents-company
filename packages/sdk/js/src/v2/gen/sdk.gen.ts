@@ -3620,6 +3620,36 @@ export class CompanyProject extends HeyApiClient {
       session_id?: string
       provider_id?: string
       model_id?: string
+      execution_strategy?: "legacy_full_plan" | "seed_and_grow"
+      seed_policy?: {
+        risk_level: "low" | "medium" | "high" | "critical"
+        scope_defined: boolean
+        reversible: boolean
+        stable_sop: boolean
+        unfamiliar_workspace: boolean
+        cross_module: boolean
+        external_side_effect: boolean
+        blocking_unknowns: Array<string>
+        slice_candidates: Array<{
+          id: string
+          title: string
+          description: string
+          work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis"
+          role: string
+          capability_packs?: Array<string>
+          decision_scope?: Array<string>
+          resource_scope?: Array<string>
+          acceptance_criteria: Array<string>
+          reality_contact: number
+          information_gain: number
+          user_value: number
+          reversible: boolean
+          dependency_count: number
+          reality_anchor: string
+          within_authorized_scope: boolean
+          external_side_effect: boolean
+        }>
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3635,6 +3665,8 @@ export class CompanyProject extends HeyApiClient {
             { in: "body", key: "session_id" },
             { in: "body", key: "provider_id" },
             { in: "body", key: "model_id" },
+            { in: "body", key: "execution_strategy" },
+            { in: "body", key: "seed_policy" },
           ],
         },
       ],
