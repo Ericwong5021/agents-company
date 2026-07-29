@@ -1419,7 +1419,15 @@ export async function produceB5CandidateFacts(input: B5ProducerArguments) {
       )
       const concurrentSupervisor = yield* Effect.gen(function* () {
         return yield* GraphSupervisor.Service
-      }).pipe(Effect.provide(GraphSupervisor.defaultLayer))
+      }).pipe(
+        Effect.provide(
+          GraphSupervisor.makeLayer().pipe(
+            Layer.provide(CompanyProject.defaultLayer),
+            Layer.provide(CompanyWorkFacts.makeLayer({ recoverOnStart: false })),
+            Layer.provide(CompanyGraphMutation.defaultLayer),
+          ),
+        ),
+      )
       const capabilityMaterializer = yield* CapabilityMaterializer.Service
       const validation = yield* CompanyValidationGate.Service
       const attention = yield* CompanyAttention.Service
