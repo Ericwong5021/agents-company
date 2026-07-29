@@ -106,10 +106,6 @@ function event(
 function runEvents(binding: PersistedFactRunBinding, index: number) {
   const legacy = binding.strategy === "legacy_full_plan"
   return [
-    event(binding, "trust.false_state_detected", "trust", {
-      surface: "project",
-      kind: "audit_clear",
-    }),
     event(binding, "project.completed", "project", {
       projectId: binding.projectId,
       strategy: binding.strategy,
@@ -337,7 +333,7 @@ describe("SeedGrowMetricReporter", () => {
           },
         ],
       })
-      expect(report.results[0]?.sourceRefs).toHaveLength(8)
+      expect(report.results[0]?.sourceRefs).toHaveLength(6)
       expect(report.results[0]?.sourceRefs.filter((source) => source.kind === "gate_report")).toHaveLength(2)
     }),
   )
@@ -518,7 +514,7 @@ describe("SeedGrowMetricReporter", () => {
     }),
   )
 
-  it.live("blocks a metric when any contracted source event is absent", () =>
+  it.live("blocks zero false-completion evidence when a terminal run anchor is absent", () =>
     Effect.gen(function* () {
       const directory = yield* tmpdirScoped()
       const core = artifactCore()
@@ -526,7 +522,7 @@ describe("SeedGrowMetricReporter", () => {
         adapter(directory, {
           core: {
             ...core,
-            events: core.events.filter((event) => event.eventType !== "trust.false_state_detected"),
+            events: core.events.filter((event) => event.eventType !== "benchmark.completed"),
           },
         }),
       )

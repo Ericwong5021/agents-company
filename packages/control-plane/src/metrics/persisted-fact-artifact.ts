@@ -701,18 +701,26 @@ function observation(
   const aggregate = metricAggregate(metric.id, sources, calculationRunIds)
   if (!aggregate) return undefined
   const coveredEventTypes =
-    metric.id === "candidate_reuse_delta_vs_legacy"
-      ? validShadowPairs(sources, bindings) &&
-        calculationRunIds.every((runId) =>
-          sources.some((event) => event.runId === runId && event.eventType === "candidate.selected"),
-        )
-        ? [...metric.eventSource]
-        : []
-      : metric.eventSource.filter((eventType) =>
-          calculationRunIds.every((runId) =>
+    metric.id === "false_completion_count"
+      ? calculationRunIds.every((runId) =>
+          ["project.completed", "benchmark.completed"].every((eventType) =>
             sources.some((event) => event.runId === runId && event.eventType === eventType),
           ),
         )
+        ? [...metric.eventSource]
+        : []
+      : metric.id === "candidate_reuse_delta_vs_legacy"
+        ? validShadowPairs(sources, bindings) &&
+          calculationRunIds.every((runId) =>
+            sources.some((event) => event.runId === runId && event.eventType === "candidate.selected"),
+          )
+          ? [...metric.eventSource]
+          : []
+        : metric.eventSource.filter((eventType) =>
+            calculationRunIds.every((runId) =>
+              sources.some((event) => event.runId === runId && event.eventType === eventType),
+            ),
+          )
   if (coveredEventTypes.length !== metric.eventSource.length) return undefined
   return MetricObservation.parse({
     metricId: metric.id,
