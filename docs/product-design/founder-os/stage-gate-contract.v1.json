@@ -97,6 +97,7 @@
       "governedPaths": [
         "packages/control-plane/src/founder-os/decision-ledger.ts",
         "packages/control-plane/src/founder-os/decision-ledger.sql.ts",
+        "packages/control-plane/migration/20260730340000_founder_canonical_constraints/migration.sql",
         "packages/shared/src/founder-os.ts"
       ],
       "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck"],
@@ -131,6 +132,12 @@
           "id": "board-projection-replay",
           "path": "packages/control-plane/src/founder-os/decision-ledger.ts",
           "includeAll": ["reconcileBoardDecisionProjectionsInTransaction", "DecisionSourceMappingTable"],
+          "excludeAll": []
+        },
+        {
+          "id": "database-finalization-constraints",
+          "path": "packages/control-plane/migration/20260730340000_founder_canonical_constraints/migration.sql",
+          "includeAll": ["founder_decision_record_canonical_insert", "founder_decision_transition_finalization_insert", "founder_decision_current_finalization_update"],
           "excludeAll": []
         }
       ]
@@ -270,6 +277,7 @@
       "governedPaths": [
         "packages/control-plane/src/founder-os/advisor.ts",
         "packages/control-plane/src/founder-os/advisor-readiness.ts",
+        "packages/control-plane/migration/20260730340000_founder_canonical_constraints/migration.sql",
         "packages/app/app/pages/company/board.vue"
       ],
       "requiredCommandIds": ["founder-stage-production-contract", "shared-typecheck", "shared-test", "control-plane-typecheck", "control-plane-test", "sdk-typecheck", "app-typecheck", "app-unit-test"],
@@ -301,6 +309,12 @@
           "path": "packages/app/app/pages/company/board.vue",
           "includeAll": ["AI 大东 · 创始人代理", "founder-board/intervene", "redefine_goal"],
           "excludeAll": ["navigateTo(\"/work\")"]
+        },
+        {
+          "id": "advisor-convergence-foreign-keys",
+          "path": "packages/control-plane/migration/20260730340000_founder_canonical_constraints/migration.sql",
+          "includeAll": ["REFERENCES `conversation_thread`", "REFERENCES `conversation_run`", "REFERENCES `channel_message`", "REFERENCES `founder_shadow_decision`", "REFERENCES `company_agent`"],
+          "excludeAll": []
         }
       ]
     },
