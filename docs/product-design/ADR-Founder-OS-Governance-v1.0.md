@@ -55,7 +55,7 @@ Founder Twin 会从历史选择、资料和结果推测偏好。推测可以参�
 
 ### 决策
 
-所有治理输入必须携带 authority。AI 生成内容只能处于 `ai_inferred` 或更低权限状态；只有可核验的人类确认事件可以产生 `human_confirmed`，且升级采用追加记录。
+所有治理输入必须携带 authority。AI 生成内容只能处于 `ai_proposed`；只有可核验的人类确认事件可以产生 `human_confirmed`，且升级采用追加记录。
 
 ### 不采用
 
