@@ -12555,6 +12555,426 @@ export type OrgDisbandResponses = {
 
 export type OrgDisbandResponse = OrgDisbandResponses[keyof OrgDisbandResponses]
 
+export type RolloutGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/rollout"
+}
+
+export type RolloutGetErrors = {
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutGetError = RolloutGetErrors[keyof RolloutGetErrors]
+
+export type RolloutGetResponses = {
+  /**
+   * Rollout status
+   */
+  200: {
+    state: {
+      id: "seed_and_grow"
+      phase: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      version: number
+      lastTransitionId?: string
+      updatedAt: number
+    }
+    executionMode: "off" | "shadow" | "active"
+    newProjectPolicy: {
+      defaultStrategy: "legacy_full_plan" | "seed_and_grow"
+      seedOptInAllowed: boolean
+      explicitLegacyFallbackAllowed: boolean
+    }
+  }
+}
+
+export type RolloutGetResponse = RolloutGetResponses[keyof RolloutGetResponses]
+
+export type RolloutTransitionData = {
+  body: {
+    idempotencyKey: string
+    to: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+    reason: string
+    actorId?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/rollout/transitions"
+}
+
+export type RolloutTransitionErrors = {
+  /**
+   * Transition conflict
+   */
+  409: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutTransitionError = RolloutTransitionErrors[keyof RolloutTransitionErrors]
+
+export type RolloutTransitionResponses = {
+  /**
+   * Persisted rollout transition
+   */
+  200: {
+    state: {
+      id: "seed_and_grow"
+      phase: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      version: number
+      lastTransitionId?: string
+      updatedAt: number
+    }
+    transition: {
+      id: string
+      from: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      to: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      version: number
+      reason: string
+      actorId?: string
+      createdAt: number
+    }
+    journal: {
+      id: string
+      kind: "transition"
+      idempotencyKey: string
+      payloadSha256: string
+      resultRefId: string
+      createdAt: number
+    }
+    replayed: boolean
+  }
+}
+
+export type RolloutTransitionResponse = RolloutTransitionResponses[keyof RolloutTransitionResponses]
+
+export type RolloutActionData = {
+  body:
+    | {
+        kind: "register_candidate"
+        idempotencyKey: string
+        candidate: {
+          id: string
+          candidateSha: string
+          targetRef: string
+        }
+      }
+    | {
+        kind: "record_local_repeat"
+        idempotencyKey: string
+        repeat: {
+          id: string
+          candidateId: string
+          runId: string
+          ordinal: 1 | 2
+          outcome: "completed" | "failed" | "blocked" | "invalid"
+          environmentSha256: string
+          evidenceSha256: string
+          normalizedResultSha256?: string
+          startedAt: number
+          finishedAt: number
+        }
+      }
+    | {
+        kind: "record_rollback"
+        idempotencyKey: string
+        rollback: {
+          id: string
+          candidateId?: string
+          projectId?: string
+          target: "kill_switch" | "legacy_fallback"
+          phaseAtAction: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+          executionModeAfter: "off" | "shadow" | "active"
+          outcome: "completed" | "failed" | "blocked" | "invalid"
+          evidenceSha256: string
+          observedAt: number
+        }
+      }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/rollout/actions"
+}
+
+export type RolloutActionErrors = {
+  /**
+   * Action conflict
+   */
+  409: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutActionError = RolloutActionErrors[keyof RolloutActionErrors]
+
+export type RolloutActionResponses = {
+  /**
+   * Persisted rollout action fact
+   */
+  200:
+    | {
+        kind: "register_candidate"
+        candidate: {
+          id: string
+          candidateSha: string
+          targetRef: string
+          registeredAt: number
+        }
+        journal: {
+          id: string
+          kind: "action"
+          actionKind: "register_candidate"
+          idempotencyKey: string
+          payloadSha256: string
+          resultRefId: string
+          createdAt: number
+        }
+        replayed: boolean
+      }
+    | {
+        kind: "record_local_repeat"
+        repeat: {
+          id: string
+          candidateId: string
+          runId: string
+          ordinal: 1 | 2
+          outcome: "completed" | "failed" | "blocked" | "invalid"
+          environmentSha256: string
+          evidenceSha256: string
+          normalizedResultSha256?: string
+          startedAt: number
+          finishedAt: number
+          recordedAt: number
+        }
+        journal: {
+          id: string
+          kind: "action"
+          actionKind: "record_local_repeat"
+          idempotencyKey: string
+          payloadSha256: string
+          resultRefId: string
+          createdAt: number
+        }
+        replayed: boolean
+      }
+    | {
+        kind: "record_rollback"
+        rollback: {
+          id: string
+          candidateId?: string
+          projectId?: string
+          target: "kill_switch" | "legacy_fallback"
+          phaseAtAction: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+          executionModeAfter: "off" | "shadow" | "active"
+          outcome: "completed" | "failed" | "blocked" | "invalid"
+          evidenceSha256: string
+          observedAt: number
+          recordedAt: number
+        }
+        journal: {
+          id: string
+          kind: "action"
+          actionKind: "record_rollback"
+          idempotencyKey: string
+          payloadSha256: string
+          resultRefId: string
+          createdAt: number
+        }
+        replayed: boolean
+      }
+}
+
+export type RolloutActionResponse = RolloutActionResponses[keyof RolloutActionResponses]
+
+export type RolloutJournalData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    limit?: number
+  }
+  url: "/rollout/journal"
+}
+
+export type RolloutJournalErrors = {
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutJournalError = RolloutJournalErrors[keyof RolloutJournalErrors]
+
+export type RolloutJournalResponses = {
+  /**
+   * Rollout journal
+   */
+  200: {
+    items: Array<
+      | {
+          id: string
+          kind: "transition"
+          idempotencyKey: string
+          payloadSha256: string
+          resultRefId: string
+          createdAt: number
+        }
+      | {
+          id: string
+          kind: "action"
+          actionKind: "register_candidate" | "record_local_repeat" | "record_rollback"
+          idempotencyKey: string
+          payloadSha256: string
+          resultRefId: string
+          createdAt: number
+        }
+    >
+  }
+}
+
+export type RolloutJournalResponse = RolloutJournalResponses[keyof RolloutJournalResponses]
+
+export type RolloutEvidenceData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    limit?: number
+  }
+  url: "/rollout/evidence"
+}
+
+export type RolloutEvidenceErrors = {
+  /**
+   * Persisted rollout facts are invalid
+   */
+  500: {
+    code:
+      | "idempotency_collision"
+      | "invalid_transition"
+      | "running_projects"
+      | "entity_conflict"
+      | "missing_candidate"
+      | "invalid_persisted_fact"
+    message: string
+  }
+}
+
+export type RolloutEvidenceError = RolloutEvidenceErrors[keyof RolloutEvidenceErrors]
+
+export type RolloutEvidenceResponses = {
+  /**
+   * Rollout evidence facts without a pass decision
+   */
+  200: {
+    candidates: Array<{
+      id: string
+      candidateSha: string
+      targetRef: string
+      registeredAt: number
+    }>
+    localRepeats: Array<{
+      id: string
+      candidateId: string
+      runId: string
+      ordinal: 1 | 2
+      outcome: "completed" | "failed" | "blocked" | "invalid"
+      environmentSha256: string
+      evidenceSha256: string
+      normalizedResultSha256?: string
+      startedAt: number
+      finishedAt: number
+      recordedAt: number
+    }>
+    rollbacks: Array<{
+      id: string
+      candidateId?: string
+      projectId?: string
+      target: "kill_switch" | "legacy_fallback"
+      phaseAtAction: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      executionModeAfter: "off" | "shadow" | "active"
+      outcome: "completed" | "failed" | "blocked" | "invalid"
+      evidenceSha256: string
+      observedAt: number
+      recordedAt: number
+    }>
+  }
+}
+
+export type RolloutEvidenceResponse = RolloutEvidenceResponses[keyof RolloutEvidenceResponses]
+
 export type PtyListData = {
   body?: never
   path?: never

@@ -102,24 +102,24 @@ async function generate(output: string) {
   })
 }
 
-async function requireGoalBriefRequestParameters(file: string) {
+async function requireRequestParameters(
+  file: string,
+  className: string,
+  methods: readonly (readonly [string, readonly string[]])[],
+) {
   let source = await Bun.file(file).text()
-  const classStart = source.indexOf("export class GoalBrief extends HeyApiClient")
-  if (classStart < 0) throw new Error("Missing generated GoalBrief client")
-  for (const [method, fields] of [
-    ["create", ["source", "brief"]],
-    ["generate", ["requestId", "goal"]],
-    ["append", ["expectedVersion", "source", "brief"]],
-  ] as const) {
+  const classStart = source.indexOf(`export class ${className} extends HeyApiClient`)
+  if (classStart < 0) throw new Error(`Missing generated ${className} client`)
+  for (const [method, fields] of methods) {
     const start = source.indexOf(`  public ${method}<`, classStart)
     const end = source.indexOf("\n    options?:", start)
-    if (start < 0 || end < 0) throw new Error(`Missing generated GoalBrief.${method} signature`)
+    if (start < 0 || end < 0) throw new Error(`Missing generated ${className}.${method} signature`)
     let signature = source.slice(start, end)
     signature = signature.replace("\n    parameters?: {", "\n    parameters: {")
     for (const field of fields) signature = signature.replace(`\n      ${field}?:`, `\n      ${field}:`)
-    if (!signature.includes("\n    parameters: {")) throw new Error(`GoalBrief.${method} parameters are optional`)
+    if (!signature.includes("\n    parameters: {")) throw new Error(`${className}.${method} parameters are optional`)
     for (const field of fields)
-      if (!signature.includes(`\n      ${field}:`)) throw new Error(`GoalBrief.${method}.${field} is optional`)
+      if (!signature.includes(`\n      ${field}:`)) throw new Error(`${className}.${method}.${field} is optional`)
     source = `${source.slice(0, start)}${signature}${source.slice(end)}`
   }
   await Bun.write(file, source)
@@ -130,7 +130,15 @@ await generate("./src/v2/gen")
 for (const file of await Array.fromAsync(new Bun.Glob("src/v2/**/*.ts").scan())) {
   await $`bun prettier --write ${file}`
 }
-await requireGoalBriefRequestParameters("./src/v2/gen/sdk.gen.ts")
+await requireRequestParameters("./src/v2/gen/sdk.gen.ts", "GoalBrief", [
+  ["create", ["source", "brief"]],
+  ["generate", ["requestId", "goal"]],
+  ["append", ["expectedVersion", "source", "brief"]],
+])
+await requireRequestParameters("./src/v2/gen/sdk.gen.ts", "Rollout", [
+  ["transition", ["idempotencyKey", "to", "reason"]],
+  ["action", ["body"]],
+])
 await $`bun prettier --write ./src/v2/gen/sdk.gen.ts`
 await $`rm -rf dist`
 await $`bun typecheck`

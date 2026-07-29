@@ -24539,6 +24539,1687 @@
         ]
       }
     },
+    "/rollout": {
+      "get": {
+        "operationId": "rollout.get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Read persisted rollout phase and low-level execution mode",
+        "responses": {
+          "200": {
+            "description": "Rollout status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "const": "seed_and_grow"
+                        },
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "shadow",
+                            "opt_in",
+                            "dogfood_default",
+                            "pre_public_default"
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "lastTransitionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "updatedAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "phase",
+                        "version",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "executionMode": {
+                      "type": "string",
+                      "enum": [
+                        "off",
+                        "shadow",
+                        "active"
+                      ]
+                    },
+                    "newProjectPolicy": {
+                      "type": "object",
+                      "properties": {
+                        "defaultStrategy": {
+                          "type": "string",
+                          "enum": [
+                            "legacy_full_plan",
+                            "seed_and_grow"
+                          ]
+                        },
+                        "seedOptInAllowed": {
+                          "type": "boolean"
+                        },
+                        "explicitLegacyFallbackAllowed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "defaultStrategy",
+                        "seedOptInAllowed",
+                        "explicitLegacyFallbackAllowed"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "executionMode",
+                    "newProjectPolicy"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persisted rollout facts are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.rollout.get({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/rollout/transitions": {
+      "post": {
+        "operationId": "rollout.transition",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Advance the rollout phase by exactly one step",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "to": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "shadow",
+                      "opt_in",
+                      "dogfood_default",
+                      "pre_public_default"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "idempotencyKey",
+                  "to",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted rollout transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "const": "seed_and_grow"
+                        },
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "shadow",
+                            "opt_in",
+                            "dogfood_default",
+                            "pre_public_default"
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "lastTransitionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "updatedAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "phase",
+                        "version",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "transition": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "from": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "shadow",
+                            "opt_in",
+                            "dogfood_default",
+                            "pre_public_default"
+                          ]
+                        },
+                        "to": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "shadow",
+                            "opt_in",
+                            "dogfood_default",
+                            "pre_public_default"
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "actorId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "createdAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "from",
+                        "to",
+                        "version",
+                        "reason",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "journal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "transition"
+                        },
+                        "idempotencyKey": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "payloadSha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "resultRefId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "createdAt": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "idempotencyKey",
+                        "payloadSha256",
+                        "resultRefId",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "transition",
+                    "journal",
+                    "replayed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Transition conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persisted rollout facts are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.rollout.transition({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/rollout/actions": {
+      "post": {
+        "operationId": "rollout.action",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Append one candidate, local repeat, or rollback fact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "register_candidate"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "candidate": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateSha": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{40}$"
+                          },
+                          "targetRef": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "candidateSha",
+                          "targetRef"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "idempotencyKey",
+                      "candidate"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "record_local_repeat"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "repeat": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "runId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "ordinal": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "const": 1
+                              },
+                              {
+                                "type": "number",
+                                "const": 2
+                              }
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed",
+                              "blocked",
+                              "invalid"
+                            ]
+                          },
+                          "environmentSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "evidenceSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "normalizedResultSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "startedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "finishedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "candidateId",
+                          "runId",
+                          "ordinal",
+                          "outcome",
+                          "environmentSha256",
+                          "evidenceSha256",
+                          "startedAt",
+                          "finishedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "idempotencyKey",
+                      "repeat"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "record_rollback"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 240
+                      },
+                      "rollback": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "target": {
+                            "type": "string",
+                            "enum": [
+                              "kill_switch",
+                              "legacy_fallback"
+                            ]
+                          },
+                          "phaseAtAction": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "shadow",
+                              "opt_in",
+                              "dogfood_default",
+                              "pre_public_default"
+                            ]
+                          },
+                          "executionModeAfter": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "shadow",
+                              "active"
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed",
+                              "blocked",
+                              "invalid"
+                            ]
+                          },
+                          "evidenceSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "observedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "target",
+                          "phaseAtAction",
+                          "executionModeAfter",
+                          "outcome",
+                          "evidenceSha256",
+                          "observedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "idempotencyKey",
+                      "rollback"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted rollout action fact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "register_candidate"
+                        },
+                        "candidate": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "candidateSha": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{40}$"
+                            },
+                            "targetRef": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500
+                            },
+                            "registeredAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "candidateSha",
+                            "targetRef",
+                            "registeredAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "journal": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "action"
+                            },
+                            "actionKind": {
+                              "type": "string",
+                              "const": "register_candidate"
+                            },
+                            "idempotencyKey": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "payloadSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "resultRefId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "createdAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "actionKind",
+                            "idempotencyKey",
+                            "payloadSha256",
+                            "resultRefId",
+                            "createdAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "candidate",
+                        "journal",
+                        "replayed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "record_local_repeat"
+                        },
+                        "repeat": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "candidateId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "runId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "ordinal": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "const": 1
+                                },
+                                {
+                                  "type": "number",
+                                  "const": 2
+                                }
+                              ]
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "completed",
+                                "failed",
+                                "blocked",
+                                "invalid"
+                              ]
+                            },
+                            "environmentSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "evidenceSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "normalizedResultSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "startedAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "finishedAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recordedAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "candidateId",
+                            "runId",
+                            "ordinal",
+                            "outcome",
+                            "environmentSha256",
+                            "evidenceSha256",
+                            "startedAt",
+                            "finishedAt",
+                            "recordedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "journal": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "action"
+                            },
+                            "actionKind": {
+                              "type": "string",
+                              "const": "record_local_repeat"
+                            },
+                            "idempotencyKey": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "payloadSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "resultRefId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "createdAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "actionKind",
+                            "idempotencyKey",
+                            "payloadSha256",
+                            "resultRefId",
+                            "createdAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "repeat",
+                        "journal",
+                        "replayed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "record_rollback"
+                        },
+                        "rollback": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "candidateId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "projectId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "target": {
+                              "type": "string",
+                              "enum": [
+                                "kill_switch",
+                                "legacy_fallback"
+                              ]
+                            },
+                            "phaseAtAction": {
+                              "type": "string",
+                              "enum": [
+                                "off",
+                                "shadow",
+                                "opt_in",
+                                "dogfood_default",
+                                "pre_public_default"
+                              ]
+                            },
+                            "executionModeAfter": {
+                              "type": "string",
+                              "enum": [
+                                "off",
+                                "shadow",
+                                "active"
+                              ]
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "completed",
+                                "failed",
+                                "blocked",
+                                "invalid"
+                              ]
+                            },
+                            "evidenceSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "observedAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recordedAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "target",
+                            "phaseAtAction",
+                            "executionModeAfter",
+                            "outcome",
+                            "evidenceSha256",
+                            "observedAt",
+                            "recordedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "journal": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "action"
+                            },
+                            "actionKind": {
+                              "type": "string",
+                              "const": "record_rollback"
+                            },
+                            "idempotencyKey": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "payloadSha256": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "resultRefId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "createdAt": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "actionKind",
+                            "idempotencyKey",
+                            "payloadSha256",
+                            "resultRefId",
+                            "createdAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "rollback",
+                        "journal",
+                        "replayed"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Action conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persisted rollout facts are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.rollout.action({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/rollout/journal": {
+      "get": {
+        "operationId": "rollout.journal",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 500,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500
+            }
+          }
+        ],
+        "summary": "List append-only rollout journal entries",
+        "responses": {
+          "200": {
+            "description": "Rollout journal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "maxItems": 500,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "kind": {
+                                "type": "string",
+                                "const": "transition"
+                              },
+                              "idempotencyKey": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "payloadSha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "resultRefId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "createdAt": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "idempotencyKey",
+                              "payloadSha256",
+                              "resultRefId",
+                              "createdAt"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "kind": {
+                                "type": "string",
+                                "const": "action"
+                              },
+                              "actionKind": {
+                                "type": "string",
+                                "enum": [
+                                  "register_candidate",
+                                  "record_local_repeat",
+                                  "record_rollback"
+                                ]
+                              },
+                              "idempotencyKey": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "payloadSha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "resultRefId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "createdAt": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "actionKind",
+                              "idempotencyKey",
+                              "payloadSha256",
+                              "resultRefId",
+                              "createdAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persisted rollout facts are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.rollout.journal({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/rollout/evidence": {
+      "get": {
+        "operationId": "rollout.evidence",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 500,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500
+            }
+          }
+        ],
+        "summary": "List candidate, isolated local repeat, and rollback facts",
+        "responses": {
+          "200": {
+            "description": "Rollout evidence facts without a pass decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "candidates": {
+                      "maxItems": 500,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateSha": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{40}$"
+                          },
+                          "targetRef": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "registeredAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "candidateSha",
+                          "targetRef",
+                          "registeredAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "localRepeats": {
+                      "maxItems": 500,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "runId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "ordinal": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "const": 1
+                              },
+                              {
+                                "type": "number",
+                                "const": 2
+                              }
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed",
+                              "blocked",
+                              "invalid"
+                            ]
+                          },
+                          "environmentSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "evidenceSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "normalizedResultSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "startedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "finishedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "recordedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "candidateId",
+                          "runId",
+                          "ordinal",
+                          "outcome",
+                          "environmentSha256",
+                          "evidenceSha256",
+                          "startedAt",
+                          "finishedAt",
+                          "recordedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rollbacks": {
+                      "maxItems": 500,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "candidateId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          },
+                          "target": {
+                            "type": "string",
+                            "enum": [
+                              "kill_switch",
+                              "legacy_fallback"
+                            ]
+                          },
+                          "phaseAtAction": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "shadow",
+                              "opt_in",
+                              "dogfood_default",
+                              "pre_public_default"
+                            ]
+                          },
+                          "executionModeAfter": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "shadow",
+                              "active"
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "completed",
+                              "failed",
+                              "blocked",
+                              "invalid"
+                            ]
+                          },
+                          "evidenceSha256": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "observedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "recordedAt": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "target",
+                          "phaseAtAction",
+                          "executionModeAfter",
+                          "outcome",
+                          "evidenceSha256",
+                          "observedAt",
+                          "recordedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "candidates",
+                    "localRepeats",
+                    "rollbacks"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persisted rollout facts are invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "idempotency_collision",
+                        "invalid_transition",
+                        "running_projects",
+                        "entity_conflict",
+                        "missing_candidate",
+                        "invalid_persisted_fact"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8000
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.rollout.evidence({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/pty": {
       "get": {
         "operationId": "pty.list",

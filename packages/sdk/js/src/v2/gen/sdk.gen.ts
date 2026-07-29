@@ -288,6 +288,16 @@ import type {
   QuestionSetNeverAskErrors,
   QuestionSetNeverAskResponses,
   RepositoryInspectInput,
+  RolloutActionErrors,
+  RolloutActionResponses,
+  RolloutEvidenceErrors,
+  RolloutEvidenceResponses,
+  RolloutGetErrors,
+  RolloutGetResponses,
+  RolloutJournalErrors,
+  RolloutJournalResponses,
+  RolloutTransitionErrors,
+  RolloutTransitionResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionActorsErrors,
@@ -4848,6 +4858,212 @@ export class Org extends HeyApiClient {
   }
 }
 
+export class Rollout extends HeyApiClient {
+  /**
+   * Read persisted rollout phase and low-level execution mode
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RolloutGetResponses, RolloutGetErrors, ThrowOnError>({
+      url: "/rollout",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Advance the rollout phase by exactly one step
+   */
+  public transition<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      idempotencyKey: string
+      to: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+      reason: string
+      actorId?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "idempotencyKey" },
+            { in: "body", key: "to" },
+            { in: "body", key: "reason" },
+            { in: "body", key: "actorId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<RolloutTransitionResponses, RolloutTransitionErrors, ThrowOnError>({
+      url: "/rollout/transitions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Append one candidate, local repeat, or rollback fact
+   */
+  public action<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      body:
+        | {
+            kind: "register_candidate"
+            idempotencyKey: string
+            candidate: {
+              id: string
+              candidateSha: string
+              targetRef: string
+            }
+          }
+        | {
+            kind: "record_local_repeat"
+            idempotencyKey: string
+            repeat: {
+              id: string
+              candidateId: string
+              runId: string
+              ordinal: 1 | 2
+              outcome: "completed" | "failed" | "blocked" | "invalid"
+              environmentSha256: string
+              evidenceSha256: string
+              normalizedResultSha256?: string
+              startedAt: number
+              finishedAt: number
+            }
+          }
+        | {
+            kind: "record_rollback"
+            idempotencyKey: string
+            rollback: {
+              id: string
+              candidateId?: string
+              projectId?: string
+              target: "kill_switch" | "legacy_fallback"
+              phaseAtAction: "off" | "shadow" | "opt_in" | "dogfood_default" | "pre_public_default"
+              executionModeAfter: "off" | "shadow" | "active"
+              outcome: "completed" | "failed" | "blocked" | "invalid"
+              evidenceSha256: string
+              observedAt: number
+            }
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<RolloutActionResponses, RolloutActionErrors, ThrowOnError>({
+      url: "/rollout/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List append-only rollout journal entries
+   */
+  public journal<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RolloutJournalResponses, RolloutJournalErrors, ThrowOnError>({
+      url: "/rollout/journal",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List candidate, isolated local repeat, and rollback facts
+   */
+  public evidence<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RolloutEvidenceResponses, RolloutEvidenceErrors, ThrowOnError>({
+      url: "/rollout/evidence",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Pty extends HeyApiClient {
   /**
    * List PTY sessions
@@ -8281,6 +8497,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _org?: Org
   get org(): Org {
     return (this._org ??= new Org({ client: this.client }))
+  }
+
+  private _rollout?: Rollout
+  get rollout(): Rollout {
+    return (this._rollout ??= new Rollout({ client: this.client }))
   }
 
   private _pty?: Pty
