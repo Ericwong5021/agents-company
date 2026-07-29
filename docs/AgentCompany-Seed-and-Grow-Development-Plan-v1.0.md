@@ -89,15 +89,15 @@ current_ci_mode: local_exact_sha_fallback
 
 ### 实施原则
 
-后端能力可以在 R3 期间通过 Feature Flag 和 Shadow Mode 提前合并，但在 R4 自动发布门禁前不替换默认项目路径。
+后端能力可以通过 Feature Flag 和 Shadow Mode 提前合并，但在最终集成候选通过统一自动发布 Gate 前不替换默认项目路径。
 
 R0–R4 是产品发布阶段，O0–O9 是本计划的工程能力包，两者不得混用：
 
-- 当前执行顺序仍由体验重构计划决定；R0 未完成时，本计划只能做文档、契约和不改变默认路径的 behind-flag 基础工作；
-- O 阶段按第 6.0 节的实际实施波次串行推进，不按能力包编号猜测先后；
-- 每个实施波次由 AI 在精确候选 SHA 上执行自动测试、真实本地部署、E2E、恢复演练和证据校验；只有机器结果为 `pass` 才自动进入下一波次；
+- 本计划获批后可一次性完成 O0–O9；默认路径在最终 Gate 前保持 behind-flag，不因开发完成而提前切换；
+- O 阶段按第 6.0 节的真实依赖实施；无依赖批次可并行，正式集成按 A0–B5 顺序串行；
+- 开发期间只运行局部自动反馈；全部开发集成后，由 AI 在同一个精确候选 SHA 上统一执行全量测试、真实本地部署、E2E、恢复演练和证据校验；
 - 人工研究、主观视觉意见和具名签署可作为建议证据记录，但不进入 Pre-Public O 阶段的阻断集合，也不需要逐阶段生成 waiver；
-- 面向公众的 tag、npm 发布及其他外部副作用不由本计划自动触发，仍遵守产品宪法和正式发布策略。
+- 当前产品未正式上线；最终 Gate 通过后，计划内已定义的 Pre-Public 部署、升级、降级、发布、回滚和上传可由 AI 直接执行，不再增加人工权限申请。
 
 ---
 
@@ -579,32 +579,32 @@ Runtime / Worktree / SQLite
 
 # 6. 分阶段开发计划
 
-## 6.0 实际实施波次与自动 Gate
+## 6.0 实际实施波次与开发依赖
 
-O0–O9 是稳定的能力包编号，不等于实际开发顺序。为消除 R3 能力反向依赖 R4 的问题，按以下波次串行实施：
+O0–O9 是稳定的能力包编号，不等于实际开发顺序。开发阶段不设置阶段测试门禁；按真实代码依赖推进，边界清晰且互不依赖的任务可使用独立 worktree 和 Subagent 并行实施，正式集成仍按下表顺序进行：
 
-| 波次 | 能力包 | 目标 | 进入条件 | 自动退出条件 |
+| 波次 | 能力包 | 目标 | 开发依赖 | 开发完成记录 |
 |---|---|---|---|---|
-| A0 | O0 | 冻结契约并建立自动验收基础设施 | 当前 R0 允许 behind-flag 基础工作 | O0 机器 Gate `pass` |
-| A1 | O1 | 建立 Attempt / Receipt 事实层 | A0 `pass` 且进入 R3 开发窗口 | O1 机器 Gate `pass` |
-| A2 | O4 | 建立 Graph Mutation、revision 与原子 Policy | A1 `pass` | O4 机器 Gate `pass` |
-| A3 | O6 | 建立 ValidationGate、FailureDiagnosis 与 Repair | A2 `pass` | O6 机器 Gate `pass` |
-| A4 | O7-R3 | 完成 Receipt / Mutation / Gate 恢复与对账 | A3 `pass` | O7-R3 机器 Gate `pass` |
-| B0 | O2 | 建立 Project Assignment 与招聘硬约束 | A4 `pass` 且进入 R4 开发窗口 | O2 机器 Gate `pass` |
-| B1 | O3 | 建立 Seed Policy 与两 Agent 启动 | B0 `pass` | O3 机器 Gate `pass` |
-| B2 | O5 | 建立 Graph Supervisor 与 Grow Loop | B1 `pass` 且 O4 `pass` | O5 机器 Gate `pass` |
-| B3 | O7-R4 | 完成 Attention Router 与 R4 恢复链 | B2 `pass` | O7-R4 机器 Gate `pass` |
-| B4 | O8 | 建立 Experience Projection 与 WebUI | B3 `pass` | O8 机器 Gate `pass` |
-| B5 | O9 | Shadow、Dogfood、默认切换与回滚 | B4 `pass` | O9 机器 Gate `pass` |
+| A0 | O0 | 冻结契约并建立自动验收基础设施 | 当前 R0 behind-flag 基础 | 独立提交与局部检查 |
+| A1 | O1 | 建立 Attempt / Receipt 事实层 | A0 契约 | 独立提交与局部检查 |
+| A2 | O4 | 建立 Graph Mutation、revision 与原子 Policy | A1 数据事实 | 独立提交与局部检查 |
+| A3 | O6 | 建立 ValidationGate、FailureDiagnosis 与 Repair | A2 图变更 | 独立提交与局部检查 |
+| A4 | O7-R3 | 完成 Receipt / Mutation / Gate 恢复与对账 | A3 验证链 | 独立提交与局部检查 |
+| B0 | O2 | 建立 Project Assignment 与招聘硬约束 | A1 事实层、A4 恢复契约 | 独立提交与局部检查 |
+| B1 | O3 | 建立 Seed Policy 与两 Agent 启动 | B0 Assignment | 独立提交与局部检查 |
+| B2 | O5 | 建立 Graph Supervisor 与 Grow Loop | B1 Seed、A2 Mutation | 独立提交与局部检查 |
+| B3 | O7-R4 | 完成 Attention Router 与 R4 恢复链 | B2 Supervisor、A3 验证链 | 独立提交与局部检查 |
+| B4 | O8 | 建立 Experience Projection 与 WebUI | B3 行为与恢复契约 | 独立提交与局部检查 |
+| B5 | O9 | Shadow、Dogfood、默认切换与回滚 | B4 完整产品面 | 独立提交与局部检查 |
 
-每个波次遵循同一契约：
+开发与最终验收遵循同一契约：
 
-1. AI 先把本波次实现收敛为一个精确候选提交，记录完整 SHA；
-2. 自动 runner 从该 SHA 创建隔离工作树、临时 Runtime Home、临时数据目录和动态端口，不用开发者当前脏工作区作为通过证据；
-3. 依次执行静态检查、包级测试、迁移、真实本地 Control Plane、Browser/Desktop E2E、重启恢复、候选部署和两轮本地同 SHA 复现；
-4. 确定性 Gate 校验退出码、JUnit/JSON、运行态断言、候选 SHA、文件摘要和证据覆盖；AI 可以执行与修复，但不能用自然语言把失败改成通过；
-5. `pass` 自动进入下一波次；`failed` 或 `blocked` 保留现场并停止，AI 最多进行三轮 Diagnose → Fix → Reverify；
-6. 人工研究、人工截图审批、SUS 与主观设计意见只写入 `advisory`，缺失时不改变 O 阶段结果；
+1. 每个开发批次收敛为独立提交，运行与改动面相称的 typecheck、targeted test、migration 或 build 作为快速反馈；失败必须记录并修复，但不阻塞其他无依赖批次继续开发；
+2. 各分支完成后基于最新 `main`，按 A0–B5 依赖顺序统一集成；冲突解决、SDK 生成物和迁移顺序都以集成后的事实为准；
+3. 全部集成完成后冻结一个精确候选 SHA，runner 从该 SHA 创建隔离工作树、临时 Runtime Home、临时数据目录和动态端口；
+4. 在同一候选上集中执行静态检查、全量包级测试、迁移、真实本地 Control Plane、Browser/Desktop E2E、重启恢复、候选部署、回滚和两轮本地同 SHA 复现；
+5. 确定性 Gate 校验退出码、JUnit/JSON、运行态断言、候选 SHA、文件摘要和证据覆盖；任何失败进入统一 Diagnose → Fix → Reverify，直至全部机器项通过；
+6. 人工研究、人工截图审批、SUS 与主观设计意见只写入 `advisory`，缺失时不阻塞开发、集成或 Pre-Public 自动验收；
 7. 产品运行时 ApprovalGate 的正确阻塞本身可以成为自动验收的 `pass`，无需真人点击批准。
 
 ## O0 — 冻结基线与架构契约
@@ -1094,7 +1094,7 @@ schema migration
 - Legacy delegation hierarchy 继续兼容旧路径，但不进入 seed_and_grow；
 - 无效打断率进入现有 `<20%` 指标。
 - A4 runner 对 Receipt、Mutation、Gate 的每个持久化边界执行 kill/restart；B3 再覆盖 Assignment、Attention 与真实 action handler；
-- 两个子 Gate 分别产出独立判定，O7-R3 通过后可以进入 B0，不等待 O7-R4。
+- 两个子 Gate 在最终候选中分别产出独立判定；开发依赖只要求 O7-R3 代码契约已落地，B0 不等待 O7-R4 完成。
 
 ---
 
@@ -1283,7 +1283,7 @@ GET /experience/work/:projectID/validation
 - 同一候选 SHA 的本地 Gate、临时部署和回滚演练全部终态成功，并由两轮隔离运行证明可复现；
 - 两个连续候选提交各自完成两轮全量 benchmark，结果可复现且指标均达标；
 - Gate 自动产出 `pre_public_default=pass` 后即可切换默认策略，不等待人工截图审批、用户研究或签名；
-- tag、npm publish、公开发布及 legacy destructive retirement 不由该 Gate 自动触发。
+- Gate 只自动触发计划内已定义的 Pre-Public 发布目标；未在仓库声明的 tag/npm 目标和 legacy destructive retirement 不得凭空执行。
 
 ---
 
@@ -1313,13 +1313,13 @@ GET /experience/work/:projectID/validation
 
 ---
 
-# 8. AI 自动化测试、部署与阶段验收
+# 8. AI 自动化测试、部署与最终统一验收
 
 本节参考 `lumi-full-stack-e2e-validation` 的方法，但按 Agent Company 的 local-first 架构实现，不复制设备、OTA、VPS 或小程序专用流程。
 
 ## 8.1 核心契约
 
-- 本地静态检查、单元测试、集成测试、候选构建、本地部署、运行态 E2E、重启恢复、同 SHA 复现和默认切换是独立 Gate；前一个成功不能推断后一个成功；
+- 开发期间的静态检查和 targeted test 是快速反馈，不是阶段准入 Gate；全部代码集成后，单元测试、集成测试、候选构建、本地部署、运行态 E2E、重启恢复、同 SHA 复现和默认切换才构成统一机器 Gate；
 - 每次运行只接受一个精确候选 SHA，所有命令、构建物和运行态结论必须绑定同一 SHA；
 - 最终 Gate 从精确提交创建隔离工作树并使用独立 Runtime Home、SQLite、WebUI data/build/output 目录和动态端口，不读取当前开发工作区的脏状态作为通过证据；
 - Browser E2E 必须连接真实本地 Control Plane；Desktop E2E 使用真实内嵌 Control Plane；不得用 fake-control-plane、生产 Fixture、静态截图或直接改库伪造业务完成；
@@ -1329,19 +1329,19 @@ GET /experience/work/:projectID/validation
 - 共享同一 SQLite、端口、Runtime Home 或可变项目状态的测试不得并行；无共享状态的包级检查可以并行；
 - 日志和证据不得保存 token、cookie、Provider 密钥、用户真实内容、完整环境变量、个人路径外的敏感信息或未脱敏 transcript；
 - Pre-Public 阶段没有人工阻断项。人工研究和主观意见只能追加为 advisory，不能伪造成机器证据；
-- public tag、npm publish、外部部署、删除和其他不可逆动作不属于阶段自动部署，需按当时授权策略单独执行。
+- 当前执行已授权计划内 Pre-Public 部署、升级、降级、发布、回滚和上传；runner 只能作用于精确解析出的目标，未定义目标和 destructive legacy retirement 不在授权范围内。
 
 ## 8.2 AI 执行者与确定性裁决者
 
 | 角色 | 职责 | 不得做 |
 |---|---|---|
-| Implementer AI | 实现本波次、运行快速检查、修复失败 | 修改验收标准掩盖失败、直接写 `pass` |
-| Validation AI | 启动精确 SHA runner、分析证据、定位最小失败面 | 用主观判断替代退出码、数据库断言或 E2E |
+| Implementer AI | 实现开发批次、运行快速检查、修复失败 | 修改验收标准掩盖失败、直接写 `pass` |
+| Validation AI | 全部集成后启动精确 SHA runner、分析证据、定位最小失败面 | 用主观判断替代退出码、数据库断言或 E2E |
 | Deterministic Gate | 校验合同、命令、报告、摘要、SHA、覆盖率与最终状态 | 调用模型自行解释失败 |
 | Local Reproducer | 从同一提交创建第二个隔离环境并复现全部 Gate | 复用第一次运行目录或历史成功记录 |
 | CI Adapter | GitHub Actions 恢复后复用同一判定模块 | 在当前不可用状态下阻塞阶段 |
 
-Implementer AI 与 Validation AI 可以由同一自动化会话串行承担，但最终 `pass` 只能由确定性 Gate 生成。需要独立 Reviewer 的产品场景，必须使用不同 Agent/Run；阶段验收本身不要求真人 Reviewer。
+Implementer AI 可在独立 worktree 并行工作；Validation AI 必须在所有分支按依赖集成后串行运行。最终 `pass` 只能由确定性 Gate 生成。需要独立 Reviewer 的产品场景，必须使用不同 Agent/Run；最终验收本身不要求真人 Reviewer。
 
 ## 8.3 单次运行证据包
 
@@ -1384,12 +1384,12 @@ Implementer AI 与 Validation AI 可以由同一自动化会话串行承担，�
 - 每条 command 记录稳定 step ID、cwd、argv、allowlist 环境键、超时、退出码、标准输出/错误摘要和日志 SHA-256；
 - JUnit、JSON assertion、截图、视频和数据库报告逐文件记录 SHA-256；
 - `stage-decision.json` 只允许 `pass | failed | blocked | invalid`，同时列出 required、passed、failed、missing 和 advisory；
-- 只有全部 required step `pass`、没有 missing/failed、证据包可重算且两轮同 SHA 归一化结果一致时，阶段才是 `pass`；
+- 只有全部 required step `pass`、没有 missing/failed、证据包可重算且两轮同 SHA 归一化结果一致时，最终候选才是 `pass`；
 - 失败证据与成功证据使用相同保留规则，不覆盖上一次 run。
 
 ## 8.4 目标自动化接口
 
-O0 在现有 `experience-automatic-evidence.ts` 的精确提交、隔离目录、命令记录、摘要校验和防篡改能力上抽取可复用基础，不复制一套互不兼容的 runner。现有 `experience-gate.ts` 只实现 R0，不能假装支持本计划；O0 必须实现以下新接口后才能进入 A1：
+O0 在现有 `experience-automatic-evidence.ts` 的精确提交、隔离目录、命令记录、摘要校验和防篡改能力上抽取可复用基础，不复制一套互不兼容的 runner。现有 `experience-gate.ts` 只实现 R0，不能假装支持本计划；以下接口在开发阶段可按需运行局部场景，最终必须在同一集成候选 SHA 上依次运行 A0–B5：
 
 ```bash
 bun script/seed-grow-stage-evidence.ts \
@@ -1407,9 +1407,9 @@ bun script/seed-grow-stage-gate.ts \
 
 stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false` 和 `replacement=two_local_exact_sha_runs`。GitHub Actions 恢复后 CI 复用相同 evidence 与 gate 模块，不维护另一套判定逻辑。`--require-pass` 不接受 human evidence 或 stage waiver；缺失人工 advisory 不影响结果，缺失机器证据必须失败或 blocked。
 
-## 8.5 自动测试与本地部署流水线
+## 8.5 最终自动测试与本地部署流水线
 
-每个波次按以下顺序执行：
+全部开发与依赖集成完成后，按以下顺序执行：
 
 1. `source.candidate`
    - 候选是完整 40 位提交 SHA；
@@ -1443,7 +1443,7 @@ stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false
 6. `e2e.real-surfaces`
    - Browser 走真实本地 Control Plane；
    - Desktop 走真实内嵌 Control Plane；
-   - 运行本阶段 benchmark、异常路径、权限路径和恢复路径；
+   - 运行 A0–B5 全部 benchmark、异常路径、权限路径和恢复路径；
    - 核心场景至少重复两轮并比较归一化结果。
 
 7. `recovery.reconcile`
@@ -1453,19 +1453,19 @@ stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false
 
 8. `local.exact-sha-repeat`
    - 从同一候选 SHA 创建第二个全新隔离工作树、依赖环境、Runtime Home 和数据目录；
-   - 重新执行本阶段全部 required Gate，不复用第一次运行的日志、报告、数据库或浏览器状态；
+   - 重新执行最终候选全部 required Gate，不复用第一次运行的日志、报告、数据库或浏览器状态；
    - 比较两轮 command status、报告摘要、覆盖矩阵与最终判定的归一化 digest；
    - GitHub Actions 当前记录为 `unavailable/non_blocking`；恢复后再增加同 SHA 远端复现，不改变本地 Gate 语义。
 
-9. `stage.finalize`
+9. `candidate.finalize`
    - 校验全部文件摘要与覆盖矩阵；
-   - 生成 `stage-decision.json`；
-   - `pass` 后 AI 自动开始下一波次；
-   - `failed | blocked | invalid` 时停止推进。
+   - 为同一候选生成 A0–B5 `stage-decision.json` 和汇总 `final-decision.json`；
+   - `pass` 后进入部署、上传与最终状态核验；
+   - `failed | blocked | invalid` 时保留证据，统一修复后重新执行受影响项和最终全集。
 
 ## 8.6 分阶段自动验收矩阵
 
-所有波次都执行 8.5 的通用流水线，并增加以下必选断言：
+开发期间不要求逐波次执行 8.5。最终候选统一执行通用流水线，并按能力包增加以下必选断言：
 
 | 波次 | 能力包 | 必选自动场景 | 核心证据 |
 |---|---|---|---|
@@ -1525,7 +1525,7 @@ AgentRun terminal
 
 ## 8.8 包级验证命令
 
-以下是通用全集；stage contract 根据受影响面选择子集，但 A0、B4、B5 必须执行全集。最终阶段 Gate 仍会补跑所有受影响路径，不能只依赖开发期间的 targeted test。
+以下是最终通用全集；开发期间按受影响面选择子集，最终候选必须补跑所有路径，不能只依赖开发期间的 targeted test。
 
 ```bash
 bun run lint
@@ -1568,21 +1568,22 @@ runner 为 Playwright、production preview 和 `qa:visual` 注入本次动态 UR
 AI 自动修复循环：
 
 ```text
-failed
+final candidate failed
 → 定位最小失败 Gate
 → 保存原证据
 → Diagnose
 → 最小修复
 → targeted reverify
-→ 全阶段 reverify
+→ 受影响链 reverify
+→ 最终全集 reverify
 ```
 
-- 最多三轮；每轮生成新的 run ID，不覆盖旧证据；
+- 持续修复并复验，直至全部 required Gate 通过；每轮生成新的 run ID，不覆盖旧证据；
 - `failed` 表示已执行且不变量失败；
 - `blocked` 只表示 required 环境、权限或外部依赖当前不可用，不等于通过；已在合同中声明为 non-blocking 的 GitHub Actions 不生成 `blocked`；
 - 人工 advisory 缺失不得生成 `blocked`；
 - `invalid` 表示参数、路径、SHA、Schema 或证据包不可信；
-- 三轮后仍未通过，AI 生成一条高信号 Attention，包含影响范围、失败 Gate、已尝试修复和恢复入口，不启动下一波次。
+- 只有外部依赖、缺失输入或无法在当前授权边界内解决的问题才可标记 `blocked`；不得因开发轮次、耗时或阶段失败而停止后续无依赖开发。
 
 退出码：
 
@@ -1692,7 +1693,7 @@ Feature Flag 切回 `off`：
 | 模型自己判断自己通过 | Gate 放行权与 Worker 分离，现实 Anchor |
 | 自动 Gate 复用过期或伪造证据 | 精确 SHA、当前进程执行、文件摘要、覆盖矩阵、防篡改自检 |
 | AI 冒充人工研究 | 人工项只允许 advisory，禁止由模型生成参与者或签署事实 |
-| 本地 preview 被误报为公开发布 | deployment step 明确标记 `local-preview`，tag/npm publish 独立授权 |
+| 本地 preview 被误报为发布完成 | deployment step 分别记录 `local-preview`、实际 Pre-Public 目标、远端状态与回查结果 |
 | Receipt 变成大段自述 | 严格 Schema、证据引用、字段预算 |
 | 多 Receipt 并发覆盖 | project revision + immediate transaction + re-decision |
 | 重启重复副作用 | Receipt/Mutation idempotency、恢复对账 |
@@ -1705,13 +1706,14 @@ Feature Flag 切回 `off`：
 
 # 12. 开发与提交批次
 
-默认在 `main` 分支开发，不强制创建 PR，也不以人工 Review 或合并批准作为波次 Gate。每个批次仍必须独立可提交、可回滚、可测试：
+默认在 `main` 分支开发；边界清晰的并行任务可使用独立 worktree 和分支，不强制创建 PR，也不以人工 Review 或合并批准作为开发 Gate。每个批次仍必须独立可提交、可回滚、可测试：
 
 - 只暂存本批次明确路径，保留无关改动；
 - 提交前运行 targeted checks 与 `git diff --check`；
-- 一个波次的全部批次完成后冻结精确候选 SHA，执行第 8 节全量自动 Gate；
-- 本地 Gate 通过后完成本阶段独立提交；GitHub Actions 当前不可用，不等待远端 CI；
-- 自动 Gate `pass` 后开始下一波次；不需要人工签字、截图审批或 stage waiver；
+- 每个批次提交前只运行与改动面相称的快速检查，不在开发阶段冻结阶段候选或执行全量 Gate；
+- 所有分支完成后基于最新 `main`，按依赖顺序集成并解决迁移、生成物和共享契约冲突；
+- 集成完成后冻结一个最终候选 SHA，执行第 8 节全量自动 Gate；GitHub Actions 当前不可用，不等待远端 CI；
+- 最终 Gate 不需要人工签字、截图审批或 stage waiver；
 - PR 可用于外部协作，但不是本计划的阶段前提。
 
 | 批次 | 波次 | 内容 |
@@ -1743,8 +1745,8 @@ Feature Flag 切回 `off`：
 
 本计划完成必须同时满足：
 
-- A0–B5 每个波次都有绑定精确候选 SHA 的 `stage-decision.json`，状态为 `pass`；
-- 每个波次的本地测试、真实本地部署、E2E、恢复演练与两轮同 SHA 复现独立通过；
+- A0–B5 的 `stage-decision.json` 全部绑定同一个最终集成候选 SHA，状态为 `pass`，且汇总 `final-decision.json` 为 `pass`；
+- 最终候选的本地全量测试、真实本地部署、E2E、恢复演练与两轮同 SHA 复现独立通过；
 - 阶段证据包可重算、摘要匹配、无 missing/failed，且没有用历史 run、Fixture 或 AI 自述代替现实证据；
 - 人工研究、人工截图审批、SUS 与具名签名没有被伪造为完成，也不阻断 Pre-Public 本计划；
 - 新复杂项目默认从 Wayfinder + First-slice Builder 启动；
@@ -1765,7 +1767,7 @@ Feature Flag 切回 `off`：
 - false completion 为 0；
 - legacy 路径在默认切换前始终可回滚；
 - 所有实现状态文档只陈述已通过验收的能力；
-- public tag、npm publish 和其他外部副作用未被阶段 runner 自动触发。
+- 计划内 Pre-Public 部署、发布、回滚和上传均有平台返回状态与可回查记录；未定义目标和 legacy destructive retirement 未被执行。
 
 ---
 
