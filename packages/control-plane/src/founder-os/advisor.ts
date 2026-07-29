@@ -288,7 +288,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
     if (existing) {
       if (existing.input_sha256 !== inputSha256)
         throw new Error("Advisor convergence idempotency key has different facts")
-      return convergenceFromRow(db, existing)
+      if (existing.status !== "blocked") return convergenceFromRow(db, existing)
     }
     const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, input.companyId)).get()
     if (!company) throw new Error("Company was not found")
@@ -370,10 +370,13 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         eq(FounderAdvisorConvergenceTable.current_request_key, currentRequestKey),
       ))
       .get()
-    if (current) return convergenceFromRow(db, current)
+    if (current && current.status !== "blocked") return convergenceFromRow(db, current)
     if (sourceReason) throw new Error(sourceReason)
+    const block = (authority: FounderAdvisorAuthorityResult) => current
+      ? convergenceFromRow(db, current)
+      : saveBlocked(db, input, inputSha256, currentRequestKey, authority)
     if (input.timeoutAt <= Date.now())
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+      return block({
         status: "blocked",
         reason: "Advisor convergence timeoutAt must be in the future.",
       })
@@ -385,7 +388,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         eq(FounderInterventionFenceTable.board_thread_id, input.source.boardThreadId),
       ))
       .get())
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+      return block({
         status: "blocked",
         reason: "Human intervention fence is active; the Founder proxy cannot speak.",
       })
@@ -394,7 +397,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       companyCommonsMode: company.company_commons_mode,
     })
     if (!["advisor", "green-delegated", "yellow-delegated"].includes(currentMode.effective.founderTwinMode))
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+      return block({
         status: "blocked",
         reason: "Effective Founder Twin mode cannot produce Advisor intents.",
       })
@@ -404,7 +407,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       .where(eq(FounderAdvisorReadinessTable.company_id, input.companyId))
       .orderBy(desc(FounderAdvisorReadinessTable.created_at), desc(FounderAdvisorReadinessTable.id))
       .get())
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+      return block({
         status: "blocked",
         reason: "Advisor readiness is not confirmed.",
       })
@@ -418,7 +421,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       ))
       .get()
     if (!snapshot)
-      return saveBlocked(db, input, inputSha256, currentRequestKey, {
+      return block({
         status: "blocked",
         reason: "Founder Twin Snapshot reference is unavailable.",
       })
@@ -518,8 +521,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       externalImpact: policyFacts.externalImpact,
       riskLevel,
     })
-    db.insert(FounderAdvisorConvergenceTable)
-      .values({
+    const row = {
         id,
         company_id: input.companyId,
         idempotency_key: input.idempotencyKey,
@@ -542,11 +544,37 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
         timeout_at: input.timeoutAt,
         dissent_json: JSON.stringify(input.dissent),
         created_at: createdAt,
-      })
-      .run()
+      }
+    if (current)
+      db.update(FounderAdvisorConvergenceTable).set({
+        idempotency_key: row.idempotency_key,
+        input_sha256: row.input_sha256,
+        board_run_id: row.board_run_id,
+        channel_message_id: row.channel_message_id,
+        shadow_decision_id: row.shadow_decision_id,
+        status: row.status,
+        decision_intent_json: row.decision_intent_json,
+        ledger_decision_id: row.ledger_decision_id,
+        authority_status: row.authority_status,
+        authority_reason: row.authority_reason,
+        governance_ref: row.governance_ref,
+        reversible: row.reversible,
+        external_impact: row.external_impact,
+        risk_level: row.risk_level,
+        dri_agent_id: row.dri_agent_id,
+        timeout_at: row.timeout_at,
+        dissent_json: row.dissent_json,
+      }).where(eq(FounderAdvisorConvergenceTable.id, current.id)).run()
+    if (!current) db.insert(FounderAdvisorConvergenceTable).values(row).run()
+    const convergenceId = current?.id ?? id
+    const sequence = (db.select({ sequence: FounderAdvisorConvergenceEventTable.sequence })
+      .from(FounderAdvisorConvergenceEventTable)
+      .where(eq(FounderAdvisorConvergenceEventTable.convergence_id, convergenceId))
+      .orderBy(desc(FounderAdvisorConvergenceEventTable.sequence))
+      .get()?.sequence ?? 0) + 1
     appendConvergenceEvent(db, {
-      convergenceId: id,
-      sequence: 1,
+      convergenceId,
+      sequence,
       idempotencyKey: "intent-recorded",
       status: "intent_recorded",
       reason: "Advisor DecisionIntent recorded without execution.",
@@ -554,7 +582,7 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
     })
     return convergenceFromRow(
       db,
-      db.select().from(FounderAdvisorConvergenceTable).where(eq(FounderAdvisorConvergenceTable.id, id)).get()!,
+      db.select().from(FounderAdvisorConvergenceTable).where(eq(FounderAdvisorConvergenceTable.id, convergenceId)).get()!,
     )
   }, { behavior: "immediate" })
 }
