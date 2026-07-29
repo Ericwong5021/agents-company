@@ -1,10 +1,13 @@
 import { lookup } from "node:dns/promises"
 import { existsSync } from "node:fs"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { isIP } from "node:net"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import type { Readable } from "node:stream"
 import TurndownService from "turndown"
+import { spawn as spawnProcess } from "../util/process"
+import { which } from "../util/which"
 import {
   BlockedSourceError,
   type AdapterOutput,
@@ -65,20 +68,18 @@ FileHandle.standardOutput.write(data)
 `
 
 const limitedOutput = async (
-  stream: ReadableStream<Uint8Array>,
+  stream: Readable,
   max_bytes: number,
   label: string,
 ) => {
-  const reader = stream.getReader()
   const chunks: Uint8Array[] = []
   let byte_length = 0
-  while (true) {
-    const item = await reader.read()
-    if (item.done) break
-    byte_length += item.value.byteLength
+  for await (const item of stream) {
+    const chunk = typeof item === "string" ? Buffer.from(item) : new Uint8Array(item)
+    byte_length += chunk.byteLength
     if (byte_length > max_bytes)
       throw new BlockedSourceError(`${label} exceeds the local output limit`)
-    chunks.push(item.value)
+    chunks.push(chunk)
   }
   const output = new Uint8Array(byte_length)
   let offset = 0
@@ -94,7 +95,8 @@ const command = async (
   timeout_ms: number,
   max_stdout_bytes = MAX_PROCESS_STDOUT_BYTES,
 ) => {
-  const child = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" })
+  const child = spawnProcess(args, { stdout: "pipe", stderr: "pipe" })
+  if (!child.stdout || !child.stderr) throw new Error("Adapter process output is unavailable")
   const timeout = setTimeout(() => child.kill(), timeout_ms)
   const result = await Promise.all([
     child.exited,
@@ -122,7 +124,7 @@ const withMediaFile = async <T>(
 ) => {
   const directory = await mkdtemp(path.join(tmpdir(), "agent-company-commons-"))
   const input = path.join(directory, `source.${extension}`)
-  await Bun.write(input, bytes)
+  await writeFile(input, bytes)
   return use(input, directory).finally(() => rm(directory, { recursive: true, force: true }))
 }
 
@@ -168,13 +170,14 @@ const extracted = (
 }
 
 const pdfText = async (bytes: Uint8Array) => {
-  if (process.platform !== "darwin" || !Bun.which("swift"))
+  const swift = which("swift")
+  if (process.platform !== "darwin" || !swift)
     throw new BlockedSourceError("The local PDFKit adapter is unavailable")
   assertPDF(bytes)
   return withMediaFile(bytes, "pdf", async (input, directory) => {
     const script = path.join(directory, "extract.swift")
-    await Bun.write(script, PDF_SWIFT)
-    const result = await command([Bun.which("swift")!, script, input], 30_000)
+    await writeFile(script, PDF_SWIFT)
+    const result = await command([swift, script, input], 30_000)
     if (result.exit_code !== 0)
       throw new Error(result.stderr || `PDFKit exited with ${result.exit_code}`)
     const pages = JSON.parse(new TextDecoder().decode(result.stdout)) as Array<{
@@ -194,11 +197,12 @@ const pdfText = async (bytes: Uint8Array) => {
 
 const imageText = async (bytes: Uint8Array) =>
   withMediaFile(bytes, imageExtension(bytes), async (input, directory) => {
-    if (process.platform !== "darwin" || !Bun.which("swift"))
+    const swift = which("swift")
+    if (process.platform !== "darwin" || !swift)
       throw new BlockedSourceError("The local Vision OCR adapter is unavailable")
     const script = path.join(directory, "ocr.swift")
-    await Bun.write(script, OCR_SWIFT)
-    const result = await command([Bun.which("swift")!, script, input], 45_000)
+    await writeFile(script, OCR_SWIFT)
+    const result = await command([swift, script, input], 45_000)
     if (result.exit_code !== 0)
       throw new Error(result.stderr || `Vision OCR exited with ${result.exit_code}`)
     const lines = JSON.parse(new TextDecoder().decode(result.stdout)) as Array<{
@@ -401,7 +405,7 @@ const fetchURL = async (
       const remaining = policy.timeout_ms - (performance.now() - started)
       if (remaining <= 0) throw new BlockedSourceError("Commons URL exceeded the timeout limit")
       const result = await command([
-        Bun.which("curl")!,
+        which("curl")!,
         "--silent",
         "--show-error",
         "--noproxy",
@@ -434,7 +438,7 @@ const fetchURL = async (
         throw new BlockedSourceError("Commons URL response exceeds the size limit")
       if (result.exit_code !== 0)
         throw new Error(result.stderr || `curl exited with ${result.exit_code}`)
-      const blocks = (await Bun.file(headers).text()).trim().split(/\r?\n\r?\n/).filter(Boolean)
+      const blocks = (await readFile(headers, "utf8")).trim().split(/\r?\n\r?\n/).filter(Boolean)
       const lines = blocks.at(-1)!.split(/\r?\n/)
       const status = Number(lines[0]!.split(/\s+/)[1])
       const responseHeaders = new Map(
@@ -458,7 +462,7 @@ const fetchURL = async (
       const contentEncoding = responseHeaders.get("content-encoding")?.toLowerCase()
       if (contentEncoding && contentEncoding !== "identity")
         throw new BlockedSourceError(`Commons URL returned blocked content encoding ${contentEncoding}`)
-      const bytes = new Uint8Array(await Bun.file(body).arrayBuffer())
+      const bytes = new Uint8Array(await readFile(body))
       if (bytes.byteLength > policy.max_bytes)
         throw new BlockedSourceError("Commons URL response exceeds the size limit")
       const mime_type = (responseHeaders.get("content-type") ?? "")
@@ -541,7 +545,7 @@ const imageAdapter: CommonsAdapter = {
 const transcriber = () => {
   const configured = process.env.AGENTCOMPANY_LOCAL_TRANSCRIBER?.trim()
   if (!configured) return
-  const executable = Bun.which(configured) ??
+  const executable = which(configured) ??
     (path.isAbsolute(configured) && existsSync(configured) ? configured : undefined)
   if (!executable) return
   const rawArgs = process.env.AGENTCOMPANY_LOCAL_TRANSCRIBER_ARGS_JSON
@@ -558,7 +562,7 @@ const transcriber = () => {
 }
 
 const probeMedia = async (input: string, expected: "audio" | "video") => {
-  const ffprobe = Bun.which("ffprobe")
+  const ffprobe = which("ffprobe")
   if (!ffprobe) throw new BlockedSourceError("ffprobe is required to validate local media")
   const result = await command([
     ffprobe,
@@ -649,7 +653,7 @@ const videoAdapter: CommonsAdapter = {
   process: async (input) =>
     withMediaFile(mediaBytes(input.artifact_content), "video", async (file, directory) => {
       await probeMedia(file, "video")
-      const ffmpeg = Bun.which("ffmpeg")
+      const ffmpeg = which("ffmpeg")
       if (!ffmpeg) throw new BlockedSourceError("ffmpeg is required to extract a video audio track")
       const audio = path.join(directory, "audio.wav")
       const result = await command([
@@ -683,11 +687,11 @@ const blocked = (
 export const defaultAdapterRegistry = () => {
   const adapters = [conversationAdapter]
   const unavailable: Partial<Record<CommonsSourceType, UnavailableCapability>> = {}
-  if (Bun.which("curl")) adapters.push(urlAdapter)
+  if (which("curl")) adapters.push(urlAdapter)
   else unavailable.url = blocked("curl_unavailable", "A local curl executable is required", ["curl"])
   if (
     process.platform === "darwin" &&
-    Bun.which("swift") &&
+    which("swift") &&
     existsSync("/System/Library/Frameworks/PDFKit.framework")
   )
     adapters.push(pdfAdapter)
@@ -700,7 +704,7 @@ export const defaultAdapterRegistry = () => {
     }
   if (
     process.platform === "darwin" &&
-    Bun.which("swift") &&
+    which("swift") &&
     existsSync("/System/Library/Frameworks/Vision.framework") &&
     existsSync("/System/Library/Frameworks/AppKit.framework")
   )
@@ -713,14 +717,14 @@ export const defaultAdapterRegistry = () => {
       requirements: ["macOS", "Vision"],
     }
   const localTranscriber = transcriber()
-  if (localTranscriber && Bun.which("ffprobe")) adapters.push(podcastAdapter)
+  if (localTranscriber && which("ffprobe")) adapters.push(podcastAdapter)
   else
     unavailable.podcast = blocked(
       "local_transcriber_unavailable",
       "Podcast import requires an explicitly configured local transcriber and ffprobe",
       ["AGENTCOMPANY_LOCAL_TRANSCRIBER", "ffprobe"],
     )
-  if (localTranscriber && Bun.which("ffprobe") && Bun.which("ffmpeg")) adapters.push(videoAdapter)
+  if (localTranscriber && which("ffprobe") && which("ffmpeg")) adapters.push(videoAdapter)
   else
     unavailable.video = blocked(
       "video_transcriber_unavailable",
