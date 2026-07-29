@@ -6,6 +6,8 @@ import {
   ExperienceApiError,
   ExperienceArtifactUnavailable,
   ExperienceArtifactView,
+  DiscoverySummary,
+  GraphChangeSummary,
   GoalBrief,
   GoalBriefAppendRequest,
   GoalBriefCreateRequest,
@@ -13,10 +15,13 @@ import {
   GoalBriefHistory,
   GoalBriefProjectView,
   GoalBriefStructuredFailure,
+  OrganizationProjection,
+  ValidationSummary,
   WorkProjection,
   WorkProjectionList,
 } from "@agents-company/shared/experience"
 import { GoalBriefModelAdapter, GoalBriefStore } from "@/goal-brief"
+import * as ExperienceProjectionService from "@/company-project/experience-projection"
 import * as WorkProjectionService from "@/company-project/work-projection"
 import * as ExperienceArtifactService from "@/company-project/experience-artifact"
 import { lazy } from "@/util/lazy"
@@ -24,6 +29,12 @@ import { runRequest } from "./trace"
 
 const ID = z.object({ briefID: z.string().trim().min(1) }).strict()
 const ProjectID = z.object({ projectID: z.string().trim().min(1) }).strict()
+const ReceiptID = z
+  .object({
+    projectID: z.string().trim().min(1),
+    receiptID: z.string().trim().min(1),
+  })
+  .strict()
 const ArtifactID = z
   .object({
     projectID: z.string().trim().min(1),
@@ -308,6 +319,115 @@ export function createExperienceRoutes(
             Effect.sync(() => WorkProjectionList.parse(WorkProjectionService.list())),
           ),
         ),
+    )
+    .get(
+      "/work/:projectID/organization",
+      describeRoute({
+        summary: "Read the source-traceable project organization projection",
+        operationId: "experience.work.organization",
+        responses: {
+          200: {
+            description: "Project organization projection",
+            content: { "application/json": { schema: resolver(OrganizationProjection) } },
+          },
+          404: {
+            description: "Project not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ProjectID),
+      async (c) => {
+        const result = await runRequest(
+          "ExperienceRoutes.work.organization",
+          c,
+          Effect.sync(() => ExperienceProjectionService.organization(c.req.valid("param").projectID)),
+        )
+        if (!result) return c.json(missing("Work organization projection not found"), 404)
+        return c.json(OrganizationProjection.parse(result))
+      },
+    )
+    .get(
+      "/work/:projectID/graph",
+      describeRoute({
+        summary: "Read source-traceable graph change diagnostics without raw mutation operations",
+        operationId: "experience.work.graph",
+        responses: {
+          200: {
+            description: "Project graph change summary",
+            content: { "application/json": { schema: resolver(GraphChangeSummary) } },
+          },
+          404: {
+            description: "Project not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ProjectID),
+      async (c) => {
+        const result = await runRequest(
+          "ExperienceRoutes.work.graph",
+          c,
+          Effect.sync(() => ExperienceProjectionService.graph(c.req.valid("param").projectID)),
+        )
+        if (!result) return c.json(missing("Work graph projection not found"), 404)
+        return c.json(GraphChangeSummary.parse(result))
+      },
+    )
+    .get(
+      "/work/:projectID/receipts/:receiptID",
+      describeRoute({
+        summary: "Read a source-traceable discovery summary for one persisted Work Receipt",
+        operationId: "experience.work.receipt",
+        responses: {
+          200: {
+            description: "Receipt discovery summary",
+            content: { "application/json": { schema: resolver(DiscoverySummary) } },
+          },
+          404: {
+            description: "Project or Work Receipt not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ReceiptID),
+      async (c) => {
+        const input = c.req.valid("param")
+        const result = await runRequest(
+          "ExperienceRoutes.work.receipt",
+          c,
+          Effect.sync(() => ExperienceProjectionService.discovery(input.projectID, input.receiptID)),
+        )
+        if (!result) return c.json(missing("Work Receipt discovery projection not found"), 404)
+        return c.json(DiscoverySummary.parse(result))
+      },
+    )
+    .get(
+      "/work/:projectID/validation",
+      describeRoute({
+        summary: "Read source-traceable validation criteria and evidence summaries",
+        operationId: "experience.work.validation",
+        responses: {
+          200: {
+            description: "Project validation summary",
+            content: { "application/json": { schema: resolver(ValidationSummary) } },
+          },
+          404: {
+            description: "Project not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ProjectID),
+      async (c) => {
+        const result = await runRequest(
+          "ExperienceRoutes.work.validation",
+          c,
+          Effect.sync(() => ExperienceProjectionService.validation(c.req.valid("param").projectID)),
+        )
+        if (!result) return c.json(missing("Work validation projection not found"), 404)
+        return c.json(ValidationSummary.parse(result))
+      },
     )
     .get(
       "/work/:projectID",

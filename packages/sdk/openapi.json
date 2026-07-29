@@ -4268,7 +4268,12 @@
                                 "delivery",
                                 "conversation",
                                 "goal_request",
-                                "user"
+                                "user",
+                                "work_attempt",
+                                "work_receipt",
+                                "graph_mutation",
+                                "project_assignment",
+                                "validation_gate"
                               ]
                             },
                             "id": {
@@ -4565,7 +4570,12 @@
                               "delivery",
                               "conversation",
                               "goal_request",
-                              "user"
+                              "user",
+                              "work_attempt",
+                              "work_receipt",
+                              "graph_mutation",
+                              "project_assignment",
+                              "validation_gate"
                             ]
                           },
                           "id": {
@@ -4947,7 +4957,12 @@
                               "delivery",
                               "conversation",
                               "goal_request",
-                              "user"
+                              "user",
+                              "work_attempt",
+                              "work_receipt",
+                              "graph_mutation",
+                              "project_assignment",
+                              "validation_gate"
                             ]
                           },
                           "id": {
@@ -5493,7 +5508,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -5689,7 +5709,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -6199,7 +6224,12 @@
                                     "delivery",
                                     "conversation",
                                     "goal_request",
-                                    "user"
+                                    "user",
+                                    "work_attempt",
+                                    "work_receipt",
+                                    "graph_mutation",
+                                    "project_assignment",
+                                    "validation_gate"
                                   ]
                                 },
                                 "id": {
@@ -6722,7 +6752,12 @@
                                 "delivery",
                                 "conversation",
                                 "goal_request",
-                                "user"
+                                "user",
+                                "work_attempt",
+                                "work_receipt",
+                                "graph_mutation",
+                                "project_assignment",
+                                "validation_gate"
                               ]
                             },
                             "id": {
@@ -7020,7 +7055,12 @@
                               "delivery",
                               "conversation",
                               "goal_request",
-                              "user"
+                              "user",
+                              "work_attempt",
+                              "work_receipt",
+                              "graph_mutation",
+                              "project_assignment",
+                              "validation_gate"
                             ]
                           },
                           "id": {
@@ -7673,7 +7713,12 @@
                               "delivery",
                               "conversation",
                               "goal_request",
-                              "user"
+                              "user",
+                              "work_attempt",
+                              "work_receipt",
+                              "graph_mutation",
+                              "project_assignment",
+                              "validation_gate"
                             ]
                           },
                           "id": {
@@ -8379,7 +8424,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -8492,7 +8542,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -8572,7 +8627,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -8646,7 +8706,12 @@
                                             "delivery",
                                             "conversation",
                                             "goal_request",
-                                            "user"
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
                                           ]
                                         },
                                         "id": {
@@ -8721,7 +8786,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -8801,7 +8871,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -8941,7 +9016,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -9054,7 +9134,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -9134,7 +9219,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -9208,7 +9298,12 @@
                                             "delivery",
                                             "conversation",
                                             "goal_request",
-                                            "user"
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
                                           ]
                                         },
                                         "id": {
@@ -9283,7 +9378,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -9363,7 +9463,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -9488,7 +9593,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -9606,7 +9716,12 @@
                                                         "delivery",
                                                         "conversation",
                                                         "goal_request",
-                                                        "user"
+                                                        "user",
+                                                        "work_attempt",
+                                                        "work_receipt",
+                                                        "graph_mutation",
+                                                        "project_assignment",
+                                                        "validation_gate"
                                                       ]
                                                     },
                                                     "id": {
@@ -9686,7 +9801,12 @@
                                                         "delivery",
                                                         "conversation",
                                                         "goal_request",
-                                                        "user"
+                                                        "user",
+                                                        "work_attempt",
+                                                        "work_receipt",
+                                                        "graph_mutation",
+                                                        "project_assignment",
+                                                        "validation_gate"
                                                       ]
                                                     },
                                                     "id": {
@@ -9768,7 +9888,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -9843,7 +9968,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -9923,7 +10053,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -10085,7 +10220,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -10167,7 +10307,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -10247,7 +10392,12 @@
                                                       "delivery",
                                                       "conversation",
                                                       "goal_request",
-                                                      "user"
+                                                      "user",
+                                                      "work_attempt",
+                                                      "work_receipt",
+                                                      "graph_mutation",
+                                                      "project_assignment",
+                                                      "validation_gate"
                                                     ]
                                                   },
                                                   "id": {
@@ -10321,7 +10471,12 @@
                                             "delivery",
                                             "conversation",
                                             "goal_request",
-                                            "user"
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
                                           ]
                                         },
                                         "id": {
@@ -10396,7 +10551,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -10476,7 +10636,12 @@
                                                     "delivery",
                                                     "conversation",
                                                     "goal_request",
-                                                    "user"
+                                                    "user",
+                                                    "work_attempt",
+                                                    "work_receipt",
+                                                    "graph_mutation",
+                                                    "project_assignment",
+                                                    "validation_gate"
                                                   ]
                                                 },
                                                 "id": {
@@ -10583,7 +10748,12 @@
                                             "delivery",
                                             "conversation",
                                             "goal_request",
-                                            "user"
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
                                           ]
                                         },
                                         "id": {
@@ -10737,7 +10907,12 @@
                                             "delivery",
                                             "conversation",
                                             "goal_request",
-                                            "user"
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
                                           ]
                                         },
                                         "id": {
@@ -10801,6 +10976,2596 @@
           {
             "lang": "js",
             "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experience/work/{projectID}/organization": {
+      "get": {
+        "operationId": "experience.work.organization",
+        "summary": "Read the source-traceable project organization projection",
+        "responses": {
+          "200": {
+            "description": "Project organization projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "available"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "activeAssignmentCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "assignments": {
+                          "maxItems": 499,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "availability": {
+                                    "type": "string",
+                                    "const": "available"
+                                  },
+                                  "projectorVersion": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "sourceWatermark": {
+                                    "type": "string",
+                                    "pattern": "^[a-f0-9]{64}$"
+                                  },
+                                  "sourceRefs": {
+                                    "minItems": 1,
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "project",
+                                            "project_event",
+                                            "goal_brief",
+                                            "legacy_charter",
+                                            "work_item",
+                                            "approval_gate",
+                                            "artifact",
+                                            "delivery",
+                                            "conversation",
+                                            "goal_request",
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
+                                          ]
+                                        },
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "version": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "eventType": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "id"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "updatedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "assignmentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "projectId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "workItemId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "agent": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "id"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "lifecycleAtSelection": {
+                                    "type": "string",
+                                    "enum": [
+                                      "candidate",
+                                      "assigned",
+                                      "employee",
+                                      "archived"
+                                    ]
+                                  },
+                                  "currentLifecycle": {
+                                    "type": "string",
+                                    "enum": [
+                                      "candidate",
+                                      "assigned",
+                                      "employee",
+                                      "archived"
+                                    ]
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "assigned",
+                                      "active",
+                                      "released"
+                                    ]
+                                  },
+                                  "version": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "temporaryRole": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "responsibility": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 8000
+                                  },
+                                  "permissionMode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "read_only",
+                                      "workspace_write",
+                                      "full_access"
+                                    ]
+                                  },
+                                  "need": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "key",
+                                      "role"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "selectionReason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 8000
+                                  },
+                                  "sourceReceiptId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "supersedesAssignmentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "assignedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "startedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "releasedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "releaseReason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 8000
+                                  }
+                                },
+                                "required": [
+                                  "availability",
+                                  "projectorVersion",
+                                  "sourceWatermark",
+                                  "sourceRefs",
+                                  "updatedAt",
+                                  "assignmentId",
+                                  "projectId",
+                                  "workItemId",
+                                  "agent",
+                                  "lifecycleAtSelection",
+                                  "currentLifecycle",
+                                  "status",
+                                  "version",
+                                  "temporaryRole",
+                                  "responsibility",
+                                  "permissionMode",
+                                  "need",
+                                  "selectionReason",
+                                  "assignedAt"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "availability": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "projectorVersion": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "sourceWatermark": {
+                                    "type": "string",
+                                    "pattern": "^[a-f0-9]{64}$"
+                                  },
+                                  "sourceRefs": {
+                                    "minItems": 1,
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "project",
+                                            "project_event",
+                                            "goal_brief",
+                                            "legacy_charter",
+                                            "work_item",
+                                            "approval_gate",
+                                            "artifact",
+                                            "delivery",
+                                            "conversation",
+                                            "goal_request",
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate"
+                                          ]
+                                        },
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "version": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "eventType": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "id"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "updatedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                                  },
+                                  "assignmentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "projectId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "reason": {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string",
+                                        "enum": [
+                                          "invalid_persisted_fact",
+                                          "projection_overflow"
+                                        ]
+                                      },
+                                      "message": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 8000
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "message"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "availability",
+                                  "projectorVersion",
+                                  "sourceWatermark",
+                                  "sourceRefs",
+                                  "updatedAt",
+                                  "assignmentId",
+                                  "projectId",
+                                  "reason"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "activeAssignmentCount",
+                        "assignments"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "reason": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "invalid_persisted_fact",
+                                "projection_overflow"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "version_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "currentVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "currentVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_in_progress"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "artifact_unavailable"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "goal_brief_structured_output_failed"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3
+                        },
+                        "recoveryActions": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "const": "retry"
+                            },
+                            {
+                              "type": "string",
+                              "const": "manual_edit"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "attempts",
+                        "recoveryActions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.organization({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experience/work/{projectID}/graph": {
+      "get": {
+        "operationId": "experience.work.graph",
+        "summary": "Read source-traceable graph change diagnostics without raw mutation operations",
+        "responses": {
+          "200": {
+            "description": "Project graph change summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "available"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "changes": {
+                          "maxItems": 499,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "mutationId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "decision": {
+                                "type": "string",
+                                "enum": [
+                                  "accept",
+                                  "retry",
+                                  "expand",
+                                  "rewire",
+                                  "supersede",
+                                  "request_capability",
+                                  "request_attention",
+                                  "quiesce"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "proposed",
+                                  "validated",
+                                  "applied",
+                                  "rejected",
+                                  "superseded"
+                                ]
+                              },
+                              "rationale": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 8000
+                              },
+                              "expectedRevision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "appliedRevision": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "triggerReceiptId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "operationCounts": {
+                                "type": "object",
+                                "properties": {
+                                  "addedWorkItems": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "addedDependencies": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "removedDependencies": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "supersededWorkItems": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "addedValidationGates": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "requestedCapabilities": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "requestedUserDecisions": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "addedWorkItems",
+                                  "addedDependencies",
+                                  "removedDependencies",
+                                  "supersededWorkItems",
+                                  "addedValidationGates",
+                                  "requestedCapabilities",
+                                  "requestedUserDecisions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "appliedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "sourceRefs": {
+                                "minItems": 2,
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "project",
+                                        "project_event",
+                                        "goal_brief",
+                                        "legacy_charter",
+                                        "work_item",
+                                        "approval_gate",
+                                        "artifact",
+                                        "delivery",
+                                        "conversation",
+                                        "goal_request",
+                                        "user",
+                                        "work_attempt",
+                                        "work_receipt",
+                                        "graph_mutation",
+                                        "project_assignment",
+                                        "validation_gate"
+                                      ]
+                                    },
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "version": {
+                                      "type": "integer",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "eventType": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "id"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "mutationId",
+                              "decision",
+                              "status",
+                              "rationale",
+                              "expectedRevision",
+                              "triggerReceiptId",
+                              "operationCounts",
+                              "createdAt",
+                              "sourceRefs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "revision",
+                        "changes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "reason": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "invalid_persisted_fact",
+                                "projection_overflow"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "version_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "currentVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "currentVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_in_progress"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "artifact_unavailable"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "goal_brief_structured_output_failed"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3
+                        },
+                        "recoveryActions": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "const": "retry"
+                            },
+                            {
+                              "type": "string",
+                              "const": "manual_edit"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "attempts",
+                        "recoveryActions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.graph({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experience/work/{projectID}/receipts/{receiptID}": {
+      "get": {
+        "operationId": "experience.work.receipt",
+        "summary": "Read a source-traceable discovery summary for one persisted Work Receipt",
+        "responses": {
+          "200": {
+            "description": "Receipt discovery summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "available"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "receiptId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "workItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "attempt": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 240
+                            },
+                            "ordinal": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "completed",
+                                "failed",
+                                "stopped"
+                              ]
+                            },
+                            "failureKind": {
+                              "type": "string",
+                              "enum": [
+                                "implementation",
+                                "environment",
+                                "missing_prerequisite",
+                                "dependency",
+                                "permission",
+                                "validator",
+                                "scope",
+                                "unknown"
+                              ]
+                            },
+                            "safeSummary": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            },
+                            "finishedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "ordinal",
+                            "status",
+                            "startedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "completed",
+                            "blocked",
+                            "failed",
+                            "ask"
+                          ]
+                        },
+                        "processingStatus": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "processing",
+                            "processed",
+                            "rejected"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "confirmedFacts": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "invalidatedAssumptions": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "unknowns": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "blockers": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "capabilityGaps": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "questions": {
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 8000
+                          }
+                        },
+                        "processedMutationId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "processedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "receiptId",
+                        "projectId",
+                        "workItemId",
+                        "attempt",
+                        "outcome",
+                        "processingStatus",
+                        "summary",
+                        "confirmedFacts",
+                        "invalidatedAssumptions",
+                        "unknowns",
+                        "blockers",
+                        "capabilityGaps",
+                        "questions",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "receiptId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "reason": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "invalid_persisted_fact",
+                                "projection_overflow"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "receiptId",
+                        "projectId",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or Work Receipt not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "version_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "currentVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "currentVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_in_progress"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "artifact_unavailable"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "goal_brief_structured_output_failed"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3
+                        },
+                        "recoveryActions": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "const": "retry"
+                            },
+                            {
+                              "type": "string",
+                              "const": "manual_edit"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "attempts",
+                        "recoveryActions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "receiptID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.receipt({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/experience/work/{projectID}/validation": {
+      "get": {
+        "operationId": "experience.work.validation",
+        "summary": "Read source-traceable validation criteria and evidence summaries",
+        "responses": {
+          "200": {
+            "description": "Project validation summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "available"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "blockingGateCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "gates": {
+                          "maxItems": 499,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "gateId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "workItemId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "prerequisite",
+                                  "unit_test",
+                                  "integration_test",
+                                  "device",
+                                  "runtime",
+                                  "artifact",
+                                  "source",
+                                  "policy"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "passed",
+                                  "failed",
+                                  "superseded"
+                                ]
+                              },
+                              "criteria": {
+                                "minItems": 1,
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "statement": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 8000
+                                    },
+                                    "anchor": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "prerequisite",
+                                            "unit_test",
+                                            "integration_test",
+                                            "device",
+                                            "runtime",
+                                            "artifact",
+                                            "source",
+                                            "policy"
+                                          ]
+                                        },
+                                        "reference": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 2000
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "reference"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "operator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "exists",
+                                        "equals",
+                                        "exit_code",
+                                        "digest"
+                                      ]
+                                    },
+                                    "expected": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "type": "boolean"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "statement",
+                                    "anchor",
+                                    "operator",
+                                    "expected"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "criteriaSha256": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "blockingWorkItemIds": {
+                                "minItems": 1,
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 240
+                                }
+                              },
+                              "evidenceRefs": {
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "project",
+                                        "project_event",
+                                        "goal_brief",
+                                        "legacy_charter",
+                                        "work_item",
+                                        "approval_gate",
+                                        "artifact",
+                                        "delivery",
+                                        "conversation",
+                                        "goal_request",
+                                        "user",
+                                        "work_attempt",
+                                        "work_receipt",
+                                        "graph_mutation",
+                                        "project_assignment",
+                                        "validation_gate"
+                                      ]
+                                    },
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "version": {
+                                      "type": "integer",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "eventType": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "id"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "evaluator": {
+                                "type": "string",
+                                "enum": [
+                                  "fact_match_v1",
+                                  "command_exit_v1",
+                                  "artifact_digest_v1",
+                                  "source_reachability_v1",
+                                  "runtime_state_v1",
+                                  "policy_invariant_v1"
+                                ]
+                              },
+                              "repairRound": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "maxRepairRounds": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "failureSummary": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 8000
+                              },
+                              "supersedesGateId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "evaluatedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                              },
+                              "sourceRefs": {
+                                "minItems": 1,
+                                "maxItems": 500,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "project",
+                                        "project_event",
+                                        "goal_brief",
+                                        "legacy_charter",
+                                        "work_item",
+                                        "approval_gate",
+                                        "artifact",
+                                        "delivery",
+                                        "conversation",
+                                        "goal_request",
+                                        "user",
+                                        "work_attempt",
+                                        "work_receipt",
+                                        "graph_mutation",
+                                        "project_assignment",
+                                        "validation_gate"
+                                      ]
+                                    },
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    },
+                                    "version": {
+                                      "type": "integer",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "eventType": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 240
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "id"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "gateId",
+                              "kind",
+                              "status",
+                              "criteria",
+                              "criteriaSha256",
+                              "blockingWorkItemIds",
+                              "evidenceRefs",
+                              "evaluator",
+                              "repairRound",
+                              "maxRepairRounds",
+                              "createdAt",
+                              "sourceRefs"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "blockingGateCount",
+                        "gates"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "reason": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "invalid_persisted_fact",
+                                "projection_overflow"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "version_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "currentVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "currentVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_in_progress"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "artifact_unavailable"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "goal_brief_structured_output_failed"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3
+                        },
+                        "recoveryActions": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "const": "retry"
+                            },
+                            {
+                              "type": "string",
+                              "const": "manual_edit"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "attempts",
+                        "recoveryActions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.validation({\n  ...\n})"
           }
         ]
       }
@@ -10948,7 +13713,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -11061,7 +13831,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -11141,7 +13916,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -11215,7 +13995,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -11290,7 +14075,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -11370,7 +14160,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -11510,7 +14305,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -11623,7 +14423,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -11703,7 +14508,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -11777,7 +14587,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -11852,7 +14667,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -11932,7 +14752,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -12057,7 +14882,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -12175,7 +15005,12 @@
                                                   "delivery",
                                                   "conversation",
                                                   "goal_request",
-                                                  "user"
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate"
                                                 ]
                                               },
                                               "id": {
@@ -12255,7 +15090,12 @@
                                                   "delivery",
                                                   "conversation",
                                                   "goal_request",
-                                                  "user"
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate"
                                                 ]
                                               },
                                               "id": {
@@ -12337,7 +15177,12 @@
                                         "delivery",
                                         "conversation",
                                         "goal_request",
-                                        "user"
+                                        "user",
+                                        "work_attempt",
+                                        "work_receipt",
+                                        "graph_mutation",
+                                        "project_assignment",
+                                        "validation_gate"
                                       ]
                                     },
                                     "id": {
@@ -12412,7 +15257,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -12492,7 +15342,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -12654,7 +15509,12 @@
                                           "delivery",
                                           "conversation",
                                           "goal_request",
-                                          "user"
+                                          "user",
+                                          "work_attempt",
+                                          "work_receipt",
+                                          "graph_mutation",
+                                          "project_assignment",
+                                          "validation_gate"
                                         ]
                                       },
                                       "id": {
@@ -12736,7 +15596,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -12816,7 +15681,12 @@
                                                 "delivery",
                                                 "conversation",
                                                 "goal_request",
-                                                "user"
+                                                "user",
+                                                "work_attempt",
+                                                "work_receipt",
+                                                "graph_mutation",
+                                                "project_assignment",
+                                                "validation_gate"
                                               ]
                                             },
                                             "id": {
@@ -12890,7 +15760,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -12965,7 +15840,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -13045,7 +15925,12 @@
                                               "delivery",
                                               "conversation",
                                               "goal_request",
-                                              "user"
+                                              "user",
+                                              "work_attempt",
+                                              "work_receipt",
+                                              "graph_mutation",
+                                              "project_assignment",
+                                              "validation_gate"
                                             ]
                                           },
                                           "id": {
@@ -13152,7 +16037,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
@@ -13306,7 +16196,12 @@
                                       "delivery",
                                       "conversation",
                                       "goal_request",
-                                      "user"
+                                      "user",
+                                      "work_attempt",
+                                      "work_receipt",
+                                      "graph_mutation",
+                                      "project_assignment",
+                                      "validation_gate"
                                     ]
                                   },
                                   "id": {
