@@ -720,17 +720,29 @@ export const B5CanonicalNormalizedResultInput = z
         message: "Scenario reports do not belong to one candidate attempt",
       })
     const runIds = value.scenarioReports.map((report) => report.binding.runId).sort()
+    const deferredMetric = value.metricReport.results.find(
+      (result) => result.metricId === "complex_initial_assignment_median",
+    )
     if (
       value.metricReport.candidateSha !== first.candidateSha ||
-      value.metricReport.status !== "pass" ||
+      value.metricReport.status !== "blocked" ||
       value.metricReport.results.length !== PrePublicScenarioMetricIds.length ||
-      value.metricReport.results.some((result) => result.status !== "pass") ||
+      !deferredMetric ||
+      deferredMetric.status !== "blocked" ||
+      deferredMetric.sampleSize !== 1 ||
+      deferredMetric.blockedReasons.length !== 1 ||
+      deferredMetric.blockedReasons[0] !== "insufficient_sample" ||
+      value.metricReport.results.some(
+        (result) =>
+          result.metricId !== "complex_initial_assignment_median" &&
+          result.status !== "pass",
+      ) ||
       JSON.stringify([...value.metricReport.runIds].sort()) !== JSON.stringify(runIds)
     )
       context.addIssue({
         code: "custom",
         path: ["metricReport"],
-        message: "Metric report does not match the complete passing scenario run set",
+        message: "Metric report does not match the complete single-attempt scenario run set",
       })
     if (
       PrePublicScenarioMetricIds.some(
@@ -754,8 +766,10 @@ export const B5CanonicalNormalizedResultInput = z
       .sort()
     if (
       value.shadowReport.candidateSha !== first.candidateSha ||
-      value.shadowReport.status !== "pass" ||
-      value.shadowReport.checks.some((check) => check.status !== "pass") ||
+      value.shadowReport.status !== "blocked" ||
+      value.shadowReport.blockedReasons.length !== 1 ||
+      value.shadowReport.blockedReasons[0] !== "insufficient_sample" ||
+      value.shadowReport.checks.some((check) => check.status !== "blocked") ||
       JSON.stringify([...value.shadowReport.scenarioIds].sort()) !==
         JSON.stringify([...B5ScenarioIds].sort()) ||
       JSON.stringify([...value.shadowReport.legacyRunIds].sort()) !==
@@ -766,7 +780,7 @@ export const B5CanonicalNormalizedResultInput = z
       context.addIssue({
         code: "custom",
         path: ["shadowReport"],
-        message: "Shadow report does not match the complete passing scenario pairs",
+        message: "Shadow report does not match the complete single-attempt scenario pairs",
       })
     if (
       value.rollbackObservations.some(
