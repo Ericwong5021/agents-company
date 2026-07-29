@@ -73,7 +73,7 @@ export const CompanyRecruitmentRoutes = lazy(() =>
       async (c) => {
         const result = await AppRuntime.runPromise(
           CompanyRecruitment.Service.use((service) =>
-            service.selectForNeed({
+            service.selectAndAssign({
               capability_need_id: c.req.valid("param").needID,
               ...c.req.valid("json"),
             }),

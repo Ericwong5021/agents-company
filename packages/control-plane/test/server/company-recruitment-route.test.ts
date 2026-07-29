@@ -6,6 +6,7 @@ import { CompanyID } from "../../src/company/schema"
 import { AppRuntime } from "../../src/effect/app-runtime"
 import { Server } from "../../src/server/server"
 import { Database } from "../../src/storage"
+import { seedB0Project } from "../company-recruitment/b0-fixture"
 import { resetDatabase } from "../fixture/db"
 
 afterEach(async () => {
@@ -45,22 +46,13 @@ describe.serial("/company/recruitment", () => {
     const app = Server.Default().app
     const company = await (await app.request("/company")).json()
     const companyID = CompanyID.parse(company.company.id)
-    const now = Date.now()
-    Database.use((db) =>
-      db
-        .insert(CompanyProjectTable)
-        .values({
-          id: "cprj_recruitment_route",
-          company_id: companyID,
-          goal: "Produce an evidence-backed analysis",
-          title: "Recruitment Route",
-          status: "planning",
-          output_dir: "/tmp/cprj_recruitment_route",
-          created_at: now,
-          updated_at: now,
-        })
-        .run(),
-    )
+    seedB0Project({
+      companyID,
+      projectID: "cprj_recruitment_route",
+      workItemID: "cwi_recruitment_route",
+      role: "evidence analyst",
+      capabilityPacks: ["research-analysis@1"],
+    })
     await AppRuntime.runPromise(
       CompanyAgent.Service.use((service) =>
         service.create({
@@ -71,7 +63,7 @@ describe.serial("/company/recruitment", () => {
           description: "Evidence analysis and source validation",
           system_prompt: "PRIVATE_SOUL_SENTINEL",
           instruct: "PRIVATE_INSTRUCT_SENTINEL",
-          responsibilities: ["evidence analyst", "analysis", "source-validation"],
+          responsibilities: ["evidence analyst", "analysis", "research-analysis"],
         }),
       ),
     )
@@ -82,10 +74,11 @@ describe.serial("/company/recruitment", () => {
       body: JSON.stringify({
         company_id: companyID,
         project_id: "cprj_recruitment_route",
+        work_item_id: "cwi_recruitment_route",
         need_key: "evidence-analysis",
         role: "evidence analyst",
         work_type: "analysis",
-        capability_packs: ["source-validation"],
+        capability_packs: ["research-analysis@1"],
         risk_level: "medium",
         demand_horizon: "project",
       }),
@@ -102,7 +95,12 @@ describe.serial("/company/recruitment", () => {
     expect(selection.agent).toMatchObject({
       id: "route-evidence-analyst",
       company_id: companyID,
-      lifecycle: "assigned",
+      lifecycle: "candidate",
+    })
+    expect(selection.assignment).toMatchObject({
+      work_item_id: "cwi_recruitment_route",
+      agent_id: "route-evidence-analyst",
+      status: "assigned",
     })
     expect(JSON.stringify(selection)).not.toContain("PRIVATE_SOUL_SENTINEL")
     expect(JSON.stringify(selection)).not.toContain("PRIVATE_INSTRUCT_SENTINEL")
@@ -149,7 +147,7 @@ describe.serial("/company/recruitment", () => {
     ).json()
     expect(JSON.stringify(snapshot)).not.toContain("PRIVATE_SOUL_SENTINEL")
     expect(snapshot.assigned_candidates).toEqual([
-      expect.objectContaining({ id: "route-evidence-analyst", lifecycle: "assigned" }),
+      expect.objectContaining({ id: "route-evidence-analyst", lifecycle: "candidate" }),
     ])
     const agents = await (await app.request(`/company/agents?company_id=${companyID}`)).json()
     expect(agents.map((item: { agent: { id: string } }) => item.agent.id)).not.toContain("route-evidence-analyst")

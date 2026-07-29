@@ -149,7 +149,6 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const company = yield* Company.Service
-    yield* company.current().pipe(Effect.ignore)
     const agents = yield* CompanyAgent.Service
 
     const getNeed = Effect.fn("CompanyRecruitment.getNeed")(function* (id: string) {
@@ -386,6 +385,7 @@ export const layer = Layer.effect(
 
     const selectForNeed = Effect.fn("CompanyRecruitment.selectForNeed")(function* (raw: SelectForNeedInput) {
       const input = SelectForNeedInput.parse(raw)
+      yield* company.current().pipe(Effect.ignore)
       const need = yield* getNeed(input.capability_need_id)
       if (!need) throw new Error(`Capability need not found: ${input.capability_need_id}`)
       if (!need.work_item_id) throw new Error(`Capability need ${need.id} is not bound to a work item`)
