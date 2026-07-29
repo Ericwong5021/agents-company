@@ -379,6 +379,13 @@ async function s19() {
   )
   const facts = projectFacts(project.id)
   const processedEvents = facts.events.filter((event) => event.type === "work_receipt.processed").length
+  const receiptId = facts.receipts[0]?.id
+  const firstRecoverProcessedCount = first.processed_receipt_ids.filter(
+    (id) => id === receiptId,
+  ).length
+  const secondRecoverProcessedCount = replay.processed_receipt_ids.filter(
+    (id) => id === receiptId,
+  ).length
   const duplicateSideEffects =
     Math.max(0, processedEvents - 1) + Math.max(0, facts.decisions.length - 1) + Math.max(0, facts.mutations.length - 1)
   await write({
@@ -389,15 +396,15 @@ async function s19() {
     ...digests(project.id),
     duplicateSideEffects,
     exactlyOnce:
-      first.processed_receipt_ids.length === 1 &&
-      replay.processed_receipt_ids.length === 0 &&
+      firstRecoverProcessedCount === 1 &&
+      secondRecoverProcessedCount === 0 &&
       facts.receipts[0]?.processing_status === "processed" &&
       processedEvents === 1 &&
       duplicateSideEffects === 0,
     recoveredAt: Date.now(),
     receiptStatus: facts.receipts[0]?.processing_status,
-    firstRecoverProcessedCount: first.processed_receipt_ids.length,
-    secondRecoverProcessedCount: replay.processed_receipt_ids.length,
+    firstRecoverProcessedCount,
+    secondRecoverProcessedCount,
   })
 }
 
