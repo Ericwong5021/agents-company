@@ -64,7 +64,7 @@ const {
   error: seedGrowError,
   refresh: refreshSeedGrow,
 } = useFetch<SeedGrowProjectExperience>(() =>
-  `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/seed-grow`);
+  `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/seed-grow`, { lazy: true });
 const seedGrow = computed(() => seedGrowResult.value ?? undefined);
 const seedProject = computed(() => detail.value?.project.executionStrategy === "seed_and_grow");
 const seedGrowPending = computed(() => seedGrowStatus.value === "pending");

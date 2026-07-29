@@ -77,6 +77,37 @@ function inspectAndFinalize(project_id: string) {
         .orderBy(asc(CompanyArtifactTable.created_at), asc(CompanyArtifactTable.id))
         .all()
         .find((artifact) => artifact.kind === "delivery_package")
+      const ensureDeliveryReady = (artifactID: string, createdAt: number) => {
+        const exists = db
+          .select({ data_json: CompanyProjectEventTable.data_json })
+          .from(CompanyProjectEventTable)
+          .where(
+            and(
+              eq(CompanyProjectEventTable.project_id, project_id),
+              eq(CompanyProjectEventTable.type, "delivery.ready"),
+            ),
+          )
+          .all()
+          .some((event) => {
+            const data = JSON.parse(event.data_json) as Record<string, unknown>
+            return Array.isArray(data.artifact_ids) && data.artifact_ids.includes(artifactID)
+          })
+        if (exists) return
+        db.insert(CompanyProjectEventTable)
+          .values({
+            id: Identifier.ascending("event"),
+            project_id,
+            type: "delivery.ready",
+            actor_id: null,
+            data_json: JSON.stringify({
+              delivery_id: `delivery:${artifactID}`,
+              version: 1,
+              artifact_ids: [artifactID],
+            }),
+            created_at: createdAt,
+          })
+          .run()
+      }
       const openMaterialAttention = db
         .select()
         .from(CompanyAttentionTable)
@@ -97,7 +128,13 @@ function inspectAndFinalize(project_id: string) {
         )
         .orderBy(asc(CompanyProjectActionTable.created_at), asc(CompanyProjectActionTable.id))
         .all()
-      if (project.status === "completed" && existingPackage && !openMaterialAttention.length && !claimedActions.length)
+      if (
+        project.status === "completed" &&
+        existingPackage &&
+        !openMaterialAttention.length &&
+        !claimedActions.length
+      ) {
+        ensureDeliveryReady(existingPackage.id, Date.now())
         return {
           project,
           result: {
@@ -115,6 +152,7 @@ function inspectAndFinalize(project_id: string) {
             released_selection_ids: [],
           },
         }
+      }
       const workItems = db
         .select()
         .from(CompanyWorkItemTable)
@@ -460,6 +498,7 @@ function inspectAndFinalize(project_id: string) {
           })
           .run()
       }
+      ensureDeliveryReady(deliveryPackage.id, now)
       if (project.status !== "completed")
         db.insert(CompanyProjectEventTable)
           .values({

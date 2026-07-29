@@ -327,17 +327,21 @@ export function defaultDecision(input: DecisionInput): SupervisorDecision {
       operations: dependencies,
     }
   }
-  if (input.receipt.outcome !== "completed" || input.receipt.blockers.length || input.receipt.questions.length)
+  const terminalGraph =
+    input.pending_receipt_count === 1 &&
+    input.snapshot.nodes.every((node) => ["completed", "superseded", "cancelled"].includes(node.status))
+  if (
+    input.receipt.outcome !== "completed" ||
+    input.receipt.blockers.length ||
+    (input.receipt.questions.length && !terminalGraph)
+  )
     return {
       kind: "retry",
       reason_code: "receipt_not_terminally_accepted",
       summary: `Receipt ${input.receipt.id} retains ${input.receipt.blockers.length} blockers and ${input.receipt.questions.length} questions.`,
       operations: [],
     }
-  if (
-    input.pending_receipt_count === 1 &&
-    input.snapshot.nodes.every((node) => ["completed", "superseded", "cancelled"].includes(node.status))
-  )
+  if (terminalGraph)
     return {
       kind: "quiesce",
       reason_code: "terminal_graph_observed",

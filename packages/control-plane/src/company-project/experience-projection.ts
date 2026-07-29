@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { asc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import {
@@ -50,7 +51,9 @@ function normalized(value: unknown): unknown {
 }
 
 function digest(value: unknown) {
-  return new Bun.CryptoHasher("sha256").update(JSON.stringify(normalized(value))).digest("hex")
+  return createHash("sha256")
+    .update(JSON.stringify(normalized(value)))
+    .digest("hex")
 }
 
 function parseJSON(value: string) {

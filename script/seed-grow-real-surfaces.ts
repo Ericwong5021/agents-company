@@ -731,7 +731,13 @@ try {
   const errorPage = await context.newPage()
   projectionFault = "error"
   await errorPage.goto(`${webUIURL}/work/${encodeURIComponent(projectID)}`, { waitUntil: "domcontentloaded" })
-  const errorStateVisible = await errorPage.getByRole("alert").filter({ hasText: "无法读取动态组织投影" }).isVisible()
+  const errorState = errorPage.getByRole("alert").filter({ hasText: "无法读取动态组织投影" })
+  const errorStateVisible = await errorState
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(
+      () => true,
+      () => false,
+    )
   if (!errorStateVisible)
     uncovered.push("Seed-and-Grow projection error is masked by the unavailable WorkProjection fallback.")
   projectionFault = "none"
@@ -787,7 +793,13 @@ try {
 
   await page.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
   await page.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
-  const teamAssignmentVisible = await page.getByText("Assignment evidence", { exact: true }).first().isVisible()
+  const teamAssignment = page.getByText("Assignment evidence", { exact: true }).first()
+  const teamAssignmentVisible = await teamAssignment
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(
+      () => true,
+      () => false,
+    )
   if (teamAssignmentVisible) {
     await page.getByText("加入原因", { exact: true }).first().waitFor({ state: "visible" })
     await page.getByText("evidence analyst", { exact: true }).first().waitFor({ state: "visible" })
@@ -1044,12 +1056,18 @@ try {
   const desktopTarget = (
     await waitForValue(
       () => json<Array<{ type?: string; url?: string }>>(`http://127.0.0.1:${desktopDebugPort}/json/list`),
-      (targets) => targets.some((target) => target.type === "page" && target.url?.startsWith(webUIURL)),
+      (targets) =>
+        targets.some(
+          (target) =>
+            target.type === "page" && target.url?.startsWith(webUIURL) && new URL(target.url).pathname === "/inbox",
+        ),
       120_000,
-      "Desktop renderer did not navigate to the production WebUI",
+      "Desktop renderer did not complete local authentication and reach the Company",
     )
-  ).find((target) => target.type === "page" && target.url?.startsWith(webUIURL))
-  if (!desktopTarget?.url) throw new Error("Desktop production WebUI target is unavailable.")
+  ).find(
+    (target) => target.type === "page" && target.url?.startsWith(webUIURL) && new URL(target.url).pathname === "/inbox",
+  )
+  if (!desktopTarget?.url) throw new Error("Desktop authenticated Company target is unavailable.")
   const desktopSnapshotResponse = await context.request.get(`${webUIURL}/api/agent-company/snapshot`)
   if (!desktopSnapshotResponse.ok())
     throw new Error(`Desktop-backed WebUI snapshot returned ${desktopSnapshotResponse.status()}.`)
