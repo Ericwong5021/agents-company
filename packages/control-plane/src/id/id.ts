@@ -52,6 +52,7 @@ const prefixes = {
   projectAction: "pact",
   rolloutTransition: "rtrn",
   rolloutJournal: "rjnl",
+  rolloutShadow: "rshd",
 } as const
 
 export function schema(prefix: keyof typeof prefixes) {

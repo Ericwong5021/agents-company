@@ -541,10 +541,21 @@ export const layer = Layer.effect(
       execution_strategy: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
       verdict?: SeedPolicyVerdict
+      shadow?: {
+        seed_policy: SeedPolicyFactsValue
+        verdict: SeedPolicyVerdict
+      }
     } => {
       const strategy = CompanyRollout.resolveNewProjectStrategy(input.execution_strategy)
-      if (strategy !== "seed_and_grow")
-        return { execution_strategy: "legacy_full_plan" as const }
+      if (strategy !== "seed_and_grow") {
+        if (!input.seed_policy || !CompanyRollout.shadowEnabled())
+          return { execution_strategy: "legacy_full_plan" as const }
+        const seed_policy = SeedPolicyFacts.parse(input.seed_policy)
+        return {
+          execution_strategy: "legacy_full_plan" as const,
+          shadow: { seed_policy, verdict: evaluateSeedPolicy(seed_policy) },
+        }
+      }
       const seed_policy = SeedPolicyFacts.parse(input.seed_policy)
       return {
         execution_strategy: "seed_and_grow" as const,
@@ -552,6 +563,32 @@ export const layer = Layer.effect(
         verdict: evaluateSeedPolicy(seed_policy),
       }
     }
+
+    const persistShadowSeedVerdict = Effect.fn("CompanyProjectExecution.persistShadowSeedVerdict")(function* (
+      project: Project,
+      shadow: {
+        seed_policy: SeedPolicyFactsValue
+        verdict: SeedPolicyVerdict
+      },
+    ) {
+      const sourceKey = `shadow-seed-policy:${project.id}:v1`
+      const existing = CompanyRollout.getShadowEvaluation(sourceKey)
+      if (existing) return existing
+      const input = { projectGoal: project.goal, seedPolicy: shadow.seed_policy }
+      const before = CompanyRollout.projectBusinessStateSha256(project.id)
+      const after = CompanyRollout.projectBusinessStateSha256(project.id)
+      return CompanyRollout.recordShadowEvaluation({
+        projectId: project.id,
+        sourceKey,
+        kind: "seed_policy",
+        snapshotSha256: CompanyRollout.valueSha256(input),
+        businessStateBeforeSha256: before,
+        businessStateAfterSha256: after,
+        input,
+        output: { verdict: shadow.verdict },
+        status: "evaluated",
+      })
+    })
 
     const persistSeedVerdict = Effect.fn("CompanyProjectExecution.persistSeedVerdict")(function* (
       project: Project,
@@ -1223,8 +1260,7 @@ export const layer = Layer.effect(
         )
         yield* projects.setActiveRun({ id: project.id })
         const current = yield* projects.get(project.id)
-        if (current && !["awaiting_approval", "completed"].includes(current.status))
-          yield* startSeedWave(project.id)
+        if (current && !["awaiting_approval", "completed"].includes(current.status)) yield* startSeedWave(project.id)
       }).pipe(
         Effect.catchCause((cause) => blockProject(project.id, String(cause))),
         Effect.forkIn(scope),
@@ -1237,7 +1273,9 @@ export const layer = Layer.effect(
     )(function* (project_id: string) {
       const project = yield* projects.get(project_id)
       if (project?.execution_strategy === "seed_and_grow") return yield* startSeedWave(project_id)
-      if (!project || ["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)) return
+      if (!project) return
+      yield* receiptProcessor.shadowLegacy(project_id).pipe(Effect.catchCause(() => Effect.succeed([])))
+      if (["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)) return
       const ready = (yield* projects.readyWorkItems(project_id)).filter((item) => item.kind !== "planner")
       if (!ready.length) {
         const items = yield* projects.listWorkItems(project_id)
@@ -1885,6 +1923,10 @@ export const layer = Layer.effect(
           execution_strategy: execution!.execution_strategy,
           seed_mode: execution?.verdict?.mode,
         }))
+      if (!existing && execution?.shadow)
+        yield* persistShadowSeedVerdict(project, execution.shadow).pipe(
+          Effect.catchCause(() => Effect.succeed(undefined)),
+        )
       const charter =
         existingCharter ??
         (yield* projects.createCharter({
@@ -2039,6 +2081,10 @@ export const layer = Layer.effect(
         execution_strategy: execution.execution_strategy,
         seed_mode: execution.verdict?.mode,
       })
+      if (execution.shadow)
+        yield* persistShadowSeedVerdict(project, execution.shadow).pipe(
+          Effect.catchCause(() => Effect.succeed(undefined)),
+        )
       if (project.execution_strategy === "seed_and_grow") {
         const verdict = execution.verdict!
         yield* persistSeedVerdict(project, verdict)

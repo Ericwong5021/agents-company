@@ -372,11 +372,49 @@ export const RolloutActionResult = z
   })
 export type RolloutActionResult = z.infer<typeof RolloutActionResult>
 
+export const RolloutShadowEvaluationKind = z.enum(["seed_policy", "supervisor"])
+export type RolloutShadowEvaluationKind = z.infer<typeof RolloutShadowEvaluationKind>
+
+export const RolloutShadowEvaluation = z
+  .object({
+    id: Identifier,
+    projectId: Identifier,
+    sourceKey: Identifier,
+    kind: RolloutShadowEvaluationKind,
+    receiptId: Identifier.optional(),
+    snapshotSha256: Sha256,
+    inputSha256: Sha256,
+    outputSha256: Sha256,
+    businessStateBeforeSha256: Sha256,
+    businessStateAfterSha256: Sha256,
+    input: z.record(z.string(), z.unknown()),
+    output: z.record(z.string(), z.unknown()),
+    status: z.enum(["evaluated", "validated", "rejected"]),
+    createdAt: Timestamp,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.kind === "supervisor") !== Boolean(value.receiptId))
+      context.addIssue({
+        code: "custom",
+        path: ["receiptId"],
+        message: "supervisor shadow evaluations require a receipt and seed policy evaluations cannot bind one",
+      })
+    if (value.businessStateBeforeSha256 !== value.businessStateAfterSha256)
+      context.addIssue({
+        code: "custom",
+        path: ["businessStateAfterSha256"],
+        message: "shadow evaluation cannot change business state",
+      })
+  })
+export type RolloutShadowEvaluation = z.infer<typeof RolloutShadowEvaluation>
+
 export const RolloutEvidence = z
   .object({
     candidates: z.array(RolloutCandidateFact).max(500),
     localRepeats: z.array(RolloutLocalRepeatFact).max(500),
     rollbacks: z.array(RolloutRollbackFact).max(500),
+    shadowEvaluations: z.array(RolloutShadowEvaluation).max(10_000),
   })
   .strict()
 export type RolloutEvidence = z.infer<typeof RolloutEvidence>

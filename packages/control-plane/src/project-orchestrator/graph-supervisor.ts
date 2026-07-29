@@ -2,6 +2,8 @@ import { Context, Effect, Layer, Semaphore } from "effect"
 import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import { FirstSliceCandidate } from "@agents-company/shared/project-orchestration"
+import type { RolloutShadowEvaluation } from "@agents-company/shared/rollout"
+import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { CompanyProject } from "@/company-project/company-project"
 import {
   CompanyGraphDecisionTable,
@@ -113,13 +115,7 @@ const decisionFromRow = (row: typeof CompanyGraphDecisionTable.$inferSelect) =>
     resolved_at: row.resolved_at ?? undefined,
   })
 
-function insertEvent(
-  db: TxOrDb,
-  project_id: string,
-  type: string,
-  data: Record<string, unknown>,
-  created_at: number,
-) {
+function insertEvent(db: TxOrDb, project_id: string, type: string, data: Record<string, unknown>, created_at: number) {
   db.insert(CompanyProjectEventTable)
     .values({
       id: Identifier.ascending("event"),
@@ -156,7 +152,10 @@ function sameDecision(
   )
 }
 
-function defaultDecision(input: DecisionInput): SupervisorDecision {
+const stableWorkItemID = (receipt_id: string, purpose: string, index: number) =>
+  `cwi_${new Bun.CryptoHasher("sha256").update(`${receipt_id}:${purpose}:${index}`).digest("hex").slice(0, 26)}`
+
+export function defaultDecision(input: DecisionInput): SupervisorDecision {
   const trigger = input.snapshot.nodes.find((node) => node.id === input.receipt.work_item_id)
   if (!trigger)
     return {
@@ -174,7 +173,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
         operations: [],
       }
     const operations = input.receipt.capability_gaps.slice(0, 3).flatMap((capability, index) => {
-      const work_item_id = Identifier.ascending("companyWorkItem")
+      const work_item_id = stableWorkItemID(input.receipt.id, "capability-gap", index)
       return [
         {
           type: "add_work_item" as const,
@@ -237,7 +236,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
       {
         type: "add_work_item" as const,
         item: {
-          id: Identifier.ascending("companyWorkItem"),
+          id: stableWorkItemID(input.receipt.id, `first-slice:${candidate.data.id}`, 0),
           plan_id: trigger.plan_id,
           parent_id: trigger.id,
           title: candidate.data.title,
@@ -267,8 +266,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
   })
   const boundedOperations = directOperations.reduce<{ operations: GraphOperationType[]; added: number }>(
     (result, operation) => {
-      if (operation.type !== "add_work_item")
-        return { ...result, operations: [...result.operations, operation] }
+      if (operation.type !== "add_work_item") return { ...result, operations: [...result.operations, operation] }
       if (result.added >= 3) return result
       return { operations: [...result.operations, operation], added: result.added + 1 }
     },
@@ -302,8 +300,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
       !input.snapshot.nodes.some((node) => node.id === parsed.data.work_item_id) ||
       !input.snapshot.nodes.some((node) => node.id === parsed.data.depends_on_id) ||
       input.snapshot.dependencies.some(
-        (edge) =>
-          edge.work_item_id === parsed.data.work_item_id && edge.depends_on_id === parsed.data.depends_on_id,
+        (edge) => edge.work_item_id === parsed.data.work_item_id && edge.depends_on_id === parsed.data.depends_on_id,
       )
     )
       return []
@@ -330,11 +327,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
       operations: dependencies,
     }
   }
-  if (
-    input.receipt.outcome !== "completed" ||
-    input.receipt.blockers.length ||
-    input.receipt.questions.length
-  )
+  if (input.receipt.outcome !== "completed" || input.receipt.blockers.length || input.receipt.questions.length)
     return {
       kind: "retry",
       reason_code: "receipt_not_terminally_accepted",
@@ -362,6 +355,7 @@ function defaultDecision(input: DecisionInput): SupervisorDecision {
 export interface Interface {
   readonly processReceipt: (receipt_id: string) => Effect.Effect<ProcessResult>
   readonly drain: (project_id: string) => Effect.Effect<ProcessResult[]>
+  readonly shadowLegacy: (project_id: string) => Effect.Effect<RolloutShadowEvaluation[]>
   readonly getDecision: (id: string) => Effect.Effect<GraphDecisionType | undefined>
   readonly listDecisions: (project_id: string) => Effect.Effect<GraphDecisionType[]>
   readonly recover: () => Effect.Effect<RecoveryReport>
@@ -631,7 +625,8 @@ export function makeLayer(hooks: Hooks = {}) {
                     ).length,
                   }),
                 )
-            const recorded = existing ?? (yield* recordDecision({ receipt: claim.receipt, snapshot, project, mode, decision }))
+            const recorded =
+              existing ?? (yield* recordDecision({ receipt: claim.receipt, snapshot, project, mode, decision }))
             const proposal = GraphMutationProposal.parse({
               project_id: project.id,
               trigger_receipt_id: claim.receipt.id,
@@ -726,9 +721,7 @@ export function makeLayer(hooks: Hooks = {}) {
         return yield* evaluate(0).pipe(
           Effect.tap(() => setState(claim.receipt.project_id, "idle")),
           Effect.catchCause((cause) =>
-            setState(claim.receipt.project_id, "blocked").pipe(
-              Effect.andThen(Effect.failCause(cause)),
-            ),
+            setState(claim.receipt.project_id, "blocked").pipe(Effect.andThen(Effect.failCause(cause))),
           ),
         )
       })
@@ -762,8 +755,7 @@ export function makeLayer(hooks: Hooks = {}) {
         )
         if (!location) throw new Error(`Work Receipt not found: ${receipt_id}`)
         const mode = hooks.mode ?? Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
-        if (mode === "off")
-          return { status: "disabled" as const, receipt_id, project_id: location.project_id }
+        if (mode === "off") return { status: "disabled" as const, receipt_id, project_id: location.project_id }
         if (location.processing_status === "processed") {
           if (!location.processed_decision_id)
             throw new Error(`Processed Seed Receipt ${receipt_id} has no Graph Decision`)
@@ -786,6 +778,78 @@ export function makeLayer(hooks: Hooks = {}) {
         const target = results.find((result) => result.receipt_id === receipt_id)
         if (!target) throw new Error(`Receipt Processor did not reach Work Receipt ${receipt_id}`)
         return target
+      })
+
+      const shadowLegacyReceipt = Effect.fn("GraphSupervisor.shadowLegacyReceipt")(function* (
+        project_id: string,
+        receipt_id: string,
+      ) {
+        const project = yield* projects.get(project_id)
+        if (!project || project.execution_strategy !== "legacy_full_plan")
+          throw new Error(`Company project ${project_id} is not a legacy project`)
+        if (project.orchestrator_version !== ORCHESTRATOR_VERSION)
+          throw new Error(`Unsupported orchestrator version ${project.orchestrator_version} for Project ${project.id}`)
+        const receipt = (yield* facts.listReceipts(project_id)).find((candidate) => candidate.id === receipt_id)
+        if (!receipt || receipt.processing_status !== "processed")
+          throw new Error(`Legacy Work Receipt ${receipt_id} is not terminally processed`)
+        const snapshot = yield* graph.snapshot(project_id)
+        const sourceKey = `shadow-supervisor:${receipt.id}:revision:${snapshot.revision}:v${project.orchestrator_version}`
+        const existing = CompanyRollout.getShadowEvaluation(sourceKey)
+        if (existing) return existing
+        const before = CompanyRollout.projectBusinessStateSha256(project_id)
+        const decision = SupervisorDecision.parse(
+          (hooks.decide ?? defaultDecision)({
+            project,
+            receipt,
+            snapshot,
+            pending_receipt_count: 1,
+          }),
+        )
+        const proposal = GraphMutationProposal.parse({
+          project_id: project.id,
+          trigger_receipt_id: receipt.id,
+          expected_revision: snapshot.revision,
+          orchestrator_version: project.orchestrator_version,
+          idempotency_key: `shadow-graph-mutation:${receipt.id}:revision:${snapshot.revision}:v${project.orchestrator_version}`,
+          decision: decision.kind,
+          rationale: decision.summary,
+          evidence_refs: receipt.evidence_refs,
+          operations: decision.operations,
+        })
+        const result = yield* graph.shadow(proposal)
+        if (result.status === "conflict")
+          throw new Error(`Legacy shadow evaluation conflicted for Work Receipt ${receipt.id}: ${result.reason}`)
+        const after = CompanyRollout.projectBusinessStateSha256(project_id)
+        return CompanyRollout.recordShadowEvaluation({
+          projectId: project.id,
+          sourceKey,
+          kind: "supervisor",
+          receiptId: receipt.id,
+          snapshotSha256: CompanyRollout.valueSha256(snapshot),
+          businessStateBeforeSha256: before,
+          businessStateAfterSha256: after,
+          input: { project, receipt, snapshot, pendingReceiptCount: 1 },
+          output: {
+            decision,
+            mutation: proposal,
+            policyVerdict: result.verdict,
+            preview: result.preview,
+          },
+          status: result.status,
+        })
+      })
+
+      const shadowLegacy = Effect.fn("GraphSupervisor.shadowLegacy")(function* (project_id: string) {
+        if (!CompanyRollout.shadowEnabled()) return []
+        const project = yield* projects.get(project_id)
+        if (!project || project.execution_strategy !== "legacy_full_plan") return []
+        return yield* lock(project_id).withPermits(1)(
+          Effect.forEach(
+            (yield* facts.listReceipts(project_id)).filter((receipt) => receipt.processing_status === "processed"),
+            (receipt) => shadowLegacyReceipt(project_id, receipt.id),
+            { concurrency: 1 },
+          ),
+        )
       })
 
       const drain = Effect.fn("GraphSupervisor.drain")(function* (project_id: string) {
@@ -829,13 +893,11 @@ export function makeLayer(hooks: Hooks = {}) {
           processed_receipt_ids: results.flatMap((result) =>
             result.status === "processed" ? [result.receipt_id] : [],
           ),
-          disabled_receipt_ids: results.flatMap((result) =>
-            result.status === "disabled" ? [result.receipt_id] : [],
-          ),
+          disabled_receipt_ids: results.flatMap((result) => (result.status === "disabled" ? [result.receipt_id] : [])),
         }
       })
 
-      return Service.of({ processReceipt, drain, getDecision, listDecisions, recover })
+      return Service.of({ processReceipt, drain, shadowLegacy, getDecision, listDecisions, recover })
     }),
   )
 }

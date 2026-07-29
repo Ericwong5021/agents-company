@@ -1,4 +1,4 @@
-import { afterEach, describe, expect } from "bun:test"
+import { afterEach, beforeEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AgentRun } from "../../src/agent-run/agent-run"
 import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
@@ -9,20 +9,19 @@ import { CompanyTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { Conversation } from "../../src/conversation"
 import { Delegation } from "../../src/delegation/delegation"
-import { Instance } from "../../src/project/instance"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import type { SeedPolicyFactsValue } from "../../src/project-orchestrator/schema"
 import * as Reputation from "../../src/reputation/reputation"
 import { Database } from "../../src/storage"
 import * as WorkType from "../../src/work-type/work-type"
 import { provideTmpdirServer } from "../fixture/fixture"
+import { resetDatabase } from "../fixture/db"
 import { testEffect } from "../lib/effect"
 import { reply, type Item, type Reply } from "../lib/llm-server"
 import { makeLayer, providerCfg } from "../workflow/lib"
 
-afterEach(async () => {
-  await Instance.disposeAll()
-})
+beforeEach(resetDatabase)
+afterEach(resetDatabase)
 
 const dependencies = Layer.mergeAll(
   makeLayer(AgentRunSupervisor.defaultLayer),
@@ -126,10 +125,10 @@ const seedCompany = (companyID: CompanyID) =>
 
 const queueWayfinder = (
   llm: {
-  pushMatch: (
-    match: (hit: { body: Record<string, unknown> }) => boolean,
-    ...input: (Item | Reply)[]
-  ) => Effect.Effect<void>
+    pushMatch: (
+      match: (hit: { body: Record<string, unknown> }) => boolean,
+      ...input: (Item | Reply)[]
+    ) => Effect.Effect<void>
   },
   facts: { unknowns?: string[]; questions?: string[] } = {},
 ) =>
@@ -502,6 +501,49 @@ describe.serial("Seed-and-Grow project execution", () => {
                 status: "pending",
                 owner_agent_id: undefined,
               })
+              yield* execution.cancel({ project_id: started.project.id })
+            }),
+          )
+        }),
+        { git: true, config: providerCfg },
+      ),
+    30000,
+  )
+
+  it.live(
+    "records a SeedPolicy shadow verdict while keeping the legacy path authoritative",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* () {
+          return yield* withSeedFlag(
+            "shadow",
+            Effect.gen(function* () {
+              CompanyRollout.transition({
+                idempotencyKey: "seed-execution-runtime-shadow",
+                to: "shadow",
+                reason: "compare SeedPolicy with the authoritative legacy path",
+              })
+              const execution = yield* CompanyProjectExecution.Service
+              const started = yield* execution.start({
+                goal: "验证同一项目输入的 SeedPolicy 影子判定",
+                provider_id: "test",
+                model_id: "test-model",
+                execution_strategy: "seed_and_grow",
+                seed_policy: seedPolicy(),
+              })
+              expect(started.project).toMatchObject({
+                execution_strategy: "legacy_full_plan",
+                seed_mode: undefined,
+              })
+              const shadow = CompanyRollout.evidence().shadowEvaluations
+              expect(shadow).toHaveLength(1)
+              expect(shadow[0]).toMatchObject({
+                projectId: started.project.id,
+                kind: "seed_policy",
+                status: "evaluated",
+                output: { verdict: { mode: "seed_pair" } },
+              })
+              expect(shadow[0].businessStateAfterSha256).toBe(shadow[0].businessStateBeforeSha256)
               yield* execution.cancel({ project_id: started.project.id })
             }),
           )

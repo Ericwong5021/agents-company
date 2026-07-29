@@ -10,6 +10,7 @@ import {
   RolloutJournalEntry,
   RolloutLocalRepeatFact,
   RolloutRollbackFact,
+  RolloutShadowEvaluation,
   RolloutState,
   RolloutStatus,
   RolloutTransitionRequest,
@@ -22,7 +23,20 @@ import {
   ProjectExecutionStrategy,
   type ProjectExecutionStrategy as ProjectExecutionStrategyValue,
 } from "@agents-company/shared/project-orchestration"
-import { CompanyProjectTable } from "@/company-project/company-project.sql"
+import {
+  CompanyArtifactTable,
+  CompanyGraphDecisionTable,
+  CompanyGraphMutationTable,
+  CompanyPlanTable,
+  CompanyProjectCharterTable,
+  CompanyProjectEventTable,
+  CompanyProjectTable,
+  CompanyValidationGateTable,
+  CompanyWorkAttemptTable,
+  CompanyWorkItemDependencyTable,
+  CompanyWorkItemTable,
+  CompanyWorkReceiptTable,
+} from "@/company-project/company-project.sql"
 import { Flag } from "@/flag/flag"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
@@ -32,6 +46,7 @@ import {
   CompanyRolloutJournalTable,
   CompanyRolloutLocalRepeatTable,
   CompanyRolloutRollbackTable,
+  CompanyRolloutShadowEvaluationTable,
   CompanyRolloutStateTable,
 } from "./company-rollout.sql"
 
@@ -75,6 +90,10 @@ function payloadJSON(value: unknown) {
 
 function digest(value: unknown) {
   return new Bun.CryptoHasher("sha256").update(payloadJSON(value)).digest("hex")
+}
+
+export function valueSha256(value: unknown) {
+  return digest(value)
 }
 
 function parsePersistedValue<T>(schema: z.ZodType<T>, value: unknown, message: string) {
@@ -182,6 +201,33 @@ function rollbackFromRow(row: typeof CompanyRolloutRollbackTable.$inferSelect) {
   )
 }
 
+function shadowFromRow(row: typeof CompanyRolloutShadowEvaluationTable.$inferSelect) {
+  const input = parsePersistedJSON(z.record(z.string(), z.unknown()), row.input_json)
+  const output = parsePersistedJSON(z.record(z.string(), z.unknown()), row.output_json)
+  if (digest(input) !== row.input_sha256 || digest(output) !== row.output_sha256)
+    throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout shadow digest does not match.")
+  return parsePersistedValue(
+    RolloutShadowEvaluation,
+    {
+      id: row.id,
+      projectId: row.project_id,
+      sourceKey: row.source_key,
+      kind: row.kind,
+      receiptId: row.receipt_id ?? undefined,
+      snapshotSha256: row.snapshot_sha256,
+      inputSha256: row.input_sha256,
+      outputSha256: row.output_sha256,
+      businessStateBeforeSha256: row.business_state_before_sha256,
+      businessStateAfterSha256: row.business_state_after_sha256,
+      input,
+      output,
+      status: row.status,
+      createdAt: row.created_at,
+    },
+    "Persisted rollout shadow evaluation cannot be parsed safely.",
+  )
+}
+
 function executionMode() {
   return SeedGrowExecutionMode.parse(Flag.AGENTCOMPANY_SEED_GROW_ORCHESTRATION)
 }
@@ -236,6 +282,175 @@ export function resolveNewProjectStrategy(requested?: ProjectExecutionStrategyVa
     executionMode: current.executionMode,
     requested,
   })
+}
+
+export function shadowEnabled() {
+  const current = status()
+  return current.state.phase === "shadow" && current.executionMode === "shadow"
+}
+
+export function projectBusinessStateSha256(projectId: string) {
+  return Database.use((db) => {
+    const workItems = db
+      .select()
+      .from(CompanyWorkItemTable)
+      .where(eq(CompanyWorkItemTable.project_id, projectId))
+      .orderBy(asc(CompanyWorkItemTable.id))
+      .all()
+    const workItemIDs = new Set(workItems.map((item) => item.id))
+    return digest({
+      project: db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, projectId)).get(),
+      charters: db
+        .select()
+        .from(CompanyProjectCharterTable)
+        .where(eq(CompanyProjectCharterTable.project_id, projectId))
+        .orderBy(asc(CompanyProjectCharterTable.project_id))
+        .all(),
+      plans: db
+        .select()
+        .from(CompanyPlanTable)
+        .where(eq(CompanyPlanTable.project_id, projectId))
+        .orderBy(asc(CompanyPlanTable.id))
+        .all(),
+      workItems,
+      dependencies: db
+        .select()
+        .from(CompanyWorkItemDependencyTable)
+        .orderBy(asc(CompanyWorkItemDependencyTable.work_item_id), asc(CompanyWorkItemDependencyTable.depends_on_id))
+        .all()
+        .filter((dependency) => workItemIDs.has(dependency.work_item_id)),
+      artifacts: db
+        .select()
+        .from(CompanyArtifactTable)
+        .where(eq(CompanyArtifactTable.project_id, projectId))
+        .orderBy(asc(CompanyArtifactTable.id))
+        .all(),
+      attempts: db
+        .select()
+        .from(CompanyWorkAttemptTable)
+        .where(eq(CompanyWorkAttemptTable.project_id, projectId))
+        .orderBy(asc(CompanyWorkAttemptTable.id))
+        .all(),
+      receipts: db
+        .select()
+        .from(CompanyWorkReceiptTable)
+        .where(eq(CompanyWorkReceiptTable.project_id, projectId))
+        .orderBy(asc(CompanyWorkReceiptTable.id))
+        .all(),
+      decisions: db
+        .select()
+        .from(CompanyGraphDecisionTable)
+        .where(eq(CompanyGraphDecisionTable.project_id, projectId))
+        .orderBy(asc(CompanyGraphDecisionTable.id))
+        .all(),
+      mutations: db
+        .select()
+        .from(CompanyGraphMutationTable)
+        .where(eq(CompanyGraphMutationTable.project_id, projectId))
+        .orderBy(asc(CompanyGraphMutationTable.id))
+        .all(),
+      validationGates: db
+        .select()
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.project_id, projectId))
+        .orderBy(asc(CompanyValidationGateTable.id))
+        .all(),
+      events: db
+        .select()
+        .from(CompanyProjectEventTable)
+        .where(eq(CompanyProjectEventTable.project_id, projectId))
+        .orderBy(asc(CompanyProjectEventTable.id))
+        .all(),
+    })
+  })
+}
+
+export function recordShadowEvaluation(input: {
+  projectId: string
+  sourceKey: string
+  kind: "seed_policy" | "supervisor"
+  receiptId?: string
+  snapshotSha256: string
+  businessStateBeforeSha256: string
+  businessStateAfterSha256: string
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+  status: "evaluated" | "validated" | "rejected"
+}) {
+  if (!shadowEnabled())
+    throw new RolloutStoreError("entity_conflict", "Rollout shadow evaluation requires the shadow phase and mode.")
+  return Database.transaction(
+    (db) => {
+      const existing = db
+        .select()
+        .from(CompanyRolloutShadowEvaluationTable)
+        .where(eq(CompanyRolloutShadowEvaluationTable.source_key, input.sourceKey))
+        .get()
+      const project = db
+        .select({ execution_strategy: CompanyProjectTable.execution_strategy })
+        .from(CompanyProjectTable)
+        .where(eq(CompanyProjectTable.id, input.projectId))
+        .get()
+      if (!project || project.execution_strategy !== "legacy_full_plan")
+        throw new RolloutStoreError("entity_conflict", "Rollout shadow evaluation requires a persisted legacy project.")
+      const fact = RolloutShadowEvaluation.parse({
+        id: existing?.id ?? Identifier.ascending("rolloutShadow"),
+        projectId: input.projectId,
+        sourceKey: input.sourceKey,
+        kind: input.kind,
+        receiptId: input.receiptId,
+        snapshotSha256: input.snapshotSha256,
+        inputSha256: digest(input.input),
+        outputSha256: digest(input.output),
+        businessStateBeforeSha256: input.businessStateBeforeSha256,
+        businessStateAfterSha256: input.businessStateAfterSha256,
+        input: input.input,
+        output: input.output,
+        status: input.status,
+        createdAt: existing?.created_at ?? Date.now(),
+      })
+      if (existing) {
+        const persisted = shadowFromRow(existing)
+        if (!same(persisted, fact))
+          throw new RolloutStoreError(
+            "entity_conflict",
+            "The rollout shadow source is already bound to a different evaluation.",
+          )
+        return persisted
+      }
+      db.insert(CompanyRolloutShadowEvaluationTable)
+        .values({
+          id: fact.id,
+          project_id: fact.projectId,
+          source_key: fact.sourceKey,
+          kind: fact.kind,
+          receipt_id: fact.receiptId ?? null,
+          snapshot_sha256: fact.snapshotSha256,
+          input_sha256: fact.inputSha256,
+          output_sha256: fact.outputSha256,
+          business_state_before_sha256: fact.businessStateBeforeSha256,
+          business_state_after_sha256: fact.businessStateAfterSha256,
+          input_json: payloadJSON(fact.input),
+          output_json: payloadJSON(fact.output),
+          status: fact.status,
+          created_at: fact.createdAt,
+        })
+        .run()
+      return fact
+    },
+    { behavior: "immediate" },
+  )
+}
+
+export function getShadowEvaluation(sourceKey: string) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(CompanyRolloutShadowEvaluationTable)
+      .where(eq(CompanyRolloutShadowEvaluationTable.source_key, sourceKey))
+      .get(),
+  )
+  return row ? shadowFromRow(row) : undefined
 }
 
 function existingJournal(db: TxOrDb, kind: "transition" | "action", idempotencyKey: string) {
@@ -787,10 +1002,17 @@ export function evidence(limit = 500) {
           .limit(bounded)
           .all()
           .map(rollbackFromRow)
+        const shadowEvaluations = db
+          .select()
+          .from(CompanyRolloutShadowEvaluationTable)
+          .orderBy(asc(CompanyRolloutShadowEvaluationTable.created_at), asc(CompanyRolloutShadowEvaluationTable.id))
+          .limit(bounded)
+          .all()
+          .map(shadowFromRow)
         candidates.forEach((candidate) => validateFactJournal(db, "register_candidate", candidate.id))
         localRepeats.forEach((repeat) => validateFactJournal(db, "record_local_repeat", repeat.id))
         rollbacks.forEach((rollback) => validateFactJournal(db, "record_rollback", rollback.id))
-        return { candidates, localRepeats, rollbacks }
+        return { candidates, localRepeats, rollbacks, shadowEvaluations }
       }),
     )
   } catch (error) {

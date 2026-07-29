@@ -1,4 +1,4 @@
-import { afterEach, describe, expect } from "bun:test"
+import { afterEach, beforeEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { and, eq } from "drizzle-orm"
 import {
@@ -18,6 +18,8 @@ import {
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
 } from "../../src/company-project/company-project.sql"
+import * as CompanyRollout from "../../src/company-rollout/company-rollout"
+import { CompanyRolloutShadowEvaluationTable } from "../../src/company-rollout/company-rollout.sql"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
 import { Database } from "../../src/storage"
@@ -45,12 +47,16 @@ function layer(options: Parameters<typeof GraphSupervisor.makeLayer>[0]) {
   )
 }
 
-function seed(projects: CompanyProject.Interface, label: string) {
+function seed(
+  projects: CompanyProject.Interface,
+  label: string,
+  execution_strategy: "legacy_full_plan" | "seed_and_grow" = "seed_and_grow",
+) {
   return Effect.gen(function* () {
     const project = yield* projects.create({
       goal: `Supervise ${label}`,
-      execution_strategy: "seed_and_grow",
-      seed_mode: "seed_pair",
+      execution_strategy,
+      seed_mode: execution_strategy === "seed_and_grow" ? "seed_pair" : undefined,
     })
     yield* projects.transition({ id: project.id, status: "planning" })
     const plan = yield* projects.createPlan({
@@ -133,8 +139,16 @@ function newItem(plan_id: string, parent_id: string, id: string) {
   })
 }
 
+let previousExecutionMode: string | undefined
+
+beforeEach(() => {
+  previousExecutionMode = process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+})
+
 afterEach(async () => {
   await resetDatabase()
+  if (previousExecutionMode === undefined) delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
+  else process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = previousExecutionMode
 })
 
 describe("Graph Supervisor", () => {
@@ -170,7 +184,7 @@ describe("Graph Supervisor", () => {
         expect(result.decision.status).toBe("applied")
         expect(result.decision.summary).not.toContain("private")
         expect(result.decision.added_node_count).toBe(1)
-        expect((yield* projects.listWorkItems(input.project.id))).toHaveLength(2)
+        expect(yield* projects.listWorkItems(input.project.id)).toHaveLength(2)
         expect((yield* projects.listWorkReceipts(input.project.id))[0]).toMatchObject({
           processing_status: "processed",
           processed_decision_id: result.decision.id,
@@ -230,7 +244,7 @@ describe("Graph Supervisor", () => {
         if (result.status !== "processed") throw new Error("Supervisor was disabled")
         expect(result.decision.status).toBe("shadowed")
         expect((yield* projects.get(input.project.id))!.graph_revision).toBe(0)
-        expect((yield* projects.listWorkItems(input.project.id))).toHaveLength(1)
+        expect(yield* projects.listWorkItems(input.project.id)).toHaveLength(1)
         expect(
           Database.use((db) =>
             db
@@ -240,6 +254,65 @@ describe("Graph Supervisor", () => {
               .all(),
           ),
         ).toHaveLength(0)
+      }),
+    ),
+  )
+
+  shadow.live("evaluates processed legacy receipts from the same graph snapshot without business writes", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = "shadow"
+        CompanyRollout.transition({
+          idempotencyKey: "graph-supervisor-legacy-shadow",
+          to: "shadow",
+          reason: "evaluate the legacy path without applying Seed-and-Grow changes",
+        })
+        const projects = yield* CompanyProject.Service
+        const supervisor = yield* GraphSupervisor.Service
+        const input = yield* seed(projects, "legacy-shadow", "legacy_full_plan")
+        expect(input.receipt.processing_status).toBe("processed")
+        const before = CompanyRollout.projectBusinessStateSha256(input.project.id)
+        const first = yield* supervisor.shadowLegacy(input.project.id)
+        const after = CompanyRollout.projectBusinessStateSha256(input.project.id)
+        expect(first).toHaveLength(1)
+        expect(first[0]).toMatchObject({
+          projectId: input.project.id,
+          receiptId: input.receipt.id,
+          kind: "supervisor",
+          status: "validated",
+          businessStateBeforeSha256: before,
+          businessStateAfterSha256: after,
+        })
+        expect(after).toBe(before)
+        expect(yield* supervisor.shadowLegacy(input.project.id)).toEqual(first)
+        expect(CompanyRollout.evidence().shadowEvaluations).toEqual(first)
+        expect(yield* projects.listWorkItems(input.project.id)).toHaveLength(1)
+        expect(
+          Database.use((db) =>
+            db
+              .select()
+              .from(CompanyGraphDecisionTable)
+              .where(eq(CompanyGraphDecisionTable.project_id, input.project.id))
+              .all(),
+          ),
+        ).toHaveLength(0)
+        expect(
+          Database.use((db) =>
+            db
+              .select()
+              .from(CompanyGraphMutationTable)
+              .where(eq(CompanyGraphMutationTable.project_id, input.project.id))
+              .all(),
+          ),
+        ).toHaveLength(0)
+        Database.use((db) =>
+          db
+            .update(CompanyRolloutShadowEvaluationTable)
+            .set({ input_json: "{}" })
+            .where(eq(CompanyRolloutShadowEvaluationTable.id, first[0].id))
+            .run(),
+        )
+        expect(() => CompanyRollout.evidence()).toThrow("shadow digest")
       }),
     ),
   )
@@ -292,21 +365,15 @@ describe("Graph Supervisor", () => {
           ),
         ).toHaveLength(2)
         expect(
-          Database.use((db) =>
-            db
-              .select()
-              .from(CompanyWorkReceiptTable)
-              .where(eq(CompanyWorkReceiptTable.id, input.receipt.id))
-              .get()?.processing_status,
+          Database.use(
+            (db) =>
+              db.select().from(CompanyWorkReceiptTable).where(eq(CompanyWorkReceiptTable.id, input.receipt.id)).get()
+                ?.processing_status,
           ),
         ).toBe("processed")
         expect(
           Database.use((db) =>
-            db
-              .select()
-              .from(CompanyWorkItemTable)
-              .where(eq(CompanyWorkItemTable.project_id, input.project.id))
-              .all(),
+            db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.project_id, input.project.id)).all(),
           ),
         ).toHaveLength(1)
       }),

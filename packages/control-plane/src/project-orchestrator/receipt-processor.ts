@@ -1,4 +1,5 @@
 import { Context, Effect, Layer } from "effect"
+import type { RolloutShadowEvaluation } from "@agents-company/shared/rollout"
 import { CapabilityMaterializer, type MaterializationResult } from "./capability-materializer"
 import { GraphSupervisor, type ProcessResult } from "./graph-supervisor"
 import { QuiescenceService, type QuiescenceResult } from "./quiescence"
@@ -11,6 +12,7 @@ export type ReceiptProcessingResult = {
 
 export interface Interface {
   readonly processReceipt: (receipt_id: string) => Effect.Effect<ReceiptProcessingResult>
+  readonly shadowLegacy: (project_id: string) => Effect.Effect<RolloutShadowEvaluation[]>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/ReceiptProcessor") {}
@@ -30,7 +32,7 @@ export const layer = Layer.effect(
         quiescence: yield* quiescence.check(processing.project_id),
       }
     })
-    return Service.of({ processReceipt })
+    return Service.of({ processReceipt, shadowLegacy: supervisor.shadowLegacy })
   }),
 )
 
