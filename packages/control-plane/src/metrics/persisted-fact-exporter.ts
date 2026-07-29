@@ -583,11 +583,14 @@ async function b5Evidence(raw: z.output<typeof PersistedFactExportRequest>) {
     if (observation.event_type === "git.blob_checked") {
       const properties = GitBlobObservation.parse(JSON.parse(observation.properties_json) as unknown)
       const blobSha256 = sha256(await candidateBlob(raw.candidateSha, properties.path))
-      const runtimePath = await validateObservationFile(evidence.report.path, properties.runtimeSha256, root)
+      await validateObservationFile(
+        path.join(RepositoryRoot, properties.path),
+        properties.runtimeSha256,
+        RepositoryRoot,
+      )
       if (
         properties.candidateBlobSha256 !== blobSha256 ||
-        properties.runtimeSha256 !== blobSha256 ||
-        runtimePath !== reportPath
+        properties.runtimeSha256 !== blobSha256
       )
         throw new Error(`B5 observation ${observation.id} has a mismatched runtime Git blob`)
     }
