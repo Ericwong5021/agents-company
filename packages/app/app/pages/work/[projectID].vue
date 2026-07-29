@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { GoalBriefProjectView } from "@agents-company/shared/experience";
-import type { CompanyProjectDetail } from "../../../modules/agent-company/runtime/shared/company-contract";
+import type {
+  CompanyProjectDetail,
+  SeedGrowProjectExperience,
+} from "../../../modules/agent-company/runtime/shared/company-contract";
 import {
   availableContextPanels,
   contextPanelLabels,
@@ -24,6 +27,7 @@ import {
   deliveryPackageView,
 } from "../../../modules/agent-company/runtime/shared/delivery-package";
 import type { ComposerTarget } from "../../../modules/agent-company/runtime/shared/company-composer";
+import { diagnosticsCount } from "../../../modules/agent-company/runtime/shared/seed-grow-view";
 
 const route = useRoute();
 const appConfig = useAppConfig();
@@ -54,6 +58,16 @@ const goalBrief = computed(() => goalBriefResult.value && "kind" in goalBriefRes
 const { data: detailResult, error: detailError } = useFetch<CompanyProjectDetail>(() =>
   `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}`);
 const detail = computed(() => detailResult.value ?? undefined);
+const {
+  data: seedGrowResult,
+  status: seedGrowStatus,
+  error: seedGrowError,
+  refresh: refreshSeedGrow,
+} = useFetch<SeedGrowProjectExperience>(() =>
+  `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/seed-grow`);
+const seedGrow = computed(() => seedGrowResult.value ?? undefined);
+const seedProject = computed(() => detail.value?.project.executionStrategy === "seed_and_grow");
+const seedGrowPending = computed(() => seedGrowStatus.value === "pending");
 
 // DELIV-05：区分 Delivered / Accepted，并用最初的验收标准构建核对清单（逐项状态待后端下发）。
 const deliveryView = computed(() => work.value?.availability === "available" && work.value.delivery
@@ -85,7 +99,10 @@ const panels = computed(() => availableContextPanels({
   artifacts: detail.value?.artifacts.length ?? 0,
   agents: detail.value?.recruitment.candidates.length ?? 0,
   threadAvailable: false,
-  diagnostics: workDiagnostics.value.length,
+  diagnostics: workDiagnostics.value.length + diagnosticsCount(
+    seedGrow.value?.graph,
+    seedGrow.value?.validation,
+  ) + (seedProject.value ? 1 : 0),
 }));
 
 // 每个项目独立保存视图状态，切换项目时校正以避免残留上一项目的上下文。
@@ -169,7 +186,7 @@ async function invokeAction(action: ControlAction) {
       body: {},
     }).catch(() => undefined);
     retrying.value = false;
-    await Promise.all([refresh(), refreshGoalBrief()]);
+    await Promise.all([refresh(), refreshGoalBrief(), refreshSeedGrow()]);
   }
 }
 
@@ -338,6 +355,18 @@ function artifactRoute(projectID: string, artifactID: string) {
                   </time>
                 </div>
               </section>
+
+              <SeedGrowOverview
+                v-if="seedProject"
+                :mode="detail?.project.seedMode"
+                :organization="seedGrow?.organization"
+                :graph="seedGrow?.graph"
+                :validation="seedGrow?.validation"
+                :discoveries="seedGrow?.discoveries ?? []"
+                :work-items="detail?.workItems ?? []"
+                :pending="seedGrowPending"
+                :failed="Boolean(seedGrowError)"
+              />
 
               <section v-if="detail?.workItems.length" class="ac-detail-panel">
                 <div class="ac-detail-heading">
@@ -569,7 +598,16 @@ function artifactRoute(projectID: string, artifactID: string) {
 
             <!-- Diagnostics -->
             <template v-else-if="activePanel === 'diagnostics'">
-              <ul class="ac-diagnostic-list">
+              <SeedGrowDiagnostics
+                v-if="seedProject"
+                :graph="seedGrow?.graph"
+                :validation="seedGrow?.validation"
+                :discoveries="seedGrow?.discoveries ?? []"
+                :diagnostics="workDiagnostics"
+                :pending="seedGrowPending"
+                :failed="Boolean(seedGrowError)"
+              />
+              <ul v-else class="ac-diagnostic-list">
                 <li v-for="diagnostic in workDiagnostics" :key="diagnostic.id">{{ diagnostic.message }}</li>
               </ul>
             </template>
