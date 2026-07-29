@@ -88,13 +88,13 @@ async function retry() {
         />
 
         <p
-          v-else-if="organizationStatus === 'pending' && !organizationResult.length"
+          v-else-if="organizationStatus === 'pending' && !organizationResult.length && !snapshot.agents.length"
           class="ac-resource-notice"
           role="status"
         >
           正在读取 Assignment 责任证据…
         </p>
-        <div v-else-if="organizationError" class="ac-empty-state" role="alert">
+        <div v-else-if="organizationError && !snapshot.agents.length" class="ac-empty-state" role="alert">
           <div class="ac-empty-state__content">
             <span class="ac-empty-state__icon" aria-hidden="true">
               <UIcon name="i-lucide-triangle-alert" />
@@ -106,6 +106,9 @@ async function retry() {
         </div>
 
         <template v-else-if="snapshot.agents.length || projectedAssignments.length">
+          <p v-if="organizationError" class="ac-resource-notice" role="alert">
+            Assignment 责任证据暂时不可用，已保留可验证的成员活动信息。
+          </p>
           <p v-if="workUnavailable || unavailableWorkCount" class="ac-resource-notice">
             成员活动可用，但部分工作关联状态不可用，不会显示为零负载。
           </p>

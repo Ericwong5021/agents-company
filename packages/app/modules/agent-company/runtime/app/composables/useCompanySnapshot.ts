@@ -24,6 +24,7 @@ let sseRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let sseStallTimer: ReturnType<typeof setInterval> | undefined
 let sseEverConnected = false
 let ssePendingSignal = false
+let sseReleaseQueued = false
 
 function notifySseRefresh(signal: boolean) {
   // 快照状态经 useState 共享，只需触发一个存活实例的后台刷新。
@@ -61,7 +62,6 @@ function ensureSseSource() {
     }
     if (kind === "signal") scheduleSseRefresh(true)
   }
-  source.onerror = () => scheduleSseRefresh()
   // 连接错误由 EventSource 自动重试；持续不可用时既有 reconnect 轮询兜底。
   sseSource = source
   sseStallTimer ??= setInterval(() => {
@@ -83,17 +83,22 @@ function ensureSseSource() {
 }
 
 function releaseSseSource() {
-  if (sseListeners.size > 0) return
-  sseSource?.close()
-  sseSource = undefined
-  if (sseRefreshTimer) clearTimeout(sseRefreshTimer)
-  if (sseStallTimer) clearInterval(sseStallTimer)
-  sseRefreshTimer = undefined
-  sseStallTimer = undefined
-  sseLastEventAt = undefined
-  sseLastRefreshAt = undefined
-  sseEverConnected = false
-  ssePendingSignal = false
+  if (sseListeners.size > 0 || sseReleaseQueued) return
+  sseReleaseQueued = true
+  queueMicrotask(() => {
+    sseReleaseQueued = false
+    if (sseListeners.size > 0) return
+    sseSource?.close()
+    sseSource = undefined
+    if (sseRefreshTimer) clearTimeout(sseRefreshTimer)
+    if (sseStallTimer) clearInterval(sseStallTimer)
+    sseRefreshTimer = undefined
+    sseStallTimer = undefined
+    sseLastEventAt = undefined
+    sseLastRefreshAt = undefined
+    sseEverConnected = false
+    ssePendingSignal = false
+  })
 }
 
 const loadingSnapshot: CompanySnapshot = {

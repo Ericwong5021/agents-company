@@ -720,6 +720,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                   }}</span>
                 </div>
                 <p class="ac-card-reason">{{ work.delivery.reason.text }}</p>
+                <p v-if="deliveryView" class="ac-delivery-hint">{{ deliveryView.artifactCount }} 项成果</p>
                 <p v-if="deliveryView?.awaitingUserDecision" class="ac-delivery-hint">
                   已交付但尚未验收：请在下方核对最初的验收标准后决定接受或请求修改。
                 </p>
