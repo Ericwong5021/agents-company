@@ -164,6 +164,21 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/founder-studio-select.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/decision-center",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/decision-center.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/decision-center-action",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/decision-center-action.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/decision-center-gate",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/decision-center-gate.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/decision-center-correction",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/decision-center-correction.post"),
