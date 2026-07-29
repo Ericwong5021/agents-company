@@ -68,7 +68,12 @@ import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
 import { ConversationRuntime } from "@/conversation/runtime"
-import { CompanyProject, CompanyProjectExecution, CompanyProjectRecovery } from "@/company-project"
+import {
+  CompanyProject,
+  CompanyProjectDirection,
+  CompanyProjectExecution,
+  CompanyProjectRecovery,
+} from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
@@ -167,6 +172,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyProjectRecovery.defaultLayer,
     CompanyRecruitment.defaultLayer,
     CompanyProjectExecution.defaultLayer,
+    CompanyProjectDirection.defaultLayer,
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     Thread.defaultLayer,

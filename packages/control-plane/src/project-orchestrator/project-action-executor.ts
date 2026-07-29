@@ -4,8 +4,11 @@ import z from "zod"
 import { AgentRun } from "@/agent-run/agent-run"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
+import { CompanyRecruitment } from "@/company-recruitment"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import * as CompanyAttention from "@/company-project/attention"
+import { CompanyProject } from "@/company-project/company-project"
+import * as CompanyProjectDirection from "@/company-project/direction"
 import {
   CompanyApprovalGateTable,
   CompanyAttentionTable,
@@ -26,8 +29,16 @@ import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import { DispatchCoordinator } from "./dispatch"
+import { authorizeDiscoveryBuilder } from "./seed-team"
 
-const RuntimeAction = z.enum(["pause_work", "resume_work", "stop_work", "retry", "resolve_blocker"])
+const RuntimeAction = z.enum([
+  "pause_work",
+  "resume_work",
+  "stop_work",
+  "retry",
+  "resolve_blocker",
+  "adjust_brief",
+])
 type RuntimeAction = z.infer<typeof RuntimeAction>
 
 const ReasonPayload = z
@@ -429,6 +440,33 @@ export function makeLayer(hooks: Hooks = {}) {
           ),
         )
       })
+
+      const authorizeBuilder = (project_id: string) =>
+        Effect.gen(function* () {
+          const projects = yield* CompanyProject.Service
+          const recruitment = yield* CompanyRecruitment.Service
+          const project = yield* projects.get(project_id)
+          if (!project) return
+          const builder = yield* authorizeDiscoveryBuilder({ project, projects, recruitment })
+          if (!builder) return
+          return (yield* recruitment.listAssignments({
+            project_id,
+            work_item_id: builder.id,
+          })).findLast(
+            (assignment) => assignment.status === "assigned" || assignment.status === "active",
+          )?.id
+        }).pipe(
+          Effect.provide(CompanyProject.defaultLayer),
+          Effect.provide(CompanyRecruitment.defaultLayer),
+        )
+
+      const adjustDirection = (input: CompanyProjectDirection.AdjustDirectionRequest) =>
+        Effect.gen(function* () {
+          const direction = yield* CompanyProjectDirection.Service
+          return yield* direction.adjust(input)
+        }).pipe(
+          Effect.provide(CompanyProjectDirection.defaultLayer),
+        )
 
       const pause = Effect.fn("ProjectActionExecutor.pause")(function* (action: ProjectActionRecordValue) {
         const existing = actionEffectResult(action.id)
@@ -987,6 +1025,18 @@ export function makeLayer(hooks: Hooks = {}) {
             { behavior: "immediate" },
           ),
         )
+        if (payload.decision === "approve" && payload.approval_gate_id) {
+          const gate = yield* Effect.sync(() =>
+            Database.use((db) =>
+              db
+                .select()
+                .from(CompanyApprovalGateTable)
+                .where(eq(CompanyApprovalGateTable.id, payload.approval_gate_id!))
+                .get(),
+            ),
+          )
+          if (gate?.kind === "risk_approval") yield* authorizeBuilder(action.project_id)
+        }
         if (persisted.dispatch_resumed === true) yield* dispatchReady(action)
         return persisted
       })
@@ -1005,6 +1055,17 @@ export function makeLayer(hooks: Hooks = {}) {
         action: ProjectActionRecordValue,
         replayed: boolean,
       ) {
+        if (action.action === "adjust_brief") {
+          const payload = CompanyProjectDirection.AdjustDirectionPayload.parse(action.payload)
+          const result = yield* adjustDirection({
+            project_id: action.project_id,
+            attention_id: action.attention_id,
+            idempotency_key: action.idempotency_key,
+            expected_graph_revision: action.expected_revision!,
+            ...payload,
+          })
+          return { action: result.action, replayed: replayed || result.replayed }
+        }
         if (action.status === "applied" || action.status === "rejected") return { action, replayed: true }
         const claimed =
           action.status === "claimed" ? { record: action, replayed: true } : yield* attention.claimAction(action.id)
@@ -1044,7 +1105,46 @@ export function makeLayer(hooks: Hooks = {}) {
       })
 
       const recover = Effect.fn("ProjectActionExecutor.recover")(function* () {
-        const assignment_ids = yield* Effect.sync(reconcileAssignments)
+        const recoveredBuilders = yield* Effect.forEach(
+          yield* Effect.sync(() =>
+            Database.use((db) =>
+              db
+                .select()
+                .from(CompanyProjectTable)
+                .where(eq(CompanyProjectTable.execution_strategy, "seed_and_grow"))
+                .all()
+                .filter(
+                  (project) =>
+                    project.seed_mode === "discovery_first" &&
+                    db
+                      .select()
+                      .from(CompanyApprovalGateTable)
+                      .where(
+                        and(
+                          eq(CompanyApprovalGateTable.project_id, project.id),
+                          eq(CompanyApprovalGateTable.kind, "risk_approval"),
+                          eq(CompanyApprovalGateTable.status, "approved"),
+                        ),
+                      )
+                      .get(),
+                )
+                .map((project) => project.id),
+            ),
+          ),
+          (project_id) =>
+            Effect.gen(function* () {
+              return yield* authorizeBuilder(project_id)
+            }),
+          { concurrency: 1 },
+        )
+        const assignment_ids = [
+          ...new Set(
+            [
+              ...recoveredBuilders.filter((id): id is string => Boolean(id)),
+              ...(yield* Effect.sync(reconcileAssignments)),
+            ],
+          ),
+        ].sort()
         const attention_ids = yield* Effect.sync(resolveInternalAttention)
         const rows = yield* Effect.sync(() =>
           Database.use((db) =>

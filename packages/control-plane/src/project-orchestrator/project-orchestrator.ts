@@ -2,6 +2,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { and, asc, eq } from "drizzle-orm"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
+import { CompanyValidationGate } from "@/company-project/validation-gate"
 import { Database } from "@/storage"
 import { CapabilityMaterializer } from "./capability-materializer"
 import { DispatchCoordinator, type DispatchBarrierResult, type DispatchResult } from "./dispatch"
@@ -45,6 +46,7 @@ export const layer = Layer.effect(
     const dispatch = yield* DispatchCoordinator.Service
     const quiescence = yield* QuiescenceService.Service
     const processor = yield* ReceiptProcessor.Service
+    const validation = yield* CompanyValidationGate.Service
     const actionExecutor = Option.getOrUndefined(yield* Effect.serviceOption(ProjectActionExecutor.Service))
 
     const processReceipt = Effect.fn("ProjectOrchestrator.processReceipt")(function* (receipt_id: string) {
@@ -96,6 +98,10 @@ export const layer = Layer.effect(
       const decisions = (yield* Effect.forEach(project_ids, supervisor.listDecisions, { concurrency: 1 }))
         .flat()
         .filter((decision) => decision.status === "applied")
+      yield* Effect.forEach(project_ids, validation.evaluateProjectPending, {
+        concurrency: 1,
+        discard: true,
+      })
       const assignmentIDsBefore = new Set(
         yield* Effect.sync(() =>
           Database.use((db) =>
@@ -150,6 +156,7 @@ export const defaultLayer = layer.pipe(
   Layer.provide(CapabilityMaterializer.defaultLayer),
   Layer.provide(DispatchCoordinator.defaultLayer),
   Layer.provide(QuiescenceService.defaultLayer),
+  Layer.provide(CompanyValidationGate.defaultLayer),
   Layer.provide(ReceiptProcessor.defaultLayer),
   Layer.provide(ProjectActionExecutor.defaultLayer),
 )

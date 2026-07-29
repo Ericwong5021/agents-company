@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import type { RolloutShadowEvaluation } from "@agents-company/shared/rollout"
+import { CompanyValidationGate } from "@/company-project/validation-gate"
 import { CapabilityMaterializer, type MaterializationResult } from "./capability-materializer"
 import { GraphSupervisor, type ProcessResult } from "./graph-supervisor"
 import { QuiescenceService, type QuiescenceResult } from "./quiescence"
@@ -23,9 +24,12 @@ export const layer = Layer.effect(
     const supervisor = yield* GraphSupervisor.Service
     const materializer = yield* CapabilityMaterializer.Service
     const quiescence = yield* QuiescenceService.Service
+    const validation = yield* CompanyValidationGate.Service
     const processReceipt = Effect.fn("ReceiptProcessor.processReceipt")(function* (receipt_id: string) {
       const processing = yield* supervisor.processReceipt(receipt_id)
       if (processing.status === "disabled") return { processing }
+      if (processing.mode === "active")
+        yield* validation.evaluateProjectPending(processing.project_id)
       return {
         processing,
         materialization: yield* materializer.materializeDecision(processing.decision),
@@ -39,6 +43,7 @@ export const layer = Layer.effect(
 export const defaultLayer = layer.pipe(
   Layer.provide(GraphSupervisor.defaultLayer),
   Layer.provide(CapabilityMaterializer.defaultLayer),
+  Layer.provide(CompanyValidationGate.defaultLayer),
   Layer.provide(QuiescenceService.defaultLayer),
 )
 

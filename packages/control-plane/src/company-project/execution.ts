@@ -1,3 +1,4 @@
+import path from "node:path"
 import z from "zod"
 import { Context, Effect, Layer, Scope } from "effect"
 import { CapabilityCatalog } from "@/capability/catalog"
@@ -29,6 +30,7 @@ import { evaluateSeedPolicy } from "@/project-orchestrator/seed-policy"
 import { startSeedProject, wayfinderWorkflow } from "@/project-orchestrator/seed-team"
 import { ReceiptProcessor } from "@/project-orchestrator/receipt-processor"
 import { CompanyProject } from "./company-project"
+import { CompanyValidationGate } from "./validation-gate"
 import {
   BoardProjectCharter,
   BoardProjectDecisionConflict,
@@ -371,11 +373,21 @@ const approvedCharterFromProject = (charter: ProjectCharter) =>
     open_decisions: charter.open_decisions,
   })
 
-const workerPermission = (item: WorkItem, policy: DeliveryPolicy, writeApproved: boolean) => {
-  if (item.work_type !== "coding") return "read_only" as const
-  if (policy.source_approval_preset === "autonomous") return "full_access" as const
-  if (policy.source_approval_preset === "strict" && !writeApproved) return "read_only" as const
-  return "workspace_write" as const
+const workerPermission = (
+  item: WorkItem,
+  policy: DeliveryPolicy,
+  writeApproved: boolean,
+  assignmentPermission: "read_only" | "workspace_write" | "full_access",
+) => {
+  const requested =
+    item.work_type !== "coding" || (policy.source_approval_preset === "strict" && !writeApproved)
+      ? "read_only"
+      : policy.source_approval_preset === "autonomous"
+        ? "full_access"
+        : "workspace_write"
+  return permissionRank[requested] <= permissionRank[assignmentPermission]
+    ? requested
+    : assignmentPermission
 }
 
 const boardBiddingEvidenceRule = (item: WorkItem) =>
@@ -416,6 +428,7 @@ const workerScript = (
   modelRef: string,
   policy: DeliveryPolicy,
   writeApproved: boolean,
+  assignmentPermission: "read_only" | "workspace_write" | "full_access",
   evidence: unknown,
   reviewFeedback?: { artifact_id: string; summary: string; findings: string[]; evidence_checked: string[] },
 ) =>
@@ -457,7 +470,7 @@ const workerScript = (
           "workspaceRead",
           ...(item.work_type === "coding" ? ["workspaceWrite"] : []),
         ],
-        permissionMode: workerPermission(item, policy, writeApproved),
+        permissionMode: workerPermission(item, policy, writeApproved, assignmentPermission),
         model: modelRef,
         schema: schema(z.object({ summary: z.string(), submission: submissions[item.work_type] })),
         label: item.title,
@@ -571,6 +584,7 @@ export const layer = Layer.effect(
     const runtime = yield* WorkflowRuntime.Service
     const workType = yield* WorkType.Service
     const receiptProcessor = yield* ReceiptProcessor.Service
+    const validation = yield* CompanyValidationGate.Service
     const scope = yield* Scope.Scope
 
     const resolveModel = Effect.fn("CompanyProjectExecution.resolveModel")(function* (input: {
@@ -683,6 +697,66 @@ export const layer = Layer.effect(
       if (verdict.mode !== project.seed_mode)
         throw new Error(`Company project ${project.id} SeedPolicy verdict differs from its pinned seed mode`)
       return verdict
+    })
+
+    const completeValidatedWorkItem = Effect.fn(
+      "CompanyProjectExecution.completeValidatedWorkItem",
+    )(function* (input: {
+      item: WorkItem
+      artifact: Artifact
+      summary: string
+    }) {
+      if (!input.artifact.content) throw new Error(`Artifact ${input.artifact.id} has no persisted bytes`)
+      yield* validation.evaluateProjectPending(input.item.project_id)
+      const artifact_sha256 = new Bun.CryptoHasher("sha256")
+        .update(input.artifact.content)
+        .digest("hex")
+      const gate = yield* validation.create({
+        id: `delivery-${new Bun.CryptoHasher("sha256")
+          .update(`${input.item.id}:${input.item.attempt + 1}:${input.artifact.id}`)
+          .digest("hex")
+          .slice(0, 40)}`,
+        project_id: input.item.project_id,
+        work_item_id: input.item.id,
+        kind: "artifact",
+        criteria: input.item.acceptance_criteria.map((criterion, index) => ({
+          id: `criterion-${index + 1}-${new Bun.CryptoHasher("sha256")
+            .update(criterion)
+            .digest("hex")
+            .slice(0, 24)}`,
+          statement: criterion,
+          anchor: { kind: "artifact" as const, reference: `artifact:${input.artifact.id}` },
+          operator: "digest" as const,
+          expected: artifact_sha256,
+        })),
+        blocking_work_item_ids: [input.item.id],
+        evaluator: "artifact_digest_v1",
+        max_repair_rounds: 3,
+      })
+      if (gate.status !== "passed")
+        throw new Error(`Delivery ValidationGate ${gate.id} did not pass`)
+      yield* projects.completeWorkItemWithReceipt({
+        id: input.item.id,
+        receipt: {
+          idempotency_key: `delivery:${input.item.id}:attempt:${input.item.attempt + 1}`,
+          outcome: "completed",
+          summary: input.summary,
+          artifact_ids: [input.artifact.id],
+          evidence_refs: [{ kind: "artifact", id: input.artifact.id }],
+          confirmed_facts: input.item.acceptance_criteria.map(
+            (criterion) =>
+              `acceptance:${criterion}:artifact:${input.artifact.id}:sha256:${artifact_sha256}:validation_gate:${gate.id}:passed`,
+          ),
+          invalidated_assumptions: [],
+          unknowns: [],
+          blockers: [],
+          capability_gaps: [],
+          task_proposals: [],
+          dependency_proposals: [],
+          questions: [],
+        },
+      })
+      return { gate, artifact_sha256 }
     })
 
     const evidenceSnapshot = Effect.fn("CompanyProjectExecution.evidenceSnapshot")(function* (project: Project) {
@@ -1018,15 +1092,34 @@ export const layer = Layer.effect(
       item: WorkItem
       script: string
       workspace?: string
+      permission_mode: "read_only" | "workspace_write" | "full_access"
     }) {
       if (!input.project.coordinator_session_id) throw new Error("Project has no coordinator session")
+      const assignment = (yield* recruitment.listAssignments({
+        project_id: input.project.id,
+        work_item_id: input.item.id,
+      })).findLast((candidate) => candidate.status === "assigned" || candidate.status === "active")
+      if (input.project.execution_strategy === "seed_and_grow" && !assignment)
+        throw new Error(`Work item ${input.item.id} has no current ProjectAssignment`)
+      if (
+        assignment &&
+        (assignment.agent_id !== input.item.owner_agent_id ||
+          JSON.stringify(assignment.resource_scope) !== JSON.stringify(input.item.resource_scope))
+      )
+        throw new Error(`Work item ${input.item.id} exceeds its ProjectAssignment scope`)
+      if (assignment && permissionRank[input.permission_mode] > permissionRank[assignment.permission_mode])
+        throw new Error(`Work item ${input.item.id} exceeds its ProjectAssignment permission`)
+      const workspace = path.resolve(input.workspace ?? input.project.output_dir)
+      const output = path.resolve(input.project.output_dir)
+      if (workspace !== output && !workspace.startsWith(`${output}${path.sep}`))
+        throw new Error(`Work item ${input.item.id} workspace exceeds its project boundary`)
       yield* projects.startWorkItem(input.item.id)
       const started = yield* runtime.start({
         script: input.script,
         sessionID: SessionID.make(input.project.coordinator_session_id),
         parentActorID: "main",
         model: model(input.project),
-        workspace: input.workspace ?? input.project.output_dir,
+        workspace,
         companyProjectID: input.project.id,
         workItemID: input.item.id,
         maxConcurrentAgents: 1,
@@ -1166,6 +1259,13 @@ export const layer = Layer.effect(
         dispatchable,
         (item) =>
           Effect.gen(function* () {
+            const assignment = assignments.find(
+              (candidate) =>
+                candidate.work_item_id === item.id &&
+                candidate.agent_id === item.owner_agent_id &&
+                (candidate.status === "assigned" || candidate.status === "active"),
+            )
+            if (!assignment) throw new Error(`Work item ${item.id} has no current ProjectAssignment`)
             const worktree =
               item.work_type === "coding"
                 ? yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: item.id })
@@ -1190,9 +1290,19 @@ export const layer = Layer.effect(
                         agentModelRef(project, item.model_group),
                         charter.policy,
                         writeApproved,
+                        assignment.permission_mode,
                         evidence,
                       ),
                 workspace: worktree?.directory,
+                permission_mode:
+                  item.purpose === "discovery"
+                    ? "read_only"
+                    : workerPermission(
+                        item,
+                        charter.policy,
+                        writeApproved,
+                        assignment.permission_mode,
+                      ),
               }),
               worktree,
             }
@@ -1229,6 +1339,7 @@ export const layer = Layer.effect(
                   },
                   created_by_agent_id: item.owner_agent_id,
                 })
+                yield* validation.evaluateProjectPending(project.id)
                 yield* projects.completeWorkItemWithReceipt({
                   id: item.id,
                   receipt: {
@@ -1267,7 +1378,7 @@ export const layer = Layer.effect(
               })
               if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
               if (item.work_type !== "coding" || !worktree) {
-                yield* projects.completeWorkItem(item.id)
+                yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 return
               }
@@ -1282,7 +1393,7 @@ export const layer = Layer.effect(
                 requested_by_agent_id: item.owner_agent_id,
                 review: { mode: "seed_first_slice", artifact_id: artifact.id },
               })
-              yield* projects.completeWorkItem(item.id)
+              yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
               yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
               if (charter.policy.require_human_merge) return
               yield* projects.resolveGate({
@@ -1372,6 +1483,7 @@ export const layer = Layer.effect(
       if (!charter) throw new Error("Project Charter is missing")
       const gates = yield* projects.listGates(project.id)
       const evidence = yield* evidenceSnapshot(project)
+      const assignments = yield* recruitment.listAssignments({ project_id })
       const writeApproved = gates.some((gate) => gate.kind === "risk_approval" && gate.status === "approved")
       if (
         charter.policy.source_approval_preset === "strict" &&
@@ -1396,6 +1508,13 @@ export const layer = Layer.effect(
         ready,
         (item) =>
           Effect.gen(function* () {
+            const assignment = assignments.find(
+              (candidate) =>
+                candidate.work_item_id === item.id &&
+                candidate.agent_id === item.owner_agent_id &&
+                (candidate.status === "assigned" || candidate.status === "active"),
+            )
+            if (!assignment) throw new Error(`Work item ${item.id} has no current ProjectAssignment`)
             if (item.kind === "reviewer") {
               if (!item.parent_id) throw new Error(`Reviewer ${item.id} has no parent work item`)
               const parent = (yield* projects.listWorkItems(project.id)).find(
@@ -1427,6 +1546,7 @@ export const layer = Layer.effect(
                     evidence,
                   ),
                   workspace: worktree?.directory,
+                  permission_mode: "read_only",
                 }),
                 worktree,
               }
@@ -1464,10 +1584,17 @@ export const layer = Layer.effect(
                   agentModelRef(project, item.model_group),
                   charter.policy,
                   writeApproved,
+                  assignment.permission_mode,
                   evidence,
                   reviewFeedback,
                 ),
                 workspace: worktree?.directory,
+                permission_mode: workerPermission(
+                  item,
+                  charter.policy,
+                  writeApproved,
+                  assignment.permission_mode,
+                ),
               }),
               worktree,
             }
@@ -1518,7 +1645,7 @@ export const layer = Layer.effect(
                     )
                   yield* recordBoardCloseout({ project, item, artifact, summary: parsed.summary })
                 }
-                yield* projects.completeWorkItem(item.id)
+                yield* completeValidatedWorkItem({ item, artifact, summary: parsed.summary })
                 yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
                 return
               }
@@ -1569,7 +1696,7 @@ export const layer = Layer.effect(
                 }
                 return
               }
-              yield* projects.completeWorkItem(item.id)
+              yield* completeValidatedWorkItem({ item, artifact: reviewArtifact, summary: parsed.summary })
               yield* reputation.updateFromAdmission(item.owner_agent_id ?? item.role, true, [], "project")
               if (parent.work_type !== "coding") return
               const parentWorktree =
@@ -1908,6 +2035,7 @@ export const layer = Layer.effect(
         project,
         item,
         script: plannerScript(project.goal, item.owner_agent_id!, agentModelRef(project, "ultra")),
+        permission_mode: "read_only",
       })
       yield* Effect.gen(function* () {
         yield* continuePlanner({ project, item: { ...item, attempt: item.attempt + 1 }, runID }).pipe(
@@ -1944,6 +2072,7 @@ export const layer = Layer.effect(
         project,
         item,
         script: approvedCharterScript(charter),
+        permission_mode: "read_only",
       })
       yield* Effect.gen(function* () {
         yield* continuePlanner({
@@ -2403,6 +2532,7 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Session.defaultLayer),
   Layer.provide(WorkType.defaultLayer),
   Layer.provide(WorkflowRuntime.defaultLayer),
+  Layer.provide(CompanyValidationGate.defaultLayer),
 )
 
 export * as CompanyProjectExecution from "./execution"

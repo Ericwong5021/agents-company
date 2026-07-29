@@ -58,6 +58,19 @@ function projectActionRequest(project_id: string, input: ExperienceWorkActionReq
     idempotency_key: input.idempotencyKey,
     expected_revision: input.expectedGraphRevision,
   }
+  if (input.action === "adjust_brief")
+    return {
+      ...base,
+      attention_id: input.attentionId,
+      payload: {
+        brief_id: input.briefId,
+        expected_brief_version: input.expectedBriefVersion,
+        expected_plan_version: input.expectedPlanVersion,
+        source: input.source,
+        brief: input.brief,
+        change_reason: input.changeReason,
+      },
+    }
   if (input.action === "retry")
     return {
       ...base,

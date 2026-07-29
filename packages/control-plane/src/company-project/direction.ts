@@ -40,6 +40,15 @@ export const AdjustDirectionRequest = z
   .strict()
 export type AdjustDirectionRequest = z.infer<typeof AdjustDirectionRequest>
 
+export const AdjustDirectionPayload = AdjustDirectionRequest.pick({
+  brief_id: true,
+  expected_brief_version: true,
+  expected_plan_version: true,
+  source: true,
+  brief: true,
+  change_reason: true,
+}).strict()
+
 const AppliedBinding = z
   .object({
     brief_id: z.string(),

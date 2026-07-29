@@ -424,6 +424,7 @@ export const ExperienceActionMutatesBusinessState = {
 } as const satisfies Record<ExperienceActionType, boolean>
 
 export const ExperienceR0ImplementedMutationActions = [
+  "adjust_brief",
   "pause_work",
   "resume_work",
   "stop_work",
@@ -438,6 +439,19 @@ const ExperienceWorkActionBase = {
 }
 
 export const ExperienceWorkActionRequest = z.union([
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("adjust_brief"),
+      attentionId: Identifier.optional(),
+      briefId: Identifier,
+      expectedBriefVersion: z.number().int().positive(),
+      expectedPlanVersion: z.number().int().positive(),
+      source: GoalBriefSource,
+      brief: GoalBriefDraft,
+      changeReason: LongText,
+    })
+    .strict(),
   z
     .object({
       ...ExperienceWorkActionBase,
@@ -492,7 +506,7 @@ export const ExperienceWorkActionResult = z
   .object({
     actionId: Identifier,
     projectId: Identifier,
-    action: z.enum(["pause_work", "resume_work", "stop_work", "retry", "resolve_blocker"]),
+    action: z.enum(["adjust_brief", "pause_work", "resume_work", "stop_work", "retry", "resolve_blocker"]),
     status: z.enum(["applied", "rejected"]),
     replayed: z.boolean(),
     result: z.record(z.string(), z.unknown()).optional(),

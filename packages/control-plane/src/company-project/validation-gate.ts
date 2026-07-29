@@ -5,6 +5,7 @@ import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
 import { createWithDatabase as createAttentionWithDatabase } from "./attention"
+import { observeGate, type AnchorObservation } from "./validation-anchor"
 import {
   CompanyArtifactTable,
   CompanyProjectEventTable,
@@ -27,6 +28,7 @@ import {
   type GraphMutationProposal as GraphMutationProposalType,
   type PrerequisiteRepairRequest as PrerequisiteRepairRequestType,
   type ValidationCriterion as ValidationCriterionType,
+  type ValidationEvidence as ValidationEvidenceType,
   type ValidationEvaluation as ValidationEvaluationType,
   type ValidationEvaluator as ValidationEvaluatorType,
   type ValidationGate as ValidationGateType,
@@ -182,6 +184,43 @@ function evidenceReferenceExists(
   )
 }
 
+function persistAnchorEvidence(
+  db: TxOrDb,
+  row: typeof CompanyValidationGateTable.$inferSelect,
+  observations: AnchorObservation[],
+  created_at: number,
+) {
+  return observations.map((observation): ValidationEvidenceType => {
+    const event_id = Identifier.ascending("event")
+    db.insert(CompanyProjectEventTable)
+      .values({
+        id: event_id,
+        project_id: row.project_id,
+        type: "validation_anchor.checked",
+        actor_id: null,
+        data_json: JSON.stringify({
+          gate_id: row.id,
+          criterion_id: observation.criterion_id,
+          anchor: observation.anchor,
+          reference: observation.reference,
+          observed: observation.observed,
+          warning: observation.warning,
+          source_ref: observation.source_ref,
+        }),
+        created_at,
+      })
+      .run()
+    return {
+      criterion_id: observation.criterion_id,
+      anchor: observation.anchor,
+      reference: observation.reference,
+      observed: observation.observed,
+      evidence_ref: { kind: "project_event", id: event_id },
+      warning: observation.warning,
+    }
+  })
+}
+
 function evaluateRow(
   db: TxOrDb,
   row: typeof CompanyValidationGateTable.$inferSelect,
@@ -256,6 +295,8 @@ function sameGate(
 export interface Interface {
   readonly create: (input: ValidationGateCreateType) => Effect.Effect<ValidationGateType>
   readonly evaluate: (input: ValidationEvaluationType) => Effect.Effect<EvaluationResult>
+  readonly evaluatePending: (gate_id: string) => Effect.Effect<EvaluationResult>
+  readonly evaluateProjectPending: (project_id: string) => Effect.Effect<EvaluationResult[]>
   readonly repair: (input: ValidationRepairInputType) => Effect.Effect<RepairResult>
   readonly planPrerequisiteRepair: (
     input: PrerequisiteRepairRequestType,
@@ -295,6 +336,146 @@ export function makeLayer() {
         )).map(gateFromRow)
       })
 
+      const evaluatePending = Effect.fn("CompanyValidationGate.evaluatePending")(function* (gate_id: string) {
+        const claimed = yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              const row = db
+                .select()
+                .from(CompanyValidationGateTable)
+                .where(eq(CompanyValidationGateTable.id, gate_id))
+                .get()
+              if (!row) throw new Error(`Validation Gate not found: ${gate_id}`)
+              if (row.status === "passed" || row.status === "failed")
+                return gateFromRow(row)
+              if (row.status !== "pending" && row.status !== "running")
+                throw new Error(`Validation Gate ${row.id} cannot be evaluated from ${row.status}`)
+              if (row.status === "pending") {
+                const now = Date.now()
+                db.update(CompanyValidationGateTable)
+                  .set({ status: "running" })
+                  .where(
+                    and(
+                      eq(CompanyValidationGateTable.id, row.id),
+                      eq(CompanyValidationGateTable.status, "pending"),
+                    ),
+                  )
+                  .run()
+                insertEvent(
+                  db,
+                  row.project_id,
+                  "validation_gate.evaluation_started",
+                  { gate_id: row.id, evaluator: row.evaluator },
+                  now,
+                )
+              }
+              return gateFromRow(
+                db
+                  .select()
+                  .from(CompanyValidationGateTable)
+                  .where(eq(CompanyValidationGateTable.id, row.id))
+                  .get()!,
+              )
+            },
+            { behavior: "immediate" },
+          ),
+        )
+        if (claimed.status === "passed" || claimed.status === "failed")
+          return {
+            status: claimed.status,
+            gate: claimed,
+            failed_criterion_ids:
+              claimed.status === "failed" ? claimed.criteria.map((criterion) => criterion.id) : [],
+          }
+        const observations = yield* Effect.promise(() => observeGate(claimed))
+        return yield* Effect.sync(() =>
+          Database.transaction(
+            (db): EvaluationResult => {
+              const row = db
+                .select()
+                .from(CompanyValidationGateTable)
+                .where(eq(CompanyValidationGateTable.id, gate_id))
+                .get()
+              if (!row) throw new Error(`Validation Gate not found: ${gate_id}`)
+              if (row.status === "passed" || row.status === "failed") {
+                const gate = gateFromRow(row)
+                return {
+                  status: row.status,
+                  gate,
+                  failed_criterion_ids:
+                    row.status === "failed" ? gate.criteria.map((criterion) => criterion.id) : [],
+                }
+              }
+              if (row.status !== "running")
+                throw new Error(`Validation Gate ${row.id} cannot finish evaluation from ${row.status}`)
+              const now = Date.now()
+              const result = evaluateRow(db, row, {
+                gate_id: row.id,
+                evaluator: gateFromRow(row).evaluator,
+                evidence: persistAnchorEvidence(db, row, observations, now),
+              })
+              db.update(CompanyValidationGateTable)
+                .set({
+                  status: result.status,
+                  evidence_refs_json: JSON.stringify(result.evidence_refs),
+                  failure_summary: result.failure_summary ?? null,
+                  evaluated_at: now,
+                })
+                .where(eq(CompanyValidationGateTable.id, row.id))
+                .run()
+              insertEvent(
+                db,
+                row.project_id,
+                "validation_gate.evaluated",
+                {
+                  gate_id: row.id,
+                  evaluator: row.evaluator,
+                  criteria_sha256: row.criteria_sha256,
+                  status: result.status,
+                  failed_criterion_ids: result.failed_criterion_ids,
+                  repair_round: row.repair_round,
+                },
+                now,
+              )
+              return {
+                status: result.status,
+                gate: gateFromRow(
+                  db
+                    .select()
+                    .from(CompanyValidationGateTable)
+                    .where(eq(CompanyValidationGateTable.id, row.id))
+                    .get()!,
+                ),
+                failed_criterion_ids: result.failed_criterion_ids,
+              }
+            },
+            { behavior: "immediate" },
+          ),
+        )
+      })
+
+      const evaluateProjectPending = Effect.fn(
+        "CompanyValidationGate.evaluateProjectPending",
+      )(function* (project_id: string) {
+        const ids = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .select({ id: CompanyValidationGateTable.id })
+              .from(CompanyValidationGateTable)
+              .where(
+                and(
+                  eq(CompanyValidationGateTable.project_id, project_id),
+                  inArray(CompanyValidationGateTable.status, ["pending", "running"]),
+                ),
+              )
+              .orderBy(asc(CompanyValidationGateTable.created_at), asc(CompanyValidationGateTable.id))
+              .all()
+              .map((row) => row.id),
+          ),
+        )
+        return yield* Effect.forEach(ids, evaluatePending, { concurrency: 1 })
+      })
+
       const create = Effect.fn("CompanyValidationGate.create")(function* (
         raw: ValidationGateCreateType,
       ) {
@@ -304,7 +485,7 @@ export function makeLayer() {
           throw new Error("Validation Gate criteria must have unique ids")
         }
         assertEvaluator(criteria, input.evaluator)
-        return yield* Effect.sync(() =>
+        const created = yield* Effect.sync(() =>
           Database.transaction(
             (db) => {
               if (
@@ -428,64 +609,20 @@ export function makeLayer() {
             { behavior: "immediate" },
           ),
         )
+        if (created.status === "pending" || created.status === "running")
+          return (yield* evaluatePending(created.id)).gate
+        return created
       })
 
       const evaluate = Effect.fn("CompanyValidationGate.evaluate")(function* (
         raw: ValidationEvaluationType,
       ) {
         const input = ValidationEvaluation.parse(raw)
-        return yield* Effect.sync(() =>
-          Database.transaction(
-            (db): EvaluationResult => {
-              const row = db
-                .select()
-                .from(CompanyValidationGateTable)
-                .where(eq(CompanyValidationGateTable.id, input.gate_id))
-                .get()
-              if (!row) throw new Error(`Validation Gate not found: ${input.gate_id}`)
-              if (!["pending", "running"].includes(row.status)) {
-                throw new Error(`Validation Gate ${row.id} cannot be evaluated from ${row.status}`)
-              }
-              const result = evaluateRow(db, row, input)
-              const now = Date.now()
-              db.update(CompanyValidationGateTable)
-                .set({
-                  status: result.status,
-                  evidence_refs_json: JSON.stringify(result.evidence_refs),
-                  failure_summary: result.failure_summary ?? null,
-                  evaluated_at: now,
-                })
-                .where(eq(CompanyValidationGateTable.id, row.id))
-                .run()
-              insertEvent(
-                db,
-                row.project_id,
-                "validation_gate.evaluated",
-                {
-                  gate_id: row.id,
-                  evaluator: row.evaluator,
-                  criteria_sha256: row.criteria_sha256,
-                  status: result.status,
-                  failed_criterion_ids: result.failed_criterion_ids,
-                  repair_round: 0,
-                },
-                now,
-              )
-              return {
-                status: result.status,
-                gate: gateFromRow(
-                  db
-                    .select()
-                    .from(CompanyValidationGateTable)
-                    .where(eq(CompanyValidationGateTable.id, row.id))
-                    .get()!,
-                ),
-                failed_criterion_ids: result.failed_criterion_ids,
-              }
-            },
-            { behavior: "immediate" },
-          ),
-        )
+        const gate = yield* get(input.gate_id)
+        if (!gate) throw new Error(`Validation Gate not found: ${input.gate_id}`)
+        if (gate.evaluator !== input.evaluator)
+          throw new Error("Validation evaluator cannot change while a Gate is active")
+        return yield* evaluatePending(input.gate_id)
       })
 
       const planPrerequisiteRepair = Effect.fn(
@@ -567,6 +704,11 @@ export function makeLayer() {
         raw: ValidationRepairInputType,
       ) {
         const input = ValidationRepairInput.parse(raw)
+        const gate = yield* get(input.gate_id)
+        if (!gate) throw new Error(`Validation Gate not found: ${input.gate_id}`)
+        if (gate.evaluator !== input.evaluator)
+          throw new Error("Validation evaluator cannot change while a Gate is active")
+        const observations = yield* Effect.promise(() => observeGate(gate))
         return yield* Effect.sync(() =>
           Database.transaction(
             (db): RepairResult => {
@@ -583,7 +725,7 @@ export function makeLayer() {
               ) {
                 throw new Error("Failure diagnosis references unavailable evidence")
               }
-              const input_sha256 = digest(input)
+              const input_sha256 = digest({ ...input, evidence: observations })
               const existing = db
                 .select()
                 .from(CompanyValidationRepairTable)
@@ -621,13 +763,14 @@ export function makeLayer() {
                   replayed: true,
                 }
               }
+              const now = Date.now()
+              const realEvidence = persistAnchorEvidence(db, row, observations, now)
               const result = evaluateRow(db, row, {
                 gate_id: row.id,
                 evaluator: input.evaluator,
-                evidence: input.evidence,
+                evidence: realEvidence,
               })
               const round = row.repair_round + 1
-              const now = Date.now()
               db.insert(CompanyValidationRepairTable)
                 .values({
                   id: Identifier.ascending("validationRepair"),
@@ -639,7 +782,7 @@ export function makeLayer() {
                   diagnosis_json: JSON.stringify(input.diagnosis),
                   fix_summary: input.fix_summary,
                   repair_diff_json: JSON.stringify(input.repair_diff),
-                  reverify_evidence_json: JSON.stringify(input.evidence),
+                  reverify_evidence_json: JSON.stringify(realEvidence),
                   result: result.status,
                   created_at: now,
                 })
@@ -735,7 +878,7 @@ export function makeLayer() {
       })
 
       const recover = Effect.fn("CompanyValidationGate.recover")(function* () {
-        return yield* Effect.sync(() =>
+        const recovered = yield* Effect.sync(() =>
           Database.transaction(
             (db): RecoveryResult => {
               const reset_gate_ids: string[] = []
@@ -807,9 +950,24 @@ export function makeLayer() {
             { behavior: "immediate" },
           ),
         )
+        yield* Effect.forEach(recovered.reset_gate_ids, evaluatePending, {
+          concurrency: 1,
+          discard: true,
+        })
+        return recovered
       })
 
-      return Service.of({ create, evaluate, repair, planPrerequisiteRepair, get, list, recover })
+      return Service.of({
+        create,
+        evaluate,
+        evaluatePending,
+        evaluateProjectPending,
+        repair,
+        planPrerequisiteRepair,
+        get,
+        list,
+        recover,
+      })
     }),
   )
 }

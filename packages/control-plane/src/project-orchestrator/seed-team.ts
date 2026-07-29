@@ -82,6 +82,28 @@ export const assignSeedWorkItem = Effect.fn("ProjectOrchestrator.assignSeedWorkI
   return assigned
 })
 
+export const authorizeDiscoveryBuilder = Effect.fn(
+  "ProjectOrchestrator.authorizeDiscoveryBuilder",
+)(function* (input: {
+  project: Project
+  recruitment: CompanyRecruitmentService
+  projects: CompanyProjectService
+}) {
+  if (input.project.execution_strategy !== "seed_and_grow" || input.project.seed_mode !== "discovery_first")
+    return
+  const items = yield* input.projects.listWorkItems(input.project.id)
+  const builder = items.find((item) => item.purpose === "first_slice")
+  if (!builder) throw new Error(`Discovery project ${input.project.id} has no First Slice Builder`)
+  const wayfinder = items.find((item) => item.purpose === "discovery")
+  return yield* assignSeedWorkItem({
+    project: input.project,
+    item: builder,
+    projects: input.projects,
+    recruitment: input.recruitment,
+    exclude_agent_ids: wayfinder?.owner_agent_id ? [wayfinder.owner_agent_id] : [],
+  })
+})
+
 export const startSeedProject = Effect.fn("ProjectOrchestrator.startSeedProject")(function* (input: {
   project: Project
   verdict: SeedPolicyVerdict
