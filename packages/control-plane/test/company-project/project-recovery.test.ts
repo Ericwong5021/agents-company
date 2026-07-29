@@ -3,6 +3,7 @@ import { Database as SQLite } from "bun:sqlite"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
+import { PROJECTOR_VERSION } from "../../src/company-project/work-projection"
 import { tmpdir } from "../fixture/fixture"
 
 const root = path.resolve(import.meta.dir, "../..")
@@ -96,7 +97,7 @@ test(
         orphan_status: "blocked",
         terminal_status: "completed",
         active_status: "running",
-        projection_version: 3,
+        projection_version: PROJECTOR_VERSION,
         projection_rebuilt: true,
         event_counts: {
           "work_receipt.processed": 1,
