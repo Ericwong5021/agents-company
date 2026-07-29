@@ -81,6 +81,24 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       status: text(raw.project.status),
       ownerAgentID: text(raw.project.owner_agent_id) || undefined,
       sourceThreadID: text(raw.project.source_thread_id) || undefined,
+      executionStrategy:
+        raw.project.execution_strategy === "seed_and_grow"
+          ? "seed_and_grow"
+          : raw.project.execution_strategy === "legacy_full_plan"
+            ? "legacy_full_plan"
+            : undefined,
+      seedMode:
+        raw.project.seed_mode === "seed_pair"
+          ? "seed_pair"
+          : raw.project.seed_mode === "discovery_first"
+            ? "discovery_first"
+            : raw.project.seed_mode === "direct_single"
+              ? "direct_single"
+              : undefined,
+      graphRevision:
+        typeof raw.project.graph_revision === "number" && Number.isInteger(raw.project.graph_revision)
+          ? raw.project.graph_revision
+          : undefined,
     },
     charter: charter
       ? {
@@ -109,6 +127,9 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       attempt: number(item.attempt),
       maxAttempts: number(item.max_attempts),
       error: text(item.error) || undefined,
+      purpose: text(item.purpose) || undefined,
+      role: text(item.role) || undefined,
+      originKind: text(item.origin_kind) || undefined,
     })),
     artifacts: records(raw.artifacts).map((artifact) => ({
       id: text(artifact.id),

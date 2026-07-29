@@ -1,6 +1,21 @@
 <script setup lang="ts">
+import type { OrganizationProjection } from "@agents-company/shared/experience";
+import {
+  assignmentStatusLabels,
+  assignmentsForAgent,
+  sourceRefLabel,
+} from "../../../modules/agent-company/runtime/shared/seed-grow-view";
+
 const appConfig = useAppConfig();
 const { data: snapshot, pending, refresh } = useCompanySnapshot();
+const {
+  data: organizationResult,
+  status: organizationStatus,
+  error: organizationError,
+  refresh: refreshOrganization,
+} = useFetch<OrganizationProjection[]>("/api/agent-company/experience/organization", {
+  default: () => [],
+});
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
 const agentsUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("agents") ?? false);
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false);
@@ -17,6 +32,14 @@ function ownedWork(agentID: string) {
   return snapshot.value.work
     .filter(work => work.availability === "available")
     .filter(work => work.summary.owner?.id === agentID);
+}
+
+function agentAssignments(agentID: string) {
+  return assignmentsForAgent(organizationResult.value, agentID);
+}
+
+async function retry() {
+  await Promise.all([refresh(), refreshOrganization()]);
 }
 </script>
 
@@ -44,12 +67,18 @@ function ownedWork(agentID: string) {
           :issue="snapshot.issue"
           :pending="pending"
           show-settings
-          @retry="refresh()"
+          @retry="retry()"
         />
 
         <template v-else-if="snapshot.agents.length">
           <p v-if="workUnavailable || unavailableWorkCount" class="ac-resource-notice">
             成员活动可用，但部分工作关联状态不可用，不会显示为零负载。
+          </p>
+          <p v-if="organizationStatus === 'pending'" class="ac-resource-notice" role="status">
+            正在读取 Assignment 责任证据…
+          </p>
+          <p v-else-if="organizationError" class="ac-resource-notice" role="alert">
+            Assignment 责任证据暂时不可用，不会显示为零分配。
           </p>
 
           <section class="ac-team-grid" aria-label="团队成员">
@@ -94,6 +123,50 @@ function ownedWork(agentID: string) {
                 </template>
                 <p v-else-if="workUnavailable || unavailableWorkCount">工作关联不完整</p>
                 <p v-else>当前未分配可见工作</p>
+              </div>
+
+              <div v-if="agentAssignments(agent.id).length" class="ac-team-assignments">
+                <p class="ac-card-kicker">Assignment evidence</p>
+                <article
+                  v-for="assignment in agentAssignments(agent.id)"
+                  :key="assignment.assignmentId"
+                >
+                  <div class="ac-team-assignments__heading">
+                    <NuxtLink :to="`/work/${encodeURIComponent(assignment.projectId)}`">
+                      {{ assignment.temporaryRole }}
+                    </NuxtLink>
+                    <span class="ac-status-badge" :data-status="assignment.status">
+                      {{ assignmentStatusLabels[assignment.status] }}
+                    </span>
+                  </div>
+                  <p>{{ assignment.responsibility }}</p>
+                  <dl>
+                    <div>
+                      <dt>加入原因</dt>
+                      <dd>{{ assignment.selectionReason }}</dd>
+                    </div>
+                    <div>
+                      <dt>能力需求</dt>
+                      <dd>{{ assignment.need.role }}</dd>
+                    </div>
+                    <div>
+                      <dt>身份</dt>
+                      <dd>{{ assignment.lifecycleAtSelection === "employee" ? "正式员工" : "项目临时角色" }}</dd>
+                    </div>
+                    <div v-if="assignment.releasedAt">
+                      <dt>释放</dt>
+                      <dd>{{ assignment.releaseReason ?? "项目责任已结束" }}</dd>
+                    </div>
+                  </dl>
+                  <details class="ac-source-trace">
+                    <summary>查看选择事实</summary>
+                    <ul>
+                      <li v-for="source in assignment.sourceRefs" :key="`${source.kind}:${source.id}`">
+                        {{ sourceRefLabel(source) }}
+                      </li>
+                    </ul>
+                  </details>
+                </article>
               </div>
 
               <p class="ac-team-evidence">

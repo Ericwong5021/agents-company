@@ -1,4 +1,10 @@
-import type { WorkProjection } from "@agents-company/shared/experience"
+import type {
+  DiscoverySummary,
+  GraphChangeSummary,
+  OrganizationProjection,
+  ValidationSummary,
+  WorkProjection,
+} from "@agents-company/shared/experience"
 
 export type CompanyConnection = "connecting" | "ready" | "degraded" | "disconnected" | "recovering"
 
@@ -103,6 +109,9 @@ export type CompanyProjectDetail = {
     status: string
     ownerAgentID?: string
     sourceThreadID?: string
+    executionStrategy?: "legacy_full_plan" | "seed_and_grow"
+    seedMode?: "seed_pair" | "discovery_first" | "direct_single"
+    graphRevision?: number
   }
   charter?: {
     value: string
@@ -126,6 +135,9 @@ export type CompanyProjectDetail = {
     attempt: number
     maxAttempts: number
     error?: string
+    purpose?: string
+    role?: string
+    originKind?: string
   }[]
   artifacts: {
     id: string
@@ -166,6 +178,13 @@ export type CompanyProjectDetail = {
       status: string
     }[]
   }
+}
+
+export type SeedGrowProjectExperience = {
+  organization: OrganizationProjection
+  graph: GraphChangeSummary
+  validation: ValidationSummary
+  discoveries: DiscoverySummary[]
 }
 
 export type CompanySnapshot = {
