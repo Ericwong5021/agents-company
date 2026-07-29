@@ -112,12 +112,7 @@ function sourceBindingValid(
   return true
 }
 
-async function sensitiveLogs(
-  automaticDirectory: string,
-  packageValue: unknown,
-  errors: string[],
-  label: string,
-) {
+async function sensitiveLogs(automaticDirectory: string, packageValue: unknown, errors: string[], label: string) {
   if (!isRecord(packageValue) || !Array.isArray(packageValue.commands)) return
   for (const command of packageValue.commands) {
     if (!isRecord(command)) continue
@@ -144,11 +139,8 @@ export async function evaluateSeedGrowStageEvidence(options: {
 }): Promise<GateEvaluation> {
   const governance = options.governance ?? (await loadSeedGrowGovernance(options.buildSha))
   const stage = stageDefinition(governance.contract, options.stage)
-  const automaticGovernance =
-    options.automaticGovernance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
-  const runnerSource =
-    options.runnerSource ??
-    runGit(["show", `${options.buildSha}:${stageRunnerPath}`]).stdout
+  const automaticGovernance = options.automaticGovernance ?? (await loadAutomaticEvidenceGovernance(options.buildSha))
+  const runnerSource = options.runnerSource ?? runGit(["show", `${options.buildSha}:${stageRunnerPath}`]).stdout
   const required = [
     ...stage.criteria.map((criterion) => `criterion:${criterion.id}`),
     "attempt:attempt-01",
@@ -238,13 +230,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
     errors,
     "schema",
   )
-  sourceBindingValid(
-    run.runnerBinding,
-    stageRunnerPath,
-    sha256(runnerSource),
-    errors,
-    "runner",
-  )
+  sourceBindingValid(run.runnerBinding, stageRunnerPath, sha256(runnerSource), errors, "runner")
   if (
     !validDate(run.createdAt) ||
     !validDate(run.finishedAt) ||
@@ -305,8 +291,9 @@ export async function evaluateSeedGrowStageEvidence(options: {
   const attempts = Array.isArray(run.attempts) ? run.attempts : []
   if (!Array.isArray(run.attempts)) errors.push("attempts must be an array")
   if (attempts.length < 2) {
-    const missingAttempts = ["attempt-01", "attempt-02"]
-      .filter((id) => !attempts.some((attempt) => isRecord(attempt) && attempt.id === id))
+    const missingAttempts = ["attempt-01", "attempt-02"].filter(
+      (id) => !attempts.some((attempt) => isRecord(attempt) && attempt.id === id),
+    )
     missingAttempts.forEach((id) => missing.push(`attempt:${id}`))
   }
   if (attempts.length > 2) errors.push("more than two attempts are not allowed")
@@ -314,9 +301,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
     isRecord(attempt) && typeof attempt.id === "string" ? [attempt.id] : [],
   )
   const attemptDirectories = attempts.flatMap((attempt) =>
-    isRecord(attempt) && typeof attempt.relativeDirectory === "string"
-      ? [attempt.relativeDirectory]
-      : [],
+    isRecord(attempt) && typeof attempt.relativeDirectory === "string" ? [attempt.relativeDirectory] : [],
   )
   if (
     new Set(attemptIDs).size !== attemptIDs.length ||
@@ -360,19 +345,12 @@ export async function evaluateSeedGrowStageEvidence(options: {
       : null
     if (
       !isRecord(runnerValue) ||
-      !exactKeys(runnerValue, [
-        "schemaVersion",
-        "id",
-        "buildSha",
-        "stage",
-        "attemptId",
-        "stageRunnerSha256",
-      ]) ||
+      !exactKeys(runnerValue, ["schemaVersion", "id", "buildSha", "attemptId", "scope", "stageRunnerSha256"]) ||
       runnerValue.schemaVersion !== 1 ||
-      runnerValue.id !== "agent-company-seed-grow-automatic-runner-binding" ||
+      runnerValue.id !== "agent-company-seed-grow-final-candidate-runner-binding" ||
       runnerValue.buildSha !== options.buildSha ||
-      runnerValue.stage !== options.stage ||
       runnerValue.attemptId !== attempt.id ||
+      runnerValue.scope !== "all_implemented_stages" ||
       runnerValue.stageRunnerSha256 !== sha256(runnerSource)
     ) {
       errors.push(`${attempt.id}: automatic runner binding content mismatch`)
@@ -410,8 +388,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
     }
     if (
       !isRecord(attempt.automaticPackage) ||
-      attempt.automaticPackage.relativePath !==
-        `${attempt.relativeDirectory}/automatic/automatic-evidence-package.json`
+      attempt.automaticPackage.relativePath !== `${attempt.relativeDirectory}/automatic/automatic-evidence-package.json`
     ) {
       errors.push(`${attempt.id}: automatic package path mismatch`)
     }
@@ -425,8 +402,7 @@ export async function evaluateSeedGrowStageEvidence(options: {
       errors.push(`${attempt.id}: automatic evidence is stale or outside the stage interval`)
     }
     const runnerDigest =
-      isRecord(attempt.automaticRunnerBinding) &&
-      typeof attempt.automaticRunnerBinding.sha256 === "string"
+      isRecord(attempt.automaticRunnerBinding) && typeof attempt.automaticRunnerBinding.sha256 === "string"
         ? attempt.automaticRunnerBinding.sha256
         : ""
     const validation = await validateAutomaticEvidencePackage({
@@ -466,15 +442,10 @@ export async function evaluateSeedGrowStageEvidence(options: {
   if (run.overallStatus !== status) errors.push("run.json contains a forged overall status")
   const finalStatus = errors.length ? "invalid" : status
   if (finalStatus === "pass") {
-    passed.push(
-      ...stage.criteria.map((criterion) => `criterion:${criterion.id}`),
-      "runner:two_local_exact_sha_runs",
-    )
+    passed.push(...stage.criteria.map((criterion) => `criterion:${criterion.id}`), "runner:two_local_exact_sha_runs")
   }
   const advisory =
-    Array.isArray(run.advisory) && run.advisory.every((item) => typeof item === "string")
-      ? run.advisory
-      : []
+    Array.isArray(run.advisory) && run.advisory.every((item) => typeof item === "string") ? run.advisory : []
   if (!Array.isArray(run.advisory) || advisory.length !== run.advisory.length) {
     errors.push("advisory must contain strings only")
   }
@@ -654,10 +625,10 @@ async function writeFixtureRun(
       `${JSON.stringify(
         {
           schemaVersion: 1,
-          id: "agent-company-seed-grow-automatic-runner-binding",
+          id: "agent-company-seed-grow-final-candidate-runner-binding",
           buildSha,
-          stage: "A0",
           attemptId,
+          scope: "all_implemented_stages",
           stageRunnerSha256: sha256(runnerSource),
         },
         null,
@@ -749,13 +720,7 @@ export async function runSeedGrowStageSelfTest() {
     "b".repeat(64),
   )
   await fs.rm(path.join(directory, "governance-fixture"), { recursive: true, force: true })
-  const fixture = await writeFixtureRun(
-    directory,
-    governance,
-    buildSha,
-    runnerSource,
-    automaticFixture.governance,
-  )
+  const fixture = await writeFixtureRun(directory, governance, buildSha, runnerSource, automaticFixture.governance)
   const evaluate = () =>
     evaluateSeedGrowStageEvidence({
       buildSha,
@@ -779,10 +744,7 @@ export async function runSeedGrowStageSelfTest() {
   const valid = await evaluate()
   const originalSource = await Bun.file(path.join(directory, "run.json")).text()
   const original = JSON.parse(originalSource) as Record<string, unknown>
-  const mutated = async (
-    mutate: (value: Record<string, unknown>) => void,
-    expected: StageStatus,
-  ) => {
+  const mutated = async (mutate: (value: Record<string, unknown>) => void, expected: StageStatus) => {
     const value = structuredClone(original)
     mutate(value)
     await Bun.write(path.join(directory, "run.json"), `${JSON.stringify(value, null, 2)}\n`)
@@ -826,20 +788,14 @@ export async function runSeedGrowStageSelfTest() {
     githubActions.status = "success"
   }, "invalid")
   const firstAttempt = fixture.run.attempts[0]!
-  const packageValue: unknown = await Bun.file(
-    path.join(directory, firstAttempt.automaticPackage.relativePath),
-  ).json()
+  const packageValue: unknown = await Bun.file(path.join(directory, firstAttempt.automaticPackage.relativePath)).json()
   const firstCommand =
     isRecord(packageValue) && Array.isArray(packageValue.commands) && isRecord(packageValue.commands[0])
       ? packageValue.commands[0]
       : null
   const stdoutPath =
     firstCommand && isRecord(firstCommand.stdout) && typeof firstCommand.stdout.relativePath === "string"
-      ? path.join(
-          directory,
-          path.dirname(firstAttempt.automaticPackage.relativePath),
-          firstCommand.stdout.relativePath,
-        )
+      ? path.join(directory, path.dirname(firstAttempt.automaticPackage.relativePath), firstCommand.stdout.relativePath)
       : ""
   const stdoutSource = stdoutPath ? await Bun.file(stdoutPath).text() : ""
   if (stdoutPath) await Bun.write(stdoutPath, `${stdoutSource}tampered\n`)

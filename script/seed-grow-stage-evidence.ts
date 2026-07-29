@@ -1,6 +1,8 @@
+import fs from "node:fs/promises"
 import path from "node:path"
 import { generateAutomaticEvidence } from "./experience-automatic-evidence"
 import { canonicalize, sha256 } from "./experience-benchmark"
+import { evaluateAndWriteSeedGrowStageGate } from "./seed-grow-stage-gate"
 import {
   assertExactCandidate,
   loadCurrentSeedGrowGovernance,
@@ -30,6 +32,17 @@ type AttemptRecord = {
 }
 
 class StageUnavailableError extends Error {}
+
+async function runnerBindingValue(buildSha: string, attemptId: string) {
+  return {
+    schemaVersion: 1,
+    id: "agent-company-seed-grow-final-candidate-runner-binding",
+    buildSha,
+    attemptId,
+    scope: "all_implemented_stages",
+    stageRunnerSha256: sha256(await Bun.file(path.join(root, stageRunnerPath)).text()),
+  }
+}
 
 function bindingFor(base: string, relativePath: string, bytes: Uint8Array, mediaType: string) {
   return {
@@ -76,18 +89,7 @@ async function blockedAttempt(
     (await writeFileBinding(
       output,
       `${relativeDirectory}/runner-binding.json`,
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          id: "agent-company-seed-grow-automatic-runner-binding",
-          buildSha,
-          stage,
-          attemptId,
-          stageRunnerSha256: sha256(await Bun.file(path.join(root, stageRunnerPath)).text()),
-        },
-        null,
-        2,
-      )}\n`,
+      `${JSON.stringify(await runnerBindingValue(buildSha, attemptId), null, 2)}\n`,
       "application/json",
     ))
   const automaticPackage = await writeFileBinding(
@@ -125,20 +127,7 @@ async function executeAttempt(
   const runnerBinding = await writeFileBinding(
     output,
     `${relativeDirectory}/runner-binding.json`,
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        id: "agent-company-seed-grow-automatic-runner-binding",
-        buildSha,
-        stage,
-        attemptId,
-        stageRunnerSha256: sha256(
-          await Bun.file(path.join(root, stageRunnerPath)).text(),
-        ),
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(await runnerBindingValue(buildSha, attemptId), null, 2)}\n`,
     "application/json",
   )
   const generated = await generateAutomaticEvidence({
@@ -150,19 +139,9 @@ async function executeAttempt(
     (error) => ({ ok: false as const, error }),
   )
   if (!generated.ok) {
-    return blockedAttempt(
-      output,
-      stage,
-      buildSha,
-      attemptId,
-      redactedError(generated.error),
-      runnerBinding,
-    )
+    return blockedAttempt(output, stage, buildSha, attemptId, redactedError(generated.error), runnerBinding)
   }
-  const relativePackagePath = path
-    .relative(output, generated.value.packagePath)
-    .split(path.sep)
-    .join("/")
+  const relativePackagePath = path.relative(output, generated.value.packagePath).split(path.sep).join("/")
   const packageValue: unknown = await Bun.file(generated.value.packagePath).json()
   return {
     id: attemptId,
@@ -174,21 +153,26 @@ async function executeAttempt(
   } satisfies AttemptRecord
 }
 
-export async function generateSeedGrowStageEvidence(options: {
-  buildSha: string
+function overallStatus(attempts: AttemptRecord[]): AttemptStatus {
+  if (attempts.some((attempt) => attempt.status === "invalid")) return "invalid"
+  if (attempts.some((attempt) => attempt.status === "failed")) return "failed"
+  if (attempts.some((attempt) => attempt.status === "blocked")) return "blocked"
+  return new Set(attempts.map((attempt) => attempt.normalizedDigest)).size === 1 ? "pass" : "invalid"
+}
+
+async function writeStageRun(options: {
+  output: string
   stage: StageID
-  outputDirectory: string
+  buildSha: string
+  governance: Awaited<ReturnType<typeof loadSeedGrowGovernance>>
+  createdAt: string
+  finishedAt: string
+  attempts: AttemptRecord[]
 }) {
-  const governance = await loadSeedGrowGovernance(options.buildSha)
-  const stage = stageDefinition(governance.contract, options.stage)
-  if (!governance.contract.implementedStages.includes(options.stage)) {
-    throw new StageUnavailableError(`Seed-and-Grow stage ${options.stage} is not implemented yet.`)
-  }
+  const stage = stageDefinition(options.governance.contract, options.stage)
   assertExactCandidate(options.buildSha, stage)
-  const output = await prepareRunDirectory(options.outputDirectory)
-  const createdAt = new Date().toISOString()
   const ciEvidence = await writeFileBinding(
-    output,
+    options.output,
     "ci/availability.json",
     `${JSON.stringify(
       {
@@ -205,84 +189,224 @@ export async function generateSeedGrowStageEvidence(options: {
     )}\n`,
     "application/json",
   )
-  const first = await executeAttempt(
-    output,
-    options.stage,
-    options.buildSha,
-    "attempt-01",
-    stage.requiredCommandIds,
-  )
-  const second =
-    first.status === "pass"
-      ? await executeAttempt(
-          output,
-          options.stage,
-          options.buildSha,
-          "attempt-02",
-          stage.requiredCommandIds,
-        )
-      : await blockedAttempt(
-          output,
-          options.stage,
-          options.buildSha,
-          "attempt-02",
-          "not_executed_after_attempt_01",
-        )
-  const attempts = [first, second]
-  const overallStatus: AttemptStatus = attempts.some((attempt) => attempt.status === "invalid")
-    ? "invalid"
-    : attempts.some((attempt) => attempt.status === "failed")
-      ? "failed"
-      : attempts.some((attempt) => attempt.status === "blocked")
-        ? "blocked"
-        : new Set(attempts.map((attempt) => attempt.normalizedDigest)).size === 1
-          ? "pass"
-          : "invalid"
-  assertExactCandidate(options.buildSha, stage)
+  const status = overallStatus(options.attempts)
   const runnerSource = await Bun.file(path.join(root, stageRunnerPath)).text()
   const run = {
     schemaVersion: 1,
     packageVersion: "1.0.0",
-    packageId: `SEED-GROW-${options.stage}-${options.buildSha.slice(0, 16)}-${path.basename(output)}`,
+    packageId: `SEED-GROW-${options.stage}-${options.buildSha.slice(0, 16)}-${path.basename(options.output)}`,
     stage: options.stage,
     capabilityPackage: stage.capabilityPackage,
     buildSha: options.buildSha,
-    buildTreeSha: governance.buildTreeSha,
+    buildTreeSha: options.governance.buildTreeSha,
     contractBinding: sourceBinding(
       "docs/product-design/experience-refactor/seed-grow-stage-contract.v1.json",
-      governance.contractSource,
+      options.governance.contractSource,
     ),
     schemaBinding: sourceBinding(
       "docs/product-design/experience-refactor/seed-grow-stage-evidence.v1.json",
-      governance.schemaSource,
+      options.governance.schemaSource,
     ),
     runnerBinding: sourceBinding(stageRunnerPath, runnerSource),
-    validationProfile: governance.contract.validationProfile,
+    validationProfile: options.governance.contract.validationProfile,
     githubActions: {
-      ...governance.contract.githubActions,
+      ...options.governance.contract.githubActions,
       evidence: ciEvidence,
     },
-    createdAt,
-    finishedAt: new Date().toISOString(),
-    attempts,
+    createdAt: options.createdAt,
+    finishedAt: options.finishedAt,
+    attempts: options.attempts,
     coverage: stageCoverage(stage),
-    overallStatus,
-    advisory: [
-      "github_actions_unavailable",
-      `local_platform_only:${process.platform}-${process.arch}`,
-    ],
+    overallStatus: status,
+    advisory: ["github_actions_unavailable", `local_platform_only:${process.platform}-${process.arch}`],
   }
-  const runPath = path.join(output, "run.json")
+  const runPath = path.join(options.output, "run.json")
   await Bun.write(runPath, `${JSON.stringify(run, null, 2)}\n`)
   return {
     runPath,
-    status: overallStatus,
-    attempts: attempts.map((attempt) => ({
+    status,
+    attempts: options.attempts.map((attempt) => ({
       id: attempt.id,
       status: attempt.status,
       normalizedDigest: attempt.normalizedDigest,
     })),
   }
+}
+
+export async function generateSeedGrowStageEvidence(options: {
+  buildSha: string
+  stage: StageID
+  outputDirectory: string
+}) {
+  const governance = await loadSeedGrowGovernance(options.buildSha)
+  const stage = stageDefinition(governance.contract, options.stage)
+  if (!governance.contract.implementedStages.includes(options.stage)) {
+    throw new StageUnavailableError(`Seed-and-Grow stage ${options.stage} is not implemented yet.`)
+  }
+  assertExactCandidate(options.buildSha, stage)
+  const output = await prepareRunDirectory(options.outputDirectory)
+  const createdAt = new Date().toISOString()
+  const first = await executeAttempt(output, options.stage, options.buildSha, "attempt-01", stage.requiredCommandIds)
+  const second =
+    first.status === "pass"
+      ? await executeAttempt(output, options.stage, options.buildSha, "attempt-02", stage.requiredCommandIds)
+      : await blockedAttempt(output, options.stage, options.buildSha, "attempt-02", "not_executed_after_attempt_01")
+  const attempts = [first, second]
+  return writeStageRun({
+    output,
+    stage: options.stage,
+    buildSha: options.buildSha,
+    governance,
+    createdAt,
+    finishedAt: new Date().toISOString(),
+    attempts,
+  })
+}
+
+async function copyAttempt(options: {
+  source: string
+  output: string
+  stage: StageID
+  buildSha: string
+  requiredCommandIds: string[]
+  attempt: AttemptRecord
+}) {
+  await fs.cp(
+    path.join(options.source, options.attempt.relativeDirectory),
+    path.join(options.output, options.attempt.relativeDirectory),
+    {
+      recursive: true,
+      dereference: false,
+      errorOnExist: true,
+      force: false,
+    },
+  )
+  const packagePath =
+    options.attempt.status === "blocked"
+      ? `${options.attempt.relativeDirectory}/automatic-evidence-error.json`
+      : `${options.attempt.relativeDirectory}/automatic/automatic-evidence-package.json`
+  const packageValue: unknown = await Bun.file(path.join(options.output, packagePath)).json()
+  return {
+    id: options.attempt.id,
+    relativeDirectory: options.attempt.relativeDirectory,
+    automaticRunnerBinding: await existingBinding(
+      options.output,
+      `${options.attempt.relativeDirectory}/runner-binding.json`,
+      "application/json",
+    ),
+    automaticPackage: await existingBinding(options.output, packagePath, "application/json"),
+    normalizedDigest:
+      options.attempt.status === "blocked"
+        ? sha256(
+            canonicalize({
+              buildSha: options.buildSha,
+              stage: options.stage,
+              status: "blocked",
+              reason:
+                typeof packageValue === "object" && packageValue !== null && "reason" in packageValue
+                  ? packageValue.reason
+                  : "invalid_blocked_attempt",
+            }),
+          )
+        : normalizeAutomaticPackage(packageValue, options.requiredCommandIds),
+    status: options.attempt.status,
+  } satisfies AttemptRecord
+}
+
+export async function generateSeedGrowAllStageEvidence(options: { buildSha: string; outputDirectory: string }) {
+  const governance = await loadSeedGrowGovernance(options.buildSha)
+  if (
+    governance.contract.implementedStages.length !== stageIDs.length ||
+    !stageIDs.every((stage) => governance.contract.implementedStages.includes(stage))
+  ) {
+    throw new StageUnavailableError("Seed-and-Grow final evidence requires every A0-B5 stage to be implemented.")
+  }
+  governance.contract.stages.forEach((stage) => assertExactCandidate(options.buildSha, stage))
+  const output = await prepareRunDirectory(options.outputDirectory)
+  const outputName = path.basename(output)
+  if (outputName.length > 61) {
+    throw new Error("Seed-and-Grow all-stage output name must leave room for the stage suffix.")
+  }
+  const createdAt = new Date().toISOString()
+  const first = await executeAttempt(output, "A0", options.buildSha, "attempt-01", governance.automaticCommandIDs)
+  const second =
+    first.status === "pass"
+      ? await executeAttempt(output, "A0", options.buildSha, "attempt-02", governance.automaticCommandIDs)
+      : await blockedAttempt(output, "A0", options.buildSha, "attempt-02", "not_executed_after_attempt_01")
+  const sourceAttempts = [first, second]
+  const finishedAt = new Date().toISOString()
+  const stages = []
+  for (const stageId of stageIDs) {
+    const stage = stageDefinition(governance.contract, stageId)
+    const stageOutput = await prepareRunDirectory(
+      path.join(path.dirname(output), `${outputName}-${stageId.toLowerCase()}`),
+    )
+    const attempts = await Promise.all(
+      sourceAttempts.map((attempt) =>
+        copyAttempt({
+          source: output,
+          output: stageOutput,
+          stage: stageId,
+          buildSha: options.buildSha,
+          requiredCommandIds: stage.requiredCommandIds,
+          attempt,
+        }),
+      ),
+    )
+    const run = await writeStageRun({
+      output: stageOutput,
+      stage: stageId,
+      buildSha: options.buildSha,
+      governance,
+      createdAt,
+      finishedAt,
+      attempts,
+    })
+    const decision = await evaluateAndWriteSeedGrowStageGate({
+      buildSha: options.buildSha,
+      stage: stageId,
+      evidenceDirectory: stageOutput,
+      outputPath: path.join(stageOutput, "stage-decision.json"),
+    })
+    stages.push({
+      stage: stageId,
+      evidenceDirectory: path.basename(stageOutput),
+      runSha256: sha256(await Bun.file(run.runPath).text()),
+      decisionSha256: sha256(await Bun.file(path.join(stageOutput, "stage-decision.json")).text()),
+      status: decision.status,
+    })
+  }
+  const status: AttemptStatus = stages.some((stage) => stage.status === "invalid")
+    ? "invalid"
+    : stages.some((stage) => stage.status === "failed")
+      ? "failed"
+      : stages.some((stage) => stage.status === "blocked")
+        ? "blocked"
+        : "pass"
+  const manifestPath = path.join(output, "final-run.json")
+  await Bun.write(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        id: "agent-company-seed-grow-final-candidate-evidence",
+        buildSha: options.buildSha,
+        buildTreeSha: governance.buildTreeSha,
+        createdAt,
+        finishedAt,
+        automaticAttempts: sourceAttempts.map((attempt) => ({
+          id: attempt.id,
+          status: attempt.status,
+          normalizedDigest: attempt.normalizedDigest,
+        })),
+        stages,
+        status,
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  return { manifestPath, status, stages }
 }
 
 export async function runSeedGrowEvidenceSelfTest() {
@@ -322,21 +446,34 @@ export async function runSeedGrowEvidenceSelfTest() {
 function parseArguments(args: string[]) {
   const allowed = new Set(["--ref", "--stage", "--out"])
   const values = new Map<string, string>()
-  for (let index = 0; index < args.length; index += 2) {
-    const key = args[index]
-    const value = args[index + 1]
-    if (!key?.startsWith("--") || !allowed.has(key) || !value || value.startsWith("--")) {
-      throw new Error("Required arguments: --ref <full-sha> --stage <A0-B5> --out <empty-run-directory>")
+  let all = false
+  for (let index = 0; index < args.length; index += 1) {
+    const key = args[index]!
+    if (key === "--all") {
+      if (all) throw new Error("Duplicate argument: --all")
+      all = true
+      continue
     }
+    const value = args[index + 1]
+    if (!allowed.has(key) || !value || value.startsWith("--"))
+      throw new Error("Required arguments: --ref <full-sha> (--stage <A0-B5> | --all) --out <empty-run-directory>")
     if (values.has(key)) throw new Error(`Duplicate argument: ${key}`)
     values.set(key, value)
+    index += 1
   }
-  if (args.length !== 6 || [...allowed].some((key) => !values.has(key))) {
-    throw new Error("Required arguments: --ref <full-sha> --stage <A0-B5> --out <empty-run-directory>")
+  if (!values.has("--ref") || !values.has("--out") || all === values.has("--stage")) {
+    throw new Error("Required arguments: --ref <full-sha> (--stage <A0-B5> | --all) --out <empty-run-directory>")
   }
+  if (all)
+    return {
+      mode: "all" as const,
+      buildSha: values.get("--ref")!,
+      outputDirectory: values.get("--out")!,
+    }
   const stage = values.get("--stage")!
   if (!stageIDs.includes(stage as StageID)) throw new Error(`Invalid Seed-and-Grow stage: ${stage}`)
   return {
+    mode: "stage" as const,
     buildSha: values.get("--ref")!,
     stage: stage as StageID,
     outputDirectory: values.get("--out")!,
@@ -347,7 +484,10 @@ if (import.meta.main) {
   if (Bun.argv.length === 3 && Bun.argv[2] === "--self-test") {
     console.log(JSON.stringify(await runSeedGrowEvidenceSelfTest(), null, 2))
   } else {
-    await generateSeedGrowStageEvidence(parseArguments(Bun.argv.slice(2))).then(
+    const options = parseArguments(Bun.argv.slice(2))
+    const execution =
+      options.mode === "all" ? generateSeedGrowAllStageEvidence(options) : generateSeedGrowStageEvidence(options)
+    await execution.then(
       (result) => {
         console.log(JSON.stringify(result, null, 2))
         process.exitCode =
