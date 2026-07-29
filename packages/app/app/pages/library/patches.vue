@@ -42,7 +42,7 @@ type LearningWorkspace = {
 };
 
 const { data: learning, pending, error, refresh } = useFetch<LearningWorkspace>("/api/agent-company/learning", {
-  default: () => ({
+  default: (): LearningWorkspace => ({
     beliefs: [],
     experiments: [],
     patches: [],

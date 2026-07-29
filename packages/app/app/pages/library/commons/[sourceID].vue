@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import type { CompanyCommonsSourceResponses, CommonsSourceRecord } from "@agents-company/sdk/v2";
+import type {
+  CompanyCommonsSourceResponses,
+  CompanyCommonsSourcesResponses,
+} from "@agents-company/sdk/v2";
 
+type CommonsSourceRecord = CompanyCommonsSourcesResponses[200][number];
 const route = useRoute();
 const highlightedChunkID = computed(() =>
   typeof route.query.chunk === "string" ? route.query.chunk : "");

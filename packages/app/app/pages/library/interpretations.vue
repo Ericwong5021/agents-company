@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type {
-  AgentInterestProfileRecord,
-  CommonsSourceRecord,
-  InterpretationRecord,
-  ReadingAssignmentRecord,
+  CompanyCommonsSourcesResponses,
+  CompanyReadingAssignmentsResponses,
+  CompanyReadingInterpretationsResponses,
+  CompanyReadingProfilesResponses,
 } from "@agents-company/sdk/v2";
 
+type AgentInterestProfileRecord = CompanyReadingProfilesResponses[200][number];
+type CommonsSourceRecord = CompanyCommonsSourcesResponses[200][number];
+type InterpretationRecord = CompanyReadingInterpretationsResponses[200][number];
+type ReadingAssignmentRecord = CompanyReadingAssignmentsResponses[200][number];
 type ReadingWorkspace = {
   interpretations: InterpretationRecord[];
   assignments: ReadingAssignmentRecord[];
@@ -130,7 +134,7 @@ async function scheduleReading() {
 async function stopReading(assignmentID: string) {
   await $fetch(`/api/agent-company/reading/${encodeURIComponent(assignmentID)}/stop`, {
     method: "POST",
-  }).then(refresh, () => undefined);
+  }).then(() => refresh(), () => undefined);
 }
 </script>
 
@@ -178,8 +182,8 @@ async function stopReading(assignmentID: string) {
                 <option value="">选择关联项目</option>
                 <option
                   v-for="work in snapshot.work.filter(item => item.availability === 'available')"
-                  :key="work.workId"
-                  :value="work.workId"
+                  :key="work.summary.workId"
+                  :value="work.summary.workId"
                 >
                   {{ work.summary.title }}
                 </option>
@@ -289,8 +293,8 @@ async function stopReading(assignmentID: string) {
               <option value="">全部项目关联</option>
               <option
                 v-for="work in snapshot.work.filter(item => item.availability === 'available')"
-                :key="work.workId"
-                :value="work.workId"
+                :key="work.summary.workId"
+                :value="work.summary.workId"
               >
                 {{ work.summary.title }}
               </option>

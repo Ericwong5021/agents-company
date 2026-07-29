@@ -1,6 +1,6 @@
 import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
-import type { CommonsSourceRecord } from "@agents-company/sdk/v2"
+import type { CompanyCommonsRetryResponses } from "@agents-company/sdk/v2"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 import { commonsAccess } from "../utils/commons-context"
 import {
@@ -8,7 +8,7 @@ import {
   requestControlPlaneSDK,
 } from "../utils/control-plane-client"
 
-export default defineAgentCompanyHandler(async (event): Promise<CommonsSourceRecord> => {
+export default defineAgentCompanyHandler(async (event): Promise<CompanyCommonsRetryResponses[200]> => {
   const sourceID = getRouterParam(event, "sourceID")
   if (!sourceID) throw createError({ statusCode: 400, statusMessage: "资料 ID 无效" })
   const config = useRuntimeConfig(event)
@@ -18,7 +18,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CommonsSourceRec
   )
   if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const access = await commonsAccess(event, client)
-  const result = await requestControlPlaneSDK<CommonsSourceRecord>(
+  const result = await requestControlPlaneSDK<CompanyCommonsRetryResponses[200]>(
     client.companyCommons.retry({
       sourceID,
       company_id: access.company_id,

@@ -126,7 +126,7 @@ export async function requestControlPlane<T>(
 export async function writeControlPlane<T>(
   baseURL: string,
   path: string,
-  body: unknown,
+  body: Record<string, unknown>,
   authorization?: string,
 ): Promise<ControlPlaneResult<T>> {
   const target = controlPlaneRequestURL(baseURL, path)

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type {
-  CommonsCapabilityRecord,
-  CommonsSourceRecord,
+  CompanyCommonsCapabilitiesResponses,
   CompanyCommonsSearchResponses,
+  CompanyCommonsSourcesResponses,
 } from "@agents-company/sdk/v2";
 
+type CommonsCapabilityRecord = CompanyCommonsCapabilitiesResponses[200][number];
+type CommonsSourceRecord = CompanyCommonsSourcesResponses[200][number];
 type CommonsWorkspace = {
   sources: CommonsSourceRecord[];
   capabilities: CommonsCapabilityRecord[];
@@ -413,11 +415,11 @@ function clearSearch() {
             <span
               v-for="capability in commons.capabilities"
               :key="capability.source_type"
-              :data-available="capability.status === 'available'"
+              :data-available="capability.status === 'supported'"
             >
               {{ sourceTypeLabel[capability.source_type] }}
               <small>
-                {{ capability.status === "available"
+                {{ capability.status === "supported"
                   ? "可用"
                   : capability.status === "blocked"
                     ? "本机阻断"

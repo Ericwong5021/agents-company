@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readValidatedBody } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
-import type { AgentInterestProfileRecord } from "@agents-company/sdk/v2"
+import type { CompanyReadingUpsertProfileResponses } from "@agents-company/sdk/v2"
 import z from "zod"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 import { commonsAccess } from "../utils/commons-context"
@@ -19,7 +19,7 @@ const Input = z.object({
   privacy_scopes: z.array(z.enum(["company", "project", "private"])).min(1).max(3),
 }).strict()
 
-export default defineAgentCompanyHandler(async (event): Promise<AgentInterestProfileRecord> => {
+export default defineAgentCompanyHandler(async (event): Promise<CompanyReadingUpsertProfileResponses[200]> => {
   const agentID = getRouterParam(event, "agentID")
   if (!agentID) throw createError({ statusCode: 400, statusMessage: "Reader Agent 不可用" })
   const input = await readValidatedBody(event, Input.parse)
@@ -30,7 +30,7 @@ export default defineAgentCompanyHandler(async (event): Promise<AgentInterestPro
   )
   if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const access = await commonsAccess(event, client)
-  const result = await requestControlPlaneSDK<AgentInterestProfileRecord>(
+  const result = await requestControlPlaneSDK<CompanyReadingUpsertProfileResponses[200]>(
     client.companyReading.upsertProfile({
       agentID,
       company_id: access.company_id,

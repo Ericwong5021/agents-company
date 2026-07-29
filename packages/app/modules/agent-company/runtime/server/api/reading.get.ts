@@ -1,10 +1,10 @@
 import { createError, getQuery } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import type {
-  AgentInterestProfileRecord,
-  CommonsSourceRecord,
-  InterpretationRecord,
-  ReadingAssignmentRecord,
+  CompanyCommonsSourcesResponses,
+  CompanyReadingAssignmentsResponses,
+  CompanyReadingInterpretationsResponses,
+  CompanyReadingProfilesResponses,
 } from "@agents-company/sdk/v2"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 import { commonsAccess } from "../utils/commons-context"
@@ -14,10 +14,10 @@ import {
 } from "../utils/control-plane-client"
 
 export default defineAgentCompanyHandler(async (event): Promise<{
-  interpretations: InterpretationRecord[]
-  assignments: ReadingAssignmentRecord[]
-  profiles: AgentInterestProfileRecord[]
-  sources: CommonsSourceRecord[]
+  interpretations: CompanyReadingInterpretationsResponses[200]
+  assignments: CompanyReadingAssignmentsResponses[200]
+  profiles: CompanyReadingProfilesResponses[200]
+  sources: CompanyCommonsSourcesResponses[200]
 }> => {
   const config = useRuntimeConfig(event)
   const client = controlPlaneSDK(
@@ -26,9 +26,10 @@ export default defineAgentCompanyHandler(async (event): Promise<{
   )
   if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
   const access = await commonsAccess(event, client)
-  const projectID = typeof getQuery(event).project_id === "string" ? getQuery(event).project_id : undefined
+  const requestedProjectID = getQuery(event).project_id
+  const projectID = typeof requestedProjectID === "string" ? requestedProjectID : undefined
   const [interpretations, assignments, profiles, sources] = await Promise.all([
-    requestControlPlaneSDK<InterpretationRecord[]>(
+    requestControlPlaneSDK<CompanyReadingInterpretationsResponses[200]>(
       client.companyReading.interpretations({
         company_id: access.company_id,
         project_ids: access.project_ids.join(","),
@@ -36,17 +37,17 @@ export default defineAgentCompanyHandler(async (event): Promise<{
         project_id: projectID,
       }),
     ),
-    requestControlPlaneSDK<ReadingAssignmentRecord[]>(
+    requestControlPlaneSDK<CompanyReadingAssignmentsResponses[200]>(
       client.companyReading.assignments({
         company_id: access.company_id,
         project_ids: access.project_ids.join(","),
         private_owner_id: access.private_owner_id,
       }),
     ),
-    requestControlPlaneSDK<AgentInterestProfileRecord[]>(
+    requestControlPlaneSDK<CompanyReadingProfilesResponses[200]>(
       client.companyReading.profiles({ company_id: access.company_id }),
     ),
-    requestControlPlaneSDK<CommonsSourceRecord[]>(
+    requestControlPlaneSDK<CompanyCommonsSourcesResponses[200]>(
       client.companyCommons.sources({
         company_id: access.company_id,
         project_ids: access.project_ids.join(","),

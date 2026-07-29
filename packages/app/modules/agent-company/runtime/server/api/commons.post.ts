@@ -1,6 +1,6 @@
 import { createError, readValidatedBody } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
-import type { CommonsSourceRecord } from "@agents-company/sdk/v2"
+import type { CompanyCommonsImportSourceResponses } from "@agents-company/sdk/v2"
 import z from "zod"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 import { commonsAccess } from "../utils/commons-context"
@@ -38,7 +38,7 @@ const Submission = z
       context.addIssue({ code: "custom", message: "Project is required", path: ["project_id"] })
   })
 
-export default defineAgentCompanyHandler(async (event): Promise<CommonsSourceRecord> => {
+export default defineAgentCompanyHandler(async (event): Promise<CompanyCommonsImportSourceResponses[200]> => {
   const input = await readValidatedBody(event, Submission.parse)
   const config = useRuntimeConfig(event)
   const client = controlPlaneSDK(
@@ -49,28 +49,35 @@ export default defineAgentCompanyHandler(async (event): Promise<CommonsSourceRec
   const access = await commonsAccess(event, client)
   if (input.project_id && !access.project_ids.includes(input.project_id))
     throw createError({ statusCode: 403, statusMessage: "项目资料范围不可用" })
-  const result = await requestControlPlaneSDK<CommonsSourceRecord>(
-    client.companyCommons.importSource({
-      company_id: access.company_id,
-      title: input.title,
-      author: input.author,
-      language: input.language,
-      tags: input.tags,
-      privacy_scope: input.privacy_scope,
-      project_id: input.privacy_scope === "project" ? input.project_id : undefined,
-      private_owner_id: input.privacy_scope === "private" ? access.private_owner_id : undefined,
-      source_type: input.source_type,
-      content: ["text", "markdown", "conversation_export"].includes(input.source_type)
-        ? input.content
-        : undefined,
-      url: input.source_type === "url" ? input.url : undefined,
-      content_base64: ["pdf", "image", "podcast", "video"].includes(input.source_type)
-        ? input.content_base64
-        : undefined,
-      media_type: ["pdf", "image", "podcast", "video"].includes(input.source_type)
-        ? input.media_type
-        : undefined,
-    }),
+  const scope = input.privacy_scope === "project"
+    ? { privacy_scope: input.privacy_scope, project_id: input.project_id! }
+    : input.privacy_scope === "private"
+      ? { privacy_scope: input.privacy_scope, private_owner_id: access.private_owner_id }
+      : { privacy_scope: input.privacy_scope }
+  const common = {
+    company_id: access.company_id,
+    title: input.title,
+    author: input.author,
+    language: input.language,
+    tags: input.tags,
+    ...scope,
+  }
+  const body = input.source_type === "url"
+    ? { ...common, source_type: input.source_type, url: input.url! }
+    : ["text", "markdown", "conversation_export"].includes(input.source_type)
+      ? {
+          ...common,
+          source_type: input.source_type as "text" | "markdown" | "conversation_export",
+          content: input.content!,
+        }
+      : {
+          ...common,
+          source_type: input.source_type as "pdf" | "image" | "podcast" | "video",
+          content_base64: input.content_base64!,
+          media_type: input.media_type!,
+        }
+  const result = await requestControlPlaneSDK<CompanyCommonsImportSourceResponses[200]>(
+    client.companyCommons.importSource({ body }),
   )
   if (!result.ok)
     throw createError({
