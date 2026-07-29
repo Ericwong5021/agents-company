@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 
 export const CompanyProjectTable = sqliteTable(
@@ -20,6 +21,9 @@ export const CompanyProjectTable = sqliteTable(
     active_plan_version: integer(),
     execution_strategy: text().notNull().default("legacy_full_plan"),
     seed_mode: text(),
+    orchestration_state: text().notNull().default("idle"),
+    orchestrator_version: integer().notNull().default(1),
+    dispatch_paused: integer({ mode: "boolean" }).notNull().default(false),
     graph_revision: integer().notNull().default(0),
     created_at: integer().notNull(),
     updated_at: integer().notNull(),
@@ -250,6 +254,9 @@ export const CompanyWorkReceiptTable = sqliteTable(
     dependency_proposals_json: text().notNull(),
     questions_json: text().notNull(),
     processing_status: text().notNull(),
+    processing_claim_id: text(),
+    claimed_at: integer(),
+    processed_decision_id: text(),
     processed_mutation_id: text(),
     created_at: integer().notNull(),
     processed_at: integer(),
@@ -258,6 +265,9 @@ export const CompanyWorkReceiptTable = sqliteTable(
     uniqueIndex("company_work_receipt_attempt_idx").on(table.attempt_id),
     uniqueIndex("company_work_receipt_idempotency_idx").on(table.idempotency_key),
     index("company_work_receipt_project_status_idx").on(table.project_id, table.processing_status),
+    uniqueIndex("company_work_receipt_project_processing_idx")
+      .on(table.project_id)
+      .where(sql.raw("processing_status = 'processing'")),
   ],
 )
 
@@ -288,6 +298,39 @@ export const CompanyGraphMutationTable = sqliteTable(
     uniqueIndex("company_graph_mutation_project_idempotency_idx").on(table.project_id, table.idempotency_key),
     index("company_graph_mutation_receipt_idx").on(table.trigger_receipt_id),
     index("company_graph_mutation_project_status_idx").on(table.project_id, table.status),
+  ],
+)
+
+export const CompanyGraphDecisionTable = sqliteTable(
+  "company_graph_decision",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    receipt_id: text()
+      .notNull()
+      .references(() => CompanyWorkReceiptTable.id, { onDelete: "cascade" }),
+    mutation_id: text().references(() => CompanyGraphMutationTable.id, { onDelete: "set null" }),
+    expected_revision: integer().notNull(),
+    orchestrator_version: integer().notNull(),
+    idempotency_key: text().notNull(),
+    kind: text().notNull(),
+    mode: text().notNull(),
+    reason_code: text().notNull(),
+    summary: text().notNull(),
+    evidence_refs_json: text().notNull(),
+    operations_json: text().notNull(),
+    automated: integer({ mode: "boolean" }).notNull(),
+    added_node_count: integer().notNull(),
+    status: text().notNull(),
+    created_at: integer().notNull(),
+    resolved_at: integer(),
+  },
+  (table) => [
+    uniqueIndex("company_graph_decision_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    uniqueIndex("company_graph_decision_receipt_revision_idx").on(table.receipt_id, table.expected_revision),
+    index("company_graph_decision_project_status_idx").on(table.project_id, table.status),
   ],
 )
 

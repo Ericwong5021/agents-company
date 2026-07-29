@@ -92,8 +92,10 @@ export function validateGraphPatch(input: {
   const graphChanges = input.proposal.operations.some((operation) =>
     ["add_work_item", "add_dependency", "remove_dependency", "supersede_work_item"].includes(operation.type),
   )
+  const addedNodeCount = input.proposal.operations.filter((operation) => operation.type === "add_work_item").length
 
   if (!decisionMatches(input.proposal)) violations.add("decision_operation_mismatch")
+  if (addedNodeCount > 3) violations.add("growth_budget_exceeded")
   if (
     graphChanges &&
     (!input.proposal.evidence_refs.length ||
