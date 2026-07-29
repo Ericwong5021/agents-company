@@ -1,6 +1,9 @@
 ALTER TABLE company_patch_benchmark ADD COLUMN reviewer_principal_id TEXT REFERENCES company_agent(id) ON DELETE RESTRICT;
+--> statement-breakpoint
 ALTER TABLE company_patch_benchmark ADD COLUMN report_author_id TEXT REFERENCES company_agent(id) ON DELETE RESTRICT;
+--> statement-breakpoint
 ALTER TABLE company_patch_target_version ADD COLUMN target_version_ref TEXT;
+--> statement-breakpoint
 
 CREATE TABLE company_learning_benchmark_target_version (
   id TEXT PRIMARY KEY NOT NULL,
@@ -12,8 +15,11 @@ CREATE TABLE company_learning_benchmark_target_version (
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_learning_benchmark_target_patch_idx ON company_learning_benchmark_target_version(patch_id);
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_learning_benchmark_target_version_idx ON company_learning_benchmark_target_version(company_id, target_id, version);
+--> statement-breakpoint
 
 CREATE TABLE company_learning_benchmark_target_selection (
   id TEXT PRIMARY KEY NOT NULL,
@@ -24,7 +30,9 @@ CREATE TABLE company_learning_benchmark_target_selection (
   selected_by TEXT NOT NULL,
   selected_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX company_learning_benchmark_target_current_idx ON company_learning_benchmark_target_selection(company_id, target_id, selected_at);
+--> statement-breakpoint
 
 CREATE TABLE company_learning_interest_target_version (
   id TEXT PRIMARY KEY NOT NULL,
@@ -36,8 +44,11 @@ CREATE TABLE company_learning_interest_target_version (
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX company_learning_interest_target_patch_idx ON company_learning_interest_target_version(patch_id);
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_learning_interest_target_version_idx ON company_learning_interest_target_version(company_id, agent_id, version);
+--> statement-breakpoint
 
 CREATE TABLE company_learning_interest_target_selection (
   id TEXT PRIMARY KEY NOT NULL,
@@ -48,7 +59,9 @@ CREATE TABLE company_learning_interest_target_selection (
   selected_by TEXT NOT NULL,
   selected_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX company_learning_interest_target_current_idx ON company_learning_interest_target_selection(company_id, agent_id, selected_at);
+--> statement-breakpoint
 
 CREATE TABLE company_learning_workflow_target_version (
   id TEXT PRIMARY KEY NOT NULL,
@@ -60,8 +73,11 @@ CREATE TABLE company_learning_workflow_target_version (
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_learning_workflow_target_patch_idx ON company_learning_workflow_target_version(patch_id);
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_learning_workflow_target_version_idx ON company_learning_workflow_target_version(company_id, target_id, version);
+--> statement-breakpoint
 
 CREATE TABLE company_learning_workflow_target_selection (
   id TEXT PRIMARY KEY NOT NULL,
@@ -72,7 +88,9 @@ CREATE TABLE company_learning_workflow_target_selection (
   selected_by TEXT NOT NULL,
   selected_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX company_learning_workflow_target_current_idx ON company_learning_workflow_target_selection(company_id, target_id, selected_at);
+--> statement-breakpoint
 
 CREATE TABLE company_work_receipt_learning_target_ref (
   receipt_id TEXT NOT NULL REFERENCES company_work_receipt(id) ON DELETE CASCADE,
@@ -82,5 +100,8 @@ CREATE TABLE company_work_receipt_learning_target_ref (
   version INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 CREATE UNIQUE INDEX company_work_receipt_learning_target_ref_idx ON company_work_receipt_learning_target_ref(receipt_id, target_version_id);
+--> statement-breakpoint
 CREATE INDEX company_work_receipt_learning_target_version_idx ON company_work_receipt_learning_target_ref(target_version_id, receipt_id);
+--> statement-breakpoint
