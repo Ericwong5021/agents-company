@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import path from "node:path"
 import { Effect } from "effect"
 import z from "zod"
 import type { Interface as AgentRunInterface } from "@/agent-run/agent-run"
@@ -535,6 +536,7 @@ export const runB5LocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(func
 ) {
   if (!input.candidateSha || !input.databasePath || !input.runtimeHomePath || !input.worktreePath)
     throw new Error("B5 local probe requires candidate, database, runtime-home, and worktree bindings")
+  const controlPlanePath = path.join(input.worktreePath, "packages/control-plane")
   const run = yield* runtime.agentRuns.create({
     id: runId,
     agentID: agentId,
@@ -545,7 +547,7 @@ export const runB5LocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(func
     permissionMode: "read_only",
     companyProjectID: projectId,
     workItemID: workItemId,
-    cwd: input.worktreePath,
+    cwd: controlPlanePath,
     runtimeHomePath: input.runtimeHomePath,
   })
   yield* runtime.agentRuns.transition({ id: run.id, state: "starting" })
@@ -559,7 +561,7 @@ export const runB5LocalProbe = Effect.fn("B5CandidateScenarios.localProbe")(func
     `process.stdout.write(new Bun.CryptoHasher("sha256").update(JSON.stringify({ candidateSha: ${JSON.stringify(input.candidateSha)}, project, workItemId: ${JSON.stringify(workItemId)} })).digest("hex"))`,
   ].join(";")
   const result = Bun.spawnSync(["bun", "-e", script], {
-    cwd: input.worktreePath,
+    cwd: controlPlanePath,
     env: {
       ...process.env,
       AGENTCOMPANY_DB: input.databasePath,
