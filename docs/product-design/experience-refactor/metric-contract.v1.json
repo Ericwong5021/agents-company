@@ -67,7 +67,7 @@
     },
     {
       "id": "delivery.criterion_evaluated",
-      "requiredProperties": ["deliveryId", "criterionId", "status", "evidenceCount"]
+      "requiredProperties": ["deliveryId", "criterionId", "status", "evidenceCount", "risk", "strategy"]
     },
     {
       "id": "benchmark.completed",
@@ -79,7 +79,7 @@
     },
     {
       "id": "work_receipt.submitted",
-      "requiredProperties": ["receiptId", "attemptId", "sourceRefCount"]
+      "requiredProperties": ["receiptId", "attemptId", "sourceRefCount", "unknownCount"]
     },
     {
       "id": "work_receipt.processed",
@@ -99,7 +99,7 @@
     },
     {
       "id": "graph_repair.completed",
-      "requiredProperties": ["repairId", "passedOriginalCriterion", "attemptCount"]
+      "requiredProperties": ["repairId", "passedOriginalCriterion", "attemptCount", "blindRetryCount"]
     },
     {
       "id": "validation_gate.evaluated",
@@ -841,7 +841,7 @@
       "formula": "sum(model.cost_recorded.cost) / accepted_deliveries",
       "numerator": "recorded model cost",
       "denominator": "accepted eligible deliveries",
-      "eventSource": ["model.cost_recorded", "delivery.presented"],
+      "eventSource": ["model.cost_recorded", "delivery.accepted"],
       "timeWindow": "two consecutive candidate benchmark runs",
       "minimumSampleSize": 2,
       "unit": "currency_per_delivery",
@@ -1062,6 +1062,47 @@
     ],
     "minimumConsecutiveCandidates": 2,
     "minimumIsolatedRunsPerCandidate": 2
+  },
+  "shadowComparison": {
+    "queryVersion": "seed-grow-shadow-query.v1",
+    "minimumSampleSize": 2,
+    "checks": [
+      {
+        "id": "completeness_not_lower",
+        "field": "completenessRateDelta",
+        "operator": ">=",
+        "value": 0,
+        "blocking": true
+      },
+      {
+        "id": "reviewer_invocations_lower",
+        "field": "reviewerInvocationRatio",
+        "operator": "<",
+        "value": 1,
+        "blocking": true
+      },
+      {
+        "id": "error_rate_not_higher",
+        "field": "errorRateDelta",
+        "operator": "<=",
+        "value": 0,
+        "blocking": true
+      },
+      {
+        "id": "candidate_reuse_higher",
+        "field": "candidateReuseRateDelta",
+        "operator": ">",
+        "value": 0,
+        "blocking": true
+      },
+      {
+        "id": "low_risk_quality_not_lower",
+        "field": "lowRiskQualityRatio",
+        "operator": ">=",
+        "value": 1,
+        "blocking": true
+      }
+    ]
   },
   "releaseGates": [
     {

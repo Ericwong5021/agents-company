@@ -20,6 +20,13 @@ const UniqueIdentifiers = z
     if (!unique(values)) context.addIssue({ code: "custom", message: "Values must be unique" })
   })
 
+const UniqueIdentifiersAllowEmpty = z
+  .array(Identifier)
+  .max(500)
+  .superRefine((values, context) => {
+    if (!unique(values)) context.addIssue({ code: "custom", message: "Values must be unique" })
+  })
+
 const UniqueEventTypes = z
   .array(EventType)
   .min(1)
@@ -202,6 +209,14 @@ export const ShadowCheckId = z.enum([
 ])
 export type ShadowCheckId = z.infer<typeof ShadowCheckId>
 
+const ShadowCheckFieldById = {
+  completeness_not_lower: "completenessRateDelta",
+  reviewer_invocations_lower: "reviewerInvocationRatio",
+  error_rate_not_higher: "errorRateDelta",
+  candidate_reuse_higher: "candidateReuseRateDelta",
+  low_risk_quality_not_lower: "lowRiskQualityRatio",
+} as const satisfies Record<ShadowCheckId, string>
+
 const ShadowCheckPolicy = z
   .object({
     id: ShadowCheckId,
@@ -230,6 +245,10 @@ export const ShadowComparisonPolicy = z
       context.addIssue({ code: "custom", message: "Shadow check identifiers must be unique" })
     if (!unique(value.checks.map((item) => item.field)))
       context.addIssue({ code: "custom", message: "Shadow check fields must be unique" })
+    for (const check of value.checks) {
+      if (check.field !== ShadowCheckFieldById[check.id])
+        context.addIssue({ code: "custom", message: `Shadow check ${check.id} uses the wrong field` })
+    }
   })
 export type ShadowComparisonPolicy = z.infer<typeof ShadowComparisonPolicy>
 
@@ -379,7 +398,7 @@ const MetricQueryCoreShape = {
   candidateSha: CandidateSha,
   queryVersion: QueryVersion,
   metricIds: UniqueIdentifiers,
-  runIds: UniqueIdentifiers,
+  runIds: UniqueIdentifiersAllowEmpty,
   window: MetricWindow,
   observations: z.array(MetricObservation).max(10_000),
 } as const
@@ -453,6 +472,7 @@ export const MetricBlockedReason = z.enum([
   "query_version_mismatch",
   "input_digest_mismatch",
   "candidate_sha_mismatch",
+  "missing_run",
   "run_binding_mismatch",
   "source_binding_mismatch",
 ])
@@ -480,7 +500,7 @@ export const MetricEvaluationReport = z
     queryVersion: QueryVersion,
     candidateSha: CandidateSha,
     inputDigest: Digest,
-    runIds: UniqueIdentifiers,
+    runIds: UniqueIdentifiersAllowEmpty,
     status: z.enum(["pass", "failed", "blocked", "observed"]),
     results: z.array(MetricResult).min(1),
   })
@@ -538,6 +558,7 @@ export function evaluateMetrics(raw: unknown): MetricEvaluationReport {
       : undefined,
     input.query.inputDigest !== digest ? "input_digest_mismatch" : undefined,
     input.query.candidateSha !== input.expectedCandidateSha ? "candidate_sha_mismatch" : undefined,
+    input.query.runIds.length === 0 ? "missing_run" : undefined,
   ].filter((reason): reason is MetricBlockedReason => reason !== undefined)
   const results = input.query.metricIds.map((metricId) => {
     const metric = input.contract.metrics.find((item) => item.id === metricId)
