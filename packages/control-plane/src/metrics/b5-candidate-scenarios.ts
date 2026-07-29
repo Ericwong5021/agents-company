@@ -2206,7 +2206,13 @@ const runS26 = Effect.fn("B5CandidateScenarios.S26")(function* (
     capability_need_id: firstNeed.id,
     permission_mode: "read_only",
   })
-  yield* completeSeedProject(runtime, first.project.id, [first.item.id], `${input.runId}-first`)
+  yield* completeSeedProject(
+    runtime,
+    first.project.id,
+    [first.item.id],
+    `${input.runId}-first`,
+    ["Equivalent Need reuses the company pool"],
+  )
   const candidateCountBeforeSecond = (
     yield* runtime.agents.list({ company_id: companyId, lifecycle: "candidate" })
   ).length
@@ -2240,7 +2246,13 @@ const runS26 = Effect.fn("B5CandidateScenarios.S26")(function* (
     candidateCountAfterSecond !== candidateCountBeforeSecond
   )
     throw new Error("S26 equivalent Need did not reuse the company pool without candidate growth")
-  yield* completeSeedProject(runtime, second.project.id, [second.item.id], `${input.runId}-second`)
+  yield* completeSeedProject(
+    runtime,
+    second.project.id,
+    [second.item.id],
+    `${input.runId}-second`,
+    ["Equivalent Need reuses the company pool"],
+  )
   return B5ScenarioRunResult.parse({
     binding: {
       projectId: second.project.id,
