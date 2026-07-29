@@ -20,7 +20,22 @@ import {
 } from "@agents-company/shared/founder-os"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import {
+  CompanyArtifactTable,
+  CompanyOutcomeSignalCurrentTable,
+  CompanyOutcomeSignalTable,
+  CompanyProjectEventTable,
+  CompanyProjectTable,
+  CompanyValidationGateTable,
+  CompanyWorkReceiptTable,
+} from "@/company-project/company-project.sql"
+import {
+  ChannelMessageTable,
+  ChannelTable,
+  ConversationThreadTable,
+} from "@/conversation/conversation.sql"
 import { FounderTwinSnapshotSelectionTable, FounderTwinSnapshotTable, GovernanceAssetTable } from "./asset.sql"
+import { DecisionRecordTable } from "./decision-ledger.sql"
 import {
   FounderShadowComparisonTable,
   FounderShadowDecisionTable,
@@ -40,6 +55,101 @@ function normalized(value: unknown): unknown {
 
 function digest(value: unknown) {
   return new Bun.CryptoHasher("sha256").update(JSON.stringify(normalized(value))).digest("hex")
+}
+
+function projectVisible(companyId: string, scope: GovernanceAssetScope, projectId: string) {
+  if (scope.kind === "project" && scope.ref !== projectId) return false
+  return Boolean(Database.use((db) =>
+    db
+      .select({ id: CompanyProjectTable.id })
+      .from(CompanyProjectTable)
+      .where(and(
+        eq(CompanyProjectTable.id, projectId),
+        eq(CompanyProjectTable.company_id, companyId),
+      ))
+      .get(),
+  ))
+}
+
+function evidenceExists(
+  companyId: string,
+  scope: GovernanceAssetScope,
+  reference: FounderShadowEvidenceRef,
+) {
+  return Database.use((db) => {
+    if (reference.kind === "artifact") {
+      const artifact = db
+        .select()
+        .from(CompanyArtifactTable)
+        .where(eq(CompanyArtifactTable.id, reference.id))
+        .get()
+      if (!artifact || artifact.scope_type === "private") return false
+      if (artifact.scope_type === "company")
+        return artifact.company_id === companyId
+      return Boolean(artifact.project_id && projectVisible(companyId, scope, artifact.project_id))
+    }
+    if (reference.kind === "decision") {
+      const decision = db
+        .select()
+        .from(DecisionRecordTable)
+        .where(eq(DecisionRecordTable.id, reference.id))
+        .get()
+      if (!decision || decision.company_id !== companyId) return false
+      if (decision.scope_type === "company") return true
+      return decision.scope_type === "project" &&
+        Boolean(decision.project_id && projectVisible(companyId, scope, decision.project_id))
+    }
+    if (reference.kind === "outcome") {
+      const outcome = db
+        .select({ projectId: CompanyOutcomeSignalTable.project_id })
+        .from(CompanyOutcomeSignalTable)
+        .innerJoin(
+          CompanyOutcomeSignalCurrentTable,
+          eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+        )
+        .where(and(
+          eq(CompanyOutcomeSignalTable.id, reference.id),
+          eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+        ))
+        .get()
+      return Boolean(outcome && projectVisible(companyId, scope, outcome.projectId))
+    }
+    if (reference.kind === "conversation") {
+      const message = db
+        .select({
+          companyId: ChannelTable.company_id,
+          projectId: ConversationThreadTable.project_scope_id,
+        })
+        .from(ChannelMessageTable)
+        .innerJoin(ChannelTable, eq(ChannelTable.id, ChannelMessageTable.channel_id))
+        .leftJoin(
+          ConversationThreadTable,
+          eq(ConversationThreadTable.id, ChannelMessageTable.source_thread_id),
+        )
+        .where(eq(ChannelMessageTable.id, reference.id))
+        .get()
+      if (!message || message.companyId !== companyId) return false
+      if (message.projectId === null) return true
+      return projectVisible(companyId, scope, message.projectId)
+    }
+    const projectId =
+      db
+        .select({ projectId: CompanyWorkReceiptTable.project_id })
+        .from(CompanyWorkReceiptTable)
+        .where(eq(CompanyWorkReceiptTable.id, reference.id))
+        .get()?.projectId ??
+      db
+        .select({ projectId: CompanyValidationGateTable.project_id })
+        .from(CompanyValidationGateTable)
+        .where(eq(CompanyValidationGateTable.id, reference.id))
+        .get()?.projectId ??
+      db
+        .select({ projectId: CompanyProjectEventTable.project_id })
+        .from(CompanyProjectEventTable)
+        .where(eq(CompanyProjectEventTable.id, reference.id))
+        .get()?.projectId
+    return Boolean(projectId && projectVisible(companyId, scope, projectId))
+  })
 }
 
 function visible(scope: GovernanceAssetScope, row: typeof GovernanceAssetTable.$inferSelect) {
@@ -186,7 +296,11 @@ export function buildContext(raw: FounderContextBuildInputValue) {
   const rubrics = assets
     .filter((asset) => asset.type === "rubric")
     .slice(0, input.limits.rubrics)
-  const invalidEvidence = input.evidenceRefs.some((reference) => reference.validity !== "verified")
+  const invalidEvidence = input.evidenceRefs.some(
+    (reference) =>
+      reference.validity !== "verified" ||
+      !evidenceExists(input.companyId, input.scope, reference),
+  )
   const insufficient = principles.length === 0
     || input.evidenceRefs.length === 0
     || input.currentFacts.length === 0
