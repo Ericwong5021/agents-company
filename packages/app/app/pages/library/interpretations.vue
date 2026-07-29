@@ -151,6 +151,8 @@ async function stopReading(assignmentID: string) {
               Interpretations
               <span class="ac-work-tab__count">{{ filtered.length }}</span>
             </span>
+            <NuxtLink to="/library/beliefs" class="ac-work-tab">Belief Lab</NuxtLink>
+            <NuxtLink to="/library/patches" class="ac-work-tab">Patches</NuxtLink>
           </div>
           <label class="ac-reading-project-filter">
             <span class="sr-only">按项目过滤</span>

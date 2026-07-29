@@ -1,6 +1,7 @@
 import { Context, Effect, Layer } from "effect"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { CompanyTable } from "@/company/company.sql"
 import { CompanyCommons } from "@/company-commons"
 import { CompanyCommonsSourceTable } from "@/company-commons/company-commons.sql"
 import type { CommonsAccess } from "@/company-commons/schema"
@@ -11,6 +12,7 @@ import {
 import { Identifier } from "@/id/id"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { Database } from "@/storage"
+import * as FounderOSMode from "@/founder-os/mode"
 import {
   CompanyAgentInterestProfileTable,
   CompanyInterpretationEvidenceTable,
@@ -83,6 +85,23 @@ const overlap = (left: Set<string>, right: Set<string>) => {
   return [...left].filter((token) => right.has(token)).length / Math.min(left.size, right.size)
 }
 
+function effectiveReadingMode(company_id: string) {
+  const company = Database.use((db) =>
+    db.select().from(CompanyTable).where(eq(CompanyTable.id, company_id)).get(),
+  )
+  if (!company) throw new Error("Reading company was not found")
+  return FounderOSMode.resolve({
+    founderTwinMode: company.founder_twin_mode,
+    companyCommonsMode: company.company_commons_mode,
+  }).effective.companyCommonsMode
+}
+
+function requireReadingMode(company_id: string) {
+  const mode = effectiveReadingMode(company_id)
+  if (!["reading", "belief-loop"].includes(mode))
+    throw new Error(`Company Commons effective mode ${mode} does not allow reading writes`)
+}
+
 const weekKey = (now = new Date()) => {
   const day = (now.getUTCDay() + 6) % 7
   const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day))
@@ -116,6 +135,7 @@ export const layer = Layer.effect(
       raw: AgentInterestProfileInputValue,
     ) {
       const input = AgentInterestProfileInput.parse(raw)
+      requireReadingMode(input.company_id)
       const agent = Database.use((db) =>
         db
           .select()
@@ -208,6 +228,7 @@ export const layer = Layer.effect(
 
     const schedule = Effect.fn("CompanyReading.schedule")(function* (raw: ReadingScheduleInputValue) {
       const input = ReadingScheduleInput.parse(raw)
+      requireReadingMode(input.company_id)
       if (!input.project_ids.includes(input.project_id))
         throw new Error("Reading project is outside the caller privacy scope")
       const source = yield* commons.get(input.source_id, input)
@@ -504,6 +525,7 @@ export const layer = Layer.effect(
       access: CommonsAccess,
     ) {
       const receipt = KnowledgeReadingReceipt.parse(rawReceipt)
+      requireReadingMode(access.company_id)
       const source = yield* commons.get(receipt.source_id, access)
       if (!source) throw new Error("Interpretation source is not visible")
       const assignment = Database.use((db) =>
@@ -649,17 +671,46 @@ export const layer = Layer.effect(
     })
 
     const recover = Effect.fn("CompanyReading.recover")(function* () {
-      const rows = Database.use((db) =>
+      const active = Database.use((db) =>
         db
           .select()
           .from(CompanyReadingAssignmentTable)
-          .where(eq(CompanyReadingAssignmentTable.status, "scheduling"))
+          .where(inArray(CompanyReadingAssignmentTable.status, ["scheduling", "scheduled", "running"]))
           .orderBy(asc(CompanyReadingAssignmentTable.created_at))
           .all(),
+      )
+      active
+        .filter((row) => !["reading", "belief-loop"].includes(effectiveReadingMode(row.company_id)))
+        .forEach((row) =>
+          Database.use((db) =>
+            db.update(CompanyReadingAssignmentTable).set({
+              status: "stopped",
+              budget_reserved: false,
+              error: `Company Commons effective mode ${effectiveReadingMode(row.company_id)} stopped reading recovery`,
+              updated_at: Date.now(),
+              stopped_at: Date.now(),
+            }).where(eq(CompanyReadingAssignmentTable.id, row.id)).run(),
+          ),
+        )
+      const rows = active.filter((row) =>
+        row.status === "scheduling" && ["reading", "belief-loop"].includes(effectiveReadingMode(row.company_id)),
       )
       const recovered = yield* Effect.forEach(
         rows,
         (row) => {
+          const mode = effectiveReadingMode(row.company_id)
+          if (!["reading", "belief-loop"].includes(mode)) {
+            Database.use((db) =>
+              db.update(CompanyReadingAssignmentTable).set({
+                status: "stopped",
+                budget_reserved: false,
+                error: `Company Commons effective mode ${mode} stopped reading recovery`,
+                updated_at: Date.now(),
+                stopped_at: Date.now(),
+              }).where(eq(CompanyReadingAssignmentTable.id, row.id)).run(),
+            )
+            return Effect.succeed(undefined)
+          }
           const source = Database.use((db) =>
             db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, row.work_item_id ?? "")).get(),
           )

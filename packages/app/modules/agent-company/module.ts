@@ -213,6 +213,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       method: "post",
       handler: resolver.resolve("./runtime/server/api/reading-stop.post"),
     })
+    addServerHandler({
+      route: "/api/agent-company/learning",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/learning.get"),
+    })
 
     extendPages((pages) => {
       pages.push(

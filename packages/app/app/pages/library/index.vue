@@ -285,6 +285,12 @@ function clearSearch() {
             <NuxtLink to="/library/interpretations" class="ac-work-tab">
               Interpretations
             </NuxtLink>
+            <NuxtLink to="/library/beliefs" class="ac-work-tab">
+              Belief Lab
+            </NuxtLink>
+            <NuxtLink to="/library/patches" class="ac-work-tab">
+              Patches
+            </NuxtLink>
           </div>
 
           <form v-if="activeTab === 'commons'" class="ac-commons-search" @submit.prevent="searchCommons">

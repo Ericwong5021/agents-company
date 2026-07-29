@@ -63,6 +63,19 @@ export {
   CompanyReadingAssignmentTable,
   CompanyInterpretationEvidenceTable,
 } from "../company-reading/company-reading.sql"
+export {
+  CompanyBeliefTable,
+  CompanyBeliefInterpretationTable,
+  CompanyBeliefEvidenceTable,
+  CompanyExperimentTable,
+  CompanyExperimentOutcomeTable,
+  CompanyLearningPatchTable,
+  CompanyPatchBenchmarkTable,
+  CompanyPatchCanaryTable,
+  CompanyPatchEventTable,
+  CompanyPatchTargetVersionTable,
+  CompanySkillCandidateSnapshotTable,
+} from "../company-learning/company-learning.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {
   CompanyRolloutStateTable,

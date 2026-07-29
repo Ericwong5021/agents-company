@@ -79,6 +79,7 @@ import {
 import { CompanyRecruitment } from "@/company-recruitment"
 import { CompanyCommons } from "@/company-commons"
 import { CompanyReading } from "@/company-reading"
+import { CompanyLearning } from "@/company-learning"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
 import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 import { FounderGreenDelegation } from "@/project-orchestrator/founder-delegation"
@@ -183,6 +184,7 @@ export const AppLayer = Layer.suspend(() => {
     CompanyOutcomeSignal.defaultLayer,
     CompanyCommons.defaultLayer,
     CompanyReading.defaultLayer,
+    CompanyLearning.defaultLayer,
     ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     FounderGreenDelegation.defaultLayer,

@@ -928,6 +928,343 @@ html.dark .shiki span {
   font-weight: 500;
 }
 
+.ac-learning-gate {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, #80725b 42%, var(--ac-line));
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--ac-ink-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.ac-belief-ledger,
+.ac-patch-ledger {
+  display: grid;
+  gap: 12px;
+}
+
+.ac-belief-row,
+.ac-patch-row {
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-panel);
+  background: var(--ac-surface);
+  padding: 22px;
+  box-shadow: 0 1px 1px rgb(17 17 15 / 0.02);
+}
+
+.ac-belief-row__heading,
+.ac-patch-row > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ac-belief-row h2,
+.ac-patch-row h2 {
+  color: var(--ac-ink);
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.ac-belief-meter {
+  position: relative;
+  height: 4px;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: var(--ac-line);
+}
+
+.ac-belief-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #80725b;
+}
+
+.ac-belief-meter small {
+  position: absolute;
+  right: 0;
+  top: 9px;
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ac-belief-boundaries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.ac-belief-boundaries section {
+  border-top: 1px solid var(--ac-line);
+  padding-top: 12px;
+}
+
+.ac-belief-boundaries p,
+.ac-patch-facts p {
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+  font-weight: 660;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ac-belief-boundaries ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.ac-belief-boundaries li {
+  border-radius: 999px;
+  background: var(--ac-canvas);
+  padding: 5px 9px;
+  color: var(--ac-ink-muted);
+  font-size: 11px;
+}
+
+.ac-belief-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  margin-top: 16px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-control);
+}
+
+.ac-belief-evidence section {
+  min-width: 0;
+  padding: 14px;
+}
+
+.ac-belief-evidence section + section {
+  border-left: 1px solid var(--ac-line);
+}
+
+.ac-belief-evidence header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+
+.ac-belief-evidence strong {
+  color: var(--ac-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.ac-belief-evidence small {
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ac-evidence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #54705b;
+}
+
+.ac-evidence-dot[data-position="counter"] {
+  background: #8b3f38;
+}
+
+.ac-belief-evidence p,
+.ac-patch-row > header p {
+  color: var(--ac-ink-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.ac-belief-evidence p + p {
+  margin-top: 7px;
+}
+
+.ac-learning-muted {
+  color: var(--ac-ink-dimmed) !important;
+}
+
+.ac-belief-row__footer,
+.ac-patch-row > footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 16px;
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+}
+
+.ac-belief-row__footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+}
+
+.ac-belief-experiments span {
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--ac-ink-muted);
+}
+
+.ac-belief-experiments span[data-verdict="supported"] {
+  border-color: color-mix(in srgb, #54705b 44%, var(--ac-line));
+}
+
+.ac-belief-experiments span[data-verdict="refuted"] {
+  border-color: color-mix(in srgb, #8b3f38 44%, var(--ac-line));
+}
+
+.ac-patch-gate-strip {
+  display: flex;
+  overflow-x: auto;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 4px;
+}
+
+.ac-patch-gate-strip span {
+  flex: none;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--ac-ink-dimmed);
+  font-size: 9px;
+  letter-spacing: 0.035em;
+}
+
+.ac-patch-gate-strip span[data-status="present"] {
+  border-color: color-mix(in srgb, #54705b 44%, var(--ac-line));
+  color: #48634f;
+}
+
+.ac-patch-gate-strip span[data-status="missing"] {
+  border-color: color-mix(in srgb, #8b3f38 44%, var(--ac-line));
+}
+
+.ac-patch-row > header p {
+  max-width: 680px;
+  margin-top: 7px;
+}
+
+.ac-patch-authority {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
+
+.ac-patch-authority span {
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--ac-ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ac-patch-authority span[data-authority="red"] {
+  border-color: color-mix(in srgb, #8b3f38 45%, var(--ac-line));
+  color: #7b312c;
+}
+
+.ac-patch-authority small {
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+}
+
+.ac-patch-track {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 20px;
+}
+
+.ac-patch-track li {
+  position: relative;
+  border-top: 1px solid var(--ac-line);
+  padding-top: 10px;
+  color: var(--ac-ink-dimmed);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ac-patch-track li > span {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--ac-line-strong);
+  border-radius: 999px;
+  background: var(--ac-surface);
+}
+
+.ac-patch-track li[data-reached="true"] {
+  border-top-color: #80725b;
+  color: var(--ac-ink);
+}
+
+.ac-patch-track li[data-reached="true"] > span {
+  border-color: #80725b;
+  background: #80725b;
+}
+
+.ac-patch-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin-top: 18px;
+  border: 1px solid var(--ac-line);
+  border-radius: var(--ac-radius-control);
+  background: var(--ac-line);
+}
+
+.ac-patch-facts section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--ac-canvas);
+  padding: 14px;
+}
+
+.ac-patch-facts strong {
+  color: var(--ac-ink);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.ac-patch-facts span,
+.ac-patch-facts code {
+  overflow: hidden;
+  color: var(--ac-ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+.ac-patch-facts code {
+  font-variant-numeric: tabular-nums;
+}
+
 .ac-disabled-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2177,6 +2514,37 @@ textarea:focus-visible {
 
   .ac-card-footer {
     align-items: flex-start;
+  }
+
+  .ac-work-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .ac-belief-row,
+  .ac-patch-row {
+    padding: 18px;
+  }
+
+  .ac-belief-row__heading,
+  .ac-patch-row > header {
+    display: grid;
+    gap: 12px;
+  }
+
+  .ac-belief-boundaries,
+  .ac-belief-evidence,
+  .ac-patch-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-belief-evidence section + section {
+    border-top: 1px solid var(--ac-line);
+    border-left: 0;
+  }
+
+  .ac-patch-authority {
+    justify-items: start;
   }
 
   .ac-card-action {
