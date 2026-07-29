@@ -299,6 +299,7 @@ export async function runSeedGrowEvidenceSelfTest() {
     ) ||
     stageDefinition(governance.contract, "A1").requiredCommandIds.length !== 3 ||
     stageDefinition(governance.contract, "A2").requiredCommandIds.length !== 4 ||
+    stageDefinition(governance.contract, "A3").requiredCommandIds.length !== 3 ||
     stage.repeats !== 2
   ) {
     throw new Error("Seed-and-Grow evidence runner self-test failed.")
@@ -309,6 +310,7 @@ export async function runSeedGrowEvidenceSelfTest() {
     tasks: governance.contract.stages.flatMap((item) => item.taskIds).length,
     a0Commands: stage.requiredCommandIds.length,
     a2Commands: stageDefinition(governance.contract, "A2").requiredCommandIds.length,
+    a3Commands: stageDefinition(governance.contract, "A3").requiredCommandIds.length,
     automaticCommands: governance.automaticCommandIDs.length,
     implementedStages: governance.contract.implementedStages,
     repeats: stage.repeats,

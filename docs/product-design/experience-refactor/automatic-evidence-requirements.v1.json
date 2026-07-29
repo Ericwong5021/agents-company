@@ -345,6 +345,93 @@
       ]
     },
     {
+      "id": "a3-prerequisite-repair",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/validation-gate.test.ts",
+        "-t",
+        "a3-prerequisite-repair",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a3-prerequisite-repair-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a3-prerequisite-repair-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a3/prerequisite-repair.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a3-repair-circuit",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/validation-gate.test.ts",
+        "-t",
+        "a3-repair-circuit",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a3-repair-circuit-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a3-repair-circuit-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a3/repair-circuit.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
+      "id": "a3-validation-policy",
+      "cwd": "packages/control-plane",
+      "argv": [
+        "bun",
+        "test",
+        "--max-concurrency=1",
+        "--timeout",
+        "30000",
+        "test/company-project/validation-gate.test.ts",
+        "-t",
+        "a3-validation-policy",
+        "--reporter=junit",
+        "--reporter-outfile=.artifacts/automatic-evidence/a3-validation-policy-junit.xml"
+      ],
+      "timeoutMs": 120000,
+      "stdoutValidator": "none",
+      "environment": {},
+      "reports": [
+        {
+          "path": ".artifacts/automatic-evidence/a3-validation-policy-junit.xml",
+          "validator": "junit"
+        },
+        {
+          "path": ".artifacts/seed-grow-a3/validation-policy.json",
+          "validator": "artifact"
+        }
+      ]
+    },
+    {
       "id": "control-plane-r0-unit",
       "cwd": "packages/control-plane",
       "argv": [
@@ -913,6 +1000,14 @@
             "command:a2-concurrency",
             "command:a2-transaction-recovery",
             "command:a2-shadow-zero-write"
+          ]
+        },
+        {
+          "id": "QA-02-VALIDATION-GATE-SAFETY",
+          "evidenceRefs": [
+            "command:a3-prerequisite-repair",
+            "command:a3-repair-circuit",
+            "command:a3-validation-policy"
           ]
         },
         {
