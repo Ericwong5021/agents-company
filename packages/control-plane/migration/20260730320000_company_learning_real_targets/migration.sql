@@ -104,4 +104,3 @@ CREATE TABLE company_work_receipt_learning_target_ref (
 CREATE UNIQUE INDEX company_work_receipt_learning_target_ref_idx ON company_work_receipt_learning_target_ref(receipt_id, target_version_id);
 --> statement-breakpoint
 CREATE INDEX company_work_receipt_learning_target_version_idx ON company_work_receipt_learning_target_ref(target_version_id, receipt_id);
---> statement-breakpoint

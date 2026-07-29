@@ -35,7 +35,7 @@ import {
   CompanyReadingAssignmentTable,
 } from "@/company-reading/company-reading.sql"
 import { Flag } from "@/flag/flag"
-import { FounderOSMode } from "@/founder-os"
+import * as FounderOSMode from "@/founder-os/mode"
 import {
   DecisionCurrentProjectionTable,
   DecisionRecordTable,
