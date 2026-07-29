@@ -4,12 +4,13 @@ import path from "node:path"
 import { eq } from "drizzle-orm"
 import {
   RolloutActionRequest,
+  RolloutLegacyPromotionDecision,
   RolloutPromotionEvaluationRequest,
   RolloutTransitionRequest,
 } from "@agents-company/shared/rollout"
 import {
   MetricContract,
-  PrePublicBlockingMetricIds,
+  PrePublicCandidateMetricIds,
   PrePublicMetricContractSha256,
 } from "@agents-company/shared/seed-grow-metrics"
 import { ShadowComparisonReport } from "@agents-company/shared/seed-grow-shadow"
@@ -70,7 +71,7 @@ function metricReport(candidateSha: string) {
     inputDigest: "1".repeat(64),
     runIds,
     status: "pass" as const,
-    results: PrePublicBlockingMetricIds.map((metricId) => {
+    results: PrePublicCandidateMetricIds.map((metricId) => {
       const metric = metricContract.metrics.find((item) => item.id === metricId)
       if (!metric || metric.target.value === null) throw new Error(`Missing blocking metric ${metricId}`)
       const value = passingValue(metric.target.operator, metric.target.value)
@@ -158,7 +159,9 @@ function advanceToDogfood() {
     })
 }
 
-function registerPromotionCandidate(id: string, candidateSha: string) {
+function registerPromotionCandidate(id: string, candidateSha: string, copied = false) {
+  const offset = id === "candidate-previous" ? 0 : 2
+  const repeatOffset = copied ? 0 : offset
   CompanyRollout.recordAction({
     kind: "register_candidate",
     idempotencyKey: `register-${id}`,
@@ -178,11 +181,11 @@ function registerPromotionCandidate(id: string, candidateSha: string) {
         runId: `run-${id}-${ordinal}`,
         ordinal,
         outcome: "completed",
-        environmentSha256: "8".repeat(64),
-        evidenceSha256: (ordinal === 1 ? "9" : "a").repeat(64),
+        environmentSha256: String(repeatOffset + ordinal).repeat(64),
+        evidenceSha256: String(repeatOffset + ordinal + 4).repeat(64),
         normalizedResultSha256: candidateSha.slice(0, 1).repeat(64),
-        startedAt: ordinal * 100,
-        finishedAt: ordinal * 100 + 50,
+        startedAt: (repeatOffset + ordinal) * 100,
+        finishedAt: (repeatOffset + ordinal) * 100 + 50,
       },
     })
 }
@@ -415,15 +418,32 @@ describe("company rollout", () => {
       id: "promotion-pass",
       candidateIds: ["candidate-previous", "candidate-current"],
       repeatIds: [
-        "repeat-candidate-current-1",
-        "repeat-candidate-current-2",
         "repeat-candidate-previous-1",
         "repeat-candidate-previous-2",
+        "repeat-candidate-current-1",
+        "repeat-candidate-current-2",
       ],
       rollbackIds: ["rollback-kill-switch", "rollback-legacy-fallback"],
+      derivedMetricResult: {
+        metricId: "consecutive_reproducible_candidate_count",
+        blocking: true,
+        status: "pass",
+        value: 2,
+        numerator: 2,
+        denominator: 2,
+        sampleSize: 4,
+        meetsThreshold: true,
+        threshold: {
+          gate: "R4",
+          operator: ">=",
+          value: 2,
+        },
+        reasons: [],
+      },
       status: "pass",
       reasons: [],
     })
+    expect(decision.derivedMetricResult.sourceRefs).toHaveLength(4)
     expect(CompanyRollout.evaluatePrePublicPromotion(request)).toEqual(decision)
     expect(
       storeError(() =>
@@ -454,6 +474,187 @@ describe("company rollout", () => {
         .run(),
     )
     expect(storeError(() => CompanyRollout.evidence()).code).toBe("invalid_persisted_fact")
+  })
+
+  test("accepts exactly the 17 candidate metrics and rejects caller-supplied or non-passing results", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    advanceToDogfood()
+    registerPromotionCandidate("candidate-previous", previousSha)
+    registerPromotionCandidate("candidate-current", currentSha)
+    const request = promotionRequest("promotion-extra-metric", previousSha, currentSha)
+    const consecutiveMetric = metricContract.metrics.find(
+      (metric) => metric.id === "consecutive_reproducible_candidate_count",
+    )
+    if (!consecutiveMetric) throw new Error("Missing consecutive candidate metric")
+    const extraMetricDecision = CompanyRollout.evaluatePrePublicPromotion({
+      ...request,
+      metricReports: [
+        {
+          ...request.metricReports[0],
+          results: [
+            ...request.metricReports[0].results,
+            {
+              ...request.metricReports[0].results[0],
+              metricId: consecutiveMetric.id,
+              threshold: consecutiveMetric.target,
+            },
+          ],
+        },
+        request.metricReports[1],
+      ],
+    })
+    expect(extraMetricDecision.reasons).toContain(`metric_result_set_invalid:${previousSha}`)
+    expect(extraMetricDecision.derivedMetricResult).toMatchObject({
+      metricId: "consecutive_reproducible_candidate_count",
+      status: "failed",
+      value: 0,
+      reasons: [`metric_result_set_invalid:${previousSha}`],
+    })
+
+    const failedMetricId = request.metricReports[0].results[0].metricId
+    const failedMetricDecision = CompanyRollout.evaluatePrePublicPromotion({
+      ...request,
+      id: "promotion-failed-metric",
+      metricReports: [
+        {
+          ...request.metricReports[0],
+          status: "failed",
+          results: request.metricReports[0].results.map((result, index) =>
+            index === 0 ? { ...result, status: "failed" as const } : result,
+          ),
+        },
+        request.metricReports[1],
+      ],
+    })
+    expect(failedMetricDecision.reasons).toEqual(
+      expect.arrayContaining([
+        `metric_report_not_pass:${previousSha}`,
+        `metric_failed:${previousSha}:${failedMetricId}`,
+      ]),
+    )
+    expect(failedMetricDecision.derivedMetricResult.status).toBe("failed")
+
+    const failedShadowCheckId = request.shadowReports[0].checks[0].id
+    const failedShadowDecision = CompanyRollout.evaluatePrePublicPromotion({
+      ...request,
+      id: "promotion-failed-shadow",
+      shadowReports: [
+        {
+          ...request.shadowReports[0],
+          status: "failed",
+          checks: request.shadowReports[0].checks.map((check, index) =>
+            index === 0 ? { ...check, status: "failed" as const } : check,
+          ),
+        },
+        request.shadowReports[1],
+      ],
+    })
+    expect(failedShadowDecision.derivedMetricResult).toMatchObject({
+      status: "failed",
+      reasons: [
+        `shadow_check_not_pass:${previousSha}:${failedShadowCheckId}`,
+        `shadow_report_failed:${previousSha}`,
+      ],
+    })
+  })
+
+  test("rejects copied repeat packages as non-independent and persists the derived result", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    advanceToDogfood()
+    registerPromotionCandidate("candidate-previous", previousSha)
+    registerPromotionCandidate("candidate-current", currentSha, true)
+    const decision = CompanyRollout.evaluatePrePublicPromotion(
+      promotionRequest("promotion-copied-repeat", previousSha, currentSha),
+    )
+    expect(decision.reasons).toContain("candidate_repeat_not_independent:candidate-current")
+    expect(decision.derivedMetricResult).toMatchObject({
+      metricId: "consecutive_reproducible_candidate_count",
+      status: "failed",
+      value: 0,
+      meetsThreshold: false,
+      reasons: ["candidate_repeat_not_independent:candidate-current"],
+    })
+    expect(CompanyRollout.getPromotionDecision(decision.id)).toEqual(decision)
+  })
+
+  test("reads pre-derived passing decisions as blocked after migration", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    const request = promotionRequest("promotion-legacy", previousSha, currentSha)
+    const legacyDecision = RolloutLegacyPromotionDecision.parse({
+      id: request.id,
+      targetPhase: "pre_public_default",
+      candidateIds: request.candidateIds,
+      candidateShas: [previousSha, currentSha],
+      repeatIds: ["legacy-repeat-1", "legacy-repeat-2", "legacy-repeat-3", "legacy-repeat-4"],
+      rollbackIds: ["legacy-rollback-1", "legacy-rollback-2"],
+      metricContractSha256: request.metricContractSha256,
+      metricReportSha256s: request.metricReports.map(CompanyRollout.valueSha256),
+      shadowReportSha256s: request.shadowReports.map(CompanyRollout.valueSha256),
+      ancestry: request.ancestry,
+      inputSha256: CompanyRollout.valueSha256(request),
+      status: "pass",
+      reasons: [],
+      createdAt: 1,
+    })
+    Database.use((db) =>
+      db
+        .insert(CompanyRolloutPromotionDecisionTable)
+        .values({
+          id: legacyDecision.id,
+          target_phase: legacyDecision.targetPhase,
+          candidate_ids_json: JSON.stringify(legacyDecision.candidateIds),
+          candidate_shas_json: JSON.stringify(legacyDecision.candidateShas),
+          repeat_ids_json: JSON.stringify(legacyDecision.repeatIds),
+          rollback_ids_json: JSON.stringify(legacyDecision.rollbackIds),
+          metric_contract_sha256: legacyDecision.metricContractSha256,
+          metric_report_sha256s_json: JSON.stringify(legacyDecision.metricReportSha256s),
+          shadow_report_sha256s_json: JSON.stringify(legacyDecision.shadowReportSha256s),
+          derived_metric_result_json:
+            '{"metricId":"consecutive_reproducible_candidate_count","blocking":true,"status":"blocked","value":0,"numerator":0,"denominator":2,"sampleSize":0,"meetsThreshold":false,"threshold":{"gate":"R4","operator":">=","value":2},"reasons":["legacy_decision_missing_derived_metric"],"sourceRefs":[]}',
+          ancestry_json: JSON.stringify(legacyDecision.ancestry),
+          input_sha256: legacyDecision.inputSha256,
+          input_json: JSON.stringify(request),
+          output_sha256: CompanyRollout.valueSha256(legacyDecision),
+          status: legacyDecision.status,
+          reasons_json: JSON.stringify(legacyDecision.reasons),
+          created_at: legacyDecision.createdAt,
+        })
+        .run(),
+    )
+    expect(CompanyRollout.getPromotionDecision(legacyDecision.id)).toMatchObject({
+      id: legacyDecision.id,
+      status: "blocked",
+      reasons: ["legacy_decision_missing_derived_metric"],
+      derivedMetricResult: {
+        status: "blocked",
+        reasons: ["legacy_decision_missing_derived_metric"],
+      },
+    })
+  })
+
+  test("does not derive the consecutive candidate metric without direct ancestry", () => {
+    const previousSha = "a".repeat(40)
+    const currentSha = "b".repeat(40)
+    advanceToDogfood()
+    registerPromotionCandidate("candidate-previous", previousSha)
+    registerPromotionCandidate("candidate-current", currentSha)
+    const request = promotionRequest("promotion-invalid-ancestry", previousSha, currentSha)
+    const decision = CompanyRollout.evaluatePrePublicPromotion({
+      ...request,
+      ancestry: {
+        ...request.ancestry,
+        parentSha: currentSha,
+      },
+    })
+    expect(decision.reasons).toContain("candidate_ancestry_invalid")
+    expect(decision.derivedMetricResult).toMatchObject({
+      status: "failed",
+      value: 0,
+      reasons: ["candidate_ancestry_invalid"],
+    })
   })
 
   test("persists a blocked promotion decision without advancing the rollout", () => {

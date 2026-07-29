@@ -129,6 +129,7 @@ export const CompanyRolloutPromotionDecisionTable = sqliteTable(
     metric_contract_sha256: text().notNull(),
     metric_report_sha256s_json: text().notNull(),
     shadow_report_sha256s_json: text().notNull(),
+    derived_metric_result_json: text().notNull(),
     ancestry_json: text().notNull(),
     input_sha256: text().notNull(),
     input_json: text().notNull(),

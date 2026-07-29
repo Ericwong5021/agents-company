@@ -1,6 +1,6 @@
 import z from "zod"
 import { ProjectExecutionStrategy } from "./project-orchestration"
-import { MetricContract, MetricEvaluationReport } from "./seed-grow-metrics"
+import { MetricContract, MetricEvaluationReport, MetricSourceRef } from "./seed-grow-metrics"
 import { ShadowComparisonReport } from "./seed-grow-shadow"
 
 const Identifier = z.string().trim().min(1).max(240)
@@ -456,7 +456,58 @@ export const RolloutPromotionEvaluationRequest = z
   })
 export type RolloutPromotionEvaluationRequest = z.infer<typeof RolloutPromotionEvaluationRequest>
 
-export const RolloutPromotionDecision = z
+export const RolloutPromotionDerivedMetricResult = z
+  .object({
+    metricId: z.literal("consecutive_reproducible_candidate_count"),
+    blocking: z.literal(true),
+    status: z.enum(["pass", "failed", "blocked"]),
+    value: z.number().int().min(0).max(2),
+    numerator: z.number().int().min(0).max(2),
+    denominator: z.literal(2),
+    sampleSize: z.number().int().min(0).max(4),
+    meetsThreshold: z.boolean(),
+    threshold: z
+      .object({
+        gate: z.literal("R4"),
+        operator: z.literal(">="),
+        value: z.literal(2),
+      })
+      .strict(),
+    reasons: z.array(z.string().trim().min(1).max(500)).max(100),
+    sourceRefs: z.array(MetricSourceRef.extend({ kind: z.literal("gate_report") })).max(4),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.numerator !== value.value || value.sampleSize !== value.sourceRefs.length)
+      context.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: "derived promotion metric counts must match their sources",
+      })
+    const passing =
+      value.value === 2 &&
+      value.meetsThreshold &&
+      value.reasons.length === 0 &&
+      value.sourceRefs.length === 4 &&
+      new Set(value.sourceRefs.map((source) => source.id)).size === 4 &&
+      new Set(value.sourceRefs.map((source) => source.runId)).size === 4 &&
+      new Set(value.sourceRefs.map((source) => source.digest)).size === 4
+    if ((value.status === "pass") !== passing)
+      context.addIssue({
+        code: "custom",
+        path: ["status"],
+        message: "derived promotion metric status must match its trusted sources",
+      })
+    if (value.status !== "pass" && !value.reasons.length)
+      context.addIssue({
+        code: "custom",
+        path: ["reasons"],
+        message: "non-passing derived promotion metrics require reasons",
+      })
+  })
+export type RolloutPromotionDerivedMetricResult = z.infer<typeof RolloutPromotionDerivedMetricResult>
+
+const RolloutPromotionDecisionCore = z
   .object({
     id: Identifier,
     targetPhase: z.literal("pre_public_default"),
@@ -474,27 +525,55 @@ export const RolloutPromotionDecision = z
     createdAt: Timestamp,
   })
   .strict()
+
+function refinePromotionDecision(value: z.infer<typeof RolloutPromotionDecisionCore>, context: z.RefinementCtx) {
+  if ((value.status === "pass") !== (value.reasons.length === 0))
+    context.addIssue({
+      code: "custom",
+      path: ["reasons"],
+      message: "passing promotion decisions cannot contain reasons and non-passing decisions require them",
+    })
+  if (value.status === "pass" && (value.repeatIds.length !== 4 || value.rollbackIds.length < 2))
+    context.addIssue({
+      code: "custom",
+      path: ["repeatIds"],
+      message: "passing promotion decisions require four repeats and both rollback targets",
+    })
+  if (
+    value.ancestry.previousCandidateSha !== value.candidateShas[0] ||
+    value.ancestry.currentCandidateSha !== value.candidateShas[1]
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["ancestry"],
+      message: "promotion ancestry must bind the evaluated candidates",
+    })
+}
+
+export const RolloutLegacyPromotionDecision = RolloutPromotionDecisionCore.superRefine(refinePromotionDecision)
+export type RolloutLegacyPromotionDecision = z.infer<typeof RolloutLegacyPromotionDecision>
+
+export const RolloutPromotionDecision = RolloutPromotionDecisionCore.extend({
+  derivedMetricResult: RolloutPromotionDerivedMetricResult,
+})
+  .strict()
   .superRefine((value, context) => {
-    if ((value.status === "pass") !== (value.reasons.length === 0))
+    refinePromotionDecision(value, context)
+    if (value.status === "pass" && value.derivedMetricResult.status !== "pass")
       context.addIssue({
         code: "custom",
-        path: ["reasons"],
-        message: "passing promotion decisions cannot contain reasons and non-passing decisions require them",
-      })
-    if (value.status === "pass" && (value.repeatIds.length !== 4 || value.rollbackIds.length < 2))
-      context.addIssue({
-        code: "custom",
-        path: ["repeatIds"],
-        message: "passing promotion decisions require four repeats and both rollback targets",
+        path: ["derivedMetricResult"],
+        message: "passing promotion decisions require a passing trusted derived metric",
       })
     if (
-      value.ancestry.previousCandidateSha !== value.candidateShas[0] ||
-      value.ancestry.currentCandidateSha !== value.candidateShas[1]
+      value.derivedMetricResult.sourceRefs.some(
+        (source) => !value.repeatIds.includes(source.id) || !value.candidateShas.includes(source.candidateSha),
+      )
     )
       context.addIssue({
         code: "custom",
-        path: ["ancestry"],
-        message: "promotion ancestry must bind the evaluated candidates",
+        path: ["derivedMetricResult", "sourceRefs"],
+        message: "derived promotion metric sources must bind the decision repeats and candidates",
       })
   })
 export type RolloutPromotionDecision = z.infer<typeof RolloutPromotionDecision>

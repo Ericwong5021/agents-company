@@ -8,8 +8,10 @@ import {
   RolloutEvidence,
   RolloutJournal,
   RolloutJournalEntry,
+  RolloutLegacyPromotionDecision,
   RolloutLocalRepeatFact,
   RolloutPromotionDecision,
+  RolloutPromotionDerivedMetricResult,
   RolloutPromotionEvaluationRequest,
   RolloutRollbackFact,
   RolloutShadowEvaluation,
@@ -23,7 +25,7 @@ import {
 } from "@agents-company/shared/rollout"
 import {
   MetricEvaluationReport,
-  PrePublicBlockingMetricIds,
+  PrePublicCandidateMetricIds,
   PrePublicMetricContractSha256,
   metricContractDigest,
 } from "@agents-company/shared/seed-grow-metrics"
@@ -247,27 +249,56 @@ function promotionFromRow(row: typeof CompanyRolloutPromotionDecisionTable.$infe
       "invalid_persisted_fact",
       "Persisted rollout promotion metric contract is inconsistent.",
     )
-  const decision = parsePersistedValue(
-    RolloutPromotionDecision,
-    {
-      id: row.id,
-      targetPhase: row.target_phase,
-      candidateIds: parsePersistedJSON(z.unknown(), row.candidate_ids_json),
-      candidateShas: parsePersistedJSON(z.unknown(), row.candidate_shas_json),
-      repeatIds: parsePersistedJSON(z.unknown(), row.repeat_ids_json),
-      rollbackIds: parsePersistedJSON(z.unknown(), row.rollback_ids_json),
-      metricContractSha256: row.metric_contract_sha256,
-      metricReportSha256s: parsePersistedJSON(z.unknown(), row.metric_report_sha256s_json),
-      shadowReportSha256s: parsePersistedJSON(z.unknown(), row.shadow_report_sha256s_json),
-      ancestry: parsePersistedJSON(z.unknown(), row.ancestry_json),
-      inputSha256: row.input_sha256,
-      status: row.status,
-      reasons: parsePersistedJSON(z.unknown(), row.reasons_json),
-      createdAt: row.created_at,
-    },
-    "Persisted rollout promotion decision cannot be parsed safely.",
-  )
-  if (digest(decision) !== row.output_sha256)
+  const persisted = {
+    id: row.id,
+    targetPhase: row.target_phase,
+    candidateIds: parsePersistedJSON(z.unknown(), row.candidate_ids_json),
+    candidateShas: parsePersistedJSON(z.unknown(), row.candidate_shas_json),
+    repeatIds: parsePersistedJSON(z.unknown(), row.repeat_ids_json),
+    rollbackIds: parsePersistedJSON(z.unknown(), row.rollback_ids_json),
+    metricContractSha256: row.metric_contract_sha256,
+    metricReportSha256s: parsePersistedJSON(z.unknown(), row.metric_report_sha256s_json),
+    shadowReportSha256s: parsePersistedJSON(z.unknown(), row.shadow_report_sha256s_json),
+    ancestry: parsePersistedJSON(z.unknown(), row.ancestry_json),
+    inputSha256: row.input_sha256,
+    status: row.status,
+    reasons: parsePersistedJSON(z.unknown(), row.reasons_json),
+    createdAt: row.created_at,
+  }
+  const derivedMetricResult = parsePersistedJSON(RolloutPromotionDerivedMetricResult, row.derived_metric_result_json)
+  const legacy =
+    derivedMetricResult.status === "blocked" &&
+    derivedMetricResult.reasons.length === 1 &&
+    derivedMetricResult.reasons[0] === "legacy_decision_missing_derived_metric" &&
+    derivedMetricResult.sourceRefs.length === 0
+  const decision = legacy
+    ? (() => {
+        const previous = parsePersistedValue(
+          RolloutLegacyPromotionDecision,
+          persisted,
+          "Persisted legacy rollout promotion decision cannot be parsed safely.",
+        )
+        if (digest(previous) !== row.output_sha256)
+          throw new RolloutStoreError(
+            "invalid_persisted_fact",
+            "Persisted legacy rollout promotion output digest does not match.",
+          )
+        return RolloutPromotionDecision.parse({
+          ...previous,
+          derivedMetricResult,
+          status: "blocked",
+          reasons: [...new Set([...previous.reasons, "legacy_decision_missing_derived_metric"])].sort(),
+        })
+      })()
+    : parsePersistedValue(
+        RolloutPromotionDecision,
+        {
+          ...persisted,
+          derivedMetricResult,
+        },
+        "Persisted rollout promotion decision cannot be parsed safely.",
+      )
+  if (!legacy && digest(decision) !== row.output_sha256)
     throw new RolloutStoreError("invalid_persisted_fact", "Persisted rollout promotion output digest does not match.")
   if (
     request.id !== decision.id ||
@@ -524,7 +555,13 @@ function metricReportReasons(
   if (report.runIds.length < 2) blocked.push(`metric_runs_missing:${candidateSha}`)
   if (report.status === "blocked") blocked.push(`metric_report_blocked:${candidateSha}`)
   if (report.status === "failed" || report.status === "observed") failed.push(`metric_report_not_pass:${candidateSha}`)
-  PrePublicBlockingMetricIds.forEach((metricId) => {
+  if (
+    report.results.length !== PrePublicCandidateMetricIds.length ||
+    new Set(report.results.map((result) => result.metricId)).size !== PrePublicCandidateMetricIds.length ||
+    !PrePublicCandidateMetricIds.every((metricId) => report.results.some((result) => result.metricId === metricId))
+  )
+    failed.push(`metric_result_set_invalid:${candidateSha}`)
+  PrePublicCandidateMetricIds.forEach((metricId) => {
     const metric = contract.metrics.find((item) => item.id === metricId)
     const results = report.results.filter((result) => result.metricId === metricId)
     if (!metric || results.length !== 1) {
@@ -585,6 +622,13 @@ function shadowReportReasons(
     blocked.push(`shadow_evidence_missing:${candidateSha}`)
   if (report.status === "blocked" || report.blockedReasons.length) blocked.push(`shadow_report_blocked:${candidateSha}`)
   if (report.status === "failed") failed.push(`shadow_report_failed:${candidateSha}`)
+  if (
+    policy &&
+    (report.checks.length !== policy.checks.length ||
+      new Set(report.checks.map((check) => check.id)).size !== policy.checks.length ||
+      !policy.checks.every((expected) => report.checks.some((check) => check.id === expected.id)))
+  )
+    failed.push(`shadow_check_set_invalid:${candidateSha}`)
   policy?.checks.forEach((expected) => {
     const checks = report.checks.filter((check) => check.id === expected.id)
     if (checks.length !== 1) {
@@ -602,8 +646,11 @@ function shadowReportReasons(
       !passesThreshold(check.value, check.operator, check.target)
     )
       failed.push(`shadow_check_binding_invalid:${candidateSha}:${expected.id}`)
-    if (check.blocking && check.status !== "pass") failed.push(`shadow_check_not_pass:${candidateSha}:${expected.id}`)
+    if (check.status !== "pass") failed.push(`shadow_check_not_pass:${candidateSha}:${expected.id}`)
   })
+  report.checks
+    .filter((check) => check.status !== "pass")
+    .forEach((check) => failed.push(`shadow_check_not_pass:${candidateSha}:${check.id}`))
   const runIds = [...report.legacyRunIds, ...report.seedAndGrowRunIds]
   if (report.sourceRefs.some((source) => source.candidateSha !== candidateSha || !runIds.includes(source.runId)))
     failed.push(`shadow_source_binding_invalid:${candidateSha}`)
@@ -625,6 +672,30 @@ function latestCandidateIds(db: TxOrDb) {
     .all()
     .reverse()
     .map((item) => item.id)
+}
+
+function nonIndependentCandidateIds(repeats: z.infer<typeof RolloutLocalRepeatFact>[]) {
+  const candidateIds = new Set<string>()
+  for (const key of ["runId", "evidenceSha256", "environmentSha256"] as const) {
+    const seen = new Set<string>()
+    repeats.forEach((repeat) => {
+      if (seen.has(repeat[key])) candidateIds.add(repeat.candidateId)
+      seen.add(repeat[key])
+    })
+  }
+  const intervals = [...repeats].sort(
+    (left, right) => left.startedAt - right.startedAt || left.finishedAt - right.finishedAt,
+  )
+  intervals.forEach((repeat, index) => {
+    if (
+      repeat.finishedAt <= repeat.startedAt ||
+      intervals
+        .slice(0, index)
+        .some((previous) => repeat.startedAt < previous.finishedAt && previous.startedAt < repeat.finishedAt)
+    )
+      candidateIds.add(repeat.candidateId)
+  })
+  return candidateIds
 }
 
 export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotionEvaluationRequest>) {
@@ -657,21 +728,48 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
       )
       const blocked: string[] = []
       const failed: string[] = []
-      if (metricContractDigest(request.metricContract) !== request.metricContractSha256)
+      const derivedBlocked: string[] = []
+      const derivedFailed: string[] = []
+      if (metricContractDigest(request.metricContract) !== request.metricContractSha256) {
         blocked.push("metric_contract_digest_mismatch")
-      if (request.metricContractSha256 !== PrePublicMetricContractSha256) blocked.push("metric_contract_unsupported")
-      if (candidates.some((candidate) => !candidate)) blocked.push("candidate_missing")
+        derivedBlocked.push("metric_contract_digest_mismatch")
+      }
+      if (request.metricContractSha256 !== PrePublicMetricContractSha256) {
+        blocked.push("metric_contract_unsupported")
+        derivedBlocked.push("metric_contract_unsupported")
+      }
+      if (candidates.some((candidate) => !candidate)) {
+        blocked.push("candidate_missing")
+        derivedBlocked.push("candidate_missing")
+      }
       const candidateFacts = candidates.map((candidate) => (candidate ? candidateFromRow(candidate) : undefined))
-      if (!same(latestCandidateIds(db), request.candidateIds)) failed.push("candidates_not_latest_consecutive")
-      if (candidateFacts.some((candidate) => candidate && candidate.targetRef !== request.ancestry.targetRef))
+      candidateFacts.forEach((candidate) => {
+        if (candidate) validateFactJournal(db, "register_candidate", candidate.id)
+      })
+      if (!same(latestCandidateIds(db), request.candidateIds)) {
+        failed.push("candidates_not_latest_consecutive")
+        derivedFailed.push("candidates_not_latest_consecutive")
+      }
+      if (
+        request.ancestry.previousCandidateSha === request.ancestry.currentCandidateSha ||
+        (candidateFacts[0] && candidateFacts[1] && candidateFacts[0].candidateSha === candidateFacts[1].candidateSha)
+      ) {
+        failed.push("candidates_not_distinct")
+        derivedFailed.push("candidates_not_distinct")
+      }
+      if (candidateFacts.some((candidate) => candidate && candidate.targetRef !== request.ancestry.targetRef)) {
         failed.push("candidate_target_ref_mismatch")
+        derivedFailed.push("candidate_target_ref_mismatch")
+      }
       if (
         !request.ancestry.verified ||
         request.ancestry.parentSha !== request.ancestry.previousCandidateSha ||
         (candidateFacts[0] && request.ancestry.previousCandidateSha !== candidateFacts[0].candidateSha) ||
         (candidateFacts[1] && request.ancestry.currentCandidateSha !== candidateFacts[1].candidateSha)
-      )
+      ) {
         failed.push("candidate_ancestry_invalid")
+        derivedFailed.push("candidate_ancestry_invalid")
+      }
       const repeats = db
         .select()
         .from(CompanyRolloutLocalRepeatTable)
@@ -679,21 +777,34 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
         .orderBy(asc(CompanyRolloutLocalRepeatTable.candidate_id), asc(CompanyRolloutLocalRepeatTable.ordinal))
         .all()
         .map(repeatFromRow)
-      request.candidateIds.forEach((candidateId) => {
-        const candidateRepeats = repeats
+      repeats.forEach((repeat) => validateFactJournal(db, "record_local_repeat", repeat.id))
+      const promotionRepeats = request.candidateIds.flatMap((candidateId) =>
+        repeats
           .filter((repeat) => repeat.candidateId === candidateId)
-          .sort((left, right) => left.ordinal - right.ordinal)
+          .sort((left, right) => left.ordinal - right.ordinal),
+      )
+      request.candidateIds.forEach((candidateId) => {
+        const candidateRepeats = promotionRepeats.filter((repeat) => repeat.candidateId === candidateId)
         if (candidateRepeats.length !== 2 || candidateRepeats.some((repeat, index) => repeat.ordinal !== index + 1)) {
           blocked.push(`candidate_repeats_missing:${candidateId}`)
+          derivedBlocked.push(`candidate_repeats_missing:${candidateId}`)
           return
         }
-        if (candidateRepeats.some((repeat) => repeat.outcome !== "completed"))
+        if (candidateRepeats.some((repeat) => repeat.outcome !== "completed")) {
           failed.push(`candidate_repeat_failed:${candidateId}`)
+          derivedFailed.push(`candidate_repeat_failed:${candidateId}`)
+        }
         if (
           candidateRepeats.some((repeat) => !repeat.normalizedResultSha256) ||
           new Set(candidateRepeats.map((repeat) => repeat.normalizedResultSha256)).size !== 1
-        )
+        ) {
           failed.push(`candidate_repeat_not_reproducible:${candidateId}`)
+          derivedFailed.push(`candidate_repeat_not_reproducible:${candidateId}`)
+        }
+      })
+      nonIndependentCandidateIds(promotionRepeats).forEach((candidateId) => {
+        failed.push(`candidate_repeat_not_independent:${candidateId}`)
+        derivedFailed.push(`candidate_repeat_not_independent:${candidateId}`)
       })
       request.candidateIds.forEach((_, index) => {
         const candidateSha =
@@ -703,6 +814,8 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
         const shadow = shadowReportReasons(request.shadowReports[index], candidateSha, request.metricContract)
         blocked.push(...metric.blocked, ...shadow.blocked)
         failed.push(...metric.failed, ...shadow.failed)
+        derivedBlocked.push(...metric.blocked, ...shadow.blocked)
+        derivedFailed.push(...metric.failed, ...shadow.failed)
       })
       const rollbacks = candidateFacts[1]
         ? db
@@ -713,6 +826,7 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
             .all()
             .map(rollbackFromRow)
         : []
+      rollbacks.forEach((rollback) => validateFactJournal(db, "record_rollback", rollback.id))
       const rollbackEvidence: z.infer<typeof RolloutRollbackFact>[] = []
       for (const target of ["kill_switch", "legacy_fallback"] as const) {
         const facts = rollbacks.filter((rollback) => rollback.target === target)
@@ -728,6 +842,37 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
         if (!completed) failed.push(`rollback_failed:${target}`)
         if (completed) rollbackEvidence.push(completed)
       }
+      const derivedReasons = [...new Set([...derivedBlocked, ...derivedFailed])].sort()
+      const candidateShaById = new Map(
+        request.candidateIds.map((candidateId, index) => [
+          candidateId,
+          candidateFacts[index]?.candidateSha ??
+            (index === 0 ? request.ancestry.previousCandidateSha : request.ancestry.currentCandidateSha),
+        ]),
+      )
+      const derivedMetricResult = RolloutPromotionDerivedMetricResult.parse({
+        metricId: "consecutive_reproducible_candidate_count",
+        blocking: true,
+        status: derivedBlocked.length ? "blocked" : derivedFailed.length ? "failed" : "pass",
+        value: derivedReasons.length ? 0 : 2,
+        numerator: derivedReasons.length ? 0 : 2,
+        denominator: 2,
+        sampleSize: promotionRepeats.length,
+        meetsThreshold: derivedReasons.length === 0,
+        threshold: {
+          gate: "R4",
+          operator: ">=",
+          value: 2,
+        },
+        reasons: derivedReasons,
+        sourceRefs: promotionRepeats.map((repeat) => ({
+          kind: "gate_report",
+          id: repeat.id,
+          candidateSha: candidateShaById.get(repeat.candidateId),
+          runId: repeat.runId,
+          digest: repeat.evidenceSha256,
+        })),
+      })
       const reasons = [...new Set([...blocked, ...failed])].sort()
       const status = blocked.length ? "blocked" : failed.length ? "failed" : "pass"
       const decision = RolloutPromotionDecision.parse({
@@ -738,11 +883,12 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
           candidateFacts[0]?.candidateSha ?? request.ancestry.previousCandidateSha,
           candidateFacts[1]?.candidateSha ?? request.ancestry.currentCandidateSha,
         ],
-        repeatIds: repeats.map((repeat) => repeat.id),
+        repeatIds: promotionRepeats.map((repeat) => repeat.id),
         rollbackIds: rollbackEvidence.map((rollback) => rollback.id),
         metricContractSha256: request.metricContractSha256,
         metricReportSha256s: request.metricReports.map((report) => digest(report)),
         shadowReportSha256s: request.shadowReports.map((report) => digest(report)),
+        derivedMetricResult,
         ancestry: request.ancestry,
         inputSha256,
         status,
@@ -760,6 +906,7 @@ export function evaluatePrePublicPromotion(input: z.input<typeof RolloutPromotio
           metric_contract_sha256: decision.metricContractSha256,
           metric_report_sha256s_json: payloadJSON(decision.metricReportSha256s),
           shadow_report_sha256s_json: payloadJSON(decision.shadowReportSha256s),
+          derived_metric_result_json: payloadJSON(decision.derivedMetricResult),
           ancestry_json: payloadJSON(decision.ancestry),
           input_sha256: decision.inputSha256,
           input_json: payloadJSON(request),

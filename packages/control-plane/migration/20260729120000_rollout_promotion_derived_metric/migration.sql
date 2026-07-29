@@ -1,0 +1,2 @@
+ALTER TABLE `company_rollout_promotion_decision`
+ADD COLUMN `derived_metric_result_json` text NOT NULL DEFAULT '{"metricId":"consecutive_reproducible_candidate_count","blocking":true,"status":"blocked","value":0,"numerator":0,"denominator":2,"sampleSize":0,"meetsThreshold":false,"threshold":{"gate":"R4","operator":">=","value":2},"reasons":["legacy_decision_missing_derived_metric"],"sourceRefs":[]}';
