@@ -2002,6 +2002,7 @@ const runS25 = Effect.fn("B5CandidateScenarios.S25")(function* (
   })
   const selected = yield* runtime.recruitment.selectAndAssign({
     capability_need_id: need.id,
+    required_agent_id: agent.id,
     permission_mode: "read_only",
   })
   if (selected.agent.id !== agent.id)
