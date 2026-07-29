@@ -6,6 +6,7 @@ import {
   ExperienceActionMutatesBusinessState,
   ExperienceAllowedActionTypes,
   ExperienceNeedsUserAction,
+  ExperienceR0ImplementedMutationActions,
   WorkProjection,
   WorkProjectionList,
   type AttentionItem,
@@ -111,9 +112,11 @@ const knownNoopEvents = new Set([
   "work_item.agent_selected",
   "project_assignment.assigned",
   "project_assignment.reassigned",
+  "project_assignment.recovered",
   "project_assignment.released",
   "work_attempt.started",
   "work_attempt.finished",
+  "work_attempt.stopped",
   "work_receipt.submitted",
   "work_receipt.processed",
   "graph_mutation.applied",
@@ -127,6 +130,17 @@ const knownNoopEvents = new Set([
   "failure_diagnosis.recorded",
   "graph_repair.completed",
   "attention.requested",
+  "attention.opened",
+  "attention.closed",
+  "dispatch.paused",
+  "dispatch.resumed",
+  "project_action.requested",
+  "project_action.claimed",
+  "project_action.effect_planned",
+  "project_action.effect_applied",
+  "project_action.dispatch_failed",
+  "project_action.applied",
+  "project_action.rejected",
   "work_item.recovered",
   "board_closeout.recorded",
   "worktree_run.created",
@@ -135,6 +149,7 @@ const knownNoopEvents = new Set([
   "worktree_run.merged",
 ])
 const enabledR0ReadActions = new Set<ExperienceActionType>(["view_progress", "open_diagnostics"])
+const implementedMutationActions = new Set<ExperienceActionType>(ExperienceR0ImplementedMutationActions)
 const phaseByStatus: Record<ExperienceUserStatus, string> = {
   draft: "目标定义",
   needs_input: "目标定义",
@@ -340,6 +355,8 @@ function knownReason(text: string, sourceRefs: ExperienceSourceRef[]): Experienc
 
 function action(id: ExperienceActionType, targetRef: ExperienceSourceRef): ExperienceActionDescriptor {
   if (!ExperienceActionMutatesBusinessState[id] && enabledR0ReadActions.has(id)) return { id, targetRef, enabled: true }
+  if (ExperienceActionMutatesBusinessState[id] && implementedMutationActions.has(id))
+    return { id, targetRef, enabled: true }
   return {
     id,
     targetRef,
@@ -678,6 +695,21 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
       )
       hasExplicitOverride = true
       if (status === "cancelled") attention.clear()
+      return
+    }
+
+    if (event.type === "work.resumed") {
+      const reasonText = stringValue(event.data, "reason", 8_000)
+      const sourceRefs = uniqueSourceRefs([projectRef, sourceRef(event)])
+      markState(
+        "running",
+        reasonText
+          ? knownReason(reasonText, sourceRefs)
+          : unavailableReason("work.resumed 事件缺少事实性原因。", event, event),
+        projectRef,
+        sourceRefs,
+      )
+      hasExplicitOverride = true
       return
     }
 
@@ -1074,10 +1106,7 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
   const allowedActions = actionsFor(state.userStatus, state.targetRef)
   const nextAction = allowedActions.find((item) => item.enabled) ?? null
   const nextMilestone = [...workItems.entries()]
-    .filter(
-      ([, item]) =>
-        item.status !== "completed" && item.status !== "superseded" && item.status !== "cancelled",
-    )
+    .filter(([, item]) => item.status !== "completed" && item.status !== "superseded" && item.status !== "cancelled")
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, item]) => ({ id, title: item.title, completed: false }))
     .at(0)
@@ -1205,11 +1234,7 @@ function unavailablePersistedProjection(
       createdAt: event.createdAt,
     })),
   }
-  const issue = diagnostic(
-    "invalid_event",
-    "项目持久化事实不符合用户投影契约，当前状态按不可用处理。",
-    identity,
-  )
+  const issue = diagnostic("invalid_event", "项目持久化事实不符合用户投影契约，当前状态按不可用处理。", identity)
   const workID = z.string().trim().min(1).max(240).safeParse(row.id)
   const title = z.string().trim().min(1).max(240).safeParse(row.title)
   const updatedAt = EventTimestamp.safeParse(row.updated_at)

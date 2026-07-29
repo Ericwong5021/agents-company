@@ -1,17 +1,14 @@
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import { asc, eq } from "drizzle-orm"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProjectTable } from "@/company-project/company-project.sql"
 import { Database } from "@/storage"
 import { CapabilityMaterializer } from "./capability-materializer"
-import {
-  DispatchCoordinator,
-  type DispatchBarrierResult,
-  type DispatchResult,
-} from "./dispatch"
+import { DispatchCoordinator, type DispatchBarrierResult, type DispatchResult } from "./dispatch"
 import { GraphSupervisor } from "./graph-supervisor"
 import { QuiescenceService, type QuiescenceResult } from "./quiescence"
 import { ReceiptProcessor, type ReceiptProcessingResult as ProcessorResult } from "./receipt-processor"
+import * as ProjectActionExecutor from "./project-action-executor"
 
 export type ReceiptProcessingResult = ProcessorResult & { dispatch?: DispatchResult }
 
@@ -25,6 +22,7 @@ export type RecoveryResult = {
   assignment_ids: string[]
   dispatches: DispatchResult[]
   quiescence: QuiescenceResult[]
+  actions: ProjectActionExecutor.RecoveryReport
   replayed: boolean
 }
 
@@ -47,6 +45,7 @@ export const layer = Layer.effect(
     const dispatch = yield* DispatchCoordinator.Service
     const quiescence = yield* QuiescenceService.Service
     const processor = yield* ReceiptProcessor.Service
+    const actionExecutor = Option.getOrUndefined(yield* Effect.serviceOption(ProjectActionExecutor.Service))
 
     const processReceipt = Effect.fn("ProjectOrchestrator.processReceipt")(function* (receipt_id: string) {
       const result = yield* processor.processReceipt(receipt_id)
@@ -61,6 +60,18 @@ export const layer = Layer.effect(
     })
 
     const recover = Effect.fn("ProjectOrchestrator.recover")(function* () {
+      const actions = actionExecutor
+        ? yield* actionExecutor.recover()
+        : {
+            idempotency_key: "project-action-recover:v1",
+            project_ids: [],
+            assignment_ids: [],
+            attention_ids: [],
+            action_ids: [],
+            applied_action_ids: [],
+            rejected_action_ids: [],
+            replayed: true,
+          }
       const receipts = yield* supervisor.recover()
       const project_ids = yield* Effect.sync(() =>
         Database.use((db) =>
@@ -73,9 +84,7 @@ export const layer = Layer.effect(
             .map((project) => project.id),
         ),
       )
-      const decisions = (
-        yield* Effect.forEach(project_ids, supervisor.listDecisions, { concurrency: 1 })
-      )
+      const decisions = (yield* Effect.forEach(project_ids, supervisor.listDecisions, { concurrency: 1 }))
         .flat()
         .filter((decision) => decision.status === "applied")
       const assignmentIDsBefore = new Set(
@@ -89,11 +98,7 @@ export const layer = Layer.effect(
           ),
         ),
       )
-      const materializations = yield* Effect.forEach(
-        decisions,
-        materializer.materializeDecision,
-        { concurrency: 1 },
-      )
+      const materializations = yield* Effect.forEach(decisions, materializer.materializeDecision, { concurrency: 1 })
       const dispatches = yield* Effect.forEach(project_ids, dispatch.dispatchReady, {
         concurrency: 1,
       })
@@ -106,23 +111,17 @@ export const layer = Layer.effect(
         receipt_ids: receipts.processed_receipt_ids,
         disabled_receipt_ids: receipts.disabled_receipt_ids,
         decision_ids: decisions.map((decision) => decision.id),
-        capability_need_ids: [
-          ...new Set(materializations.flatMap((result) => result.capability_need_ids)),
-        ].sort(),
-        assignment_ids: [
-          ...new Set(materializations.flatMap((result) => result.assignment_ids)),
-        ].sort(),
+        capability_need_ids: [...new Set(materializations.flatMap((result) => result.capability_need_ids))].sort(),
+        assignment_ids: [...new Set(materializations.flatMap((result) => result.assignment_ids))].sort(),
         dispatches,
         quiescence: quiescenceResults,
+        actions,
         replayed:
+          actions.replayed &&
           !receipts.processed_receipt_ids.length &&
-          materializations
-            .flatMap((result) => result.assignment_ids)
-            .every((id) => assignmentIDsBefore.has(id)) &&
+          materializations.flatMap((result) => result.assignment_ids).every((id) => assignmentIDsBefore.has(id)) &&
           dispatches.every((result) => !result.dispatched_work_item_ids.length) &&
-          quiescenceResults.every(
-            (result) => result.status !== "completed" || result.replayed,
-          ),
+          quiescenceResults.every((result) => result.status !== "completed" || result.replayed),
       }
     })
 
@@ -143,6 +142,7 @@ export const defaultLayer = layer.pipe(
   Layer.provide(DispatchCoordinator.defaultLayer),
   Layer.provide(QuiescenceService.defaultLayer),
   Layer.provide(ReceiptProcessor.defaultLayer),
+  Layer.provide(ProjectActionExecutor.defaultLayer),
 )
 
 export * as ProjectOrchestrator from "./project-orchestrator"

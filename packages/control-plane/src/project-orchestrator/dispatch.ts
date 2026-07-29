@@ -1,7 +1,11 @@
 import { Context, Effect, Layer } from "effect"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { CompanyProject } from "@/company-project/company-project"
-import { CompanyProjectEventTable, CompanyProjectTable } from "@/company-project/company-project.sql"
+import {
+  CompanyAttentionTable,
+  CompanyProjectEventTable,
+  CompanyProjectTable,
+} from "@/company-project/company-project.sql"
 import { CompanyProjectExecution } from "@/company-project/execution"
 import { CompanyRecruitment } from "@/company-recruitment"
 import { Identifier } from "@/id/id"
@@ -101,7 +105,22 @@ export const layer = Layer.effect(
           dispatched_work_item_ids: [],
         }
       const approvalGates = yield* projects.listGates(project_id)
-      if (approvalGates.some((gate) => gate.status === "pending"))
+      const materialAttention = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ id: CompanyAttentionTable.id })
+            .from(CompanyAttentionTable)
+            .where(
+              and(
+                eq(CompanyAttentionTable.project_id, project_id),
+                eq(CompanyAttentionTable.status, "open"),
+                eq(CompanyAttentionTable.material, true),
+              ),
+            )
+            .get(),
+        ),
+      )
+      if (approvalGates.some((gate) => gate.status === "pending") || materialAttention)
         return {
           project_id,
           status: "gated" as const,

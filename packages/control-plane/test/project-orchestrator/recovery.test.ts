@@ -2,17 +2,14 @@ import { afterEach, describe, expect } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Effect, Layer } from "effect"
-import {
-  CompanyGraphMutation,
-  CompanyProject,
-  CompanyWorkFacts,
-} from "../../src/company-project"
+import { CompanyGraphMutation, CompanyProject, CompanyWorkFacts } from "../../src/company-project"
 import { CompanyRecruitment } from "../../src/company-recruitment"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { CapabilityMaterializer } from "../../src/project-orchestrator/capability-materializer"
 import { DispatchCoordinator } from "../../src/project-orchestrator/dispatch"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
 import { ProjectOrchestrator } from "../../src/project-orchestrator/project-orchestrator"
+import { ProjectActionExecutor } from "../../src/project-orchestrator/project-action-executor"
 import { QuiescenceService } from "../../src/project-orchestrator/quiescence"
 import { ReceiptProcessor } from "../../src/project-orchestrator/receipt-processor"
 import { resetDatabase } from "../fixture/db"
@@ -26,16 +23,39 @@ const recruitment = Layer.succeed(
     releaseProject: () => Effect.succeed([]),
   } as unknown as CompanyRecruitment.Interface),
 )
+const recoveryTrace: string[] = []
+const actions = Layer.succeed(
+  ProjectActionExecutor.Service,
+  ProjectActionExecutor.Service.of({
+    recover: () =>
+      Effect.sync(() => {
+        recoveryTrace.push("actions")
+        return {
+          idempotency_key: "project-action-recover:v1",
+          project_ids: [],
+          assignment_ids: [],
+          attention_ids: [],
+          action_ids: [],
+          applied_action_ids: [],
+          rejected_action_ids: [],
+          replayed: true,
+        }
+      }),
+  } as unknown as ProjectActionExecutor.Interface),
+)
 const dispatch = Layer.succeed(
   DispatchCoordinator.Service,
   DispatchCoordinator.Service.of({
     dispatchReady: (project_id: string) =>
-      Effect.succeed({
-        project_id,
-        status: "idle",
-        barrier: "open",
-        eligible_work_item_ids: [],
-        dispatched_work_item_ids: [],
+      Effect.sync(() => {
+        recoveryTrace.push("dispatch")
+        return {
+          project_id,
+          status: "idle" as const,
+          barrier: "open" as const,
+          eligible_work_item_ids: [],
+          dispatched_work_item_ids: [],
+        }
       }),
   } as unknown as DispatchCoordinator.Interface),
 )
@@ -48,18 +68,9 @@ const dependencies = Layer.mergeAll(
 const supervisor = GraphSupervisor.makeLayer({ mode: "active" }).pipe(Layer.provide(dependencies))
 const materializer = CapabilityMaterializer.layer.pipe(Layer.provide(dependencies))
 const quiescence = QuiescenceService.layer.pipe(Layer.provide(dependencies))
-const processorDependencies = Layer.mergeAll(
-  dependencies,
-  supervisor,
-  materializer,
-  quiescence,
-)
+const processorDependencies = Layer.mergeAll(dependencies, supervisor, materializer, quiescence)
 const processor = ReceiptProcessor.layer.pipe(Layer.provide(processorDependencies))
-const orchestratorDependencies = Layer.mergeAll(
-  processorDependencies,
-  processor,
-  dispatch,
-)
+const orchestratorDependencies = Layer.mergeAll(processorDependencies, processor, dispatch, actions)
 const it = testEffect(
   Layer.mergeAll(
     orchestratorDependencies,
@@ -69,6 +80,7 @@ const it = testEffect(
 )
 
 afterEach(async () => {
+  recoveryTrace.splice(0)
   await resetDatabase()
 })
 
@@ -148,6 +160,7 @@ describe("B2 orchestrator recovery", () => {
           receipt_ids: [receipt.id],
           replayed: false,
         })
+        expect(recoveryTrace[0]).toBe("actions")
         expect(first.quiescence).toEqual([
           expect.objectContaining({
             status: "completed",
@@ -166,9 +179,9 @@ describe("B2 orchestrator recovery", () => {
           delivery_package_artifact_id: first.quiescence[0]!.delivery_package_artifact_id,
         })
         expect(yield* supervisor.listDecisions(project.id)).toHaveLength(1)
-        expect((yield* projects.listArtifacts(project.id)).filter((entry) => entry.kind === "delivery_package")).toHaveLength(
-          1,
-        )
+        expect(
+          (yield* projects.listArtifacts(project.id)).filter((entry) => entry.kind === "delivery_package"),
+        ).toHaveLength(1)
         yield* Effect.promise(async () => {
           await fs.mkdir(path.join(process.cwd(), ".artifacts", "seed-grow-b2"), { recursive: true })
           await Bun.write(

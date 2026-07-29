@@ -97,12 +97,7 @@ export function actionFromRow(row: typeof CompanyProjectActionTable.$inferSelect
   })
 }
 
-function insertEvent(
-  project_id: string,
-  type: string,
-  data: Record<string, unknown>,
-  actor_id?: string,
-) {
+function insertEvent(project_id: string, type: string, data: Record<string, unknown>, actor_id?: string) {
   Database.use((db) =>
     db
       .insert(CompanyProjectEventTable)
@@ -189,27 +184,22 @@ function createAttention(raw: AttentionCreateValue) {
 
 export type ReplayResult<T> = { record: T; replayed: boolean }
 
+export class ProjectActionTargetNotFoundError extends Error {}
+export class ProjectActionRequestConflictError extends Error {}
+
 export interface Interface {
   readonly route: (input: AttentionRouteInputValue) => Effect.Effect<ReturnType<typeof AttentionRouter.route>>
   readonly create: (input: AttentionCreateValue) => Effect.Effect<ReplayResult<AttentionRecordValue>>
   readonly open: (input: AttentionCreateValue) => Effect.Effect<ReplayResult<AttentionRecordValue> | undefined>
-  readonly list: (input: {
-    project_id: string
-    status?: AttentionStatusValue
-  }) => Effect.Effect<AttentionRecordValue[]>
+  readonly list: (input: { project_id: string; status?: AttentionStatusValue }) => Effect.Effect<AttentionRecordValue[]>
   readonly close: (input: z.input<typeof AttentionClose>) => Effect.Effect<ReplayResult<AttentionRecordValue>>
-  readonly requestAction: (
-    input: ProjectActionRequestValue,
-  ) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
+  readonly requestAction: (input: ProjectActionRequestValue) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
   readonly claimAction: (id: string) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
   readonly applyAction: (input: {
     id: string
     result: Record<string, unknown>
   }) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
-  readonly rejectAction: (input: {
-    id: string
-    error: string
-  }) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
+  readonly rejectAction: (input: { id: string; error: string }) => Effect.Effect<ReplayResult<ProjectActionRecordValue>>
   readonly replayAction: (input: {
     project_id: string
     idempotency_key: string
@@ -238,10 +228,7 @@ export const layer = Layer.succeed(
             .from(CompanyAttentionTable)
             .where(
               status
-                ? and(
-                    eq(CompanyAttentionTable.project_id, input.project_id),
-                    eq(CompanyAttentionTable.status, status),
-                  )
+                ? and(eq(CompanyAttentionTable.project_id, input.project_id), eq(CompanyAttentionTable.status, status))
                 : eq(CompanyAttentionTable.project_id, input.project_id),
             )
             .orderBy(asc(CompanyAttentionTable.created_at), asc(CompanyAttentionTable.id))
@@ -253,11 +240,7 @@ export const layer = Layer.succeed(
         const input = AttentionClose.parse(raw)
         return Database.transaction(
           (db) => {
-            const existing = db
-              .select()
-              .from(CompanyAttentionTable)
-              .where(eq(CompanyAttentionTable.id, input.id))
-              .get()
+            const existing = db.select().from(CompanyAttentionTable).where(eq(CompanyAttentionTable.id, input.id)).get()
             if (!existing) throw new Error(`Attention not found: ${input.id}`)
             if (existing.status === "resolved") {
               if (existing.resolution !== input.resolution)
@@ -280,10 +263,7 @@ export const layer = Layer.succeed(
                 resolved_at: now,
               })
               .where(
-                and(
-                  eq(CompanyAttentionTable.id, input.id),
-                  eq(CompanyAttentionTable.version, input.expected_version),
-                ),
+                and(eq(CompanyAttentionTable.id, input.id), eq(CompanyAttentionTable.version, input.expected_version)),
               )
               .run()
             insertEvent(existing.project_id, "attention.closed", {
@@ -313,7 +293,7 @@ export const layer = Layer.succeed(
         return Database.transaction(
           (db) => {
             if (!db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.project_id)).get())
-              throw new Error(`Company project not found: ${input.project_id}`)
+              throw new ProjectActionTargetNotFoundError(`Company project not found: ${input.project_id}`)
             const attention = input.attention_id
               ? db
                   .select()
@@ -327,14 +307,18 @@ export const layer = Layer.succeed(
                   .get()
               : undefined
             if (input.attention_id && !attention)
-              throw new Error(`Attention ${input.attention_id} does not belong to project ${input.project_id}`)
+              throw new ProjectActionTargetNotFoundError(
+                `Attention ${input.attention_id} does not belong to project ${input.project_id}`,
+              )
             if (attention?.status !== undefined && attention.status !== "open")
-              throw new Error(`Attention ${attention.id} is not open`)
+              throw new ProjectActionRequestConflictError(`Attention ${attention.id} is not open`)
             if (
               attention &&
               !z.array(ProjectActionKind).parse(JSON.parse(attention.allowed_actions_json)).includes(input.action)
             )
-              throw new Error(`Action ${input.action} is not allowed for Attention ${attention.id}`)
+              throw new ProjectActionRequestConflictError(
+                `Action ${input.action} is not allowed for Attention ${attention.id}`,
+              )
             const existing = db
               .select()
               .from(CompanyProjectActionTable)
@@ -347,7 +331,9 @@ export const layer = Layer.succeed(
               .get()
             if (existing) {
               if (existing.payload_sha256 !== payload_sha256)
-                throw new Error(`Project action idempotency key ${input.idempotency_key} has different facts`)
+                throw new ProjectActionRequestConflictError(
+                  `Project action idempotency key ${input.idempotency_key} has different facts`,
+                )
               return { record: actionFromRow(existing), replayed: true }
             }
             const id = Identifier.ascending("projectAction")
@@ -397,8 +383,7 @@ export const layer = Layer.succeed(
               .where(eq(CompanyProjectActionTable.id, id))
               .get()
             if (!existing) throw new Error(`Project action not found: ${id}`)
-            if (existing.status !== "requested")
-              return { record: actionFromRow(existing), replayed: true }
+            if (existing.status !== "requested") return { record: actionFromRow(existing), replayed: true }
             const project = db
               .select()
               .from(CompanyProjectTable)
@@ -406,10 +391,7 @@ export const layer = Layer.succeed(
               .get()
             if (!project) throw new Error(`Company project not found: ${existing.project_id}`)
             const now = Date.now()
-            if (
-              existing.expected_revision !== null &&
-              existing.expected_revision !== project.graph_revision
-            ) {
+            if (existing.expected_revision !== null && existing.expected_revision !== project.graph_revision) {
               db.update(CompanyProjectActionTable)
                 .set({
                   status: "rejected",
@@ -498,8 +480,7 @@ export const layer = Layer.succeed(
                 throw new Error(`Project action ${input.id} was rejected with different facts`)
               return { record: actionFromRow(existing), replayed: true }
             }
-            if (existing.status === "applied")
-              throw new Error(`Project action ${input.id} cannot reject from applied`)
+            if (existing.status === "applied") throw new Error(`Project action ${input.id} cannot reject from applied`)
             const now = Date.now()
             db.update(CompanyProjectActionTable)
               .set({ status: "rejected", error: input.error, updated_at: now, finished_at: now })

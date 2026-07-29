@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Cause, Effect, Exit } from "effect"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
 import z from "zod"
@@ -19,11 +19,16 @@ import {
   ValidationSummary,
   WorkProjection,
   WorkProjectionList,
+  ExperienceWorkActionRequest,
+  ExperienceWorkActionResult,
+  type ExperienceWorkActionRequest as ExperienceWorkActionRequestValue,
 } from "@agents-company/shared/experience"
 import { GoalBriefModelAdapter, GoalBriefStore } from "@/goal-brief"
 import * as ExperienceProjectionService from "@/company-project/experience-projection"
 import * as WorkProjectionService from "@/company-project/work-projection"
 import * as ExperienceArtifactService from "@/company-project/experience-artifact"
+import * as CompanyAttention from "@/company-project/attention"
+import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 import { lazy } from "@/util/lazy"
 import { runRequest } from "./trace"
 
@@ -44,6 +49,37 @@ const ArtifactID = z
 
 function missing(message: string) {
   return ExperienceApiError.parse({ code: "not_found", message })
+}
+
+function projectActionRequest(project_id: string, input: ExperienceWorkActionRequestValue) {
+  const base = {
+    project_id,
+    action: input.action,
+    idempotency_key: input.idempotencyKey,
+    expected_revision: input.expectedGraphRevision,
+  }
+  if (input.action === "retry")
+    return {
+      ...base,
+      payload: {
+        reason: input.reason,
+        work_item_ids: input.workItemIds,
+      },
+    }
+  if (input.action === "resolve_blocker")
+    return {
+      ...base,
+      attention_id: input.attentionId,
+      payload: {
+        resolution: input.resolution,
+        approval_gate_id: "approvalGateId" in input ? input.approvalGateId : undefined,
+        decision: "decision" in input ? input.decision : undefined,
+      },
+    }
+  return {
+    ...base,
+    payload: { reason: input.reason },
+  }
 }
 
 export function createExperienceRoutes(
@@ -319,6 +355,75 @@ export function createExperienceRoutes(
             Effect.sync(() => WorkProjectionList.parse(WorkProjectionService.list())),
           ),
         ),
+    )
+    .post(
+      "/work/:projectID/actions",
+      describeRoute({
+        summary: "Execute a durable user-facing work action",
+        operationId: "experience.work.action",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {},
+          },
+        },
+        responses: {
+          200: {
+            description: "Persisted work action result",
+            content: {
+              "application/json": { schema: resolver(ExperienceWorkActionResult) },
+            },
+          },
+          404: {
+            description: "Project or action target not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+          409: {
+            description: "Work action request conflict",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ProjectID),
+      validator("json", ExperienceWorkActionRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const outcome = await runRequest(
+          "ExperienceRoutes.work.action",
+          c,
+          Effect.exit(
+            ProjectActionExecutor.Service.use((executor) =>
+              executor.execute(projectActionRequest(c.req.valid("param").projectID, input)),
+            ),
+          ),
+        )
+        if (Exit.isFailure(outcome)) {
+          const error = Cause.squash(outcome.cause)
+          if (error instanceof CompanyAttention.ProjectActionTargetNotFoundError)
+            return c.json(missing(error.message), 404)
+          if (error instanceof CompanyAttention.ProjectActionRequestConflictError)
+            return c.json(
+              ExperienceApiError.parse({
+                code: "request_conflict",
+                message: error.message,
+              }),
+              409,
+            )
+          throw error
+        }
+        const executed = outcome.value
+        return c.json(
+          ExperienceWorkActionResult.parse({
+            actionId: executed.action.id,
+            projectId: executed.action.project_id,
+            action: executed.action.action,
+            status: executed.action.status,
+            replayed: executed.replayed,
+            result: executed.action.result,
+            error: executed.action.error,
+          }),
+        )
+      },
     )
     .get(
       "/work/:projectID/organization",

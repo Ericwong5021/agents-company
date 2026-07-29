@@ -2,11 +2,7 @@ import { afterEach, describe, expect } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Effect, Layer } from "effect"
-import {
-  CompanyGraphMutation,
-  CompanyProject,
-  CompanyWorkFacts,
-} from "../../src/company-project"
+import { CompanyGraphMutation, CompanyAttention, CompanyProject, CompanyWorkFacts } from "../../src/company-project"
 import { CompanyRecruitment } from "../../src/company-recruitment"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { GraphSupervisor } from "../../src/project-orchestrator/graph-supervisor"
@@ -30,6 +26,7 @@ const dependencies = Layer.mergeAll(
   CompanyProject.recoveryControlledLayer,
   CompanyWorkFacts.makeLayer({ recoverOnStart: false }),
   CompanyGraphMutation.defaultLayer,
+  CompanyAttention.defaultLayer,
   recruitment,
 )
 const it = testEffect(
@@ -51,6 +48,7 @@ describe("B2 quiescence", () => {
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const projects = yield* CompanyProject.Service
+        const attention = yield* CompanyAttention.Service
         const supervisor = yield* GraphSupervisor.Service
         const quiescence = yield* QuiescenceService.Service
         const project = yield* projects.create({
@@ -147,6 +145,39 @@ describe("B2 quiescence", () => {
         })
         expect((yield* quiescence.check(project.id)).blocker_codes).toContain("pending_approval_gates")
         yield* projects.resolveGate({ id: gate.id, decision: "approve" })
+        const opened = yield* attention.create({
+          project_id: project.id,
+          idempotency_key: "b3-quiescence-attention",
+          issue: {
+            issue_kind: "permission_required",
+            risk: "high",
+            materiality: "permission",
+          },
+          title: "Material permission decision",
+          summary: "Quiescence must wait for the material decision",
+          source_refs: [{ kind: "project", id: project.id }],
+        })
+        const requested = yield* attention.requestAction({
+          project_id: project.id,
+          attention_id: opened.record.id,
+          action: "stop_work",
+          idempotency_key: "b3-quiescence-action",
+          payload: { reason: "verify claimed blocker" },
+          expected_revision: (yield* projects.get(project.id))!.graph_revision,
+        })
+        const claimed = yield* attention.claimAction(requested.record.id)
+        const actionBlocked = yield* quiescence.check(project.id)
+        expect(actionBlocked.blocker_codes).toContain("open_material_attention")
+        expect(actionBlocked.blocker_codes).toContain("claimed_project_actions")
+        yield* attention.close({
+          id: opened.record.id,
+          expected_version: opened.record.version,
+          resolution: "Permission granted",
+        })
+        yield* attention.applyAction({
+          id: claimed.record.id,
+          result: { verified: true },
+        })
         const completed = yield* quiescence.check(project.id)
         const replayed = yield* quiescence.check(project.id)
         expect(completed).toMatchObject({

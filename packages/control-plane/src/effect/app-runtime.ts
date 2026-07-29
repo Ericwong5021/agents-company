@@ -71,6 +71,7 @@ import { ConversationRuntime } from "@/conversation/runtime"
 import { CompanyProject, CompanyProjectExecution, CompanyProjectRecovery } from "@/company-project"
 import { CompanyRecruitment } from "@/company-recruitment"
 import { ProjectOrchestrator } from "@/project-orchestrator/project-orchestrator"
+import { ProjectActionExecutor } from "@/project-orchestrator/project-action-executor"
 import { Thread } from "@/thread/thread"
 import { Org } from "@/org"
 import { defaultLayer as ReputationLayer } from "@/reputation/reputation"
@@ -85,7 +86,9 @@ export const AppLayer = Layer.suspend(() => {
   const bus = Bus.defaultLayer
   const groupSession = GroupSession.defaultLayer
   const conversation = Conversation.defaultLayer
-  const conversationRuntime = ConversationRuntime.layer.pipe(Layer.provide(Layer.mergeAll(groupSession, bus, conversation)))
+  const conversationRuntime = ConversationRuntime.layer.pipe(
+    Layer.provide(Layer.mergeAll(groupSession, bus, conversation)),
+  )
   return Layer.mergeAll(
     Npm.defaultLayer,
     AppFileSystem.defaultLayer,
@@ -150,13 +153,21 @@ export const AppLayer = Layer.suspend(() => {
     conversationRuntime,
     ConversationCommand.layer.pipe(
       Layer.provide(
-        Layer.mergeAll(conversation, conversationRuntime, bus, Company.defaultLayer, Git.defaultLayer, Project.defaultLayer),
+        Layer.mergeAll(
+          conversation,
+          conversationRuntime,
+          bus,
+          Company.defaultLayer,
+          Git.defaultLayer,
+          Project.defaultLayer,
+        ),
       ),
     ),
     CompanyProject.recoveryControlledLayer,
     CompanyProjectRecovery.defaultLayer,
     CompanyRecruitment.defaultLayer,
     CompanyProjectExecution.defaultLayer,
+    ProjectActionExecutor.defaultLayer,
     ProjectOrchestrator.defaultLayer,
     Thread.defaultLayer,
     AgentMessage.defaultLayer,

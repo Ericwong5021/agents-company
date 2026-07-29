@@ -335,14 +335,13 @@ describe.serial("Work Projection", () => {
         availability: "unavailable",
         text: "当前原因不可用",
       },
-      nextAction: { id: "open_diagnostics", enabled: true },
+      nextAction: { id: "resolve_blocker", enabled: true },
     })
     expect(result.summary.allowedActions.filter((item) => item.enabled)).toEqual([
+      expect.objectContaining({ id: "resolve_blocker" }),
       expect.objectContaining({ id: "open_diagnostics" }),
+      expect.objectContaining({ id: "stop_work" }),
     ])
-    expect(
-      result.summary.allowedActions.filter((item) => item.id !== "open_diagnostics").every((item) => !item.enabled),
-    ).toBe(true)
   })
 
   test.serial("maps only canonical work controls and critical-path or exhausted-retry predicates", () => {
@@ -802,11 +801,11 @@ describe.serial("Work Projection", () => {
     expect(oversized).toEqual(WorkProjection.parse(rebuild("project-oversized")))
     expect(invalidArtifact).toEqual(WorkProjection.parse(rebuild("project-artifact-invalid")))
     expect([oversized, invalidArtifact].every((item) => item.availability === "unavailable")).toBe(true)
-    expect([oversized, invalidArtifact].every((item) =>
-      item.diagnostics.some((diagnostic) =>
-        diagnostic.message.includes("项目持久化事实不符合用户投影契约"),
+    expect(
+      [oversized, invalidArtifact].every((item) =>
+        item.diagnostics.some((diagnostic) => diagnostic.message.includes("项目持久化事实不符合用户投影契约")),
       ),
-    )).toBe(true)
+    ).toBe(true)
     expect(JSON.stringify(oversized)).not.toContain("t".repeat(241))
 
     expect(

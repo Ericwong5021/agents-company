@@ -139,6 +139,8 @@ import type {
   ExperienceGoalBriefHistoryResponses,
   ExperienceGoalBriefProjectErrors,
   ExperienceGoalBriefProjectResponses,
+  ExperienceWorkActionErrors,
+  ExperienceWorkActionResponses,
   ExperienceWorkGetErrors,
   ExperienceWorkGetResponses,
   ExperienceWorkGraphErrors,
@@ -2082,6 +2084,84 @@ export class Work extends HeyApiClient {
     return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
       url: "/experience/work",
       ...options,
+    })
+  }
+
+  /**
+   * Execute a durable user-facing work action
+   */
+  public action<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      body:
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "pause_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resume_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "stop_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "retry"
+            workItemIds?: Array<string>
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resolve_blocker"
+            attentionId: string
+            resolution: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resolve_blocker"
+            attentionId?: string
+            approvalGateId: string
+            decision: "approve" | "reject"
+            resolution: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceWorkActionResponses,
+      ExperienceWorkActionErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

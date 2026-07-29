@@ -423,8 +423,97 @@ export const ExperienceActionMutatesBusinessState = {
   archive: true,
 } as const satisfies Record<ExperienceActionType, boolean>
 
-export const ExperienceR0ImplementedMutationActions = [] as const satisfies readonly ExperienceActionType[]
+export const ExperienceR0ImplementedMutationActions = [
+  "pause_work",
+  "resume_work",
+  "stop_work",
+  "resolve_blocker",
+  "retry",
+] as const satisfies readonly ExperienceActionType[]
 const ExperienceR0ImplementedMutationActionSet = new Set<ExperienceActionType>(ExperienceR0ImplementedMutationActions)
+
+const ExperienceWorkActionBase = {
+  idempotencyKey: Identifier,
+  expectedGraphRevision: z.number().int().nonnegative(),
+}
+
+export const ExperienceWorkActionRequest = z.union([
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("pause_work"),
+      reason: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("resume_work"),
+      reason: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("stop_work"),
+      reason: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("retry"),
+      workItemIds: z.array(Identifier).max(500).optional(),
+      reason: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("resolve_blocker"),
+      attentionId: Identifier,
+      resolution: LongText,
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("resolve_blocker"),
+      attentionId: Identifier.optional(),
+      approvalGateId: Identifier,
+      decision: z.enum(["approve", "reject"]),
+      resolution: LongText,
+    })
+    .strict(),
+])
+export type ExperienceWorkActionRequest = z.infer<typeof ExperienceWorkActionRequest>
+
+export const ExperienceWorkActionResult = z
+  .object({
+    actionId: Identifier,
+    projectId: Identifier,
+    action: z.enum(["pause_work", "resume_work", "stop_work", "retry", "resolve_blocker"]),
+    status: z.enum(["applied", "rejected"]),
+    replayed: z.boolean(),
+    result: z.record(z.string(), z.unknown()).optional(),
+    error: LongText.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.status === "applied" && !value.result)
+      context.addIssue({
+        code: "custom",
+        path: ["result"],
+        message: "Applied actions require a persisted result",
+      })
+    if (value.status === "rejected" && !value.error)
+      context.addIssue({
+        code: "custom",
+        path: ["error"],
+        message: "Rejected actions require an error",
+      })
+  })
+export type ExperienceWorkActionResult = z.infer<typeof ExperienceWorkActionResult>
 
 export const ExperienceAllowedActionTypes = {
   draft: ["continue_editing", "adjust_brief"],

@@ -601,6 +601,9 @@ export type BoardDecisionResult = {
     active_plan_version?: number
     execution_strategy: "legacy_full_plan" | "seed_and_grow"
     seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
+    orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
+    orchestrator_version: number
+    dispatch_paused: boolean
     graph_revision: number
     created_at: number
     updated_at: number
@@ -7773,6 +7776,142 @@ export type ExperienceWorkListResponses = {
 
 export type ExperienceWorkListResponse = ExperienceWorkListResponses[keyof ExperienceWorkListResponses]
 
+export type ExperienceWorkActionData = {
+  body:
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "pause_work"
+        reason?: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "resume_work"
+        reason?: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "stop_work"
+        reason?: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "retry"
+        workItemIds?: Array<string>
+        reason?: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "resolve_blocker"
+        attentionId: string
+        resolution: string
+      }
+    | {
+        idempotencyKey: string
+        expectedGraphRevision: number
+        action: "resolve_blocker"
+        attentionId?: string
+        approvalGateId: string
+        decision: "approve" | "reject"
+        resolution: string
+      }
+  path: {
+    projectID: string
+  }
+  query?: never
+  url: "/experience/work/{projectID}/actions"
+}
+
+export type ExperienceWorkActionErrors = {
+  /**
+   * Project or action target not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+  /**
+   * Work action request conflict
+   */
+  409:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkActionError = ExperienceWorkActionErrors[keyof ExperienceWorkActionErrors]
+
+export type ExperienceWorkActionResponses = {
+  /**
+   * Persisted work action result
+   */
+  200: {
+    actionId: string
+    projectId: string
+    action: "pause_work" | "resume_work" | "stop_work" | "retry" | "resolve_blocker"
+    status: "applied" | "rejected"
+    replayed: boolean
+    result?: {
+      [key: string]: unknown
+    }
+    error?: string
+  }
+}
+
+export type ExperienceWorkActionResponse = ExperienceWorkActionResponses[keyof ExperienceWorkActionResponses]
+
 export type ExperienceWorkOrganizationData = {
   body?: never
   path: {
@@ -11303,6 +11442,9 @@ export type CompanyProjectStartResponses = {
       active_plan_version?: number
       execution_strategy: "legacy_full_plan" | "seed_and_grow"
       seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
+      orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
+      orchestrator_version: number
+      dispatch_paused: boolean
       graph_revision: number
       created_at: number
       updated_at: number
@@ -11415,6 +11557,9 @@ export type CompanyProjectReceiptsResponses = {
     work_item_id: string
     attempt_id: string
     processing_status: "pending" | "processing" | "processed" | "rejected"
+    processing_claim_id?: string
+    claimed_at?: number
+    processed_decision_id?: string
     processed_mutation_id?: string
     created_at: number
     processed_at?: number
@@ -11490,6 +11635,9 @@ export type CompanyProjectRetryResponses = {
       active_plan_version?: number
       execution_strategy: "legacy_full_plan" | "seed_and_grow"
       seed_mode?: "direct_single" | "seed_pair" | "discovery_first"
+      orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
+      orchestrator_version: number
+      dispatch_paused: boolean
       graph_revision: number
       created_at: number
       updated_at: number

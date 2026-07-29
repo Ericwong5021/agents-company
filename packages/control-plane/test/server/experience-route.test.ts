@@ -9,6 +9,7 @@ import {
   ExperienceApiError,
   ExperienceArtifactUnavailable,
   ExperienceArtifactView,
+  ExperienceWorkActionResult,
   GraphChangeSummary,
   GoalBrief,
   GoalBriefHistory,
@@ -243,6 +244,79 @@ describe.serial("/experience", () => {
     responses.forEach((item) => {
       expect(ExperienceApiError.parse(item.body).code).toBe("not_found")
     })
+  })
+
+  test.serial("executes a strict durable Experience work action contract", async () => {
+    Database.use((db) =>
+      db
+        .insert(CompanyProjectTable)
+        .values({
+          id: "project-action-api",
+          goal: "Pause safely",
+          title: "Action API",
+          status: "executing",
+          output_dir: "/tmp/project-action-api",
+          execution_strategy: "seed_and_grow",
+          seed_mode: "direct_single",
+          graph_revision: 2,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        })
+        .run(),
+    )
+    const request = {
+      action: "pause_work",
+      idempotencyKey: "api-pause-1",
+      expectedGraphRevision: 2,
+      reason: "Inspect current evidence",
+    }
+    const first = await json("/experience/work/project-action-api/actions", {
+      method: "POST",
+      body: JSON.stringify(request),
+    })
+    const replay = await json("/experience/work/project-action-api/actions", {
+      method: "POST",
+      body: JSON.stringify(request),
+    })
+    const invalid = await json("/experience/work/project-action-api/actions", {
+      method: "POST",
+      body: JSON.stringify({ ...request, unexpected: true }),
+    })
+    const invalidResolve = await json("/experience/work/project-action-api/actions", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "resolve_blocker",
+        idempotencyKey: "api-resolve-invalid",
+        expectedGraphRevision: 2,
+        resolution: "No target",
+      }),
+    })
+    const conflict = await json("/experience/work/project-action-api/actions", {
+      method: "POST",
+      body: JSON.stringify({ ...request, reason: "Different facts" }),
+    })
+    const missing = await json("/experience/work/project-action-missing/actions", {
+      method: "POST",
+      body: JSON.stringify({ ...request, idempotencyKey: "api-pause-missing" }),
+    })
+
+    expect(first.response.status).toBe(200)
+    expect(ExperienceWorkActionResult.parse(first.body)).toMatchObject({
+      projectId: "project-action-api",
+      action: "pause_work",
+      status: "applied",
+      replayed: false,
+    })
+    expect(ExperienceWorkActionResult.parse(replay.body)).toMatchObject({
+      status: "applied",
+      replayed: true,
+    })
+    expect(invalid.response.status).toBe(400)
+    expect(invalidResolve.response.status).toBe(400)
+    expect(conflict.response.status).toBe(409)
+    expect(ExperienceApiError.parse(conflict.body).code).toBe("request_conflict")
+    expect(missing.response.status).toBe(404)
+    expect(ExperienceApiError.parse(missing.body).code).toBe("not_found")
   })
 
   test.serial("returns work list and detail through the shared projection schemas", async () => {
@@ -1108,6 +1182,11 @@ describe.serial("/experience", () => {
       },
       { method: "get", path: "/experience/work", statuses: ["200"] },
       {
+        method: "post",
+        path: "/experience/work/{projectID}/actions",
+        statuses: ["200", "404", "409"],
+      },
+      {
         method: "get",
         path: "/experience/work/{projectID}/organization",
         statuses: ["200", "404"],
@@ -1143,6 +1222,7 @@ describe.serial("/experience", () => {
       { method: "post", path: "/experience/goal-brief" },
       { method: "post", path: "/experience/goal-brief/generate" },
       { method: "post", path: "/experience/goal-brief/{briefID}/versions" },
+      { method: "post", path: "/experience/work/{projectID}/actions" },
     ] as const) {
       const requestBody = spec.paths?.[item.path]?.[item.method]?.requestBody
       if (!requestBody || "$ref" in requestBody)

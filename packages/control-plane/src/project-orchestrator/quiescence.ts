@@ -1,14 +1,16 @@
 import { Context, Effect, Layer, Semaphore } from "effect"
-import { asc, eq } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { CompanyID } from "@/company/schema"
 import {
   CompanyApprovalGateTable,
   CompanyArtifactTable,
+  CompanyAttentionTable,
   CompanyGraphDecisionTable,
   CompanyGraphMutationTable,
   CompanyPlanTable,
   CompanyProjectCharterTable,
   CompanyProjectEventTable,
+  CompanyProjectActionTable,
   CompanyProjectTable,
   CompanyValidationGateTable,
   CompanyWorkAttemptTable,
@@ -30,6 +32,8 @@ export type QuiescenceBlocker = {
     | "pending_mutations"
     | "unresolved_validation_gates"
     | "pending_approval_gates"
+    | "open_material_attention"
+    | "claimed_project_actions"
     | "unresolved_receipt_blockers"
     | "acceptance_evidence_missing"
     | "active_quiesce_decision_missing"
@@ -73,7 +77,27 @@ function inspectAndFinalize(project_id: string) {
         .orderBy(asc(CompanyArtifactTable.created_at), asc(CompanyArtifactTable.id))
         .all()
         .find((artifact) => artifact.kind === "delivery_package")
-      if (project.status === "completed" && existingPackage)
+      const openMaterialAttention = db
+        .select()
+        .from(CompanyAttentionTable)
+        .where(
+          and(
+            eq(CompanyAttentionTable.project_id, project_id),
+            eq(CompanyAttentionTable.status, "open"),
+            eq(CompanyAttentionTable.material, true),
+          ),
+        )
+        .orderBy(asc(CompanyAttentionTable.created_at), asc(CompanyAttentionTable.id))
+        .all()
+      const claimedActions = db
+        .select()
+        .from(CompanyProjectActionTable)
+        .where(
+          and(eq(CompanyProjectActionTable.project_id, project_id), eq(CompanyProjectActionTable.status, "claimed")),
+        )
+        .orderBy(asc(CompanyProjectActionTable.created_at), asc(CompanyProjectActionTable.id))
+        .all()
+      if (project.status === "completed" && existingPackage && !openMaterialAttention.length && !claimedActions.length)
         return {
           project,
           result: {
@@ -131,8 +155,7 @@ function inspectAndFinalize(project_id: string) {
         .orderBy(asc(CompanyGraphDecisionTable.created_at), asc(CompanyGraphDecisionTable.id))
         .all()
       const quiesce = decisions.findLast(
-        (decision) =>
-          decision.kind === "quiesce" && decision.mode === "active" && decision.status === "applied",
+        (decision) => decision.kind === "quiesce" && decision.mode === "active" && decision.status === "applied",
       )
       const latestReceipts = [...receipts]
         .reverse()
@@ -190,8 +213,7 @@ function inspectAndFinalize(project_id: string) {
         const artifactBindings = artifacts.filter((artifact) => {
           const evidence = JSON.parse(artifact.evidence_json) as Record<string, unknown>
           return (
-            (Array.isArray(evidence.acceptance_criteria) &&
-              evidence.acceptance_criteria.includes(criterion)) ||
+            (Array.isArray(evidence.acceptance_criteria) && evidence.acceptance_criteria.includes(criterion)) ||
             (typeof evidence.criterion === "string" && evidence.criterion === criterion) ||
             (typeof evidence.criterion_bindings === "object" &&
               evidence.criterion_bindings !== null &&
@@ -276,8 +298,7 @@ function inspectAndFinalize(project_id: string) {
             ]
           : []),
         ...(attempts.some(
-          (attempt) =>
-            attempt.status !== "running" && !receipts.some((receipt) => receipt.attempt_id === attempt.id),
+          (attempt) => attempt.status !== "running" && !receipts.some((receipt) => receipt.attempt_id === attempt.id),
         )
           ? [
               {
@@ -285,8 +306,7 @@ function inspectAndFinalize(project_id: string) {
                 entity_ids: attempts
                   .filter(
                     (attempt) =>
-                      attempt.status !== "running" &&
-                      !receipts.some((receipt) => receipt.attempt_id === attempt.id),
+                      attempt.status !== "running" && !receipts.some((receipt) => receipt.attempt_id === attempt.id),
                   )
                   .map((attempt) => attempt.id)
                   .sort(),
@@ -337,20 +357,28 @@ function inspectAndFinalize(project_id: string) {
               },
             ]
           : []),
-        ...(latestReceipts.some(
-          (receipt) =>
-            receipt.outcome !== "completed" ||
-            parseList(receipt.blockers_json).length,
-        )
+        ...(openMaterialAttention.length
+          ? [
+              {
+                code: "open_material_attention" as const,
+                entity_ids: openMaterialAttention.map((attention) => attention.id),
+              },
+            ]
+          : []),
+        ...(claimedActions.length
+          ? [
+              {
+                code: "claimed_project_actions" as const,
+                entity_ids: claimedActions.map((action) => action.id),
+              },
+            ]
+          : []),
+        ...(latestReceipts.some((receipt) => receipt.outcome !== "completed" || parseList(receipt.blockers_json).length)
           ? [
               {
                 code: "unresolved_receipt_blockers" as const,
                 entity_ids: latestReceipts
-                  .filter(
-                    (receipt) =>
-                      receipt.outcome !== "completed" ||
-                      parseList(receipt.blockers_json).length,
-                  )
+                  .filter((receipt) => receipt.outcome !== "completed" || parseList(receipt.blockers_json).length)
                   .map((receipt) => receipt.id)
                   .sort(),
               },
@@ -366,9 +394,7 @@ function inspectAndFinalize(project_id: string) {
               },
             ]
           : []),
-        ...(!quiesce
-          ? [{ code: "active_quiesce_decision_missing" as const, entity_ids: [project.id] }]
-          : []),
+        ...(!quiesce ? [{ code: "active_quiesce_decision_missing" as const, entity_ids: [project.id] }] : []),
       ].sort((left, right) => left.code.localeCompare(right.code))
       if (blockers.length)
         return {
@@ -385,41 +411,39 @@ function inspectAndFinalize(project_id: string) {
           },
         }
       const now = Date.now()
-      const deliveryPackage =
-        existingPackage ??
-        {
-          id: Identifier.ascending("artifact"),
-          project_id,
-          work_item_id: null,
-          kind: "delivery_package",
-          title: `${project.title} Delivery Package`,
-          path: null,
-          content: `${JSON.stringify(
-            {
-              schema_version: 1,
-              project_id,
-              graph_revision: project.graph_revision,
-              quiesce_decision_id: quiesce!.id,
-              acceptance_coverage: acceptanceCoverage,
-              work_item_ids: workItems.map((item) => item.id),
-              receipt_ids: receipts.map((receipt) => receipt.id),
-              validation_gate_ids: validationGates
-                .filter((gate) => gate.status === "passed")
-                .map((gate) => gate.id)
-                .sort(),
-              limitations: acceptanceCoverage.flatMap((coverage) => coverage.limitations),
-            },
-            null,
-            2,
-          )}\n`,
-          evidence_json: JSON.stringify({
-            quiesce_decision_id: quiesce!.id,
+      const deliveryPackage = existingPackage ?? {
+        id: Identifier.ascending("artifact"),
+        project_id,
+        work_item_id: null,
+        kind: "delivery_package",
+        title: `${project.title} Delivery Package`,
+        path: null,
+        content: `${JSON.stringify(
+          {
+            schema_version: 1,
+            project_id,
             graph_revision: project.graph_revision,
+            quiesce_decision_id: quiesce!.id,
+            acceptance_coverage: acceptanceCoverage,
+            work_item_ids: workItems.map((item) => item.id),
             receipt_ids: receipts.map((receipt) => receipt.id),
-          }),
-          created_by_agent_id: null,
-          created_at: now,
-        }
+            validation_gate_ids: validationGates
+              .filter((gate) => gate.status === "passed")
+              .map((gate) => gate.id)
+              .sort(),
+            limitations: acceptanceCoverage.flatMap((coverage) => coverage.limitations),
+          },
+          null,
+          2,
+        )}\n`,
+        evidence_json: JSON.stringify({
+          quiesce_decision_id: quiesce!.id,
+          graph_revision: project.graph_revision,
+          receipt_ids: receipts.map((receipt) => receipt.id),
+        }),
+        created_by_agent_id: null,
+        created_at: now,
+      }
       if (!existingPackage) {
         db.insert(CompanyArtifactTable).values(deliveryPackage).run()
         db.insert(CompanyProjectEventTable)
@@ -496,9 +520,7 @@ export const layer = Layer.effect(
       const finalized = yield* lock(project_id).withPermits(1)(Effect.sync(() => inspectAndFinalize(project_id)))
       if (finalized.result.status !== "completed") return finalized.result
       const released = yield* recruitment.releaseProject({
-        ...(finalized.project.company_id
-          ? { company_id: CompanyID.parse(finalized.project.company_id) }
-          : {}),
+        ...(finalized.project.company_id ? { company_id: CompanyID.parse(finalized.project.company_id) } : {}),
         project_id,
       })
       return {
