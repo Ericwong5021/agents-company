@@ -496,9 +496,41 @@ export function submitGovernanceInTransaction(db: TxOrDb, raw: GovernanceRequest
   const existing = db
     .select()
     .from(CompanyApprovalGateTable)
-    .where(eq(CompanyApprovalGateTable.decision_id, decision.id))
+    .where(and(
+      eq(CompanyApprovalGateTable.decision_id, decision.id),
+      eq(CompanyApprovalGateTable.kind, "founder_red"),
+    ))
     .orderBy(desc(CompanyApprovalGateTable.requested_at))
     .get()
+  if (existing) {
+    const requestEvent = db
+      .select()
+      .from(FounderGovernanceEventTable)
+      .where(and(
+        eq(FounderGovernanceEventTable.gate_id, existing.id),
+        eq(FounderGovernanceEventTable.type, "approval_gate.requested"),
+      ))
+      .orderBy(desc(FounderGovernanceEventTable.created_at))
+      .get()
+    const facts = requestEvent
+      ? z
+          .object({
+            actionType: z.string().trim().min(1),
+            proposedAuthorityClass: FounderAuthorityClass,
+            evidenceSufficient: z.boolean(),
+          })
+          .safeParse(JSON.parse(requestEvent.data_json))
+      : undefined
+    if (
+      !facts?.success
+      || facts.data.actionType !== input.actionType
+      || facts.data.proposedAuthorityClass !== input.proposedAuthorityClass
+      || facts.data.evidenceSufficient !== input.evidenceSufficient
+      || existing.requested_by_actor_kind !== input.requestedBy.kind
+      || existing.requested_by_actor_id !== input.requestedBy.id
+    )
+      throw new Error("Decision ApprovalGate is bound to different immutable governance facts")
+  }
   const gate = existing ?? {
     id: Identifier.ascending("gate"),
     ...scopeColumns(decision.scope),
@@ -542,15 +574,16 @@ export function submitGovernanceInTransaction(db: TxOrDb, raw: GovernanceRequest
         actorId: input.requestedBy.id,
       })
   }
+  const gateApproved = existing?.status === "approved" && decision.currentStatus === "accepted"
+  const effectiveAuthority = gateApproved
+    ? DecisionAuthorityEvaluation.parse({ ...authority, allowed: true })
+    : authority
   return GovernanceDecision.parse({
     schemaVersion: 1,
     decision: recordFromRow(db, row),
-    authority,
+    authority: effectiveAuthority,
     gate: gateFromRow(gate),
-    dispatchAllowed:
-      existing?.status === "approved"
-      && decision.currentStatus === "accepted"
-      && authority.allowed,
+    dispatchAllowed: gateApproved && effectiveAuthority.allowed,
   })
 }
 
@@ -633,25 +666,6 @@ export const governanceLayer = Layer.succeed(
                   actorId: input.actor.id,
                 })
                   : null
-              if (input.decision === "approve")
-                appendDecisionDispatchInTransaction(db, {
-                  companyId: before.scope.companyId,
-                  decisionId: before.id,
-                  transitionId:
-                    authorizationTransition?.id ??
-                    db
-                      .select()
-                      .from(DecisionCurrentProjectionTable)
-                      .where(eq(DecisionCurrentProjectionTable.decision_id, before.id))
-                      .get()!.latest_transition_id,
-                  consumer: "governance_dispatch",
-                  actionType: requestFacts.data.actionType,
-                  payload: {
-                    gateId: gate.id,
-                    requestedBy: input.actor,
-                  },
-                  idempotencyKey: `founder-gate:${gate.id}:dispatch`,
-                })
               governanceEvent(db, {
                 scope: before.scope,
                 decisionId: before.id,
@@ -678,17 +692,43 @@ export const governanceLayer = Layer.succeed(
                 }).effective.founderTwinMode,
                 approvalPreset: preset.preset,
               })
+              const dispatchAllowed =
+                input.decision === "approve"
+                && authority.authorityClass === "red"
+                && authority.requiresApproval
+              const effectiveAuthority = dispatchAllowed
+                ? DecisionAuthorityEvaluation.parse({ ...authority, allowed: true })
+                : authority
+              if (dispatchAllowed)
+                appendDecisionDispatchInTransaction(db, {
+                  companyId: before.scope.companyId,
+                  decisionId: before.id,
+                  transitionId:
+                    authorizationTransition?.id ??
+                    db
+                      .select()
+                      .from(DecisionCurrentProjectionTable)
+                      .where(eq(DecisionCurrentProjectionTable.decision_id, before.id))
+                      .get()!.latest_transition_id,
+                  consumer: "governance_dispatch",
+                  actionType: requestFacts.data.actionType,
+                  payload: {
+                    gateId: gate.id,
+                    requestedBy: input.actor,
+                  },
+                  idempotencyKey: `founder-gate:${gate.id}:dispatch`,
+                })
               return GovernanceDecision.parse({
                 schemaVersion: 1,
                 decision,
-                authority,
+                authority: effectiveAuthority,
                 gate: gateFromRow({
                   ...gate,
                   status: input.decision === "approve" ? "approved" : "rejected",
                   decision_note: input.note,
                   decided_at: now,
                 }),
-                dispatchAllowed: input.decision === "approve" && authority.allowed,
+                dispatchAllowed,
               })
             },
             { behavior: "immediate" },

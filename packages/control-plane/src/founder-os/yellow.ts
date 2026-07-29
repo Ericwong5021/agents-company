@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { Cause, Context, Effect, Exit, Layer } from "effect"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm"
 import z from "zod"
 import {
   FounderYellowActionContract,
@@ -38,10 +38,13 @@ import {
   submitGovernanceInTransaction,
 } from "./authority"
 import {
+  appendDecisionDispatchInTransaction,
+  appendDecisionTransitionInTransaction,
   defaultLayer as decisionLedgerLayer,
   Service as DecisionLedgerService,
 } from "./decision-ledger"
 import {
+  DecisionCurrentProjectionTable,
   FounderGovernanceEventTable,
 } from "./decision-ledger.sql"
 import * as FounderOSMode from "./mode"
@@ -202,19 +205,23 @@ function readiness(companyId: string) {
         recordedAt: null,
       }),
     }
+  const outcome = Database.use((db) => validatedOutcome(db, row.outcome_signal_id))
+  const confirmed = outcome?.result === "succeeded"
   return {
     id: row.id,
     value: FounderYellowReadiness.parse({
       schemaVersion: 1,
       companyId,
-      status: "confirmed",
+      status: confirmed ? "confirmed" : "not_confirmed",
       greenReadinessRef: row.green_readiness_id,
       w6ObservationEvidenceRef: row.w6_observation_evidence_ref,
       e0EvidenceRef: row.e0_evidence_ref,
       outcomeSignalRef: row.outcome_signal_id,
       authorizationEventRef: row.authorization_event_id,
       confirmedBy: row.confirmed_by,
-      failClosedReasons: [],
+      failClosedReasons: confirmed
+        ? []
+        : ["Referenced Outcome Signal is no longer validated and successful."],
       autoPromotionAllowed: false,
       recordedAt: row.created_at,
     }),
@@ -235,16 +242,22 @@ function fenced(companyId: string, boardThreadId: string) {
 }
 
 function circuitOpen(companyId: string) {
-  return Boolean(Database.use((db) =>
+  const latest = Database.use((db) =>
     db
-      .select({ id: FounderYellowEventTable.id })
+      .select()
       .from(FounderYellowEventTable)
       .where(and(
         eq(FounderYellowEventTable.company_id, companyId),
-        eq(FounderYellowEventTable.type, "circuit_opened"),
+        inArray(FounderYellowEventTable.type, ["circuit_opened", "override_recorded"]),
       ))
-      .get(),
-  ))
+      .orderBy(desc(FounderYellowEventTable.created_at), desc(FounderYellowEventTable.id))
+      .all()
+      .find((row) =>
+        row.type === "circuit_opened"
+        || z.object({ circuitReset: z.literal(true) }).catchall(z.unknown()).safeParse(JSON.parse(row.data_json)).success
+      ),
+  )
+  return latest?.type === "circuit_opened"
 }
 
 function greenReady(companyId: string) {
@@ -297,6 +310,29 @@ function event(
   }
   db.insert(FounderYellowEventTable).values(row).run()
   return row
+}
+
+function downgradeInvalidYellowReadiness(companyId: string, readinessId: string | null) {
+  Database.transaction((db) => {
+    const company = db.select().from(CompanyTable).where(eq(CompanyTable.id, companyId)).get()
+    if (company?.founder_twin_mode !== "yellow-delegated") return
+    event(db, {
+      companyId,
+      runId: null,
+      decisionId: null,
+      idempotencyKey: `yellow-readiness-invalid:${readinessId ?? "missing"}`,
+      type: "circuit_opened",
+      actor: { kind: "policy_engine", id: "yellow-readiness-monitor" },
+      data: {
+        reason: "Referenced Outcome Signal is no longer validated and successful.",
+        targetMode: "advisor",
+      },
+    })
+    db.update(CompanyTable)
+      .set({ founder_twin_mode: "advisor", time_updated: Date.now() })
+      .where(eq(CompanyTable.id, companyId))
+      .run()
+  }, { behavior: "immediate" })
 }
 
 function contract(actionType: string) {
@@ -529,7 +565,21 @@ function chain(db: TxOrDb, run: typeof FounderYellowRunTable.$inferSelect) {
   const outcomeIds = db
     .select({ id: CompanyOutcomeSignalTable.id })
     .from(CompanyOutcomeSignalTable)
-    .where(eq(CompanyOutcomeSignalTable.decision_id, run.decision_id))
+    .innerJoin(
+      CompanyOutcomeSignalCurrentTable,
+      eq(CompanyOutcomeSignalCurrentTable.outcome_signal_id, CompanyOutcomeSignalTable.id),
+    )
+    .where(and(
+      eq(CompanyOutcomeSignalTable.decision_id, run.decision_id),
+      eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+      inArray(CompanyOutcomeSignalTable.work_receipt_id, receiptIds),
+      run.dispatched_at
+        ? gte(CompanyOutcomeSignalTable.observed_at, run.dispatched_at)
+        : undefined,
+      run.dispatched_at
+        ? gte(CompanyOutcomeSignalCurrentTable.validated_at, run.dispatched_at)
+        : undefined,
+    ))
     .orderBy(asc(CompanyOutcomeSignalTable.observed_at), asc(CompanyOutcomeSignalTable.id))
     .all()
     .map((outcome) => outcome.id)
@@ -676,6 +726,15 @@ function recordReadiness(raw: FounderYellowReadinessRecordInputValue) {
       .set({ founder_twin_mode: "yellow-delegated", time_updated: Date.now() })
       .where(eq(CompanyTable.id, input.companyId))
       .run()
+    event(db, {
+      companyId: input.companyId,
+      runId: null,
+      decisionId: null,
+      idempotencyKey: `${input.idempotencyKey}:circuit-reset`,
+      type: "override_recorded",
+      actor: input.actor,
+      data: { circuitReset: true, readinessId: input.idempotencyKey },
+    })
   }, { behavior: "immediate" })
   return readiness(input.companyId).value
 }
@@ -1038,32 +1097,149 @@ export const layer = Layer.effect(
     const drain = Effect.fn("FounderYellowDelegation.drain")(function* (
       outboxId: string,
     ) {
-      const outbox = Database.use((db) =>
-        db.select().from(FounderYellowDispatchOutboxTable).where(eq(FounderYellowDispatchOutboxTable.id, outboxId)).get(),
-      )
-      if (!outbox || outbox.status !== "pending") return
-      const run = Database.use((db) =>
-        db.select().from(FounderYellowRunTable).where(eq(FounderYellowRunTable.id, outbox.run_id)).get()!,
-      )
+      const prepared = Database.transaction((db) => {
+        const outbox = db
+          .select()
+          .from(FounderYellowDispatchOutboxTable)
+          .where(eq(FounderYellowDispatchOutboxTable.id, outboxId))
+          .get()
+        if (!outbox) return
+        const run = db
+          .select()
+          .from(FounderYellowRunTable)
+          .where(eq(FounderYellowRunTable.id, outbox.run_id))
+          .get()
+        if (!run) return
+        if (outbox.decision_dispatch_outbox_id)
+          return { outbox, run, decisionDispatchOutboxId: outbox.decision_dispatch_outbox_id }
+        const projection = db
+          .select()
+          .from(DecisionCurrentProjectionTable)
+          .where(eq(DecisionCurrentProjectionTable.decision_id, run.decision_id))
+          .get()
+        const transition = projection?.current_status === "proposed"
+          ? appendDecisionTransitionInTransaction(db, run.decision_id, {
+              schemaVersion: 1,
+              idempotencyKey: `yellow:${run.id}:accepted`,
+              toStatus: "accepted",
+              kind: "accepted",
+              reason: "Recovered Yellow authorization and rollback checkpoint.",
+              actorId: "board-ceo",
+            })
+          : null
+        const decisionDispatch = appendDecisionDispatchInTransaction(db, {
+          companyId: run.company_id,
+          decisionId: run.decision_id,
+          transitionId: transition?.id ?? null,
+          consumer: `founder_yellow_delegation:${run.id}`,
+          actionType: run.action_type,
+          payload: {
+            runId: run.id,
+            projectId: run.project_id,
+            receiptId: run.receipt_id,
+            checkpointId: run.checkpoint_id,
+          },
+          idempotencyKey: `yellow:${run.id}:recovered-dispatch`,
+        })
+        db.update(FounderYellowDispatchOutboxTable)
+          .set({ decision_dispatch_outbox_id: decisionDispatch.id, updated_at: Date.now() })
+          .where(eq(FounderYellowDispatchOutboxTable.id, outbox.id))
+          .run()
+        return {
+          outbox: { ...outbox, decision_dispatch_outbox_id: decisionDispatch.id },
+          run,
+          decisionDispatchOutboxId: decisionDispatch.id,
+        }
+      }, { behavior: "immediate" })
+      if (!prepared) return
+      const outbox = prepared.outbox
+      const run = prepared.run
+      const decisionDispatch = (yield* ledger.dispatches(run.decision_id))
+        .find((item) => item.id === prepared.decisionDispatchOutboxId)
+      if (!decisionDispatch) throw new Error("Yellow dispatch projection is missing its Decision Ledger outbox")
+      if (decisionDispatch.currentStatus === "completed") {
+        const recoveredStatus =
+          decisionDispatch.executionReceipt?.startsWith("yellow_failed_") ? "failed" : "processed"
+        if (outbox.status === "pending")
+          yield* Effect.sync(() =>
+            Database.use((db) =>
+              db.update(FounderYellowDispatchOutboxTable)
+                .set({
+                  status: recoveredStatus,
+                  updated_at: Date.now(),
+                })
+                .where(eq(FounderYellowDispatchOutboxTable.id, outbox.id))
+                .run()
+            ),
+          )
+        const decision = yield* ledger.get(run.decision_id)
+        if (recoveredStatus === "processed" && decision.currentStatus === "accepted")
+          yield* ledger.appendTransition(run.decision_id, {
+            schemaVersion: 1,
+            idempotencyKey: `yellow:${run.id}:executed`,
+            toStatus: "executed",
+            kind: "executed",
+            reason: "Recovered completed Yellow dispatch from the durable Decision outbox.",
+            actorId: "board-ceo",
+          })
+        if (recoveredStatus === "failed" && decision.currentStatus === "accepted")
+          yield* ledger.appendTransition(run.decision_id, {
+            schemaVersion: 1,
+            idempotencyKey: `yellow:${run.id}:failed`,
+            toStatus: "failed",
+            kind: "failed",
+            reason: "Recovered terminal Yellow dispatch failure from the durable Decision outbox.",
+            actorId: "board-ceo",
+          })
+        return
+      }
+      const consumerId = `yellow_worker_${run.id}`
+      const claimed = yield* ledger.claimDispatch({
+        consumer: decisionDispatch.consumer,
+        consumerId,
+        leaseDurationMs: 300_000,
+      })
+      if (!claimed || claimed.id !== decisionDispatch.id || !claimed.leaseToken) return
+      const completeFailure = (reason: string) =>
+        Effect.gen(function* () {
+          yield* failRun(run, reason)
+          const decision = yield* ledger.get(run.decision_id)
+          if (decision.currentStatus === "accepted")
+            yield* ledger.appendTransition(run.decision_id, {
+              schemaVersion: 1,
+              idempotencyKey: `yellow:${run.id}:failed`,
+              toStatus: "failed",
+              kind: "failed",
+              reason,
+              actorId: "board-ceo",
+            })
+          yield* ledger.completeDispatch(claimed.id, {
+            consumerId,
+            leaseToken: claimed.leaseToken!,
+            executionReceipt: `yellow_failed_${run.id}`,
+          })
+        })
+      if (outbox.status === "failed")
+        return yield* ledger.completeDispatch(claimed.id, {
+          consumerId,
+          leaseToken: claimed.leaseToken,
+          executionReceipt: `yellow_failed_${run.id}`,
+        })
+      if (outbox.status === "processed")
+        return yield* ledger.completeDispatch(claimed.id, {
+          consumerId,
+          leaseToken: claimed.leaseToken,
+          executionReceipt: `yellow_processed_${run.id}`,
+        })
       if (
         circuitOpen(run.company_id)
         || fenced(run.company_id, run.board_thread_id)
         || currentMode(run.company_id).effective.founderTwinMode !== "yellow-delegated"
       )
-        return yield* failRun(run, "Yellow dispatch was fenced or downgraded before Orchestrator entry.")
+        return yield* completeFailure("Yellow dispatch was fenced or downgraded before Orchestrator entry.")
       const decision = yield* ledger.get(run.decision_id)
-      if (decision.currentStatus === "proposed")
-        yield* ledger.appendTransition(run.decision_id, {
-          schemaVersion: 1,
-          idempotencyKey: `yellow:${run.id}:accepted`,
-          toStatus: "accepted",
-          kind: "accepted",
-          reason: "Yellow Governance authorization and rollback checkpoint persisted.",
-          actorId: "board-ceo",
-        })
-      const accepted = yield* ledger.get(run.decision_id)
-      if (accepted.currentStatus !== "accepted")
-        return yield* failRun(run, `Decision status ${accepted.currentStatus} cannot enter Yellow dispatch.`)
+      if (decision.currentStatus !== "accepted")
+        return yield* completeFailure(`Decision status ${decision.currentStatus} cannot enter Yellow dispatch.`)
       yield* Effect.sync(() =>
         Database.transaction((db) => {
           db.update(FounderYellowDispatchOutboxTable)
@@ -1086,22 +1262,22 @@ export const layer = Layer.effect(
         || fenced(run.company_id, run.board_thread_id)
         || currentMode(run.company_id).effective.founderTwinMode !== "yellow-delegated"
       )
-        return yield* failRun(run, "Yellow dispatch was fenced at the final pre-dispatch check.")
+        return yield* completeFailure("Yellow dispatch was fenced at the final pre-dispatch check.")
       yield* orchestrator.pauseDispatch(run.project_id, `Yellow checkpoint ${run.checkpoint_id}`)
       const result = yield* Effect.exit(orchestrator.processReceipt(run.receipt_id))
       if (Exit.isFailure(result))
-        return yield* failRun(run, String(Cause.squash(result.cause)))
+        return yield* completeFailure(String(Cause.squash(result.cause)))
       if (
         result.value.processing.status === "disabled"
         || result.value.processing.decision.status !== "applied"
         || !result.value.processing.mutation_id
       )
-        return yield* failRun(run, "Graph Supervisor did not apply a reversible Yellow mutation.")
+        return yield* completeFailure("Graph Supervisor did not apply a reversible Yellow mutation.")
       const direction = FounderYellowDelegationInput.shape.direction.parse(JSON.parse(run.direction_json))
       const project = Database.use((db) =>
         db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, run.project_id)).get(),
       )
-      if (!project) return yield* failRun(run, "Yellow project disappeared before direction apply.")
+      if (!project) return yield* completeFailure("Yellow project disappeared before direction apply.")
       const directionResult = yield* Effect.exit(orchestrator.applyFounderDirection({
         project_id: run.project_id,
         idempotency_key: `yellow:${run.id}:direction`,
@@ -1116,8 +1292,7 @@ export const layer = Layer.effect(
         },
       }))
       if (Exit.isFailure(directionResult) || directionResult.value.action.status !== "applied")
-        return yield* failRun(
-          run,
+        return yield* completeFailure(
           Exit.isFailure(directionResult)
             ? String(Cause.squash(directionResult.cause))
             : "Checkpointed Yellow direction handler rejected the mutation.",
@@ -1126,7 +1301,7 @@ export const layer = Layer.effect(
         db.select({ goal: CompanyProjectTable.goal }).from(CompanyProjectTable).where(eq(CompanyProjectTable.id, run.project_id)).get(),
       )
       if (appliedGoal?.goal !== direction.brief.goal)
-        return yield* failRun(run, "Yellow direction handler did not persist the proposed goal.")
+        return yield* completeFailure("Yellow direction handler did not persist the proposed goal.")
       const updatedChain = Database.use((db) =>
         chain(db, {
           ...run,
@@ -1172,6 +1347,11 @@ export const layer = Layer.effect(
           })
         }, { behavior: "immediate" }),
       )
+      yield* ledger.completeDispatch(claimed.id, {
+        consumerId,
+        leaseToken: claimed.leaseToken,
+        executionReceipt: result.value.processing.mutation_id,
+      })
       yield* ledger.appendTransition(run.decision_id, {
         schemaVersion: 1,
         idempotencyKey: `yellow:${run.id}:executed`,
@@ -1250,6 +1430,8 @@ export const layer = Layer.effect(
         )
       }
       const currentReadiness = readiness(input.companyId)
+      if (currentReadiness.value.status !== "confirmed")
+        downgradeInvalidYellowReadiness(input.companyId, currentReadiness.id)
       const reasons = [
         ...(currentReadiness.value.status === "confirmed" ? [] : currentReadiness.value.failClosedReasons),
         ...(currentMode(input.companyId).effective.founderTwinMode === "yellow-delegated"
@@ -1269,6 +1451,9 @@ export const layer = Layer.effect(
         ...(decision.decisionMaker === "ai_founder" && decision.decisionMakerId === "board-ceo"
           ? []
           : ["Yellow delegation requires a board-ceo AI Founder decision."]),
+        ...(["proposed", "accepted"].includes(decision.currentStatus)
+          ? []
+          : [`Decision status ${decision.currentStatus} cannot enter Yellow dispatch.`]),
         ...(decision.authorityClass === "yellow"
           && decision.reversible === true
           && decision.externalImpact === false
@@ -1300,6 +1485,37 @@ export const layer = Layer.effect(
           || !verdict.authority.allowed
         )
           return { prepared: false as const, verdict }
+        const projection = db
+          .select()
+          .from(DecisionCurrentProjectionTable)
+          .where(eq(DecisionCurrentProjectionTable.decision_id, input.decisionId))
+          .get()
+        if (!projection || !["proposed", "accepted"].includes(projection.current_status))
+          return { prepared: false as const, verdict }
+        const transition = projection.current_status === "proposed"
+          ? appendDecisionTransitionInTransaction(db, input.decisionId, {
+              schemaVersion: 1,
+              idempotencyKey: `yellow:${runId}:accepted`,
+              toStatus: "accepted",
+              kind: "accepted",
+              reason: "Yellow Governance authorization and rollback checkpoint persisted.",
+              actorId: "board-ceo",
+            })
+          : null
+        const decisionDispatch = appendDecisionDispatchInTransaction(db, {
+          companyId: input.companyId,
+          decisionId: input.decisionId,
+          transitionId: transition?.id ?? null,
+          consumer: `founder_yellow_delegation:${runId}`,
+          actionType: input.actionType,
+          payload: {
+            runId,
+            projectId: input.projectId,
+            receiptId: input.receiptId,
+            checkpointId,
+          },
+          idempotencyKey: `yellow:${input.idempotencyKey}:dispatch`,
+        })
         const now = Date.now()
         db.insert(FounderYellowCheckpointTable)
           .values({
@@ -1353,6 +1569,7 @@ export const layer = Layer.effect(
             id: outboxId,
             company_id: input.companyId,
             run_id: runId,
+            decision_dispatch_outbox_id: decisionDispatch.id,
             decision_id: input.decisionId,
             receipt_id: input.receiptId,
             checkpoint_id: checkpointId,
@@ -1386,10 +1603,11 @@ export const layer = Layer.effect(
           data: {
             governanceRef: verdict.authority.policyId,
             outboxId,
+            decisionDispatchOutboxId: decisionDispatch.id,
             contract: contractValue,
           },
         })
-        return { prepared: true as const, verdict }
+        return { prepared: true as const, verdict, outboxId }
       }, { behavior: "immediate" })
       if (!prepared.prepared)
         return saveBlocked(
@@ -1398,7 +1616,7 @@ export const layer = Layer.effect(
           ["Governance did not authorize deterministic Yellow dispatch."],
           prepared.verdict.gate?.id ?? prepared.verdict.authority.policyId,
         )
-      yield* drain(outboxId)
+      yield* drain(prepared.outboxId)
       yield* reconcile(input.companyId)
       return Database.use((db) =>
         yellowSummaryFromRow(
@@ -1409,29 +1627,46 @@ export const layer = Layer.effect(
     })
 
     const recover = Effect.fn("FounderYellowDelegation.recover")(function* () {
-      const pending = Database.use((db) =>
+      const recoverable = Database.use((db) =>
         db
           .select()
           .from(FounderYellowDispatchOutboxTable)
-          .where(eq(FounderYellowDispatchOutboxTable.status, "pending"))
+          .where(inArray(FounderYellowDispatchOutboxTable.status, ["pending", "processed", "failed"]))
           .orderBy(asc(FounderYellowDispatchOutboxTable.created_at), asc(FounderYellowDispatchOutboxTable.id))
           .all(),
       )
-      yield* Effect.forEach(pending, (item) => drain(item.id), { concurrency: 1, discard: true })
+      yield* Effect.forEach(recoverable, (item) => drain(item.id), { concurrency: 1, discard: true })
+      const readinessCompanies = Database.use((db) =>
+        [...new Set(
+          db
+            .select({ companyId: FounderYellowReadinessTable.company_id })
+            .from(FounderYellowReadinessTable)
+            .all()
+            .map((row) => row.companyId),
+        )],
+      )
+      readinessCompanies.map((companyId) => {
+        const current = readiness(companyId)
+        if (current.value.status !== "confirmed")
+          downgradeInvalidYellowReadiness(companyId, current.id)
+      })
       return {
-        pendingOutboxIds: pending.map((item) => item.id),
+        pendingOutboxIds: recoverable.filter((item) => item.status === "pending").map((item) => item.id),
         reconciledRunIds: yield* reconcile(),
       }
     })
 
     const projection = Effect.fn("FounderYellowDelegation.projection")(function* (companyId: string) {
       yield* reconcile(companyId)
+      const currentReadiness = readiness(companyId)
+      if (currentReadiness.value.status !== "confirmed")
+        downgradeInvalidYellowReadiness(companyId, currentReadiness.id)
       const state = currentMode(companyId)
       const open = circuitOpen(companyId)
       return FounderYellowDelegationProjection.parse({
         schemaVersion: 1,
         companyId,
-        readiness: readiness(companyId).value,
+        readiness: currentReadiness.value,
         mode: state,
         effectiveDelegationMode: open
           ? greenReady(companyId)

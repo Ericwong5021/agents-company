@@ -62,6 +62,7 @@ export const FounderGreenDelegationRunTable = sqliteTable(
     graph_decision_id: text(),
     mutation_id: text(),
     dispatch_json: text(),
+    dispatched_at: integer(),
     fail_closed_reasons_json: text().notNull(),
     error: text(),
     created_at: integer().notNull(),

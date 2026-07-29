@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { Cause, Context, Effect, Exit, Layer } from "effect"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm"
 import z from "zod"
 import {
   FounderGreenDelegationAction,
@@ -303,6 +303,13 @@ function chain(row: typeof FounderGreenDelegationRunTable.$inferSelect) {
       .where(and(
         eq(CompanyOutcomeSignalTable.decision_id, row.decision_id),
         eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+        inArray(CompanyOutcomeSignalTable.work_receipt_id, receiptIds),
+        row.dispatched_at
+          ? gte(CompanyOutcomeSignalTable.observed_at, row.dispatched_at)
+          : undefined,
+        row.dispatched_at
+          ? gte(CompanyOutcomeSignalCurrentTable.validated_at, row.dispatched_at)
+          : undefined,
       ))
       .orderBy(asc(CompanyOutcomeSignalTable.observed_at), asc(CompanyOutcomeSignalTable.id))
       .all()
@@ -429,6 +436,9 @@ function save(input: {
     graph_decision_id: input.graphDecisionId ?? null,
     mutation_id: input.mutationId ?? null,
     dispatch_json: input.dispatch ? JSON.stringify(input.dispatch) : null,
+    dispatched_at:
+      existing?.dispatched_at ??
+      (input.status === "outcome_pending" ? Date.now() : null),
     fail_closed_reasons_json: JSON.stringify(input.reasons),
     error: input.error ?? null,
     created_at: existing?.created_at ?? Date.now(),
@@ -470,6 +480,13 @@ function reconcileOutcomes(companyId: string) {
           .where(and(
             eq(CompanyOutcomeSignalTable.decision_id, run.decision_id),
             eq(CompanyOutcomeSignalCurrentTable.current_status, "validated"),
+            eq(CompanyOutcomeSignalTable.work_receipt_id, run.receipt_id),
+            run.dispatched_at
+              ? gte(CompanyOutcomeSignalTable.observed_at, run.dispatched_at)
+              : undefined,
+            run.dispatched_at
+              ? gte(CompanyOutcomeSignalCurrentTable.validated_at, run.dispatched_at)
+              : undefined,
           ))
           .orderBy(desc(CompanyOutcomeSignalTable.observed_at), desc(CompanyOutcomeSignalTable.id))
           .get()

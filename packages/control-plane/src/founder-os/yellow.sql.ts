@@ -2,6 +2,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import { CompanyOutcomeSignalTable, CompanyProjectTable, CompanyWorkReceiptTable } from "@/company-project/company-project.sql"
 import { CompanyTable } from "@/company/company.sql"
 import { DecisionRecordTable } from "./decision-ledger.sql"
+import { DecisionDispatchOutboxTable } from "./decision-ledger.sql"
 import { FounderGreenReadinessTable } from "@/project-orchestrator/founder-delegation.sql"
 
 export const FounderYellowReadinessTable = sqliteTable(
@@ -91,6 +92,7 @@ export const FounderYellowDispatchOutboxTable = sqliteTable(
     id: text().primaryKey(),
     company_id: text().notNull().references(() => CompanyTable.id, { onDelete: "cascade" }),
     run_id: text().notNull().references(() => FounderYellowRunTable.id, { onDelete: "cascade" }),
+    decision_dispatch_outbox_id: text().references(() => DecisionDispatchOutboxTable.id),
     decision_id: text().notNull().references(() => DecisionRecordTable.id),
     receipt_id: text().notNull().references(() => CompanyWorkReceiptTable.id),
     checkpoint_id: text().notNull().references(() => FounderYellowCheckpointTable.id),
@@ -102,6 +104,7 @@ export const FounderYellowDispatchOutboxTable = sqliteTable(
   },
   (table) => [
     uniqueIndex("founder_yellow_dispatch_outbox_run_idx").on(table.run_id),
+    uniqueIndex("founder_yellow_dispatch_outbox_decision_dispatch_idx").on(table.decision_dispatch_outbox_id),
     index("founder_yellow_dispatch_outbox_status_idx").on(table.status, table.created_at),
   ],
 )

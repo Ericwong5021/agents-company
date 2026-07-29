@@ -1,17 +1,13 @@
 import {
   DecisionAuthorityEvaluation,
   DecisionAuthorityInput,
-  DecisionDispatchAuthorizeInput,
-  DecisionDispatchClaimInput,
   DecisionDispatchEvent,
   DecisionDispatchOutbox,
-  DecisionDispatchResolveInput,
   DecisionCenterActionInput,
   DecisionCenterProjection,
   DecisionRecord,
   DecisionRecordAppendInput,
   DecisionTransition,
-  DecisionTransitionAppendInput,
   DelegationPolicy,
   FounderCorrectionAppendInput,
   FounderCorrectionRecord,
@@ -181,62 +177,6 @@ export const FounderOSRoutes = lazy(() =>
           ),
         ),
     )
-    .post(
-      "/decisions/:decisionID/transitions",
-      describeRoute({
-        operationId: "founderOS.decisionTransitionAppend",
-        summary: "Append a validated decision state transition",
-        responses: {
-          200: {
-            description: "Appended or idempotently recovered transition",
-            content: { "application/json": { schema: resolver(DecisionTransition) } },
-          },
-          400: badRequest,
-          401: localAuthUnauthorizedResponse,
-          404: notFound,
-          409: conflict,
-          500: internalError,
-        },
-      }),
-      validator("param", DecisionParam, productValidationHook),
-      validator("json", DecisionTransitionAppendInput, productValidationHook),
-      async (c) =>
-        c.json(
-          await AppRuntime.runPromise(
-            Service.use((service) =>
-              service.appendTransition(c.req.valid("param").decisionID, c.req.valid("json")),
-            ),
-          ),
-        ),
-    )
-    .post(
-      "/decisions/:decisionID/dispatches",
-      describeRoute({
-        operationId: "founderOS.decisionDispatchAuthorize",
-        summary: "Atomically authorize a decision and commit its dispatch outbox",
-        responses: {
-          200: {
-            description: "Committed dispatch outbox",
-            content: { "application/json": { schema: resolver(DecisionDispatchOutbox) } },
-          },
-          400: badRequest,
-          401: localAuthUnauthorizedResponse,
-          404: notFound,
-          409: conflict,
-          500: internalError,
-        },
-      }),
-      validator("param", DecisionParam, productValidationHook),
-      validator("json", DecisionDispatchAuthorizeInput, productValidationHook),
-      async (c) =>
-        c.json(
-          await AppRuntime.runPromise(
-            Service.use((service) =>
-              service.authorizeDispatch(c.req.valid("param").decisionID, c.req.valid("json")),
-            ),
-          ),
-        ),
-    )
     .get(
       "/decisions/:decisionID/dispatches",
       describeRoute({
@@ -261,55 +201,6 @@ export const FounderOSRoutes = lazy(() =>
           ),
         ),
     )
-    .post(
-      "/dispatches/claims",
-      describeRoute({
-        operationId: "founderOS.decisionDispatchClaim",
-        summary: "Claim only a committed or recoverable dispatch outbox",
-        responses: {
-          200: {
-            description: "Claimed outbox or null",
-            content: { "application/json": { schema: resolver(DecisionDispatchOutbox.nullable()) } },
-          },
-          400: badRequest,
-          401: localAuthUnauthorizedResponse,
-          409: conflict,
-          500: internalError,
-        },
-      }),
-      validator("json", DecisionDispatchClaimInput, productValidationHook),
-      async (c) =>
-        c.json(
-          await AppRuntime.runPromise(Service.use((service) => service.claimDispatch(c.req.valid("json")))),
-        ),
-    )
-    .post(
-      "/dispatches/:dispatchID/completion",
-      describeRoute({
-        operationId: "founderOS.decisionDispatchComplete",
-        summary: "Append an idempotent dispatch completion event",
-        responses: {
-          200: {
-            description: "Completed dispatch outbox",
-            content: { "application/json": { schema: resolver(DecisionDispatchOutbox) } },
-          },
-          400: badRequest,
-          401: localAuthUnauthorizedResponse,
-          409: conflict,
-          500: internalError,
-        },
-      }),
-      validator("param", z.object({ dispatchID: z.string().min(1) }).strict(), productValidationHook),
-      validator("json", DecisionDispatchResolveInput, productValidationHook),
-      async (c) =>
-        c.json(
-          await AppRuntime.runPromise(
-            Service.use((service) =>
-              service.completeDispatch(c.req.valid("param").dispatchID, c.req.valid("json")),
-            ),
-          ),
-        ),
-    )
     .get(
       "/dispatches/:dispatchID/events",
       describeRoute({
@@ -330,33 +221,6 @@ export const FounderOSRoutes = lazy(() =>
         c.json(
           await AppRuntime.runPromise(
             Service.use((service) => service.dispatchEvents(c.req.valid("param").dispatchID)),
-          ),
-        ),
-    )
-    .post(
-      "/dispatches/:dispatchID/failure",
-      describeRoute({
-        operationId: "founderOS.decisionDispatchFail",
-        summary: "Append a retryable dispatch failure event",
-        responses: {
-          200: {
-            description: "Failed dispatch outbox",
-            content: { "application/json": { schema: resolver(DecisionDispatchOutbox) } },
-          },
-          400: badRequest,
-          401: localAuthUnauthorizedResponse,
-          409: conflict,
-          500: internalError,
-        },
-      }),
-      validator("param", z.object({ dispatchID: z.string().min(1) }).strict(), productValidationHook),
-      validator("json", DecisionDispatchResolveInput, productValidationHook),
-      async (c) =>
-        c.json(
-          await AppRuntime.runPromise(
-            Service.use((service) =>
-              service.failDispatch(c.req.valid("param").dispatchID, c.req.valid("json")),
-            ),
           ),
         ),
     )

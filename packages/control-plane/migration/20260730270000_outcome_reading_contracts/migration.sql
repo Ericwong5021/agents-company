@@ -1,15 +1,26 @@
 ALTER TABLE company_work_receipt ADD COLUMN payload_kind TEXT;
+--> statement-breakpoint
 ALTER TABLE company_work_receipt ADD COLUMN typed_payload_json TEXT;
+--> statement-breakpoint
 
 ALTER TABLE company_outcome_signal ADD COLUMN company_id TEXT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN validator_result_kind TEXT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN validator_result_id TEXT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN work_receipt_id TEXT REFERENCES company_work_receipt(id) ON DELETE RESTRICT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN metric_contract_kind TEXT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN metric_contract_id TEXT;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN metric_contract_version INTEGER;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN observation_window_starts_at INTEGER;
+--> statement-breakpoint
 ALTER TABLE company_outcome_signal ADD COLUMN observation_window_ends_at INTEGER;
+--> statement-breakpoint
 
 UPDATE company_outcome_signal
 SET company_id = COALESCE((
@@ -30,6 +41,7 @@ metric_contract_id = 'legacy:' || company_outcome_signal.project_id,
 metric_contract_version = 1,
 observation_window_starts_at = observed_at,
 observation_window_ends_at = observed_at + 1;
+--> statement-breakpoint
 
 CREATE TABLE company_outcome_signal_transition (
   id TEXT PRIMARY KEY NOT NULL,
@@ -46,12 +58,15 @@ CREATE TABLE company_outcome_signal_transition (
   occurred_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX company_outcome_signal_transition_sequence_idx
 ON company_outcome_signal_transition(outcome_signal_id, sequence);
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX company_outcome_signal_transition_idempotency_idx
 ON company_outcome_signal_transition(outcome_signal_id, idempotency_key);
+--> statement-breakpoint
 
 INSERT INTO company_outcome_signal_transition (
   id,
@@ -83,6 +98,7 @@ SELECT
   observed_at,
   created_at
 FROM company_outcome_signal;
+--> statement-breakpoint
 
 CREATE TABLE company_outcome_signal_current (
   outcome_signal_id TEXT PRIMARY KEY NOT NULL REFERENCES company_outcome_signal(id) ON DELETE CASCADE,
@@ -92,9 +108,11 @@ CREATE TABLE company_outcome_signal_current (
   validated_at INTEGER,
   updated_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE INDEX company_outcome_signal_current_status_idx
 ON company_outcome_signal_current(current_status, updated_at);
+--> statement-breakpoint
 
 INSERT INTO company_outcome_signal_current (
   outcome_signal_id,
@@ -112,8 +130,10 @@ SELECT
   NULL,
   created_at
 FROM company_outcome_signal;
+--> statement-breakpoint
 
 ALTER TABLE company_interpretation ADD COLUMN work_receipt_id TEXT REFERENCES company_work_receipt(id) ON DELETE RESTRICT;
+--> statement-breakpoint
 
 UPDATE company_interpretation
 SET work_receipt_id = (
@@ -122,11 +142,14 @@ SET work_receipt_id = (
   WHERE company_work_receipt.idempotency_key = 'knowledge-reading-receipt:' || company_interpretation.id
   LIMIT 1
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX company_interpretation_work_receipt_idx
 ON company_interpretation(work_receipt_id);
+--> statement-breakpoint
 
 ALTER TABLE company_commons_source ADD COLUMN capability_status TEXT NOT NULL DEFAULT 'unsupported';
+--> statement-breakpoint
 
 UPDATE company_commons_source
 SET capability_status = CASE

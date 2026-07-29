@@ -11,15 +11,19 @@ CREATE TABLE founder_decision_dispatch_outbox (
   execution_key TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX founder_decision_dispatch_outbox_idempotency_idx
 ON founder_decision_dispatch_outbox(decision_id, idempotency_key);
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX founder_decision_dispatch_outbox_execution_idx
 ON founder_decision_dispatch_outbox(execution_key);
+--> statement-breakpoint
 
 CREATE INDEX founder_decision_dispatch_outbox_consumer_idx
 ON founder_decision_dispatch_outbox(consumer, created_at);
+--> statement-breakpoint
 
 CREATE TABLE founder_decision_dispatch_event (
   id TEXT PRIMARY KEY NOT NULL,
@@ -34,15 +38,19 @@ CREATE TABLE founder_decision_dispatch_event (
   error TEXT,
   created_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX founder_decision_dispatch_event_sequence_idx
 ON founder_decision_dispatch_event(outbox_id, sequence);
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX founder_decision_dispatch_event_idempotency_idx
 ON founder_decision_dispatch_event(outbox_id, idempotency_key);
+--> statement-breakpoint
 
 CREATE INDEX founder_decision_dispatch_event_status_idx
 ON founder_decision_dispatch_event(status, created_at);
+--> statement-breakpoint
 
 CREATE TABLE founder_decision_dispatch_current (
   outbox_id TEXT PRIMARY KEY NOT NULL REFERENCES founder_decision_dispatch_outbox(id) ON DELETE CASCADE,
@@ -56,6 +64,7 @@ CREATE TABLE founder_decision_dispatch_current (
   last_error TEXT,
   updated_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE INDEX founder_decision_dispatch_current_status_idx
 ON founder_decision_dispatch_current(current_status, lease_expires_at, updated_at);
