@@ -16,19 +16,21 @@ const benchmarkPath =
 const CommitSha = z.string().regex(/^[a-f0-9]{40}$/)
 const Digest = z.string().regex(/^[a-f0-9]{64}$/)
 const Timestamp = z.number().int().nonnegative()
-const AttemptId = z.enum(["attempt-01", "attempt-02"])
+const CandidateArgument = z.union([CommitSha, z.literal("HEAD")])
+const AttemptId = z.enum(["automatic", "attempt-01", "attempt-02"])
 const AbsolutePath = z.string().refine((value) => path.isAbsolute(value))
 const RelativeFile = z
   .object({
     relativePath: z.string().trim().min(1).refine((value) => !path.isAbsolute(value)),
     sha256: Digest,
     byteLength: z.number().int().nonnegative(),
+    mediaType: z.literal("application/json"),
   })
   .strict()
 
 export const B5ProducerArguments = z
   .object({
-    candidateSha: CommitSha,
+    candidateSha: CandidateArgument,
     attemptId: AttemptId,
     outputDirectory: AbsolutePath,
   })
@@ -84,7 +86,12 @@ export const B5CandidateAttemptSummary = z
     files: z
       .object({
         facts: RelativeFile.extend({ relativePath: z.literal("facts.json") }).strict(),
-        summary: RelativeFile.extend({ relativePath: z.literal("summary.json") }).strict(),
+        summary: z
+          .object({
+            relativePath: z.literal("summary.json"),
+            mediaType: z.literal("application/json"),
+          })
+          .strict(),
         metricReport: RelativeFile.extend({
           relativePath: z.literal("metric-report.json"),
         }).strict(),
@@ -97,10 +104,11 @@ export const B5CandidateAttemptSummary = z
         rollbackLegacyFallback: RelativeFile.extend({
           relativePath: z.literal("rollback-legacy-fallback.json"),
         }).strict(),
-        observationReports: z.array(RelativeFile).min(30),
+        observationReports: z.array(RelativeFile).length(30),
       })
       .strict(),
     normalizedResultSha256: Digest,
+    outputIsolationSha256: Digest,
     attemptStatus: z.literal("completed"),
     promotionClaimed: z.literal(false),
   })
@@ -121,6 +129,16 @@ export const B5CandidateAttemptSummary = z
         path: ["candidate", "headSha"],
         message: "Candidate SHA must equal the checked-out HEAD",
       })
+    value.orderedRunBindings.forEach((binding, index) => {
+      const report = value.files.observationReports[index]
+      const expected = `reports/${binding.scenarioId}-${binding.strategy}.json`
+      if (report?.relativePath !== expected)
+        context.addIssue({
+          code: "custom",
+          path: ["files", "observationReports", index, "relativePath"],
+          message: `Expected fixed archived report ${expected}`,
+        })
+    })
   })
 export type B5CandidateAttemptSummary = z.infer<typeof B5CandidateAttemptSummary>
 
@@ -172,8 +190,8 @@ export function parseB5ProducerArguments(argv: string[]) {
 }
 
 export async function resolveB5CandidateGit(candidateSha: string) {
-  const requestedSha = CommitSha.parse(candidateSha)
   const headSha = CommitSha.parse(git(["rev-parse", "--verify", "HEAD^{commit}"]))
+  const requestedSha = candidateSha === "HEAD" ? headSha : CommitSha.parse(candidateSha)
   if (requestedSha !== headSha)
     throw new Error(`Requested candidate ${requestedSha} is not checked out at HEAD ${headSha}`)
   const parents = git(["rev-list", "--parents", "-n", "1", headSha]).split(/\s+/)

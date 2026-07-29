@@ -98,5 +98,21 @@ describe("B5 candidate scenarios", () => {
       ]),
     ).toThrow()
     expect(B5CandidateAttemptSummary.keyof().options).toContain("files")
+    expect(
+      parseB5ProducerArguments([
+        "--candidate-sha",
+        "HEAD",
+        "--attempt-id",
+        "automatic",
+        "--out",
+        ".artifacts/seed-grow-b5/real-candidate-facts",
+      ]),
+    ).toEqual({
+      candidateSha: "HEAD",
+      attemptId: "automatic",
+      outputDirectory: path.resolve(
+        ".artifacts/seed-grow-b5/real-candidate-facts",
+      ),
+    })
   })
 })
