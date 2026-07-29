@@ -104,6 +104,26 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/goal-brief.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/projects/:projectID/experience/:projection",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/experience.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID/experience/receipts/:receiptID",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/receipt.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/projects/:projectID/seed-grow",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/seed-grow.get"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/experience/organization",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/organization-list.get"),
+    })
+    addServerHandler({
       route: "/api/agent-company/goal-brief/generate",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/goal-brief-generate.post"),
