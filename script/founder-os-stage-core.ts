@@ -241,7 +241,7 @@ export function validateContractSafety(contract: StageContract) {
     "control-plane-test": {
       id: "control-plane-test",
       cwd: "packages/control-plane",
-      argv: ["bun", "test"],
+      argv: ["bun", "run", "test"],
       reportPath: "reports/control-plane-test.json",
       kind: "test",
     },

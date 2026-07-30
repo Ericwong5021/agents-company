@@ -97,7 +97,7 @@ export function evaluateFounderOSStageContract(candidateSha: string, stage: Stag
       && sameValues(command.argv, ["bun", "typecheck"]))
       && commands.some((command) => command.kind === "test"
         && command.cwd === "packages/control-plane"
-        && sameValues(command.argv, ["bun", "test"]))
+        && sameValues(command.argv, ["bun", "run", "test"]))
       && commands.every((command) => command.cwd !== "." || command.kind === "production_contract"),
     "Control Plane validation runs from its package directory"),
     assertion("governed-source-nonempty", governedSources.size >= 2
