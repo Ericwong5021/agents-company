@@ -156,7 +156,7 @@ export function expandCommand(command: CommandDefinition, stage: StageId, candid
 }
 
 export function normalizeCommandOutput(value: string) {
-  return value
+  const normalized = value
     .replaceAll(root, "<ROOT>")
     .replace(/\/(?:private\/)?var\/folders\/[^\s:]+/g, "<TEMP>")
     .replace(/\b\d+(?:\.\d+)?\s*(?:ms|s)\b/g, "<DURATION>")
@@ -164,6 +164,16 @@ export function normalizeCommandOutput(value: string) {
     .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, "<UUID>")
     .replace(/\b(port|pid)[=: ]+\d+\b/gi, "$1=<NUMBER>")
     .trim()
+  const lines = normalized.split(/\r?\n/)
+  if (lines[0]?.startsWith("bun test v")) return lines[0]
+  if (!lines.some((line) => /^Ran \d+ tests? across \d+ files?/.test(line))) return normalized
+  return lines
+    .filter((line) =>
+      /^\$ bun (?:run )?test\b/.test(line)
+      || /^\s*\d+\s+(?:pass|fail|skip|todo)$/.test(line)
+      || /^Ran \d+ tests? across \d+ files?/.test(line))
+    .map((line) => line.replace(/\s+\[<DURATION>\]$/, ""))
+    .join("\n")
 }
 
 export async function writeFileBinding(
