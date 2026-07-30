@@ -15,6 +15,7 @@ import {
 } from "../../../shared/onboarding"
 
 const { data: snapshot } = useCompanySnapshot()
+const route = useRoute()
 const state = ref<OnboardingState>(parseOnboardingState(null))
 const hydrated = ref(false)
 
@@ -23,7 +24,10 @@ const view = computed(() => ({
   providerConfigured: snapshot.value.company.providerConfigured !== false,
   hasWork: snapshot.value.work.length > 0,
 }))
-const stage = computed(() => onboardingStage(state.value, view.value))
+const stage = computed(() =>
+  route.query.restart === "1" && state.value.mode === "unset"
+    ? "welcome"
+    : onboardingStage(state.value, view.value))
 
 function persist(next: OnboardingState) {
   state.value = next
@@ -32,7 +36,7 @@ function persist(next: OnboardingState) {
 
 function goReal() {
   persist(chooseReal(state.value, new Date().toISOString()))
-  navigateTo(view.value.providerConfigured ? "/inbox" : "/settings")
+  navigateTo(view.value.providerConfigured ? "/inbox?newGoal=1" : "/settings")
 }
 
 function goDemo() {
@@ -52,7 +56,7 @@ function leaveDemo() {
 onMounted(() => {
   state.value = parseOnboardingState(window.localStorage.getItem(onboardingStorageKey))
   hydrated.value = true
-  if (onboardingStage(state.value, view.value) === "normal") navigateTo("/inbox", { replace: true })
+  if (stage.value === "normal") navigateTo("/inbox", { replace: true })
 })
 </script>
 

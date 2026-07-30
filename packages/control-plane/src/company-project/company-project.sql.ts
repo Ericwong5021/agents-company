@@ -33,6 +33,7 @@ export const CompanyProjectTable = sqliteTable(
     index("company_project_status_idx").on(table.status),
     index("company_project_owner_idx").on(table.owner_agent_id),
     uniqueIndex("company_project_source_thread_idx").on(table.source_thread_id),
+    uniqueIndex("company_project_decision_request_idx").on(table.decision_request_id),
   ],
 )
 

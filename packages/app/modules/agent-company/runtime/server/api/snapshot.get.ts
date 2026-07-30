@@ -375,7 +375,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
       id: company.value.id,
       name: company.value.name,
       provider: company.value.provider
-        ? `${company.value.provider.providerID} / ${company.value.provider.modelID}`
+        ? `已连接 · ${company.value.provider.modelID}`
         : "未配置",
       providerConfigured: !providerRequired,
       approvalPolicy: company.value.policy,

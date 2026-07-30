@@ -19,7 +19,7 @@ async function trackedModelsData() {
 
 const modelsData = process.env.MODELS_DEV_API_JSON
   ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
-  : await fetch(`${modelsUrl}/api.json`)
+  : await fetch(`${modelsUrl}/api.json`, { signal: AbortSignal.timeout(10_000) })
       .then((response) => {
         if (!response.ok) throw new Error(`models.dev returned HTTP ${response.status}`)
         return response.text()

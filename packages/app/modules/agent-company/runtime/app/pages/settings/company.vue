@@ -528,7 +528,7 @@ function persistOnboarding(next: OnboardingState) {
 
 function restartGuide() {
   persistOnboarding(restartOnboarding())
-  navigateTo("/welcome")
+  navigateTo("/welcome?restart=1")
 }
 
 function enterDemo() {
@@ -667,7 +667,7 @@ async function saveProvider() {
       hasWork: snapshot.value.work.length > 0,
     })
   ) {
-    navigateTo("/inbox")
+    navigateTo("/inbox?newGoal=1")
   }
 }
 </script>

@@ -10,6 +10,7 @@ node_modules
 .nitro
 dist
 .data
+.artifacts
 .DS_Store
 *.tsbuildinfo
 .nuxt

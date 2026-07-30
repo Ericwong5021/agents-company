@@ -91,7 +91,6 @@ export function create(opts: CreateOptions = {}) {
     .use(AuthMiddleware(auth))
     .route("/company/recruitment", CompanyRecruitmentRoutes())
     .route("/company", CompanyRoutes())
-    .route("/experience", ExperienceRoutes())
     .route("/global", GlobalRoutes())
     .route("/local-auth", LocalAuthRoutes())
 
@@ -103,6 +102,7 @@ export function create(opts: CreateOptions = {}) {
         ),
       )
       .use(FenceMiddleware)
+      .route("/experience", ExperienceRoutes())
       .route("/", InstanceRoutes(runtime.upgradeWebSocket))
   } else {
     protectedApp
@@ -111,6 +111,7 @@ export function create(opts: CreateOptions = {}) {
         "/",
         new Hono()
           .use(InstanceMiddleware())
+          .route("/experience", ExperienceRoutes())
           .route("/experimental/workspace", WorkspaceRoutes())
           .use(WorkspaceRouterMiddleware(runtime.upgradeWebSocket))
           .route("/", InstanceRoutes(runtime.upgradeWebSocket)),

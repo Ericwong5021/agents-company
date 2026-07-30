@@ -7,6 +7,8 @@ import {
   GoalBriefDraft,
   GoalBriefHistory,
   GoalBriefProjectView,
+  GoalBriefStartRequest,
+  GoalBriefStartResult,
   LegacyGoalBrief,
   type GoalBrief as GoalBriefValue,
   type GoalBriefDraft as GoalBriefDraftValue,
@@ -20,7 +22,12 @@ import {
   CompanyProjectEventTable,
   CompanyProjectTable,
 } from "@/company-project/company-project.sql"
-import { GoalBriefGenerationRequestTable, GoalBriefTable, GoalBriefVersionTable } from "./goal-brief.sql"
+import {
+  GoalBriefGenerationRequestTable,
+  GoalBriefStartRequestTable,
+  GoalBriefTable,
+  GoalBriefVersionTable,
+} from "./goal-brief.sql"
 
 const approvalModes = new Set(["autonomous", "balanced", "strict"])
 
@@ -40,13 +47,17 @@ function duplicateProperties(node: Node, path: string[] = []): string[] {
   })
 }
 
-export function parseModelOutput(raw: string) {
+export function parseModelJson(raw: string) {
   const errors: ParseError[] = []
   const tree = parseTree(raw, errors, { allowTrailingComma: false, disallowComments: true })
   if (!tree || errors.length) throw new Error("Goal Brief model output is not valid JSON")
   const duplicates = duplicateProperties(tree)
   if (duplicates.length) throw new Error(`Goal Brief model output contains duplicate fields: ${duplicates.join(", ")}`)
-  return GoalBriefDraft.parse(JSON.parse(raw) as unknown)
+  return JSON.parse(raw) as unknown
+}
+
+export function parseModelOutput(raw: string) {
+  return GoalBriefDraft.parse(parseModelJson(raw))
 }
 
 function rootFromRow(row: typeof GoalBriefTable.$inferSelect) {
@@ -342,6 +353,179 @@ export function releaseGeneration(requestID: string, payloadHash: string, ownerT
             eq(GoalBriefGenerationRequestTable.payload_hash, payloadHash),
             eq(GoalBriefGenerationRequestTable.owner_token, ownerToken),
             isNull(GoalBriefGenerationRequestTable.brief_id),
+          ),
+        )
+        .run()
+    },
+    { behavior: "immediate" },
+  )
+}
+
+export type StartReservation =
+  | { status: "reserved"; brief: GoalBriefValue }
+  | { status: "pending" }
+  | { status: "conflict" }
+  | { status: "not_found" }
+  | { status: "version_conflict"; currentVersion: number }
+  | { status: "blocked"; questionIDs: string[] }
+  | { status: "completed"; result: ReturnType<typeof GoalBriefStartResult.parse> }
+
+function completedStart(row: typeof GoalBriefStartRequestTable.$inferSelect) {
+  if (!row.project_id || !row.run_id) return
+  return GoalBriefStartResult.parse({
+    briefId: row.brief_id,
+    briefVersion: row.brief_version,
+    projectId: row.project_id,
+    runId: row.run_id,
+    replayed: true,
+  })
+}
+
+export function reserveStart(
+  briefID: string,
+  raw: unknown,
+  ownerToken: string,
+  now = Date.now(),
+  leaseDuration = 30_000,
+): StartReservation {
+  const input = GoalBriefStartRequest.parse(raw)
+  return Database.transaction(
+    (db) => {
+      const byRequest = db
+        .select()
+        .from(GoalBriefStartRequestTable)
+        .where(eq(GoalBriefStartRequestTable.request_id, input.requestId))
+        .get()
+      if (
+        byRequest &&
+        (byRequest.brief_id !== briefID || byRequest.brief_version !== input.expectedVersion)
+      )
+        return { status: "conflict" as const }
+      const byBrief =
+        byRequest ??
+        db
+          .select()
+          .from(GoalBriefStartRequestTable)
+          .where(eq(GoalBriefStartRequestTable.brief_id, briefID))
+          .get()
+      if (byBrief) {
+        const completed = completedStart(byBrief)
+        if (completed) return { status: "completed" as const, result: completed }
+        if (byBrief.request_id !== input.requestId) return { status: "pending" as const }
+        if (byBrief.lease_expires_at > now) return { status: "pending" as const }
+      }
+      const brief = fromDatabase(db, briefID)
+      if (!brief) return { status: "not_found" as const }
+      if (brief.version !== input.expectedVersion)
+        return { status: "version_conflict" as const, currentVersion: brief.version }
+      if (brief.projectId) return { status: "conflict" as const }
+      const questionIDs = brief.openQuestions
+        .filter((question) => question.blocking || ["high", "critical"].includes(brief.riskLevel))
+        .map((question) => question.id)
+      if (questionIDs.length) return { status: "blocked" as const, questionIDs }
+      if (byBrief) {
+        db.update(GoalBriefStartRequestTable)
+          .set({
+            owner_token: ownerToken,
+            lease_expires_at: now + leaseDuration,
+            updated_at: now,
+          })
+          .where(eq(GoalBriefStartRequestTable.request_id, input.requestId))
+          .run()
+        return { status: "reserved" as const, brief }
+      }
+      db.insert(GoalBriefStartRequestTable)
+        .values({
+          request_id: input.requestId,
+          brief_id: briefID,
+          brief_version: input.expectedVersion,
+          owner_token: ownerToken,
+          lease_expires_at: now + leaseDuration,
+          project_id: null,
+          run_id: null,
+          created_at: now,
+          updated_at: now,
+        })
+        .run()
+      return { status: "reserved" as const, brief }
+    },
+    { behavior: "immediate" },
+  )
+}
+
+export function completeStart(
+  requestID: string,
+  ownerToken: string,
+  projectID: string,
+  runID: string,
+) {
+  return Database.transaction(
+    (db) => {
+      const request = db
+        .select()
+        .from(GoalBriefStartRequestTable)
+        .where(eq(GoalBriefStartRequestTable.request_id, requestID))
+        .get()
+      if (!request) throw new Error("Goal Brief start reservation is missing")
+      const completed = completedStart(request)
+      if (completed) return completed
+      if (request.owner_token !== ownerToken) throw new Error("Goal Brief start reservation ownership was lost")
+      const brief = fromDatabase(db, request.brief_id, request.brief_version)
+      if (!brief) throw new Error("Goal Brief start reservation references a missing Brief")
+      if (brief.projectId && brief.projectId !== projectID)
+        throw new Error("Goal Brief is already bound to another Project")
+      const now = Date.now()
+      if (!brief.projectId) {
+        db.update(GoalBriefTable)
+          .set({ project_id: projectID, updated_at: now })
+          .where(eq(GoalBriefTable.id, brief.id))
+          .run()
+        db.insert(CompanyProjectEventTable)
+          .values(
+            projectEventValues(
+              projectID,
+              "goal_brief.created",
+              brief.id,
+              brief.version,
+              brief.source,
+              brief.openQuestions.length,
+              brief.openQuestions.filter((question) => question.blocking).length,
+              now,
+            ),
+          )
+          .run()
+      }
+      db.update(GoalBriefStartRequestTable)
+        .set({
+          project_id: projectID,
+          run_id: runID,
+          lease_expires_at: 0,
+          updated_at: now,
+        })
+        .where(eq(GoalBriefStartRequestTable.request_id, requestID))
+        .run()
+      return GoalBriefStartResult.parse({
+        briefId: brief.id,
+        briefVersion: brief.version,
+        projectId: projectID,
+        runId: runID,
+        replayed: false,
+      })
+    },
+    { behavior: "immediate" },
+  )
+}
+
+export function releaseStart(requestID: string, ownerToken: string) {
+  Database.transaction(
+    (db) => {
+      db.update(GoalBriefStartRequestTable)
+        .set({ lease_expires_at: 0, updated_at: Date.now() })
+        .where(
+          and(
+            eq(GoalBriefStartRequestTable.request_id, requestID),
+            eq(GoalBriefStartRequestTable.owner_token, ownerToken),
+            isNull(GoalBriefStartRequestTable.project_id),
           ),
         )
         .run()

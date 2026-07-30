@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { GoalBrief } from "@agents-company/shared/experience";
+import {
+  ExperienceApiError,
+  GoalBriefStartResult,
+  type GoalBrief,
+} from "@agents-company/shared/experience";
 import type {
   DecisionCenterItem,
   DecisionCenterProjection,
@@ -33,15 +37,20 @@ import {
 
 const goalDraftStorageKey = "agent-company:inbox-goal-draft:v1";
 const appConfig = useAppConfig();
+const route = useRoute();
 const { data: snapshot, pending, refresh } = useCompanySnapshot();
 const goalDraft = useState("agent-company-inbox-goal-draft", () => "");
 const generationRequestID = useState("agent-company-inbox-goal-request-id", () => "");
 const generationRequestGoal = useState("agent-company-inbox-goal-request-goal", () => "");
 const draftHydrated = ref(false);
 const generating = ref(false);
+const starting = ref(false);
 const generatedBrief = ref<GoalBrief>();
 const generationFailure = ref<GoalBriefFailureView>();
 const generationError = ref("");
+const startError = ref("");
+const startRequestID = ref("");
+const newGoalOpen = ref(route.query.newGoal === "1");
 const goalDraftInput = ref<HTMLTextAreaElement>();
 const draftStorageAvailable = ref(true);
 const onboarding = ref<OnboardingState>(parseOnboardingState(null));
@@ -59,7 +68,10 @@ const firstRun = computed(() =>
   && snapshot.value.work.length === 0
   && attentionItems.value.length === 0
   && unavailableWork.value.length === 0);
-const showGoalDraft = computed(() => firstRun.value || (!available.value && hasLocalDraft.value));
+const showGoalDraft = computed(() =>
+  available.value
+    ? firstRun.value || newGoalOpen.value || hasLocalDraft.value || Boolean(generatedBrief.value)
+    : hasLocalDraft.value);
 // 首次进入且尚未做出选择时，先呈现“连接真实工作区 / 查看演示”两个清晰选项，而非直接跳到目标输入。
 const welcomeStage = computed(() =>
   onboardingHydrated.value && firstRun.value && onboarding.value.mode === "unset");
@@ -318,6 +330,10 @@ function chooseDemoWorkspace() {
   navigateTo("/welcome");
 }
 
+function openNewGoal() {
+  newGoalOpen.value = true;
+}
+
 function skipOnboardingChoice() {
   persistOnboarding(skipOnboarding(onboarding.value, new Date().toISOString()));
 }
@@ -353,6 +369,8 @@ watch(goalDraft, (value) => {
   generatedBrief.value = undefined;
   generationFailure.value = undefined;
   generationError.value = "";
+  startError.value = "";
+  startRequestID.value = "";
   persistGoalDraft();
 });
 
@@ -374,6 +392,7 @@ async function generateGoalBrief() {
       goal: request.goal,
     },
     ignoreResponseError: true,
+    timeout: 165_000,
   }).then(
     response => ({ ok: true as const, response }),
     () => ({ ok: false as const }),
@@ -382,8 +401,8 @@ async function generateGoalBrief() {
   if (!isCurrentGoalDraftRequest(goalDraft.value, currentGenerationRequest(), request)) return;
   if (!result.ok) {
     generationError.value = draftStorageAvailable.value
-      ? "目标摘要服务暂时不可用，草稿仍保存在此浏览器。"
-      : "目标摘要服务暂时不可用，当前草稿仅保留在本页。";
+      ? "目标摘要未在三分钟内完成或连接已中断。草稿仍保存在此设备，可以安全重试，不会重复创建 Work。"
+      : "目标摘要未在三分钟内完成或连接已中断。当前草稿仅保留在本页。";
     return;
   }
 
@@ -392,7 +411,14 @@ async function generateGoalBrief() {
     result.response._data,
   );
   if (!response) {
-    generationError.value = "本地服务返回了无法识别的目标摘要，草稿没有被清除。";
+    const detail = result.response._data && typeof result.response._data === "object"
+      && "statusMessage" in result.response._data
+      && typeof result.response._data.statusMessage === "string"
+      ? result.response._data.statusMessage
+      : "";
+    generationError.value = detail
+      ? `${detail}，草稿仍保存在本地。`
+      : "目标摘要没有生成成功，请检查模型连接后重试；草稿仍保存在本地。";
     return;
   }
   if (response.kind === "success") {
@@ -409,6 +435,42 @@ async function generateGoalBrief() {
 async function editGoalDraft() {
   await nextTick();
   goalDraftInput.value?.focus();
+}
+
+async function startGoalBrief(brief: GoalBrief) {
+  if (starting.value || !available.value) return;
+  startRequestID.value ||= generationRequestID.value || crypto.randomUUID();
+  starting.value = true;
+  startError.value = "";
+  const result = await $fetch.raw<unknown>(
+    `/api/agent-company/goal-brief/${encodeURIComponent(brief.id)}/start`,
+    {
+      method: "POST",
+      body: {
+        requestId: startRequestID.value,
+        expectedVersion: brief.version,
+      },
+      ignoreResponseError: true,
+    },
+  ).then(
+    response => ({ ok: true as const, response }),
+    () => ({ ok: false as const }),
+  );
+  starting.value = false;
+  if (!result.ok) {
+    startError.value = "开始执行服务暂时不可用，请重试。";
+    return;
+  }
+  if (result.response.status === 200) {
+    const response = GoalBriefStartResult.safeParse(result.response._data);
+    if (response.success) {
+      localStorage.removeItem(goalDraftStorageKey);
+      await navigateTo(`/work/${encodeURIComponent(response.data.projectId)}`);
+      return;
+    }
+  }
+  const error = ExperienceApiError.safeParse(result.response._data);
+  startError.value = error.success ? error.data.message : "开始执行响应无法识别，请重试。";
 }
 </script>
 
@@ -428,14 +490,25 @@ async function editGoalDraft() {
               需要你处理的决定、阻塞与交付会集中出现在这里。
             </p>
           </div>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-refresh-cw"
-            aria-label="刷新 Inbox"
-            :loading="pending"
-            @click="refreshInbox"
-          />
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="available && snapshot.company.providerConfigured !== false"
+              color="neutral"
+              variant="outline"
+              icon="i-lucide-plus"
+              @click="openNewGoal"
+            >
+              新建目标
+            </UButton>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-refresh-cw"
+              aria-label="刷新 Inbox"
+              :loading="pending"
+              @click="refreshInbox"
+            />
+          </div>
         </header>
 
         <section
@@ -851,12 +924,18 @@ async function editGoalDraft() {
               <UIcon name="i-lucide-inbox" />
             </span>
             <h2>
-              {{ available ? "让本地 AI 团队接手第一个交付目标" : "本地目标草稿仍在这里" }}
+              {{
+                available
+                  ? firstRun
+                    ? "让本地 AI 团队接手第一个交付目标"
+                    : "创建一个新的交付目标"
+                  : "本地目标草稿仍在这里"
+              }}
             </h2>
             <p>
               {{
                 available
-                  ? "Agent Company 会把目标转为过程可控的团队执行，并把可验证成果保留在 Work 与 Library。当前还没有形成真实工作状态。"
+                  ? "Agent Company 会先生成可调整的目标摘要；你确认开始后，它才会创建 Work 并启动团队执行。"
                   : "连接中断不会清除这份本地草稿。恢复连接后，可以继续生成只读目标摘要。"
               }}
             </p>
@@ -885,9 +964,9 @@ async function editGoalDraft() {
                   {{
                     draftStorageAvailable
                       ? hasLocalDraft
-                        ? "已保存到此浏览器"
-                        : "输入内容只保存在此浏览器"
-                      : "浏览器存储不可用，刷新或关闭页面会丢失草稿"
+                        ? "已保存到此设备"
+                        : "输入内容只保存在此设备"
+                      : "本地存储不可用，刷新或关闭页面会丢失草稿"
                   }}
                 </span>
                 <UButton
@@ -896,11 +975,14 @@ async function editGoalDraft() {
                   :disabled="!canGenerate"
                   @click="generateGoalBrief"
                 >
-                  生成只读目标摘要
+                  生成目标摘要
                 </UButton>
               </div>
               <p class="ac-goal-draft__boundary">
-                生成摘要会在本地 Control Plane 保存一个未绑定项目的 Brief，不会立项或启动 Agent。正式提交将在后续阶段开放。
+                生成摘要只会保存未绑定项目的 Brief；点击“开始执行”后才会创建 Work。
+              </p>
+              <p v-if="generating" class="ac-goal-draft__boundary" role="status">
+                正在连接模型并生成摘要，通常需要一到两分钟。请保持页面打开；超时后可以安全重试。
               </p>
               <p
                 v-if="snapshot.company.providerConfigured === false"
@@ -946,10 +1028,15 @@ async function editGoalDraft() {
               <GoalBriefCard
                 :brief="generatedBrief"
                 :readonly="!available"
+                :starting="starting"
                 @updated="generatedBrief = $event"
+                @start="startGoalBrief"
               />
+              <p v-if="startError" class="ac-goal-generation-state__boundary" role="alert">
+                {{ startError }}
+              </p>
               <p class="ac-goal-generation-state__boundary">
-                摘要已保存在本地 Control Plane，但没有绑定 Project，也不会开始执行。正式提交将在后续阶段开放。
+                摘要已保存在本地；开始后会绑定到唯一 Work，重复提交不会创建第二个项目。
               </p>
             </section>
 

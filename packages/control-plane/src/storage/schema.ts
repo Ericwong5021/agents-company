@@ -90,6 +90,12 @@ export {
 } from "../company-learning/company-learning.sql"
 export { CompanyWorkProjectionTable } from "../company-project/work-projection.sql"
 export {
+  GoalBriefGenerationRequestTable,
+  GoalBriefStartRequestTable,
+  GoalBriefTable,
+  GoalBriefVersionTable,
+} from "../goal-brief/goal-brief.sql"
+export {
   CompanyRolloutStateTable,
   CompanyRolloutJournalTable,
   CompanyRolloutCandidateTable,
@@ -98,7 +104,6 @@ export {
   CompanyRolloutShadowEvaluationTable,
   CompanyRolloutPromotionDecisionTable,
 } from "../company-rollout/company-rollout.sql"
-export { GoalBriefGenerationRequestTable, GoalBriefTable, GoalBriefVersionTable } from "../goal-brief/goal-brief.sql"
 export {
   FounderGreenDelegationRunTable,
   FounderGreenReadinessTable,

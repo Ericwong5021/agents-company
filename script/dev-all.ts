@@ -3,6 +3,8 @@
 const root = import.meta.dir + "/.."
 const controlPlanePort = process.env.AGENT_COMPANY_DEV_CONTROL_PLANE_PORT ?? "4097"
 const controlPlaneUrl = `http://127.0.0.1:${controlPlanePort}`
+const webPort = process.env.PORT ?? "3210"
+const webUrl = `http://127.0.0.1:${webPort}`
 const localAuthSecret = `${crypto.randomUUID()}${crypto.randomUUID()}`
 const localInternalSecret = `${crypto.randomUUID()}${crypto.randomUUID()}`
 
@@ -29,7 +31,7 @@ const services = [
     env: {
       AGENT_COMPANY_CONTROL_PLANE_URL: controlPlaneUrl,
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? localAuthSecret,
-      BETTER_AUTH_URL: "http://127.0.0.1:3210",
+      BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? webUrl,
       INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET ?? localInternalSecret,
     },
   },

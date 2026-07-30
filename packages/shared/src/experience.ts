@@ -154,6 +154,25 @@ export const GoalBriefAppendRequest = z
   .strict()
 export type GoalBriefAppendRequest = z.infer<typeof GoalBriefAppendRequest>
 
+export const GoalBriefStartRequest = z
+  .object({
+    requestId: z.string().uuid(),
+    expectedVersion: z.number().int().positive(),
+  })
+  .strict()
+export type GoalBriefStartRequest = z.infer<typeof GoalBriefStartRequest>
+
+export const GoalBriefStartResult = z
+  .object({
+    briefId: Identifier,
+    briefVersion: z.number().int().positive(),
+    projectId: Identifier,
+    runId: Identifier,
+    replayed: z.boolean(),
+  })
+  .strict()
+export type GoalBriefStartResult = z.infer<typeof GoalBriefStartResult>
+
 export const GoalBriefHistory = z
   .object({
     id: Identifier,

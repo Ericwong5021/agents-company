@@ -259,6 +259,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/goal-brief-append.post"),
     })
     addServerHandler({
+      route: "/api/agent-company/goal-brief/:briefID/start",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/goal-brief-start.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/projects/:projectID/artifacts/:artifactID",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/artifact.get"),

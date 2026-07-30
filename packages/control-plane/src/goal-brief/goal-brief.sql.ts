@@ -57,3 +57,24 @@ export const GoalBriefGenerationRequestTable = sqliteTable(
   },
   (table) => [uniqueIndex("goal_brief_generation_request_brief_idx").on(table.brief_id)],
 )
+
+export const GoalBriefStartRequestTable = sqliteTable(
+  "goal_brief_start_request",
+  {
+    request_id: text().primaryKey(),
+    brief_id: text()
+      .notNull()
+      .references(() => GoalBriefTable.id, { onDelete: "cascade" }),
+    brief_version: integer().notNull(),
+    owner_token: text().notNull(),
+    lease_expires_at: integer().notNull(),
+    project_id: text().references(() => CompanyProjectTable.id, { onDelete: "set null" }),
+    run_id: text(),
+    created_at: integer().notNull(),
+    updated_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("goal_brief_start_request_brief_idx").on(table.brief_id),
+    uniqueIndex("goal_brief_start_request_project_idx").on(table.project_id),
+  ],
+)

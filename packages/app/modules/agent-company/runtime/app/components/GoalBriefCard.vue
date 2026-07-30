@@ -11,6 +11,7 @@ const props = defineProps<{
   brief: GoalBrief;
   // 只读时隐藏编辑与开始动作（例如连接中断或历史视图）。
   readonly?: boolean;
+  starting?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -29,12 +30,14 @@ const draftGoal = ref("");
 const draftConstraints = ref("");
 const draftDeliverables = ref<{ id: string; title: string; description: string }[]>([]);
 const draftAcceptance = ref<{ id: string; description: string; verification: string }[]>([]);
+const draftQuestionAnswers = ref<Record<string, string>>({});
 
 function beginEdit() {
   draftGoal.value = props.brief.goal;
   draftConstraints.value = props.brief.constraints.join("\n");
   draftDeliverables.value = props.brief.deliverables.map(item => ({ ...item }));
   draftAcceptance.value = props.brief.acceptanceCriteria.map(item => ({ ...item }));
+  draftQuestionAnswers.value = {};
   saveError.value = "";
   editing.value = true;
 }
@@ -69,6 +72,23 @@ function collectEdit(): GoalBriefFieldEdit {
   }));
   if (JSON.stringify(acceptance) !== JSON.stringify(props.brief.acceptanceCriteria))
     edit.acceptanceCriteria = acceptance;
+
+  const answered = props.brief.openQuestions.flatMap((question, index) => {
+    const answer = draftQuestionAnswers.value[question.id]?.trim();
+    return answer ? [{ question, answer, index }] : [];
+  });
+  if (answered.length) {
+    const answeredIDs = new Set(answered.map(item => item.question.id));
+    edit.openQuestions = props.brief.openQuestions.filter(question => !answeredIDs.has(question.id));
+    edit.assumptions = [
+      ...props.brief.assumptions,
+      ...answered.map(item => ({
+        id: `answer-${item.index + 1}-${item.question.id}`.slice(0, 240),
+        description: `${item.question.question}：${item.answer}`,
+        confirmed: true,
+      })),
+    ];
+  }
 
   return edit;
 }
@@ -196,6 +216,13 @@ async function saveEdit() {
           <strong>{{ question.question }}</strong>
           <span>{{ question.impact }}</span>
           <span class="ac-brief__default-assumption">若不回答：{{ question.defaultAssumption }}</span>
+          <textarea
+            v-if="editing"
+            v-model="draftQuestionAnswers[question.id]"
+            rows="2"
+            maxlength="4000"
+            placeholder="输入你的决定"
+          />
         </li>
       </ul>
     </div>
@@ -233,11 +260,11 @@ async function saveEdit() {
           <ul><li v-for="(item, index) in view.fullBrief.nonGoals" :key="index">{{ item }}</li></ul>
         </div>
         <div v-if="view.fullBrief.assumptions.length">
-          <h5>系统假设</h5>
+          <h5>系统假设（不阻塞开始）</h5>
           <ul>
             <li v-for="item in view.fullBrief.assumptions" :key="item.id" :data-confirmed="item.confirmed">
               {{ item.description }}
-              <small>{{ item.confirmed ? "已确认" : "待确认" }}</small>
+              <small>{{ item.confirmed ? "已确认" : "系统暂定 · 不阻塞" }}</small>
             </li>
           </ul>
         </div>
@@ -261,8 +288,13 @@ async function saveEdit() {
         <UButton color="neutral" variant="ghost" :disabled="saving" @click="cancelEdit">取消</UButton>
       </template>
       <template v-else>
-        <UButton color="neutral" @click="emit('start', props.brief)">
-          {{ view.autoStart ? "确认并开始" : "开始执行" }}
+        <UButton
+          color="neutral"
+          :loading="starting"
+          :disabled="view.hasMaterialQuestions"
+          @click="emit('start', props.brief)"
+        >
+          {{ view.hasMaterialQuestions ? "请先处理关键问题" : view.autoStart ? "确认并开始" : "开始执行" }}
         </UButton>
         <UButton color="neutral" variant="outline" @click="beginEdit">调整</UButton>
       </template>

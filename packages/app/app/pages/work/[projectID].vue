@@ -852,6 +852,18 @@ function artifactRoute(projectID: string, artifactID: string) {
                     <li v-for="constraint in goalBrief.brief.constraints" :key="constraint">{{ constraint }}</li>
                   </ul>
                 </div>
+                <div
+                  v-if="goalBrief.kind === 'goal_brief' && goalBrief.brief.assumptions.length"
+                  class="ac-brief-constraints"
+                >
+                  <h3>系统假设（不阻塞当前执行）</h3>
+                  <ul>
+                    <li v-for="assumption in goalBrief.brief.assumptions" :key="assumption.id">
+                      {{ assumption.description }}
+                      <small>{{ assumption.confirmed ? "已确认" : "系统暂定 · 不阻塞" }}</small>
+                    </li>
+                  </ul>
+                </div>
               </template>
             </template>
 

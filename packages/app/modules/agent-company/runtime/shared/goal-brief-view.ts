@@ -87,9 +87,14 @@ export const GoalBriefFieldEdit = GoalBriefDraft.pick({
   deliverables: true,
   acceptanceCriteria: true,
   constraints: true,
+  assumptions: true,
+  openQuestions: true,
 }).partial()
 export type GoalBriefFieldEdit = Partial<
-  Pick<GoalBriefDraftValue, "goal" | "deliverables" | "acceptanceCriteria" | "constraints">
+  Pick<
+    GoalBriefDraftValue,
+    "goal" | "deliverables" | "acceptanceCriteria" | "constraints" | "assumptions" | "openQuestions"
+  >
 >
 
 // 把局部编辑合并进当前 Brief，产出可提交的 append 请求。只重写受影响字段。
@@ -108,8 +113,8 @@ export function buildBriefAppendRequest(
       acceptanceCriteria: patch.acceptanceCriteria ?? brief.acceptanceCriteria,
       constraints: patch.constraints ?? brief.constraints,
       nonGoals: brief.nonGoals,
-      assumptions: brief.assumptions,
-      openQuestions: brief.openQuestions,
+      assumptions: patch.assumptions ?? brief.assumptions,
+      openQuestions: patch.openQuestions ?? brief.openQuestions,
       riskLevel: brief.riskLevel,
       recommendedPlan: brief.recommendedPlan,
       approvalMode: brief.approvalMode,

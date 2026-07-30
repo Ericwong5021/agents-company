@@ -14,6 +14,8 @@ import {
   GoalBriefGenerateRequest,
   GoalBriefHistory,
   GoalBriefProjectView,
+  GoalBriefStartRequest,
+  GoalBriefStartResult,
   GoalBriefStructuredFailure,
   OrganizationProjection,
   ValidationSummary,
@@ -24,6 +26,7 @@ import {
   type ExperienceWorkActionRequest as ExperienceWorkActionRequestValue,
 } from "@agents-company/shared/experience"
 import { GoalBriefModelAdapter, GoalBriefStore } from "@/goal-brief"
+import { CompanyProjectExecution } from "@/company-project"
 import * as ExperienceProjectionService from "@/company-project/experience-projection"
 import * as WorkProjectionService from "@/company-project/work-projection"
 import * as ExperienceArtifactService from "@/company-project/experience-artifact"
@@ -235,6 +238,108 @@ export function createExperienceRoutes(
         )
         if (!result) return c.json(missing("Goal Brief not found"), 404)
         return c.json(GoalBriefHistory.parse(result))
+      },
+    )
+    .post(
+      "/goal-brief/:briefID/start",
+      describeRoute({
+        summary: "Start a Project from the current Goal Brief version",
+        operationId: "experience.goalBrief.start",
+        requestBody: {
+          required: true,
+          content: { "application/json": {} },
+        },
+        responses: {
+          200: {
+            description: "Started Project binding",
+            content: { "application/json": { schema: resolver(GoalBriefStartResult) } },
+          },
+          404: {
+            description: "Goal Brief not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+          409: {
+            description: "Goal Brief start conflict",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ID),
+      validator("json", GoalBriefStartRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const ownerToken = crypto.randomUUID()
+        const reservation = GoalBriefStore.reserveStart(
+          c.req.valid("param").briefID,
+          input,
+          ownerToken,
+          Date.now(),
+          5 * 60_000,
+        )
+        if (reservation.status === "not_found")
+          return c.json(missing("Goal Brief not found"), 404)
+        if (reservation.status === "version_conflict")
+          return c.json(
+            ExperienceApiError.parse({
+              code: "version_conflict",
+              message: "Goal Brief was updated before execution started",
+              currentVersion: reservation.currentVersion,
+            }),
+            409,
+          )
+        if (reservation.status === "pending")
+          return c.json(
+            ExperienceApiError.parse({
+              code: "request_in_progress",
+              message: "Goal Brief is already starting",
+            }),
+            409,
+          )
+        if (reservation.status === "blocked")
+          return c.json(
+            ExperienceApiError.parse({
+              code: "request_conflict",
+              message: `请先回答会影响执行的关键问题：${reservation.questionIDs.join("、")}`,
+            }),
+            409,
+          )
+        if (reservation.status === "conflict")
+          return c.json(
+            ExperienceApiError.parse({
+              code: "request_conflict",
+              message: "Goal Brief start request conflicts with its current binding",
+            }),
+            409,
+          )
+        if (reservation.status === "completed")
+          return c.json(GoalBriefStartResult.parse(reservation.result))
+        const outcome = await runRequest(
+          "ExperienceRoutes.goalBrief.start",
+          c,
+          Effect.exit(
+            CompanyProjectExecution.Service.use((execution) =>
+              execution.start({
+                goal: reservation.brief.goal,
+                title: reservation.brief.deliverables[0]?.title,
+                decision_request_id: input.requestId,
+              }),
+            ),
+          ),
+        )
+        if (Exit.isFailure(outcome)) {
+          GoalBriefStore.releaseStart(input.requestId, ownerToken)
+          throw Cause.squash(outcome.cause)
+        }
+        return c.json(
+          GoalBriefStartResult.parse(
+            GoalBriefStore.completeStart(
+              input.requestId,
+              ownerToken,
+              outcome.value.project.id,
+              outcome.value.run_id,
+            ),
+          ),
+        )
       },
     )
     .post(

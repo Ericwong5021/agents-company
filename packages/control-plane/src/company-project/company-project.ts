@@ -214,6 +214,7 @@ export interface Interface {
   }) => Effect.Effect<Project>
   readonly get: (id: string) => Effect.Effect<Project | undefined>
   readonly findBySourceThread: (source_thread_id: string) => Effect.Effect<Project | undefined>
+  readonly findByDecisionRequest: (decision_request_id: string) => Effect.Effect<Project | undefined>
   readonly list: () => Effect.Effect<Project[]>
   readonly createCharter: (input: {
     project_id: string
@@ -407,6 +408,21 @@ export const layer = Layer.effect(
       return row ? projectFromRow(row) : undefined
     })
 
+    const findByDecisionRequest = Effect.fn("CompanyProject.findByDecisionRequest")(function* (
+      decision_request_id: string,
+    ) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select()
+            .from(CompanyProjectTable)
+            .where(eq(CompanyProjectTable.decision_request_id, decision_request_id))
+            .get(),
+        ),
+      )
+      return row ? projectFromRow(row) : undefined
+    })
+
     const create = Effect.fn("CompanyProject.create")(function* (input: {
       company_id?: string
       root_need_id?: string
@@ -423,6 +439,10 @@ export const layer = Layer.effect(
     }) {
       if (input.source_thread_id) {
         const existing = yield* findBySourceThread(input.source_thread_id)
+        if (existing) return existing
+      }
+      if (input.decision_request_id) {
+        const existing = yield* findByDecisionRequest(input.decision_request_id)
         if (existing) return existing
       }
       const execution_strategy = ProjectExecutionStrategy.parse(input.execution_strategy ?? "legacy_full_plan")
@@ -2196,6 +2216,7 @@ export const layer = Layer.effect(
       create,
       get,
       findBySourceThread,
+      findByDecisionRequest,
       list,
       createCharter,
       getCharter,

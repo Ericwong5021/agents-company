@@ -44,6 +44,7 @@ const companyTables = [
   "company_plan",
   "company_project_charter",
   "company_project_event",
+  "goal_brief_start_request",
   "goal_brief_generation_request",
   "goal_brief_version",
   "goal_brief",

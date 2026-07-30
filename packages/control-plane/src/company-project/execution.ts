@@ -534,6 +534,7 @@ export interface Interface {
   readonly start: (input: {
     goal: string
     title?: string
+    decision_request_id?: string
     session_id?: string
     provider_id?: string
     model_id?: string
@@ -2566,12 +2567,33 @@ const serviceLayer = Layer.effect(
     const start = Effect.fn("CompanyProjectExecution.start")(function* (input: {
       goal: string
       title?: string
+      decision_request_id?: string
       session_id?: string
       provider_id?: string
       model_id?: string
       execution_strategy?: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
     }) {
+      const existing = input.decision_request_id
+        ? yield* projects.findByDecisionRequest(input.decision_request_id)
+        : undefined
+      if (existing?.goal !== undefined && existing.goal !== input.goal)
+        throw new Error("Project start request is already bound to a different goal")
+      if (existing?.active_run_id) return { project: existing, run_id: existing.active_run_id }
+      if (existing) {
+        const planner = (yield* projects.listWorkItems(existing.id)).find(
+          (item) => item.kind === "planner" && item.status === "pending",
+        )
+        if (planner) {
+          const run_id =
+            existing.execution_strategy === "seed_and_grow"
+              ? yield* startSeedWave(existing.id)
+              : yield* launchPlanner(existing, planner)
+          if (!run_id) throw new Error(`Seed project ${existing.id} has no dispatchable AgentRun`)
+          return { project: existing, run_id }
+        }
+        throw new Error(`Project start request ${input.decision_request_id} is incomplete and cannot be resumed`)
+      }
       const execution = resolveNewExecution(input)
       const selectedModel = yield* resolveModel(input)
       const session = input.session_id
@@ -2582,6 +2604,7 @@ const serviceLayer = Layer.effect(
           })
       if (!session) throw new Error(`Session not found: ${input.session_id}`)
       const project = yield* projects.create({
+        decision_request_id: input.decision_request_id,
         goal: input.goal,
         title: input.title,
         coordinator_session_id: session.id,

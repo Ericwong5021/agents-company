@@ -35,7 +35,7 @@ export default defineAgentCompanyHandler(
         body: input.data,
         ignoreResponseError: true,
         retry: 0,
-        timeout: 30_000,
+        timeout: 160_000,
       })
       .then(
         (response) => ({ ok: true as const, response }),
