@@ -187,7 +187,7 @@ function selectionReasonLabel(value: string) {
               <li v-for="(selection, index) in selections" :key="`${selection.projectID}-${index}`">
                 <strong>候选记录 {{ index + 1 }}</strong>
                 <span>{{ selection.decision === "selected" ? "入选" : "未入选" }}{{
-                  selection.released ? "（已释放）" : "" }}</span>
+                  selection.released ? "（执行分配已结束）" : "" }}</span>
                 <span>{{ selectionReasonLabel(selection.reason) }}</span>
                 <details class="ac-source-trace">
                   <summary>查看内部追踪信息</summary>

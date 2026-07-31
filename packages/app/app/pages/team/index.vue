@@ -80,6 +80,10 @@ const historicalProjectedAssignments = computed(() =>
 const primaryWorkTerminal = computed(() =>
   primaryWork.value?.availability === "available"
   && ["accepted", "failed", "cancelled"].includes(primaryWork.value.summary.userStatus))
+const primaryWorkAwaitingAcceptance = computed(() =>
+  primaryWork.value?.availability === "available"
+  && Boolean(primaryWork.value.delivery)
+  && primaryWork.value.summary.userStatus !== "accepted")
 const primaryWorkBlocked = computed(() =>
   primaryWork.value?.availability === "available"
   && primaryWork.value.summary.userStatus === "blocked")
@@ -100,21 +104,24 @@ function currentResponsibilitySummary(agentID: string) {
   const released = rows.filter((assignment) => assignment.status === "released").length
   if (primaryWorkTerminal.value)
     return rows.length ? `本工作已结束 · ${rows.length} 项责任记录` : "本工作已结束"
+  if (primaryWorkAwaitingAcceptance.value)
+    return rows.length ? `执行已结束 · 等待你验收 · ${rows.length} 项责任记录` : "执行已结束 · 等待你验收"
   if (primaryWorkBlocked.value) {
-    if (active && released) return `工作受阻 · ${active} 项责任待恢复 · ${released} 项已释放`
+    if (active && released) return `工作受阻 · ${active} 项责任待恢复 · ${released} 项执行分配已结束`
     if (active) return `工作受阻 · ${active} 项责任待恢复`
-    if (released) return `工作受阻 · ${released} 项已释放`
+    if (released) return `工作受阻 · ${released} 项执行分配已结束`
     return "工作受阻 · 当前没有待恢复责任"
   }
-  if (active && released) return `${active} 项进行中 · ${released} 项已释放`
+  if (active && released) return `${active} 项进行中 · ${released} 项执行分配已结束`
   if (active) return `${active} 项进行中`
-  if (released) return `${released} 项已释放`
+  if (released) return `${released} 项执行分配已结束`
   if (ownedWork(agentID).length) return "本工作负责人"
   return "当前工作未记录责任"
 }
 
 function assignmentStatusLabel(status: keyof typeof assignmentStatusLabels) {
   if (primaryWorkBlocked.value && ["assigned", "active"].includes(status)) return "责任待恢复"
+  if (primaryWorkAwaitingAcceptance.value && status === "released") return "执行已结束 · 待验收"
   return assignmentStatusLabels[status]
 }
 
@@ -266,13 +273,15 @@ async function retry() {
                         {{
                           primaryWorkTerminal
                             ? "工作已结束，无需介入"
+                            : primaryWorkAwaitingAcceptance
+                              ? "执行已结束，等待你验收"
                             : appConfig.experience.interruptibilityLabels[agent.interruptibility]
                         }}
                       </dd>
                     </div>
                     <div>
                       <dt>当前工作</dt>
-                      <dd>{{ primaryWorkTerminal ? "已结束" : primaryWorkBlocked ? "工作受阻，等待恢复" : "执行状态以工作页为准" }}</dd>
+                      <dd>{{ primaryWorkTerminal ? "已结束" : primaryWorkAwaitingAcceptance ? "执行已结束，等待你验收" : primaryWorkBlocked ? "工作受阻，等待恢复" : "执行状态以工作页为准" }}</dd>
                     </div>
                   </dl>
 
@@ -356,7 +365,7 @@ async function retry() {
                     {{ (assignment.agent.name ?? assignment.agent.id).slice(0, 1) }}
                   </span>
                   <span class="ac-activity-badge" data-attention="false">
-                    {{ primaryWorkTerminal ? "已结束" : "项目中" }}
+                    {{ primaryWorkTerminal ? "已结束" : primaryWorkAwaitingAcceptance ? "待你验收" : "项目中" }}
                   </span>
                 </div>
 

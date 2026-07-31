@@ -330,6 +330,7 @@ export interface Interface {
     title: string
     path?: string
     content?: string
+    file_content?: string
     evidence?: Record<string, unknown>
     created_by_agent_id?: string
   }) => Effect.Effect<Artifact>
@@ -1377,6 +1378,7 @@ export const layer = Layer.effect(
       title: string
       path?: string
       content?: string
+      file_content?: string
       evidence?: Record<string, unknown>
       created_by_agent_id?: string
     }) {
@@ -1385,10 +1387,10 @@ export const layer = Layer.effect(
       const artifactPath = input.path ? path.resolve(project.output_dir, input.path) : undefined
       if (artifactPath && !AppFileSystem.contains(project.output_dir, artifactPath))
         throw new Error("Artifact path escapes project directory")
-      if (artifactPath && input.content !== undefined)
+      if (artifactPath && (input.file_content ?? input.content) !== undefined)
         yield* Effect.promise(async () => {
           await fs.mkdir(path.dirname(artifactPath), { recursive: true })
-          await Bun.write(artifactPath, input.content!)
+          await Bun.write(artifactPath, (input.file_content ?? input.content)!)
         })
       const id = Identifier.ascending("artifact")
       const row = {

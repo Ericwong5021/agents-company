@@ -19,6 +19,8 @@ export function safeExecutionSummary(value?: string) {
     return "系统核验未通过，本次成果已保留但不会进入交付；请按失败项修正后重试。"
   if (/INTERNAL_ERROR|stream error/i.test(text))
     return "模型服务连接中断，本次尝试未完成；系统已保留进度并按重试策略处理。"
+  if (/local coding runtime exited before completing the assigned work/i.test(text))
+    return "本地运行器在完成任务前退出，本次尝试未完成；系统已保留进度并按重试策略处理。"
   if (/timed?\s*out|timeout/i.test(text))
     return "本次执行等待超时，系统已保留进度并按重试策略处理。"
   if (internalFailurePattern.test(text))

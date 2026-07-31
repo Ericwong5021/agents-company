@@ -24,6 +24,7 @@ const props = defineProps<{
   diagnostics: { id: string; message: string }[]
   pending: boolean
   failed: boolean
+  awaitingUserAcceptance: boolean
 }>()
 
 const changes = computed(() =>
@@ -68,6 +69,11 @@ const tokenUsageAvailable = computed(() =>
       || props.detail.usage.cacheWrite > 0
     )
   ))
+
+function assignmentStatusLabel(status: keyof typeof assignmentStatusLabels) {
+  if (status === "released" && props.awaitingUserAcceptance) return "执行已结束 · 等待你验收"
+  return assignmentStatusLabels[status]
+}
 const costUsageAvailable = computed(() =>
   Boolean(props.detail?.usage && (props.detail.usage.runCount === 0 || props.detail.usage.cost > 0)))
 const failedAttemptCount = computed(() =>
@@ -402,7 +408,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
       <article v-for="assignment in assignments" :key="assignment.assignmentId" class="ac-seed-diagnostics__item">
         <div class="ac-seed-diagnostics__item-title">
           <h4>{{ humanLabel(assignment.agent.name ?? assignment.agent.id) }}</h4>
-          <span>{{ assignmentStatusLabels[assignment.status] }}</span>
+          <span>{{ assignmentStatusLabel(assignment.status) }}</span>
         </div>
         <p>{{ humanLabel(assignment.temporaryRole) }} · {{ humanLabel(assignment.responsibility) }}</p>
         <details class="ac-source-trace">

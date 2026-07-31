@@ -29,7 +29,7 @@ export const graphStatusLabels = {
 export const assignmentStatusLabels = {
   assigned: "已分配",
   active: "工作中",
-  released: "已释放",
+  released: "执行分配已结束",
 } as const
 
 export const permissionModeLabels = {

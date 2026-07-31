@@ -31,7 +31,7 @@ import {
 import * as ExperienceArtifact from "./experience-artifact"
 import { CompanyWorkProjectionTable } from "./work-projection.sql"
 
-export const PROJECTOR_VERSION = 11
+export const PROJECTOR_VERSION = 12
 const MAX_PROJECTION_DIAGNOSTICS = 500
 const MAX_PROJECTION_ITEMS = 500
 const EventTimestamp = z.number().int().min(0).max(253_402_300_799_999)
@@ -152,6 +152,7 @@ const knownNoopEvents = new Set([
   "validation_gate.evaluation_started",
   "validation_gate.evaluated",
   "validation_gate.recovered",
+  "validation_gate.superseded",
   "validation_anchor.checked",
   "failure_diagnosis.recorded",
   "graph_repair.completed",

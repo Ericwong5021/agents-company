@@ -48,6 +48,20 @@ import {
 
 const workTypes = ["coding", "decision", "research", "writing", "design", "analysis", "knowledge_reading"] as const
 const modelGroups = ["standard", "lite"] as const
+const projectControlEventTypes = new Set([
+  "attention.closed",
+  "delivery.accepted",
+  "delivery.ready",
+  "delivery.revision_requested",
+  "dispatch.paused",
+  "dispatch.resumed",
+  "project_action.retry_scheduled",
+  "work.paused",
+  "work.resumed",
+  "work_item.retry_scheduled",
+  "work_item.rework_requested",
+  "work_item.rework_scheduled",
+])
 
 function defaultSeedPolicy(input: { goal: string; charter?: BoardProjectCharter }) {
   const resources = input.charter?.resources ?? []
@@ -373,6 +387,56 @@ const normalizeTaskAcceptanceLanguage = (task: SubTask): SubTask => ({
   acceptanceCriteria: normalizeInternalAcceptanceLanguage(task.acceptanceCriteria),
 })
 
+const normalizeStableCopyDependencies = (tasks: SubTask[]) => {
+  const keyed = tasks.map((task, index) => ({ ...task, key: task.key ?? `task-${index + 1}` }))
+  const visual = keyed.find(
+    (task) =>
+      inferWorkType(task) === "design" &&
+      /(?:D3|SVG|画板|首屏|界面|原型|视觉)/i.test(`${task.summary}\n${task.acceptanceCriteria}`),
+  )
+  const copy = keyed.find(
+    (task) =>
+      inferWorkType(task) === "writing" &&
+      /(?:D4|中文.{0,8}文案|首屏.{0,8}文案|文案)/i.test(`${task.summary}\n${task.acceptanceCriteria}`),
+  )
+  if (
+    !visual ||
+    !copy ||
+    !/(?:D2|稳定编号|文案编号|逐一映射|编号.{0,20}映射|映射.{0,20}编号)/i.test(
+      `${visual.summary}\n${visual.acceptanceCriteria}\n${copy.summary}\n${copy.acceptanceCriteria}`,
+    )
+  )
+    return tasks
+  const normalized = keyed.map((task) => {
+    if (task.key === copy.key)
+      return {
+        ...task,
+        parentKey: task.parentKey === visual.key ? undefined : task.parentKey,
+        dependsOn: (task.dependsOn ?? []).filter((dependency) => dependency !== visual.key),
+      }
+    if (task.key !== visual.key) return task
+    return {
+      ...task,
+      dependsOn: [...new Set([...(task.dependsOn ?? []), copy.key])],
+    }
+  })
+  const order = (pending: SubTask[], ordered: SubTask[] = []): SubTask[] => {
+    if (!pending.length) return ordered
+    const known = new Set(ordered.map((task) => task.key))
+    const index = pending.findIndex(
+      (task) =>
+        (!task.parentKey || known.has(task.parentKey)) &&
+        (task.dependsOn ?? []).every((dependency) => known.has(dependency)),
+    )
+    if (index < 0) throw new Error("Delegation task dependencies contain a cycle or unknown key")
+    return order(
+      pending.filter((_, candidate) => candidate !== index),
+      [...ordered, pending[index]!],
+    )
+  }
+  return order(normalized)
+}
+
 const researchModeFor = (item: WorkItem) =>
   item.work_type === "research" &&
   /假设\s*[\/／]\s*待验证|需求假设|本地研究边界|不开展.{0,30}外部调研|不声称.{0,30}(?:调研|外部行动)|未经验证.{0,30}(?:显式|标注)/i.test(
@@ -395,6 +459,44 @@ const artifactTitle = (item: WorkItem, submission: unknown) => {
   if (!parsed.success) return item.title
   return parsed.data.content.match(/^#\s+(.+)$/m)?.[1]?.trim() || item.title
 }
+
+const designArtifactFile = (item: WorkItem, submission: unknown) => {
+  if (item.work_type !== "design") return
+  const parsed = submissions.design.safeParse(submission)
+  if (!parsed.success) return
+  const source = parsed.data.artifacts
+    .map((artifact) => artifact.description.match(/<svg\b[\s\S]*?<\/svg>/i)?.[0])
+    .find((value): value is string => Boolean(value))
+  if (!source) return
+  const content = source
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<foreignObject\b[\s\S]*?<\/foreignObject>/gi, "")
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(?:href|xlink:href)\s*=\s*(["'])(?!#)[^"']*\1/gi, "")
+    .replace(/url\(\s*(?!#)[^)]+\)/gi, "none")
+    .replace(/@import[^;]+;/gi, "")
+  return {
+    path: `artifacts/${item.id}-attempt-${item.attempt + 1}.svg`,
+    content,
+    evidence: {
+      path: `artifacts/${item.id}-attempt-${item.attempt + 1}.svg`,
+      media_type: "image/svg+xml",
+      byte_length: Buffer.byteLength(content),
+      sha256: new Bun.CryptoHasher("sha256").update(content).digest("hex"),
+    },
+  }
+}
+
+const structuredArtifactFile = (item: WorkItem, content: string) => ({
+  path: `artifacts/${item.id}-attempt-${item.attempt + 1}.json`,
+  content,
+  evidence: {
+    path: `artifacts/${item.id}-attempt-${item.attempt + 1}.json`,
+    media_type: "application/json",
+    byte_length: Buffer.byteLength(content),
+    sha256: new Bun.CryptoHasher("sha256").update(content).digest("hex"),
+  },
+})
 
 const numericValue = (value: string) => {
   const match = value.replace(/[*_`]/g, "").match(/-?\d[\d,]*(?:\.\d+)?/)
@@ -850,10 +952,77 @@ const boardCloseoutWritebackRule = (item: WorkItem) =>
     : undefined
 
 const workItemRuntimeEvidenceRule =
-  "运行时语义：本地运行服务事实是在当前工作项启动前生成的快照，所以当前节点可能仍显示待执行、尝试次数少 1，当前独立复核也可能显示尚未启动。宿主随后负责把节点置为执行中、持久化本次回答为成果，并完成或阻塞节点；执行成员不应也不需要修改自己的状态。项目流程状态和运行时间是易变的宿主元数据，除非验收条件明确要求实时状态报告，不得把它们提升为业务结论或交付物的唯一时间基准。非代码执行成员由宿主以只读权限运行。不得仅因这种预运行快照、缺少自状态写入工具或没有另附未要求的系统级命令或网络审计而判定执行未发生。"
+  "运行时语义：本地运行服务事实是在当前工作项启动前生成的快照，所以当前节点可能仍显示待执行、尝试次数少 1，当前独立复核也可能显示尚未启动。宿主随后负责把节点置为执行中、持久化本次回答为成果，并完成或阻塞节点；执行成员不应也不需要修改自己的状态。项目流程状态和运行时间是易变的宿主元数据，除非验收条件明确要求实时状态报告，不得把它们提升为业务结论或交付物的唯一时间基准。team_selections 中 execution_assignment_released=true 只表示该执行分配的容量已经结束，不表示用户已验收或项目角色已最终释放；最终验收只看 project.user_delivery_accepted。非代码执行成员由宿主以只读权限运行。不得仅因这种预运行快照、缺少自状态写入工具或没有另附未要求的系统级命令或网络审计而判定执行未发生。"
+
+const projectArtifactPersistenceRule =
+  "成果持久化语义：非代码 Worker 只需返回符合 Work Type 的完整结构化 submission；宿主会在回答返回后把它写为项目内不可变版本文件，并生成 artifact.evidence.host_materialized_file，其中包含项目相对路径、媒体类型、非零字节数和 sha256。Reviewer 看到该宿主证据且交付正文可逐项检查时，应将其视为真实、可打开的本地成果；不得要求 Worker 自行写文件、提供绝对路径、浏览器截图或回答之后才可能发生的打开记录。文件证据缺失、内容不完整或不满足原验收条件时仍必须拒绝。"
+
+const currentArtifactTraceRule = (item: WorkItem) => {
+  const visualDesign =
+    item.work_type === "design" &&
+    /画板|视觉|界面|线框|原型|SVG|可视|同屏|并置/i.test(
+      `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+    )
+  const artifactPath = `artifacts/${item.id}-attempt-${item.attempt + 1}.${visualDesign ? "svg" : "json"}`
+  return `本轮成果的确定宿主项目相对路径是 \`${artifactPath}\`；Work Type 核验通过后，复核前系统核验记录的确定路径是 \`artifacts/verification/${item.id}-attempt-${item.attempt + 1}.json\`。若本任务要求成果索引、版本表、证据映射或可打开入口，必须在当前 submission 中直接列出这两个路径并标明第 ${item.attempt + 1} 次提交、等待最终人工验收；不得写成“以宿主材料化证据为准”或留待回答后补填。路径由宿主在当前回答返回后按约定持久化，不得谎称已经人工打开或人工验收。`
+}
+
+const calendarDateBoundaryRule =
+  "日期边界：用户只确认日历日期而未确认具体时刻或时区时，只能保留已确认日期并把精确日程标为待确认。除非 Goal Brief 或原验收条件明确把具体时刻、时区或更早截止时刻列为阻塞要求，不得在执行或复核阶段新增这些放行前提，也不得因此拒绝与该日程细节无关的内容成果。"
 
 const reviewerRuntimeEvidenceRule =
-  "当前回答本身就是本轮独立复核。不得要求当前 Reviewer 在启动前快照中已经 completed、已经有本轮 Artifact，或先由另一个 Reviewer 复核这次交付；accepted 后这些状态由宿主持久化。Worker 交付物早于 Reviewer 生成，因此其证据快照时间早于当前复核时间、项目流程状态随后从 executing 变为 reviewing 都是正常时序，不得仅据此拒绝，也不得要求把历史快照改写成复核时刻。只验收 parent 叶子任务及其上游依赖，不得把尚未获准运行的下游 WorkItem 处于 pending 当作 parent 的缺陷，除非 parent 的 depends_on 明确包含它。"
+  "当前回答本身就是本轮独立复核。不得要求当前 Reviewer 在启动前快照中已经 completed、已经有本轮 Artifact，或先由另一个 Reviewer 复核这次交付；accepted 后这些状态与复核 Gate 由宿主持久化。Worker 交付物早于 Reviewer 生成，因此其证据快照时间早于当前复核时间、项目流程状态随后从 executing 变为 reviewing 都是正常时序，不得仅据此拒绝，也不得要求把历史快照改写成复核时刻。运行事实中当前交付物的 evidence.work_type_verification 与 authority=control_plane、phase=pre_review 且 delivery_artifact_id 匹配当前交付物的 system_verification，是宿主在复核前生成的机器核验证据，不是 Worker 自述，也不等于人工验收。system_verification.delivery_artifact_sha256 必须匹配当前交付物 evidence.content_sha256；若有 materialized_file，其 path、media_type、byte_length、sha256 必须匹配 evidence.host_materialized_file。两种摘要分别校验结构化交付记录和实际材料化文件，不得把 JSON 记录摘要与 SVG 文件摘要误判为冲突。核验通过时不得再要求回答之后才会产生的另一份系统核验记录。若证据缺失、失败或对应字段不匹配，仍必须拒绝。只验收 parent 叶子任务及其上游依赖，不得把尚未获准运行的下游 WorkItem 处于 pending 当作 parent 的缺陷，除非 parent 的 depends_on 明确包含它。"
+
+const designArtifactPersistenceRule = (item: WorkItem) =>
+  item.work_type === "design" && /画板|视觉|界面|线框|原型|SVG|可视|同屏|并置/i.test(
+    `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+  )
+    ? "本地运行服务会在当前回答返回后，把 design submission.artifacts[].description 中第一个完整、自包含且无外部资源的 <svg>…</svg> 安全持久化为项目内真实 SVG 文件，并生成路径、摘要与字节数证据。当前任务要求可视画板时，必须直接嵌入完整 SVG；不得只给“另存为文件”的说明、HTML 源码、链接或纯文字描述。SVG 必须在单一画布中直接包含全部待比较方向，不得含脚本、foreignObject 或外部资源。"
+    : undefined
+
+const reviewerDesignArtifactRule = (item: WorkItem) =>
+  item.work_type === "design" && /画板|视觉|界面|线框|原型|SVG|可视|同屏|并置/i.test(
+    `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+  )
+    ? "对于自包含 SVG 设计交付，本地运行服务事实中的 artifact.evidence.host_materialized_file 是宿主在 Worker 回答后写入项目目录并计算的文件证据。若该证据包含项目相对路径、image/svg+xml、非零字节数和 sha256，且交付物内的完整 SVG 可逐项检查，就应按真实持久化可视文件验收；不得再要求 Worker 自行写文件、提供绝对路径、浏览器截图或回答之后才可能存在的打开记录。证据缺失、SVG 不完整或视觉内容不满足原验收条件时仍必须拒绝。"
+    : undefined
+
+const stableCopyConsistencyRule = (item: WorkItem, userRevision?: string) => {
+  const text = `${item.source_task_key ?? ""}\n${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`
+  if (
+    item.work_type === "writing" &&
+    /(?:D4|中文.{0,8}文案|首屏.{0,8}文案)/i.test(text) &&
+    /(?:D2|稳定编号|文案编号|逐一映射|映射)/i.test(text)
+  )
+    return "跨成果文案契约：本任务是稳定编号对应可见文案的唯一正文来源。每个编号必须给出一条可直接复用的最终可见字符串；标题、副标题、行动按钮等不得只给改写方向或多个备选。后续视觉成果会逐字复用这些字符串。"
+  if (
+    item.work_type !== "design" ||
+    !/(?:D3|SVG|画板|首屏|界面|原型|视觉)/i.test(text) ||
+    !/(?:D2|稳定编号|文案编号|映射)/i.test(text)
+  )
+    return
+  if (userRevision)
+    return "跨成果文案契约：从本地运行服务事实中读取最新上游文案成果。用户点名修改的视觉方向必须按稳定编号逐字采用最新文案；未点名的视觉方向和元素必须保持上一版不变。不得为追求方向差异自行改写可见文案。"
+  return "跨成果文案契约：从本地运行服务事实中读取已完成的上游文案成果，并按稳定编号逐字复用标题、副标题、行动按钮等全部可见字符串。两个视觉方向只能改变布局、色彩、字体层级、组件形态与装饰处理，不得为制造差异改写同一编号的文案。"
+}
+
+const humanAcceptancePreparationRule = (item: WorkItem) =>
+  /人工.{0,8}验收|验收清单|复核准备/i.test(
+    `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+  )
+    ? "人工验收准备只按原始验收条件建立证据映射，不得擅自增加新的放行前提。系统核验是可供人工检查的有效内部证据，但绝不等于人工验收；除非原始验收条件明确要求某项必须另设独立 Reviewer，否则不得仅因该项只有系统核验而把它判为未通过。用户确认了日历日期但未确认具体时刻或时区时，只能保持为已确认日期与待确认的精确日程；除非原始验收条件明确要求具体时刻，不得把缺少精确时刻升级为阻塞成果验收的新条件。运行事实中的 project.status=completed 只表示机器工作项已完成，execution_assignment_released 只表示执行容量已结束；二者都不等于用户已验收或最终角色已释放。只有 user_delivery_accepted=true 才能表述为最终完成和最终释放；此前应表述为成果待人工验收、角色等待验收。"
+    : undefined
+
+const limitedRevisionRule = (userRevision?: string, baselineArtifact?: unknown) =>
+  userRevision
+    ? [
+        `有限修改白名单：${userRevision}`,
+        baselineArtifact
+          ? `用户发出修改请求前的同任务基线交付：${JSON.stringify(baselineArtifact)}`
+          : "当前未提供同任务基线交付；不得因此扩大修改范围。",
+        "修改请求中明确点名的成果和字段是唯一允许发生实质变化的白名单；所有未点名字段、模块、风险边界、方向和措辞必须与基线保持不变。组合任务中若用户只修改 D4 并明确 D5 保持不变，必须逐字保留基线 D5；若只修改标题和行动按钮，D4 其余模块也必须逐字保留。下游验收或复核任务只能更新由白名单变化必然导致的版本号、证据路径、摘要值和核验状态，不得改写其他实质内容。summary 必须逐项列出实际改动和保持不变的部分；无法证明未越界时不得声称完成。",
+      ].join("\n")
+    : undefined
 
 const deliveryAcceptanceLanguageRule =
   "工作项通过系统核验或独立复核，只能表述为“已完成系统核验”或“已完成内部复核”。只有用户接受项目整体交付后才能使用“已验收”；当前执行阶段不得把上游 D1、D2、D3 等交付项写成已验收。"
@@ -869,6 +1038,7 @@ const workerScript = (
   evidence: unknown,
   reviewFeedback?: { artifact_id: string; summary: string; findings: string[]; evidence_checked: string[] },
   userRevision?: string,
+  baselineArtifact?: unknown,
 ) =>
   workflow(
     `company-project-worker-${item.work_type}`,
@@ -905,6 +1075,13 @@ const workerScript = (
           boardBiddingEvidenceRule(item),
           quantitativeClarityRule(item),
           boardCloseoutWritebackRule(item),
+          projectArtifactPersistenceRule,
+          currentArtifactTraceRule(item),
+          calendarDateBoundaryRule,
+          designArtifactPersistenceRule(item),
+          stableCopyConsistencyRule(item, userRevision),
+          humanAcceptancePreparationRule(item),
+          limitedRevisionRule(userRevision, baselineArtifact),
           workItemRuntimeEvidenceRule,
           deliveryAcceptanceLanguageRule,
           `你独占的决策范围：${item.decision_scope.join("；") || "无"}`,
@@ -950,6 +1127,8 @@ const reviewerScript = (
   artifact: unknown,
   modelRef: string,
   evidence: unknown,
+  userRevision?: string,
+  baselineArtifact?: unknown,
 ) =>
   workflow(
     `company-project-review-${parent.work_type}`,
@@ -971,6 +1150,12 @@ const reviewerScript = (
           quantitativeClarityRule(parent),
           workItemRuntimeEvidenceRule,
           reviewerRuntimeEvidenceRule,
+          projectArtifactPersistenceRule,
+          calendarDateBoundaryRule,
+          reviewerDesignArtifactRule(parent),
+          stableCopyConsistencyRule(parent, userRevision),
+          humanAcceptancePreparationRule(parent),
+          limitedRevisionRule(userRevision, baselineArtifact),
           "你没有参与原任务。只根据交付物、证据和验收条件判断，不因执行者自述而放宽标准。",
           "复核结论必须使用非技术业务中文；禁止用单字母状态码或未解释缩写替代证据状态、风险和决定；内部实体 ID 只能作为追踪证据，不能作为主要结论。",
         ].join("\n"),
@@ -1305,7 +1490,9 @@ const serviceLayer = Layer.effect(
       }
     })
 
-    const persistSystemVerification = Effect.fn("CompanyProjectExecution.persistSystemVerification")(function* (
+    const persistVerificationEvidence = Effect.fn(
+      "CompanyProjectExecution.persistVerificationEvidence",
+    )(function* (
       input: {
         item: WorkItem
         artifact: Artifact
@@ -1313,19 +1500,6 @@ const serviceLayer = Layer.effect(
         worktree?: WorktreeRun
       },
     ) {
-      if (!["self_check", "machine"].includes(input.item.validation_mode))
-        throw new Error(`Work item ${input.item.id} requires independent validation`)
-      if (input.item.review_status !== "not_required")
-        throw new Error(`Work item ${input.item.id} cannot use system verification while review is required`)
-      if (
-        (yield* projects.listWorkItems(input.item.project_id)).some(
-          (candidate) =>
-            candidate.kind === "reviewer" &&
-            candidate.parent_id === input.item.id &&
-            !["superseded", "cancelled"].includes(candidate.status),
-        )
-      )
-        throw new Error(`Work item ${input.item.id} has an independent Reviewer`)
       if (!input.verification.passed)
         throw new Error(`Work item ${input.item.id} did not pass its Work Type verifier`)
       if (
@@ -1337,12 +1511,28 @@ const serviceLayer = Layer.effect(
         throw new Error(`Coding work item ${input.item.id} did not pass sandbox verification`)
       if (!input.artifact.content)
         throw new Error(`Delivery artifact ${input.artifact.id} has no persisted bytes`)
+      const existing = (yield* projects.listArtifacts(input.item.project_id)).find(
+        (candidate) =>
+          candidate.work_item_id === input.item.id &&
+          candidate.kind === "system_verification" &&
+          candidate.evidence.delivery_artifact_id === input.artifact.id,
+      )
+      if (existing) return existing
       const delivery_artifact_sha256 = new Bun.CryptoHasher("sha256")
         .update(input.artifact.content)
         .digest("hex")
+      const materialized_file = z
+        .object({
+          path: z.string(),
+          media_type: z.string(),
+          byte_length: z.number().int().positive(),
+          sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        })
+        .safeParse(input.artifact.evidence.host_materialized_file)
       const evidence = {
         accepted: true,
         authority: "control_plane",
+        phase: "pre_review",
         work_item_id: input.item.id,
         validation_mode: input.item.validation_mode,
         delivery_artifact_id: input.artifact.id,
@@ -1351,6 +1541,7 @@ const serviceLayer = Layer.effect(
           work_type: input.item.work_type,
           result: input.verification,
         },
+        ...(materialized_file.success ? { materialized_file: materialized_file.data } : {}),
         ...(input.worktree
           ? {
               sandbox: {
@@ -1372,10 +1563,37 @@ const serviceLayer = Layer.effect(
         evidence: {
           authority: evidence.authority,
           accepted: evidence.accepted,
+          phase: evidence.phase,
           delivery_artifact_id: evidence.delivery_artifact_id,
           delivery_artifact_sha256,
+          ...(materialized_file.success ? { materialized_file: materialized_file.data } : {}),
         },
       })
+      return artifact
+    })
+
+    const persistSystemVerification = Effect.fn("CompanyProjectExecution.persistSystemVerification")(function* (
+      input: {
+        item: WorkItem
+        artifact: Artifact
+        verification: VerifyResult
+        worktree?: WorktreeRun
+      },
+    ) {
+      if (!["self_check", "machine"].includes(input.item.validation_mode))
+        throw new Error(`Work item ${input.item.id} requires independent validation`)
+      if (input.item.review_status !== "not_required")
+        throw new Error(`Work item ${input.item.id} cannot use system verification while review is required`)
+      if (
+        (yield* projects.listWorkItems(input.item.project_id)).some(
+          (candidate) =>
+            candidate.kind === "reviewer" &&
+            candidate.parent_id === input.item.id &&
+            !["superseded", "cancelled"].includes(candidate.status),
+        )
+      )
+        throw new Error(`Work item ${input.item.id} has an independent Reviewer`)
+      const artifact = yield* persistVerificationEvidence(input)
       const criteria = input.item.acceptance_criteria.filter(
         (criterion) =>
           criterion !== "artifact_exists" && !/^artifact_sha256:[a-f0-9]{64}$/i.test(criterion),
@@ -1496,6 +1714,12 @@ const serviceLayer = Layer.effect(
           source_thread_id: project.source_thread_id,
           decision_request_id: project.decision_request_id,
           dri_agent_id: project.owner_agent_id,
+          user_delivery_accepted:
+            events
+              .filter((event) =>
+                ["delivery.accepted", "delivery.ready", "delivery.revision_requested"].includes(event.type),
+              )
+              .at(-1)?.type === "delivery.accepted",
           temporal_baseline: {
             source: "project_created_at",
             value: new Date(project.created_at).toISOString(),
@@ -1521,6 +1745,7 @@ const serviceLayer = Layer.effect(
           work_item_id: artifact.work_item_id,
           kind: artifact.kind,
           title: artifact.title,
+          path: artifact.path ? path.relative(project.output_dir, artifact.path) : null,
           content: artifact.content?.slice(0, artifact.kind === "attempt_failure" ? 2_000 : 8_000),
           evidence: artifact.evidence,
         })),
@@ -1532,6 +1757,15 @@ const serviceLayer = Layer.effect(
             type: event.type,
             actor_id: event.actor_id ?? null,
             data: event.data,
+          })),
+        project_control_events: events
+          .filter((event) => projectControlEventTypes.has(event.type))
+          .map((event) => ({
+            id: event.id,
+            type: event.type,
+            actor_id: event.actor_id ?? null,
+            data: event.data,
+            created_at: event.created_at,
           })),
         current_needs: currentNeeds.map((need) => ({
           id: need.id,
@@ -1552,7 +1786,7 @@ const serviceLayer = Layer.effect(
           source: selection.source,
           lifecycle_at_selection: selection.lifecycle_at_selection,
           reason: selection.reason,
-          released: Boolean(selection.time_released),
+          execution_assignment_released: Boolean(selection.time_released),
         })),
         selected_agents: selectedAgents.flatMap((agent) =>
           agent
@@ -1577,7 +1811,7 @@ const serviceLayer = Layer.effect(
           source: selection.source,
           lifecycle_at_selection: selection.lifecycle_at_selection,
           reason: selection.reason,
-          released: Boolean(selection.time_released),
+          execution_assignment_released: Boolean(selection.time_released),
         })),
         history_needs:
           organization?.needs
@@ -2090,14 +2324,22 @@ const serviceLayer = Layer.effect(
                 }),
                 acceptanceVerification(item, parsed.summary, parsed.submission),
               )
+              const content = `${JSON.stringify(parsed, null, 2)}\n`
+              const materializedFile =
+                designArtifactFile(item, parsed.submission) ?? structuredArtifactFile(item, content)
               const artifact = yield* projects.addArtifact({
                 project_id: project.id,
                 work_item_id: item.id,
                 kind: item.work_type,
                 title: artifactTitle(item, parsed.submission),
-                path: `artifacts/${item.id}.json`,
-                content: `${JSON.stringify(parsed, null, 2)}\n`,
-                evidence: { work_type_verification: verification },
+                path: materializedFile.path,
+                content,
+                file_content: materializedFile.content,
+                evidence: {
+                  work_type_verification: verification,
+                  content_sha256: new Bun.CryptoHasher("sha256").update(content).digest("hex"),
+                  host_materialized_file: materializedFile.evidence,
+                },
                 created_by_agent_id: item.owner_agent_id,
               })
               if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
@@ -2271,11 +2513,28 @@ const serviceLayer = Layer.effect(
       if (!charter) throw new Error("Project Charter is missing")
       const gates = yield* projects.listGates(project.id)
       const evidence = yield* evidenceSnapshot(project)
-      const revisionEvent = (yield* projects.listEvents(project.id)).findLast(
+      const projectEvents = yield* projects.listEvents(project.id)
+      const revisionEvent = projectEvents.findLast(
         (event) => event.type === "delivery.revision_requested",
       )
       const userRevision =
         revisionEvent && typeof revisionEvent.data.reason === "string" ? revisionEvent.data.reason : undefined
+      const revisionEventIndex = revisionEvent
+        ? projectEvents.findIndex((event) => event.id === revisionEvent.id)
+        : -1
+      const revisionBaselineArtifactIDs = new Set(
+        revisionEventIndex < 0
+          ? []
+          : z
+              .object({ artifact_ids: z.array(z.string()) })
+              .passthrough()
+              .safeParse(
+                projectEvents
+                  .slice(0, revisionEventIndex)
+                  .findLast((event) => event.type === "delivery.ready")
+                  ?.data,
+              ).data?.artifact_ids ?? [],
+      )
       const assignments = yield* recruitment.listAssignments({ project_id })
       const gated = ready.filter(
         (item) =>
@@ -2334,10 +2593,17 @@ const serviceLayer = Layer.effect(
                 (candidate) => candidate.id === item.parent_id,
               )
               if (!parent) throw new Error(`Reviewer parent not found: ${item.parent_id}`)
-              const artifact = (yield* projects.listArtifacts(project.id)).findLast(
-                (candidate) => candidate.work_item_id === parent.id && candidate.kind !== "attempt_failure",
+              const projectArtifacts = yield* projects.listArtifacts(project.id)
+              const artifact = projectArtifacts.findLast(
+                (candidate) => candidate.work_item_id === parent.id && candidate.kind === parent.work_type,
               )
               if (!artifact) throw new Error(`Reviewer has no artifact for ${parent.id}`)
+              const baselineArtifact = projectArtifacts.find(
+                (candidate) =>
+                  revisionBaselineArtifactIDs.has(candidate.id) &&
+                  candidate.work_item_id === parent.id &&
+                  candidate.kind === parent.work_type,
+              )
               yield* projects.setWorkItemReview({ id: parent.id, review_status: "running" })
               const worktree =
                 parent.work_type === "coding"
@@ -2358,6 +2624,8 @@ const serviceLayer = Layer.effect(
                     artifact.content ? JSON.parse(artifact.content) : artifact.evidence,
                     agentModelRef(project, parent.risk_level === "high" ? "ultra" : "standard"),
                     evidence,
+                    userRevision,
+                    baselineArtifact?.content ? JSON.parse(baselineArtifact.content) : baselineArtifact?.evidence,
                   ),
                   workspace: worktree?.directory,
                   permission_mode: "read_only",
@@ -2368,8 +2636,9 @@ const serviceLayer = Layer.effect(
             const reviewer = (yield* projects.listWorkItems(project.id)).find(
               (candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id,
             )
+            const projectArtifacts = yield* projects.listArtifacts(project.id)
             const reviewArtifact = reviewer
-              ? (yield* projects.listArtifacts(project.id)).findLast(
+              ? projectArtifacts.findLast(
                   (candidate) =>
                     candidate.work_item_id === reviewer.id &&
                     candidate.kind === "independent_review" &&
@@ -2382,6 +2651,12 @@ const serviceLayer = Layer.effect(
                   ...reviewResult.parse(JSON.parse(reviewArtifact.content)),
                 }
               : undefined
+            const baselineArtifact = projectArtifacts.find(
+              (candidate) =>
+                revisionBaselineArtifactIDs.has(candidate.id) &&
+                candidate.work_item_id === item.id &&
+                candidate.kind === item.work_type,
+            )
             const worktree =
               item.work_type === "coding"
                 ? yield* projects.createWorktreeRun({ project_id: project.id, work_item_id: item.id })
@@ -2403,6 +2678,7 @@ const serviceLayer = Layer.effect(
                   evidence,
                   reviewFeedback,
                   userRevision,
+                  baselineArtifact?.content ? JSON.parse(baselineArtifact.content) : baselineArtifact?.evidence,
                 ),
                 workspace: worktree?.directory,
                 permission_mode: workerPermission(
@@ -2441,14 +2717,22 @@ const serviceLayer = Layer.effect(
                   }),
                   acceptanceVerification(item, parsed.summary, parsed.submission),
                 )
+                const content = `${JSON.stringify(parsed, null, 2)}\n`
+                const materializedFile =
+                  designArtifactFile(item, parsed.submission) ?? structuredArtifactFile(item, content)
                 const artifact = yield* projects.addArtifact({
                   project_id: project.id,
                   work_item_id: item.id,
                   kind: item.work_type,
                   title: artifactTitle(item, parsed.submission),
-                  path: `artifacts/${item.id}.json`,
-                  content: JSON.stringify(parsed, null, 2) + "\n",
-                  evidence: { work_type_verification: verification },
+                  path: materializedFile.path,
+                  content,
+                  file_content: materializedFile.content,
+                  evidence: {
+                    work_type_verification: verification,
+                    content_sha256: new Bun.CryptoHasher("sha256").update(content).digest("hex"),
+                    host_materialized_file: materializedFile.evidence,
+                  },
                   created_by_agent_id: item.owner_agent_id,
                 })
                 if (!verification.passed) return yield* failure(item, verification.findings.join("; "))
@@ -2480,6 +2764,7 @@ const serviceLayer = Layer.effect(
                   (candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id,
                 )
                 if (reviewer) {
+                  yield* persistVerificationEvidence({ item, artifact, verification, worktree: verified })
                   yield* projects.setWorkItemReview({ id: item.id, review_status: "pending" })
                   yield* projects.recordEvent({
                     project_id: project.id,
@@ -2561,7 +2846,7 @@ const serviceLayer = Layer.effect(
               if (!parsed.evidence_checked.length)
                 throw new Error(`Reviewer ${item.id} accepted without checked evidence`)
               const parentArtifact = (yield* projects.listArtifacts(project.id)).findLast(
-                (candidate) => candidate.work_item_id === parent.id && candidate.kind !== "attempt_failure",
+                (candidate) => candidate.work_item_id === parent.id && candidate.kind === parent.work_type,
               )
               if (!parentArtifact?.content) throw new Error(`Reviewer parent ${parent.id} has no persisted artifact`)
               const parentArtifactSha = new Bun.CryptoHasher("sha256").update(parentArtifact.content).digest("hex")
@@ -2752,27 +3037,30 @@ const serviceLayer = Layer.effect(
         open_decisions: parsed.open_decisions,
         acceptance_criteria: parsed.acceptance_criteria,
       })
-      const tasks = savedProjection?.tasks
-        ? savedProjection.tasks
-        : (
-            yield* delegation.decompose({
-              goal: input.project.goal,
-              context: [
-                `Project Charter: ${JSON.stringify(parsed)}`,
-                "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
-                "Preserve every explicit numbered deliverable mapping exactly. A task for D1, D2, D3, or another numbered deliverable must include every requirement and acceptance criterion assigned to that same label, and must never move a hard rule to a sibling deliverable.",
-                "The planner never implements and workers never redesign sibling tasks.",
-                deliveryAcceptanceLanguageRule,
-                localExecutionBoundary,
-              ].join("\n"),
-              sessionID: input.project.coordinator_session_id!,
-              delegatorAgentID: input.item.owner_agent_id!,
-              actorAgentType: "general",
-            })
-          )
-            .map(normalizeExecutableTask)
-            .map(normalizeOutputQualityTask)
-            .map(normalizeTaskAcceptanceLanguage)
+      const tasks = normalizeStableCopyDependencies(
+        savedProjection?.tasks
+          ? savedProjection.tasks
+          : (
+              yield* delegation.decompose({
+                goal: input.project.goal,
+                context: [
+                  `Project Charter: ${JSON.stringify(parsed)}`,
+                  "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
+                  "Preserve every explicit numbered deliverable mapping exactly. A task for D1, D2, D3, or another numbered deliverable must include every requirement and acceptance criterion assigned to that same label, and must never move a hard rule to a sibling deliverable.",
+                  "When a visual deliverable and a copy deliverable share stable content IDs, schedule the copy deliverable first and make the visual deliverable depend on it. The visual deliverable must reuse the exact visible strings for each shared ID; visual directions may differ in composition and styling, not wording.",
+                  "The planner never implements and workers never redesign sibling tasks.",
+                  deliveryAcceptanceLanguageRule,
+                  localExecutionBoundary,
+                ].join("\n"),
+                sessionID: input.project.coordinator_session_id!,
+                delegatorAgentID: input.item.owner_agent_id!,
+                actorAgentType: "general",
+              })
+            )
+              .map(normalizeExecutableTask)
+              .map(normalizeOutputQualityTask)
+              .map(normalizeTaskAcceptanceLanguage),
+      )
       const keys = validateTasks(tasks)
       const sourceKeys = keys.map(stableLogicalKey)
       if (new Set(sourceKeys).size !== sourceKeys.length)

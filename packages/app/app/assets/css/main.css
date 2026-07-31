@@ -1402,6 +1402,45 @@ html.dark .shiki span {
   margin-top: 22px;
 }
 
+.ac-brief-disclosure {
+  padding-top: 14px;
+  border-top: 1px solid var(--ac-line);
+}
+
+.ac-brief-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ac-ink-dimmed);
+  font-size: 10px;
+  font-weight: 660;
+  letter-spacing: 0.08em;
+  list-style: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ac-brief-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ac-brief-disclosure > summary small {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--ac-canvas);
+  color: var(--ac-ink-muted);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.ac-brief-disclosure > p,
+.ac-brief-disclosure > ul {
+  margin-top: 12px;
+}
+
 .ac-brief-constraints li {
   margin-top: 8px;
   color: var(--ac-ink-muted);
@@ -2899,7 +2938,7 @@ textarea:focus-visible {
 /* WORK-02 — 三栏高信号工作区：左选工作 / 中高信号工作流 / 右上下文面板，各栏独立滚动 */
 .ac-work3 {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 344px;
+  grid-template-columns: 224px minmax(0, 1fr) 320px;
   height: 100%;
   min-height: 0;
 }
@@ -2952,7 +2991,31 @@ textarea:focus-visible {
 }
 
 .ac-work3__main {
-  padding: 40px 40px 64px;
+  padding: 36px 36px 64px;
+}
+
+.ac-work3__main .ac-workspace-header {
+  margin-bottom: 20px;
+}
+
+.ac-work3__main .ac-workspace-title {
+  max-width: 760px;
+  font-size: clamp(28px, 3vw, 40px);
+  letter-spacing: -0.035em;
+}
+
+.ac-workspace-goal {
+  display: -webkit-box;
+  max-width: 760px;
+  margin-top: 12px;
+  overflow: hidden;
+  color: var(--ac-ink);
+  font-size: var(--ac-text-lead);
+  font-weight: 610;
+  line-height: 1.55;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* WORK-07 — 运行控制动作条：主动作高亮，禁用态弱化并保留悬停原因 */
@@ -2973,11 +3036,16 @@ textarea:focus-visible {
   font-weight: 560;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    transform 100ms ease;
 }
 
 .ac-work3__action:hover:not(:disabled) {
   background: var(--ac-surface);
+}
+
+.ac-work3__action:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .ac-work3__action[data-primary="true"]:not(:disabled) {
@@ -3008,6 +3076,273 @@ textarea:focus-visible {
   background: var(--ac-surface);
   color: var(--ac-ink);
   font-weight: 600;
+}
+
+.ac-runtime-boundary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin-bottom: 26px;
+  border-radius: var(--ac-radius-panel);
+  background: var(--ac-surface-raised);
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgb(39 31 24 / 10%);
+}
+
+.ac-runtime-boundary > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.ac-runtime-boundary span {
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+}
+
+.ac-runtime-boundary strong {
+  overflow-wrap: anywhere;
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.ac-runtime-boundary p {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--ac-line);
+  padding-top: 12px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-min);
+  line-height: 1.65;
+}
+
+.ac-formed-team {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 26px;
+  border-block: 1px solid var(--ac-line);
+  padding-block: 18px;
+}
+
+.ac-formed-team__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.ac-formed-team__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ac-formed-team__heading strong {
+  color: var(--ac-ink);
+  font-size: var(--ac-text-body);
+}
+
+.ac-formed-team__heading button {
+  min-height: 40px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+  font-weight: 620;
+  transition:
+    color 140ms ease,
+    transform 100ms ease;
+}
+
+.ac-formed-team__heading button:hover {
+  color: var(--ac-ink);
+}
+
+.ac-formed-team__heading button:active {
+  transform: scale(0.96);
+}
+
+.ac-formed-team ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.ac-formed-team li {
+  display: flex;
+  min-width: 180px;
+  align-items: center;
+  gap: 9px;
+}
+
+.ac-formed-team li > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ac-sidebar);
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 680;
+}
+
+.ac-formed-team li > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ac-formed-team li strong {
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+}
+
+.ac-formed-team li small {
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+}
+
+.ac-delivery-focus {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.72fr) minmax(280px, 1.28fr);
+  gap: 18px 26px;
+  margin-bottom: 28px;
+  border-radius: var(--ac-radius-panel);
+  background: var(--ac-surface-raised);
+  padding: 22px;
+  box-shadow: 0 2px 12px rgb(39 31 24 / 10%);
+}
+
+.ac-delivery-focus h2 {
+  margin-top: 5px;
+  color: var(--ac-ink);
+  font-size: 20px;
+  font-weight: 690;
+  letter-spacing: -0.02em;
+}
+
+.ac-delivery-focus > div > p:last-child {
+  max-width: 32ch;
+  margin-top: 8px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+  line-height: 1.6;
+}
+
+.ac-delivery-focus nav {
+  display: grid;
+  gap: 1px;
+  align-self: start;
+  background: var(--ac-line);
+}
+
+.ac-delivery-focus nav a {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  background: var(--ac-surface-raised);
+  padding: 9px 10px;
+  transition:
+    background-color 140ms ease,
+    transform 100ms ease;
+}
+
+.ac-delivery-focus nav a:hover {
+  background: var(--ac-canvas);
+}
+
+.ac-delivery-focus nav a:active {
+  transform: scale(0.98);
+}
+
+.ac-delivery-focus nav span {
+  color: var(--ac-ink-dimmed);
+  font-size: var(--ac-text-min);
+}
+
+.ac-delivery-focus nav strong {
+  overflow: hidden;
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-delivery-focus nav svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ac-ink-muted);
+}
+
+.ac-delivery-focus > a {
+  grid-column: 1 / -1;
+  width: max-content;
+  min-height: 40px;
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 650;
+  line-height: 40px;
+}
+
+.ac-revision-preview {
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid var(--ac-ink);
+  background: var(--ac-sidebar);
+  padding: 12px 14px;
+}
+
+.ac-revision-preview strong {
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 680;
+}
+
+.ac-revision-preview p:not(.ac-card-kicker),
+.ac-revision-preview small {
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-min);
+  line-height: 1.55;
+}
+
+.ac-team-member {
+  display: grid;
+  gap: 9px;
+  border-bottom: 1px solid var(--ac-line);
+  padding: 14px 0;
+}
+
+.ac-team-member header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ac-team-member header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.ac-team-member h3 {
+  color: var(--ac-ink);
+  font-size: var(--ac-text-caption);
+  font-weight: 680;
+}
+
+.ac-team-member p,
+.ac-team-member span {
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-min);
+  line-height: 1.55;
+}
+
+.ac-team-member p strong {
+  color: var(--ac-ink);
+  font-weight: 650;
 }
 
 /* DELIV-04 — Gate 决策面：说明输入 + 决策动作 + 契约边界说明 */
@@ -3164,6 +3499,16 @@ textarea:focus-visible {
   padding: 20px 16px 40px;
 }
 
+@media (max-width: 1440px) and (min-width: 961px) {
+  .ac-work3 {
+    grid-template-columns: minmax(0, 1fr) 304px;
+  }
+
+  .ac-work3__list {
+    display: none;
+  }
+}
+
 /* WORK-02 — 窄屏不压缩三栏，改为按 list → main → context 优先级单栏切换 */
 @media (max-width: 960px) {
   .ac-work3 {
@@ -3183,6 +3528,32 @@ textarea:focus-visible {
 
   .ac-work3__mobile-bar {
     display: flex;
+  }
+}
+
+@media (max-width: 720px) {
+  .ac-work3__main {
+    padding: 24px 18px 48px;
+  }
+
+  .ac-runtime-boundary,
+  .ac-delivery-focus {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-runtime-boundary p,
+  .ac-delivery-focus > a {
+    grid-column: auto;
+  }
+
+  .ac-formed-team__heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ac-delivery-focus nav strong {
+    white-space: normal;
   }
 }
 

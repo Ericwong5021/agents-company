@@ -16,21 +16,23 @@ defineEmits<{
   <section class="ac-onboarding" aria-labelledby="ac-onboarding-title">
     <div class="ac-onboarding__intro">
       <span class="ac-onboarding__eyebrow">开始使用</span>
-      <h2 id="ac-onboarding-title">用本地 AI 团队交付第一个目标</h2>
+      <h2 id="ac-onboarding-title">把一个目标交给会自己组队的 Agent 公司</h2>
       <p>
-        选择连接你的真实本地工作区开始正式使用，或先查看一个明确标注的演示，了解团队如何组织与交付。
+        Agent 会按目标发现所需角色、临时组队、拆分工作并交付成果。你保留方向调整、外部动作授权和最终验收权。
       </p>
     </div>
 
     <div class="ac-onboarding__choices" role="group" aria-label="选择开始方式">
       <button type="button" class="ac-onboarding__choice" data-variant="real" @click="$emit('real')">
         <span class="ac-onboarding__choice-icon" aria-hidden="true"><UIcon name="i-lucide-plug" /></span>
-        <span class="ac-onboarding__choice-title">连接真实工作区</span>
+        <span class="ac-onboarding__choice-title">
+          {{ providerConfigured ? "创建真实工作" : "连接模型服务" }}
+        </span>
         <span class="ac-onboarding__choice-desc">
           {{
             providerConfigured
-              ? "已有模型服务配置；发送目标时会实际调用，此处未单独实时测试。"
-              : "先连接模型服务，完成后直接进入目标输入。"
+              ? "目标会发送给当前模型服务；开始后，团队将围绕这项工作动态形成。"
+              : "先完成模型连接，再输入目标并让团队动态形成。"
           }}
         </span>
         <span class="ac-onboarding__choice-cta">

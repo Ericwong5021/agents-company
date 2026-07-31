@@ -181,8 +181,23 @@ function actionEffectResult(action_id: string) {
   return Database.use((db) => actionEffectResultWithDatabase(db, action_id))
 }
 
-const revisionReferences = (value: string) =>
+const revisionReferencesIn = (value: string) =>
   new Set([...value.matchAll(/D(?:10|[1-9])/gi)].map((match) => match[0]!.toUpperCase()))
+
+const revisionReferences = (value: string) => {
+  const focused = value.match(
+    /(?:重点|仅|只)(?:需要|需)?(?:更新|修改|调整|重做|重写|修订)?([^。；;\n]+)/i,
+  )?.[1]
+  const focusedReferences = focused ? revisionReferencesIn(focused) : new Set<string>()
+  return focusedReferences.size ? focusedReferences : revisionReferencesIn(value)
+}
+
+const workItemRevisionReferences = (item: typeof CompanyWorkItemTable.$inferSelect) => {
+  const sourceReferences = revisionReferencesIn(item.source_task_key ?? "")
+  if (sourceReferences.size) return sourceReferences
+  const titleReference = item.title.match(/D(?:10|[1-9])/i)?.[0]
+  return titleReference ? new Set([titleReference.toUpperCase()]) : new Set<string>()
+}
 
 const revisionTopicRules = [
   /预算|金额|小计|总计|结余|预备金|单价|成本|报价|budget|subtotal|total|cost/i,
@@ -206,12 +221,9 @@ function revisionWorkItemIDs(input: {
   const deliveryItems = input.work_items.filter((item) => delivered.has(item.id))
   const requestedReferences = revisionReferences(input.reason)
   let roots = requestedReferences.size
-    ? deliveryItems.filter((item) => {
-        const references = revisionReferences(
-          `${item.title}\n${item.description}\n${item.acceptance_criteria_json}`,
-        )
-        return [...requestedReferences].some((reference) => references.has(reference))
-      })
+    ? deliveryItems.filter((item) =>
+        [...requestedReferences].some((reference) => workItemRevisionReferences(item).has(reference)),
+      )
     : []
   if (!roots.length) {
     const topics = revisionTopicRules.filter((pattern) => pattern.test(input.reason))
@@ -1072,12 +1084,71 @@ export function makeLayer(hooks: Hooks = {}) {
                 .sort((left, right) => left.id.localeCompare(right.id))
               if (!retryable.length) throw new Error("no_retryable_work_items")
               const now = Date.now()
+              const targetAttention = action.attention_id
+                ? db
+                    .select()
+                    .from(CompanyAttentionTable)
+                    .where(eq(CompanyAttentionTable.id, action.attention_id))
+                    .get()
+                : undefined
+              if (action.attention_id && targetAttention?.project_id !== action.project_id)
+                throw new Error("retry_attention_project_mismatch")
+              const targetAttentions = targetAttention
+                ? [targetAttention]
+                : action.attention_id
+                  ? []
+                  : db
+                      .select()
+                      .from(CompanyAttentionTable)
+                      .where(and(
+                        eq(CompanyAttentionTable.project_id, action.project_id),
+                        eq(CompanyAttentionTable.status, "open"),
+                        eq(CompanyAttentionTable.issue_kind, "unresolved_material_risk"),
+                      ))
+                      .all()
+                      .filter(attention =>
+                        /(?:Seed project|Project) has exhausted a work-item retry budget/i.test(attention.summary),
+                      )
+              targetAttentions.forEach((attention) => {
+                const resolution = payload.reason ?? "用户请求重试"
+                db.update(CompanyAttentionTable)
+                  .set({
+                    status: "resolved",
+                    resolution,
+                    version: attention.version + 1,
+                    updated_at: now,
+                    resolved_at: now,
+                  })
+                  .where(and(
+                    eq(CompanyAttentionTable.id, attention.id),
+                    eq(CompanyAttentionTable.status, "open"),
+                  ))
+                  .run()
+                event(db, action.project_id, "attention.closed", {
+                  attention_id: attention.id,
+                  version: attention.version + 1,
+                  resolution,
+                  action_id: action.id,
+                })
+              })
               retryable.forEach((item) =>
                 db
                   .update(CompanyWorkItemTable)
                   .set({
                     status: "pending",
-                    max_attempts: Math.max(item.max_attempts, item.attempt + 1),
+                    max_attempts: Math.min(
+                      100,
+                      Math.max(
+                        item.max_attempts,
+                        item.attempt +
+                          Math.max(
+                            1,
+                            ...projectItems
+                              .filter((candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id)
+                              .map((candidate) => candidate.max_attempts - candidate.attempt),
+                          ),
+                      ),
+                    ),
                     error: null,
                     workflow_run_id: null,
                     completed_at: null,

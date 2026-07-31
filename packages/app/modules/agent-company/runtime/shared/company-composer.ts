@@ -13,7 +13,7 @@ export function composerTargetLabel(target: ComposerTarget): string {
 
 export function composerIntentHint(target: ComposerTarget): string {
   if (target.kind === "board") return "作为新目标或公司讨论发出，由本地服务按意图分类路由。"
-  return "记录到项目讨论，不会创建新项目或修改已启动计划；需要变更时请使用运行控制。"
+  return "记录到项目讨论，不会触发团队自动回复或修改已启动计划；需要变更时请使用运行控制。"
 }
 
 export const MAX_MENTIONS = 20
@@ -53,7 +53,7 @@ export function draftStorageKey(target: ComposerTarget): string {
 export const composerQuickIntents = [
   { id: "adjust", label: "提出调整建议", prefix: "调整建议：" },
   { id: "constraint", label: "补充背景", prefix: "补充背景：" },
-  { id: "summary", label: "请求总结", prefix: "请求总结：" },
+  { id: "summary", label: "记录总结请求", prefix: "总结请求：" },
 ] as const
 
 export function applyQuickIntent(body: string, prefix: string): string {

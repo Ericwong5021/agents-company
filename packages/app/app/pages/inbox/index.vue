@@ -60,6 +60,7 @@ const newGoalOpen = ref(route.query.newGoal === "1");
 const previousGoalDraft = ref("");
 const newGoalFeedback = ref("");
 const goalDraftInput = ref<HTMLTextAreaElement>();
+const goalDraftSection = ref<HTMLElement>();
 const draftStorageAvailable = ref(true);
 const onboarding = ref<OnboardingState>(parseOnboardingState(null));
 const onboardingHydrated = ref(false);
@@ -359,7 +360,10 @@ onMounted(async () => {
   await nextTick();
   draftHydrated.value = true;
   if (stored.request) await recoverGeneratedGoalBrief(stored.request.requestId, stored.request.goal);
-  if (newGoalOpen.value) goalDraftInput.value?.focus();
+  if (newGoalOpen.value) {
+    goalDraftSection.value?.scrollIntoView({ block: "start" });
+    goalDraftInput.value?.focus();
+  }
 });
 
 watch(
@@ -368,6 +372,7 @@ watch(
     if (value !== "1") return;
     newGoalOpen.value = true;
     await nextTick();
+    goalDraftSection.value?.scrollIntoView({ behavior: "smooth", block: "start" });
     goalDraftInput.value?.focus();
   },
 );
@@ -408,6 +413,7 @@ async function openNewGoal() {
     ? "新的空白目标草稿已建立；上一份本地草稿已保留。"
     : "新的空白目标草稿已建立。";
   await nextTick();
+  goalDraftSection.value?.scrollIntoView({ behavior: "smooth", block: "start" });
   goalDraftInput.value?.focus();
 }
 
@@ -1155,6 +1161,7 @@ async function startGoalBrief(brief: GoalBrief) {
 
         <section
           v-if="showGoalDraft && !welcomeStage"
+          ref="goalDraftSection"
           class="ac-empty-state"
           :class="{ 'ac-empty-state--with-connection': !available }"
         >
@@ -1220,6 +1227,14 @@ async function startGoalBrief(brief: GoalBrief) {
                   }}
                 </span>
                 <UButton
+                  v-if="snapshot.company.providerConfigured === false"
+                  color="neutral"
+                  to="/settings"
+                >
+                  先连接模型服务
+                </UButton>
+                <UButton
+                  v-else
                   color="neutral"
                   :loading="generating"
                   :disabled="!canGenerate"

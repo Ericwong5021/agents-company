@@ -874,6 +874,14 @@ async function saveProvider() {
             <p class="company-provider-form__message">重新开始引导会清除本机的演示与引导标记，不影响任何真实公司数据。</p>
           </section>
 
+          <details>
+            <summary class="company-settings-section cursor-pointer">
+              <strong class="block text-sm text-highlighted">高级治理与创始人代理</strong>
+              <span class="mt-2 block text-sm text-muted">
+                默认收起。日常使用无需处理；仅在你要配置创始人代理、治理资产或校准时展开。
+              </span>
+            </summary>
+            <div class="mt-5 grid gap-5">
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
@@ -1454,6 +1462,8 @@ async function saveProvider() {
             <p v-if="studioMessage" class="company-provider-form__message" role="status">{{ studioMessage }}</p>
           </section>
 
+            </div>
+          </details>
         </div>
       </div>
     </template>

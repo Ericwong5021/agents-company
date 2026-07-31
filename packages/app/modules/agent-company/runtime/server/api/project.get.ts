@@ -156,6 +156,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       : undefined,
     workItems: records(raw.work_items).map((item) => ({
       id: text(item.id),
+      sourceTaskKey: text(item.source_task_key) || undefined,
       title: text(item.title),
       status: text(item.status),
       kind: text(item.kind),

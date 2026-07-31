@@ -18,6 +18,7 @@ const browserMediaTypes = new Set([
   "image/gif",
   "image/jpeg",
   "image/png",
+  "image/svg+xml",
   "image/webp",
 ])
 const descriptorDirectory = process.platform === "linux" ? "/proc/self/fd" : "/dev/fd"
@@ -156,6 +157,15 @@ export function read(projectID: string, artifactID: string) {
     kind: row.kind,
     title: row.title,
   })
+  if (row.path && !row.path.toLowerCase().endsWith(".json")) {
+    const view = fileView({
+      ...artifact,
+      outputDirectory: project.output_dir,
+      path: row.path,
+      createdAt: row.created_at,
+    })
+    if (view) return { status: "available" as const, artifact: view }
+  }
   if (
     row.content !== null &&
     Buffer.byteLength(row.content) > 0 &&

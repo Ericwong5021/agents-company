@@ -31,6 +31,7 @@ const props = defineProps<{
   }[]
   pending: boolean
   failed: boolean
+  awaitingUserAcceptance: boolean
 }>()
 
 const assignments = computed(() => availableAssignments(props.organization))
@@ -80,6 +81,11 @@ function workStatus(status?: string) {
     cancelled: "已取消",
   }
   return status ? (labels[status] ?? status) : "尚未建立"
+}
+
+function assignmentStatusLabel(status: keyof typeof assignmentStatusLabels) {
+  if (status === "released" && props.awaitingUserAcceptance) return "执行已结束 · 等待你验收"
+  return assignmentStatusLabels[status]
 }
 
 function seedMode(mode?: string) {
@@ -144,7 +150,7 @@ function seedMode(mode?: string) {
           </div>
           <p class="ac-assignment-row__responsibility">{{ assignment.responsibility }}</p>
           <span class="ac-status-badge" :data-status="assignment.status">
-            {{ assignmentStatusLabels[assignment.status] }}
+            {{ assignmentStatusLabel(assignment.status) }}
           </span>
           <details class="ac-source-trace">
             <summary>加入依据</summary>

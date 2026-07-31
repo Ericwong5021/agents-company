@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   AttentionItem,
+  DeliveryArtifactRef,
   ExperienceWorkActionRequest,
   ExperienceWorkActionResult,
   GoalBriefProjectView,
@@ -139,6 +140,8 @@ const seedProject = computed(() => detail.value?.project.executionStrategy === "
 const seedGrowPending = computed(() => seedGrowStatus.value === "pending")
 const coordinatedRefreshPendingProject = ref<string>()
 const coordinatedRefreshDirty = ref<Record<string, boolean>>({})
+const runtimeRefreshPending = ref(false)
+const runtimeRefreshTimer = ref<ReturnType<typeof setInterval>>()
 
 function clearCoordinatedRefreshDirty(projectID: string) {
   const next = { ...coordinatedRefreshDirty.value }
@@ -169,6 +172,14 @@ async function refreshProjectExperience(projectID = workID.value) {
   await refreshProjectExperience(nextProjectID)
 }
 
+function refreshRuntimeExperience() {
+  if (runtimeRefreshPending.value) return
+  runtimeRefreshPending.value = true
+  void Promise.all([refresh(), refreshDetail()]).finally(() => {
+    runtimeRefreshPending.value = false
+  })
+}
+
 async function refreshRestoredProject() {
   restoringWork.value = true
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -196,22 +207,128 @@ const acceptanceItems = computed(() =>
 const deliveryArtifacts = computed(() =>
   work.value?.availability === "available" ? work.value.delivery?.artifacts ?? [] : [],
 )
+const currentDeliveryVersion = computed(() =>
+  work.value?.availability === "available" ? work.value.delivery?.version : undefined,
+)
+const workspaceHeadline = computed(() => {
+  if (work.value?.availability !== "available") return ""
+  const projection = work.value
+  const artifactCount = projection.delivery?.artifacts.length ?? 0
+  if (projection.summary.userStatus === "accepted") return "交付已验收"
+  if (projection.delivery && projection.summary.needsUserAction)
+    return `${artifactCount} 项成果待你验收`
+  if (projection.summary.needsUserAction) return "团队需要你的决定"
+  if (projection.summary.userStatus === "paused") return "工作已暂停"
+  if (projection.progress.totalItems)
+    return `${projection.progress.completedItems} / ${projection.progress.totalItems} 项工作已完成`
+  return humanLabel(projection.summary.phase)
+})
+const featuredDeliveryArtifacts = computed(() => {
+  const prioritized = deliveryArtifacts.value.filter(artifact =>
+    /视觉|设计|界面|画布|线框|原型|图稿|稿件/.test(artifact.title),
+  )
+  const seen = new Set<string>()
+  return [...prioritized, ...deliveryArtifacts.value].filter((artifact) => {
+    if (seen.has(artifact.id)) return false
+    seen.add(artifact.id)
+    return true
+  }).slice(0, 3)
+})
+const workModelLabels = computed(() => [
+  ...new Set((detail.value?.agentRuns ?? []).flatMap(run =>
+    run.model ? [run.model.split("/").at(-1) ?? run.model] : [])),
+])
+const workUsageSummary = computed(() => {
+  const usage = detail.value?.usage
+  if (!usage) return "用量与费用暂不可见"
+  const hasTokenUsage = usage.total > 0 || usage.input > 0 || usage.output > 0
+  const tokens = hasTokenUsage ? `${usage.total.toLocaleString()} tokens` : "用量未返回"
+  const cost = usage.cost > 0 ? `费用 ${usage.cost.toLocaleString()}` : "费用未返回，请以 Provider 账单为准"
+  return `${usage.runCount} 次模型运行 · ${tokens} · ${cost}${hasTokenUsage || usage.cost > 0 ? "" : "，不能按 0 计算"}`
+})
+const formedTeamMembers = computed(() => {
+  const seen = new Set<string>()
+  return (detail.value?.recruitment.selections ?? []).flatMap((selection) => {
+    if (selection.decision !== "selected" || seen.has(selection.agentID)) return []
+    seen.add(selection.agentID)
+    return [{
+      id: selection.agentID,
+      name: agentDisplayName(selection.agentID),
+      role: detail.value?.recruitment.needs.find(need => need.id === selection.capabilityNeedID)?.role
+        ?? "项目角色",
+      reason: selection.reason.replace(/^入选[：:]\s*/, "").split("。")[0],
+      released: selection.released,
+      active: detail.value?.workItems.some(item =>
+        item.ownerAgentID === selection.agentID
+        && !["completed", "superseded", "cancelled"].includes(item.status),
+      ) ?? false,
+      responsibilities: detail.value?.workItems
+        .filter(item => item.ownerAgentID === selection.agentID && item.kind !== "project_planning")
+        .map(item => humanLabel(item.role || item.title))
+        .filter((item, index, values) => values.indexOf(item) === index)
+        .slice(0, 3) ?? [],
+    }]
+  })
+})
 
-function acceptanceEvidenceArtifacts(item: AcceptanceChecklistItem, index: number) {
+function memberStatusLabel(member: { released: boolean; active: boolean }) {
+  if (member.active) return "正在参与"
+  if (work.value?.availability === "available" && work.value.delivery && !deliveryAccepted.value)
+    return "任务已结束 · 等待你验收"
+  if (member.released) return "任务已结束 · 执行分配已结束"
+  return "任务已结束"
+}
+
+function artifactDeliverableIDs(artifact: DeliveryArtifactRef) {
+  const persisted = detail.value?.artifacts.find(candidate => candidate.id === artifact.id)
+  const item = detail.value?.workItems.find(candidate => candidate.id === persisted?.workItemID)
+  return new Set([
+    ...`${item?.sourceTaskKey ?? ""}`.matchAll(/D(?:10|[1-9])/gi),
+    ...artifact.title.matchAll(/D(?:10|[1-9])/gi),
+  ].map(match => match[0]!.toUpperCase()))
+}
+
+function acceptanceEvidenceArtifacts(item: AcceptanceChecklistItem) {
   const artifacts = deliveryArtifacts.value
   if (!artifacts.length) return []
   const criterion = `${item.description} ${item.verification}`
-  if (/(?:全部|所有)(?:产出|成果|交付物)|汇编|全套成果/.test(criterion)) return artifacts
-  const deliverableIDs = [...criterion.matchAll(/\bD\d+\b/gi)].map(match => match[0].toUpperCase())
-  const directMatches = deliverableIDs.length
-    ? artifacts.filter((artifact) => {
-        const artifactIDs = [...artifact.title.matchAll(/\bD\d+\b/gi)].map(match => match[0].toUpperCase())
-        return artifactIDs.length === deliverableIDs.length
-          && deliverableIDs.every(deliverableID => artifactIDs.includes(deliverableID))
-      })
-    : []
+  if (
+    /(?:全部|所有)(?:产出|成果|交付物)|汇编|全套成果|交付过程及内容|工作记录与交付内容|成果未涉及禁止/.test(criterion)
+    || /禁用素材|禁止的外部行动|不包含真实 Logo|未发生.*(?:外部行动|发布|上传|外发|付款|采购)/.test(criterion)
+  )
+    return artifacts
+  const deliverableIDs = new Set(
+    [...criterion.matchAll(/\bD\d+\b/gi)].map(match => match[0].toUpperCase()),
+  )
+  const range = criterion.match(/\bD(\d+)\s*(?:至|到|-)\s*D(\d+)\b/i)
+  if (range) {
+    const start = Number(range[1])
+    const end = Number(range[2])
+    Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => `D${start + index}`)
+      .forEach(id => deliverableIDs.add(id))
+  }
+  ;[
+    { id: "D1", pattern: /竞品观察|观察框架/ },
+    { id: "D2", pattern: /信息架构|模块顺序|信息层级/ },
+    { id: "D3", pattern: /视觉方向|可视比较|版式.*色彩/ },
+    { id: "D4", pattern: /中文首屏文案|文案不将|事实主张/ },
+    { id: "D5", pattern: /风险与约束|风险边界/ },
+    { id: "D6", pattern: /人工验收清单|评审项|逐项核验/ },
+  ].filter(item => item.pattern.test(criterion)).forEach(item => deliverableIDs.add(item.id))
+  const directMatches = artifacts.filter(artifact =>
+    [...artifactDeliverableIDs(artifact)].some(id => deliverableIDs.has(id)),
+  )
   if (directMatches.length) return directMatches
-  return artifacts[index] ? [artifacts[index]] : artifacts
+  if (/过程|台账|版本|失败记录|暂停|恢复|重试|动态组队|责任|加入理由/.test(criterion))
+    return artifacts.filter((artifact) => {
+      const persisted = detail.value?.artifacts.find(candidate => candidate.id === artifact.id)
+      const workItem = detail.value?.workItems.find(candidate => candidate.id === persisted?.workItemID)
+      return ["review-ledger", "d6-human-review-package"].includes(workItem?.sourceTaskKey ?? "")
+        || artifactDeliverableIDs(artifact).has("D6")
+        || /^d6-|human.*review/i.test(workItem?.sourceTaskKey ?? "")
+        || /台账|执行状态模板|人工.*验收.*(?:清单|索引|包)/.test(artifact.title)
+    })
+  return []
 }
 const acceptanceCheckStore = useState<Record<string, Record<string, boolean>>>(
   "work-acceptance-checks",
@@ -231,6 +348,9 @@ const deliveryAccepted = computed(
       work.value.summary.userStatus === "accepted"
       || work.value.delivery?.acceptanceState === "accepted"
     ),
+)
+const awaitingUserAcceptance = computed(
+  () => work.value?.availability === "available" && Boolean(work.value.delivery) && !deliveryAccepted.value,
 )
 const acceptedCriterionIDs = computed(() =>
   acceptanceItems.value.filter((item) => acceptanceChecks.value[item.id]).map((item) => item.id),
@@ -284,8 +404,21 @@ const currentPlanArtifacts = computed(() => {
       !activePlanVersion || artifact.planVersion === undefined || artifact.planVersion === activePlanVersion)
     .toSorted((left, right) => right.createdAt - left.createdAt)
 })
-const currentDeliveryArtifacts = computed(() =>
+const currentDeliveryArtifactIDs = computed(() =>
+  new Set(deliveryArtifacts.value.map(artifact => artifact.id)),
+)
+const planDeliveryArtifacts = computed(() =>
   currentPlanArtifacts.value.filter(artifact => !executionEvidenceKinds.has(artifact.kind)),
+)
+const currentDeliveryArtifacts = computed(() =>
+  currentDeliveryArtifactIDs.value.size
+    ? planDeliveryArtifacts.value.filter(artifact => currentDeliveryArtifactIDs.value.has(artifact.id))
+    : planDeliveryArtifacts.value,
+)
+const previousDeliveryArtifacts = computed(() =>
+  currentDeliveryArtifactIDs.value.size
+    ? planDeliveryArtifacts.value.filter(artifact => !currentDeliveryArtifactIDs.value.has(artifact.id))
+    : [],
 )
 const currentExecutionEvidence = computed(() =>
   currentPlanArtifacts.value.filter(artifact => executionEvidenceKinds.has(artifact.kind)),
@@ -378,6 +511,17 @@ const renderedActivePanel = computed(() => hydrated.value ? activePanel.value : 
 onMounted(() => {
   hydrated.value = true
   if (route.query.restored === "1") void refreshRestoredProject()
+  runtimeRefreshTimer.value = setInterval(() => {
+    if (
+      work.value?.availability === "available"
+      && ["running", "reviewing", "revision"].includes(work.value.summary.userStatus)
+    )
+      refreshRuntimeExperience()
+  }, 5_000)
+})
+
+onBeforeUnmount(() => {
+  if (runtimeRefreshTimer.value) clearInterval(runtimeRefreshTimer.value)
 })
 
 watch(
@@ -470,6 +614,65 @@ const decisionNote = ref("")
 const actionPending = ref<string>()
 const actionNote = ref("")
 const actionError = ref("")
+const revisionImpactPreview = computed(() => {
+  const reason = actionNote.value.trim()
+  const activePlanVersion = detail.value?.project.activePlanVersion
+  const items = detail.value?.workItems.filter(item =>
+    !activePlanVersion || item.planVersion === undefined || item.planVersion === activePlanVersion) ?? []
+  if (!reason || !items.length || !controlActions.value.some(action => action.id === "request_change" && action.enabled))
+    return
+  const focused = reason.match(
+    /(?:重点|仅|只)(?:需要|需)?(?:更新|修改|调整|重做|重写|修订)?([^。；;\n]+)/i,
+  )?.[1]
+  const focusedReferences = new Set(
+    [...(focused ?? "").matchAll(/D(?:10|[1-9])/gi)].map(match => match[0]!.toUpperCase()),
+  )
+  const references = focusedReferences.size
+    ? focusedReferences
+    : new Set([...reason.matchAll(/D(?:10|[1-9])/gi)].map(match => match[0]!.toUpperCase()))
+  const itemReferences = (item: typeof items[number]) => {
+    const sourceReferences = [...`${item.sourceTaskKey ?? ""}`.matchAll(/D(?:10|[1-9])/gi)]
+      .map(match => match[0]!.toUpperCase())
+    if (sourceReferences.length) return new Set(sourceReferences)
+    const titleReference = item.title.match(/D(?:10|[1-9])/i)?.[0]
+    return new Set(titleReference ? [titleReference.toUpperCase()] : [])
+  }
+  const runBudget = (item: typeof items[number]) =>
+    Math.max(item.maxAttempts, item.attempt + 1) - item.attempt
+  const direct = items.filter(item => [...itemReferences(item)].some(reference => references.has(reference)))
+  if (!direct.length)
+    return {
+      direct: [],
+      dependent: [],
+      total: items.length,
+      totalItems: items.length,
+      maxModelRuns: items.reduce((total, item) => total + runBudget(item), 0),
+      uncertain: true,
+    }
+  const expand = (ids: Set<string>): Set<string> => {
+    const next = new Set([
+      ...ids,
+      ...items.filter(item => item.dependsOn.some(id => ids.has(id))).map(item => item.id),
+    ])
+    return next.size === ids.size ? next : expand(next)
+  }
+  const directIDs = new Set(direct.map(item => item.id))
+  const affectedIDs = expand(directIDs)
+  const affected = items.filter(item => affectedIDs.has(item.id))
+  const label = (item: typeof items[number]) => {
+    const id = `${item.sourceTaskKey ?? ""}\n${item.title}`.match(/D(?:10|[1-9])/i)?.[0]?.toUpperCase()
+    if (!id) return humanLabel(item.title)
+    return `${id}${/独立复核/.test(item.title) ? "（独立复核）" : ""}`
+  }
+  return {
+    direct: direct.map(label),
+    dependent: affected.filter(item => !directIDs.has(item.id)).map(label),
+    total: affectedIDs.size,
+    totalItems: items.length,
+    maxModelRuns: affected.reduce((total, item) => total + runBudget(item), 0),
+    uncertain: false,
+  }
+})
 const pendingActionIntents = useState<Record<string, ExperienceWorkActionRequest>>(
   "work-pending-action-intents",
   () => ({}),
@@ -797,7 +1000,7 @@ function agentLifecycleLabel(lifecycle: string) {
     employee: "正式员工",
     candidate: "项目候选角色",
     temporary: "项目临时角色",
-    released: "项目责任已结束",
+    released: "执行责任已结束",
   } as Record<string, string>)[lifecycle] ?? lifecycle
 }
 // DELIV-02 — 步骤与审批的原始状态是后端自由字符串，映射为用户可读标签；未知值原样显示，不猜测。
@@ -1045,7 +1248,10 @@ function artifactRoute(projectID: string, artifactID: string) {
             <header class="ac-workspace-header">
               <div>
                 <p class="ac-workspace-eyebrow">{{ work.summary.phase }}</p>
-                <h1 class="ac-workspace-title">{{ humanLabel(work.summary.title) }}</h1>
+                <h1 class="ac-workspace-title">{{ workspaceHeadline }}</h1>
+                <p class="ac-workspace-goal" :title="humanLabel(work.summary.title)">
+                  {{ humanLabel(work.summary.title) }}
+                </p>
                 <p class="ac-workspace-lede">{{ humanLabel(work.summary.reason.text) }}</p>
                 <!-- DELIV-02 — 首屏直接回答“谁负责 / 下一里程碑 / 是否需用户行动” -->
                 <div class="ac-work-meta">
@@ -1062,6 +1268,64 @@ function artifactRoute(projectID: string, artifactID: string) {
                 {{ isArchivedWork ? "已归档" : appConfig.experience.statusLabels[work.summary.userStatus] }}
               </span>
             </header>
+
+            <section class="ac-runtime-boundary" aria-label="数据与模型边界">
+              <div>
+                <span>公司记录</span>
+                <strong>保存在本机</strong>
+              </div>
+              <div>
+                <span>模型处理</span>
+                <strong>{{ workModelLabels.join("、") || snapshot.company.provider || "已连接模型服务" }}</strong>
+              </div>
+              <div>
+                <span>运行与费用</span>
+                <strong>{{ workUsageSummary }}</strong>
+              </div>
+              <p>
+                “本地工作区”不等于“仅在本机推理”：生成与执行内容会发送给已连接的模型服务。
+                若 NDA 禁止该传输，请先停止工作并切换到符合要求的本地模型。
+              </p>
+            </section>
+
+            <section v-if="formedTeamMembers.length" class="ac-formed-team" aria-label="本项目动态团队">
+              <div class="ac-formed-team__heading">
+                <div>
+                  <p class="ac-card-kicker">动态团队</p>
+                  <strong>围绕这项工作形成了 {{ formedTeamMembers.length }} 个角色</strong>
+                </div>
+                <button type="button" @click="selectPanel('agent')">查看项目成员</button>
+              </div>
+              <ul>
+                <li v-for="member in formedTeamMembers.slice(0, 6)" :key="member.id">
+                  <span aria-hidden="true">{{ member.name.slice(0, 1) }}</span>
+                  <div>
+                    <strong>{{ member.name }}</strong>
+                    <small>{{ humanLabel(member.role) }} · {{ memberStatusLabel(member) }}</small>
+                  </div>
+                </li>
+              </ul>
+            </section>
+
+            <section v-if="work.delivery" class="ac-delivery-focus" aria-labelledby="delivery-focus-title">
+              <div>
+                <p class="ac-card-kicker">本轮结果</p>
+                <h2 id="delivery-focus-title">{{ work.delivery.artifacts.length }} 项成果已经形成</h2>
+                <p>先看最能代表结果的成果，再决定验收或请求修改。</p>
+              </div>
+              <nav aria-label="重点成果">
+                <NuxtLink
+                  v-for="artifact in featuredDeliveryArtifacts"
+                  :key="artifact.id"
+                  :to="artifactRoute(artifact.projectId, artifact.id)"
+                >
+                  <span>{{ artifactKindLabel(artifact.kind) }}</span>
+                  <strong>{{ humanLabel(artifact.title) }}</strong>
+                  <UIcon name="i-lucide-arrow-up-right" />
+                </NuxtLink>
+              </nav>
+              <a href="#delivery-package">查看完整交付与验收清单</a>
+            </section>
 
             <p v-if="isArchivedWork" class="ac-brief-state" role="status">
               这项工作已归档，成果与执行记录仍保留。点击“恢复到当前工作”即可重新放回当前列表。
@@ -1107,7 +1371,11 @@ function artifactRoute(projectID: string, artifactID: string) {
                 :aria-disabled="!canInvokeFromUI(action)"
                 @click="invokeAction(action)"
               >
-                {{ action.label }}<template v-if="actionPending === action.id">…</template>
+                {{
+                  action.id === "request_change" && revisionImpactPreview
+                    ? `请求修改 · 预计重跑 ${revisionImpactPreview.total} 项`
+                    : action.label
+                }}<template v-if="actionPending === action.id">…</template>
               </button>
             </div>
             <div
@@ -1122,6 +1390,25 @@ function artifactRoute(projectID: string, artifactID: string) {
                 maxlength="8000"
                 placeholder="可先填写新方向再点暂停；暂停不会清空内容。请求修改时请写明问题与期望结果。"
               />
+              <section v-if="revisionImpactPreview" class="ac-revision-preview" aria-live="polite">
+                <p class="ac-card-kicker">提交前预告</p>
+                <strong v-if="revisionImpactPreview.uncertain">
+                  当前输入未定位到具体编号，可能重新执行全部 {{ revisionImpactPreview.totalItems }} 项工作
+                </strong>
+                <strong v-else>
+                  预计重新执行 {{ revisionImpactPreview.total }} / {{ revisionImpactPreview.totalItems }} 项工作
+                </strong>
+                <p v-if="revisionImpactPreview.direct.length">
+                  直接修改：{{ revisionImpactPreview.direct.join("、") }}
+                </p>
+                <p v-if="revisionImpactPreview.dependent.length">
+                  依赖复核：{{ revisionImpactPreview.dependent.join("、") }}
+                </p>
+                <small>
+                  旧版成果会保留。按当前重试预算最多再触发 {{ revisionImpactPreview.maxModelRuns }}
+                  次模型运行，实际通常更少；费用仍以 Provider 账单为准，缺失费用不会按 0 计算。
+                </small>
+              </section>
               <p v-if="actionError" class="ac-brief-state ac-brief-state--error" role="alert">{{ actionError }}</p>
             </div>
 
@@ -1170,6 +1457,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                 :work-items="detail?.workItems ?? []"
                 :pending="seedGrowPending"
                 :failed="Boolean(seedGrowError)"
+                :awaiting-user-acceptance="awaitingUserAcceptance"
               />
 
               <section v-if="currentPlanWorkItems.length" class="ac-detail-panel">
@@ -1238,7 +1526,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                 </article>
               </section>
 
-              <section v-if="work.delivery" class="ac-detail-panel">
+              <section v-if="work.delivery" id="delivery-package" class="ac-detail-panel">
                 <div class="ac-detail-heading">
                   <div>
                     <p class="ac-card-kicker">交付</p>
@@ -1286,7 +1574,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                 <div v-if="acceptanceItems.length" class="ac-acceptance">
                   <p class="ac-card-kicker">验收标准核对</p>
                   <ul class="ac-acceptance__list">
-                    <li v-for="(item, index) in acceptanceItems" :key="item.id" class="ac-acceptance__item">
+                    <li v-for="item in acceptanceItems" :key="item.id" class="ac-acceptance__item">
                       <label
                         class="ac-acceptance__verdict"
                         :data-verdict="deliveryAccepted || acceptanceChecks[item.id] ? 'pass' : 'unverified'"
@@ -1306,13 +1594,16 @@ function artifactRoute(projectID: string, artifactID: string) {
                         </small>
                         <small>
                           证据成果：
-                          <NuxtLink
-                            v-for="(artifact, evidenceIndex) in acceptanceEvidenceArtifacts(item, index)"
-                            :key="`${item.id}:${artifact.id}`"
-                            :to="artifactRoute(artifact.projectId, artifact.id)"
-                          >
-                            {{ evidenceIndex ? "、" : "" }}{{ humanLabel(artifact.title) }}
-                          </NuxtLink>
+                          <template v-if="acceptanceEvidenceArtifacts(item).length">
+                            <NuxtLink
+                              v-for="(artifact, evidenceIndex) in acceptanceEvidenceArtifacts(item)"
+                              :key="`${item.id}:${artifact.id}`"
+                              :to="artifactRoute(artifact.projectId, artifact.id)"
+                            >
+                              {{ evidenceIndex ? "、" : "" }}{{ humanLabel(artifact.title) }}
+                            </NuxtLink>
+                          </template>
+                          <span v-else>尚未建立逐项证据映射，请从上方成果中人工核对</span>
                         </small>
                       </span>
                     </li>
@@ -1408,14 +1699,14 @@ function artifactRoute(projectID: string, artifactID: string) {
                 <p class="ac-brief-state">
                   目标摘要与执行计划分别计数；问答保存和方向调整都会形成新的目标摘要版本。
                 </p>
-                <div class="ac-brief-constraints" v-if="goalBrief.brief.constraints.length">
-                  <h3>约束</h3>
+                <details v-if="goalBrief.brief.constraints.length" class="ac-brief-constraints ac-brief-disclosure">
+                  <summary><span>约束</span><small>{{ goalBrief.brief.constraints.length }}</small></summary>
                   <ul>
                     <li v-for="constraint in goalBrief.brief.constraints" :key="constraint">{{ constraint }}</li>
                   </ul>
-                </div>
-                <div v-if="recordedUserAnswers.length" class="ac-brief-constraints">
-                  <h3>用户已回答</h3>
+                </details>
+                <details v-if="recordedUserAnswers.length" class="ac-brief-constraints ac-brief-disclosure">
+                  <summary><span>用户已回答</span><small>{{ recordedUserAnswers.length }}</small></summary>
                   <p>回答已记录；“未知”或“未核实”仍表示事实尚未确认。</p>
                   <ul>
                     <li v-for="assumption in recordedUserAnswers" :key="assumption.id">
@@ -1423,16 +1714,16 @@ function artifactRoute(projectID: string, artifactID: string) {
                       <small>回答已记录</small>
                     </li>
                   </ul>
-                </div>
-                <div v-if="systemAssumptions.length" class="ac-brief-constraints">
-                  <h3>系统假设（不阻塞当前执行）</h3>
+                </details>
+                <details v-if="systemAssumptions.length" class="ac-brief-constraints ac-brief-disclosure">
+                  <summary><span>系统假设（不阻塞当前执行）</span><small>{{ systemAssumptions.length }}</small></summary>
                   <ul>
                     <li v-for="assumption in systemAssumptions" :key="assumption.id">
                       {{ assumption.description }}
                       <small>系统暂定 · 不阻塞</small>
                     </li>
                   </ul>
-                </div>
+                </details>
               </template>
             </template>
 
@@ -1476,6 +1767,13 @@ function artifactRoute(projectID: string, artifactID: string) {
 
             <!-- Artifact -->
             <template v-else-if="renderedActivePanel === 'artifact'">
+              <div v-if="currentDeliveryArtifacts.length" class="ac-detail-heading">
+                <div>
+                  <p class="ac-card-kicker">{{ currentDeliveryVersion ? "当前交付" : "进行中成果" }}</p>
+                  <h2>{{ currentDeliveryVersion ? `交付版本 ${currentDeliveryVersion}` : "本轮成果" }}</h2>
+                </div>
+                <strong>{{ currentDeliveryArtifacts.length }}</strong>
+              </div>
               <div v-if="currentDeliveryArtifacts.length" class="ac-artifact-list">
                 <NuxtLink
                   v-for="artifact in currentDeliveryArtifacts"
@@ -1510,6 +1808,23 @@ function artifactRoute(projectID: string, artifactID: string) {
                   </NuxtLink>
                 </div>
               </details>
+              <details v-if="previousDeliveryArtifacts.length" class="ac-detail-panel">
+                <summary>查看之前轮次成果（{{ previousDeliveryArtifacts.length }}）</summary>
+                <div class="ac-artifact-list">
+                  <NuxtLink
+                    v-for="artifact in previousDeliveryArtifacts"
+                    :key="artifact.id"
+                    class="ac-artifact-link"
+                    :to="artifactRoute(detail?.project.id ?? workID ?? '', artifact.id)"
+                  >
+                    <span>
+                      <strong>{{ humanLabel(artifact.title) }}</strong>
+                      <small>{{ artifactKindLabel(artifact.kind) }}</small>
+                    </span>
+                    <UIcon name="i-lucide-arrow-up-right" />
+                  </NuxtLink>
+                </div>
+              </details>
               <details v-if="historicalPlanArtifacts.length" class="ac-detail-panel">
                 <summary>查看旧计划成果与记录（{{ historicalPlanArtifacts.length }}）</summary>
                 <div class="ac-artifact-list">
@@ -1531,9 +1846,18 @@ function artifactRoute(projectID: string, artifactID: string) {
 
             <!-- Agent -->
             <template v-else-if="renderedActivePanel === 'agent'">
-              <article v-for="agent in detail?.recruitment.candidates ?? []" :key="agent.id" class="ac-inline-item">
-                <h3>{{ humanLabel(agent.name) }}</h3>
-                <span>{{ agentLifecycleLabel(agent.lifecycle) }}</span>
+              <article v-for="member in formedTeamMembers" :key="member.id" class="ac-team-member">
+                <header>
+                  <div>
+                    <h3>{{ member.name }}</h3>
+                    <p>{{ humanLabel(member.role) }}</p>
+                  </div>
+                  <span>{{ memberStatusLabel(member) }}</span>
+                </header>
+                <p><strong>为什么加入：</strong>{{ member.reason || "按当前任务所需能力完成选择。" }}</p>
+                <p v-if="member.responsibilities.length">
+                  <strong>负责：</strong>{{ member.responsibilities.join("、") }}
+                </p>
               </article>
             </template>
 
@@ -1598,6 +1922,7 @@ function artifactRoute(projectID: string, artifactID: string) {
                 :diagnostics="diagnosticGroups"
                 :pending="seedProject && seedGrowPending"
                 :failed="seedProject && Boolean(seedGrowError)"
+                :awaiting-user-acceptance="awaitingUserAcceptance"
               />
             </template>
 

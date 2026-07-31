@@ -185,6 +185,7 @@ export type CompanyProjectDetail = {
   }
   workItems: {
     id: string
+    sourceTaskKey?: string
     title: string
     status: string
     kind: string
