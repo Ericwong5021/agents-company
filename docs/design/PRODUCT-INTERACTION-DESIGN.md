@@ -19,19 +19,19 @@
 ## 2. 默认信息架构
 
 ```text
-新建目标
-办公室
-公司频道
-  公司大群
-  董事会
-项目频道
-  <真实 Project Channel>
-部门频道             仅真实存在时显示
-Direct               仅 M5 私域硬边界和 capability 开启后显示
-设置
+Inbox
+  Goal Brief / Decision Center / Attention
+Work
+  Project / Board Room / Thread / Artifact / Delivery
+Team
+  员工与临时责任 / 能力证据 / 活动投影
+Library
+  Deliveries / Company Commons / Interpretations / Beliefs / Learning Patches
+Settings
+  Provider / Founder Studio / Founder Control Center / Integrations
 ```
 
-自动任务、技能市场和本地知识库不是当前 Company 主导航。Coding Session 通过“项目工作台”次级入口打开，不定义 Company 的主要信息架构。
+一级导航固定为 Inbox、Work、Team、Library、Settings。Board 使用 `/company/board` 作为 Work 内治理承载面；Founder OS 不新增平行一级入口。Direct 仅在私域硬边界与 capability 解冻后显示。
 
 ## 3. 核心用户旅程
 
@@ -135,19 +135,15 @@ UI 不直接显示完整任意本地路径，不执行制品内脚本，不在�
 
 | 能力 | 当前事实 | 目标依赖 |
 |---|---|---|
-| Company / Board / Project 频道 | M2 已有真实 API | 直接重构 UI |
-| 八类高信号 schema | 已定义，M2 只生产四类 | M3 领域事实后开放其余四类 |
-| Thread 消息和来源 | M2 已有 | 扩展 Tool Run、Attempt、Artifact 读模型 |
-| 结构化 Charter / Approval / Delivery | 尚未进入消息响应 | M3B |
-| 员工活动投影 | 产品契约已定义，产品 API 尚缺 | M4 子集 |
-| Ambient / Direct / Dream | UI 契约可先稳定，真实事实尚缺 | M5 |
+| Inbox / Work / Team / Library / Settings | Nuxt 路由与真实状态投影已存在 | 继续按体验重构 Gate 验收 |
+| Board 治理面 | `/company/board` 已读取真实 Board、Ledger、Shadow/Advisor 与接管事实 | 高模式仍需授权 |
+| Thread、Attempt、Artifact、Delivery | 读取 Control Plane 与 Project 投影，不以 Fixture 补成功 | R2/R3 继续做产品验收 |
+| 员工活动与能力证据 | Team 页面读取真实责任、负载、最近交付与能力状态 | 规模和人工可理解性待弱门禁 |
+| Commons 与 Learning | Library 已承载来源、Interpretation、Belief 与 Patch | 真实样本待弱门禁 |
+| Ambient / Direct / Dream | 冻结，不描述为可用 | Life 层解冻条件 |
 
 在依赖未完成时，UI 显示诚实的空状态或隐藏入口，不回退到 fixture。
 
-## 10. 2026-07-18 实施状态
+## 10. 当前实现规则
 
-本轮已完成新建目标、真实导航、高信号群聊、Thread 页签与失败 Attempt 展示、员工活动卡片、响应式覆盖层、设计 Token 和 Pencil 目标稿。当前办公室从已有董事会成员、Thread 与 Agent Run 事实生成状态，不生成 Ambient 活动。
-
-Control Plane 已新增 `/company/agents` 公开活动投影接口。它只返回公开员工字段、运行状态和 Evidence，不返回消息正文或 Direct 私密内容。JavaScript SDK 已重新生成，WebUI 办公室直接消费生成客户端，并通过 `company.agent_activity.invalidated` 事件重新读取快照，不维护第二套客户端领域状态机。
-
-持久化 Attempt 链和 Artifact 安全预览接口仍属于后续领域里程碑。本轮 UI 只展示现有失败 Run 能够证明的 Attempt，不把展示契约误写成已具备完整历史存储。
+WebUI 只消费 Control Plane 的权威快照、生成 SDK 和失效事件，不维护第二套领域状态机。服务缺失、连接中断、模式关闭或来源不足时，页面必须显示不可用、阻断或空状态。机器验证与人工体验验收分开登记；实现存在不等于已公开发布。

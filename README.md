@@ -11,9 +11,9 @@ You set the direction. The company forms the right team, delivers verifiable res
 </div>
 
 > [!IMPORTANT]
-> Agent Company is an in-development **Pre-Public** product, currently in stage R0 of an [experience refactor](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) that rebuilds the user-facing product layer on top of the existing Control Plane. The local Control Plane, agent runtime, governance and delivery foundations, Electron shell, and shared WebUI exist. The group-chat workspace, artifact and delivery experience, desktop background lifecycle, strict private spaces, and the Agent life layer are **not** built yet — several are deliberately frozen until the delivery loop is verified.
+> Agent Company is an in-development **Pre-Public** product. The [experience refactor](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) still controls the R0–R4 release order. The local Control Plane, agent runtime, shared WebUI, Electron shell, dynamic-organization foundations, and Founder OS v1 are implemented; release acceptance, strict private spaces, and the Agent life layer remain separate work or deliberately frozen.
 >
-> Everything below describes **target behavior** defined by the product documents, not shipped capability. For what actually exists today, read the [implementation plan](docs/product-design/implementation-plan.md); for what is being built now, read the experience refactor plan.
+> Implemented does not mean enabled or publicly released. Founder Twin and Company Commons default to `off`, and machine Gate success does not substitute for human authorization or real-sample acceptance. See the [current Founder OS contract](docs/product-design/Founder-OS-v1.md) and [documentation index](docs/README.md).
 
 ## What it is
 
@@ -23,8 +23,8 @@ The product has three inseparable layers:
 
 | Layer | Responsibility | Status |
 |---|---|---|
-| Work | Goals, group collaboration, execution, artifacts, validation, and delivery | Being rebuilt (R0–R3) |
-| Governance | Charter, delegation, approval policy, gates, reputation, recovery, and audit | Foundations in place |
+| Work | Goals, group collaboration, execution, artifacts, validation, and delivery | Implemented foundations; release acceptance follows R0–R3 |
+| Governance | Charter, delegation, approval policy, gates, Founder OS, recovery, and audit | Founder OS v1 implemented; higher modes remain authorization-gated |
 | Life | Persistent identity, relationships, private space, reflection, ambient activity, and Dreaming | Frozen until the delivery loop is verified |
 
 ## Product principles
@@ -56,7 +56,7 @@ Local Control Plane
 
 | Package | Role |
 |---|---|
-| `packages/app` | Shared Eve/Nuxt WebUI |
+| `packages/app` | Shared Nuxt WebUI |
 | `packages/desktop` | Electron shell, local server host, and packaging |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane, runtime, SQLite, Git, workflows, and internal CLI tooling |
 | `packages/sdk` | Generated and hand-written client SDKs |
@@ -66,14 +66,15 @@ Clients do not write SQLite, identity files, or managed resources directly. The 
 
 ## Current delivery path
 
-Current work is stage **R0 — Truthful Product Shell** of the experience refactor: real product identity, real connection state, and a user-facing state projection layer, so that what the interface claims is always backed by a fact from the Control Plane. R0 is not yet passed; its remaining blockers are human acceptance studies that automation is not allowed to substitute for.
+The experience refactor still controls release sequencing from **R0 — Truthful Product Shell** through R4. Its machine evidence and human/public-release evidence remain distinct; consult the plan for the current release decision rather than inferring it from an implemented module.
 
-Underneath, the Control Plane carries a company bootstrap, persistent channels and threads, an agent execution kernel with explicit skills, charter and approval governance, and worktree-based software delivery through merge and main-branch verification. The board conversation UI was removed with the Solid-to-Nuxt WebUI migration and is scheduled for rebuild in R2.
+The current product includes company bootstrap, persistent channels and threads, the Agent execution kernel, charter and approval governance, worktree-based software delivery, a real Board governance surface, Decision Center, Founder Studio and Control Center, Company Commons, Interpretations, Beliefs, and Learning Patches. These surfaces read Control Plane facts and fail closed when their service or mode is unavailable.
 
-Later stages: Goal → Start (R1), controllable execution and attention (R2), verified delivery (R3), dynamic organization (R4). Desktop background lifecycle, private spaces, the Agent life layer, and release hardening follow.
+Founder OS v1 passed W0–W7, E0, and K0–K2 machine Gates twice on candidate `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8`. Human authorization and real-sample acceptance remain advisory and unconfirmed; no runtime mode elevation follows from that result.
 
 - [Experience refactor plan](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md): what is being built now, in what order, and the release gates.
 - [Implementation plan](docs/product-design/implementation-plan.md): current code facts, per-milestone exit criteria, and remaining gaps.
+- [Founder OS v1](docs/product-design/Founder-OS-v1.md): implemented architecture, surfaces, modes, and validation boundaries.
 
 ## Development
 
@@ -107,6 +108,7 @@ Repository conventions are in [AGENTS.md](AGENTS.md). Contribution workflow is i
 - [Product Design Overview](docs/product-design/00-overview.md): system model and topic map
 - [Experience Refactor Plan](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md): current execution order (R0–R4), tasks, and release gates
 - [Implementation Plan](docs/product-design/implementation-plan.md): current facts, gaps, milestone exit criteria
+- [Founder OS v1](docs/product-design/Founder-OS-v1.md): implemented governance and organizational-learning contract
 - [Documentation Index](docs/README.md): authority order and maintenance rules
 
 ## License

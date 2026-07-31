@@ -1,11 +1,11 @@
 # ADR：Founder OS 治理边界
 
-- 状态：Proposed
+- 状态：Implemented
 - 日期：2026-07-30
 - 人工确认：not_confirmed
 - 适用范围：Founder OS v1
 
-本记录包含 W0 的六项架构决定。Pre-Public 开发中，人工确认作为 advisory 弱门禁登记；未确认不阻塞机器验证、集成或后续开发，也不等于已获得授权。提高 Founder Twin 模式仍需要真实授权。
+本记录包含 W0 的六项架构决定，当前实现已受对应依赖边界和精确提交 Gate 约束。人工确认作为 advisory 弱门禁登记；未确认不否认实现完成，也不等于已获得提高 Founder Twin 模式的授权。
 
 ## FOS-ADR-001：Founder Twin 属于 Governance Plane
 

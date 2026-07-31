@@ -8,11 +8,13 @@
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
 - Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
-## Core Focus (as of 2026-07-26)
+## Core Focus (as of 2026-07-30)
 
 The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
 
 Current execution order comes from `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` (stages R0–R4; the active stage is R0). `docs/product-design/implementation-plan.md` defines milestone architecture and exit criteria but no longer decides what to work on next. Ambient, Reflection, Direct, Dreaming, and Agent Home are frozen until the Life-layer unfreeze conditions in PRD 4.1 are met — do not start work on them, and do not describe them as available.
+
+Founder OS v1 product development is complete at candidate `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8`; this does not change the R0–R4 release order or authorize higher runtime modes. `founderTwinMode` and `companyCommonsMode` remain fail-closed behind their global maxima, and human authorization or real-sample acceptance must never be inferred from machine Gate success.
 
 - The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
 - The local Control Plane and agent runtime live in `packages/control-plane`.

@@ -1,6 +1,6 @@
 # Founder OS v1 信息架构
 
-- 状态：Frozen
+- 状态：Implemented / Frozen
 - 日期：2026-07-30
 - 任务：FOS-IA-001
 
@@ -26,4 +26,4 @@ Founder OS 保留现有五项一级导航，不新增平行入口：
 | Belief Lab | K2 | Library 内 Belief 标签页 |
 | Learning Patches | K2 | Library 内 Patches 标签页 |
 
-所有页面读取 Control Plane 的持久化事实或可重建投影，不维护前端第二套治理状态。`/company/board` 当前重定向到 `/work` 只属于基线事实，不代表 Board Room 已实现。Founder Twin 模式提高、红灯授权和核心治理资产确认不能由导航或客户端状态绕过。
+所有页面读取 Control Plane 的持久化事实或可重建投影，不维护前端第二套治理状态。`/company/board` 已承载真实 Board 治理投影、Shadow/Advisor 依据和人工接管入口。Founder Twin 模式提高、红灯授权和核心治理资产确认不能由导航或客户端状态绕过。

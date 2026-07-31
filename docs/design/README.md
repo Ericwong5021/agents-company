@@ -1,8 +1,6 @@
 # Agent Company × Marvis Pencil 设计稿
 
-> **验收证据已失效（2026-07-26 标注）**：本目录的同视口 QA 对照图产生于 2026-07-17 的 Solid/Vite 实现（`e3b74a1`），该实现已在 2026-07-23 的 Eve/Nuxt 迁移（`f51af90`）中整体删除，`packages/app/src` 目录不复存在。下方“验收输出”中的 `qa/compare-*.png` 与 [design-qa.md](design-qa.md) 只能作为历史记录阅读，**不构成当前 Nuxt WebUI 的验收证据**。当前 WebUI 的视觉与交互门槛由[体验重构计划](../product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 SHELL-04、QA-03、QA-04 定义，尚未产生新的同视口验收记录。
->
-> 目标稿本身（Pencil 画板、Marvis 参照存档、`exports/*.png`）不受影响，继续作为设计参照有效。
+> 本目录保存目标稿和设计参照，不保存已被替换实现的 QA 结论。当前 WebUI 的视觉与交互门槛由[体验重构计划](../product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 SHELL-04、QA-03、QA-04 定义，人工验收状态见[Pre-Public 弱门禁登记](../product-design/pre-public-acceptance-register.md)。
 
 - 主设计文件：`agent-company-marvis-pencil.pen`
 - 本轮设计权威：Pencil（目标稿层面）；WebUI 视觉语言的当前事实源见 [CODEX-DESIGN-LANGUAGE.md](../product-design/CODEX-DESIGN-LANGUAGE.md)
@@ -14,7 +12,6 @@
 
 - [UI Design Tokens](UI-DESIGN-TOKENS.md)：颜色、字体、间距、组件、响应式、动效与无障碍规范
 - [产品交互设计](PRODUCT-INTERACTION-DESIGN.md)：Marvis 转译原则、信息架构、核心旅程、Thread、员工卡片与实现边界
-- [设计 QA](design-qa.md)：实机对照、自动验证、已知阻塞与下一轮验证门槛
 
 ## 当前产品决策
 
@@ -46,7 +43,7 @@ Pencil 文件内变量与 `UI-DESIGN-TOKENS.md` 对齐。可复用组件包含 S
 
 原先并列的 `company-tokens.css` 已随 Solid WebUI 一并删除；当前实现的样式来源是 `packages/ui/src/styles/` 与 `packages/app/app/assets/css/main.css`，两者与本文件的 token 对齐关系尚未重新建立。
 
-## 验收输出
+## 设计参照输出
 
 - `assets/references/marvis-*-2026-07-18.png`：九个 Marvis 实机状态存档
 - `exports/KFn6r.png`：本轮四个关键目标屏 Contact Sheet
@@ -56,9 +53,3 @@ Pencil 文件内变量与 `UI-DESIGN-TOKENS.md` 对齐。可复用组件包含 S
 - `exports/VQyEm.png`：Office · Employee Cards
 - `exports/zXTfi.png`：Responsive · 375px
 - Pencil 布局检查：当前 Master Board 无裁切、重叠或溢出问题
-
-以下同视口对照图针对已删除的 Solid 实现，保留为历史记录，不作为当前验收证据（见页首标注）：
-
-- `qa/compare-board-reference-implementation-final.png`：董事会同视口对照
-- `qa/compare-office-reference-implementation-final.png`：办公室同视口对照
-- `qa/compare-settings-reference-implementation-final.png`：Marvis 与实装设置弹窗同视口对照

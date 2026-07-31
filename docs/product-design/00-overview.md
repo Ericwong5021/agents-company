@@ -135,10 +135,11 @@ Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不�
 | [交互原语](05-interaction-primitives.md) | 用户与 Agent 如何在 IM 中协作 |
 | [治理](06-governance.md) | 哪些动作自动、哪些需要批准、如何审计 |
 | [工作类型](07-work-types.md) | 领域中立工作契约如何组合能力，软件适配器如何保持深度治理 |
+| [Founder OS v1](Founder-OS-v1.md) | 创始人代理、公司认知与组织学习当前如何工作 |
 | [实施计划](implementation-plan.md) | Pre-Public 的当前事实、里程碑与发布 Gate |
 
 ## 9. 当前实现与目标的区别
 
-仓库中已有大量可复用模块，包括 Session、Actor、Group Session、Thread、Delegation、Admission、Reputation、Trust Dial、Audit、Token Governance、Workflow、Control Plane 和 Worktree。
+仓库中已有 Session、Actor、Group Session、Thread、Delegation、Admission、Reputation、Trust Dial、Audit、Workflow、Control Plane、Worktree，以及完成机器 Gate 的 Founder OS v1 治理与学习纵向链。
 
-模块存在不等于产品闭环已经完成。当前阶段的关键工作是把这些能力收敛进共享 WebUI、本地常驻进程、严格隐私边界、领域中立交付内核和跨任务纵向验收。具体以[实施计划](implementation-plan.md)为准。
+模块存在和机器 Gate 通过不等于运行模式已获授权或公开发布验收完成。发布顺序看体验重构计划，当前实现看[实施计划](implementation-plan.md)与[Founder OS v1](Founder-OS-v1.md)。

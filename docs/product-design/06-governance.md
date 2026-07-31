@@ -157,3 +157,9 @@ Worktree 默认开启。开启后以下是硬约束：
 - 将批准等级临时提升为严格。
 
 紧急停止必须优先保证状态可恢复，不以强制删除工作区作为默认实现。
+
+## 11. Founder OS v1
+
+Founder OS 把代表创始人的治理判断收敛为 `DecisionIntent → Authority → Decision Ledger → ApprovalGate/Orchestrator → Outcome`。Founder Twin 不直接拥有执行工具或任务图写权限；AI、Board、Policy 与 Human 来源在数据和 UI 中保持可区分。
+
+实现、模式、页面和验证边界见 [Founder OS v1 当前合同](Founder-OS-v1.md)。机器 Gate 通过不等于人工授权；红灯、模式提高和核心资产确认继续由确定性策略与真实用户决定。

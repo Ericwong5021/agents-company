@@ -11,9 +11,9 @@
 </div>
 
 > [!IMPORTANT]
-> Agent Company 是仍在开发中的 **Pre-Public** 产品，当前处于[体验重构](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)的 R0 阶段——在既有 Control Plane 之上重做用户可感知的产品层。本地 Control Plane、Agent Runtime、治理与交付基础、Electron 和共享 WebUI 已经存在；群聊工作台、制品与交付体验、桌面后台生命周期、严格私人空间和 Agent 生命层**尚未建成**，其中若干项被有意冻结，直到交付闭环通过验证。
+> Agent Company 是仍在开发中的 **Pre-Public** 产品。[体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)继续决定 R0–R4 的发布顺序。本地 Control Plane、Agent Runtime、共享 WebUI、Electron、动态组织基础和 Founder OS v1 已实现；发布验收、严格私人空间与 Agent 生命层仍是独立工作或保持冻结。
 >
-> 以下内容描述的是产品文档定义的**目标行为**，不代表已交付能力。当前实际实现见[实施计划](docs/product-design/implementation-plan.md)，当前在做什么见体验重构计划。
+> 已实现不等于已启用或已公开发布。Founder Twin 与 Company Commons 默认 `off`，机器 Gate 通过不能替代人工授权或真实样本验收。当前合同见 [Founder OS v1](docs/product-design/Founder-OS-v1.md)，文档分工见[文档导航](docs/README.md)。
 
 ## 它是什么
 
@@ -23,8 +23,8 @@ Agent Company 让一个用户在自己的电脑上经营一个持续存在的 AI
 
 | 层次 | 职责 | 现状 |
 |---|---|---|
-| 工作层 | 目标、群体协作、执行、制品、验证与交付 | 重建中（R0–R3） |
-| 治理层 | Charter、委派、批准策略、Gate、声誉、恢复与审计 | 基础已具备 |
+| 工作层 | 目标、群体协作、执行、制品、验证与交付 | 基础已实现；发布验收仍按 R0–R3 |
+| 治理层 | Charter、委派、批准策略、Gate、Founder OS、恢复与审计 | Founder OS v1 已实现；高模式仍需授权 |
 | 生命层 | 持久身份、关系、私人空间、Reflection、Ambient 与 Dreaming | 冻结，待交付闭环通过验证 |
 
 ## 产品原则
@@ -56,7 +56,7 @@ Local Control Plane
 
 | Package | 职责 |
 |---|---|
-| `packages/app` | Eve/Nuxt 共享 WebUI |
+| `packages/app` | Nuxt 共享 WebUI |
 | `packages/desktop` | Electron 桌面壳、本地 Server 宿主与打包 |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane、Runtime、SQLite、Git、Workflow 与内部 CLI 工具 |
 | `packages/sdk` | 生成与手写的客户端 SDK |
@@ -66,14 +66,15 @@ Local Control Plane
 
 ## 当前交付路径
 
-当前工作是体验重构的 **R0 — Truthful Product Shell**：真实的产品身份、真实的连接状态、可投影的用户状态层，让界面上的每一句陈述都有 Control Plane 的事实支撑。R0 尚未通过，剩余阻断项是不允许用自动化替代的真人验收研究。
+体验重构继续控制从 **R0 — Truthful Product Shell** 到 R4 的发布顺序。机器证据与人工/公开发布证据保持分离；当前发布裁决应读取计划和 Gate，不能由某个模块已经实现来推断。
 
-底层已具备：公司初始化、持久频道与 Thread、带显式 Skill 的 Agent 执行内核、Charter 与批准治理，以及基于 Worktree 的软件交付（含合并与主分支复验）。董事会会话界面随 Solid → Nuxt 的 WebUI 迁移被删除，计划在 R2 重建。
+当前产品已具备公司初始化、持久频道与 Thread、Agent 执行内核、Charter 与批准治理、基于 Worktree 的软件交付、真实 Board 治理面、Decision Center、Founder Studio 与 Control Center、Company Commons、Interpretations、Beliefs 和 Learning Patches。服务或模式不可用时，界面如实失败关闭。
 
-后续阶段：Goal → Start（R1）、可控执行与注意力（R2）、可验证交付（R3）、动态组织（R4）。桌面后台生命周期、私人空间、Agent 生命层与发布硬化排在其后。
+Founder OS v1 在候选提交 `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8` 上完成 W0–W7、E0、K0–K2 两轮机器 Gate。人工授权与真实样本验收仍为建议项且尚未确认；该结论不提高任何运行模式。
 
 - [体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前在做什么、按什么顺序、发布门槛是什么。
 - [实施计划](docs/product-design/implementation-plan.md)：当前代码事实、各里程碑退出标准与剩余缺口。
+- [Founder OS v1](docs/product-design/Founder-OS-v1.md)：已实现架构、产品承载面、模式与验证边界。
 
 ## 本地开发
 
@@ -107,6 +108,7 @@ bun test
 - [产品设计总览](docs/product-design/00-overview.md)：系统模型与专题导航
 - [体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)：当前执行顺序（R0–R4）、任务与发布门槛
 - [实施计划](docs/product-design/implementation-plan.md)：当前事实、缺口与里程碑退出标准
+- [Founder OS v1](docs/product-design/Founder-OS-v1.md)：已实现的治理与组织学习合同
 - [文档导航](docs/README.md)：权威顺序与维护规则
 
 ## 许可证

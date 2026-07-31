@@ -1,8 +1,9 @@
 # Implementation Plan：Pre-Public 纵向交付
 
 > 角色：本文是**架构收敛路径与里程碑退出标准**的事实源，不决定当前排期。当前执行顺序由[体验重构计划](Agent-Company-Experience-Refactor-Plan-v1.0.md)的 R0-R4 决定（自 2026-07-25 起 `In Execution`，当前批次为 R0）。
-> 状态：M0、M1 已完成；M2 后端契约完成、用户可见闭环随 WebUI 迁移回退（见 2.1）；M3A 实施中；M3B 部分实现（见 2.1）；M4、M5、M6 未进入验收
-> 事实基线更新：2026-07-26
+> 状态：M0、M1 已完成；M2 控制面契约与 Board 治理面已恢复，完整群聊闭环仍由体验重构裁决；M3A/M3B 已有纵向实现；M4、M5、M6 未在本文重新裁决
+> 事实基线更新：2026-07-30
+> 增量事实：Founder OS v1 已完成 W0–W7、E0、K0–K2 产品开发与精确提交机器 Gate；运行模式提高和真实样本仍走独立授权
 > 视觉决策：Company Workspace 的产品信息架构保留；其 Solid/Vite 实现已由 Eve/Nuxt WebUI 迁移取代
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -30,7 +31,8 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | 区域 | 当前事实 | 当前结论 |
 |---|---|---|
 | 产品文档 | 宪法、PRD、00–07 专题设计和本计划已有单向优先级 | S0 产品收敛基本完成 |
-| Company Workspace | 控制面已有持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影；但用户可见的频道栏、主会话、Thread 面板与 Composer 已随 Solid WebUI 在 `f51af90` 删除 | **不再是可用的公司会话入口**：`packages/app/app/pages/company/board.vue` 只做 302 重定向到 `/work`，模块内 board 页未注册。当前产品入口是 R0 的 Inbox → Goal Brief → Work 投影 |
+| Company Workspace | 控制面已有持久 Channel/Message/ConversationThread、真实 Board runtime、来源证据与高信号投影；Nuxt 已恢复 `/company/board` 的真实治理承载面 | Board 可展示 Shadow/Advisor、Ledger 依据与人工接管；完整公司群聊、Thread 和交付体验仍按体验重构阶段验收 |
+| Founder OS | Decision Ledger、Authority、Founder Assets/Snapshot、Shadow/Advisor、Green/Yellow、Outcome、Commons、Reading 与 Learning 已形成持久化纵向链 | W0–W7、E0、K0–K2 在 `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8` 双次机器 Gate 通过；默认模式仍为 `off`，人工授权与真实样本未确认 |
 | 共享 App Shell | M0 已把根路由、Titlebar、通知、Deep Link 与构建 CSS 接入同一 App Chrome；M1 在其上接入 Company data source | 可以继续承接 M2 的真实会话数据 |
 | Local Server / Runtime | M1/M2 已提供仅绑定 loopback 的 trusted Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成；非回环监听仍不属于当前主路径 |
 | Company Project | 默认路径已是自适应 planner 与动态任务树；Charter、三预设继承、WorktreeRun 状态机、`merge --no-ff` 与主分支复验已落地（`fc45cc7`、`02d3406`、`09c2692`），有约 2700 行专项测试 | 固定游戏 MVP 已不是默认路径。仍缺：只能在 `output_dir` 下新建空仓库、不能绑定用户已有主仓库；WorktreeRun 无 destroyable/destroyed 状态与销毁实现；`recovery_needed` 无赋值点，启动不做 `git worktree list` 交叉核对 |
@@ -45,8 +47,8 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 ```text
 S0 产品事实基线：基本完成
 M1 Company Bootstrap：完成
-真实 IM 用户旅程：控制面契约完成；用户可见闭环随 WebUI 迁移回退，重建排在 R2
-Agent 执行内核：M3A 实施中
+真实 IM 用户旅程：控制面契约与 Board 治理面可用；完整频道、Thread 与交付闭环仍由 R2/R3 验收
+Agent 执行内核与 Founder OS：纵向实现已落地；公开发布与高模式授权不由模块存在推断
 自治领域交付闭环：Charter/治理/合并验证已落地，资源处置与跨领域验收未完成
 Agent 生命层与 Pre-Public 发布：尚未进入验收
 当前批次：体验重构 R0（gate 未通过，卡在 5 项真人验收）
@@ -177,12 +179,11 @@ Local Control Plane（唯一权威写入者）
 
 目标：当前 Company Workspace 从 fixture 变成真实、可持久化的公司会话入口。
 
-状态：**控制面完成（2026-07-15），用户可见闭环于 2026-07-23 回退**。
+状态：**控制面完成；Nuxt Board 治理承载面已于 2026-07-30 恢复，完整公司群聊与 Thread 闭环继续由 R2/R3 验收**。
 
-- 仍然成立：真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry、SSE 重连和 Desktop sidecar 均已收口；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
-- 已回退：`f51af90` 把共享 WebUI 整体迁移到 Eve/Nuxt，承载 M2 用户闭环的 Solid 应用（`packages/app/src`）随之删除。主要工作第 8 条（频道栏、主会话、Thread Panel、Composer 接生成 SDK）与最后一条退出标准（App Playwright 走真实本地 Server 完成董事会消息到 Thread 主路径）当前**均无代码载体**；浏览器 Gate 已改为跑在 `e2e/fake-control-plane.ts` 上。
-- 未达成项：主要工作第 7 条的八种高信号只有六种能真实产生——`signal-projector.ts` 的白名单是 conclusion/plan/status/risk/intervention 五种，decision 走董事会立项独立路径，approval 与 delivery 即使带事实源也会被拒为 `unsupported_signal`。
-- 重建归属：会话与 Thread 的用户界面按体验重构计划在 R2（WORK-02、WORK-03）重建，不在本里程碑内补做。本节其余内容作为控制面契约的退出标准继续有效。
+- 真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry、SSE 重连和 Desktop sidecar 已收口；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
+- `/company/board` 已读取真实 Board、Ledger、Shadow/Advisor 与人工接管投影，不再重定向到 `/work`。
+- 公司群聊、完整 Thread 工作日志、Artifact/Delivery 消费与高信号覆盖仍按体验重构计划的 WORK/DELIV Task 验收，不能由 Board 页面存在推断完成。
 
 主要工作：
 
