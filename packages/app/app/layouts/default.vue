@@ -7,8 +7,22 @@ import {
 
 const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const route = useRoute();
+const scopedNavigationTargets = new Set(["/company/board", "/team"]);
 const appConfig = useAppConfig();
-const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigation));
+const routeProjectID = computed(() => {
+  const queryProject = typeof route.query.project === "string" ? route.query.project : "";
+  if (queryProject) return queryProject;
+  if (!route.path.startsWith("/work/")) return "";
+  return Array.isArray(route.params.projectID)
+    ? route.params.projectID[0] ?? ""
+    : typeof route.params.projectID === "string"
+      ? route.params.projectID
+      : "";
+});
+const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigation).map(item =>
+  scopedNavigationTargets.has(item.to) && routeProjectID.value
+    ? { ...item, to: `${item.to}?project=${encodeURIComponent(routeProjectID.value)}` }
+    : item));
 const pageTitle = computed(() => activeShellNavigationItem(navigation.value, route.path)?.label);
 
 useHead(() => ({
@@ -36,10 +50,10 @@ useHead(() => ({
     >
       <template #header="{ collapsed }">
         <NuxtLink
-          to="/inbox"
+          to="/company"
           class="ac-shell-brand"
           :class="{ 'ac-shell-brand--collapsed': collapsed }"
-          aria-label="Agent Company Inbox"
+          aria-label="Agent Company 公司总览"
         >
           <Logo class="ac-shell-brand__mark" />
           <span v-if="!collapsed" class="ac-shell-brand__text">

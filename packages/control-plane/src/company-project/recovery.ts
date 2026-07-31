@@ -1,8 +1,9 @@
 import { Context, Effect, Layer } from "effect"
-import { asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, gte } from "drizzle-orm"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import { WorkflowRunTable } from "@/workflow/workflow.sql"
 import {
   CompanyProjectEventTable,
   CompanyProjectTable,
@@ -66,13 +67,36 @@ function reconcileWorkItems() {
             : undefined
           const run = attempt?.agent_run_id
             ? db.select().from(AgentRunTable).where(eq(AgentRunTable.id, attempt.agent_run_id)).get()
-            : undefined
+            : attempt
+              ? db
+                  .select()
+                  .from(AgentRunTable)
+                  .where(
+                    and(
+                      eq(AgentRunTable.company_project_id, item.project_id),
+                      eq(AgentRunTable.work_item_id, item.id),
+                      gte(AgentRunTable.time_created, attempt.started_at),
+                    ),
+                  )
+                  .orderBy(desc(AgentRunTable.time_created), desc(AgentRunTable.id))
+                  .get()
+              : undefined
           const now = Date.now()
+          const workflow = item.workflow_run_id
+            ? db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, item.workflow_run_id)).get()
+            : undefined
+          const workflowFinalizing =
+            workflow &&
+            workflow.status !== "running" &&
+            workflow.time_updated <= now &&
+            now - workflow.time_updated < 30_000
           const nextStatus =
             receipt && attempt?.status === "completed"
               ? "completed"
               : receipt && attempt?.status !== "running"
                 ? "blocked"
+                : workflow?.status === "running" || workflowFinalizing
+                  ? "running"
                 : run && ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(run.state)
                   ? "running"
                   : "blocked"

@@ -58,7 +58,7 @@ function toggleStartup() {
       />
     </span>
     <div>
-      <p class="company-eyebrow">Local Control Plane</p>
+      <p class="company-eyebrow">本地运行服务</p>
       <h2>{{ issue?.title ?? "正在连接本地服务" }}</h2>
       <p>{{ issue?.detail ?? "正在读取真实公司状态，请稍候。" }}</p>
       <p v-if="issue" class="company-connection-state__impact">

@@ -9,10 +9,15 @@ import type {
 import type { CompanyBoardThread } from "../../../modules/agent-company/runtime/shared/company-contract"
 
 const { data: snapshot, refresh } = useCompanySnapshot()
+const route = useRoute()
+const initialRouteProject = typeof route.query.project === "string" ? route.query.project : ""
 const board = ref<FounderBoardGovernanceProjection | null>(null)
 const thread = ref<CompanyBoardThread | null>(null)
 const loading = ref(false)
 const actionMessage = ref("")
+const companyScopeConfirmed = ref(false)
+const scopeInitialized = ref(Boolean(initialRouteProject))
+const appliedRouteProject = ref(initialRouteProject)
 const intervention = reactive({
   kind: "takeover" as "takeover" | "pause" | "correct" | "reject" | "redefine_goal",
   projectId: "",
@@ -20,7 +25,7 @@ const intervention = reactive({
   newGoal: "",
 })
 const shadowRun = reactive({
-  projectId: "",
+  projectId: initialRouteProject,
   currentGoal: "",
 })
 const comparison = reactive({
@@ -38,23 +43,163 @@ const convergence = reactive({
   context: "",
   timeoutMinutes: 30,
 })
+const selectedShadowProject = computed(() =>
+  snapshot.value.projects.find((project) => project.id === shadowRun.projectId))
+const scopeProjectID = computed(() =>
+  typeof route.query.project === "string" ? route.query.project : "")
+const scopeProject = computed(() =>
+  snapshot.value.projects.find((project) => project.id === scopeProjectID.value))
+const projectScoped = computed(() => Boolean(scopeProjectID.value))
+const shadowScopeReady = computed(() =>
+  Boolean(shadowRun.projectId) || companyScopeConfirmed.value || snapshot.value.projects.length === 0)
+const visibleBoardMessages = computed(() =>
+  projectScoped.value
+    ? snapshot.value.messages.filter((message) => message.body.includes(scopeProjectID.value))
+    : snapshot.value.messages)
 const boardThreadId = computed(() =>
-  [...snapshot.value.messages].reverse().find((message) => message.threadID)?.threadID)
+  [...visibleBoardMessages.value].reverse().find((message) => message.threadID)?.threadID)
 const boardMessages = computed(() =>
-  snapshot.value.messages.filter((message) => message.threadID === boardThreadId.value))
+  visibleBoardMessages.value.filter((message) => message.threadID === boardThreadId.value))
 const currentRequest = computed(() =>
   [...boardMessages.value].reverse().find((message) => message.kind === "user") ?? boardMessages.value.at(-1))
+const visibleShadowDecisions = computed(() =>
+  (board.value?.shadow.decisions ?? []).filter((decision) =>
+    !projectScoped.value || (decision.scope.kind === "project" && decision.scope.ref === scopeProjectID.value)))
+const visibleDecisions = computed(() =>
+  (board.value?.decisions ?? []).filter((decision) =>
+    !projectScoped.value
+    || (decision.scope.type === "project" && decision.scope.projectId === scopeProjectID.value)))
+const visibleAssets = computed(() =>
+  (board.value?.assets ?? []).filter((asset) =>
+    !projectScoped.value
+    || asset.scope.kind === "company"
+    || (asset.scope.kind === "project" && asset.scope.ref === scopeProjectID.value)))
+const interventionActionLabel = computed(() => ({
+  takeover: "接管",
+  pause: "暂停",
+  correct: "纠正",
+  reject: "否决",
+  redefine_goal: "重定义目标",
+})[intervention.kind])
+const interventionEffect = computed(() =>
+  intervention.projectId
+    ? `提交“${interventionActionLabel.value}”会立即锁定创始人代理，并暂停所选项目的在途工作。`
+    : `提交“${interventionActionLabel.value}”会锁定创始人代理，不会停止任何项目。`)
+function modeLabel(value?: string | null) {
+  return ({
+    off: "关闭",
+    shadow: "影子建议",
+    advisor: "顾问建议",
+    "green-delegated": "绿色委托",
+    "yellow-delegated": "黄色委托",
+  } as Record<string, string>)[value ?? "off"] ?? value ?? "关闭"
+}
+function governanceStatusLabel(value?: string | null) {
+  return ({
+    authorized: "已授权",
+    not_confirmed: "未确认授权",
+    unavailable: "状态不可用",
+  } as Record<string, string>)[value ?? "unavailable"] ?? value ?? "状态不可用"
+}
+function authorityLabel(value?: string | null) {
+  return ({
+    green: "绿色权限",
+    yellow: "黄色权限",
+    red: "红色权限",
+  } as Record<string, string>)[value ?? "unknown"] ?? "权限未判定"
+}
+function decisionStatusLabel(value?: string | null) {
+  return ({
+    suggested: "已生成建议",
+    blocked: "已阻断",
+    proposed: "已提出",
+    awaiting_approval: "等待批准",
+    accepted: "已接受",
+    executed: "已执行",
+    overridden: "已被人工推翻",
+    failed: "执行失败",
+    rolled_back: "已回滚",
+    unknown: "状态未知",
+  } as Record<string, string>)[value ?? "unknown"] ?? "状态未知"
+}
+function blockReasonLabel(value: string) {
+  return ({
+    snapshot_missing: "缺少创始人偏好快照",
+    snapshot_checksum_invalid: "创始人偏好快照校验失败",
+    context_insufficient: "当前上下文不足",
+    asset_reference_missing: "缺少治理依据",
+    asset_scope_forbidden: "治理依据超出可用范围",
+    evidence_reference_invalid: "证据引用无效",
+    model_unavailable: "模型服务不可用",
+    model_timeout: "模型响应超时",
+    model_output_missing: "模型没有返回建议",
+    model_output_invalid: "模型建议格式无法识别",
+  } as Record<string, string>)[value] ?? "治理条件未满足"
+}
+
+function shortWorkID(value: string) {
+  return value.slice(-8)
+}
+
+function projectStatusLabel(value: string) {
+  return ({
+    running: "执行中",
+    reviewing: "复核中",
+    delivered: "待验收",
+    accepted: "已接受",
+    blocked: "受阻",
+    failed: "未完成",
+    cancelled: "已取消",
+  } as Record<string, string>)[value] ?? value
+}
+
+function personLabel(value?: string | null) {
+  if (!value) return ""
+  return ({
+    CEO: "首席执行官",
+    ceo: "首席执行官",
+    CTO: "技术负责人",
+    cto: "技术负责人",
+    "Product Lead": "产品负责人",
+    product_lead: "产品负责人",
+    "board-product-lead": "产品负责人",
+    "project-planner": "项目规划负责人",
+  } as Record<string, string>)[value]
+    ?? value
+      .replace(/\s+independent reviewer\b/gi, "（独立复核）")
+      .replace(/\bProject Charter\b/gi, "项目章程")
+      .replace(/\bCharter\b/gi, "工作章程")
+}
+
+function boardPersonLabel(name: string, role?: string | null) {
+  const nameLabel = personLabel(name)
+  const roleLabel = personLabel(role)
+  return roleLabel && roleLabel !== nameLabel ? `${nameLabel} · ${roleLabel}` : nameLabel
+}
 
 function seedForms() {
-  shadowRun.currentGoal ||= snapshot.value.company.setupGoal
-    ?? snapshot.value.projects.at(0)?.title
+  const requestedProjectID = typeof route.query.project === "string" ? route.query.project : ""
+  const requestedProject = snapshot.value.projects.find((project) => project.id === requestedProjectID)
+  if (requestedProject && appliedRouteProject.value !== requestedProject.id) {
+    shadowRun.projectId = requestedProject.id
+    shadowRun.currentGoal = requestedProject.title
+    intervention.projectId = requestedProject.id
+    appliedRouteProject.value = requestedProject.id
+    scopeInitialized.value = true
+  } else if (!scopeInitialized.value && snapshot.value.projects.length) {
+    shadowRun.projectId = snapshot.value.projects.at(0)?.id ?? ""
+    shadowRun.currentGoal = snapshot.value.projects.at(0)?.title ?? ""
+    scopeInitialized.value = true
+  }
+  shadowRun.currentGoal ||= selectedShadowProject.value?.title
+    ?? snapshot.value.company.setupGoal
     ?? "评估当前公司目标与讨论"
-  comparison.shadowDecisionId ||= board.value?.shadow.decisions.at(0)?.id ?? ""
-  comparison.actualDecisionId ||= board.value?.decisions.at(0)?.id ?? ""
-  comparison.actualDecision ||= board.value?.decisions.at(0)?.finalDecision
-    ?? board.value?.decisions.at(0)?.recommendation
+  comparison.shadowDecisionId ||= visibleShadowDecisions.value.at(0)?.id ?? ""
+  comparison.actualDecisionId ||= visibleDecisions.value.at(0)?.id ?? ""
+  comparison.actualDecision ||= visibleDecisions.value.at(0)?.finalDecision
+    ?? visibleDecisions.value.at(0)?.recommendation
     ?? ""
-  convergence.shadowDecisionId ||= board.value?.shadow.decisions.at(0)?.id ?? ""
+  convergence.shadowDecisionId ||= visibleShadowDecisions.value.at(0)?.id ?? ""
   convergence.channelMessageId ||= currentRequest.value?.id ?? ""
   convergence.driAgentId ||= snapshot.value.agents.at(0)?.id ?? ""
   convergence.subject ||= currentRequest.value?.body ?? ""
@@ -82,6 +227,10 @@ async function loadBoard() {
 
 async function runShadow() {
   if (!shadowRun.currentGoal.trim() || loading.value) return
+  if (!shadowScopeReady.value) {
+    actionMessage.value = "请先选择一项工作；若确需综合多项工作，请明确确认公司范围。"
+    return
+  }
   loading.value = true
   actionMessage.value = ""
   const source = currentRequest.value
@@ -95,11 +244,11 @@ async function runShadow() {
           : { kind: "company" },
         currentGoal: shadowRun.currentGoal,
         discussion: boardMessages.value.map((message) => `${message.author}: ${message.body}`).join("\n")
-          || "当前 Board 尚无可用讨论记录。",
-        authorizationBoundary: "Shadow 只生成建议，不发言、不建 Gate、不执行。",
+          || "当前董事会尚无可用讨论记录。",
+        authorizationBoundary: "影子模式只生成建议，不发言、不创建审批、不执行。",
         currentFacts: [
-          `Provider: ${snapshot.value.company.provider}`,
-          `Approval policy: ${snapshot.value.company.approvalPolicy}`,
+          `模型服务：${snapshot.value.company.provider}`,
+          `审批策略：${snapshot.value.company.approvalPolicy}`,
         ],
         evidenceRefs: source
           ? [{ kind: "conversation", id: source.id, validity: "verified" }]
@@ -110,10 +259,10 @@ async function runShadow() {
   }).then(
     (result) => {
       actionMessage.value = result.status === "suggested"
-        ? "Shadow 建议已写入只读投影。"
-        : `Shadow 保持阻断：${result.blockReasons.join("、")}`
+        ? "影子建议已写入只读记录。"
+        : `影子建议保持阻断：${result.blockReasons.map(blockReasonLabel).join("、")}`
     },
-    () => actionMessage.value = "Shadow 请求未写入，请检查上下文与 Control Plane 状态。",
+    () => actionMessage.value = "影子建议未写入，请检查上下文与本地服务状态。",
   )
   loading.value = false
   await loadBoard()
@@ -146,10 +295,10 @@ async function compareShadow() {
     },
   }).then(
     () => {
-      actionMessage.value = "Shadow 对照已写入，未冒充人工确认样本。"
+      actionMessage.value = "影子建议对照已写入，未冒充人工确认样本。"
       comparison.rationale = ""
     },
-    () => actionMessage.value = "Shadow 对照未写入，请检查 Ledger 引用。",
+    () => actionMessage.value = "影子建议对照未写入，请检查决策台账引用。",
   )
   loading.value = false
   await loadBoard()
@@ -188,9 +337,9 @@ async function convergeAdvisor() {
     },
   }).then(
     (result) => actionMessage.value = result.status === "intent_recorded"
-      ? "Advisor DecisionIntent 已写入 Ledger，未创建执行。"
-      : `Advisor 保持 ${result.status}：${result.events.at(-1)?.reason ?? result.authority.reason}`,
-    () => actionMessage.value = "Advisor 收敛未写入，请检查 Board 来源链。",
+      ? "顾问代理的决策意图已写入决策台账，未创建执行。"
+      : `顾问代理保持未执行：${result.events.at(-1)?.reason ?? result.authority.reason}`,
+    () => actionMessage.value = "顾问代理未能形成决策意图，请检查董事会来源链。",
   )
   loading.value = false
   await loadBoard()
@@ -220,7 +369,7 @@ async function intervene() {
       intervention.newGoal = ""
     })
     .catch(() => {
-      actionMessage.value = "接管记录未完成，请检查 Control Plane 状态。"
+      actionMessage.value = "接管记录未完成，请检查本地服务状态。"
     })
   loading.value = false
   await Promise.all([loadBoard(), refresh()])
@@ -229,6 +378,13 @@ async function intervene() {
 onMounted(loadBoard)
 watch(() => snapshot.value.company.id, (companyId) => {
   if (companyId) loadBoard()
+})
+watch(
+  () => [route.query.project, snapshot.value.projects.map((project) => project.id).join(",")],
+  seedForms,
+)
+watch(() => shadowRun.projectId, () => {
+  companyScopeConfirmed.value = false
 })
 </script>
 
@@ -251,29 +407,34 @@ watch(() => snapshot.value.company.id, (companyId) => {
       <main id="main-content" class="company-page founder-board-page" lang="zh">
         <header class="company-page__header founder-board-page__header">
           <div>
-            <p class="company-eyebrow">Founder governance board</p>
+            <p class="company-eyebrow">创始人治理</p>
             <h1>董事会治理</h1>
-            <p class="company-page__lede">讨论、依据、Decision Ledger 与人类接管共享同一条可追溯事实链。</p>
+            <p class="company-page__lede">
+              <template v-if="projectScoped">
+                当前仅显示“{{ scopeProject?.title ?? `工作 #${shortWorkID(scopeProjectID)}` }}”的治理记录。
+              </template>
+              <template v-else>讨论、依据、决策台账与人工接管共享同一条可追溯事实链。</template>
+            </p>
           </div>
           <div class="founder-principal">
             <span class="founder-principal__mark" aria-hidden="true">董</span>
             <div>
               <strong>{{ board?.principal.displayName ?? "AI 大东 · 创始人代理" }}</strong>
-              <span>主体 board-ceo · 非新增员工</span>
+              <span>董事会创始人代理 · 非新增员工</span>
             </div>
           </div>
         </header>
 
         <CompanyModuleNav />
 
-        <section class="founder-board-status" aria-label="Advisor 状态">
+        <section class="founder-board-status" aria-label="顾问代理状态">
           <div>
             <span>当前模式</span>
-            <strong>{{ board?.mode.effective.founderTwinMode ?? "off" }}</strong>
+            <strong>{{ modeLabel(board?.mode.effective.founderTwinMode) }}</strong>
           </div>
           <div>
             <span>治理授权</span>
-            <strong>{{ board?.authorization.status ?? "not_confirmed" }}</strong>
+            <strong>{{ governanceStatusLabel(board?.authorization.status) }}</strong>
           </div>
           <div>
             <span>代理发言</span>
@@ -282,14 +443,14 @@ watch(() => snapshot.value.company.id, (companyId) => {
         </section>
 
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
-          当前模式或真实授权尚未满足，Advisor 收敛保持 fail-closed，页面不能提高模式。
+          当前模式或真实授权尚未满足，顾问代理保持安全关闭，页面不能提高模式。
         </p>
 
         <div class="founder-board-layout">
           <section class="company-section founder-board-takeover">
             <div class="company-section__heading">
               <div>
-                <p class="company-eyebrow">Shadow run</p>
+                <p class="company-eyebrow">影子建议</p>
                 <h2>生成只读建议</h2>
               </div>
             </div>
@@ -300,43 +461,50 @@ watch(() => snapshot.value.company.id, (companyId) => {
             <label>
               <span>项目范围</span>
               <select v-model="shadowRun.projectId">
-                <option value="">公司范围</option>
+                <option value="">公司范围（需明确确认）</option>
                 <option v-for="project in snapshot.projects" :key="project.id" :value="project.id">
-                  {{ project.title }}
+                  {{ project.title }} · {{ projectStatusLabel(project.status) }} · #{{ shortWorkID(project.id) }}
                 </option>
               </select>
+            </label>
+            <label v-if="!shadowRun.projectId && snapshot.projects.length">
+              <input v-model="companyScopeConfirmed" type="checkbox">
+              <span>我确认这条建议可综合多项工作的公司范围信息。</span>
             </label>
             <UButton
               color="neutral"
               :loading="loading"
-              :disabled="!shadowRun.currentGoal.trim()"
+              :disabled="!shadowRun.currentGoal.trim() || !shadowScopeReady"
               @click="runShadow"
             >
-              运行 Shadow
+              生成影子建议
             </UButton>
           </section>
 
-          <section class="company-section founder-board-takeover">
+          <section
+            v-if="visibleShadowDecisions.length && visibleDecisions.length"
+            class="company-section founder-board-takeover"
+          >
             <div class="company-section__heading">
               <div>
-                <p class="company-eyebrow">Shadow compare</p>
+                <p class="company-eyebrow">建议对照</p>
                 <h2>对照真实决定</h2>
               </div>
             </div>
             <label>
-              <span>Shadow</span>
+              <span>影子建议</span>
               <select v-model="comparison.shadowDecisionId">
                 <option value="">选择建议</option>
-                <option v-for="decision in board?.shadow.decisions ?? []" :key="decision.id" :value="decision.id">
+                <option v-for="decision in visibleShadowDecisions" :key="decision.id" :value="decision.id">
                   {{ decision.recommendation || decision.id }}
                 </option>
               </select>
             </label>
             <label>
-              <span>Ledger 决定</span>
+              <span>决策台账中的真实决定</span>
               <select v-model="comparison.actualDecisionId">
                 <option value="">选择决定</option>
-                <option v-for="decision in board?.decisions ?? []" :key="decision.id" :value="decision.id">
+                <option v-for="decision in visibleDecisions" :key="decision.id" :value="decision.id">
                   {{ decision.subject || decision.id }}
                 </option>
               </select>
@@ -369,20 +537,23 @@ watch(() => snapshot.value.company.id, (companyId) => {
           </section>
         </div>
 
-        <section class="company-section founder-board-takeover">
+        <section
+          v-if="board?.advisorCanSpeak && thread?.run?.id"
+          class="company-section founder-board-takeover"
+        >
           <div class="company-section__heading">
             <div>
-              <p class="company-eyebrow">Advisor converge</p>
-              <h2>收敛为 DecisionIntent</h2>
+              <p class="company-eyebrow">顾问代理收敛</p>
+              <h2>形成决策意图</h2>
             </div>
-            <span>{{ thread?.run?.id ?? "缺少 Board Run" }}</span>
+            <span>{{ thread?.run?.id ? "董事会讨论已连接" : "缺少董事会讨论" }}</span>
           </div>
           <div class="founder-board-layout">
             <label>
-              <span>Shadow</span>
+              <span>影子建议</span>
               <select v-model="convergence.shadowDecisionId">
                 <option value="">选择建议</option>
-                <option v-for="decision in board?.shadow.decisions ?? []" :key="decision.id" :value="decision.id">
+                <option v-for="decision in visibleShadowDecisions" :key="decision.id" :value="decision.id">
                   {{ decision.recommendation || decision.id }}
                 </option>
               </select>
@@ -397,11 +568,11 @@ watch(() => snapshot.value.company.id, (companyId) => {
               </select>
             </label>
             <label>
-              <span>DRI Agent</span>
+              <span>直接负责人</span>
               <select v-model="convergence.driAgentId">
-                <option value="">选择 Agent</option>
+                <option value="">选择负责人</option>
                 <option v-for="agent in snapshot.agents" :key="agent.id" :value="agent.id">
-                  {{ agent.name }} · {{ agent.role }}
+                  {{ boardPersonLabel(agent.name, agent.role) }}
                 </option>
               </select>
             </label>
@@ -424,39 +595,41 @@ watch(() => snapshot.value.company.id, (companyId) => {
             :disabled="!board?.advisorCanSpeak || !thread?.run?.id || !convergence.channelMessageId || !convergence.shadowDecisionId || !convergence.driAgentId || !convergence.subject.trim() || !convergence.context.trim()"
             @click="convergeAdvisor"
           >
-            写入 Advisor Intent
+            写入决策意图
           </UButton>
-          <p class="company-provider-form__message">只写入治理意图与 Ledger，不创建 WorkItem 或执行。</p>
+          <p class="company-provider-form__message">只写入治理意图与决策台账，不创建工作项或执行。</p>
         </section>
 
         <div class="founder-board-layout">
           <section class="company-section founder-board-discussion">
             <div class="company-section__heading">
               <div>
-                <p class="company-eyebrow">Board record</p>
+                <p class="company-eyebrow">董事会记录</p>
                 <h2>真实讨论记录</h2>
               </div>
             </div>
             <div class="founder-board-messages">
-              <article v-for="message in snapshot.messages" :key="message.id">
+              <article v-for="message in visibleBoardMessages" :key="message.id">
                 <header>
-                  <strong>{{ message.author }}</strong>
-                  <span>{{ message.role }} · {{ message.time }}</span>
+                  <strong>{{ personLabel(message.author) }}</strong>
+                  <span>{{ personLabel(message.role) ? `${personLabel(message.role)} · ` : "" }}{{ message.time }}</span>
                 </header>
                 <p>{{ message.body }}</p>
               </article>
-              <p v-if="!snapshot.messages.length" class="company-empty">暂无已持久化 Board 消息。</p>
+              <p v-if="!visibleBoardMessages.length" class="company-empty">
+                {{ projectScoped ? "当前工作暂无董事会治理消息；执行协作请回到工作页查看项目讨论。" : "暂无已保存的董事会消息。" }}
+              </p>
             </div>
           </section>
 
-          <aside class="company-section founder-board-takeover">
+          <aside v-if="boardThreadId" class="company-section founder-board-takeover">
             <div class="company-section__heading">
               <div>
-                <p class="company-eyebrow">Human control</p>
+                <p class="company-eyebrow">人工控制</p>
                 <h2>立即接管</h2>
               </div>
             </div>
-            <p>写入 fence 后，创始人代理停止发言；已选项目通过现有停止链取消在途工作。</p>
+            <p>{{ interventionEffect }}</p>
             <label>
               <span>动作</span>
               <select v-model="intervention.kind">
@@ -470,7 +643,7 @@ watch(() => snapshot.value.company.id, (companyId) => {
             <label>
               <span>关联项目</span>
               <select v-model="intervention.projectId">
-                <option value="">仅停止当前 Board 代理</option>
+                <option value="">仅停止当前董事会代理</option>
                 <option v-for="project in snapshot.projects" :key="project.id" :value="project.id">
                   {{ project.title }}
                 </option>
@@ -490,9 +663,9 @@ watch(() => snapshot.value.company.id, (companyId) => {
               :disabled="!boardThreadId || !intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())"
               @click="intervene"
             >
-              写入接管并停止
+              提交“{{ interventionActionLabel }}”{{ intervention.projectId ? "并暂停项目" : "并锁定代理" }}
             </UButton>
-            <p v-if="!boardThreadId" class="company-provider-form__message">当前没有可关联的 Board Thread。</p>
+            <p v-if="!boardThreadId" class="company-provider-form__message">当前没有可关联的董事会讨论。</p>
             <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
           </aside>
         </div>
@@ -500,27 +673,27 @@ watch(() => snapshot.value.company.id, (companyId) => {
         <section class="company-section">
           <div class="company-section__heading">
             <div>
-              <p class="company-eyebrow">Shadow projection</p>
-              <h2>Shadow 决策投影</h2>
+              <p class="company-eyebrow">影子建议记录</p>
+              <h2>影子建议</h2>
             </div>
-            <span>{{ board?.shadow.decisions.length ?? 0 }} 条</span>
+            <span>{{ visibleShadowDecisions.length }} 条</span>
           </div>
           <div class="founder-decision-list">
-            <article v-for="decision in board?.shadow.decisions ?? []" :key="decision.id">
+            <article v-for="decision in visibleShadowDecisions" :key="decision.id">
               <header>
                 <div>
-                  <strong>{{ decision.recommendation || "Shadow 决策被阻断" }}</strong>
-                  <span>{{ decision.status }} · {{ decision.authorityClass ?? "unknown" }} · 只读</span>
+                  <strong>{{ decision.recommendation || "影子建议已被阻断" }}</strong>
+                  <span>{{ decisionStatusLabel(decision.status) }} · {{ authorityLabel(decision.authorityClass) }} · 只读</span>
                 </div>
                 <span class="founder-confidence">
                   {{ decision.confidence === undefined ? "置信度未记录" : `置信度 ${Math.round(decision.confidence * 100)}%` }}
                 </span>
               </header>
               <p v-if="decision.blockReasons.length">
-                阻断：{{ decision.blockReasons.join("、") }}
+                阻断：{{ decision.blockReasons.map(blockReasonLabel).join("、") }}
               </p>
               <details>
-                <summary>查看 Shadow 依据</summary>
+                <summary>查看影子建议依据</summary>
                 <div class="founder-evidence-groups">
                   <div>
                     <strong>原则</strong>
@@ -545,27 +718,27 @@ watch(() => snapshot.value.company.id, (companyId) => {
                 </div>
               </details>
             </article>
-            <p v-if="!board?.shadow.decisions.length" class="company-empty">暂无 Shadow 决策投影。</p>
+            <p v-if="!visibleShadowDecisions.length" class="company-empty">当前范围暂无影子建议。</p>
           </div>
         </section>
 
         <section class="company-section">
           <div class="company-section__heading">
             <div>
-              <p class="company-eyebrow">Decision evidence</p>
-              <h2>Advisor 依据与 Ledger</h2>
+              <p class="company-eyebrow">决策依据</p>
+              <h2>顾问代理依据与决策台账</h2>
             </div>
           </div>
           <div class="founder-decision-list">
             <article
-              v-for="decision in board?.decisions ?? []"
+              v-for="decision in visibleDecisions"
               :id="`decision-${decision.id}`"
               :key="decision.id"
             >
               <header>
                 <div>
                   <strong>{{ decision.subject || "未命名治理决定" }}</strong>
-                  <span>{{ decision.authorityClass ?? "unknown" }} · {{ decision.currentStatus }}</span>
+                  <span>{{ authorityLabel(decision.authorityClass) }} · {{ decisionStatusLabel(decision.currentStatus) }}</span>
                 </div>
                 <span class="founder-confidence">
                   {{ decision.confidence === null ? "置信度未记录" : `置信度 ${Math.round(decision.confidence * 100)}%` }}
@@ -604,20 +777,20 @@ watch(() => snapshot.value.company.id, (companyId) => {
                 </div>
               </details>
             </article>
-            <p v-if="!board?.decisions.length" class="company-empty">暂无 Ledger 决定。</p>
+            <p v-if="!visibleDecisions.length" class="company-empty">当前范围暂无决策台账记录。</p>
           </div>
         </section>
 
         <section class="company-section">
           <div class="company-section__heading">
             <div>
-              <p class="company-eyebrow">Referenced assets</p>
+              <p class="company-eyebrow">引用资产</p>
               <h2>治理资产版本</h2>
             </div>
           </div>
           <div class="founder-asset-index">
             <article
-              v-for="asset in board?.assets ?? []"
+              v-for="asset in visibleAssets"
               :id="`asset-${asset.id}-${asset.version}`"
               :key="`${asset.id}:${asset.version}`"
             >

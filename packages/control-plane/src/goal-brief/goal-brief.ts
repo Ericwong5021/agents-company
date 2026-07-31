@@ -603,6 +603,18 @@ export function get(briefID: string, version?: number): GoalBriefValue | undefin
   return row ? versionFromRow(rootFromRow(root), row) : undefined
 }
 
+export function getByGenerationRequest(requestID: string): GoalBriefValue | undefined {
+  return Database.use((db) => {
+    const request = db
+      .select()
+      .from(GoalBriefGenerationRequestTable)
+      .where(eq(GoalBriefGenerationRequestTable.request_id, requestID))
+      .get()
+    if (!request?.brief_id) return
+    return fromDatabase(db, request.brief_id)
+  })
+}
+
 export function history(briefID: string) {
   const root = Database.use((db) => db.select().from(GoalBriefTable).where(eq(GoalBriefTable.id, briefID)).get())
   if (!root) return undefined

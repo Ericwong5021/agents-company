@@ -4,6 +4,7 @@ import type {
   CompanyCommonsSearchResponses,
   CompanyCommonsSourcesResponses,
 } from "@agents-company/sdk/v2";
+import type { WorkProjection } from "@agents-company/shared/experience";
 
 type CommonsCapabilityRecord = CompanyCommonsCapabilitiesResponses[200][number];
 type CommonsSourceRecord = CompanyCommonsSourcesResponses[200][number];
@@ -14,6 +15,9 @@ type CommonsWorkspace = {
 
 const appConfig = useAppConfig();
 const { data: snapshot, pending, refresh } = useCompanySnapshot();
+const { data: archivedWork } = useFetch<WorkProjection[]>("/api/agent-company/archived-work", {
+  default: () => [],
+});
 const {
   data: commons,
   pending: commonsPending,
@@ -37,6 +41,47 @@ const deliveries = computed(() => snapshot.value.work
         workTitle: work.summary.title,
       }]
     : []));
+const archivedDeliveries = computed(() => archivedWork.value
+  .filter(work => work.availability === "available")
+  .flatMap(work => work.delivery
+    ? [{
+        ...work.delivery,
+        workTitle: work.summary.title,
+      }]
+    : []));
+const archivedStageResults = computed(() => archivedWork.value
+  .filter((work): work is Extract<WorkProjection, { availability: "available" }> =>
+    work.availability === "available"
+    && !work.delivery
+    && work.progress.completedItems > 0));
+const archivedResultCount = computed(() =>
+  archivedDeliveries.value.length + archivedStageResults.value.length);
+const stageResults = computed(() => snapshot.value.work
+  .filter((work): work is Extract<WorkProjection, { availability: "available" }> =>
+    work.availability === "available"
+    && !work.delivery
+    && work.progress.completedItems > 0));
+const primaryWorkID = computed(() => {
+  const work = snapshot.value.work[0];
+  if (!work) return "";
+  return work.availability === "available" ? work.summary.workId : work.workId;
+});
+const currentDeliveries = computed(() =>
+  deliveries.value.filter(delivery => delivery.workId === primaryWorkID.value));
+const historicalDeliveries = computed(() =>
+  deliveries.value.filter(delivery => delivery.workId !== primaryWorkID.value));
+const currentStageResults = computed(() =>
+  stageResults.value.filter(work => work.summary.workId === primaryWorkID.value));
+const historicalStageResults = computed(() =>
+  stageResults.value.filter(work => work.summary.workId !== primaryWorkID.value));
+const currentUnavailableWork = computed(() =>
+  unavailableWork.value.filter(work => work.workId === primaryWorkID.value));
+const historicalUnavailableWork = computed(() =>
+  unavailableWork.value.filter(work => work.workId !== primaryWorkID.value));
+const historicalResultCount = computed(() =>
+  historicalDeliveries.value.length +
+  historicalStageResults.value.length +
+  historicalUnavailableWork.value.length);
 const dateTime = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
   month: "short",
@@ -101,6 +146,20 @@ const scopeLabel: Record<CommonsSourceRecord["privacy_scope"], string> = {
   project: "项目",
   private: "仅自己",
 };
+
+function humanLabel(value: string) {
+  return value
+    .replace(/\s+independent reviewer\b/gi, "（独立复核）")
+    .replace(/\bControl Plane Verification\b/gi, "系统核验")
+    .replace(/\bDelivery v(\d+)\b/gi, "交付版本 $1")
+    .replace(/\bProject Charter\b/gi, "项目章程")
+    .replace(/\bCharter\b/gi, "工作章程")
+    .replace(/\bDelivery\b/gi, "交付")
+    .replace(/\bArtifacts?\b/gi, "成果")
+    .replace(/持久化\s+成果/g, "持久化成果")
+    .replace(/定义\s+工作章程\s+与任务树/g, "定义工作章程与任务树")
+    .replace(/项目章程\s+与动态任务计划/g, "项目章程与动态任务计划");
+}
 
 function resetImport() {
   title.value = "";
@@ -247,10 +306,10 @@ function clearSearch() {
       <div class="ac-workspace-page">
         <header class="ac-workspace-header">
           <div>
-            <p class="ac-workspace-eyebrow">Durable company memory</p>
-            <h1 class="ac-workspace-title">Library</h1>
+            <p class="ac-workspace-eyebrow">持久化资料与成果</p>
+            <h1 class="ac-workspace-title">成果库</h1>
             <p class="ac-workspace-lede">
-              原始资料、解析状态与可验证交付都保存在本地 Control Plane。
+              原始资料、解析状态与可验证交付都保存在本地服务。
             </p>
           </div>
           <UButton
@@ -265,14 +324,14 @@ function clearSearch() {
         </header>
 
         <div class="ac-work-toolbar">
-          <div class="ac-work-tabs" role="tablist" aria-label="Library 视图">
+          <div class="ac-work-tabs" role="tablist" aria-label="成果库视图">
             <button
               type="button"
               class="ac-work-tab"
               :data-active="activeTab === 'commons'"
               @click="activeTab = 'commons'"
             >
-              Commons inbox
+              原始资料
               <span class="ac-work-tab__count">{{ commons.sources.length }}</span>
             </button>
             <button
@@ -282,16 +341,16 @@ function clearSearch() {
               @click="activeTab = 'deliveries'"
             >
               交付成果
-              <span class="ac-work-tab__count">{{ deliveries.length }}</span>
+              <span class="ac-work-tab__count">{{ deliveries.length + stageResults.length + unavailableWork.length }}</span>
             </button>
             <NuxtLink to="/library/interpretations" class="ac-work-tab">
-              Interpretations
+              资料解读
             </NuxtLink>
             <NuxtLink to="/library/beliefs" class="ac-work-tab">
-              Belief Lab
+              结论实验室
             </NuxtLink>
             <NuxtLink to="/library/patches" class="ac-work-tab">
-              Patches
+              修订记录
             </NuxtLink>
           </div>
 
@@ -431,7 +490,7 @@ function clearSearch() {
           <div v-if="commonsPending" class="ac-detail-panel" aria-live="polite">正在读取 Commons…</div>
           <div v-else-if="commonsError" class="ac-detail-panel ac-brief-state--error">
             <h2>Commons 暂时不可用</h2>
-            <p>页面不会用浏览器缓存替代 Control Plane 的持久化事实。</p>
+            <p>页面不会用浏览器缓存替代本地服务的持久化事实。</p>
             <UButton color="neutral" variant="outline" @click="refreshCommons()">重新读取</UButton>
           </div>
           <p v-else-if="searchError" class="ac-commons-error" role="alert">{{ searchError }}</p>
@@ -458,7 +517,7 @@ function clearSearch() {
                 </span>
               </div>
               <p class="ac-card-reason">
-                {{ source.error_message || source.origin || (source.author ? `作者：${source.author}` : "原文已保存到 Artifact") }}
+                {{ source.error_message || source.origin || (source.author ? `作者：${source.author}` : "原文已保存为成果") }}
               </p>
               <div class="ac-card-footer">
                 <span>{{ dateTimeWithTime.format(new Date(source.updated_at)) }}</span>
@@ -493,12 +552,13 @@ function clearSearch() {
           </div>
 
           <section
-            v-else-if="deliveries.length || unavailableWork.length"
+            v-else-if="deliveries.length || stageResults.length || unavailableWork.length || archivedResultCount"
             class="ac-card-list"
             aria-label="交付成果"
           >
+            <p class="ac-card-kicker">当前工作</p>
             <NuxtLink
-              v-for="work in unavailableWork"
+              v-for="work in currentUnavailableWork"
               :key="work.workId"
               :to="`/work/${encodeURIComponent(work.workId)}`"
               class="ac-library-card"
@@ -506,11 +566,11 @@ function clearSearch() {
               <div class="ac-card-heading">
                 <div>
                   <p class="ac-card-kicker">成果状态待确认</p>
-                  <h2>{{ work.title }}</h2>
+                  <h2>{{ humanLabel(work.title) }}</h2>
                 </div>
                 <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
               </div>
-              <p class="ac-card-reason">{{ work.reason.text }}</p>
+              <p class="ac-card-reason">{{ humanLabel(work.reason.text) }}</p>
               <div class="ac-card-footer">
                 <span>{{ work.diagnostics.length }} 项诊断</span>
                 <span class="ac-card-action">
@@ -521,7 +581,32 @@ function clearSearch() {
             </NuxtLink>
 
             <NuxtLink
-              v-for="delivery in deliveries"
+              v-for="work in currentStageResults"
+              :key="work.summary.workId"
+              :to="`/work/${encodeURIComponent(work.summary.workId)}`"
+              class="ac-library-card"
+            >
+              <div class="ac-card-heading">
+                <div>
+                  <p class="ac-card-kicker">阶段成果已保留</p>
+                  <h2>{{ humanLabel(work.summary.title) }}</h2>
+                </div>
+                <span class="ac-status-badge" :data-status="work.summary.userStatus">
+                  {{ work.progress.percent }}%
+                </span>
+              </div>
+              <p class="ac-card-reason">{{ humanLabel(work.summary.reason.text) }}</p>
+              <div class="ac-card-footer">
+                <span>{{ work.progress.completedItems }} / {{ work.progress.totalItems }} 项工作完成</span>
+                <span class="ac-card-action">
+                  查看已保存成果
+                  <UIcon name="i-lucide-arrow-right" />
+                </span>
+              </div>
+            </NuxtLink>
+
+            <NuxtLink
+              v-for="delivery in currentDeliveries"
               :key="delivery.id"
               :to="`/work/${encodeURIComponent(delivery.workId)}`"
               class="ac-library-card"
@@ -529,11 +614,11 @@ function clearSearch() {
               <div class="ac-card-heading">
                 <div>
                   <p class="ac-card-kicker">版本 {{ delivery.version }}</p>
-                  <h2>{{ delivery.workTitle }}</h2>
+                  <h2>{{ humanLabel(delivery.workTitle) }}</h2>
                 </div>
                 <time :datetime="delivery.updatedAt">{{ dateTime.format(new Date(delivery.updatedAt)) }}</time>
               </div>
-              <p class="ac-card-reason">{{ delivery.reason.text }}</p>
+              <p class="ac-card-reason">{{ humanLabel(delivery.reason.text) }}</p>
               <div class="ac-card-footer">
                 <span>{{ delivery.artifacts.length }} 项成果</span>
                 <span
@@ -548,6 +633,116 @@ function clearSearch() {
                 </span>
               </div>
             </NuxtLink>
+
+            <details v-if="historicalResultCount" class="ac-detail-panel">
+              <summary>历史工作与版本（{{ historicalResultCount }}）</summary>
+              <div class="ac-card-list">
+                <NuxtLink
+                  v-for="work in historicalUnavailableWork"
+                  :key="work.workId"
+                  :to="`/work/${encodeURIComponent(work.workId)}`"
+                  class="ac-library-card"
+                >
+                  <div class="ac-card-heading">
+                    <div>
+                      <p class="ac-card-kicker">历史成果状态待确认</p>
+                      <h2>{{ humanLabel(work.title) }}</h2>
+                    </div>
+                    <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
+                  </div>
+                  <p class="ac-card-reason">{{ humanLabel(work.reason.text) }}</p>
+                </NuxtLink>
+                <NuxtLink
+                  v-for="work in historicalStageResults"
+                  :key="work.summary.workId"
+                  :to="`/work/${encodeURIComponent(work.summary.workId)}`"
+                  class="ac-library-card"
+                >
+                  <div class="ac-card-heading">
+                    <div>
+                      <p class="ac-card-kicker">历史阶段成果</p>
+                      <h2>{{ humanLabel(work.summary.title) }}</h2>
+                    </div>
+                    <span class="ac-status-badge" :data-status="work.summary.userStatus">
+                      {{ work.progress.percent }}%
+                    </span>
+                  </div>
+                  <p class="ac-card-reason">{{ humanLabel(work.summary.reason.text) }}</p>
+                </NuxtLink>
+                <NuxtLink
+                  v-for="delivery in historicalDeliveries"
+                  :key="delivery.id"
+                  :to="`/work/${encodeURIComponent(delivery.workId)}`"
+                  class="ac-library-card"
+                >
+                  <div class="ac-card-heading">
+                    <div>
+                      <p class="ac-card-kicker">历史版本 {{ delivery.version }}</p>
+                      <h2>{{ humanLabel(delivery.workTitle) }}</h2>
+                    </div>
+                    <time :datetime="delivery.updatedAt">{{ dateTime.format(new Date(delivery.updatedAt)) }}</time>
+                  </div>
+                  <p class="ac-card-reason">{{ humanLabel(delivery.reason.text) }}</p>
+                  <div class="ac-card-footer">
+                    <span>{{ delivery.artifacts.length }} 项成果</span>
+                    <span class="ac-card-action">
+                      查看历史成果
+                      <UIcon name="i-lucide-arrow-right" />
+                    </span>
+                  </div>
+                </NuxtLink>
+              </div>
+            </details>
+
+            <details v-if="archivedResultCount" class="ac-detail-panel" open>
+              <summary>已归档成果（{{ archivedResultCount }} 项工作）</summary>
+              <div class="ac-card-list">
+                <NuxtLink
+                  v-for="work in archivedStageResults"
+                  :key="work.summary.workId"
+                  :to="`/work/${encodeURIComponent(work.summary.workId)}`"
+                  class="ac-library-card"
+                >
+                  <div class="ac-card-heading">
+                    <div>
+                      <p class="ac-card-kicker">已归档阶段成果</p>
+                      <h2>{{ humanLabel(work.summary.title) }}</h2>
+                    </div>
+                    <span class="ac-status-badge" data-status="archived">已归档</span>
+                  </div>
+                  <p class="ac-card-reason">{{ humanLabel(work.summary.reason.text) }}</p>
+                  <div class="ac-card-footer">
+                    <span>{{ work.progress.completedItems }} / {{ work.progress.totalItems }} 项工作已有成果</span>
+                    <span class="ac-card-action">
+                      打开并恢复
+                      <UIcon name="i-lucide-arrow-right" />
+                    </span>
+                  </div>
+                </NuxtLink>
+                <NuxtLink
+                  v-for="delivery in archivedDeliveries"
+                  :key="delivery.id"
+                  :to="`/work/${encodeURIComponent(delivery.workId)}`"
+                  class="ac-library-card"
+                >
+                  <div class="ac-card-heading">
+                    <div>
+                      <p class="ac-card-kicker">成果与执行记录已保留</p>
+                      <h2>{{ humanLabel(delivery.workTitle) }}</h2>
+                    </div>
+                    <span class="ac-status-badge" data-status="archived">已归档</span>
+                  </div>
+                  <p class="ac-card-reason">可打开完整成果，并恢复到当前工作。</p>
+                  <div class="ac-card-footer">
+                    <span>{{ delivery.artifacts.length }} 项成果</span>
+                    <span class="ac-card-action">
+                      打开并恢复
+                      <UIcon name="i-lucide-arrow-right" />
+                    </span>
+                  </div>
+                </NuxtLink>
+              </div>
+            </details>
           </section>
 
           <section v-else class="ac-empty-state">

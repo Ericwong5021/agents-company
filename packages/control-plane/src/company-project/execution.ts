@@ -31,6 +31,7 @@ import { evaluateSeedPolicy } from "@/project-orchestrator/seed-policy"
 import { startSeedProject, wayfinderWorkflow } from "@/project-orchestrator/seed-team"
 import { ReceiptProcessor } from "@/project-orchestrator/receipt-processor"
 import { CompanyProject } from "./company-project"
+import * as CompanyAttention from "./attention"
 import { CompanyValidationGate } from "./validation-gate"
 import {
   BoardProjectCharter,
@@ -292,6 +293,94 @@ const inferWorkType = (task: SubTask): (typeof workTypes)[number] => {
   return "analysis"
 }
 
+const localExecutionBoundary =
+  "任务必须能由当前本地只读 Agent 在本轮完成。不得把真人访谈、向外发送问卷、联系或招募、报名收费、发布、实地踩点、现场核验、线下试运行，或尚未发生的真实反馈与经营数据作为自动任务的完成条件。相关事项必须改写为本地执行准备包与明确的人工检查点：提供脚本、模板、筛选规则、证据字段、停止条件和放行标准；区分已知事实、假设与未验证项；不得声称外部行动已经发生。下游任务应使用标注限制的临时假设继续形成可交付方案，不能因等待现实世界证据而耗尽重试预算。"
+
+const conciseManualTaskSummary = (summary: string) => {
+  const text = summary.replace(/\s+/g, " ").trim()
+  const subject = text.split(/[。；;]/, 1)[0] ?? text
+  const bounded = subject.length > 180 ? `${subject.slice(0, 176)}…` : subject
+  return `${bounded.replace(/[，。；;：:]+$/g, "")}（本地准备与人工核验）`
+}
+
+const conciseWorkItemTitle = (summary: string) => {
+  const text = summary.replace(/\s+/g, " ").trim()
+  const numbered = text.match(/\bD\d+(?:[–-]D\d+)?\s*《[^》]+》/)
+  if (numbered) return `完成 ${numbered[0]}`
+  const subject = text.split(/[。；;\n]/, 1)[0] ?? text
+  return subject.length > 80 ? `${subject.slice(0, 76).replace(/[，、：:]+$/g, "")}…` : subject
+}
+
+const manualEvidencePattern =
+  /(?:开展.{0,40}(?:访谈|问卷)|(?:访谈|问卷).{0,30}(?:反馈|答卷|样本|家庭|参与者)|样本不少于|至少[一二三四五六七八九十\d]+(?:个|份|组|场).{0,40}(?:家庭|访谈|反馈|报名|付费|试运行|试运营)|(?:实地|现场|踩点|远程).{0,35}(?:核验|验证|检查|测试)|场地.{0,35}(?:核验|许可|审批|照片|通信|撤离)|(?:招募|报名|收费|付费|订金|购买承诺|对外发布|发送问卷)|(?:实施|完成|组织|举行).{0,35}(?:试运行|试运营|线下活动|首场活动)|确认参与家庭.{0,35}(?:健康|过敏|同意|签到)|(?:到场率|满意度|复购意愿|推荐意愿|实际成本|每家庭收入|真实市场验证)|(?:conduct|run|complete|collect|obtain|contact|recruit|enroll|charge|publish|send|inspect|verify).{0,60}(?:interview|survey response|participant|family|venue|on-site|field visit|payment|deposit|pilot|attendance|satisfaction))/i
+
+const manualEvidenceTermPattern =
+  /(?:访谈|问卷|样本|家庭|参与者|实地|现场|踩点|远程|场地|招募|报名|收费|付费|订金|购买承诺|对外发布|发送问卷|试运行|试运营|线下活动|首场活动|到场率|满意度|复购意愿|推荐意愿|实际成本|真实市场验证|interview|survey|participant|family|venue|on-site|field visit|payment|deposit|pilot|attendance|satisfaction)/i
+
+const hasRequiredManualEvidence = (value: string) =>
+  value
+    .split(/[。；;\n]/)
+    .filter((clause) => {
+      const term = clause.search(manualEvidenceTermPattern)
+      if (term < 0) return true
+      return !/(?:不得|禁止|不应|不能|无需|不含|不包含|不触发|不执行|不会|尚未|未曾|没有)/.test(
+        clause.slice(0, term),
+      )
+    })
+    .some((clause) => manualEvidencePattern.test(clause))
+
+const normalizeExecutableTask = (task: SubTask): SubTask => {
+  const original = `${task.summary}\n${task.acceptanceCriteria}`
+  if (!manualEvidencePattern.test(original) || !hasRequiredManualEvidence(original)) return task
+  const summary = task.summary.trim()
+  const acceptance = task.acceptanceCriteria.trim()
+  return {
+    ...task,
+    summary: conciseManualTaskSummary(summary),
+    acceptanceCriteria: [
+      "不得声称已经完成真人访谈、问卷回收、联系招募、报名付款、对外发布、实地核验或现场试运行。",
+      `保留原待验证事项并形成可直接交给人工执行的准备包：${summary}；原验收要求：${acceptance}`,
+      "准备包必须包含执行脚本或模板、对象或场地筛选规则、证据记录字段、风险与停止条件、负责人角色和人工放行标准。",
+      "明确区分已知事实、临时假设和未验证项，并给出下游任务可继续采用的保守假设及其限制。",
+    ].join(" "),
+    workType: task.workType === "research" ? "analysis" : task.workType,
+    role: task.role ? `${task.role}（本地准备）` : "本地执行准备与人工检查点设计角色",
+  }
+}
+
+const quantitativeTaskPattern =
+  /定价|价格|成本|盈亏|单位经济|预算|报价|formula|pricing|cost|margin|break[- ]?even/i
+
+const normalizeOutputQualityTask = (task: SubTask): SubTask => {
+  if (!quantitativeTaskPattern.test(`${task.summary}\n${task.acceptanceCriteria}`)) return task
+  const qualityRequirement =
+    "成果全文必须使用通顺、无歧义的中文；金额、人数、比例与单位必须准确搭配，提交前逐句检查并修正病句。"
+  if (task.acceptanceCriteria.includes(qualityRequirement)) return task
+  return {
+    ...task,
+    acceptanceCriteria: `${task.acceptanceCriteria} ${qualityRequirement}`,
+  }
+}
+
+const normalizeInternalAcceptanceLanguage = (value: string) =>
+  value
+    .replace(/已验收的(\s*D\d+\b)/gi, "已完成内部核验的$1")
+    .replace(/(\bD\d+\b)\s*已验收/gi, "$1 已完成内部核验")
+
+const normalizeTaskAcceptanceLanguage = (task: SubTask): SubTask => ({
+  ...task,
+  summary: normalizeInternalAcceptanceLanguage(task.summary),
+  acceptanceCriteria: normalizeInternalAcceptanceLanguage(task.acceptanceCriteria),
+})
+
+const researchModeFor = (item: WorkItem) =>
+  item.work_type === "research" &&
+  /假设\s*[\/／]\s*待验证|需求假设|本地研究边界|不开展.{0,30}外部调研|不声称.{0,30}(?:调研|外部行动)|未经验证.{0,30}(?:显式|标注)/i.test(
+    `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+  )
+    ? ("hypothesis_synthesis" as const)
+    : undefined
+
 const capabilityPacks = (workType: (typeof workTypes)[number]) => {
   if (workType === "coding") return ["software-implementation@1"]
   if (workType === "decision") return ["board-strategy@1"]
@@ -299,6 +388,303 @@ const capabilityPacks = (workType: (typeof workTypes)[number]) => {
   if (workType === "design") return ["design-production@1"]
   return ["research-analysis@1"]
 }
+
+const artifactTitle = (item: WorkItem, submission: unknown) => {
+  if (item.work_type !== "writing") return item.title
+  const parsed = submissions.writing.safeParse(submission)
+  if (!parsed.success) return item.title
+  return parsed.data.content.match(/^#\s+(.+)$/m)?.[1]?.trim() || item.title
+}
+
+const numericValue = (value: string) => {
+  const match = value.replace(/[*_`]/g, "").match(/-?\d[\d,]*(?:\.\d+)?/)
+  if (!match) return
+  const parsed = Number(match[0].replaceAll(",", ""))
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+const numericResultValue = (value: string) =>
+  numericValue(value.split(/[=＝]/).at(-1) ?? value)
+
+const markdownCells = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim())
+
+const budgetTable = (content: string) => {
+  const lines = content.split(/\r?\n/)
+  const tables: {
+    rows: { label: string; quantity: number; unitPrice: number; subtotal: number }[]
+  }[] = []
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!lines[index]!.trim().startsWith("|")) continue
+    const headers = markdownCells(lines[index]!)
+    const separator = markdownCells(lines[index + 1]!)
+    if (
+      headers.length !== separator.length ||
+      !separator.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")))
+    )
+      continue
+    const quantityIndex = headers.findIndex((header) => /^(?:数量|qty|quantity)$/i.test(header.replace(/\s+/g, "")))
+    const unitPriceIndex = headers.findIndex((header) =>
+      /(?:估算)?单价|unit\s*(?:price|cost)|price\s*per/i.test(header),
+    )
+    const subtotalIndex = headers.findIndex((header) => /小计|subtotal|line\s*total/i.test(header))
+    if (quantityIndex < 0 || unitPriceIndex < 0 || subtotalIndex < 0) continue
+    const rows: { label: string; quantity: number; unitPrice: number; subtotal: number }[] = []
+    for (let rowIndex = index + 2; rowIndex < lines.length; rowIndex += 1) {
+      const line = lines[rowIndex]!.trim()
+      if (!line.startsWith("|")) break
+      const cells = markdownCells(line)
+      const quantity = numericValue(cells[quantityIndex] ?? "")
+      const unitPrice = numericValue(cells[unitPriceIndex] ?? "")
+      const subtotal = numericResultValue(cells[subtotalIndex] ?? "")
+      if (quantity === undefined || unitPrice === undefined || subtotal === undefined) continue
+      rows.push({
+        label: cells.find((cell, cellIndex) =>
+          cellIndex !== quantityIndex &&
+          cellIndex !== unitPriceIndex &&
+          cellIndex !== subtotalIndex &&
+          /[\p{L}\p{N}]/u.test(cell),
+        ) ?? `第${rows.length + 1}项`,
+        quantity,
+        unitPrice,
+        subtotal,
+      })
+    }
+    if (rows.length) tables.push({ rows })
+  }
+  return tables.toSorted((left, right) => right.rows.length - left.rows.length)[0]
+}
+
+const amountAfterEquation = (line?: string) => {
+  if (!line) return
+  const plain = line.replace(/[*_`]/g, "")
+  const equalityIndex = Math.max(plain.lastIndexOf("="), plain.lastIndexOf("＝"))
+  if (equalityIndex >= 0) return numericValue(plain.slice(equalityIndex + 1))
+  const labelIndex = Math.max(plain.indexOf("："), plain.indexOf(":"))
+  if (labelIndex >= 0) return numericValue(plain.slice(labelIndex + 1))
+  return numericValue(plain)
+}
+
+const budgetArithmeticFindings = (content: string) => {
+  const table = budgetTable(content)
+  if (!table || table.rows.length < 2) return []
+  const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+  const equalMoney = (left: number, right: number) => Math.abs(roundMoney(left) - roundMoney(right)) < 0.005
+  const amount = (value: number) => `${roundMoney(value)}元`
+  const expectedSubtotal = roundMoney(
+    table.rows.reduce((total, row) => total + row.quantity * row.unitPrice, 0),
+  )
+  const lines = content.split(/\r?\n/).map((line) => line.replace(/[*_`]/g, ""))
+  const arithmeticLine = (pattern: RegExp) => {
+    const matchingIndexes = lines.flatMap((line, index) => (pattern.test(line) ? [index] : []))
+    const matching = matchingIndexes.map((index) => lines[index]!)
+    const labelIndexes = matchingIndexes.filter((index) => {
+      const plain = lines[index]!
+        .replace(/^\s*(?:#{1,6}\s*|\d+[.)、]\s*|[-+]\s*)/, "")
+        .trim()
+      return plain.replace(pattern, "").replace(/[:：\s]/g, "").length === 0
+    })
+    const labeledFormulas = labelIndexes.flatMap((index) =>
+      lines.slice(index + 1).filter((line) => line.trim()).slice(0, 1),
+    )
+    return (
+      matching.find((line) => /[=＝]/.test(line) && amountAfterEquation(line) !== undefined) ??
+      labeledFormulas.find((line) => /[=＝]/.test(line) && amountAfterEquation(line) !== undefined) ??
+      matching.find(
+        (line) =>
+          /[:：]\s*[（(]?\s*[0-9][\d,.]*\s*元/.test(line) && amountAfterEquation(line) !== undefined,
+      )
+    )
+  }
+  const subtotalLine = arithmeticLine(/(?:物料|预算|成本)小计(?:复算)?/)
+  const reserveLine = arithmeticLine(/预备金/)
+  const totalLine = arithmeticLine(/(?:预算总计|总计复算|合计总额)/)
+  const remainingFormulaLine = arithmeticLine(/预算结余\s*(?:复算)?\s*(?:[:：=＝]|$)/)
+  const inlineRemainingLine = lines.find((line) => /结余/.test(line))
+  const declaredSubtotal = amountAfterEquation(subtotalLine)
+  const declaredReserve = amountAfterEquation(reserveLine)
+  const reservePercentLine = lines.find((line) => /预备金/.test(line) && /%/.test(line))
+  const reserveDecimal = numericValue(reserveLine?.match(/[×*]\s*(0(?:\.\d+))/)?.[1] ?? "")
+  const reservePercent =
+    numericValue(reservePercentLine?.match(/([0-9][\d,.]*)\s*%/)?.[1] ?? "") ??
+    (reserveDecimal === undefined ? undefined : reserveDecimal * 100)
+  const declaredTotal = amountAfterEquation(totalLine)
+  const remainingMatch = inlineRemainingLine?.match(
+    /(?:较|相对)?\s*([0-9][\d,.]*)\s*元(?:预算)?(?:上限)?[^。；\n]{0,30}?结余\s*([0-9][\d,.]*)\s*元/,
+  )
+  const formulaBudgetCap = remainingFormulaLine?.match(
+    /[（(]\s*([0-9][\d,.]*)\s*元?\s*[-－−]/,
+  )?.[1]
+  const budgetCap = numericValue(remainingMatch?.[1] ?? formulaBudgetCap ?? "")
+  const declaredRemaining =
+    amountAfterEquation(remainingFormulaLine) ?? numericValue(remainingMatch?.[2] ?? "")
+  const expectedReserve =
+    reservePercent === undefined ? declaredReserve : roundMoney((expectedSubtotal * reservePercent) / 100)
+  const expectedTotal =
+    expectedReserve === undefined ? undefined : roundMoney(expectedSubtotal + expectedReserve)
+  const references = [
+    ...content.matchAll(
+      /D4(?:预算)?(?:总额|总计)(?:复算结果)?\s*(?:为|[:：=＝])?\s*\*{0,2}([0-9][\d,.]*)\s*元/gi,
+    ),
+  ].flatMap((match) => {
+    const value = numericValue(match[1] ?? "")
+    return value === undefined ? [] : [value]
+  })
+  const findings = [
+    ...table.rows.flatMap((row, index) => {
+      const expected = roundMoney(row.quantity * row.unitPrice)
+      return equalMoney(expected, row.subtotal)
+        ? []
+        : [
+            `预算表第${index + 1}项“${row.label}”小计错误：${row.quantity} × ${row.unitPrice} 应为 ${amount(expected)}，实际为 ${amount(row.subtotal)}`,
+          ]
+    }),
+    ...(declaredSubtotal !== undefined && !equalMoney(declaredSubtotal, expectedSubtotal)
+      ? [
+          `预算表${table.rows.length}项逐行复算合计应为 ${amount(expectedSubtotal)}，成果写为 ${amount(declaredSubtotal)}`,
+        ]
+      : []),
+    ...(declaredReserve !== undefined &&
+    expectedReserve !== undefined &&
+    !equalMoney(declaredReserve, expectedReserve)
+      ? [
+          `预备金按${reservePercent ?? "已声明比例"}%复算应为 ${amount(expectedReserve)}，成果写为 ${amount(declaredReserve)}`,
+        ]
+      : []),
+    ...(declaredTotal !== undefined && expectedTotal !== undefined && !equalMoney(declaredTotal, expectedTotal)
+      ? [`预算总计应为 ${amount(expectedTotal)}，成果写为 ${amount(declaredTotal)}`]
+      : []),
+    ...(budgetCap !== undefined &&
+    declaredRemaining !== undefined &&
+    expectedTotal !== undefined &&
+    !equalMoney(declaredRemaining, budgetCap - expectedTotal)
+      ? [
+          `${amount(budgetCap)}预算上限的结余应为 ${amount(budgetCap - expectedTotal)}，成果写为 ${amount(declaredRemaining)}`,
+        ]
+      : []),
+    ...(expectedTotal === undefined
+      ? []
+      : references
+          .filter((reference) => !equalMoney(reference, expectedTotal))
+          .map((reference) => `D4预算总额引用应为 ${amount(expectedTotal)}，成果写为 ${amount(reference)}`)),
+  ]
+  return [...new Set(findings)]
+}
+
+const fixedPrimaryGroupCount = (value: string) => {
+  const match = value.match(
+    /(?:以且仅以|固定(?:的)?(?:唯一)?主情景(?:仅)?(?:为|按)|(?:主情景|主场景)(?:固定|限定)?(?:为|按|：|:))\s*(\d+)\s*组家庭/,
+  )
+  return match ? Number(match[1]) : undefined
+}
+
+const declaredPrimaryGroupCounts = (value: string) =>
+  value.split(/[。；;\n]/).flatMap((clause) => {
+    if (!/(?:主情景|主场景)/.test(clause)) return []
+    const direct = clause.match(/(?:主情景|主场景)[^。；\n]{0,20}?(?:为|采用|固定|按|：|:)\s*(\d+)\s*组/)
+    const reverse = clause.match(/(?:固定|采用|按|以)\s*(\d+)\s*组家庭[^。；\n]{0,24}(?:主情景|主场景)/)
+    const count = Number(direct?.[1] ?? reverse?.[1])
+    return Number.isFinite(count) ? [count] : []
+  })
+
+const claimsPrematureDeliveryAcceptance = (value: string) =>
+  value.split(/[。；;\n]/).some((clause) => {
+    const match = clause.match(/(?:\bD\d+\b\s*已验收|已验收的\s*\bD\d+\b)/i)
+    if (!match) return false
+    return !/(?:不得|不能|不应|尚未|未被|不可|不要)[^。；\n]{0,20}$/.test(clause.slice(0, match.index))
+  })
+
+const acceptanceVerification = (item: WorkItem, summary: string, submission: unknown): VerifyResult => {
+  const criteria = item.acceptance_criteria.join("\n")
+  const title = artifactTitle(item, submission)
+  const content =
+    item.work_type === "writing" && submissions.writing.safeParse(submission).success
+      ? submissions.writing.parse(submission).content
+      : JSON.stringify(submission)
+  const expectedTitle = criteria.match(/标题以[“"]([^”"]+)[”"]开头/)?.[1]
+  const quoted = item.acceptance_criteria.flatMap((criterion) =>
+    /(?:原样|逐字)/.test(criterion)
+      ? [...criterion.matchAll(/[“"]([^”"\n]+)[”"]/g)].map((match) => match[1]!.trim())
+      : [],
+  )
+  const strict = item.acceptance_criteria.flatMap((criterion) =>
+    [...criterion.matchAll(/严格为\s*([^，、。；;\n]+)/g)].map((match) => match[1]!.trim()),
+  )
+  const quantitative = quantitativeTaskPattern.test(
+    `${item.title}\n${item.description}\n${criteria}`,
+  )
+  const formulaLines = quantitative
+    ? content.split(/\\n|\r?\n|[。；;]/).filter((line) => /[=＝]/.test(line))
+    : []
+  const ambiguousFormulaLines = formulaLines.filter((line) => {
+    const formula = line.replace(/^\s*(?:[-*+]\s+|\d+[.)、]\s*)/, "")
+    return /[+＋]/.test(formula) && /[-－]/.test(formula) && !/[()（）[\]]/.test(formula)
+  })
+  const symbolicFormulaLines = formulaLines.filter(
+    (line) =>
+      /[A-Za-z]/.test(line) &&
+      (/(?:定价|价格|成本|预算|报价|小计|预备金|总计|结余|利润|毛利|pricing|price|cost|margin|revenue|profit)/i.test(
+        line,
+      ) ||
+        /\b[A-Za-z_][A-Za-z0-9_]*\b\s*[×*/]\s*\b[A-Za-z_][A-Za-z0-9_]*\b/.test(line)),
+  )
+  const requiredPrimaryGroupCount = fixedPrimaryGroupCount(criteria)
+  const primaryGroupCounts = declaredPrimaryGroupCounts(content)
+  const findings = [
+    ...(expectedTitle && !title.startsWith(expectedTitle)
+      ? [`成果入口标题必须以 ${expectedTitle} 开头，实际为 ${title}`]
+      : []),
+    ...[...new Set([...quoted, ...strict])]
+      .filter((literal) => !content.includes(literal))
+      .map((literal) => `成果正文缺少必须原样出现的字面内容：${literal}`),
+    ...(ambiguousFormulaLines.length
+      ? ["定价或成本公式包含多项加减，但没有用括号明确运算顺序"]
+      : []),
+    ...(symbolicFormulaLines.length &&
+    !/变量[^\n。；]{0,40}(?:定义|说明|规则)|符号(?:定义|说明)|其中[：:]/.test(content)
+      ? ["定价或成本公式使用了符号变量，但没有在同一成果中定义变量与单位"]
+      : []),
+    ...(quantitative &&
+    /参与人数\s*(?:人民币|金额|¥)|(?:人民币|金额)\s*无关|(?:人数|家庭数)\s*(?:元|人民币)/.test(content)
+      ? ["成果存在人数与金额单位混用或语句不通顺，需逐句修正后再提交"]
+      : []),
+    ...(requiredPrimaryGroupCount !== undefined && !primaryGroupCounts.includes(requiredPrimaryGroupCount)
+      ? [`成果没有把 ${requiredPrimaryGroupCount} 组家庭声明为唯一主情景`]
+      : []),
+    ...primaryGroupCounts
+      .filter((count) => requiredPrimaryGroupCount !== undefined && count !== requiredPrimaryGroupCount)
+      .map(
+        (count) =>
+          `成果把 ${count} 组家庭声明为主情景，与固定的 ${requiredPrimaryGroupCount} 组家庭硬约束冲突`,
+      ),
+    ...(claimsPrematureDeliveryAcceptance(content)
+      ? ["项目整体交付尚未由用户接受，内部工作项只能称为已完成系统核验或内部复核，不能称为已验收"]
+      : []),
+    ...budgetArithmeticFindings(content),
+    ...(item.work_type === "analysis" &&
+    /(?:交叉验收|最终验收|cross[- ]?acceptance)/i.test(`${item.title}\n${item.description}`) &&
+    /(?:需返工|未通过|不通过|不能验收|暂不验收|未满足)/.test(
+      `${summary}\n${
+        submissions.analysis.safeParse(submission).success
+          ? submissions.analysis.parse(submission).conclusions.join("\n")
+          : ""
+      }`,
+    )
+      ? ["交叉验收仍报告阻塞性缺陷，不能形成可验收交付"]
+      : []),
+  ]
+  return { passed: findings.length === 0, findings }
+}
+
+const combineVerification = (base: VerifyResult, acceptance: VerifyResult): VerifyResult => ({
+  passed: base.passed && acceptance.passed,
+  findings: [...base.findings, ...acceptance.findings],
+})
 
 const executableCapabilityPacks = (values: string[], workType: (typeof workTypes)[number]) => {
   const available = new Set(CapabilityCatalog.list().map((pack) => `${pack.id}@${pack.version}`))
@@ -325,16 +711,49 @@ const assignmentConstraints = (references: string[]) => {
   }
 }
 
+const executionClock = (projectCreatedAt?: number) =>
+  [
+    "日期规则：计划中的日期、截止时间和相对窗口必须使用明确时区并校验先后关系。模型调用时间是易变的宿主元数据，不得写入成果作为绝对最低时间门槛，也不得仅因 Worker、Reviewer 或重试发生在不同时间而要求改写已生成成果。",
+    "用户明确要求从某个日历日期开始的计划时，该日期可以作为计划记录中的第1天，即使项目在当天稍后创建；这只表示计划覆盖范围，不表示较早时段的动作已经发生。不得仅因第1天早于项目创建时刻而拒绝，但必须把过去时段标为未执行的计划记录，不得伪称已完成。",
+    projectCreatedAt === undefined
+      ? "项目尚未创建时，不得虚构精确的当前时间；优先使用第1天、T-48小时等相对表达。"
+      : `如业务验收确实需要项目级绝对时间，唯一稳定基准是项目创建时间 ${new Date(projectCreatedAt).toISOString()}；后续 Attempt 不得改变该基准。`,
+  ].join("\n")
+
+const safeExecutionFailure = (error: string) => {
+  const text = error.trim()
+  if (/Document lacks structure/i.test(text))
+    return "成果缺少清晰结构；请补充 Markdown 标题、编号章节或明确的章节分隔。"
+  if (/cannot use system verification while review is required/i.test(text))
+    return "当前工作项的系统核验状态与独立复核状态冲突，本次成果未能进入下一步；系统已保留成果，需修正复核范围后重试。"
+  if (/Delivery acceptance remains unverified:/i.test(text)) {
+    const reason = text.match(/Delivery acceptance remains unverified:\s*([^\n]+)/i)?.[1]?.trim()
+    return reason
+      ? `成果仍有未通过的验收项：${reason.slice(0, 600)}`
+      : "成果仍有未通过的验收项，系统已保留成果并停止交付。"
+  }
+  if (/System verification Gate .* did not pass/i.test(text))
+    return "系统核验未通过，本次成果已保留但不会进入交付；请按失败项修正后重试。"
+  if (/INTERNAL_ERROR|stream error/i.test(text))
+    return "模型服务连接中断，本次尝试未完成；系统已保留进度并按重试策略处理。"
+  if (/timed?\s*out|timeout/i.test(text))
+    return "本次执行等待超时，系统已保留进度并按重试策略处理。"
+  if (/Cause\(\[|(?:^|\n)\s*at\s|\/(?:Users|home|private|Volumes)\/|[A-Za-z]:\\/i.test(text))
+    return "本次执行遇到内部错误，系统已保留进度并按重试策略处理。"
+  return text.split(/\r?\n/, 1)[0]!.slice(0, 800)
+}
+
 const plannerScript = (goal: string, agentID: string, modelRef: string) =>
   workflow(
     "company-project-charter",
     [
-      `phase("形成领域中立 Project Charter")`,
+      `phase("形成领域中立项目范围与计划")`,
       `const result = await agent(${json(
         [
           "你是 AgentCompany 的临时项目规划者，只负责定义目标边界与验收，不执行交付。",
-          "根据目标形成领域中立 Charter。不要假设项目必须产出软件、浏览器、终端、游戏或 Git 仓库。",
+          "根据目标形成领域中立的项目范围与计划。不要假设项目必须产出软件、浏览器、终端、游戏或 Git 仓库。",
           "只有目标明确要求软件实现时，才把软件开发写进范围。",
+          executionClock(),
           `目标：${goal}`,
         ].join("\n"),
       )}, ${json({
@@ -345,7 +764,7 @@ const plannerScript = (goal: string, agentID: string, modelRef: string) =>
         permissionMode: "read_only",
         model: modelRef,
         schema: schema(charterResult),
-        label: "Project Charter",
+        label: "项目范围与计划",
         phase: "Plan",
         timeoutMs: 20 * 60_000,
       })})`,
@@ -357,7 +776,7 @@ const plannerScript = (goal: string, agentID: string, modelRef: string) =>
 const approvedCharterScript = (charter: BoardProjectCharter) =>
   workflow(
     "company-project-approved-charter",
-    [`phase("接收董事会已批准 Project Charter")`, `return ${json({ accepted: true, charter })}`].join("\n"),
+    [`phase("接收董事会已批准的项目范围与计划")`, `return ${json({ accepted: true, charter })}`].join("\n"),
   )
 
 const approvedCharterFromProject = (charter: ProjectCharter) =>
@@ -402,10 +821,17 @@ const boardBiddingEvidenceRule = (item: WorkItem) =>
     ? "产品语义：Bidding 是已有 Group Session/Thread 内选择下一位发言者的机制，不是筛选 Thread 成员。董事会 Thread 可以包含全部固定董事；验收应检查实际产生高信号消息的 winner、选择或 pass 理由，以及全员 pass/预算结束，而不能把候选成员存在误判成其已经发言。"
     : undefined
 
+const quantitativeClarityRule = (item: WorkItem) =>
+  /定价|价格|成本|盈亏|单位经济|预算|报价|formula|pricing|cost|margin|break[- ]?even/i.test(
+    `${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+  )
+    ? "涉及定价、成本、盈亏、单位经济或公式时，每个公式必须用明确括号标出运算顺序，在同一处定义每个变量、单位和正负号，并用逐步代入的数值示例核对结果；纯文本与可访问文本必须同样无歧义。"
+    : undefined
+
 const boardCloseoutWritebackRule = (item: WorkItem) =>
   item.source_task_key === "board_closeout_and_organization_decision"
     ? [
-        `Control Plane 宿主写回协议事实：${JSON.stringify({
+        `本地运行服务写回协议事实：${JSON.stringify({
           source_task_key: item.source_task_key,
           stage: "before_board_closeout_writeback",
           current_response: "dri_signed_decision_payload",
@@ -424,13 +850,17 @@ const boardCloseoutWritebackRule = (item: WorkItem) =>
     : undefined
 
 const workItemRuntimeEvidenceRule =
-  "运行时语义：Control Plane 事实是在当前 WorkItem 启动前生成的快照，所以当前节点可能仍显示 pending、attempt 少 1，当前 Reviewer 也可能显示尚未启动。宿主随后负责把节点置为 running、持久化本次回答为 Artifact，并完成或阻塞节点；Agent 不应也不需要修改自己的状态。非 coding Worker 由宿主以 read_only 权限运行。不得仅因这种预运行快照、缺少自状态写入工具或没有另附未要求的系统级命令/网络审计而判定执行未发生。"
+  "运行时语义：本地运行服务事实是在当前工作项启动前生成的快照，所以当前节点可能仍显示待执行、尝试次数少 1，当前独立复核也可能显示尚未启动。宿主随后负责把节点置为执行中、持久化本次回答为成果，并完成或阻塞节点；执行成员不应也不需要修改自己的状态。项目流程状态和运行时间是易变的宿主元数据，除非验收条件明确要求实时状态报告，不得把它们提升为业务结论或交付物的唯一时间基准。非代码执行成员由宿主以只读权限运行。不得仅因这种预运行快照、缺少自状态写入工具或没有另附未要求的系统级命令或网络审计而判定执行未发生。"
 
 const reviewerRuntimeEvidenceRule =
-  "当前回答本身就是本轮独立复核。不得要求当前 Reviewer 在启动前快照中已经 completed、已经有本轮 Artifact，或先由另一个 Reviewer 复核这次交付；accepted 后这些状态由宿主持久化。只验收 parent 叶子任务及其上游依赖，不得把尚未获准运行的下游 WorkItem 处于 pending 当作 parent 的缺陷，除非 parent 的 depends_on 明确包含它。"
+  "当前回答本身就是本轮独立复核。不得要求当前 Reviewer 在启动前快照中已经 completed、已经有本轮 Artifact，或先由另一个 Reviewer 复核这次交付；accepted 后这些状态由宿主持久化。Worker 交付物早于 Reviewer 生成，因此其证据快照时间早于当前复核时间、项目流程状态随后从 executing 变为 reviewing 都是正常时序，不得仅据此拒绝，也不得要求把历史快照改写成复核时刻。只验收 parent 叶子任务及其上游依赖，不得把尚未获准运行的下游 WorkItem 处于 pending 当作 parent 的缺陷，除非 parent 的 depends_on 明确包含它。"
+
+const deliveryAcceptanceLanguageRule =
+  "工作项通过系统核验或独立复核，只能表述为“已完成系统核验”或“已完成内部复核”。只有用户接受项目整体交付后才能使用“已验收”；当前执行阶段不得把上游 D1、D2、D3 等交付项写成已验收。"
 
 const workerScript = (
   goal: string,
+  projectCreatedAt: number,
   item: WorkItem,
   modelRef: string,
   policy: DeliveryPolicy,
@@ -438,6 +868,7 @@ const workerScript = (
   assignmentPermission: "read_only" | "workspace_write" | "full_access",
   evidence: unknown,
   reviewFeedback?: { artifact_id: string; summary: string; findings: string[]; evidence_checked: string[] },
+  userRevision?: string,
 ) =>
   workflow(
     `company-project-worker-${item.work_type}`,
@@ -446,23 +877,45 @@ const workerScript = (
       `const result = await agent(${json(
         [
           `公司目标：${goal}`,
+          executionClock(projectCreatedAt),
           `你的临时角色：${item.role}`,
           `任务：${item.description}`,
           `验收条件：\n- ${item.acceptance_criteria.join("\n- ")}`,
-          `Control Plane 当前可验证事实：${JSON.stringify(evidence)}`,
+          `本地运行服务当前可验证事实：${JSON.stringify(evidence)}`,
+          "项目范围与计划中的约束和用户已确认事项是硬边界；任何收费、发布、外部副作用、预算、日期、资质或安全结论都不得与其冲突。存在冲突时必须停止该建议并明确前置条件。",
+          /(?:合作方|资质|许可|备案|保险|主管要求)/.test(
+            `${goal}\n${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+          )
+            ? "若项目范围允许通过合格或合规合作方开展后续动作，合作方身份本身不构成合规证据；必须把适用于具体活动范围的资质、许可、备案、保险和主管要求书面依据列为放行前提，缺失或冲突时继续保持未核实且不得对外执行或收费。"
+            : undefined,
+          /(?:未成年人|儿童|监护人|child|minor|guardian)/i.test(
+            `${goal}\n${item.title}\n${item.description}\n${item.acceptance_criteria.join("\n")}`,
+          )
+            ? "涉及未成年人保护疑虑或风险披露时，不得自动通知任何可能涉事或身份未核实的监护人。只允许先保障儿童即时安全、做最少必要记录，并按已经书面核验的保护程序升级给有权限的保护责任人，由其决定是否、何时及向谁沟通并记录理由；程序或权限未核实时必须停止相关参与，无法安全维持群体时停止全队。"
+            : undefined,
+          item.error
+            ? `上一轮系统核验未通过：${item.error}。本次必须直接修正该问题并重新逐项核对，不能只解释或复述失败原因。`
+            : undefined,
           reviewFeedback
             ? `上一轮独立复核要求返工：${JSON.stringify(reviewFeedback)}。必须逐条回应 findings，并提交修正后的实际证据。`
             : undefined,
+          userRevision
+            ? `用户已请求修改上一版交付：${userRevision}。必须逐条落实，只生成新的可验收成果，不得把修改要求仅复述在总结或交叉验收报告中。`
+            : undefined,
           boardBiddingEvidenceRule(item),
+          quantitativeClarityRule(item),
           boardCloseoutWritebackRule(item),
           workItemRuntimeEvidenceRule,
+          deliveryAcceptanceLanguageRule,
           `你独占的决策范围：${item.decision_scope.join("；") || "无"}`,
           `允许使用或修改的资源范围：${item.resource_scope.join("；") || "仅返回结构化交付物"}`,
           "只执行这一个叶子任务，不重新规划整个项目，不替其他子树做决定。",
+          "严格最小化交付：只输出本任务描述与验收条件明确要求的内容。不得主动附加通用准备包、风险、合规、安全、筛选、放行、证据模板或其他叶子任务内容；只有本任务明确要求的章节才可出现。",
+          "面向用户的正文必须使用非技术业务中文；禁止用单字母状态码或未解释缩写替代证据状态、风险、决定和负责人；内部实体 ID 只能放在追踪信息中，不能代替人员、成果、阶段或决定的可读名称。",
           item.review_status === "not_required"
             ? "本任务不设独立 Reviewer：提交前必须逐条自检验收条件，并在 summary 中说明每条的自检结果。"
             : undefined,
-          "如果当前事实包含上一次独立复核的 findings，本次必须针对 findings 返工，并用已经发生的 Control Plane 实体、状态和内容交付证据；不得把计划中的后续动作写成已完成。",
+          "如果当前事实包含上一次独立复核的问题，本次必须逐项返工，并用本地运行服务中已经发生的实体、状态和内容交付证据；不得把计划中的后续动作写成已完成。",
           item.work_type === "coding"
             ? "在授权工作树内完成实现，并亲自运行测试、检查与构建；verificationCommands 必须填写可由宿主再次执行的真实命令。"
             : "返回符合当前 Work Type 结构的 submission，所有结论必须能被验收条件直接检查。",
@@ -491,6 +944,7 @@ const workerScript = (
 
 const reviewerScript = (
   goal: string,
+  projectCreatedAt: number,
   item: WorkItem,
   parent: WorkItem,
   artifact: unknown,
@@ -504,14 +958,21 @@ const reviewerScript = (
       `const result = await agent(${json(
         [
           `公司目标：${goal}`,
+          executionClock(projectCreatedAt),
           `被复核任务：${parent.title}`,
           `原验收条件：\n- ${parent.acceptance_criteria.join("\n- ")}`,
           `交付物：${JSON.stringify(artifact)}`,
-          `Control Plane 当前可验证事实：${JSON.stringify(evidence)}`,
+          `本地运行服务当前可验证事实：${JSON.stringify(evidence)}`,
+          "必须逐项核对项目范围与计划的约束和用户已确认事项；交付若越过收费、发布、外部副作用、预算、日期、资质或安全边界，必须拒绝并指出冲突。",
+          "如果拒绝，必须在同一轮列出当前交付物中所有可检测、会阻塞验收的独立问题，并逐条绑定原验收条件；不得把已经能发现的问题留到后续修订轮次。相同根因只保留一条。",
+          "若项目范围允许通过合格或合规合作方开展后续动作，合作方身份本身不构成合规证据；必须有可追溯书面依据证明其资质、许可、备案、保险和主管要求适用于具体活动范围，否则该路径仍视为未核实。",
+          "涉及未成年人保护疑虑或风险披露时，交付不得要求自动通知任何可能涉事或身份未核实的监护人；必须先保障即时安全、最少必要记录，并仅按已书面核验程序升级给有权限的保护责任人。程序或权限未核实时必须停止相关参与，无法安全维持群体时停止全队。",
           boardBiddingEvidenceRule(parent),
+          quantitativeClarityRule(parent),
           workItemRuntimeEvidenceRule,
           reviewerRuntimeEvidenceRule,
           "你没有参与原任务。只根据交付物、证据和验收条件判断，不因执行者自述而放宽标准。",
+          "复核结论必须使用非技术业务中文；禁止用单字母状态码或未解释缩写替代证据状态、风险和决定；内部实体 ID 只能作为追踪证据，不能作为主要结论。",
         ].join("\n"),
       )}, ${json({
         companyAgentID: item.owner_agent_id,
@@ -532,12 +993,14 @@ const reviewerScript = (
 
 export interface Interface {
   readonly start: (input: {
+    company_id?: string
     goal: string
     title?: string
     decision_request_id?: string
     session_id?: string
     provider_id?: string
     model_id?: string
+    charter?: BoardProjectCharter
     execution_strategy?: ProjectExecutionStrategyValue
     seed_policy?: SeedPolicyFactsValue
   }) => Effect.Effect<{ project: Project; run_id: string }>
@@ -561,8 +1024,19 @@ export interface Interface {
       run_id?: string
       replayed: boolean
     },
-    InstanceType<typeof BoardProjectDecisionConflict>
-  >
+      InstanceType<typeof BoardProjectDecisionConflict>
+    >
+  readonly replanFromCharter: (input: {
+    project_id: string
+    plan_id: string
+    charter: BoardProjectCharter
+  }) => Effect.Effect<{
+    project: Project
+    plan: Plan
+    work_item: WorkItem
+    run_id?: string
+    replayed: boolean
+  }>
   readonly retry: (input: {
     project_id: string
     provider_id?: string
@@ -593,6 +1067,7 @@ const serviceLayer = Layer.effect(
     const workType = yield* WorkType.Service
     const receiptProcessor = yield* ReceiptProcessor.Service
     const validation = yield* CompanyValidationGate.Service
+    const attention = yield* CompanyAttention.Service
     const scope = yield* Scope.Scope
 
     const resolveModel = Effect.fn("CompanyProjectExecution.resolveModel")(function* (input: {
@@ -613,6 +1088,26 @@ const serviceLayer = Layer.effect(
 
     const agentModelRef = (project: Project, group: "ultra" | "standard" | "lite") =>
       project.provider_id && project.model_id ? `${project.provider_id}/${project.model_id}` : group
+
+    const publishProjectUpdate = Effect.fn("CompanyProjectExecution.publishProjectUpdate")(function* (input: {
+      project: Project
+      request_id: string
+      body: string
+      signal_type: "conclusion" | "plan" | "status" | "risk" | "approval" | "delivery" | "intervention"
+      actor_id?: string
+    }) {
+      if (!input.project.company_id) return
+      yield* conversation.recordProjectUpdate({
+        companyID: CompanyID.parse(input.project.company_id),
+        projectScopeID: input.project.id,
+        requestID: input.request_id,
+        author: input.actor_id
+          ? { kind: "agent", id: input.actor_id }
+          : { kind: "system", id: "control-plane" },
+        body: input.body,
+        signalType: input.signal_type,
+      }).pipe(Effect.catchCause(() => Effect.void))
+    })
 
     const resolveNewExecution = (input: {
       goal: string
@@ -787,6 +1282,19 @@ const serviceLayer = Layer.effect(
           questions: [],
         },
       })
+      const project = yield* projects.get(input.item.project_id)
+      if (project)
+        yield* publishProjectUpdate({
+          project,
+          request_id: `work-item-completed:${input.item.id}:${input.artifact.id}`,
+          actor_id: input.item.owner_agent_id,
+          signal_type: "status",
+          body: [
+            `阶段成果已完成：${input.item.title}`,
+            `结果：${input.summary}`,
+            `成果已保存：${input.artifact.title}`,
+          ].join("\n"),
+        })
       return {
         gate_ids: [
           ...new Set(
@@ -858,7 +1366,7 @@ const serviceLayer = Layer.effect(
         project_id: input.item.project_id,
         work_item_id: input.item.id,
         kind: "system_verification",
-        title: `${input.item.title} · Control Plane Verification`,
+        title: `${input.item.title} · 系统核验`,
         path: `artifacts/verification/${input.item.id}-attempt-${input.item.attempt + 1}.json`,
         content: `${JSON.stringify(evidence, null, 2)}\n`,
         evidence: {
@@ -908,6 +1416,9 @@ const serviceLayer = Layer.effect(
         projects.getCharter(project.id),
         projects.listEvents(project.id),
       ])
+      const charterEvidence = charter
+        ? Object.fromEntries(Object.entries(charter).filter(([key]) => key !== "created_at" && key !== "updated_at"))
+        : undefined
       const organization = project.company_id
         ? yield* recruitment.snapshot({
             company_id: CompanyID.parse(project.company_id),
@@ -985,8 +1496,12 @@ const serviceLayer = Layer.effect(
           source_thread_id: project.source_thread_id,
           decision_request_id: project.decision_request_id,
           dri_agent_id: project.owner_agent_id,
+          temporal_baseline: {
+            source: "project_created_at",
+            value: new Date(project.created_at).toISOString(),
+          },
         },
-        charter,
+        charter: charterEvidence,
         board,
         work_items: items.map((item) => ({
           id: item.id,
@@ -1000,9 +1515,6 @@ const serviceLayer = Layer.effect(
           attempt: item.attempt,
           review_status: item.review_status,
           error: item.error,
-          started_at: item.started_at,
-          completed_at: item.completed_at,
-          updated_at: item.updated_at,
         })),
         artifacts: artifacts.map((artifact) => ({
           id: artifact.id,
@@ -1011,7 +1523,6 @@ const serviceLayer = Layer.effect(
           title: artifact.title,
           content: artifact.content?.slice(0, artifact.kind === "attempt_failure" ? 2_000 : 8_000),
           evidence: artifact.evidence,
-          created_at: artifact.created_at,
         })),
         gates: gates.map((gate) => ({ id: gate.id, kind: gate.kind, status: gate.status, title: gate.title })),
         work_item_reassignments: events
@@ -1021,7 +1532,6 @@ const serviceLayer = Layer.effect(
             type: event.type,
             actor_id: event.actor_id ?? null,
             data: event.data,
-            created_at: event.created_at,
           })),
         current_needs: currentNeeds.map((need) => ({
           id: need.id,
@@ -1068,7 +1578,6 @@ const serviceLayer = Layer.effect(
           lifecycle_at_selection: selection.lifecycle_at_selection,
           reason: selection.reason,
           released: Boolean(selection.time_released),
-          time_created: selection.time_created,
         })),
         history_needs:
           organization?.needs
@@ -1223,14 +1732,41 @@ const serviceLayer = Layer.effect(
       const item = (yield* projects.listWorkItems(input.project.id)).find((item) => item.id === input.item.id)
       if (!item?.owner_agent_id || item.owner_agent_id !== result.agent.id)
         throw new Error(`Assignment did not update work item ${input.item.id} owner`)
+      yield* publishProjectUpdate({
+        project: input.project,
+        request_id: `agent-selected:${result.assignment.id}`,
+        actor_id: result.agent.id,
+        signal_type: "plan",
+        body: [
+          `已安排：${result.agent.name}`,
+          `负责：${item.title}`,
+          `角色：${item.role}`,
+          `选择依据：${selected?.reason ?? "能力与当前任务匹配"}`,
+        ].join("\n"),
+      })
       return item
     })
 
-    const blockProject = (project_id: string, error: string) =>
+    const blockProject = (project_id: string, error: string, requestAttention = true) =>
       Effect.gen(function* () {
         const project = yield* projects.get(project_id)
-        if (project && !["completed", "rejected", "blocked"].includes(project.status))
+        if (project && !["completed", "rejected", "blocked"].includes(project.status)) {
           yield* projects.transition({ id: project_id, status: "blocked", actor_id: "system", reason: error })
+          if (requestAttention)
+            yield* attention.create({
+              project_id,
+              idempotency_key: `project-blocked:${project_id}:${project.updated_at}`,
+              issue: {
+                issue_kind: "unresolved_material_risk",
+                risk: "high",
+                materiality: "unresolved_risk",
+              },
+              title: "项目执行受阻",
+              summary: safeExecutionFailure(error),
+              required_decision: "确认恢复方式，或调整目标后继续。",
+              source_refs: [{ kind: "project", id: project_id }],
+            })
+        }
         yield* projects.setActiveRun({ id: project_id })
       })
 
@@ -1275,7 +1811,16 @@ const serviceLayer = Layer.effect(
         scriptDeadlineMs: 3 * 60 * 60_000,
         notifyOnTerminal: false,
       })
-      yield* projects.setWorkItemRun({ id: input.item.id, workflow_run_id: started.runID })
+      yield* projects.setWorkItemRun({ id: input.item.id, workflow_run_id: started.runID }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.gen(function* () {
+            yield* runtime.cancel({ runID: started.runID }).pipe(
+              Effect.catchCause(() => Effect.succeed(undefined)),
+            )
+            return yield* Effect.failCause(cause)
+          }),
+        ),
+      )
       yield* projects.setActiveRun({ id: input.project.id, run_id: started.runID })
       return started.runID
     })
@@ -1287,6 +1832,7 @@ const serviceLayer = Layer.effect(
     ) {
       const attempt = item.attempt + 1
       const retryable = attempt < item.max_attempts
+      const safeError = safeExecutionFailure(error)
       yield* projects.addArtifact({
         project_id: item.project_id,
         work_item_id: item.id,
@@ -1296,7 +1842,7 @@ const serviceLayer = Layer.effect(
           JSON.stringify(
             {
               attempt,
-              error,
+              error: safeError,
               impact: "当前 Work Item 未通过执行或验证，正式交付状态未推进。",
               retryable,
               next_adjustment: retryable ? "保留本次证据并按剩余重试预算调整下一次执行。" : "升级到项目 DRI。",
@@ -1304,10 +1850,10 @@ const serviceLayer = Layer.effect(
             null,
             2,
           ) + "\n",
-        evidence: { error, attempt, retryable },
+        evidence: { error: safeError, attempt, retryable },
         created_by_agent_id: item.owner_agent_id,
       })
-      const current = yield* projects.blockWorkItem({ id: item.id, error })
+      const current = yield* projects.blockWorkItem({ id: item.id, error: safeError })
       yield* reputation.updateFromAdmission(
         item.owner_agent_id ?? item.role,
         false,
@@ -1320,9 +1866,22 @@ const serviceLayer = Layer.effect(
           project_id: item.project_id,
           type: "work_item.retry_scheduled",
           actor_id: item.owner_agent_id,
-          data: { work_item_id: item.id, attempt: current.attempt + 1, reason: error },
+          data: { work_item_id: item.id, attempt: current.attempt + 1, reason: safeError },
         })
       }
+      const project = yield* projects.get(item.project_id)
+      if (project)
+        yield* publishProjectUpdate({
+          project,
+          request_id: `work-item-failure:${item.id}:${attempt}`,
+          actor_id: item.owner_agent_id,
+          signal_type: "risk",
+          body: [
+            `任务未通过：${item.title}`,
+            `原因：${safeError}`,
+            retryable ? `将进入第 ${attempt + 1} 次尝试。` : "重试次数已用尽，需要负责人处理。",
+          ].join("\n"),
+        })
       return current
     })
 
@@ -1431,6 +1990,7 @@ const serviceLayer = Layer.effect(
                       })
                     : workerScript(
                         project.goal,
+                        project.created_at,
                         item,
                         agentModelRef(project, item.model_group),
                         charter.policy,
@@ -1522,15 +2082,19 @@ const serviceLayer = Layer.effect(
                 return
               }
               const parsed = z.object({ summary: z.string(), submission: submissions[item.work_type] }).parse(value)
-              const verification = yield* workType.verify(item.work_type as WorkTypeID, {
-                submission: parsed.submission,
-                orgLayer: "project",
-              })
+              const verification = combineVerification(
+                yield* workType.verify(item.work_type as WorkTypeID, {
+                  submission: parsed.submission,
+                  orgLayer: "project",
+                  researchMode: researchModeFor(item),
+                }),
+                acceptanceVerification(item, parsed.summary, parsed.submission),
+              )
               const artifact = yield* projects.addArtifact({
                 project_id: project.id,
                 work_item_id: item.id,
                 kind: item.work_type,
-                title: item.title,
+                title: artifactTitle(item, parsed.submission),
                 path: `artifacts/${item.id}.json`,
                 content: `${JSON.stringify(parsed, null, 2)}\n`,
                 evidence: { work_type_verification: verification },
@@ -1609,17 +2173,26 @@ const serviceLayer = Layer.effect(
       return started[0]?.runID
     })
 
+    const obsoleteWorkItem = Effect.fn("CompanyProjectExecution.obsoleteWorkItem")(function* (item: WorkItem) {
+      const current = (yield* projects.listWorkItems(item.project_id)).find((candidate) => candidate.id === item.id)
+      if (!current || ["completed", "superseded", "cancelled"].includes(current.status)) return true
+      if (!current.plan_id) return false
+      const plan = (yield* projects.listPlans(item.project_id)).find((candidate) => candidate.id === current.plan_id)
+      return !plan || plan.status !== "active"
+    })
+
     const startReadyWave: (project_id: string) => Effect.Effect<string | undefined> = Effect.fn(
       "CompanyProjectExecution.startReadyWave",
     )(function* (project_id: string) {
       const project = yield* projects.get(project_id)
       if (project?.execution_strategy === "seed_and_grow") return yield* startSeedWave(project_id)
-      if (!project) return
+      if (!project || project.dispatch_paused) return
       yield* receiptProcessor.shadowLegacy(project_id).pipe(Effect.catchCause(() => Effect.succeed([])))
       if (["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)) return
       const ready = (yield* projects.readyWorkItems(project_id)).filter((item) => item.kind !== "planner")
       if (!ready.length) {
         const items = yield* projects.listWorkItems(project_id)
+        const activePlan = (yield* projects.listPlans(project_id)).find((plan) => plan.status === "active")
         if (items.some((item) => item.status === "blocked" || item.status === "failed")) {
           yield* blockProject(project_id, "Project has exhausted a work-item retry budget")
           return
@@ -1629,6 +2202,26 @@ const serviceLayer = Layer.effect(
             (item) => item.status === "completed" || item.status === "superseded" || item.status === "cancelled",
           )
         ) {
+          const deliveryWorkItemIDs = new Set(
+            items
+              .filter(
+                (item) =>
+                  item.plan_id === activePlan?.id && item.kind === "worker" && item.status === "completed",
+              )
+              .map((item) => item.id),
+          )
+          const deliveryArtifacts = [
+            ...new Map(
+              (yield* projects.listArtifacts(project_id)).flatMap((artifact) =>
+                artifact.work_item_id &&
+                deliveryWorkItemIDs.has(artifact.work_item_id) &&
+                !["attempt_failure", "independent_review", "system_verification"].includes(artifact.kind)
+                  ? [[artifact.work_item_id, artifact] as const]
+                  : [],
+              ),
+            ).values(),
+          ].sort((left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id))
+          if (!deliveryArtifacts.length) throw new Error(`Company project ${project_id} has no delivery artifacts`)
           yield* recruitment.releaseProject({
             ...(project.company_id ? { company_id: CompanyID.parse(project.company_id) } : {}),
             project_id: project.id,
@@ -1638,6 +2231,39 @@ const serviceLayer = Layer.effect(
             status: "completed",
             actor_id: project.owner_agent_id ?? "system",
           })
+          const deliveryEvents = yield* projects.listEvents(project_id)
+          const latestReady = deliveryEvents.findLast((event) => event.type === "delivery.ready")
+          const latestRevision = deliveryEvents.findLast((event) => event.type === "delivery.revision_requested")
+          if (!latestReady || (latestRevision && latestRevision.created_at > latestReady.created_at))
+            yield* projects.recordEvent({
+              project_id,
+              type: "delivery.ready",
+              actor_id: project.owner_agent_id ?? "system",
+              data: {
+                delivery_id: `delivery:${project_id}`,
+                version: latestReady
+                  ? z
+                      .object({ version: z.number().int().positive() })
+                      .passthrough()
+                      .parse(latestReady.data).version + 1
+                  : 1,
+                artifact_ids: deliveryArtifacts.map((artifact) => artifact.id),
+              },
+            })
+          const deliveryVersion = latestReady
+            ? z.object({ version: z.number().int().positive() }).passthrough().parse(latestReady.data).version + 1
+            : 1
+          yield* publishProjectUpdate({
+            project,
+            request_id: `delivery-ready:${project_id}:${deliveryVersion}`,
+            actor_id: project.owner_agent_id,
+            signal_type: "delivery",
+            body: [
+              `项目交付已就绪：${project.title}`,
+              `共 ${deliveryArtifacts.length} 项成果可供验收。`,
+              ...deliveryArtifacts.map((artifact) => `成果：${artifact.title}`),
+            ].join("\n"),
+          })
         }
         return
       }
@@ -1645,6 +2271,11 @@ const serviceLayer = Layer.effect(
       if (!charter) throw new Error("Project Charter is missing")
       const gates = yield* projects.listGates(project.id)
       const evidence = yield* evidenceSnapshot(project)
+      const revisionEvent = (yield* projects.listEvents(project.id)).findLast(
+        (event) => event.type === "delivery.revision_requested",
+      )
+      const userRevision =
+        revisionEvent && typeof revisionEvent.data.reason === "string" ? revisionEvent.data.reason : undefined
       const assignments = yield* recruitment.listAssignments({ project_id })
       const gated = ready.filter(
         (item) =>
@@ -1680,12 +2311,16 @@ const serviceLayer = Layer.effect(
         return
       }
       const nextStatus = ready.every((item) => item.kind === "reviewer") ? "reviewing" : "executing"
-      if (project.status !== nextStatus)
+      const dispatchState = yield* projects.get(project_id)
+      if (!dispatchState || dispatchState.dispatch_paused) return
+      if (dispatchState.status !== nextStatus)
         yield* projects.transition({ id: project.id, status: nextStatus, actor_id: project.owner_agent_id ?? "system" })
       const started = yield* Effect.forEach(
         ready,
         (item) =>
           Effect.gen(function* () {
+            if ((yield* projects.get(project_id))?.dispatch_paused) return
+            if (yield* obsoleteWorkItem(item)) return
             const assignment = assignments.find(
               (candidate) =>
                 candidate.work_item_id === item.id &&
@@ -1717,6 +2352,7 @@ const serviceLayer = Layer.effect(
                   item,
                   script: reviewerScript(
                     project.goal,
+                    project.created_at,
                     item,
                     parent,
                     artifact.content ? JSON.parse(artifact.content) : artifact.evidence,
@@ -1758,6 +2394,7 @@ const serviceLayer = Layer.effect(
                 item,
                 script: workerScript(
                   project.goal,
+                  project.created_at,
                   item,
                   agentModelRef(project, item.model_group),
                   charter.policy,
@@ -1765,6 +2402,7 @@ const serviceLayer = Layer.effect(
                   assignment.permission_mode,
                   evidence,
                   reviewFeedback,
+                  userRevision,
                 ),
                 workspace: worktree?.directory,
                 permission_mode: workerPermission(
@@ -1776,26 +2414,38 @@ const serviceLayer = Layer.effect(
               }),
               worktree,
             }
-          }),
+          }).pipe(
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                if (yield* obsoleteWorkItem(item)) return
+                return yield* Effect.failCause(cause)
+              }),
+            ),
+          ),
         { concurrency: 4 },
       )
+      const activeStarted = started.flatMap((entry) => (entry ? [entry] : []))
       yield* Effect.gen(function* () {
         yield* Effect.forEach(
-          started,
+          activeStarted,
           ({ item, runID, worktree }) =>
             Effect.gen(function* () {
               const value = yield* outcome(runID)
               if (item.kind === "worker") {
                 const parsed = z.object({ summary: z.string(), submission: submissions[item.work_type] }).parse(value)
-                const verification = yield* workType.verify(item.work_type as WorkTypeID, {
-                  submission: parsed.submission,
-                  orgLayer: "project",
-                })
+                const verification = combineVerification(
+                  yield* workType.verify(item.work_type as WorkTypeID, {
+                    submission: parsed.submission,
+                    orgLayer: "project",
+                    researchMode: researchModeFor(item),
+                  }),
+                  acceptanceVerification(item, parsed.summary, parsed.submission),
+                )
                 const artifact = yield* projects.addArtifact({
                   project_id: project.id,
                   work_item_id: item.id,
                   kind: item.work_type,
-                  title: item.title,
+                  title: artifactTitle(item, parsed.submission),
                   path: `artifacts/${item.id}.json`,
                   content: JSON.stringify(parsed, null, 2) + "\n",
                   evidence: { work_type_verification: verification },
@@ -1894,6 +2544,18 @@ const serviceLayer = Layer.effect(
                     },
                   })
                 }
+                yield* publishProjectUpdate({
+                  project,
+                  request_id: `review-rejected:${reviewArtifact.id}`,
+                  actor_id: item.owner_agent_id,
+                  signal_type: "risk",
+                  body: [
+                    `独立复核未通过：${parent.title}`,
+                    `复核结论：${parsed.summary}`,
+                    ...parsed.findings.map((finding) => `需修正：${finding}`),
+                    parent.attempt < parent.max_attempts ? "已安排返工。" : "返工次数已用尽，需要负责人处理。",
+                  ].join("\n"),
+                })
                 return
               }
               if (!parsed.evidence_checked.length)
@@ -2012,6 +2674,7 @@ const serviceLayer = Layer.effect(
                   const current = (yield* projects.listWorkItems(project.id)).find(
                     (candidate) => candidate.id === item.id,
                   )
+                  if (yield* obsoleteWorkItem(item)) return
                   if (current?.status === "running") {
                     yield* failure(item, String(cause))
                     return
@@ -2029,7 +2692,7 @@ const serviceLayer = Layer.effect(
         Effect.catchCause((cause) => blockProject(project.id, String(cause))),
         Effect.forkIn(scope),
       )
-      return started[0]?.runID
+      return activeStarted[0]?.runID
     })
 
     const continuePlanner = Effect.fn("CompanyProjectExecution.continuePlanner")(function* (input: {
@@ -2049,7 +2712,7 @@ const serviceLayer = Layer.effect(
               deliverables: draft.success_criteria,
               acceptance_criteria: draft.acceptance_criteria,
               scope: draft.scope,
-              non_goals: ["不执行 Charter 范围外工作"],
+              non_goals: ["不执行项目范围外工作"],
               constraints: draft.constraints.length ? draft.constraints : ["遵守当前公司权限与审批策略"],
               resources: [{ kind: "other", scope: input.project.output_dir, disposition: "retain" }],
               risks: [],
@@ -2089,26 +2752,37 @@ const serviceLayer = Layer.effect(
         open_decisions: parsed.open_decisions,
         acceptance_criteria: parsed.acceptance_criteria,
       })
-      const tasks =
-        savedProjection?.tasks ??
-        (yield* delegation.decompose({
-          goal: input.project.goal,
-          context: [
-            `Project Charter: ${JSON.stringify(parsed)}`,
-            "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
-            "The planner never implements and workers never redesign sibling tasks.",
-          ].join("\n"),
-          sessionID: input.project.coordinator_session_id!,
-          delegatorAgentID: input.item.owner_agent_id!,
-          actorAgentType: "general",
-        }))
+      const tasks = savedProjection?.tasks
+        ? savedProjection.tasks
+        : (
+            yield* delegation.decompose({
+              goal: input.project.goal,
+              context: [
+                `Project Charter: ${JSON.stringify(parsed)}`,
+                "Use domain-neutral work types. Each task must own a non-overlapping decision scope and resource scope.",
+                "Preserve every explicit numbered deliverable mapping exactly. A task for D1, D2, D3, or another numbered deliverable must include every requirement and acceptance criterion assigned to that same label, and must never move a hard rule to a sibling deliverable.",
+                "The planner never implements and workers never redesign sibling tasks.",
+                deliveryAcceptanceLanguageRule,
+                localExecutionBoundary,
+              ].join("\n"),
+              sessionID: input.project.coordinator_session_id!,
+              delegatorAgentID: input.item.owner_agent_id!,
+              actorAgentType: "general",
+            })
+          )
+            .map(normalizeExecutableTask)
+            .map(normalizeOutputQualityTask)
+            .map(normalizeTaskAcceptanceLanguage)
       const keys = validateTasks(tasks)
       const sourceKeys = keys.map(stableLogicalKey)
       if (new Set(sourceKeys).size !== sourceKeys.length)
         throw new Error("Delegation task keys collapse to the same stable source key")
+      const plan = (yield* projects.listPlans(input.project.id)).find((candidate) => candidate.id === input.item.plan_id)
+      if (!plan) throw new Error("Project plan is missing")
+      const needKeyScope = plan.version > 1 ? `plan-${plan.version}-` : ""
       const needKeys = sourceKeys.map((key) => ({
-        worker: stableLogicalKey(`worker-${key}`),
-        reviewer: stableLogicalKey(`reviewer-${key}`),
+        worker: stableLogicalKey(`worker-${needKeyScope}${key}`),
+        reviewer: stableLogicalKey(`reviewer-${needKeyScope}${key}`),
       }))
       if (new Set(needKeys.flatMap((key) => [key.worker, key.reviewer])).size !== needKeys.length * 2)
         throw new Error("Delegation capability need keys must be unique")
@@ -2117,14 +2791,12 @@ const serviceLayer = Layer.effect(
           project_id: input.project.id,
           work_item_id: input.item.id,
           kind: "project_charter",
-          title: "Project Charter 与动态任务计划",
+          title: "项目范围与动态任务计划",
           path: "artifacts/project-charter.json",
           content: JSON.stringify({ charter: parsed, tasks }, null, 2) + "\n",
           evidence: { task_count: tasks.length },
           created_by_agent_id: input.item.owner_agent_id,
         })
-      const plan = (yield* projects.listPlans(input.project.id)).at(-1)
-      if (!plan) throw new Error("Project plan is missing")
       const charterPolicy = (yield* projects.getCharter(input.project.id))?.policy
       if (!charterPolicy) throw new Error("Project Charter policy is missing")
       const existingItems = yield* projects.listWorkItems(input.project.id)
@@ -2175,7 +2847,7 @@ const serviceLayer = Layer.effect(
           plan_id: plan.id,
           source_task_key: sourceKey,
           parent_id: parentID,
-          title: task.summary.slice(0, 100),
+          title: conciseWorkItemTitle(task.summary),
           description: task.summary,
           kind: "worker" as const,
           work_type: type,
@@ -2183,7 +2855,7 @@ const serviceLayer = Layer.effect(
           capability_packs: packs,
           decision_scope: task.decisionScope?.length ? task.decisionScope : [task.summary],
           resource_scope: task.resourceScope?.length ? task.resourceScope : [`artifacts/${key}`],
-          inputs: [`Project Charter ${input.project.id}`, task.summary],
+          inputs: [`项目范围 ${input.project.id}`, task.summary],
           expected_outputs: [task.acceptanceCriteria],
           validators: [task.acceptanceCriteria],
           disposition: "retain",
@@ -2192,7 +2864,7 @@ const serviceLayer = Layer.effect(
           review_status: decision.reviewer ? ("pending" as const) : ("not_required" as const),
           owner_agent_id: existingWorker?.owner_agent_id,
           acceptance_criteria: [task.acceptanceCriteria],
-          max_attempts: 2,
+          max_attempts: risk === "high" ? 6 : 4,
           depends_on: dependencies,
         }
         if (legacyWorkers[0]) {
@@ -2263,7 +2935,7 @@ const serviceLayer = Layer.effect(
           capability_packs: ["independent-review@1"],
           decision_scope: [],
           resource_scope: worker.resource_scope,
-          inputs: [`Work Item ${worker.id} 的交付物与验证证据`],
+          inputs: [`工作项 ${worker.id} 的交付物与验证证据`],
           expected_outputs: ["独立复核结论与可操作 findings"],
           validators: worker.acceptance_criteria,
           disposition: "retain",
@@ -2272,7 +2944,7 @@ const serviceLayer = Layer.effect(
           review_status: "not_required" as const,
           owner_agent_id: existingReviewer?.owner_agent_id,
           acceptance_criteria: worker.acceptance_criteria,
-          max_attempts: 2,
+          max_attempts: risk === "high" ? 6 : 4,
           depends_on: [worker.id],
         }
         if (legacyReviewers[0]) {
@@ -2372,6 +3044,87 @@ const serviceLayer = Layer.effect(
           yield* startReadyWave(project.id).pipe(Effect.catchCause((cause) => blockProject(project.id, String(cause))))
       }).pipe(Effect.forkIn(scope))
       return runID
+    })
+
+    const replanFromCharter = Effect.fn("CompanyProjectExecution.replanFromCharter")(function* (input: {
+      project_id: string
+      plan_id: string
+      charter: BoardProjectCharter
+    }) {
+      const charter = BoardProjectCharter.parse(input.charter)
+      const project = yield* projects.get(input.project_id)
+      if (!project) throw new Error(`Company project not found: ${input.project_id}`)
+      if (project.execution_strategy !== "legacy_full_plan")
+        throw new Error(`Company project ${project.id} cannot rebuild a legacy plan from ${project.execution_strategy}`)
+      const plan = (yield* projects.listPlans(project.id)).find((candidate) => candidate.id === input.plan_id)
+      if (!plan || plan.status !== "active")
+        throw new Error(`Active project plan not found: ${input.plan_id}`)
+      const existing = (yield* projects.listWorkItems(project.id)).find(
+        (item) => item.plan_id === plan.id && item.kind === "planner",
+      )
+      const planner = yield* staffWorkItem({
+        project,
+        key: `project-replan-${plan.version}`,
+        need_key: stableLogicalKey(`project-replan-${plan.version}`),
+        item:
+          existing ??
+          (yield* projects.createWorkItem({
+            project_id: project.id,
+            plan_id: plan.id,
+            source_task_key: stableLogicalKey(`project-replan-${plan.version}`),
+            title: "根据新方向重建任务树",
+            description: "保持最新目标摘要、交付物、验收条件与硬约束不变，重建依赖有序的执行与独立复核任务。",
+            kind: "planner",
+            work_type: "decision",
+            role: "project-planner",
+            capability_packs: ["product-charter@1"],
+            decision_scope: ["新计划工作项边界", "依赖关系", "临时责任"],
+            resource_scope: charter.resources.map((resource) => resource.scope),
+            inputs: ["最新 Goal Brief", "方向调整后的 Project Charter"],
+            expected_outputs: ["新计划下依赖有序的 worker/reviewer Work Items"],
+            validators: ["每个叶子任务可独立验收", "每个正式责任只有一个 owner", "独立复核者与执行者不同"],
+            disposition: "retain",
+            model_group: "ultra",
+            risk_level: "medium",
+            review_status: "not_required",
+            acceptance_criteria: ["新任务树覆盖最新交付物、验收条件与硬约束"],
+            max_attempts: 2,
+          })),
+      })
+      const resumed =
+        project.status === "blocked" || project.status === "rejected"
+          ? yield* projects.transition({
+              id: project.id,
+              status: "planning",
+              actor_id: planner.owner_agent_id ?? "user",
+              reason: "方向调整已生成新计划，开始重建任务树",
+            })
+          : project
+      if (planner.status === "running")
+        return {
+          project: resumed,
+          plan,
+          work_item: planner,
+          run_id: planner.workflow_run_id ?? resumed.active_run_id,
+          replayed: true,
+        }
+      if (planner.status === "completed")
+        return {
+          project: resumed,
+          plan,
+          work_item: planner,
+          run_id: (yield* startReadyWave(project.id)) ?? resumed.active_run_id,
+          replayed: true,
+        }
+      if (planner.status !== "pending")
+        throw new Error(`Direction planner ${planner.id} cannot run from ${planner.status}`)
+      return {
+        project: resumed,
+        plan,
+        work_item: planner,
+        run_id: yield* launchApprovedCharter(resumed, planner, charter),
+        replayed: Boolean(existing),
+      }
     })
 
     const startFromCharter = Effect.fn("CompanyProjectExecution.startFromCharter")(function* (input: {
@@ -2506,7 +3259,7 @@ const serviceLayer = Layer.effect(
         (yield* projects.createPlan({
           project_id: project.id,
           phase: "planning",
-          summary: "依据董事会已批准 Charter 拆解可执行 Work Items。",
+          summary: "依据董事会已批准的项目范围拆解可执行工作项。",
           acceptance_criteria: [
             "每个 Work Item 有唯一负责人",
             "输入、产出、资源、验证器与处置方式完整",
@@ -2523,8 +3276,8 @@ const serviceLayer = Layer.effect(
           (yield* projects.createWorkItem({
             project_id: project.id,
             plan_id: plan.id,
-            title: "拆解已批准 Charter",
-            description: "保持董事会批准的范围与验收不变，将 Charter 拆成依赖有序的执行与独立复核任务。",
+            title: "拆解已批准的项目范围",
+            description: "保持董事会批准的范围与验收不变，将项目范围拆成依赖有序的执行与独立复核任务。",
             kind: "planner",
             work_type: "decision",
             role: "project-planner",
@@ -2565,15 +3318,18 @@ const serviceLayer = Layer.effect(
     })
 
     const start = Effect.fn("CompanyProjectExecution.start")(function* (input: {
+      company_id?: string
       goal: string
       title?: string
       decision_request_id?: string
       session_id?: string
       provider_id?: string
       model_id?: string
+      charter?: BoardProjectCharter
       execution_strategy?: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
     }) {
+      const charterInput = input.charter ? BoardProjectCharter.parse(input.charter) : undefined
       const existing = input.decision_request_id
         ? yield* projects.findByDecisionRequest(input.decision_request_id)
         : undefined
@@ -2588,13 +3344,15 @@ const serviceLayer = Layer.effect(
           const run_id =
             existing.execution_strategy === "seed_and_grow"
               ? yield* startSeedWave(existing.id)
-              : yield* launchPlanner(existing, planner)
+              : charterInput
+                ? yield* launchApprovedCharter(existing, planner, charterInput)
+                : yield* launchPlanner(existing, planner)
           if (!run_id) throw new Error(`Seed project ${existing.id} has no dispatchable AgentRun`)
           return { project: existing, run_id }
         }
         throw new Error(`Project start request ${input.decision_request_id} is incomplete and cannot be resumed`)
       }
-      const execution = resolveNewExecution(input)
+      const execution = resolveNewExecution({ ...input, charter: charterInput })
       const selectedModel = yield* resolveModel(input)
       const session = input.session_id
         ? yield* sessions.get(SessionID.make(input.session_id))
@@ -2604,9 +3362,11 @@ const serviceLayer = Layer.effect(
           })
       if (!session) throw new Error(`Session not found: ${input.session_id}`)
       const project = yield* projects.create({
+        company_id: input.company_id,
         decision_request_id: input.decision_request_id,
         goal: input.goal,
         title: input.title,
+        owner_agent_id: charterInput?.dri_agent_id,
         coordinator_session_id: session.id,
         provider_id: selectedModel?.providerID,
         model_id: selectedModel?.modelID,
@@ -2620,6 +3380,23 @@ const serviceLayer = Layer.effect(
       if (project.execution_strategy === "seed_and_grow") {
         const verdict = execution.verdict!
         yield* persistSeedVerdict(project, verdict)
+        if (charterInput && !(yield* projects.getCharter(project.id)))
+          yield* projects.createCharter({
+            project_id: project.id,
+            title: charterInput.title,
+            value: charterInput.value,
+            deliverables: charterInput.deliverables,
+            acceptance_criteria: charterInput.acceptance_criteria,
+            scope: charterInput.scope,
+            non_goals: charterInput.non_goals,
+            constraints: charterInput.constraints,
+            resources: charterInput.resources,
+            risks: charterInput.risks,
+            dri_agent_id: charterInput.dri_agent_id,
+            milestones: charterInput.milestones,
+            open_decisions: charterInput.open_decisions,
+            success_criteria: charterInput.deliverables,
+          })
         const team = yield* startSeedProject({
           project,
           verdict,
@@ -2662,28 +3439,28 @@ const serviceLayer = Layer.effect(
       const plan = yield* projects.createPlan({
         project_id: project.id,
         phase: "planning",
-        summary: "形成 Project Charter，并通过 Delegation 生成动态、依赖有序的任务树。",
+        summary: "形成项目范围与计划，并通过任务委派生成动态、依赖有序的任务树。",
         acceptance_criteria: ["任务领域中立", "角色按任务创建", "决策与资源范围不重叠", "所有叶子任务可独立验收"],
       })
       const item = yield* projects.createWorkItem({
         project_id: project.id,
         plan_id: plan.id,
-        title: "定义 Charter 与任务树",
+        title: "定义项目范围与任务树",
         description: "定义目标边界、验收条件并分解动态执行任务，不实现叶子交付。",
         kind: "planner",
         work_type: "decision",
         role: "project-planner",
         capability_packs: ["product-charter@1"],
-        decision_scope: ["Project Charter", "任务边界", "初始依赖关系"],
+        decision_scope: ["项目范围与计划", "任务边界", "初始依赖关系"],
         resource_scope: ["artifacts/project-charter.json"],
         inputs: [input.goal],
-        expected_outputs: ["Project Charter", "依赖有序的 Work Items"],
-        validators: ["Charter Definition of Ready", "每个 Work Item 可独立验收"],
+        expected_outputs: ["项目范围与计划", "依赖有序的工作项"],
+        validators: ["项目范围已具备启动条件", "每个工作项可独立验收"],
         disposition: "retain",
         model_group: "ultra",
         risk_level: "medium",
         review_status: "not_required",
-        acceptance_criteria: ["Charter 完整", "任务树领域中立", "每个叶子任务有角色、模型组和验收条件"],
+        acceptance_criteria: ["项目范围完整", "任务树领域中立", "每个叶子任务有角色、模型组和验收条件"],
         max_attempts: 2,
       })
       const planner = yield* staffWorkItem({
@@ -2697,7 +3474,12 @@ const serviceLayer = Layer.effect(
         status: "planning",
         actor_id: planner.owner_agent_id,
       })
-      return { project: planning, run_id: yield* launchPlanner(planning, planner) }
+      return {
+        project: planning,
+        run_id: charterInput
+          ? yield* launchApprovedCharter(planning, planner, charterInput)
+          : yield* launchPlanner(planning, planner),
+      }
     })
 
     const cancel = Effect.fn("CompanyProjectExecution.cancel")(function* (input: {
@@ -2707,7 +3489,7 @@ const serviceLayer = Layer.effect(
       const project = yield* projects.get(input.project_id)
       if (!project) throw new Error(`Company project not found: ${input.project_id}`)
       const reason = input.reason ?? "用户已取消当前执行"
-      if (project.execution_strategy === "seed_and_grow") yield* blockProject(project.id, reason)
+      if (project.execution_strategy === "seed_and_grow") yield* blockProject(project.id, reason, false)
       const items = yield* projects.listWorkItems(project.id)
       yield* Effect.forEach(
         items.filter((item) => item.status === "running" && item.workflow_run_id),
@@ -2718,7 +3500,7 @@ const serviceLayer = Layer.effect(
           }),
         { concurrency: "unbounded", discard: true },
       )
-      yield* blockProject(project.id, reason)
+      yield* blockProject(project.id, reason, false)
       return (yield* projects.get(project.id))!
     })
 
@@ -2831,11 +3613,22 @@ const serviceLayer = Layer.effect(
       return run_id ? { gate, run_id } : { gate }
     })
 
-    return Service.of({ start, startFromCharter, retry, resolveGate, cancel, dispatchReady: startReadyWave })
+    return Service.of({
+      start,
+      startFromCharter,
+      replanFromCharter,
+      retry,
+      resolveGate,
+      cancel,
+      dispatchReady: startReadyWave,
+    })
   }),
 ).pipe(Layer.provide(ReceiptProcessor.defaultLayer))
 
-export const layer = serviceLayer.pipe(Layer.provide(CompanyValidationGate.defaultLayer))
+export const layer = serviceLayer.pipe(
+  Layer.provide(CompanyAttention.defaultLayer),
+  Layer.provide(CompanyValidationGate.defaultLayer),
+)
 
 export const defaultLayer = layer.pipe(
   Layer.provide(CompanyProject.defaultLayer),

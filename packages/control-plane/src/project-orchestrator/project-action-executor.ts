@@ -5,12 +5,18 @@ import { AgentRun } from "@/agent-run/agent-run"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
 import { CompanyRecruitment } from "@/company-recruitment"
-import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
+import {
+  CompanyProjectAssignmentTable,
+  CompanyTeamSelectionTable,
+} from "@/company-recruitment/company-recruitment.sql"
+import { CompanyID } from "@/company/schema"
 import * as CompanyAttention from "@/company-project/attention"
 import { CompanyProject } from "@/company-project/company-project"
 import * as CompanyProjectDirection from "@/company-project/direction"
+import { goalBriefCharter } from "@/goal-brief/project-charter"
 import {
   CompanyApprovalGateTable,
+  CompanyArtifactTable,
   CompanyAttentionTable,
   CompanyPlanTable,
   CompanyProjectActionTable,
@@ -18,6 +24,7 @@ import {
   CompanyProjectTable,
   CompanyValidationGateTable,
   CompanyWorkAttemptTable,
+  CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
   CompanyWorktreeRunTable,
 } from "@/company-project/company-project.sql"
@@ -26,6 +33,7 @@ import {
   type ProjectActionRecord as ProjectActionRecordValue,
   type ProjectActionRequest as ProjectActionRequestValue,
 } from "@/company-project/schema"
+import { ChannelTable, Conversation } from "@/conversation"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { WorkflowRuntime } from "@/workflow/runtime"
@@ -39,6 +47,10 @@ const RuntimeAction = z.enum([
   "retry",
   "resolve_blocker",
   "adjust_brief",
+  "accept_delivery",
+  "request_change",
+  "archive",
+  "restore",
   "apply_founder_direction",
   "restore_direction_checkpoint",
 ])
@@ -53,6 +65,24 @@ const ReasonPayload = z
 const RetryPayload = ReasonPayload.extend({
   work_item_ids: z.array(z.string().trim().min(1)).max(500).optional(),
 }).strict()
+
+const AcceptDeliveryPayload = z
+  .object({
+    delivery_id: z.string().trim().min(1),
+    accepted_criterion_ids: z.array(z.string().trim().min(1)).min(1).max(200),
+    note: z.string().trim().min(1).max(8_000).optional(),
+  })
+  .strict()
+
+const RequestChangePayload = z
+  .object({
+    delivery_id: z.string().trim().min(1),
+    reason: z.string().trim().min(1).max(8_000),
+  })
+  .strict()
+
+const ArchivePayload = z.object({}).strict()
+const RestorePayload = z.object({}).strict()
 
 const ResolveBlockerPayload = z
   .object({
@@ -151,6 +181,76 @@ function actionEffectResult(action_id: string) {
   return Database.use((db) => actionEffectResultWithDatabase(db, action_id))
 }
 
+const revisionReferences = (value: string) =>
+  new Set([...value.matchAll(/D(?:10|[1-9])/gi)].map((match) => match[0]!.toUpperCase()))
+
+const revisionTopicRules = [
+  /预算|金额|小计|总计|结余|预备金|单价|成本|报价|budget|subtotal|total|cost/i,
+  /参与者|家庭|人群|需求|participant|audience/i,
+  /流程|时段|时间轴|签到|排队|schedule|timeline/i,
+  /职责|岗位|志愿者|替补|交接|role|staff/i,
+  /风险|剪针|儿童|拥挤|卫生|火灾|用电|risk|safety/i,
+  /Go\/No-Go|放行|停止判断|检查清单|checklist/i,
+  /假设|待确认|法规|场地规则|供应商|assumption/i,
+  /报名|采购|付款|外部联系|发布|external action/i,
+  /最终成果|活动包|交付版本|验收映射|可打开|final artifact|delivery/i,
+]
+
+function revisionWorkItemIDs(input: {
+  reason: string
+  delivery_work_item_ids: string[]
+  work_items: (typeof CompanyWorkItemTable.$inferSelect)[]
+  dependencies: (typeof CompanyWorkItemDependencyTable.$inferSelect)[]
+}) {
+  const delivered = new Set(input.delivery_work_item_ids)
+  const deliveryItems = input.work_items.filter((item) => delivered.has(item.id))
+  const requestedReferences = revisionReferences(input.reason)
+  let roots = requestedReferences.size
+    ? deliveryItems.filter((item) => {
+        const references = revisionReferences(
+          `${item.title}\n${item.description}\n${item.acceptance_criteria_json}`,
+        )
+        return [...requestedReferences].some((reference) => references.has(reference))
+      })
+    : []
+  if (!roots.length) {
+    const topics = revisionTopicRules.filter((pattern) => pattern.test(input.reason))
+    if (topics.length)
+      roots = deliveryItems.filter((item) => {
+        const text = `${item.title}\n${item.description}\n${item.acceptance_criteria_json}`
+        return topics.some((pattern) => pattern.test(text))
+      })
+  }
+  if (!roots.length) roots = deliveryItems
+  const selected = new Set(roots.map((item) => item.id))
+  let changed = true
+  while (changed) {
+    changed = false
+    input.work_items
+      .filter(
+        (item) =>
+          item.kind === "reviewer" &&
+          item.parent_id &&
+          selected.has(item.parent_id) &&
+          !["superseded", "cancelled"].includes(item.status),
+      )
+      .forEach((item) => {
+        if (selected.has(item.id)) return
+        selected.add(item.id)
+        changed = true
+      })
+    input.dependencies.forEach((dependency) => {
+      if (!selected.has(dependency.depends_on_id) || selected.has(dependency.work_item_id)) return
+      const item = input.work_items.find((candidate) => candidate.id === dependency.work_item_id)
+      if (!item || !["worker", "reviewer"].includes(item.kind) || ["superseded", "cancelled"].includes(item.status))
+        return
+      selected.add(item.id)
+      changed = true
+    })
+  }
+  return input.work_items.filter((item) => selected.has(item.id)).map((item) => item.id)
+}
+
 function stopEffectAppliedWithDatabase(
   db: Database.TxOrDb,
   action: ProjectActionRecordValue,
@@ -219,6 +319,19 @@ function assertRevision(action: ProjectActionRecordValue) {
   if (action.expected_revision !== undefined && action.expected_revision !== project.graph_revision)
     throw new Error(`project_revision_conflict:${action.expected_revision}:${project.graph_revision}`)
   return project
+}
+
+function safeProjectActionError(error: string) {
+  if (/no_retryable_work_items|has no retryable work items/i.test(error))
+    return "当前没有可重试的工作项，请刷新后使用页面提供的可用操作。"
+  if (/project_revision_conflict/i.test(error))
+    return "工作状态已更新，本次操作未执行。请刷新后按最新状态重试。"
+  if (/(?:^|\n)\s*at\s|\/(?:Users|home|private|Volumes)\/|[A-Za-z]:\\/i.test(error))
+    return "当前操作遇到内部错误，业务状态已保留。请刷新后重试。"
+  return error
+    .split(/\r?\n/, 1)[0]!
+    .replace(/^(?:Error|RuntimeException):\s*/i, "")
+    .slice(0, 800)
 }
 
 function saveEffectResult(db: Database.TxOrDb, action: ProjectActionRecordValue, result: Record<string, unknown>) {
@@ -411,6 +524,7 @@ export function makeLayer(hooks: Hooks = {}) {
       const workflow = yield* WorkflowRuntime.Service
       const agentRuns = yield* AgentRun.Service
       const agentSupervisor = yield* AgentRunSupervisor.Service
+      const conversation = yield* Conversation.Service
       const locks = new Map<string, Semaphore.Semaphore>()
       const lock = (project_id: string) => {
         const current = locks.get(project_id)
@@ -418,6 +532,74 @@ export function makeLayer(hooks: Hooks = {}) {
         const created = Semaphore.makeUnsafe(1)
         locks.set(project_id, created)
         return created
+      }
+
+      const recordActionUpdate = Effect.fn("ProjectActionExecutor.recordActionUpdate")(function* (input: {
+        action: ProjectActionRecordValue
+        body: string
+        signalType: "status" | "intervention"
+      }) {
+        const project = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.action.project_id)).get(),
+          ),
+        )
+        if (!project?.company_id) return
+        yield* conversation.recordProjectUpdate({
+          companyID: CompanyID.parse(project.company_id),
+          projectScopeID: project.id,
+          requestID: `project-control:${input.action.id}`,
+          author: { kind: "user", id: "local_user" },
+          body: input.body,
+          signalType: input.signalType,
+        }).pipe(Effect.catchCause(() => Effect.void))
+      })
+
+      const actionUpdate = (action: ProjectActionRecordValue) => {
+        if (action.action === "pause_work") {
+          const payload = ReasonPayload.parse(action.payload)
+          return {
+            body: [
+              "已暂停新任务派发。已在运行的工作会继续到安全停点；调整方向时，系统会先安全停止在途工作。",
+              payload.reason ? `说明：${payload.reason}` : undefined,
+            ].filter(Boolean).join("\n"),
+            signalType: "intervention" as const,
+          }
+        }
+        if (action.action === "resume_work") {
+          const payload = ReasonPayload.parse(action.payload)
+          return {
+            body: ["已恢复新任务派发。", payload.reason ? `说明：${payload.reason}` : undefined]
+              .filter(Boolean)
+              .join("\n"),
+            signalType: "status" as const,
+          }
+        }
+        if (action.action === "stop_work") {
+          const payload = ReasonPayload.parse(action.payload)
+          return {
+            body: ["已停止项目执行；现有目标、记录与成果仍保留。", payload.reason ? `说明：${payload.reason}` : undefined]
+              .filter(Boolean)
+              .join("\n"),
+            signalType: "intervention" as const,
+          }
+        }
+        if (action.action === "retry") {
+          const payload = RetryPayload.parse(action.payload)
+          return {
+            body: ["已请求恢复受阻工作并重新执行。", payload.reason ? `说明：${payload.reason}` : undefined]
+              .filter(Boolean)
+              .join("\n"),
+            signalType: "intervention" as const,
+          }
+        }
+        if (action.action === "resolve_blocker") {
+          const payload = ResolveBlockerPayload.parse(action.payload)
+          return {
+            body: `已处理项目阻塞：${payload.resolution}`,
+            signalType: "intervention" as const,
+          }
+        }
       }
 
       const dispatchReady = Effect.fn("ProjectActionExecutor.dispatchReady")(function* (
@@ -435,7 +617,7 @@ export function makeLayer(hooks: Hooks = {}) {
                 {
                   action_id: action.id,
                   action: action.action,
-                  error: Cause.pretty(outcome.cause).slice(0, 8_000),
+                  error: safeProjectActionError(Cause.pretty(outcome.cause)),
                 },
                 null,
               ),
@@ -510,6 +692,70 @@ export function makeLayer(hooks: Hooks = {}) {
           return yield* direction.adjust(input)
         }).pipe(Effect.provide(CompanyProjectDirection.defaultLayer))
 
+      const quiesceDirection = (action: ProjectActionRecordValue) =>
+        Effect.gen(function* () {
+          const project = yield* Effect.sync(() =>
+            Database.use((db) =>
+              db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, action.project_id)).get(),
+            ),
+          )
+          if (!project?.dispatch_paused) return
+          const runningItems = yield* Effect.sync(() =>
+            Database.use((db) =>
+              db
+                .select()
+                .from(CompanyWorkItemTable)
+                .where(eq(CompanyWorkItemTable.project_id, action.project_id))
+                .all()
+                .filter((item) => item.status === "running"),
+            ),
+          )
+          const workflowRunIDs = [
+            ...new Set(runningItems.flatMap((item) => item.workflow_run_id ? [item.workflow_run_id] : [])),
+          ]
+          const activeAgentRunIDs = yield* Effect.sync(() =>
+            Database.use((db) =>
+              db
+                .select()
+                .from(AgentRunTable)
+                .where(eq(AgentRunTable.company_project_id, action.project_id))
+                .all()
+                .filter((run) =>
+                  ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(run.state),
+                )
+                .map((run) => run.id),
+            ),
+          )
+          yield* Effect.forEach(
+            workflowRunIDs,
+            (runID) => workflow.cancel({ runID }),
+            { concurrency: 1, discard: true },
+          )
+          yield* Effect.forEach(
+            activeAgentRunIDs,
+            (runID) =>
+              Effect.gen(function* () {
+                yield* agentSupervisor.stop(runID).pipe(Effect.ignore)
+                const current = yield* agentRuns.get(runID)
+                if (
+                  current &&
+                  ["queued", "starting", "running", "interrupting", "awaiting_recovery"].includes(current.state)
+                )
+                  yield* agentRuns.transition({ id: runID, state: "stopped", exitCode: 130 })
+              }),
+            { concurrency: 1, discard: true },
+          )
+          const projects = yield* CompanyProject.Service
+          const remainingRunning = (yield* projects.listWorkItems(action.project_id)).filter(
+            (item) => item.status === "running",
+          )
+          yield* Effect.forEach(
+            remainingRunning,
+            (item) => projects.blockWorkItem({ id: item.id, error: "方向调整前已安全暂停在途工作" }),
+            { concurrency: 1, discard: true },
+          )
+        }).pipe(Effect.provide(CompanyProject.defaultLayer))
+
       const restoreDirectionCheckpoint = (
         input: CompanyProjectDirection.RestoreDirectionCheckpointRequest,
       ) =>
@@ -532,7 +778,7 @@ export function makeLayer(hooks: Hooks = {}) {
         const payload = ReasonPayload.parse(action.payload)
         const reason = payload.reason ?? "用户暂停执行"
         const barrier = yield* dispatch.pauseDispatch(action.project_id, reason)
-        return yield* Effect.sync(() =>
+        const result = yield* Effect.sync(() =>
           Database.transaction(
             (db) => {
               const replayed = actionEffectResultWithDatabase(db, action.id)
@@ -553,6 +799,7 @@ export function makeLayer(hooks: Hooks = {}) {
             { behavior: "immediate" },
           ),
         )
+        return result
       })
 
       const resume = Effect.fn("ProjectActionExecutor.resume")(function* (action: ProjectActionRecordValue) {
@@ -821,27 +1068,24 @@ export function makeLayer(hooks: Hooks = {}) {
                 throw new Error("retry_work_item_project_mismatch")
               const retryable = projectItems
                 .filter((item) => !requestedIDs.length || requestedIDs.includes(item.id))
-                .filter(
-                  (item) => (item.status === "blocked" || item.status === "failed") && item.attempt < item.max_attempts,
-                )
+                .filter((item) => item.status === "blocked" || item.status === "failed")
                 .sort((left, right) => left.id.localeCompare(right.id))
               if (!retryable.length) throw new Error("no_retryable_work_items")
               const now = Date.now()
-              db.update(CompanyWorkItemTable)
-                .set({
-                  status: "pending",
-                  error: null,
-                  workflow_run_id: null,
-                  completed_at: null,
-                  updated_at: now,
-                })
-                .where(
-                  inArray(
-                    CompanyWorkItemTable.id,
-                    retryable.map((item) => item.id),
-                  ),
-                )
-                .run()
+              retryable.forEach((item) =>
+                db
+                  .update(CompanyWorkItemTable)
+                  .set({
+                    status: "pending",
+                    max_attempts: Math.max(item.max_attempts, item.attempt + 1),
+                    error: null,
+                    workflow_run_id: null,
+                    completed_at: null,
+                    updated_at: now,
+                  })
+                  .where(eq(CompanyWorkItemTable.id, item.id))
+                  .run(),
+              )
               retryable.forEach((item) =>
                 event(
                   db,
@@ -897,6 +1141,418 @@ export function makeLayer(hooks: Hooks = {}) {
         )
         yield* dispatchReady(action)
         return persisted
+      })
+
+      const decideDelivery = Effect.fn("ProjectActionExecutor.decideDelivery")(function* (
+        action: ProjectActionRecordValue,
+      ) {
+        const accepted = action.action === "accept_delivery"
+        const acceptedPayload = accepted ? AcceptDeliveryPayload.parse(action.payload) : undefined
+        const changePayload = accepted ? undefined : RequestChangePayload.parse(action.payload)
+        const deliveryID = acceptedPayload?.delivery_id ?? changePayload!.delivery_id
+        const result = yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              const existing = actionEffectResultWithDatabase(db, action.id)
+              if (existing) return existing
+              const events = db
+                .select()
+                .from(CompanyProjectEventTable)
+                .where(eq(CompanyProjectEventTable.project_id, action.project_id))
+                .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+                .all()
+              const ready = events.findLast((candidate) => candidate.type === "delivery.ready")
+              if (!ready) throw new Error("delivery_not_ready")
+              const readyData = eventData(ready)
+              if (readyData.delivery_id !== deliveryID) throw new Error("delivery_id_mismatch")
+              const readyIndex = events.findIndex((candidate) => candidate.id === ready.id)
+              if (
+                events
+                  .slice(readyIndex + 1)
+                  .some(
+                    (candidate) =>
+                      candidate.type === "delivery.accepted" || candidate.type === "delivery.revision_requested",
+                  )
+              )
+                throw new Error("delivery_already_decided")
+              const deliveryWorkItemIDs = acceptedPayload
+                ? []
+                : [
+                    ...new Set(
+                      db
+                        .select()
+                        .from(CompanyArtifactTable)
+                        .where(
+                          inArray(
+                            CompanyArtifactTable.id,
+                            z
+                              .object({ artifact_ids: z.array(z.string().trim().min(1)) })
+                              .passthrough()
+                              .parse(readyData).artifact_ids,
+                          ),
+                        )
+                        .all()
+                        .flatMap((artifact) => (artifact.work_item_id ? [artifact.work_item_id] : [])),
+                    ),
+                  ]
+              const projectWorkItems = acceptedPayload
+                ? []
+                : db
+                    .select()
+                    .from(CompanyWorkItemTable)
+                    .where(eq(CompanyWorkItemTable.project_id, action.project_id))
+                    .orderBy(asc(CompanyWorkItemTable.created_at), asc(CompanyWorkItemTable.id))
+                    .all()
+              const projectDependencies = acceptedPayload
+                ? []
+                : db
+                    .select()
+                    .from(CompanyWorkItemDependencyTable)
+                    .where(
+                      inArray(
+                        CompanyWorkItemDependencyTable.work_item_id,
+                        projectWorkItems.map((item) => item.id),
+                      ),
+                    )
+                    .all()
+              const reworkWorkItemIDs = acceptedPayload
+                ? []
+                : revisionWorkItemIDs({
+                    reason: changePayload!.reason,
+                    delivery_work_item_ids: deliveryWorkItemIDs,
+                    work_items: projectWorkItems,
+                    dependencies: projectDependencies,
+                  })
+              if (!acceptedPayload && !reworkWorkItemIDs.length) throw new Error("delivery_has_no_reworkable_items")
+              const reworkRows = acceptedPayload
+                ? []
+                : projectWorkItems.filter((item) => reworkWorkItemIDs.includes(item.id))
+              const reviewerRows = reworkRows.filter((item) => item.kind === "reviewer")
+              const reworkWorkerRows = reworkRows.filter((item) => item.kind === "worker")
+              const result = acceptedPayload
+                ? {
+                    delivery_id: acceptedPayload.delivery_id,
+                    accepted_criterion_ids: acceptedPayload.accepted_criterion_ids,
+                    note: acceptedPayload.note,
+                  }
+                : {
+                    delivery_id: changePayload!.delivery_id,
+                    reason: changePayload!.reason,
+                    rework_work_item_ids: reworkRows.map((item) => item.id).sort(),
+                    rework_work_item_titles: reworkRows.map((item) => item.title),
+                  }
+              event(
+                db,
+                action.project_id,
+                accepted ? "delivery.accepted" : "delivery.revision_requested",
+                {
+                  ...result,
+                  action_id: action.id,
+                },
+              )
+              if (acceptedPayload) {
+                const now = Date.now()
+                const assignments = db
+                  .select()
+                  .from(CompanyProjectAssignmentTable)
+                  .where(eq(CompanyProjectAssignmentTable.project_id, action.project_id))
+                  .all()
+                  .filter((assignment) => assignment.status === "assigned" || assignment.status === "active")
+                assignments.forEach((assignment) => {
+                  db.update(CompanyProjectAssignmentTable)
+                    .set({
+                      status: "released",
+                      released_at: now,
+                      release_reason: "delivery_accepted",
+                    })
+                    .where(eq(CompanyProjectAssignmentTable.id, assignment.id))
+                    .run()
+                  db.update(CompanyTeamSelectionTable)
+                    .set({ time_released: now, time_updated: now })
+                    .where(eq(CompanyTeamSelectionTable.id, assignment.selection_id))
+                    .run()
+                  event(db, action.project_id, "project_assignment.released", {
+                    assignment_id: assignment.id,
+                    work_item_id: assignment.work_item_id,
+                    reason: "delivery_accepted",
+                  })
+                })
+              }
+              if (!acceptedPayload) {
+                const now = Date.now()
+                const reviewerByParent = new Map(
+                  reviewerRows.flatMap((reviewer) => (reviewer.parent_id ? [[reviewer.parent_id, reviewer] as const] : [])),
+                )
+                const supersededGates = db
+                  .select()
+                  .from(CompanyValidationGateTable)
+                  .where(
+                    and(
+                      eq(CompanyValidationGateTable.project_id, action.project_id),
+                      inArray(CompanyValidationGateTable.work_item_id, reworkWorkItemIDs),
+                      ne(CompanyValidationGateTable.status, "superseded"),
+                    ),
+                  )
+                  .all()
+                if (supersededGates.length)
+                  db.update(CompanyValidationGateTable)
+                    .set({ status: "superseded" })
+                    .where(
+                      inArray(
+                        CompanyValidationGateTable.id,
+                        supersededGates.map((gate) => gate.id),
+                      ),
+                    )
+                    .run()
+                supersededGates.forEach((gate) =>
+                  event(
+                    db,
+                    action.project_id,
+                    "validation_gate.superseded",
+                    {
+                      gate_id: gate.id,
+                      work_item_id: gate.work_item_id,
+                      reason: "user_request_change",
+                      action_id: action.id,
+                    },
+                    null,
+                  ),
+                )
+                reworkRows.forEach((item) => {
+                  db.update(CompanyWorkItemTable)
+                    .set({
+                      status: "pending",
+                      review_status:
+                        item.kind === "worker" && reviewerByParent.has(item.id) ? "pending" : item.review_status,
+                      workflow_run_id: null,
+                      error: null,
+                      started_at: null,
+                      completed_at: null,
+                      max_attempts: Math.max(item.max_attempts, item.attempt + 1),
+                      updated_at: now,
+                    })
+                    .where(eq(CompanyWorkItemTable.id, item.id))
+                    .run()
+                  const assignment = db
+                    .select()
+                    .from(CompanyProjectAssignmentTable)
+                    .where(eq(CompanyProjectAssignmentTable.work_item_id, item.id))
+                    .all()
+                    .sort((left, right) => right.version - left.version)[0]
+                  if (!assignment) throw new Error(`Work item ${item.id} has no ProjectAssignment to reopen`)
+                  db.update(CompanyProjectAssignmentTable)
+                    .set({
+                      status: "assigned",
+                      started_at: null,
+                      released_at: null,
+                      release_reason: null,
+                    })
+                    .where(eq(CompanyProjectAssignmentTable.id, assignment.id))
+                    .run()
+                  db.update(CompanyTeamSelectionTable)
+                    .set({ time_released: null, time_updated: now })
+                    .where(eq(CompanyTeamSelectionTable.id, assignment.selection_id))
+                    .run()
+                  event(
+                    db,
+                    action.project_id,
+                    "project_assignment.recovered",
+                    {
+                      assignment_id: assignment.id,
+                      work_item_id: item.id,
+                      from: assignment.status,
+                      to: "assigned",
+                      reason: "user_request_change",
+                    },
+                    assignment.agent_id,
+                  )
+                })
+                reworkWorkerRows.forEach((worker) =>
+                  event(db, action.project_id, "work_item.rework_requested", {
+                    worker_id: worker.id,
+                    reviewer_id: reviewerByParent.get(worker.id)?.id,
+                    origin: "user_request_change",
+                    reason: changePayload!.reason,
+                    delivery_id: changePayload!.delivery_id,
+                    action_id: action.id,
+                  }),
+                )
+                const project = db
+                  .select()
+                  .from(CompanyProjectTable)
+                  .where(eq(CompanyProjectTable.id, action.project_id))
+                  .get()
+                if (!project) throw new Error(`Company project not found: ${action.project_id}`)
+                db.update(CompanyProjectTable)
+                  .set({
+                    status: "executing",
+                    orchestration_state: project.dispatch_paused ? "paused" : "idle",
+                    active_run_id: null,
+                    completed_at: null,
+                    updated_at: now,
+                  })
+                  .where(eq(CompanyProjectTable.id, action.project_id))
+                  .run()
+                if (project.status !== "executing")
+                  event(
+                    db,
+                    action.project_id,
+                    "project.status_changed",
+                    {
+                      from: project.status,
+                      to: "executing",
+                      reason: changePayload!.reason,
+                      action_id: action.id,
+                    },
+                    "user",
+                  )
+              }
+              saveEffectResult(db, action, result)
+              return result
+            },
+            { behavior: "immediate" },
+          ),
+        )
+        const project = yield* Effect.sync(() =>
+          Database.use((db) =>
+            db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, action.project_id)).get(),
+          ),
+        )
+        const revisionTitles = changePayload
+          ? z
+              .object({ rework_work_item_titles: z.array(z.string()) })
+              .passthrough()
+              .safeParse(result).data?.rework_work_item_titles ?? []
+          : []
+        if (changePayload) yield* dispatchReady(action)
+        if (project?.company_id)
+          yield* conversation.recordProjectUpdate({
+            companyID: CompanyID.parse(project.company_id),
+            projectScopeID: project.id,
+            requestID: `project-delivery-decision:${action.id}`,
+            author: { kind: "user", id: "local_user" },
+            body: acceptedPayload
+              ? `用户已验收交付；已核对 ${acceptedPayload.accepted_criterion_ids.length} 项验收标准。`
+              : [
+                  `用户已请求修改交付：${changePayload!.reason}`,
+                  revisionTitles.length ? `本次重新执行范围：${revisionTitles.join("；")}` : undefined,
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+            signalType: "delivery",
+          }).pipe(Effect.catchCause(() => Effect.void))
+        return result
+      })
+
+      const archive = Effect.fn("ProjectActionExecutor.archive")(function* (
+        action: ProjectActionRecordValue,
+      ) {
+        ArchivePayload.parse(action.payload)
+        return yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              const existing = actionEffectResultWithDatabase(db, action.id)
+              if (existing) return existing
+              const project = db
+                .select()
+                .from(CompanyProjectTable)
+                .where(eq(CompanyProjectTable.id, action.project_id))
+                .get()
+              if (!project) throw new Error(`Company project not found: ${action.project_id}`)
+              const events = db
+                .select()
+                .from(CompanyProjectEventTable)
+                .where(eq(CompanyProjectEventTable.project_id, action.project_id))
+                .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+                .all()
+              if (!events.some((candidate) =>
+                candidate.type === "delivery.accepted" || candidate.type === "work.cancelled"))
+                throw new Error("project_not_archivable")
+              const lifecycleEvent = events.findLast((candidate) =>
+                candidate.type === "project.archived" || candidate.type === "project.restored")
+              const archivedAt = lifecycleEvent?.type === "project.archived"
+                ? z.number().int().nonnegative().parse(eventData(lifecycleEvent).archived_at)
+                : Date.now()
+              if (lifecycleEvent?.type !== "project.archived")
+                event(db, action.project_id, "project.archived", {
+                  action_id: action.id,
+                  archived_at: archivedAt,
+                })
+              db.update(ChannelTable)
+                .set({
+                  time_archived: archivedAt,
+                  time_updated: archivedAt,
+                })
+                .where(
+                  and(
+                    eq(ChannelTable.kind, "project"),
+                    eq(ChannelTable.scope_id, action.project_id),
+                  ),
+                )
+                .run()
+              const result = {
+                archived: true,
+                archived_at: archivedAt,
+              }
+              saveEffectResult(db, action, result)
+              return result
+            },
+            { behavior: "immediate" },
+          ),
+        )
+      })
+
+      const restore = Effect.fn("ProjectActionExecutor.restore")(function* (
+        action: ProjectActionRecordValue,
+      ) {
+        RestorePayload.parse(action.payload)
+        return yield* Effect.sync(() =>
+          Database.transaction(
+            (db) => {
+              const existing = actionEffectResultWithDatabase(db, action.id)
+              if (existing) return existing
+              const project = db
+                .select()
+                .from(CompanyProjectTable)
+                .where(eq(CompanyProjectTable.id, action.project_id))
+                .get()
+              if (!project) throw new Error(`Company project not found: ${action.project_id}`)
+              const lifecycleEvent = db
+                .select()
+                .from(CompanyProjectEventTable)
+                .where(eq(CompanyProjectEventTable.project_id, action.project_id))
+                .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+                .all()
+                .findLast((candidate) =>
+                  candidate.type === "project.archived" || candidate.type === "project.restored")
+              if (lifecycleEvent?.type !== "project.archived") throw new Error("project_not_archived")
+              const restoredAt = Date.now()
+              event(db, action.project_id, "project.restored", {
+                action_id: action.id,
+                restored_at: restoredAt,
+              })
+              db.update(ChannelTable)
+                .set({
+                  time_archived: null,
+                  time_updated: restoredAt,
+                })
+                .where(
+                  and(
+                    eq(ChannelTable.kind, "project"),
+                    eq(ChannelTable.scope_id, action.project_id),
+                  ),
+                )
+                .run()
+              const result = {
+                restored: true,
+                restored_at: restoredAt,
+              }
+              saveEffectResult(db, action, result)
+              return result
+            },
+            { behavior: "immediate" },
+          ),
+        )
       })
 
       const resolveBlocker = Effect.fn("ProjectActionExecutor.resolveBlocker")(function* (
@@ -1121,7 +1777,7 @@ export function makeLayer(hooks: Hooks = {}) {
                   project_id: action.project_id,
                   gate_id: gate.id,
                   work_item_id: gate.work_item_id,
-                  error: Cause.pretty(authorized.cause).slice(0, 8_000),
+                  error: safeProjectActionError(Cause.pretty(authorized.cause)),
                 }),
               )
               return {
@@ -1143,6 +1799,9 @@ export function makeLayer(hooks: Hooks = {}) {
         if (kind === "resume_work") return yield* resume(action)
         if (kind === "stop_work") return yield* stop(action)
         if (kind === "retry") return yield* retry(action)
+        if (kind === "accept_delivery" || kind === "request_change") return yield* decideDelivery(action)
+        if (kind === "archive") return yield* archive(action)
+        if (kind === "restore") return yield* restore(action)
         return yield* resolveBlocker(action)
       })
 
@@ -1152,6 +1811,7 @@ export function makeLayer(hooks: Hooks = {}) {
       ) {
         if (action.action === "adjust_brief") {
           const payload = CompanyProjectDirection.AdjustDirectionPayload.parse(action.payload)
+          if (action.status === "requested") yield* quiesceDirection(action)
           const result = yield* adjustDirection({
             project_id: action.project_id,
             attention_id: action.attention_id,
@@ -1159,6 +1819,19 @@ export function makeLayer(hooks: Hooks = {}) {
             expected_graph_revision: action.expected_revision!,
             ...payload,
           })
+          if (result.status === "applied") {
+            if (!dispatch.replanFromCharter) throw new Error("direction_replan_unavailable")
+            yield* dispatch.replanFromCharter({
+              project_id: action.project_id,
+              plan_id: result.plan.id,
+              charter: goalBriefCharter(result.brief),
+            })
+            yield* recordActionUpdate({
+              action: result.action,
+              body: `已调整方向。目标摘要版本 ${result.brief.version}，执行计划版本 ${result.plan.version}；系统正在按新方向重建后续任务。`,
+              signalType: "intervention",
+            })
+          }
           return { action: result.action, replayed: replayed || result.replayed }
         }
         if (action.action === "restore_direction_checkpoint") {
@@ -1209,7 +1882,7 @@ export function makeLayer(hooks: Hooks = {}) {
           }
           const rejected = yield* attention.rejectAction({
             id: claimed.record.id,
-            error: Cause.pretty(outcome.cause).slice(0, 8_000),
+            error: safeProjectActionError(Cause.pretty(outcome.cause)),
           })
           return { action: rejected.record, replayed }
         }
@@ -1218,6 +1891,8 @@ export function makeLayer(hooks: Hooks = {}) {
           id: claimed.record.id,
           result: outcome.value,
         })
+        const update = actionUpdate(applied.record)
+        if (update) yield* recordActionUpdate({ action: applied.record, ...update })
         hooks.onBoundary?.("after_apply", applied.record)
         return { action: applied.record, replayed }
       })
@@ -1271,7 +1946,7 @@ export function makeLayer(hooks: Hooks = {}) {
                   project_id: gate.project_id,
                   gate_id: gate.id,
                   work_item_id: gate.work_item_id!,
-                  error: Cause.pretty(authorized.cause).slice(0, 8_000),
+                  error: safeProjectActionError(Cause.pretty(authorized.cause)),
                 }),
               )
             }).pipe(Effect.catchCause(() => Effect.succeed(undefined))),
@@ -1344,7 +2019,7 @@ export function makeLayer(hooks: Hooks = {}) {
 
       return Service.of({ execute, recover })
     }),
-  )
+  ).pipe(Layer.provide(Conversation.defaultLayer))
 }
 
 export const layer = makeLayer()

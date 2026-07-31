@@ -718,6 +718,10 @@ export const ProjectActionKind = z.enum([
   "retry",
   "resolve_blocker",
   "adjust_brief",
+  "accept_delivery",
+  "request_change",
+  "archive",
+  "restore",
   "apply_founder_direction",
   "restore_direction_checkpoint",
 ])

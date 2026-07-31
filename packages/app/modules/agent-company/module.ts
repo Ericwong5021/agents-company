@@ -59,6 +59,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/snapshot.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/archived-work",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/archived-work.get"),
+    })
+    addServerHandler({
       route: "/api/agent-company/board",
       method: "get",
       handler: resolver.resolve("./runtime/server/api/board.get"),
@@ -252,6 +257,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/goal-brief/generate",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/goal-brief-generate.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/goal-brief/request",
+      method: "get",
+      handler: resolver.resolve("./runtime/server/api/goal-brief-request.get"),
     })
     addServerHandler({
       route: "/api/agent-company/goal-brief/:briefID/versions",

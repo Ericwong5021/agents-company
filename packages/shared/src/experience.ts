@@ -376,6 +376,7 @@ export const ExperienceUserStatus = z.enum([
   "revision",
   "delivered",
   "accepted",
+  "archived",
   "failed",
   "cancelled",
 ])
@@ -393,6 +394,7 @@ export const ExperienceUserStatusLabels = {
   revision: "Revision",
   delivered: "Delivered",
   accepted: "Accepted",
+  archived: "Archived",
   failed: "Failed",
   cancelled: "Cancelled",
 } as const satisfies Record<ExperienceUserStatus, string>
@@ -418,6 +420,7 @@ export const ExperienceActionType = z.enum([
   "open_diagnostics",
   "view_retained_results",
   "archive",
+  "restore",
 ])
 export type ExperienceActionType = z.infer<typeof ExperienceActionType>
 
@@ -442,6 +445,7 @@ export const ExperienceActionMutatesBusinessState = {
   open_diagnostics: false,
   view_retained_results: false,
   archive: true,
+  restore: true,
 } as const satisfies Record<ExperienceActionType, boolean>
 
 export const ExperienceR0ImplementedMutationActions = [
@@ -451,6 +455,10 @@ export const ExperienceR0ImplementedMutationActions = [
   "stop_work",
   "resolve_blocker",
   "retry",
+  "accept_delivery",
+  "request_change",
+  "archive",
+  "restore",
 ] as const satisfies readonly ExperienceActionType[]
 const ExperienceR0ImplementedMutationActionSet = new Set<ExperienceActionType>(ExperienceR0ImplementedMutationActions)
 
@@ -520,6 +528,35 @@ export const ExperienceWorkActionRequest = z.union([
       resolution: LongText,
     })
     .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("accept_delivery"),
+      deliveryId: Identifier,
+      acceptedCriterionIds: z.array(Identifier).min(1).max(200),
+      note: LongText.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("request_change"),
+      deliveryId: Identifier,
+      reason: LongText,
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("archive"),
+    })
+    .strict(),
+  z
+    .object({
+      ...ExperienceWorkActionBase,
+      action: z.literal("restore"),
+    })
+    .strict(),
 ])
 export type ExperienceWorkActionRequest = z.infer<typeof ExperienceWorkActionRequest>
 
@@ -527,7 +564,18 @@ export const ExperienceWorkActionResult = z
   .object({
     actionId: Identifier,
     projectId: Identifier,
-    action: z.enum(["adjust_brief", "pause_work", "resume_work", "stop_work", "retry", "resolve_blocker"]),
+    action: z.enum([
+      "adjust_brief",
+      "pause_work",
+      "resume_work",
+      "stop_work",
+      "retry",
+      "resolve_blocker",
+      "accept_delivery",
+      "request_change",
+      "archive",
+      "restore",
+    ]),
     status: z.enum(["applied", "rejected"]),
     replayed: z.boolean(),
     result: z.record(z.string(), z.unknown()).optional(),
@@ -562,6 +610,7 @@ export const ExperienceAllowedActionTypes = {
   revision: ["view_revision", "view_evidence", "stop_work"],
   delivered: ["open_delivery", "accept_delivery", "request_change", "view_evidence"],
   accepted: ["open_delivery", "view_evidence", "archive"],
+  archived: ["restore"],
   failed: ["retry", "open_diagnostics", "adjust_brief", "stop_work"],
   cancelled: ["view_retained_results", "archive"],
 } as const satisfies Record<ExperienceUserStatus, readonly ExperienceActionType[]>
@@ -578,6 +627,7 @@ export const ExperienceNeedsUserAction = {
   revision: false,
   delivered: true,
   accepted: false,
+  archived: false,
   failed: true,
   cancelled: false,
 } as const satisfies Record<ExperienceUserStatus, boolean>
@@ -1041,6 +1091,7 @@ export const WorkProjection = WorkProjectionValue.superRefine((value, context) =
     const validAcceptanceState =
       (value.summary.userStatus === "delivered" && value.delivery.acceptanceState === "pending") ||
       (value.summary.userStatus === "accepted" && value.delivery.acceptanceState === "accepted") ||
+      (value.summary.userStatus === "archived" && value.delivery.acceptanceState === "accepted") ||
       (value.summary.userStatus === "revision" && value.delivery.acceptanceState === "revision_requested")
     if (!validAcceptanceState)
       context.addIssue({

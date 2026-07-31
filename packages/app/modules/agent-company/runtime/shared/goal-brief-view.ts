@@ -19,7 +19,7 @@ import { classifyOpenQuestions, resolveStartDecision } from "./goal-brief-clarif
 
 export const approvalModeCopy = {
   autonomous: { label: "自主执行", autoStart: true, detail: "确认后立即开始，仅在高风险动作前暂停。" },
-  balanced: { label: "先看 Brief", autoStart: false, detail: "展示目标摘要，允许你在开始前调整。" },
+  balanced: { label: "先看目标摘要", autoStart: false, detail: "展示目标摘要，允许你在开始前调整。" },
   strict: { label: "等待你开始", autoStart: false, detail: "在你明确开始前不会执行。" },
 } as const
 
@@ -97,6 +97,19 @@ export type GoalBriefFieldEdit = Partial<
   >
 >
 
+function reconciledRecommendedPlan(brief: GoalBriefValue, patch: GoalBriefFieldEdit) {
+  const goal = patch.goal ?? brief.goal
+  const deliverables = patch.deliverables ?? brief.deliverables
+  return {
+    summary: `以当前版本目标和硬约束为唯一边界，依次形成交付成果并完成验收；旧版本建议不得覆盖当前版本。当前目标：${goal.slice(0, 1_000)}`,
+    steps: deliverables.map((deliverable, index) => ({
+      id: `current-deliverable-${index + 1}`,
+      title: deliverable.title,
+      outcome: `${deliverable.description.slice(0, 7_000)} 完成时逐项核对当前约束与验收标准；如有冲突，必须以当前版本为准并停止冲突动作。`,
+    })),
+  }
+}
+
 // 把局部编辑合并进当前 Brief，产出可提交的 append 请求。只重写受影响字段。
 export function buildBriefAppendRequest(
   brief: GoalBriefValue,
@@ -104,6 +117,22 @@ export function buildBriefAppendRequest(
   source: GoalBriefSource = "user_confirmation",
 ) {
   const patch = GoalBriefFieldEdit.parse(edit)
+  const constraintsChanged =
+    patch.constraints !== undefined &&
+    JSON.stringify(patch.constraints) !== JSON.stringify(brief.constraints)
+  const planInputsChanged = (
+    ["deliverables", "acceptanceCriteria", "constraints", "assumptions", "openQuestions"] as const
+  ).some((key) => patch[key] !== undefined)
+  const currentAssumptionIDs = new Set(brief.assumptions.map((assumption) => assumption.id))
+  const assumptions = (patch.assumptions ?? brief.assumptions).filter(
+    (assumption) =>
+      !constraintsChanged ||
+      (
+        assumption.confirmed &&
+        (assumption.id.startsWith("answer-") || !currentAssumptionIDs.has(assumption.id))
+      ),
+  )
+  const openQuestions = patch.openQuestions ?? brief.openQuestions
   return GoalBriefAppendRequest.parse({
     expectedVersion: brief.version,
     source,
@@ -113,10 +142,12 @@ export function buildBriefAppendRequest(
       acceptanceCriteria: patch.acceptanceCriteria ?? brief.acceptanceCriteria,
       constraints: patch.constraints ?? brief.constraints,
       nonGoals: brief.nonGoals,
-      assumptions: patch.assumptions ?? brief.assumptions,
-      openQuestions: patch.openQuestions ?? brief.openQuestions,
+      assumptions,
+      openQuestions: constraintsChanged ? openQuestions.filter((question) => question.blocking) : openQuestions,
       riskLevel: brief.riskLevel,
-      recommendedPlan: brief.recommendedPlan,
+      recommendedPlan: planInputsChanged
+        ? reconciledRecommendedPlan(brief, patch)
+        : brief.recommendedPlan,
       approvalMode: brief.approvalMode,
       sourceRefs: brief.sourceRefs,
     },

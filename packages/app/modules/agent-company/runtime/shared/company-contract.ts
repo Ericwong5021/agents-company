@@ -122,6 +122,7 @@ export type CompanyProjectMessage = {
   id: string
   author: string
   body: string
+  detail?: string
   createdAt: number
   signalType?: string
   sourceThreadID?: string
@@ -196,12 +197,14 @@ export type CompanyProjectDetail = {
     purpose?: string
     role?: string
     originKind?: string
+    planVersion?: number
   }[]
   artifacts: {
     id: string
     title: string
     kind: string
     workItemID?: string
+    planVersion?: number
     createdAt: number
   }[]
   gates: {

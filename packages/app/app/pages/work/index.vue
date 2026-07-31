@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { WorkProjection } from "@agents-company/shared/experience";
 import {
   groupCounts,
   ownerOptions,
@@ -10,6 +11,9 @@ import {
 
 const appConfig = useAppConfig();
 const { data: snapshot, pending, refresh } = useCompanySnapshot();
+const { data: archivedWork } = useFetch<WorkProjection[]>("/api/agent-company/archived-work", {
+  default: () => [],
+});
 const route = useRoute();
 const router = useRouter();
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
@@ -21,44 +25,100 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
   minute: "2-digit",
 });
 
+function humanLabel(value: string) {
+  const labels: Record<string, string> = {
+    CEO: "首席执行官",
+    ceo: "首席执行官",
+    CTO: "技术负责人",
+    cto: "技术负责人",
+    "Product Lead": "产品负责人",
+    product_lead: "产品负责人",
+    "board-product-lead": "产品负责人",
+    "project-planner": "项目规划负责人",
+    blocked: "受阻",
+    superseded: "已由新计划替代",
+  };
+  return (labels[value] ?? value)
+    .replace(/\s+independent reviewer\b/gi, "（独立复核）")
+    .replace(/\bParent(?:\s+delivery)?\s+artifacts? bytes are persisted\b/gi, "上游交付成果已持久保存")
+    .replace(/\bSuperseded by active plan\s+cpln_[A-Za-z0-9]+\b/gi, "已由当前计划替代")
+    .replace(/\bcpln_[A-Za-z0-9]+\b/g, "当前计划")
+    .replace(/\bsuperseded\b/gi, "已由新计划替代")
+    .replace(/\bControl Plane Verification\b/gi, "系统核验")
+    .replace(/\bDelivery v(\d+)\b/gi, "交付版本 $1")
+    .replace(/\bProject Charter\b/gi, "项目章程")
+    .replace(/\bCharter\b/gi, "工作章程")
+    .replace(/\bDelivery\b/gi, "交付")
+    .replace(/\bArtifacts?\b/gi, "成果")
+    .replace(/持久化\s+成果/g, "持久化成果")
+    .replace(/定义\s+工作章程\s+与任务树/g, "定义工作章程与任务树")
+    .replace(/项目章程\s+与动态任务计划/g, "项目章程与动态任务计划");
+}
+
 function ownerName(owner?: { id: string; name?: string }) {
   if (!owner) return "尚未分配负责人";
-  return owner.name ?? snapshot.value.agents.find(agent => agent.id === owner.id)?.name ?? "负责人已分配";
+  return humanLabel(
+    owner.name ?? snapshot.value.agents.find(agent => agent.id === owner.id)?.name ?? owner.id,
+  );
 }
 
 // 归一化为列表项（用于分组/搜索/排序），同时保留原始投影用于卡片渲染。
 const decorated = computed(() => snapshot.value.work.map(item => ({ item, entry: toWorkListEntry(item) })));
+const archivedDecorated = computed(() =>
+  archivedWork.value.map(item => ({ item, entry: toWorkListEntry(item) })));
 const counts = computed(() => groupCounts(decorated.value.map(row => row.entry)));
-const owners = computed(() => ownerOptions(decorated.value.map(row => row.entry)));
+const owners = computed(() => ownerOptions(decorated.value.map(row => row.entry))
+  .map(option => ({ ...option, name: humanLabel(option.name) })));
 
-// 深链接/刷新保持分组、搜索与负责人筛选。
-const group = ref<WorkGroupId>(workGroups.some(item => item.id === route.query.group) ? (route.query.group as WorkGroupId) : "all");
+type WorkViewMode = "latest" | WorkGroupId;
+const initialMode: WorkViewMode = route.query.group === "latest"
+  ? "latest"
+  : workGroups.some(item => item.id === route.query.group)
+    ? route.query.group as WorkGroupId
+    : "latest";
+const mode = ref<WorkViewMode>(initialMode);
+const group = computed<WorkGroupId>(() => mode.value === "latest" ? "all" : mode.value);
 const query = ref(typeof route.query.q === "string" ? route.query.q : "");
 const owner = ref<string | null>(typeof route.query.owner === "string" ? route.query.owner : null);
 const filter = computed(() => ({ group: group.value, query: query.value, owner: owner.value }));
 
-const visible = computed(() => {
+const matching = computed(() => {
   const byId = new Map(decorated.value.map(row => [row.entry.workId, row.item]));
   return selectWork(decorated.value.map(row => row.entry), filter.value).flatMap(entry => {
     const item = byId.get(entry.workId);
     return item ? [{ entry, item }] : [];
   });
 });
+const visible = computed(() => mode.value === "latest" ? matching.value.slice(0, 1) : matching.value);
+const archivedVisible = computed(() => {
+  const byId = new Map(archivedDecorated.value.map(row => [row.entry.workId, row.item]));
+  return selectWork(
+    archivedDecorated.value.map(row => row.entry),
+    { group: "all", query: query.value, owner: owner.value },
+  ).flatMap(entry => {
+    const item = byId.get(entry.workId);
+    return item ? [{ entry, item }] : [];
+  });
+});
 
-const hasFilter = computed(() => group.value !== "all" || query.value.trim() !== "" || owner.value !== null);
+const hasFilter = computed(() => mode.value !== "latest" || query.value.trim() !== "" || owner.value !== null);
 
 function clearFilters() {
-  group.value = "all";
+  mode.value = "latest";
   query.value = "";
   owner.value = null;
 }
 
-watch(filter, value => {
+function shortWorkID(value: string) {
+  return value.slice(-8);
+}
+
+watch([mode, query, owner], ([selectedMode, search, selectedOwner]) => {
   router.replace({
     query: {
-      ...(value.group !== "all" ? { group: value.group } : {}),
-      ...(value.query.trim() ? { q: value.query } : {}),
-      ...(value.owner ? { owner: value.owner } : {}),
+      ...(selectedMode !== "latest" ? { group: selectedMode } : {}),
+      ...(search.trim() ? { q: search } : {}),
+      ...(selectedOwner ? { owner: selectedOwner } : {}),
     },
   });
 });
@@ -74,13 +134,17 @@ watch(filter, value => {
       <div class="ac-workspace-page">
         <header class="ac-workspace-header">
           <div>
-            <p class="ac-workspace-eyebrow">Active execution</p>
-            <h1 class="ac-workspace-title">Work</h1>
+            <p class="ac-workspace-eyebrow">当前与历史工作</p>
+            <h1 class="ac-workspace-title">工作</h1>
             <p class="ac-workspace-lede">
-              查看目标、执行过程、失败尝试与当前进展。
+              默认只显示最近更新的工作；历史工作可按状态或“全部”主动查看。
             </p>
           </div>
         </header>
+
+        <p v-if="typeof route.query.archived === 'string'" class="ac-brief-state" role="status">
+          工作已归档，成果与执行记录仍保留。可在下方“已归档工作”中打开或恢复。
+        </p>
 
         <div
           v-if="!available || workUnavailable"
@@ -95,18 +159,29 @@ watch(filter, value => {
           />
         </div>
 
-        <template v-else-if="decorated.length">
-          <div class="ac-work-toolbar">
+        <template v-else-if="decorated.length || archivedDecorated.length">
+          <div v-if="decorated.length" class="ac-work-toolbar">
             <div class="ac-work-tabs" role="tablist" aria-label="工作分组">
+              <button
+                type="button"
+                role="tab"
+                class="ac-work-tab"
+                :data-active="mode === 'latest'"
+                :aria-selected="mode === 'latest'"
+                @click="mode = 'latest'"
+              >
+                最近工作
+                <span class="ac-work-tab__count">{{ decorated.length ? 1 : 0 }}</span>
+              </button>
               <button
                 v-for="tab in workGroups"
                 :key="tab.id"
                 type="button"
                 role="tab"
                 class="ac-work-tab"
-                :data-active="group === tab.id"
-                :aria-selected="group === tab.id"
-                @click="group = tab.id"
+                :data-active="mode === tab.id"
+                :aria-selected="mode === tab.id"
+                @click="mode = tab.id"
               >
                 {{ tab.label }}
                 <span class="ac-work-tab__count">{{ counts[tab.id] }}</span>
@@ -117,7 +192,7 @@ watch(filter, value => {
                 v-model="query"
                 type="search"
                 class="ac-work-search"
-                placeholder="搜索目标或负责人"
+                placeholder="搜索目标、工作编号或负责人"
                 aria-label="搜索工作"
               >
               <select
@@ -148,20 +223,21 @@ watch(filter, value => {
                 <div class="ac-card-heading">
                   <div>
                     <p class="ac-card-kicker">{{ item.summary.phase }}</p>
-                    <h2>{{ item.summary.title }}</h2>
+                    <h2>{{ humanLabel(item.summary.title) }}</h2>
                   </div>
                   <span class="ac-status-badge" :data-status="item.summary.userStatus">
                     {{ appConfig.experience.statusLabels[item.summary.userStatus] }}
                   </span>
                 </div>
 
-                <p class="ac-card-reason">{{ item.summary.reason.text }}</p>
+                <p class="ac-card-reason">{{ humanLabel(item.summary.reason.text) }}</p>
 
                 <div class="ac-progress" :aria-label="`${item.progress.completedItems} / ${item.progress.totalItems} 已完成`">
                   <span :style="{ width: `${item.progress.percent ?? 0}%` }" />
                 </div>
 
                 <div class="ac-card-footer">
+                  <span>工作 #{{ shortWorkID(entry.workId) }}</span>
                   <span>{{ ownerName(item.summary.owner) }}</span>
                   <span>
                     {{ item.progress.completedItems }} / {{ item.progress.totalItems }}
@@ -187,11 +263,11 @@ watch(filter, value => {
                 <div class="ac-card-heading">
                   <div>
                     <p class="ac-card-kicker">状态诊断</p>
-                    <h2>{{ item.title }}</h2>
+                    <h2>{{ humanLabel(item.title) }}</h2>
                   </div>
                   <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
                 </div>
-                <p class="ac-card-reason">{{ item.reason.text }}</p>
+                <p class="ac-card-reason">{{ humanLabel(item.reason.text) }}</p>
                 <div class="ac-card-footer">
                   <span>{{ item.diagnostics.length }} 项诊断</span>
                   <time :datetime="item.updatedAt">
@@ -206,7 +282,7 @@ watch(filter, value => {
             </NuxtLink>
           </section>
 
-          <section v-else key="work-no-results" class="ac-empty-state">
+          <section v-else-if="!archivedVisible.length" key="work-no-results" class="ac-empty-state">
             <div class="ac-empty-state__content">
               <span class="ac-empty-state__icon" aria-hidden="true">
                 <UIcon name="i-lucide-filter-x" />
@@ -216,6 +292,40 @@ watch(filter, value => {
               <button v-if="hasFilter" type="button" class="ac-work-clear" @click="clearFilters">清除筛选</button>
             </div>
           </section>
+
+          <details
+            v-if="archivedVisible.length"
+            class="ac-detail-panel"
+            :open="typeof route.query.archived === 'string' || Boolean(query.trim())"
+          >
+            <summary>已归档工作（{{ archivedVisible.length }}）</summary>
+            <div class="ac-card-list">
+              <NuxtLink
+                v-for="{ entry, item } in archivedVisible"
+                :key="entry.workId"
+                :to="`/work/${encodeURIComponent(entry.workId)}`"
+                class="ac-work-card"
+              >
+                <div class="ac-card-heading">
+                  <div>
+                    <p class="ac-card-kicker">成果与执行记录已保留</p>
+                    <h2>{{ humanLabel(entry.title) }}</h2>
+                  </div>
+                  <span class="ac-status-badge" data-status="archived">已归档</span>
+                </div>
+                <p class="ac-card-reason">
+                  {{ item.availability === "available" ? item.summary.reason.text : item.reason.text }}
+                </p>
+                <div class="ac-card-footer">
+                  <span>工作 #{{ shortWorkID(entry.workId) }}</span>
+                  <span class="ac-card-action">
+                    打开并恢复
+                    <UIcon name="i-lucide-arrow-right" />
+                  </span>
+                </div>
+              </NuxtLink>
+            </div>
+          </details>
         </template>
 
         <section v-else key="work-empty" class="ac-empty-state">

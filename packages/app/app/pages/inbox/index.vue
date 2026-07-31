@@ -36,14 +36,20 @@ import {
 } from "../../../modules/agent-company/runtime/shared/inbox-attention";
 
 const goalDraftStorageKey = "agent-company:inbox-goal-draft:v1";
+const previousGoalDraftStorageKey = "agent-company:inbox-previous-goal-draft:v1";
+const goalGenerationStartedAtStorageKey = "agent-company:inbox-goal-started-at:v1";
+const goalBriefRecoveryWindowMs = 180_000;
+const goalBriefRecoveryPollMs = 2_000;
 const appConfig = useAppConfig();
 const route = useRoute();
 const { data: snapshot, pending, refresh } = useCompanySnapshot();
 const goalDraft = useState("agent-company-inbox-goal-draft", () => "");
 const generationRequestID = useState("agent-company-inbox-goal-request-id", () => "");
 const generationRequestGoal = useState("agent-company-inbox-goal-request-goal", () => "");
+const generationRequestStartedAt = useState("agent-company-inbox-goal-request-started-at", () => 0);
 const draftHydrated = ref(false);
 const generating = ref(false);
+const recoveringGeneratedBrief = ref(false);
 const starting = ref(false);
 const generatedBrief = ref<GoalBrief>();
 const generationFailure = ref<GoalBriefFailureView>();
@@ -51,6 +57,8 @@ const generationError = ref("");
 const startError = ref("");
 const startRequestID = ref("");
 const newGoalOpen = ref(route.query.newGoal === "1");
+const previousGoalDraft = ref("");
+const newGoalFeedback = ref("");
 const goalDraftInput = ref<HTMLTextAreaElement>();
 const draftStorageAvailable = ref(true);
 const onboarding = ref<OnboardingState>(parseOnboardingState(null));
@@ -58,9 +66,29 @@ const onboardingHydrated = ref(false);
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false);
 const unavailableWork = computed(() => snapshot.value.work.filter(work => work.availability === "unavailable"));
-const attentionItems = computed(() => aggregateAttention(snapshot.value.work));
+const primaryWorkID = computed(() => {
+  const item = snapshot.value.work[0];
+  if (!item) return "";
+  return item.availability === "available" ? item.summary.workId : item.workId;
+});
+const allAttentionItems = computed(() => aggregateAttention(snapshot.value.work));
+const attentionItems = computed(() =>
+  allAttentionItems.value.filter(item => item.workId === primaryWorkID.value));
+const historicalAttentionItems = computed(() =>
+  allAttentionItems.value.filter(item => item.workId !== primaryWorkID.value));
+const currentUnavailableWork = computed(() =>
+  unavailableWork.value.filter(work => work.workId === primaryWorkID.value));
+const historicalUnavailableWork = computed(() =>
+  unavailableWork.value.filter(work => work.workId !== primaryWorkID.value));
 const attentionCategories = computed(() => categorySummaries(countByType(attentionItems.value)));
-const totalUnhandled = computed(() => attentionItems.value.length + unavailableWork.value.length);
+const totalUnhandled = computed(() => attentionItems.value.length + currentUnavailableWork.value.length);
+const historicalUnhandled = computed(() =>
+  historicalAttentionItems.value.length + historicalUnavailableWork.value.length);
+const historicalUnhandledWorkCount = computed(() =>
+  new Set([
+    ...historicalAttentionItems.value.map(item => item.workId),
+    ...historicalUnavailableWork.value.map(work => work.workId),
+  ]).size);
 const hasLocalDraft = computed(() => Boolean(goalDraft.value.trim()));
 const firstRun = computed(() =>
   available.value
@@ -80,13 +108,24 @@ const canGenerate = computed(() =>
   && available.value
   && snapshot.value.company.providerConfigured !== false
   && hasLocalDraft.value
-  && !generating.value);
+  && !generating.value
+  && !recoveringGeneratedBrief.value);
+const providerDisclosure = computed(() =>
+  snapshot.value.company.providerConfigured === false
+    ? "尚未配置模型服务"
+    : `当前模型服务（${snapshot.value.company.provider}）`);
 const dateTime = new Intl.DateTimeFormat("zh-CN", {
   month: "short",
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit",
 });
+
+function localizedReason(value: string) {
+  return value
+    .replace(/Delivery v(\d+)/g, "交付版本 $1")
+    .replace(/\bArtifacts?\b/g, "成果");
+}
 const decisionCenter = ref<DecisionCenterProjection>();
 const decisionCenterPending = ref(false);
 const decisionCenterFeedback = ref("");
@@ -120,7 +159,7 @@ async function refreshDecisionCenter() {
     query: { companyId: snapshot.value.company.id },
   }).then(
     value => decisionCenter.value = value,
-    () => decisionCenterFeedback.value = "Decision Center 暂时无法读取，未显示缓存状态。",
+    () => decisionCenterFeedback.value = "决策中心暂时无法读取，未显示缓存状态。",
   );
   decisionCenterPending.value = false;
 }
@@ -292,7 +331,7 @@ async function takeoverDecision(item: DecisionCenterItem) {
       decisionCenterFeedback.value = "接管 fence 与停止请求已写入治理链。";
       return refreshDecisionCenter();
     },
-    () => decisionCenterFeedback.value = "接管未完成，请检查 Board Thread 与项目状态。",
+    () => decisionCenterFeedback.value = "接管未完成，请检查董事会讨论与项目状态。",
   );
   decisionCenterPending.value = false;
 }
@@ -307,13 +346,31 @@ onMounted(async () => {
     }
   })();
   goalDraft.value = stored.draft;
+  try {
+    previousGoalDraft.value = localStorage.getItem(previousGoalDraftStorageKey) ?? "";
+  } catch {
+    draftStorageAvailable.value = false;
+  }
   generationRequestID.value = stored.request?.requestId ?? "";
   generationRequestGoal.value = stored.request?.goal ?? "";
+  generationRequestStartedAt.value = restoreGenerationStartedAt();
   onboarding.value = parseOnboardingState(localStorage.getItem(onboardingStorageKey));
   onboardingHydrated.value = true;
   await nextTick();
   draftHydrated.value = true;
+  if (stored.request) await recoverGeneratedGoalBrief(stored.request.requestId, stored.request.goal);
+  if (newGoalOpen.value) goalDraftInput.value?.focus();
 });
+
+watch(
+  () => route.query.newGoal,
+  async value => {
+    if (value !== "1") return;
+    newGoalOpen.value = true;
+    await nextTick();
+    goalDraftInput.value?.focus();
+  },
+);
 
 function persistOnboarding(next: OnboardingState) {
   onboarding.value = next;
@@ -330,8 +387,47 @@ function chooseDemoWorkspace() {
   navigateTo("/welcome");
 }
 
-function openNewGoal() {
+async function openNewGoal() {
   newGoalOpen.value = true;
+  const current = goalDraft.value.trim();
+  if (current) {
+    previousGoalDraft.value = goalDraft.value;
+    try {
+      localStorage.setItem(previousGoalDraftStorageKey, previousGoalDraft.value);
+    } catch {
+      draftStorageAvailable.value = false;
+    }
+  }
+  goalDraft.value = "";
+  generatedBrief.value = undefined;
+  generationFailure.value = undefined;
+  generationError.value = "";
+  startError.value = "";
+  startRequestID.value = "";
+  newGoalFeedback.value = current
+    ? "新的空白目标草稿已建立；上一份本地草稿已保留。"
+    : "新的空白目标草稿已建立。";
+  await nextTick();
+  goalDraftInput.value?.focus();
+}
+
+async function restorePreviousGoalDraft() {
+  const previous = previousGoalDraft.value;
+  if (!previous.trim()) return;
+  const current = goalDraft.value;
+  previousGoalDraft.value = current;
+  try {
+    if (current.trim()) localStorage.setItem(previousGoalDraftStorageKey, current);
+    else localStorage.removeItem(previousGoalDraftStorageKey);
+  } catch {
+    draftStorageAvailable.value = false;
+  }
+  goalDraft.value = previous;
+  newGoalFeedback.value = current.trim()
+    ? "已切换到上一份本地草稿；刚才的草稿也已保留，可再次切换。"
+    : "已恢复上一份本地草稿。";
+  await nextTick();
+  goalDraftInput.value?.focus();
 }
 
 function skipOnboardingChoice() {
@@ -344,6 +440,39 @@ function currentGenerationRequest() {
     requestId: generationRequestID.value,
     goal: generationRequestGoal.value,
   };
+}
+
+function restoreGenerationStartedAt() {
+  if (!import.meta.client) return 0;
+  try {
+    const value = Number(localStorage.getItem(goalGenerationStartedAtStorageKey));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function beginGenerationRecoveryWindow() {
+  const startedAt = Date.now();
+  generationRequestStartedAt.value = startedAt;
+  if (import.meta.client) {
+    try {
+      localStorage.setItem(goalGenerationStartedAtStorageKey, String(startedAt));
+    } catch {}
+  }
+}
+
+function clearGenerationRecoveryWindow() {
+  generationRequestStartedAt.value = 0;
+  if (import.meta.client) {
+    try {
+      localStorage.removeItem(goalGenerationStartedAtStorageKey);
+    } catch {}
+  }
+}
+
+function waitForRecoveryPoll(delay: number) {
+  return new Promise(resolve => setTimeout(resolve, delay));
 }
 
 function persistGoalDraft() {
@@ -360,11 +489,65 @@ function persistGoalDraft() {
   }
 }
 
+async function recoverGeneratedGoalBrief(requestID: string, requestGoal: string) {
+  if (!requestID || !requestGoal || requestGoal !== goalDraft.value.trim() || generatedBrief.value) return;
+  const deadline = generationRequestStartedAt.value > 0
+    ? generationRequestStartedAt.value + goalBriefRecoveryWindowMs
+    : Date.now();
+  recoveringGeneratedBrief.value = true;
+  generationError.value = "";
+  while (true) {
+    const result = await $fetch.raw<unknown>("/api/agent-company/goal-brief/request", {
+      query: { requestId: requestID },
+      ignoreResponseError: true,
+      timeout: 8_000,
+    }).then(
+      response => ({ ok: true as const, response }),
+      () => ({ ok: false as const }),
+    );
+    if (
+      requestID !== generationRequestID.value
+      || requestGoal !== generationRequestGoal.value
+      || requestGoal !== goalDraft.value.trim()
+    ) {
+      recoveringGeneratedBrief.value = false;
+      return;
+    }
+    if (result.ok) {
+      const response = parseGoalBriefGenerationResponse(result.response.status, result.response._data);
+      if (response?.kind === "success" && !response.brief.projectId && !response.brief.sourceThreadId) {
+        generatedBrief.value = response.brief;
+        clearGenerationRecoveryWindow();
+        recoveringGeneratedBrief.value = false;
+        return;
+      }
+      if (response?.kind === "structured_failure") {
+        generationFailure.value = parseGoalBriefFailure(response.failure);
+        clearGenerationRecoveryWindow();
+        recoveringGeneratedBrief.value = false;
+        return;
+      }
+      if (response?.kind === "conflict" && response.error.code === "request_conflict") {
+        generationError.value = response.error.message;
+        clearGenerationRecoveryWindow();
+        recoveringGeneratedBrief.value = false;
+        return;
+      }
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await waitForRecoveryPoll(Math.min(goalBriefRecoveryPollMs, remaining));
+  }
+  recoveringGeneratedBrief.value = false;
+  generationError.value = "本地工作区仍已连接，但这次模型请求没有形成可恢复的目标摘要。请选择“重试生成”，或检查模型设置；草稿仍保存在本地。";
+}
+
 watch(goalDraft, (value) => {
   if (!import.meta.client || !draftHydrated.value) return;
   if (value.trim() !== generationRequestGoal.value) {
     generationRequestID.value = "";
     generationRequestGoal.value = "";
+    clearGenerationRecoveryWindow();
   }
   generatedBrief.value = undefined;
   generationFailure.value = undefined;
@@ -380,6 +563,7 @@ async function generateGoalBrief() {
   const request = goalDraftRequest(goal, currentGenerationRequest(), () => crypto.randomUUID());
   generationRequestID.value = request.requestId;
   generationRequestGoal.value = request.goal;
+  beginGenerationRecoveryWindow();
   persistGoalDraft();
 
   generating.value = true;
@@ -398,11 +582,13 @@ async function generateGoalBrief() {
     () => ({ ok: false as const }),
   );
   generating.value = false;
-  if (!isCurrentGoalDraftRequest(goalDraft.value, currentGenerationRequest(), request)) return;
+  if (!isCurrentGoalDraftRequest(goalDraft.value, currentGenerationRequest(), request)) {
+    if (goalDraft.value.trim() === request.goal)
+      generationError.value = "目标摘要请求状态发生变化，没有创建工作；草稿仍保存在本地，可以安全重试。";
+    return;
+  }
   if (!result.ok) {
-    generationError.value = draftStorageAvailable.value
-      ? "目标摘要未在三分钟内完成或连接已中断。草稿仍保存在此设备，可以安全重试，不会重复创建 Work。"
-      : "目标摘要未在三分钟内完成或连接已中断。当前草稿仅保留在本页。";
+    await recoverGeneratedGoalBrief(request.requestId, request.goal);
     return;
   }
 
@@ -423,12 +609,19 @@ async function generateGoalBrief() {
   }
   if (response.kind === "success") {
     generatedBrief.value = response.brief;
+    clearGenerationRecoveryWindow();
     return;
   }
   if (response.kind === "structured_failure") {
     generationFailure.value = parseGoalBriefFailure(response.failure);
+    clearGenerationRecoveryWindow();
     return;
   }
+  if (response.error.code === "request_in_progress") {
+    await recoverGeneratedGoalBrief(request.requestId, request.goal);
+    return;
+  }
+  clearGenerationRecoveryWindow();
   generationError.value = response.error.message;
 }
 
@@ -465,6 +658,8 @@ async function startGoalBrief(brief: GoalBrief) {
     const response = GoalBriefStartResult.safeParse(result.response._data);
     if (response.success) {
       localStorage.removeItem(goalDraftStorageKey);
+      localStorage.removeItem(goalGenerationStartedAtStorageKey);
+      await refresh();
       await navigateTo(`/work/${encodeURIComponent(response.data.projectId)}`);
       return;
     }
@@ -484,8 +679,8 @@ async function startGoalBrief(brief: GoalBrief) {
       <div class="ac-workspace-page">
         <header class="ac-workspace-header">
           <div>
-            <p class="ac-workspace-eyebrow">Attention queue</p>
-            <h1 class="ac-workspace-title">Inbox</h1>
+            <p class="ac-workspace-eyebrow">待处理队列</p>
+            <h1 class="ac-workspace-title">收件箱</h1>
             <p class="ac-workspace-lede">
               需要你处理的决定、阻塞与交付会集中出现在这里。
             </p>
@@ -504,7 +699,7 @@ async function startGoalBrief(brief: GoalBrief) {
               color="neutral"
               variant="ghost"
               icon="i-lucide-refresh-cw"
-              aria-label="刷新 Inbox"
+              aria-label="刷新收件箱"
               :loading="pending"
               @click="refreshInbox"
             />
@@ -514,11 +709,11 @@ async function startGoalBrief(brief: GoalBrief) {
         <section
           v-if="available && decisionCenter"
           class="ac-card-list"
-          aria-label="Decision Center"
+          aria-label="决策中心"
         >
           <div class="ac-card-heading">
             <div>
-              <p class="ac-card-kicker">Decision Center</p>
+              <p class="ac-card-kicker">决策中心</p>
               <h2>创始人治理决定</h2>
             </div>
             <span>{{ decisionCenter.pending.length }} 项待决定</span>
@@ -851,12 +1046,12 @@ async function startGoalBrief(brief: GoalBrief) {
         />
 
         <section
-          v-if="available && (attentionItems.length || unavailableWork.length)"
+          v-if="available && (attentionItems.length || currentUnavailableWork.length)"
           class="ac-card-list"
-          aria-label="待处理事项"
+          aria-label="当前工作待处理事项"
         >
           <NuxtLink
-            v-for="work in unavailableWork"
+            v-for="work in currentUnavailableWork"
             :key="work.workId"
             :to="`/work/${encodeURIComponent(work.workId)}`"
             class="ac-attention-card"
@@ -869,7 +1064,7 @@ async function startGoalBrief(brief: GoalBrief) {
               </div>
               <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
             </div>
-            <p class="ac-card-reason">{{ work.reason.text }}</p>
+            <p class="ac-card-reason">{{ localizedReason(work.reason.text) }}</p>
             <p class="ac-card-impact">{{ work.diagnostics.length }} 项诊断需要查看</p>
             <span class="ac-card-action">
               查看诊断
@@ -891,7 +1086,7 @@ async function startGoalBrief(brief: GoalBrief) {
               </div>
               <time :datetime="item.updatedAt">{{ dateTime.format(new Date(item.updatedAt)) }}</time>
             </div>
-            <p class="ac-card-reason">{{ item.reason.text }}</p>
+            <p class="ac-card-reason">{{ localizedReason(item.reason.text) }}</p>
             <p class="ac-card-impact">{{ item.impact }}</p>
             <span
               v-if="item.recommendedAction"
@@ -905,6 +1100,50 @@ async function startGoalBrief(brief: GoalBrief) {
             </span>
           </NuxtLink>
         </section>
+
+        <details
+          v-if="available && historicalUnhandled"
+          class="ac-detail-panel"
+        >
+          <summary>
+            历史待办事项（{{ historicalUnhandled }} 项，来自 {{ historicalUnhandledWorkCount }} 项工作）
+          </summary>
+          <div class="ac-card-list">
+            <NuxtLink
+              v-for="work in historicalUnavailableWork"
+              :key="work.workId"
+              :to="`/work/${encodeURIComponent(work.workId)}`"
+              class="ac-attention-card"
+              data-priority="critical"
+            >
+              <div class="ac-card-heading">
+                <div>
+                  <p class="ac-card-kicker">历史状态诊断</p>
+                  <h2>{{ work.title }}</h2>
+                </div>
+                <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
+              </div>
+              <p class="ac-card-reason">{{ localizedReason(work.reason.text) }}</p>
+            </NuxtLink>
+            <NuxtLink
+              v-for="item in historicalAttentionItems"
+              :key="item.id"
+              :to="`/work/${encodeURIComponent(item.workId)}`"
+              class="ac-attention-card"
+              :data-priority="item.priority"
+            >
+              <div class="ac-card-heading">
+                <div>
+                  <p class="ac-card-kicker">历史工作 · {{ item.workTitle }}</p>
+                  <h2>{{ item.title }}</h2>
+                </div>
+                <time :datetime="item.updatedAt">{{ dateTime.format(new Date(item.updatedAt)) }}</time>
+              </div>
+              <p class="ac-card-reason">{{ localizedReason(item.reason.text) }}</p>
+              <p class="ac-card-impact">{{ item.impact }}</p>
+            </NuxtLink>
+          </div>
+        </details>
 
         <OnboardingChoice
           v-if="welcomeStage"
@@ -935,7 +1174,7 @@ async function startGoalBrief(brief: GoalBrief) {
             <p>
               {{
                 available
-                  ? "Agent Company 会先生成可调整的目标摘要；你确认开始后，它才会创建 Work 并启动团队执行。"
+                  ? "Agent Company 会先生成可调整的目标摘要；你确认开始后，它才会创建工作并启动团队执行。"
                   : "连接中断不会清除这份本地草稿。恢复连接后，可以继续生成只读目标摘要。"
               }}
             </p>
@@ -947,6 +1186,17 @@ async function startGoalBrief(brief: GoalBrief) {
                   <strong>{{ draftStorageAvailable ? "本地保存" : "仅本页保留" }}</strong>
                 </div>
                 <small>未创建项目</small>
+              </div>
+              <div v-if="newGoalFeedback" class="ac-goal-generation-state" role="status">
+                <p>{{ newGoalFeedback }}</p>
+                <UButton
+                  v-if="previousGoalDraft.trim()"
+                  color="neutral"
+                  variant="outline"
+                  @click="restorePreviousGoalDraft"
+                >
+                  恢复上一份草稿
+                </UButton>
               </div>
               <label for="inbox-goal-draft">描述你希望团队交付的结果</label>
               <textarea
@@ -965,7 +1215,7 @@ async function startGoalBrief(brief: GoalBrief) {
                     draftStorageAvailable
                       ? hasLocalDraft
                         ? "已保存到此设备"
-                        : "输入内容只保存在此设备"
+                        : "草稿先保存在此设备"
                       : "本地存储不可用，刷新或关闭页面会丢失草稿"
                   }}
                 </span>
@@ -979,16 +1229,22 @@ async function startGoalBrief(brief: GoalBrief) {
                 </UButton>
               </div>
               <p class="ac-goal-draft__boundary">
-                生成摘要只会保存未绑定项目的 Brief；点击“开始执行”后才会创建 Work。
+                点击“生成目标摘要”会把当前目标全文发送给{{ providerDisclosure }}处理。
+                是否留存和计费取决于你与该服务方的账户条款；这不会授权发布、付款、采购、外联或外发消息。
+                摘要会先作为未绑定工作的草稿保存在本机；点击“开始执行”后才会创建工作。
+                <NuxtLink to="/settings">查看模型连接</NuxtLink>
               </p>
               <p v-if="generating" class="ac-goal-draft__boundary" role="status">
-                正在连接模型并生成摘要，通常需要一到两分钟。请保持页面打开；超时后可以安全重试。
+                正在把当前目标发送给{{ providerDisclosure }}并生成摘要，通常需要一到两分钟。请保持页面打开；超时后可以安全重试。
+              </p>
+              <p v-if="recoveringGeneratedBrief" class="ac-goal-draft__boundary" role="status">
+                正在恢复此前生成的目标摘要…
               </p>
               <p
                 v-if="snapshot.company.providerConfigured === false"
                 class="ac-goal-draft__boundary"
               >
-                连接 Provider 后可以生成只读目标摘要。
+                连接模型服务后可以生成只读目标摘要。
               </p>
             </div>
 
@@ -1012,13 +1268,21 @@ async function startGoalBrief(brief: GoalBrief) {
               </div>
             </div>
 
-            <p
+            <div
               v-if="generationError"
               class="ac-goal-generation-state ac-goal-generation-state--error"
               role="alert"
             >
-              {{ generationError }}
-            </p>
+              <p>{{ generationError }}</p>
+              <div class="ac-goal-generation-state__actions">
+                <UButton color="neutral" @click="generateGoalBrief">
+                  重试生成
+                </UButton>
+                <UButton color="neutral" variant="outline" to="/settings">
+                  检查模型设置
+                </UButton>
+              </div>
+            </div>
 
             <section
               v-if="generatedBrief"
@@ -1036,7 +1300,7 @@ async function startGoalBrief(brief: GoalBrief) {
                 {{ startError }}
               </p>
               <p class="ac-goal-generation-state__boundary">
-                摘要已保存在本地；开始后会绑定到唯一 Work，重复提交不会创建第二个项目。
+                摘要已保存在本地；开始后会绑定到唯一工作，重复提交不会创建第二个项目。
               </p>
             </section>
 
@@ -1047,13 +1311,13 @@ async function startGoalBrief(brief: GoalBrief) {
               variant="outline"
               :to="snapshot.company.providerConfigured === false ? '/settings' : '/work'"
             >
-              {{ snapshot.company.providerConfigured === false ? "连接 Provider" : "查看 Work" }}
+              {{ snapshot.company.providerConfigured === false ? "连接模型服务" : "查看工作" }}
             </UButton>
           </div>
         </section>
 
         <section
-          v-if="available && !workUnavailable && !firstRun && attentionItems.length === 0 && unavailableWork.length === 0"
+          v-if="available && !workUnavailable && !firstRun && attentionItems.length === 0 && currentUnavailableWork.length === 0"
           class="ac-empty-state"
         >
           <div class="ac-empty-state__content">
@@ -1061,7 +1325,7 @@ async function startGoalBrief(brief: GoalBrief) {
               <UIcon name="i-lucide-circle-check" />
             </span>
             <h2>目前没有需要你处理的事项</h2>
-            <p>已有工作会继续保留在 Work；出现决定、阻塞或待验收成果时，这里会提示你。</p>
+            <p>已有工作会继续保留在“工作”；出现决定、阻塞或待验收成果时，这里会提示你。</p>
             <UButton
               class="ac-empty-state__action"
               color="neutral"

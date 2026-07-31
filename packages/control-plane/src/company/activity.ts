@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray } from "@/storage"
 import * as Database from "@/storage/db"
 import { AgentRunTable } from "@/agent-run/agent-run.sql"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
-import { CompanyWorkItemTable } from "@/company-project/company-project.sql"
+import { CompanyProjectTable, CompanyWorkItemTable } from "@/company-project/company-project.sql"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { ChannelTable, ConversationThreadTable } from "@/conversation/conversation.sql"
 import { ConversationThreadID } from "@/conversation/schema"
@@ -164,12 +164,31 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
           .from(CompanyWorkItemTable)
           .where(eq(CompanyWorkItemTable.owner_agent_id, agent.id))
           .all()
+        const ownedProjects = db
+          .select()
+          .from(CompanyProjectTable)
+          .where(eq(CompanyProjectTable.owner_agent_id, agent.id))
+          .all()
+        const activeItems = ownedItems.filter((item) => item.status === "pending" || item.status === "running")
+        const blockedItems = ownedItems.filter((item) => item.status === "blocked")
+        const activeItemProjects = new Set(activeItems.map((item) => item.project_id))
+        const blockedItemProjects = new Set(blockedItems.map((item) => item.project_id))
         const delivered = ownedItems
           .filter((item) => item.status === "completed" && item.completed_at !== null)
           .toSorted((left, right) => right.completed_at! - left.completed_at!)[0]
         const workload = {
-          active: ownedItems.filter((item) => item.status === "pending" || item.status === "running").length,
-          blocked: ownedItems.filter((item) => item.status === "blocked").length,
+          active:
+            activeItems.length
+            + ownedProjects.filter(
+              (project) =>
+                ["intake", "planning", "executing", "reviewing", "awaiting_approval", "revision"].includes(project.status)
+                && !activeItemProjects.has(project.id),
+            ).length,
+          blocked:
+            blockedItems.length
+            + ownedProjects.filter(
+              (project) => project.status === "blocked" && !blockedItemProjects.has(project.id),
+            ).length,
           ...(delivered
             ? {
                 recent_delivery: {
@@ -181,8 +200,7 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
               }
             : {}),
         }
-        const run =
-          db
+        const currentRun = db
             .select()
             .from(AgentRunTable)
             .where(
@@ -193,6 +211,8 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
             )
             .orderBy(desc(AgentRunTable.time_updated), desc(AgentRunTable.id))
             .get()
+        const run =
+          currentRun
           ?? db
             .select()
             .from(AgentRunTable)
@@ -221,11 +241,27 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
         const channel = thread
           ? db.select().from(ChannelTable).where(eq(ChannelTable.id, thread.channel_id)).get()
           : undefined
+        const projectedState = currentRun
+          ? state(run.state)
+          : workload.blocked > 0
+            ? {
+                activity: "failed" as const,
+                attention: "urgent" as const,
+                interruptibility: "needs_intervention" as const,
+                risk: "有阻塞工作需要处理",
+              }
+            : workload.active > 0
+              ? {
+                  activity: "waiting" as const,
+                  attention: "focused" as const,
+                  interruptibility: "interruptible" as const,
+                }
+              : state(run.state)
         return AgentActivityProjection.parse({
           agent: projectionAgent,
           employment,
-          presence: onlineRunStates.has(run.state) ? "online" : "offline",
-          ...state(run.state),
+          presence: currentRun && onlineRunStates.has(currentRun.state) ? "online" : "offline",
+          ...projectedState,
           ...(channel ? { location: channel.title } : {}),
           ...(thread?.title ? { subject: thread.title } : {}),
           since: run.time_started ?? run.time_updated,

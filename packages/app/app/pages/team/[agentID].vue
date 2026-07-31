@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import type { CompanyAgentDetail } from "../../../modules/agent-company/runtime/shared/company-contract";
+import { selectionEvidenceLabel } from "../../../modules/agent-company/runtime/shared/seed-grow-view";
 
 const appConfig = useAppConfig();
 const route = useRoute();
 const agentID = computed(() => Array.isArray(route.params.agentID)
   ? route.params.agentID[0]
   : route.params.agentID);
+const projectID = computed(() => {
+  const value = route.query.project
+  return Array.isArray(value) ? value[0] : value
+})
+const { data: snapshot } = useCompanySnapshot()
 const {
   data: detail,
   status,
@@ -29,6 +35,65 @@ const outcomeLabels: Record<string, string> = {
   success: "成功交付",
   failure: "交付失败",
 };
+const performances = computed(() =>
+  projectID.value
+    ? detail.value?.performances.filter((performance) => performance.projectID === projectID.value) ?? []
+    : detail.value?.performances ?? [],
+)
+const selections = computed(() =>
+  projectID.value
+    ? detail.value?.selections.filter((selection) => selection.projectID === projectID.value) ?? []
+    : detail.value?.selections ?? [],
+)
+const isProjectOwner = computed(() =>
+  Boolean(
+    projectID.value &&
+    snapshot.value.work.some(
+      (work) =>
+        work.availability === "available" &&
+        work.summary.workId === projectID.value &&
+        work.summary.owner?.id === agentID.value,
+    ),
+  ),
+)
+
+function shortWorkID(value: string) {
+  return value.slice(-8)
+}
+
+function capabilityLabel(value: string) {
+  const normalized = value.split("@")[0] ?? value
+  if (normalized.includes("charter") || normalized.includes("planner")) return "目标拆解与项目规划"
+  if (normalized.includes("safety")) return "安全流程设计"
+  if (normalized.includes("evidence")) return "证据框架整理"
+  if (normalized.includes("review")) return "独立复核"
+  return "项目执行能力"
+}
+
+function roleLabel(value?: string | null) {
+  const role = value ?? ""
+  const known = {
+    ceo: "首席执行官",
+    cto: "技术负责人",
+    product_lead: "产品负责人",
+    CEO: "首席执行官",
+    CTO: "技术负责人",
+    "Product Lead": "产品负责人",
+    "project-planner": "项目规划负责人",
+  } as Record<string, string>
+  return (known[role] ?? role)
+    .replace(/\s+independent reviewer\b/gi, "（独立复核）")
+    .replace(/\bProject Charter\b/g, "项目章程")
+    .replace(/\bCharter\b/g, "工作章程")
+    || "团队成员"
+}
+
+function selectionReasonLabel(value: string) {
+  return selectionEvidenceLabel(roleLabel(value)).replace(
+    /Agent conflicts with the persisted independence boundary\.?/gi,
+    "候选成员与已保存的独立性边界冲突。",
+  )
+}
 </script>
 
 <template>
@@ -39,7 +104,10 @@ const outcomeLabels: Record<string, string> = {
 
     <template #body>
       <div class="ac-workspace-page ac-workspace-page--narrow">
-        <NuxtLink to="/team" class="ac-back-link">
+        <NuxtLink
+          :to="projectID ? `/team?project=${encodeURIComponent(projectID)}` : '/team'"
+          class="ac-back-link"
+        >
           <UIcon name="i-lucide-arrow-left" />
           返回团队
         </NuxtLink>
@@ -60,22 +128,24 @@ const outcomeLabels: Record<string, string> = {
           <header class="ac-workspace-header mt-5">
             <div>
               <p class="ac-workspace-eyebrow">
-                {{ detail.agent.employment === "employee" ? "正式员工" : "在岗临时角色" }}
+                {{ detail.agent.employment === "employee" ? "正式员工" : projectID ? "本工作临时角色" : "公司临时角色" }}
               </p>
-              <h1 class="ac-workspace-title">{{ detail.agent.name }}</h1>
+              <h1 class="ac-workspace-title">{{ roleLabel(detail.agent.name) }}</h1>
               <p class="ac-workspace-lede">
-                {{ detail.agent.role ?? "团队成员" }} ·
-                {{ appConfig.experience.activityLabels[detail.agent.activity] }} ·
-                进行中 {{ detail.agent.workload.active }} · 阻塞 {{ detail.agent.workload.blocked }}
+                {{ roleLabel(detail.agent.role) }} ·
+                {{ projectID ? "仅显示当前工作的责任与记录" : `公司范围活动：${appConfig.experience.activityLabels[detail.agent.activity]}` }}
+              </p>
+              <p v-if="isProjectOwner" class="ac-workspace-lede">
+                本工作负责人身份来自已确认的目标摘要；它与具体执行任务的候选入选记录相互独立。
               </p>
             </div>
           </header>
 
           <section class="ac-detail-panel ac-agent-panel" aria-label="能力证据">
-            <p class="ac-card-kicker">Capability evidence</p>
+            <p class="ac-card-kicker">能力证据</p>
             <ul v-if="detail.capabilities.length" class="ac-agent-list">
               <li v-for="capability in detail.capabilities" :key="capability.pack">
-                <strong>{{ capability.pack }}</strong>
+                <strong>{{ capabilityLabel(capability.pack) }}</strong>
                 <span>{{ capabilityLabels[capability.status] ?? capability.status }}</span>
                 <span v-if="capability.lastVerifiedAt">
                   最近验证 {{ dateTime.format(new Date(capability.lastVerifiedAt)) }}
@@ -86,37 +156,50 @@ const outcomeLabels: Record<string, string> = {
                 </span>
               </li>
             </ul>
-            <p v-else class="ac-agent-empty">还没有能力证据记录。</p>
+            <p v-else class="ac-agent-empty">
+              还没有能力证据记录。<template v-if="isProjectOwner">负责人身份不表示具体执行能力已通过验证。</template>
+            </p>
           </section>
 
           <section class="ac-detail-panel ac-agent-panel" aria-label="工作历史">
-            <p class="ac-card-kicker">Delivery history</p>
-            <ul v-if="detail.performances.length" class="ac-agent-list">
-              <li v-for="performance in detail.performances" :key="`${performance.projectID}-${performance.timeCreated}`">
-                <strong>{{ performance.projectID }}</strong>
+            <p class="ac-card-kicker">交付历史</p>
+            <ul v-if="performances.length" class="ac-agent-list">
+              <li v-for="(performance, index) in performances" :key="`${performance.projectID}-${performance.timeCreated}`">
+                <strong>工作记录 {{ index + 1 }}</strong>
                 <span>{{ outcomeLabels[performance.outcome] ?? performance.outcome }}</span>
                 <span>质量 {{ performance.qualityScore }} · 可靠性 {{ performance.reliabilityScore }}</span>
                 <span>{{ performance.reviewSummary }}</span>
+                <details class="ac-source-trace">
+                  <summary>查看内部追踪信息</summary>
+                  <span>工作 #{{ shortWorkID(performance.projectID) }}</span>
+                </details>
               </li>
             </ul>
             <p v-else class="ac-agent-empty">还没有已记录的交付表现。</p>
           </section>
 
-          <section class="ac-detail-panel ac-agent-panel" aria-label="选择历史">
-            <p class="ac-card-kicker">Selection history</p>
-            <ul v-if="detail.selections.length" class="ac-agent-list">
-              <li v-for="(selection, index) in detail.selections" :key="`${selection.projectID}-${index}`">
-                <strong>{{ selection.projectID }}</strong>
+          <section class="ac-detail-panel ac-agent-panel" aria-label="执行任务候选记录">
+            <p class="ac-card-kicker">执行任务候选记录</p>
+            <p v-if="isProjectOwner" class="ac-agent-empty">
+              以下记录只说明该成员是否适合某个具体执行任务，不改变其项目负责人责任。
+            </p>
+            <ul v-if="selections.length" class="ac-agent-list">
+              <li v-for="(selection, index) in selections" :key="`${selection.projectID}-${index}`">
+                <strong>候选记录 {{ index + 1 }}</strong>
                 <span>{{ selection.decision === "selected" ? "入选" : "未入选" }}{{
                   selection.released ? "（已释放）" : "" }}</span>
-                <span>{{ selection.reason }}</span>
+                <span>{{ selectionReasonLabel(selection.reason) }}</span>
+                <details class="ac-source-trace">
+                  <summary>查看内部追踪信息</summary>
+                  <span>工作 #{{ shortWorkID(selection.projectID) }}</span>
+                </details>
               </li>
             </ul>
             <p v-else class="ac-agent-empty">还没有团队选择记录。</p>
           </section>
 
           <section v-if="detail.employmentReviews.length" class="ac-detail-panel ac-agent-panel" aria-label="雇佣审计">
-            <p class="ac-card-kicker">Employment review</p>
+            <p class="ac-card-kicker">雇佣复核</p>
             <ul class="ac-agent-list">
               <li v-for="(review, index) in detail.employmentReviews" :key="index">
                 <strong>{{ review.status }}</strong>

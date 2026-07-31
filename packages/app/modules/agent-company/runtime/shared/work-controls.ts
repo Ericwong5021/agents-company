@@ -30,6 +30,7 @@ export const actionLabels: Record<ExperienceActionType, string> = {
   open_diagnostics: "打开诊断",
   view_retained_results: "查看保留成果",
   archive: "归档",
+  restore: "恢复到当前工作",
 }
 
 // 前端可执行的处理路径：导航/查看类在客户端内处理；变更类目前仅 retry 有 app 侧真实代理。
@@ -67,9 +68,11 @@ export function toControlActions(descriptors: ExperienceActionDescriptor[]): Con
     enabled: descriptor.enabled,
     mutates: ExperienceActionMutatesBusinessState[descriptor.id],
     handler: descriptor.enabled
-      ? ["pause_work", "resume_work", "stop_work", "resolve_blocker", "adjust_brief"].includes(descriptor.id)
+      ? ["pause_work", "resume_work", "stop_work", "resolve_blocker", "adjust_brief", "archive", "restore"].includes(descriptor.id)
         ? "action"
-        : clientHandlerFor(descriptor.id)
+        : ["accept_delivery", "request_change"].includes(descriptor.id)
+          ? "action"
+          : clientHandlerFor(descriptor.id)
       : "none",
     disabledReason: descriptor.enabled ? undefined : descriptor.disabledReason,
   }))

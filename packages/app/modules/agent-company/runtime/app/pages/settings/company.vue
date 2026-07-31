@@ -39,6 +39,37 @@ const connectionLabel = computed(() => ({
   disconnected: "未连接",
   recovering: "正在恢复",
 })[snapshot.value.connection])
+const savedProviderLabel = computed(() =>
+  snapshot.value.company.providerConfigured === false
+    ? "未配置"
+    : snapshot.value.company.provider.replace(/^已连接/, "已保存"))
+function governanceStatusLabel(value?: string | null) {
+  return ({
+    authorized: "已授权",
+    not_confirmed: "未确认授权",
+    unavailable: "状态不可用",
+    confirmed: "已确认",
+    blocked: "已阻断",
+    ready: "可启用",
+  } as Record<string, string>)[value ?? "unavailable"] ?? value ?? "状态不可用"
+}
+function founderModeLabel(value?: string | null) {
+  return ({
+    off: "关闭",
+    shadow: "影子建议",
+    advisor: "顾问建议",
+    "green-delegated": "绿色委托",
+    "yellow-delegated": "黄色委托",
+  } as Record<string, string>)[value ?? "off"] ?? value ?? "关闭"
+}
+function commonsModeLabel(value?: string | null) {
+  return ({
+    off: "关闭",
+    "ingest-only": "仅导入",
+    reading: "可阅读",
+    "belief-loop": "信念循环",
+  } as Record<string, string>)[value ?? "off"] ?? value ?? "关闭"
+}
 
 const presetId = ref<ProviderPresetId>("openai")
 const preset = computed(() => providerPreset(presetId.value))
@@ -105,11 +136,11 @@ const founderModeOptions = computed(() => {
   const globalOrder = ["off", "shadow", "advisor", "green-delegated", "yellow-delegated"] as const
   const maximum = globalOrder.indexOf(founderModes.value?.globalMaximum.founderTwinMode ?? "off")
   return [
-    { value: "off" as const, label: "off", disabled: false },
-    { value: "shadow" as const, label: "shadow", disabled: maximum < 1 },
+    { value: "off" as const, label: "关闭", disabled: false },
+    { value: "shadow" as const, label: "影子建议", disabled: maximum < 1 },
     {
       value: "advisor" as const,
-      label: `advisor · ${advisorReadiness.value?.status ?? "not_confirmed"}`,
+      label: `顾问建议 · ${governanceStatusLabel(advisorReadiness.value?.status)}`,
       disabled: true,
     },
   ]
@@ -243,7 +274,7 @@ async function confirmAdvisorReadiness() {
       return value
     },
     () => {
-      advisorMessage.value = "Advisor 未开启，请核对 exact commit、三项指标与人工授权事件。"
+      advisorMessage.value = "顾问代理未开启，请核对精确提交、三项指标与人工授权事件。"
       return advisorReadiness.value
     },
   )
@@ -276,7 +307,7 @@ async function createAssetDraft() {
   if (!assetDraft.content.trim() || !assetDraft.rationale.trim() || studioLoading.value) return
   const caseType = ["taste_reference", "taste_anti_reference", "decision_case", "rubric"].includes(assetDraft.type)
   if (caseType && (!assetDraft.sourceRefId.trim() || !assetDraft.dimensions.trim())) {
-    studioMessage.value = "品味、案例与 Rubric 需要原始 Artifact ID 和至少一个评估维度。"
+    studioMessage.value = "品味、案例与评分规则需要原始成果记录 ID 和至少一个评估维度。"
     return
   }
   studioLoading.value = true
@@ -465,7 +496,7 @@ async function enqueueCalibration() {
       calibrationDraft.secondLabel = ""
       studioMessage.value = "校准项已进入人工队列。"
     },
-    () => studioMessage.value = "校准项未写入，请检查候选 Artifact。",
+    () => studioMessage.value = "校准项未写入，请检查候选成果。",
   )
   studioLoading.value = false
   await loadFounderStudio()
@@ -681,7 +712,7 @@ async function saveProvider() {
     <template #body>
       <div class="company-settings-page">
         <header class="company-settings-page__header">
-          <h1>Settings</h1>
+          <h1>设置</h1>
           <p>管理本地运行连接与 Agent Company 使用的模型服务。</p>
         </header>
 
@@ -689,7 +720,164 @@ async function saveProvider() {
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
-                <h2>Founder Control Center</h2>
+                <h2>本地运行</h2>
+                <p>连接本机服务并读取当前公司的真实配置。</p>
+              </div>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-refresh-cw"
+                aria-label="刷新本地运行状态"
+                :loading="pending"
+                @click="refresh()"
+              />
+            </div>
+            <dl>
+              <div>
+                <dt>连接</dt>
+                <dd>{{ connectionLabel }}</dd>
+              </div>
+              <div>
+                <dt>公司</dt>
+                <dd>{{ snapshot.company.name }}</dd>
+              </div>
+              <div>
+                <dt>模型服务</dt>
+                <dd>{{ savedProviderLabel }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <CompanyConnectionState
+            v-if="snapshot.connection !== 'ready' && snapshot.connection !== 'degraded'"
+            :connection="snapshot.connection"
+            :issue="snapshot.issue"
+            :pending="pending"
+            @retry="refresh()"
+          />
+
+          <section class="company-settings-section company-provider-form ac-provider-wizard">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>模型服务</h2>
+                <p>下方用于配置或替换模型连接。已保存密钥不会回填；不更换配置时无需重新输入。</p>
+              </div>
+            </div>
+
+            <div class="ac-provider-presets" role="radiogroup" aria-label="选择模型服务">
+              <button
+                v-for="option in providerPresets"
+                :key="option.id"
+                type="button"
+                role="radio"
+                :aria-checked="presetId === option.id"
+                class="ac-provider-preset"
+                :data-active="presetId === option.id"
+                @click="selectPreset(option.id)"
+              >
+                <span class="ac-provider-preset__label">{{ option.label }}</span>
+                <span class="ac-provider-preset__desc">{{ option.description }}</span>
+              </button>
+            </div>
+
+            <div class="company-provider-form__grid">
+              <label v-if="preset.requiresKey" class="company-provider-form__wide">
+                <span>API 密钥</span>
+                <input
+                  v-model="draft.apiKey"
+                  type="password"
+                  :placeholder="preset.keyHint"
+                  autocomplete="new-password"
+                >
+              </label>
+              <label v-if="preset.custom || preset.local" class="company-provider-form__wide">
+                <span>API 地址</span>
+                <input
+                  v-model="draft.baseUrl"
+                  type="url"
+                  placeholder="https://provider.example.com/v1"
+                  autocomplete="url"
+                >
+              </label>
+
+              <details class="company-provider-form__wide ac-settings-disclosure">
+                <summary>高级设置</summary>
+                <div class="company-provider-form__grid">
+                  <label>
+                    <span>接口格式</span>
+                    <select v-model="draft.format">
+                      <option value="openai">OpenAI compatible</option>
+                      <option value="anthropic">Anthropic compatible</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>服务标识</span>
+                    <input v-model="draft.providerId" autocomplete="off">
+                  </label>
+                  <label v-if="!(preset.custom || preset.local)" class="company-provider-form__wide">
+                    <span>API 地址</span>
+                    <input v-model="draft.baseUrl" type="url" autocomplete="url">
+                  </label>
+                  <label class="company-provider-form__wide">
+                    <span>请求头 JSON</span>
+                    <textarea v-model="headersText" rows="3" spellcheck="false" />
+                  </label>
+                </div>
+              </details>
+            </div>
+
+            <div class="ac-provider-actions">
+              <UButton color="neutral" variant="soft" :loading="testing" @click="testConnection">测试新配置</UButton>
+              <span v-if="message" class="company-provider-form__message" role="status">{{ message }}</span>
+            </div>
+
+            <div v-if="discovered.length" class="ac-provider-models" role="radiogroup" aria-label="选择模型">
+              <label
+                v-for="model in discovered"
+                :key="model.model_id"
+                class="ac-provider-model"
+                :data-active="selectedModel === model.model_id"
+              >
+                <input v-model="selectedModel" type="radio" name="ac-provider-model" :value="model.model_id">
+                <span class="ac-provider-model__name">{{ model.name }}</span>
+                <span class="ac-provider-model__id">{{ model.model_id }}</span>
+              </label>
+            </div>
+
+            <p
+              v-if="errorInfo"
+              class="company-provider-form__message company-provider-form__message--error"
+              role="alert"
+            >
+              {{ errorInfo.message }}
+            </p>
+
+            <div class="company-provider-form__actions">
+              <span>当前：{{ savedProviderLabel }} · 此处不会显示已保存密钥</span>
+              <UButton color="neutral" :loading="saving" :disabled="!selectedModel" @click="saveProvider">
+                验证并保存
+              </UButton>
+            </div>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>引导与演示</h2>
+                <p>随时重新开始首次引导，或进入明确标注的演示；演示与真实数据、模型服务、项目完全隔离。</p>
+              </div>
+            </div>
+            <div class="ac-onboarding-controls">
+              <UButton color="neutral" variant="soft" @click="restartGuide">重新开始引导</UButton>
+              <UButton color="neutral" variant="outline" @click="enterDemo">进入演示</UButton>
+            </div>
+            <p class="company-provider-form__message">重新开始引导会清除本机的演示与引导标记，不影响任何真实公司数据。</p>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>创始人代理控制台（高级）</h2>
                 <p>只读显示代理模式、待办与校准趋势；未获授权时不能在这里提高模式。</p>
               </div>
               <UButton
@@ -704,14 +892,14 @@ async function saveProvider() {
 
             <p class="company-provider-form__message">
               {{ founderControl?.principal.displayName ?? "AI 大东 · 创始人代理" }}
-              · 授权 {{ founderControl?.authorization.status ?? "unavailable" }}
+              · 授权 {{ governanceStatusLabel(founderControl?.authorization.status) }}
               · 模式提升 {{ founderControl?.authorization.canRaiseModeFromUI ? "可用" : "已禁用" }}
             </p>
 
             <dl>
               <div>
                 <dt>当前有效模式</dt>
-                <dd>{{ founderControl?.mode.effective.founderTwinMode ?? "off" }}</dd>
+                <dd>{{ founderModeLabel(founderControl?.mode.effective.founderTwinMode) }}</dd>
               </div>
               <div>
                 <dt>今日代理决定</dt>
@@ -855,7 +1043,7 @@ async function saveProvider() {
                     <dd>{{ founderControl?.calibrationTrend.preferences ?? 0 }}</dd>
                   </div>
                   <div>
-                    <dt>Shadow 匹配 / 推翻</dt>
+                    <dt>影子建议匹配 / 推翻</dt>
                     <dd>
                       {{ founderControl?.trends.shadowComparisons ?? 0 }}
                       / {{ founderControl?.trends.shadowOverrides ?? 0 }}
@@ -871,15 +1059,15 @@ async function saveProvider() {
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
-                <h2>Founder OS 模式</h2>
+                <h2>创始人代理模式（高级）</h2>
                 <p>这里写入 Company 级原始模式，实际能力始终取全局上限与公司设置中更严格的一项。</p>
               </div>
-              <span class="ac-studio-status">effective {{ founderModes?.effective.founderTwinMode ?? "off" }}</span>
+              <span class="ac-studio-status">当前生效：{{ founderModeLabel(founderModes?.effective.founderTwinMode) }}</span>
             </div>
 
             <div class="company-provider-form company-provider-form__grid">
               <label>
-                <span>Founder Twin</span>
+                <span>创始人代理</span>
                 <select v-model="modeDraft.founderTwinMode">
                   <option
                     v-for="option in founderModeOptions"
@@ -890,10 +1078,10 @@ async function saveProvider() {
                     {{ option.label }}
                   </option>
                 </select>
-                <small>Advisor 与 Green/Yellow 只能通过各自的 Delegation Readiness 受控路径开启。</small>
+                <small>顾问建议与绿色/黄色委托只能通过各自的启用条件受控开启。</small>
               </label>
               <label>
-                <span>Company Commons</span>
+                <span>公司知识库</span>
                 <select v-model="modeDraft.companyCommonsMode">
                   <option
                     v-for="option in commonsModeOptions"
@@ -901,7 +1089,7 @@ async function saveProvider() {
                     :value="option.value"
                     :disabled="option.disabled"
                   >
-                    {{ option.value === "reading" ? "interpreting" : option.value }}
+                    {{ commonsModeLabel(option.value) }}
                   </option>
                 </select>
                 <small>belief-loop 不在此入口开放。</small>
@@ -909,9 +1097,9 @@ async function saveProvider() {
               <div class="company-provider-form__actions company-provider-form__wide">
                 <span>
                   全局上限：
-                  {{ founderModes?.globalMaximum.founderTwinMode ?? "off" }}
+                  {{ founderModeLabel(founderModes?.globalMaximum.founderTwinMode) }}
                   /
-                  {{ founderModes?.globalMaximum.companyCommonsMode ?? "off" }}
+                  {{ commonsModeLabel(founderModes?.globalMaximum.companyCommonsMode) }}
                 </span>
                 <UButton color="neutral" :loading="modeLoading" @click="saveFounderModes">
                   保存公司模式
@@ -923,14 +1111,14 @@ async function saveProvider() {
             <div class="ac-advisor-readiness" :data-status="advisorReadiness?.status ?? 'not_confirmed'">
               <div class="ac-advisor-readiness__heading">
                 <div>
-                  <span>W4 Advisor readiness</span>
-                  <strong>{{ advisorReadiness?.status ?? "not_confirmed" }}</strong>
+                  <span>顾问代理启用条件（高级）</span>
+                  <strong>{{ governanceStatusLabel(advisorReadiness?.status) }}</strong>
                 </div>
                 <UButton
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-refresh-cw"
-                  aria-label="刷新 Advisor readiness"
+                  aria-label="刷新顾问代理启用条件"
                   :loading="advisorLoading"
                   @click="loadAdvisorReadiness"
                 />
@@ -988,7 +1176,7 @@ async function saveProvider() {
                       "
                       @click="confirmAdvisorReadiness"
                     >
-                      验证并开启 Advisor
+                      验证并开启顾问代理
                     </UButton>
                   </div>
                 </div>
@@ -1000,7 +1188,7 @@ async function saveProvider() {
           <section class="company-settings-section">
             <div class="company-settings-section__heading">
               <div>
-                <h2>Founder Studio</h2>
+                <h2>创始人偏好工作室（高级）</h2>
                 <p>Profile、治理资产、品味校准与不可变 Snapshot 共享同一条本地事实链。</p>
               </div>
               <UButton
@@ -1014,7 +1202,7 @@ async function saveProvider() {
             </div>
 
             <p class="company-provider-form__message">
-              人工确认：{{ founderStudio?.authorization.status ?? "not_confirmed" }} · 弱门禁，不自动提升 authority
+              人工确认：{{ governanceStatusLabel(founderStudio?.authorization.status) }} · 弱门禁，不自动提升权限级别
             </p>
 
             <div class="ac-studio-workbench">
@@ -1057,7 +1245,7 @@ async function saveProvider() {
                     <textarea v-model="assetDraft.rationale" rows="3" />
                   </label>
                   <label>
-                    <span>原始 Artifact ID</span>
+                    <span>原始成果记录 ID</span>
                     <input v-model="assetDraft.sourceRefId" placeholder="品味与案例必填">
                   </label>
                   <label v-if="['taste_reference', 'taste_anti_reference', 'decision_case', 'rubric'].includes(assetDraft.type)">
@@ -1218,7 +1406,7 @@ async function saveProvider() {
                     <textarea v-model="calibrationDraft.prompt" rows="2" />
                   </label>
                   <label>
-                    <span>候选 A Artifact ID</span>
+                    <span>候选 A 成果记录 ID</span>
                     <input v-model="calibrationDraft.firstArtifactId">
                   </label>
                   <label>
@@ -1226,7 +1414,7 @@ async function saveProvider() {
                     <input v-model="calibrationDraft.firstLabel">
                   </label>
                   <label v-if="calibrationDraft.kind === 'ab'">
-                    <span>候选 B Artifact ID</span>
+                    <span>候选 B 成果记录 ID</span>
                     <input v-model="calibrationDraft.secondArtifactId">
                   </label>
                   <label v-if="calibrationDraft.kind === 'ab'">
@@ -1266,162 +1454,6 @@ async function saveProvider() {
             <p v-if="studioMessage" class="company-provider-form__message" role="status">{{ studioMessage }}</p>
           </section>
 
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>本地运行</h2>
-                <p>连接本机服务并读取当前公司的真实配置。</p>
-              </div>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-refresh-cw"
-                aria-label="刷新本地运行状态"
-                :loading="pending"
-                @click="refresh()"
-              />
-            </div>
-            <dl>
-              <div>
-                <dt>连接</dt>
-                <dd>{{ connectionLabel }}</dd>
-              </div>
-              <div>
-                <dt>公司</dt>
-                <dd>{{ snapshot.company.name }}</dd>
-              </div>
-              <div>
-                <dt>模型服务</dt>
-                <dd>{{ snapshot.company.provider }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <CompanyConnectionState
-            v-if="snapshot.connection !== 'ready' && snapshot.connection !== 'degraded'"
-            :connection="snapshot.connection"
-            :issue="snapshot.issue"
-            :pending="pending"
-            @retry="refresh()"
-          />
-
-          <section class="company-settings-section company-provider-form ac-provider-wizard">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>模型服务</h2>
-                <p>选择服务、填写必要凭据并测试连接，密钥仅保存在本机。</p>
-              </div>
-            </div>
-
-            <div class="ac-provider-presets" role="radiogroup" aria-label="选择模型服务">
-              <button
-                v-for="option in providerPresets"
-                :key="option.id"
-                type="button"
-                role="radio"
-                :aria-checked="presetId === option.id"
-                class="ac-provider-preset"
-                :data-active="presetId === option.id"
-                @click="selectPreset(option.id)"
-              >
-                <span class="ac-provider-preset__label">{{ option.label }}</span>
-                <span class="ac-provider-preset__desc">{{ option.description }}</span>
-              </button>
-            </div>
-
-            <div class="company-provider-form__grid">
-              <label v-if="preset.requiresKey" class="company-provider-form__wide">
-                <span>API 密钥</span>
-                <input
-                  v-model="draft.apiKey"
-                  type="password"
-                  :placeholder="preset.keyHint"
-                  autocomplete="new-password"
-                >
-              </label>
-              <label v-if="preset.custom || preset.local" class="company-provider-form__wide">
-                <span>API 地址</span>
-                <input
-                  v-model="draft.baseUrl"
-                  type="url"
-                  placeholder="https://provider.example.com/v1"
-                  autocomplete="url"
-                >
-              </label>
-
-              <details class="company-provider-form__wide ac-settings-disclosure">
-                <summary>高级设置</summary>
-                <div class="company-provider-form__grid">
-                  <label>
-                    <span>接口格式</span>
-                    <select v-model="draft.format">
-                      <option value="openai">OpenAI compatible</option>
-                      <option value="anthropic">Anthropic compatible</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>服务标识</span>
-                    <input v-model="draft.providerId" autocomplete="off">
-                  </label>
-                  <label v-if="!(preset.custom || preset.local)" class="company-provider-form__wide">
-                    <span>API 地址</span>
-                    <input v-model="draft.baseUrl" type="url" autocomplete="url">
-                  </label>
-                  <label class="company-provider-form__wide">
-                    <span>请求头 JSON</span>
-                    <textarea v-model="headersText" rows="3" spellcheck="false" />
-                  </label>
-                </div>
-              </details>
-            </div>
-
-            <div class="ac-provider-actions">
-              <UButton color="neutral" variant="soft" :loading="testing" @click="testConnection">测试连接</UButton>
-              <span v-if="message" class="company-provider-form__message" role="status">{{ message }}</span>
-            </div>
-
-            <div v-if="discovered.length" class="ac-provider-models" role="radiogroup" aria-label="选择模型">
-              <label
-                v-for="model in discovered"
-                :key="model.model_id"
-                class="ac-provider-model"
-                :data-active="selectedModel === model.model_id"
-              >
-                <input v-model="selectedModel" type="radio" name="ac-provider-model" :value="model.model_id">
-                <span class="ac-provider-model__name">{{ model.name }}</span>
-                <span class="ac-provider-model__id">{{ model.model_id }}</span>
-              </label>
-            </div>
-
-            <p
-              v-if="errorInfo"
-              class="company-provider-form__message company-provider-form__message--error"
-              role="alert"
-            >
-              {{ errorInfo.message }}
-            </p>
-
-            <div class="company-provider-form__actions">
-              <span>当前：{{ snapshot.company.provider }}</span>
-              <UButton color="neutral" :loading="saving" :disabled="!selectedModel" @click="saveProvider">
-                验证并保存
-              </UButton>
-            </div>
-          </section>
-
-          <section class="company-settings-section">
-            <div class="company-settings-section__heading">
-              <div>
-                <h2>引导与演示</h2>
-                <p>随时重新开始首次引导，或进入明确标注的演示；演示与真实数据、Provider、项目完全隔离。</p>
-              </div>
-            </div>
-            <div class="ac-onboarding-controls">
-              <UButton color="neutral" variant="soft" @click="restartGuide">重新开始引导</UButton>
-              <UButton color="neutral" variant="outline" @click="enterDemo">进入演示</UButton>
-            </div>
-            <p class="company-provider-form__message">重新开始引导会清除本机的演示与引导标记，不影响任何真实公司数据。</p>
-          </section>
         </div>
       </div>
     </template>

@@ -13,7 +13,7 @@ export function composerTargetLabel(target: ComposerTarget): string {
 
 export function composerIntentHint(target: ComposerTarget): string {
   if (target.kind === "board") return "作为新目标或公司讨论发出，由本地服务按意图分类路由。"
-  return "作为对该项目的追问或补充发出，不会创建新项目。"
+  return "记录到项目讨论，不会创建新项目或修改已启动计划；需要变更时请使用运行控制。"
 }
 
 export const MAX_MENTIONS = 20
@@ -51,8 +51,8 @@ export function draftStorageKey(target: ComposerTarget): string {
 
 // 可发现的文本意图动作：仅做输入辅助前缀，不虚构后端命令。
 export const composerQuickIntents = [
-  { id: "adjust", label: "调整方向", prefix: "调整方向：" },
-  { id: "constraint", label: "添加约束", prefix: "添加约束：" },
+  { id: "adjust", label: "提出调整建议", prefix: "调整建议：" },
+  { id: "constraint", label: "补充背景", prefix: "补充背景：" },
   { id: "summary", label: "请求总结", prefix: "请求总结：" },
 ] as const
 

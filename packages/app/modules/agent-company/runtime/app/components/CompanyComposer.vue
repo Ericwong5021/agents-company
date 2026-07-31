@@ -79,6 +79,7 @@ async function send() {
   }).then(() => {
     // 仅在本地服务确认接受后清空草稿并轮换 request_id；失败保留全部内容。
     if (shouldRotateRequestID("accepted")) requestID.value = crypto.randomUUID();
+    if (import.meta.client) localStorage.removeItem(storageKey.value);
     body.value = "";
     selectedMentions.value = [];
     showMentions.value = false;
@@ -117,7 +118,7 @@ function onKeydown(event: KeyboardEvent) {
       rows="3"
       maxlength="20000"
       :disabled="sending"
-      placeholder="输入追问、补充材料或方向调整…（⌘/Ctrl+Enter 发送）"
+      placeholder="输入追问、补充材料或调整建议…（⌘/Ctrl+Enter 发送）"
       @keydown="onKeydown"
     />
 
@@ -128,10 +129,10 @@ function onKeydown(event: KeyboardEvent) {
           class="ac-composer__tool"
           :data-active="showMentions"
           :disabled="!options.length"
-          :title="options.length ? '选择要提及的 Agent' : '公司名册为空，暂无可提及对象'"
+          :title="options.length ? '选择要提及的团队成员' : '公司名册为空，暂无可提及对象'"
           @click="showMentions = !showMentions"
         >
-          @ Agent<template v-if="selectedMentions.length">（{{ selectedMentions.length }}）</template>
+          @ 团队成员<template v-if="selectedMentions.length">（{{ selectedMentions.length }}）</template>
         </button>
         <button
           v-for="intent in composerQuickIntents"

@@ -29,6 +29,7 @@ const statusToGroup = {
   revision: "running",
   delivered: "delivered",
   accepted: "delivered",
+  archived: "other",
   cancelled: "other",
 } as const satisfies Record<ExperienceUserStatus, WorkListGroup>
 
@@ -84,7 +85,7 @@ function matchesFilter(entry: WorkListEntry, filter: WorkFilter) {
   if (filter.group !== "all" && entry.group !== filter.group) return false
   if (filter.owner && entry.ownerId !== filter.owner) return false
   const query = filter.query.trim().toLowerCase()
-  if (query && !`${entry.title} ${entry.ownerName ?? ""}`.toLowerCase().includes(query)) return false
+  if (query && !`${entry.title} ${entry.workId} ${entry.ownerName ?? ""}`.toLowerCase().includes(query)) return false
   return true
 }
 

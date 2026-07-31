@@ -167,7 +167,7 @@ async function actOnExperiment(experiment: Experiment, action: "refresh_authorit
         </header>
 
         <div class="ac-work-toolbar">
-          <nav class="ac-work-tabs" aria-label="Library 视图">
+          <nav class="ac-work-tabs" aria-label="成果库视图">
             <NuxtLink to="/library" class="ac-work-tab">Commons inbox</NuxtLink>
             <NuxtLink to="/library/interpretations" class="ac-work-tab">Interpretations</NuxtLink>
             <span class="ac-work-tab" data-active="true">

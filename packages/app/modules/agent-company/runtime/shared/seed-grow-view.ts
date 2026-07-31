@@ -32,6 +32,12 @@ export const assignmentStatusLabels = {
   released: "已释放",
 } as const
 
+export const permissionModeLabels = {
+  read_only: "只读",
+  workspace_write: "可写入工作区",
+  full_access: "完整访问",
+} as const
+
 export const validationStatusLabels = {
   pending: "待运行",
   running: "验证中",
@@ -90,22 +96,57 @@ export function diagnosticsCount(
 
 export function sourceRefLabel(source: ExperienceSourceRef) {
   const labels: Record<ExperienceSourceRef["kind"], string> = {
-    project: "Project",
-    project_event: "Event",
-    goal_brief: "Goal Brief",
-    legacy_charter: "Charter",
-    work_item: "Work item",
-    approval_gate: "Approval",
-    artifact: "Artifact",
-    delivery: "Delivery",
-    conversation: "Conversation",
-    goal_request: "Goal request",
-    user: "User",
-    work_attempt: "Attempt",
-    work_receipt: "Receipt",
-    graph_mutation: "Graph change",
-    project_assignment: "Assignment",
-    validation_gate: "Validation",
+    project: "工作",
+    project_event: "工作事件",
+    goal_brief: "目标摘要",
+    legacy_charter: "项目范围",
+    work_item: "工作项",
+    approval_gate: "审批",
+    artifact: "成果",
+    delivery: "交付",
+    conversation: "讨论",
+    goal_request: "目标请求",
+    user: "用户",
+    work_attempt: "执行尝试",
+    work_receipt: "执行回执",
+    graph_mutation: "工作调整",
+    project_assignment: "责任分配",
+    validation_gate: "验收检查",
   }
   return `${labels[source.kind]} · ${source.id}`
+}
+
+export function sourceRefTypeLabel(source: ExperienceSourceRef) {
+  const labels: Record<ExperienceSourceRef["kind"], string> = {
+    project: "工作",
+    project_event: "工作事件",
+    goal_brief: "目标摘要",
+    legacy_charter: "工作章程",
+    work_item: "工作项",
+    approval_gate: "审批",
+    artifact: "成果记录",
+    delivery: "交付",
+    conversation: "讨论",
+    goal_request: "目标请求",
+    user: "用户",
+    work_attempt: "执行尝试",
+    work_receipt: "执行回执",
+    graph_mutation: "工作调整",
+    project_assignment: "责任分配",
+    validation_gate: "验证",
+  }
+  return `${labels[source.kind]}（已记录）`
+}
+
+export function selectionEvidenceLabel(value: string) {
+  return value
+    .replace(
+      /入选：符合 0 项任务能力；历史交付证据尚未覆盖本任务，全部能力将在本项目中逐项复核。/g,
+      "入选：历史交付证据尚未覆盖本任务；所需能力将在本项目中逐项执行并独立复核。",
+    )
+    .replace(
+      /能力证据强度 (\d+)（仅表示历史可核验记录，不代表能力上限）/g,
+      "历史可核验记录 $1（不代表能力上限）",
+    )
+    .replace(/负载可用性/g, "当前可投入程度")
 }

@@ -652,6 +652,13 @@ export const layer = Layer.effect(
             const rows = candidates.map((item) => {
               const rank = item.agent.id === chosen.agent.id ? 1 : (rankOf.get(item.agent.id) ?? 0)
               const selected = item.agent.id === chosen.agent.id
+              const verifiedCapabilityCount = verifiedPacks(item.facts).length
+              const capabilityEvidence =
+                verifiedCapabilityCount === need.capability_packs.length
+                  ? "所需能力均已有历史交付验证"
+                  : verifiedCapabilityCount > 0
+                    ? "部分能力已有历史交付验证，其余能力将在本项目中逐项复核"
+                    : "历史交付证据尚未覆盖本任务，全部能力将在本项目中逐项复核"
               const gaps = selected
                 ? unverifiedRequiredPacks(item.facts).map((pack) => `能力包 ${pack} 的证据尚未验证`)
                 : item.hard_gaps.length
@@ -660,7 +667,7 @@ export const layer = Layer.effect(
               const reason = selected
                 ? chosen.source === "new_candidate"
                   ? `入选：现有池无人满足硬性条件，显式创建临时角色；覆盖 ${item.score.capability_match} 项能力。`
-                  : `入选：能力匹配 ${item.score.capability_match} 项，能力证据强度 ${item.score.evidence_strength}（已验证 ${verifiedPacks(item.facts).length}/${need.capability_packs.length} 项能力包），负载可用性 ${item.score.availability}，历史质量 ${item.score.historical_quality}，可靠性 ${item.score.historical_reliability}。`
+                  : `入选：${item.score.capability_match > 0 ? `符合 ${item.score.capability_match} 项任务能力；` : ""}${capabilityEvidence}。能力证据强度 ${item.score.evidence_strength}（仅表示历史可核验记录，不代表能力上限），负载可用性 ${item.score.availability}，历史交付质量 ${item.score.historical_quality}，按时可靠性 ${item.score.historical_reliability}。`
                 : item.hard_gaps.length
                   ? `未入选：${item.hard_gaps.join("；")}。`
                   : rank === 2

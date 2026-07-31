@@ -192,7 +192,7 @@ const PROJECT_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   executing: ["executing", "reviewing", "awaiting_approval", "completed", "blocked"],
   reviewing: ["executing", "reviewing", "awaiting_approval", "completed", "blocked"],
   awaiting_approval: ["executing", "reviewing", "completed", "rejected", "blocked"],
-  completed: [],
+  completed: ["executing"],
   rejected: ["planning"],
   blocked: ["planning", "executing", "reviewing", "rejected"],
 }

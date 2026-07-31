@@ -7,6 +7,7 @@ import {
   CompanyProjectTable,
 } from "@/company-project/company-project.sql"
 import { CompanyProjectExecution } from "@/company-project/execution"
+import type { BoardProjectCharter } from "@/company-project/schema"
 import { CompanyRecruitment } from "@/company-recruitment"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { Identifier } from "@/id/id"
@@ -32,6 +33,11 @@ export interface Interface {
   readonly dispatchReady: (project_id: string) => Effect.Effect<DispatchResult>
   readonly pauseDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
   readonly resumeDispatch: (project_id: string, reason?: string) => Effect.Effect<DispatchBarrierResult>
+  readonly replanFromCharter?: (input: {
+    project_id: string
+    plan_id: string
+    charter: BoardProjectCharter
+  }) => Effect.Effect<{ run_id?: string }>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@control-plane/DispatchCoordinator") {}
@@ -216,7 +222,20 @@ export const layer = Layer.effect(
       }
     })
 
-    return Service.of({ dispatchReady, pauseDispatch, resumeDispatch })
+    const replanFromCharter = Effect.fn("DispatchCoordinator.replanFromCharter")(function* (input: {
+      project_id: string
+      plan_id: string
+      charter: BoardProjectCharter
+    }) {
+      yield* setBarrier({
+        project_id: input.project_id,
+        paused: false,
+        reason: "方向调整已生成新计划",
+      })
+      return yield* execution.replanFromCharter(input)
+    })
+
+    return Service.of({ dispatchReady, pauseDispatch, resumeDispatch, replanFromCharter })
   }),
 )
 

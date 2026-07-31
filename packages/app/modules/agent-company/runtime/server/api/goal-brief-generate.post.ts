@@ -48,6 +48,9 @@ export default defineAgentCompanyHandler(
       if (result.response.status === 401 || result.response.status === 403) {
         throw createError({ statusCode: 401, statusMessage: "生成目标摘要需要重新授权" })
       }
+      if (result.response.status >= 500) {
+        throw createError({ statusCode: 503, statusMessage: "模型服务连接中断，请稍后重试" })
+      }
       throw createError({ statusCode: 502, statusMessage: "目标摘要响应无法识别" })
     }
     if (response.kind === "success") return response.brief

@@ -20,10 +20,15 @@ const emit = defineEmits<{
 }>();
 
 const view = computed(() => goalBriefView(props.brief));
+const recordedUserAnswers = computed(() =>
+  view.value.fullBrief.assumptions.filter(item => item.id.startsWith("answer-")));
+const systemAssumptions = computed(() =>
+  view.value.fullBrief.assumptions.filter(item => !item.id.startsWith("answer-")));
 const showFullBrief = ref(false);
 const editing = ref(false);
 const saving = ref(false);
 const saveError = ref("");
+const saveNotice = ref("");
 
 // 编辑工作副本。保存时只把与当前版本不同的字段作为受影响字段提交。
 const draftGoal = ref("");
@@ -31,6 +36,7 @@ const draftConstraints = ref("");
 const draftDeliverables = ref<{ id: string; title: string; description: string }[]>([]);
 const draftAcceptance = ref<{ id: string; description: string; verification: string }[]>([]);
 const draftQuestionAnswers = ref<Record<string, string>>({});
+const draftAssumptions = ref<{ id: string; description: string; confirmed: boolean }[]>([]);
 
 function beginEdit() {
   draftGoal.value = props.brief.goal;
@@ -38,13 +44,20 @@ function beginEdit() {
   draftDeliverables.value = props.brief.deliverables.map(item => ({ ...item }));
   draftAcceptance.value = props.brief.acceptanceCriteria.map(item => ({ ...item }));
   draftQuestionAnswers.value = {};
+  draftAssumptions.value = props.brief.assumptions.map(item => ({ ...item }));
   saveError.value = "";
+  saveNotice.value = "";
   editing.value = true;
 }
 
 function cancelEdit() {
   editing.value = false;
   saveError.value = "";
+  saveNotice.value = "";
+}
+
+function removeDraftAssumption(index: number) {
+  draftAssumptions.value.splice(index, 1);
 }
 
 function collectEdit(): GoalBriefFieldEdit {
@@ -73,6 +86,27 @@ function collectEdit(): GoalBriefFieldEdit {
   if (JSON.stringify(acceptance) !== JSON.stringify(props.brief.acceptanceCriteria))
     edit.acceptanceCriteria = acceptance;
 
+  const assumptions = draftAssumptions.value
+    .map((item, index) => {
+      const description = item.description.trim();
+      const original = props.brief.assumptions.find(candidate => candidate.id === item.id);
+      if (
+        original
+        && !item.id.startsWith("answer-")
+        && description
+        && description !== original.description
+      ) {
+        return {
+          id: `answer-assumption-${index + 1}-${item.id}`.slice(0, 240),
+          description,
+          confirmed: true,
+        };
+      }
+      return { ...item, description };
+    })
+    .filter(item => item.description);
+  if (JSON.stringify(assumptions) !== JSON.stringify(props.brief.assumptions)) edit.assumptions = assumptions;
+
   const answered = props.brief.openQuestions.flatMap((question, index) => {
     const answer = draftQuestionAnswers.value[question.id]?.trim();
     return answer ? [{ question, answer, index }] : [];
@@ -80,8 +114,9 @@ function collectEdit(): GoalBriefFieldEdit {
   if (answered.length) {
     const answeredIDs = new Set(answered.map(item => item.question.id));
     edit.openQuestions = props.brief.openQuestions.filter(question => !answeredIDs.has(question.id));
+    const baseAssumptions = edit.assumptions ?? props.brief.assumptions;
     edit.assumptions = [
-      ...props.brief.assumptions,
+      ...(edit.openQuestions.length ? baseAssumptions : baseAssumptions.filter(item => item.confirmed)),
       ...answered.map(item => ({
         id: `answer-${item.index + 1}-${item.question.id}`.slice(0, 240),
         description: `${item.question.question}：${item.answer}`,
@@ -93,11 +128,14 @@ function collectEdit(): GoalBriefFieldEdit {
   return edit;
 }
 
+const hasUnsavedChanges = computed(() => editing.value && Object.keys(collectEdit()).length > 0);
+
 async function saveEdit() {
   if (saving.value) return;
   const edit = collectEdit();
   if (Object.keys(edit).length === 0) {
     editing.value = false;
+    saveNotice.value = "没有需要保存的修改。";
     return;
   }
   const request = (() => {
@@ -114,6 +152,7 @@ async function saveEdit() {
 
   saving.value = true;
   saveError.value = "";
+  saveNotice.value = "";
   const result = await $fetch.raw<unknown>(
     `/api/agent-company/goal-brief/${encodeURIComponent(props.brief.id)}/versions`,
     { method: "POST", body: request, ignoreResponseError: true },
@@ -130,6 +169,7 @@ async function saveEdit() {
   const response = parseGoalBriefAppendResponse(result.response.status, result.response._data);
   if (response?.kind === "success") {
     editing.value = false;
+    saveNotice.value = `已保存为目标摘要第 ${response.brief.version} 版。`;
     emit("updated", response.brief);
     return;
   }
@@ -145,7 +185,7 @@ async function saveEdit() {
   <section class="ac-brief" :data-editing="editing">
     <header class="ac-brief__heading">
       <div>
-        <span class="ac-brief__eyebrow">Goal Brief</span>
+        <span class="ac-brief__eyebrow">目标摘要</span>
         <h3>系统理解的目标</h3>
       </div>
       <div class="ac-brief__badges">
@@ -219,10 +259,44 @@ async function saveEdit() {
           <textarea
             v-if="editing"
             v-model="draftQuestionAnswers[question.id]"
+            :aria-label="`回答：${question.question}`"
             rows="2"
             maxlength="4000"
             placeholder="输入你的决定"
           />
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="recordedUserAnswers.length && !editing" class="ac-brief__section">
+      <h4>你已确认</h4>
+      <ul>
+        <li v-for="item in recordedUserAnswers" :key="item.id">{{ item.description }}</li>
+      </ul>
+    </div>
+
+    <div v-if="editing && draftAssumptions.length" class="ac-brief__section">
+      <h4>已记录回答与系统假设</h4>
+      <p>用户回答与约束优先于系统假设；如有冲突，可直接修改或移除系统假设。</p>
+      <ul class="ac-brief__edit-list">
+        <li v-for="(item, index) in draftAssumptions" :key="item.id">
+          <label :for="`ac-brief-assumption-${index}`">
+            {{ item.id.startsWith("answer-") ? "用户已回答" : "系统假设" }}
+          </label>
+          <textarea
+            :id="`ac-brief-assumption-${index}`"
+            v-model="item.description"
+            rows="2"
+            maxlength="4000"
+          />
+          <UButton
+            v-if="!item.id.startsWith('answer-')"
+            color="neutral"
+            variant="ghost"
+            @click="removeDraftAssumption(index)"
+          >
+            移除此假设
+          </UButton>
         </li>
       </ul>
     </div>
@@ -244,10 +318,10 @@ async function saveEdit() {
       <textarea id="ac-brief-constraints" v-model="draftConstraints" rows="3" maxlength="4000" />
     </div>
 
-    <!-- 完整 Brief：低频治理字段 -->
+    <!-- 完整目标摘要：低频治理字段 -->
     <div v-if="view.hasFullBriefDetail && !editing" class="ac-brief__full">
       <button type="button" class="ac-brief__toggle" :aria-expanded="showFullBrief" @click="showFullBrief = !showFullBrief">
-        {{ showFullBrief ? "收起完整 Brief" : "查看完整 Brief" }}
+        {{ showFullBrief ? "收起完整目标摘要" : "查看完整目标摘要" }}
         <UIcon :name="showFullBrief ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" />
       </button>
       <div v-if="showFullBrief" class="ac-brief__full-body">
@@ -259,12 +333,12 @@ async function saveEdit() {
           <h5>非目标</h5>
           <ul><li v-for="(item, index) in view.fullBrief.nonGoals" :key="index">{{ item }}</li></ul>
         </div>
-        <div v-if="view.fullBrief.assumptions.length">
+        <div v-if="systemAssumptions.length">
           <h5>系统假设（不阻塞开始）</h5>
           <ul>
-            <li v-for="item in view.fullBrief.assumptions" :key="item.id" :data-confirmed="item.confirmed">
+            <li v-for="item in systemAssumptions" :key="item.id">
               {{ item.description }}
-              <small>{{ item.confirmed ? "已确认" : "系统暂定 · 不阻塞" }}</small>
+              <small>系统暂定 · 不阻塞</small>
             </li>
           </ul>
         </div>
@@ -281,6 +355,10 @@ async function saveEdit() {
     </div>
 
     <p v-if="saveError" class="ac-brief__error" role="alert">{{ saveError }}</p>
+    <p v-if="editing" class="ac-brief__status" aria-live="polite">
+      {{ hasUnsavedChanges ? "有未保存的修改" : "尚无修改" }}
+    </p>
+    <p v-else-if="saveNotice" class="ac-brief__status" role="status">{{ saveNotice }}</p>
 
     <footer v-if="!readonly" class="ac-brief__actions">
       <template v-if="editing">
@@ -290,11 +368,10 @@ async function saveEdit() {
       <template v-else>
         <UButton
           color="neutral"
-          :loading="starting"
-          :disabled="view.hasMaterialQuestions"
-          @click="emit('start', props.brief)"
+          :loading="!view.hasMaterialQuestions && starting"
+          @click="view.hasMaterialQuestions ? beginEdit() : emit('start', props.brief)"
         >
-          {{ view.hasMaterialQuestions ? "请先处理关键问题" : view.autoStart ? "确认并开始" : "开始执行" }}
+          {{ view.hasMaterialQuestions ? "回答关键问题" : view.autoStart ? "确认并开始" : "开始执行" }}
         </UButton>
         <UButton color="neutral" variant="outline" @click="beginEdit">调整</UButton>
       </template>

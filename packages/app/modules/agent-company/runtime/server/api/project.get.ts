@@ -6,6 +6,7 @@ import {
   controlPlaneSDK,
   requestControlPlaneSDK,
 } from "../utils/control-plane-client"
+import { safeExecutionSummary } from "../../shared/execution-diagnostics"
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -73,6 +74,20 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
 
   const charter = record(raw.charter) ? raw.charter : undefined
   const recruitment = record(recruitmentRaw) ? recruitmentRaw : {}
+  const planVersions = new Map(
+    records(raw.plans).flatMap((plan) => {
+      const id = text(plan.id)
+      const version = number(plan.version)
+      return id && version > 0 ? [[id, version] as const] : []
+    }),
+  )
+  const workItemPlanVersions = new Map(
+    records(raw.work_items).flatMap((item) => {
+      const id = text(item.id)
+      const version = planVersions.get(text(item.plan_id))
+      return id && version ? [[id, version] as const] : []
+    }),
+  )
   const candidates = [...records(recruitment.candidate_pool), ...records(recruitment.assigned_candidates)]
   const people = [
     ...records(agentsRaw).flatMap((entry) =>
@@ -149,16 +164,18 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       reviewStatus: text(item.review_status),
       attempt: number(item.attempt),
       maxAttempts: number(item.max_attempts),
-      error: text(item.error) || undefined,
+      error: text(item.error) ? safeExecutionSummary(text(item.error)) : undefined,
       purpose: text(item.purpose) || undefined,
       role: text(item.role) || undefined,
       originKind: text(item.origin_kind) || undefined,
+      planVersion: planVersions.get(text(item.plan_id)),
     })),
     artifacts: records(raw.artifacts).map((artifact) => ({
       id: text(artifact.id),
       title: text(artifact.title),
       kind: text(artifact.kind),
       workItemID: text(artifact.work_item_id) || undefined,
+      planVersion: workItemPlanVersions.get(text(artifact.work_item_id)),
       createdAt: number(artifact.created_at),
     })),
     gates: records(raw.gates).map((gate) => ({
@@ -174,7 +191,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       ordinal: number(attempt.ordinal),
       status: text(attempt.status),
       failureKind: text(attempt.failure_kind) || undefined,
-      summary: text(attempt.safe_summary) || undefined,
+      summary: text(attempt.safe_summary) ? safeExecutionSummary(text(attempt.safe_summary)) : undefined,
       startedAt: number(attempt.started_at),
       finishedAt: typeof attempt.finished_at === "number" ? attempt.finished_at : undefined,
     })),
@@ -183,7 +200,7 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
       workItemID: text(receipt.work_item_id),
       attemptID: text(receipt.attempt_id),
       outcome: text(receipt.outcome),
-      summary: text(receipt.summary),
+      summary: safeExecutionSummary(text(receipt.summary)),
       processingStatus: text(receipt.processing_status),
       artifactIDs: list(receipt.artifact_ids),
       evidenceRefs: records(receipt.evidence_refs).map((reference) => ({

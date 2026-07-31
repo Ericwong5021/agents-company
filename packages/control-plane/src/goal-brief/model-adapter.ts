@@ -1,4 +1,4 @@
-import { generateObject, NoObjectGeneratedError } from "ai"
+import { generateObject, generateText, NoObjectGeneratedError, tool } from "ai"
 import { Effect } from "effect"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { createHash } from "node:crypto"
@@ -149,9 +149,9 @@ function normalizeCandidate(value: unknown, sourceRefs?: z.infer<typeof GoalBrie
     : candidate.acceptanceCriteria
   const assumptions = Array.isArray(candidate.assumptions)
     ? candidate.assumptions.map((item, index) => ({
-        id: record(item) && typeof item.id === "string" ? item.id : generatedID("assumption", index),
+        id: generatedID("system-assumption", index),
         description: generatedText(item, ["description", "assumption", "text", "value"]),
-        confirmed: record(item) && typeof item.confirmed === "boolean" ? item.confirmed : false,
+        confirmed: false,
       }))
     : candidate.assumptions
   const openQuestions = Array.isArray(candidate.openQuestions)
@@ -225,6 +225,90 @@ function parse(
   return GoalBriefDraft.parse(normalizeCandidate(providerValue(provider, value), sourceRefs))
 }
 
+function explicitDeliverableSegments(value: string) {
+  const matches = [...value.matchAll(/\bD(\d{1,2})\b/gi)].filter((match) => {
+    const index = match.index ?? 0
+    const before = value.slice(Math.max(0, index - 24), index)
+    const after = value.slice(index + match[0].length, index + match[0].length + 24)
+    return !/D\d{1,2}\s*[–—-]\s*$/i.test(before) && !/^\s*[–—-]\s*D\d{1,2}\b/i.test(after)
+  })
+  return matches.map((match, index) => ({
+    label: `D${Number(match[1])}`,
+    body: value.slice((match.index ?? 0) + match[0].length, matches[index + 1]?.index ?? value.length),
+  }))
+}
+
+function numericAnchors(value: string) {
+  return [...value.matchAll(/\d[\d,，]*(?:\.\d+)?%?/g)].map((match) => {
+    const raw = match[0]
+    const percentage = raw.endsWith("%")
+    const numeric = raw.replace(/[%+,，]/g, "")
+    const parsed = Number(numeric)
+    return `${Number.isFinite(parsed) ? parsed : numeric}${percentage ? "%" : ""}`
+  })
+}
+
+function validateExplicitDeliverableMapping(source: string, draft: z.infer<typeof GoalBriefDraft>) {
+  const sourceByLabel = new Map<string, string[]>()
+  for (const segment of explicitDeliverableSegments(source))
+    sourceByLabel.set(segment.label, [...(sourceByLabel.get(segment.label) ?? []), segment.body])
+
+  for (const [label, bodies] of sourceByLabel) {
+    const marker = new RegExp(`\\b${label}\\b`, "i")
+    const deliverables = draft.deliverables.filter(
+      (item) => item.id.toUpperCase() === label || marker.test(`${item.title}\n${item.description}`),
+    )
+    if (!deliverables.length) throw new Error(`Explicit deliverable ${label} is missing. Preserve every numbered deliverable.`)
+    const relatedCriteria = draft.acceptanceCriteria.filter((item) =>
+      marker.test(`${item.description}\n${item.verification}`),
+    )
+    const relatedSteps = draft.recommendedPlan.steps.filter((item) => marker.test(`${item.title}\n${item.outcome}`))
+    const target = [
+      ...deliverables.flatMap((item) => [item.title, item.description]),
+      ...relatedCriteria.flatMap((item) => [item.description, item.verification]),
+      ...relatedSteps.flatMap((item) => [item.title, item.outcome]),
+    ].join("\n")
+    const targetAnchors = new Set(numericAnchors(target))
+    const missing = [...new Set(numericAnchors(bodies.join("\n")))].filter((anchor) => !targetAnchors.has(anchor))
+    if (missing.length)
+      throw new Error(
+        `Explicit deliverable ${label} is missing user-supplied anchors: ${missing.join(", ")}. Keep each requirement in its original numbered deliverable and do not move it to another deliverable or a global constraint.`,
+      )
+  }
+}
+
+const externalActionPattern =
+  /部署|上传|发布|付款|采购|外联|联系|发送|招募|报名|收费|签约|实地|踩点|线下|试运行|访谈|问卷回收|deploy|upload|publish|pay|purchase|contact|recruit|enroll|charge|sign|on-site|field visit|pilot/i
+
+const externalBoundaryPattern =
+  /仅(?:准备|形成)|不执行|不得执行|未授权|待(?:人工|用户)批准|批准后|模板|清单|脚本|候选|approval|not execute|preparation only/i
+
+function applyExternalActionBoundary(draft: z.infer<typeof GoalBriefDraft>) {
+  const planText = JSON.stringify(draft.recommendedPlan)
+  if (!externalActionPattern.test(planText)) return draft
+  const constraint = "目标摘要的生成不构成执行授权；任何对外、线下、资金、发布或不可逆动作均须在执行前获得用户明确批准。"
+  return GoalBriefDraft.parse({
+    ...draft,
+    constraints: draft.constraints.includes(constraint)
+      ? draft.constraints
+      : [...draft.constraints.slice(0, 99), constraint],
+    recommendedPlan: {
+      summary: externalBoundaryPattern.test(draft.recommendedPlan.summary)
+        ? draft.recommendedPlan.summary
+        : `${draft.recommendedPlan.summary} 本轮只形成可在本地审阅的准备材料；外部或线下动作须另行获得用户明确批准。`,
+      steps: draft.recommendedPlan.steps.map((step) => {
+        const text = `${step.title}\n${step.outcome}`
+        if (!externalActionPattern.test(text) || externalBoundaryPattern.test(text)) return step
+        return {
+          ...step,
+          title: `准备“${step.title}”所需材料`.slice(0, 240),
+          outcome: `${step.outcome} 本轮仅形成材料、模板与人工检查点，不执行相关外部、线下、资金或发布动作。`,
+        }
+      }),
+    },
+  })
+}
+
 function issue(error: unknown) {
   if (error instanceof z.ZodError)
     return error.issues
@@ -240,6 +324,7 @@ export async function adapt(input: {
   generate: (request: GoalBriefModelRequest) => Promise<unknown>
   maxRepairAttempts?: number
   sourceRefs?: z.infer<typeof GoalBriefDraft>["sourceRefs"]
+  validate?: (draft: z.infer<typeof GoalBriefDraft>) => void
 }) {
   const provider = GoalBriefModelProvider.parse(input.provider)
   const maxRepairAttempts = z
@@ -258,7 +343,9 @@ export async function adapt(input: {
       schema: GoalBriefDraft,
     })
     try {
-      return parse(provider, generated, input.sourceRefs)
+      const parsed = parse(provider, generated, input.sourceRefs)
+      input.validate?.(parsed)
+      return parsed
     } catch (error) {
       const lastIssue = issue(error)
       if (attempt > maxRepairAttempts) throw new GoalBriefModelAdaptationError(provider, attempt, lastIssue)
@@ -328,6 +415,7 @@ const log = Log.create({ service: "goal-brief" })
 
 export type GoalBriefStructuredGenerationCall = {
   model: LanguageModelV3
+  outputMode: "object" | "tool"
   system: string
   prompt: string
   schema: typeof GeneratedGoalBriefDraft
@@ -338,11 +426,29 @@ export type GoalBriefGenerationDependencies = {
   resolveDefaultModel: () => Promise<{
     adapterProvider: GoalBriefModelProvider
     model: LanguageModelV3
+    outputMode?: "object" | "tool"
   }>
   generate: (input: GoalBriefStructuredGenerationCall) => Promise<unknown>
 }
 
 async function generateStructured(input: GoalBriefStructuredGenerationCall) {
+  if (input.outputMode === "tool") {
+    const result = await generateText({
+      model: input.model,
+      tools: {
+        submitGoalBrief: tool({
+          description: "Submit the complete Goal Brief",
+          inputSchema: input.schema,
+        }),
+      },
+      toolChoice: { type: "tool", toolName: "submitGoalBrief" },
+      temperature: 0,
+      system: input.system,
+      prompt: input.prompt,
+      abortSignal: input.abortSignal,
+    })
+    return result.toolCalls.find((call) => call.toolName === "submitGoalBrief")?.input ?? result.text
+  }
   try {
     return (
       await generateObject({
@@ -408,15 +514,18 @@ export async function generateAndCreate(
     heartbeat.unref()
     try {
       const resolved = await dependencies.resolveDefaultModel()
-      const brief = await adapt({
+      const generatedBrief = await adapt({
         provider: resolved.adapterProvider,
         sourceRefs: [{ kind: "goal_request", id: input.requestId }],
+        validate: (draft) =>
+          validateExplicitDeliverableMapping(`${input.goal}\n${input.context ?? ""}`, draft),
         generate: async (request) => {
           const output = await dependencies.generate({
             model: resolved.model,
+            outputMode: resolved.outputMode ?? "object",
             schema: GeneratedGoalBriefDraft,
             system:
-              "Create one complete Goal Brief as strict structured data. Keep goal, deliverables, acceptance criteria, constraints, non-goals, assumptions, open questions, risk, plan, and approval mode semantically distinct. Never copy the goal into other fields to simulate completeness.",
+              "Create one complete Goal Brief as strict structured data. Keep goal, deliverables, acceptance criteria, constraints, non-goals, assumptions, open questions, risk, plan, and approval mode semantically distinct. Never copy the goal into other fields to simulate completeness. Preserve every explicit numbered deliverable label and keep every requirement, number, formula, date, percentage, and hard rule in the exact numbered deliverable where the user placed it. Never move a requirement between D1, D2, D3, or any other numbered deliverable, even when it also applies globally. Every generated assumption must set confirmed to false; only a later explicit user response may confirm an assumption. Goal Brief generation never authorizes deployment, upload, publishing, payment, procurement, external contact, recruitment, enrollment, field visits, or offline execution. Represent such actions only as local preparation materials and future steps gated by explicit user approval.",
             prompt: JSON.stringify({
               goal: input.goal,
               ...(input.context ? { context: input.context } : {}),
@@ -428,6 +537,7 @@ export async function generateAndCreate(
           return resolved.adapterProvider === "anthropic_compatible" ? { input: output } : { output }
         },
       })
+      const brief = applyExternalActionBoundary(generatedBrief)
       const completion = completeGeneration(input.requestId, payloadHash, ownerToken, {
         projectId: input.projectId,
         sourceThreadId: input.sourceThreadId,
@@ -473,6 +583,7 @@ export function createFromDefaultModel(input: GoalBriefGenerateRequestValue) {
                   ? "anthropic_compatible"
                   : "openai_compatible",
               model: await bridge.promise(provider.getLanguage(model)),
+              outputMode: model.capabilities.toolcall ? "tool" : "object",
             }
           },
           generate: generateStructured,

@@ -221,7 +221,7 @@ async function submitPatchAction(patch: LearningPatch) {
         </header>
 
         <div class="ac-work-toolbar">
-          <nav class="ac-work-tabs" aria-label="Library 视图">
+          <nav class="ac-work-tabs" aria-label="成果库视图">
             <NuxtLink to="/library" class="ac-work-tab">Commons inbox</NuxtLink>
             <NuxtLink to="/library/interpretations" class="ac-work-tab">Interpretations</NuxtLink>
             <NuxtLink to="/library/beliefs" class="ac-work-tab">Belief Lab</NuxtLink>

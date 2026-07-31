@@ -19,9 +19,9 @@ export const contextPanelOrder: ContextPanelKind[] = [
 export const contextPanelLabels: Record<ContextPanelKind, string> = {
   goal_brief: "目标",
   approval: "审批",
-  artifact: "制品",
+  artifact: "成果",
   agent: "成员",
-  thread: "讨论",
+  thread: "项目讨论",
   diagnostics: "诊断",
 }
 

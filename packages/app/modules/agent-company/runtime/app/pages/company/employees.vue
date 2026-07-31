@@ -55,7 +55,7 @@ const companyAvailable = computed(() => ["ready", "degraded"].includes(snapshot.
             </dl>
             <span class="company-employee__subject">{{ agent.subject }}</span>
           </article>
-          <p v-if="!snapshot.agents.length" class="company-empty">No employees were returned by the Control Plane.</p>
+          <p v-if="!snapshot.agents.length" class="company-empty">本地运行服务尚未返回员工记录。</p>
         </section>
       </div>
     </template>

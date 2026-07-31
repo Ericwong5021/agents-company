@@ -26,8 +26,8 @@ import {
   CompanyWorkReceiptTable,
 } from "./company-project.sql"
 import { GraphMutation, ValidationGate, WorkAttempt, WorkReceipt, type WorkReceiptEvidenceRef } from "./schema"
-import { PROJECTOR_VERSION } from "./work-projection"
 
+const PROJECTOR_VERSION = 4
 const MAX_PROJECTION_ITEMS = 499
 const Timestamp = z.number().int().min(0).max(253_402_300_799_999)
 const AgentFact = z

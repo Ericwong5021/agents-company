@@ -9,7 +9,9 @@ export function visibleShellNavigation<T extends ShellNavigationItem>(items: rea
 }
 
 export function isShellNavigationActive(item: ShellNavigationItem, path: string) {
-  return !item.hidden && (path === item.to || path.startsWith(`${item.to}/`))
+  const targetPath = item.to.split(/[?#]/, 1)[0]!
+  if (targetPath === "/company") return !item.hidden && path === targetPath
+  return !item.hidden && (path === targetPath || path.startsWith(`${targetPath}/`))
 }
 
 export function activeShellNavigationItem<T extends ShellNavigationItem>(

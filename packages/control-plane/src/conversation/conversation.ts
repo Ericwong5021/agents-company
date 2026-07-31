@@ -350,6 +350,27 @@ export const EnsureProjectChannelInput = z
   .strict()
 export type EnsureProjectChannelInput = z.infer<typeof EnsureProjectChannelInput>
 
+export const RecordProjectUpdateInput = z
+  .object({
+    companyID: CompanyID,
+    projectScopeID: z.string().min(1),
+    requestID: z.string().min(1).max(240),
+    author: MessageAuthor,
+    body: z.string().trim().min(1).max(20_000),
+    signalType: SignalType,
+    dri: ConversationPrincipal.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.signalType !== "decision" || value.dri) return
+    context.addIssue({
+      code: "custom",
+      message: "A decision signal requires a DRI.",
+      path: ["dri"],
+    })
+  })
+export type RecordProjectUpdateInput = z.infer<typeof RecordProjectUpdateInput>
+
 export const RecordBoardDecisionInput = z
   .object({
     companyID: CompanyID,
@@ -577,18 +598,24 @@ function readChannelMessages(input: {
   limit: number
 }) {
   return Database.use((db) => {
-    const mainFeedMessage = or(
-      eq(ChannelMessageTable.author_kind, "user"),
-      and(
-        isNotNull(ChannelMessageTable.signal_type),
-        exists(
-          db
-            .select({ id: SignalProjectionTable.id })
-            .from(SignalProjectionTable)
-            .where(eq(SignalProjectionTable.channel_message_id, ChannelMessageTable.id)),
-        ),
-      ),
-    )
+    const mainFeedMessage =
+      input.channel.kind === "project"
+        ? or(
+            eq(ChannelMessageTable.author_kind, "user"),
+            isNotNull(ChannelMessageTable.signal_type),
+          )
+        : or(
+            eq(ChannelMessageTable.author_kind, "user"),
+            and(
+              isNotNull(ChannelMessageTable.signal_type),
+              exists(
+                db
+                  .select({ id: SignalProjectionTable.id })
+                  .from(SignalProjectionTable)
+                  .where(eq(SignalProjectionTable.channel_message_id, ChannelMessageTable.id)),
+              ),
+            ),
+          )
     const channelScope =
       input.channel.kind === "company"
         ? or(
@@ -895,6 +922,7 @@ export interface Interface {
   readonly sendMessage: (input: Intake.SendMessageInput) => Effect.Effect<Intake.MessageAccepted, Intake.SendMessageError>
   readonly ensureCompanyChannels: (input: EnsureCompanyChannelsInput) => Effect.Effect<void>
   readonly ensureProjectChannel: (input: EnsureProjectChannelInput) => Effect.Effect<ChannelSummary, InstanceType<typeof CompanyNotFound>>
+  readonly recordProjectUpdate: (input: RecordProjectUpdateInput) => Effect.Effect<ChannelMessage, Error>
   readonly ensureThreadAccess: (input: EnsureThreadAccessInput) => Effect.Effect<void, InstanceType<typeof ThreadNotVisible>>
   readonly recordBoardDecision: (
     input: RecordBoardDecisionInput,
@@ -1130,6 +1158,81 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       return channelFromRow(channel)
     })
 
+    const recordProjectUpdate = Effect.fn("Conversation.recordProjectUpdate")(function* (
+      raw: RecordProjectUpdateInput,
+    ) {
+      const input = RecordProjectUpdateInput.parse(raw)
+      const row = yield* Effect.try({
+        try: () =>
+          Database.transaction(
+            (db) => {
+              const channel = db
+                .select()
+                .from(ChannelTable)
+                .where(
+                  and(
+                    eq(ChannelTable.company_id, input.companyID),
+                    eq(ChannelTable.kind, "project"),
+                    eq(ChannelTable.scope_id, input.projectScopeID),
+                    isNull(ChannelTable.time_archived),
+                  ),
+                )
+                .get()
+              if (!channel) throw new Error(`Project channel is unavailable for ${input.projectScopeID}`)
+              const existing = db
+                .select()
+                .from(ChannelMessageTable)
+                .where(
+                  and(
+                    eq(ChannelMessageTable.channel_id, channel.id),
+                    eq(ChannelMessageTable.request_id, input.requestID),
+                  ),
+                )
+                .get()
+              if (existing) {
+                const same =
+                  existing.author_kind === input.author.kind &&
+                  existing.author_id === input.author.id &&
+                  existing.body === input.body &&
+                  existing.signal_type === input.signalType &&
+                  existing.dri_principal_kind === input.dri?.kind &&
+                  existing.dri_principal_id === input.dri?.id
+                if (!same) throw new Error(`Project update request conflicts: ${input.requestID}`)
+                return existing
+              }
+              const now = Date.now()
+              const created = {
+                id: ChannelMessageID.parse(Identifier.ascending("channelMessage")),
+                channel_id: channel.id,
+                root_need_id: null,
+                source_thread_id: null,
+                reply_to_id: null,
+                request_id: input.requestID,
+                author_kind: input.author.kind,
+                author_id: input.author.id,
+                body: input.body,
+                signal_type: input.signalType,
+                dri_principal_kind: input.dri?.kind ?? null,
+                dri_principal_id: input.dri?.id ?? null,
+                visibility: "channel" as const,
+                mentions: [],
+                time_created: now,
+                time_updated: now,
+              }
+              db.insert(ChannelMessageTable).values(created).run()
+              db.update(ChannelTable)
+                .set({ time_updated: now })
+                .where(eq(ChannelTable.id, channel.id))
+                .run()
+              return created
+            },
+            { behavior: "immediate" },
+          ),
+        catch: (cause) => cause instanceof Error ? cause : new Error(String(cause)),
+      })
+      return messageFromRow(row)
+    })
+
     // TEAM-05：非 Board 成员被指派为 DRI 时，授予其源 Thread 的 channel + thread 成员资格（幂等，可重入）。
     const ensureThreadAccess = Effect.fn("Conversation.ensureThreadAccess")(function* (
       input: EnsureThreadAccessInput,
@@ -1343,6 +1446,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       sendMessage,
       ensureCompanyChannels,
       ensureProjectChannel,
+      recordProjectUpdate,
       ensureThreadAccess,
       recordBoardDecision,
     })

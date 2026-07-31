@@ -10,7 +10,8 @@ import {
   availableAssignments,
   graphDecisionLabels,
   graphStatusLabels,
-  sourceRefLabel,
+  selectionEvidenceLabel,
+  sourceRefTypeLabel,
   validationStatusLabels,
 } from "../../modules/agent-company/runtime/shared/seed-grow-view"
 
@@ -83,11 +84,11 @@ function workStatus(status?: string) {
 
 function seedMode(mode?: string) {
   const labels: Record<string, string> = {
-    seed_pair: "双 Agent 起步",
+    seed_pair: "双角色起步",
     discovery_first: "先确认现实边界",
-    direct_single: "单 Agent 直接切片",
+    direct_single: "单角色直接切片",
   }
-  return mode ? (labels[mode] ?? mode) : "Seed-and-Grow"
+  return mode ? (labels[mode] ?? mode) : "按需成长"
 }
 </script>
 
@@ -95,14 +96,14 @@ function seedMode(mode?: string) {
   <section class="ac-seed-flow" aria-labelledby="seed-grow-title">
     <div class="ac-seed-flow__heading">
       <div>
-        <p class="ac-card-kicker">Seed and grow</p>
+        <p class="ac-card-kicker">按需成长</p>
         <h2 id="seed-grow-title">动态组织进展</h2>
-        <p>从最小团队开始，只在 Receipt 证据要求时增长工作图。</p>
+        <p>从最小团队开始，只在真实执行证据表明有需要时增加工作与成员。</p>
       </div>
       <span class="ac-seed-flow__mode">{{ seedMode(mode) }}</span>
     </div>
 
-    <p v-if="pending" class="ac-seed-flow__state" role="status">正在读取组织与 Graph 事实…</p>
+    <p v-if="pending" class="ac-seed-flow__state" role="status">正在读取组织与工作调整事实…</p>
     <p v-else-if="failed" class="ac-seed-flow__state ac-seed-flow__state--error" role="alert">
       无法读取动态组织投影，现有项目状态仍可查看。
     </p>
@@ -111,7 +112,7 @@ function seedMode(mode?: string) {
       <article>
         <span class="ac-seed-flow__step">01</span>
         <div>
-          <p>Wayfinder</p>
+          <p>边界确认</p>
           <h3>{{ wayfinder?.title ?? "现实边界尚未建立" }}</h3>
           <span>{{ workStatus(wayfinder?.status) }}</span>
         </div>
@@ -119,7 +120,7 @@ function seedMode(mode?: string) {
       <article>
         <span class="ac-seed-flow__step">02</span>
         <div>
-          <p>First slice</p>
+          <p>首个可交付切片</p>
           <h3>{{ firstSlice?.title ?? "第一切片尚未建立" }}</h3>
           <span>{{ workStatus(firstSlice?.status) }}</span>
         </div>
@@ -129,7 +130,7 @@ function seedMode(mode?: string) {
     <div v-if="!pending && !failed" class="ac-seed-flow__section">
       <div class="ac-seed-flow__section-head">
         <div>
-          <p class="ac-card-kicker">Seed team</p>
+          <p class="ac-card-kicker">起步团队</p>
           <h3>当前责任</h3>
         </div>
         <strong>{{ organization?.availability === "available" ? organization.activeAssignmentCount : "不可用" }}</strong>
@@ -147,22 +148,22 @@ function seedMode(mode?: string) {
           </span>
           <details class="ac-source-trace">
             <summary>加入依据</summary>
-            <p>{{ assignment.selectionReason }}</p>
+            <p>{{ selectionEvidenceLabel(assignment.selectionReason) }}</p>
             <ul>
               <li v-for="source in assignment.sourceRefs" :key="`${source.kind}:${source.id}`">
-                {{ sourceRefLabel(source) }}
+                {{ sourceRefTypeLabel(source) }}
               </li>
             </ul>
           </details>
         </article>
       </div>
-      <p v-else class="ac-seed-flow__empty">当前没有可验证的 Assignment。</p>
+      <p v-else class="ac-seed-flow__empty">当前没有可验证的责任分配。</p>
     </div>
 
     <div v-if="!pending && !failed" class="ac-seed-flow__section">
       <div class="ac-seed-flow__section-head">
         <div>
-          <p class="ac-card-kicker">Discover, adjust, continue</p>
+          <p class="ac-card-kicker">发现、调整、继续</p>
           <h3>发现与调整</h3>
         </div>
         <strong>{{ changes.length }}</strong>
@@ -182,7 +183,7 @@ function seedMode(mode?: string) {
             </div>
             <div class="ac-seed-timeline__meta">
               <span>{{ graphStatusLabels[change.status] }}</span>
-              <span>Graph {{ change.expectedRevision }} → {{ change.appliedRevision ?? "待定" }}</span>
+              <span>工作结构版本 {{ change.expectedRevision }} → {{ change.appliedRevision ?? "待定" }}</span>
             </div>
             <template v-if="discoveryFor(change.triggerReceiptId)?.availability === 'available'">
               <p class="ac-seed-timeline__summary">{{ discoveryFor(change.triggerReceiptId)?.summary }}</p>
@@ -202,21 +203,21 @@ function seedMode(mode?: string) {
               <summary>查看证据来源</summary>
               <ul>
                 <li v-for="source in change.sourceRefs" :key="`${source.kind}:${source.id}`">
-                  {{ sourceRefLabel(source) }}
+                  {{ sourceRefTypeLabel(source) }}
                 </li>
               </ul>
             </details>
           </div>
         </article>
       </div>
-      <p v-else class="ac-seed-flow__empty">还没有基于 Receipt 的 Graph 调整。</p>
+      <p v-else class="ac-seed-flow__empty">还没有基于执行证据的工作结构调整。</p>
     </div>
 
     <div v-if="!pending && !failed" class="ac-seed-flow__section">
       <div class="ac-seed-flow__section-head">
         <div>
-          <p class="ac-card-kicker">Validation</p>
-          <h3>阻断 Gate</h3>
+          <p class="ac-card-kicker">验证</p>
+          <h3>阻断条件</h3>
         </div>
         <strong>{{ validation?.availability === "available" ? validation.blockingGateCount : "不可用" }}</strong>
       </div>
@@ -231,7 +232,7 @@ function seedMode(mode?: string) {
           </span>
         </article>
       </div>
-      <p v-else class="ac-seed-flow__empty">当前没有 Validation Gate。</p>
+      <p v-else class="ac-seed-flow__empty">当前没有阻断验证条件。</p>
     </div>
 
     <div v-if="unavailable.length" class="ac-resource-notice" role="status">

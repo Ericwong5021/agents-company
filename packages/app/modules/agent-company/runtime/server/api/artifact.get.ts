@@ -6,6 +6,7 @@ import { createError, getRouterParam } from "h3"
 import { useRuntimeConfig } from "nitropack/runtime"
 import { defineAgentCompanyHandler } from "../utils/authenticated-handler"
 import { controlPlaneURL, requestControlPlane } from "../utils/control-plane-client"
+import { sanitizeAttemptFailureContent } from "../../shared/execution-diagnostics"
 
 export default defineAgentCompanyHandler(async (event): Promise<ExperienceArtifactViewValue> => {
   const projectID = getRouterParam(event, "projectID")
@@ -38,5 +39,11 @@ export default defineAgentCompanyHandler(async (event): Promise<ExperienceArtifa
   if (!parsed.success || parsed.data.projectId !== projectID || parsed.data.id !== artifactID) {
     throw createError({ statusCode: 502, statusMessage: "成果响应无法识别" })
   }
-  return parsed.data
+  if (parsed.data.kind !== "attempt_failure" || parsed.data.encoding !== "utf8") return parsed.data
+  const content = sanitizeAttemptFailureContent(parsed.data.content)
+  return {
+    ...parsed.data,
+    content,
+    byteLength: new TextEncoder().encode(content).byteLength,
+  }
 })

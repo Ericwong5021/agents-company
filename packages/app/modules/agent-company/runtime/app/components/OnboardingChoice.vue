@@ -29,12 +29,12 @@ defineEmits<{
         <span class="ac-onboarding__choice-desc">
           {{
             providerConfigured
-              ? "Provider 已就绪，直接描述你的第一个目标。"
-              : "先连接模型 Provider，完成后直接进入目标输入。"
+              ? "已有模型服务配置；发送目标时会实际调用，此处未单独实时测试。"
+              : "先连接模型服务，完成后直接进入目标输入。"
           }}
         </span>
         <span class="ac-onboarding__choice-cta">
-          {{ providerConfigured ? "开始写目标" : "去连接 Provider" }}
+          {{ providerConfigured ? "开始写目标" : "去连接模型服务" }}
           <UIcon name="i-lucide-arrow-right" />
         </span>
       </button>

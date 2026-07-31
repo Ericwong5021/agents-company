@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import z from "zod"
 import {
   DeliveryArtifactRef,
@@ -22,11 +22,16 @@ import {
 } from "@agents-company/shared/experience"
 import { Database } from "@/storage"
 import { projectView as goalBriefProjectView } from "@/goal-brief/goal-brief"
-import { CompanyArtifactTable, CompanyProjectEventTable, CompanyProjectTable } from "./company-project.sql"
+import {
+  CompanyArtifactTable,
+  CompanyAttentionTable,
+  CompanyProjectEventTable,
+  CompanyProjectTable,
+} from "./company-project.sql"
 import * as ExperienceArtifact from "./experience-artifact"
 import { CompanyWorkProjectionTable } from "./work-projection.sql"
 
-export const PROJECTOR_VERSION = 4
+export const PROJECTOR_VERSION = 11
 const MAX_PROJECTION_DIAGNOSTICS = 500
 const MAX_PROJECTION_ITEMS = 500
 const EventTimestamp = z.number().int().min(0).max(253_402_300_799_999)
@@ -61,6 +66,16 @@ const DefinitionFact = z.discriminatedUnion("kind", [
 const PersistedArtifactFact = DeliveryArtifactRef.safeExtend({
   openable: z.boolean(),
 }).strict()
+const PersistedAttentionFact = z
+  .object({
+    id: z.string().trim().min(1).max(240),
+    title: z.string().trim().min(1).max(240),
+    summary: z.string().trim().min(1).max(8_000),
+    requiredDecision: z.string().trim().min(1).max(8_000).optional(),
+    risk: z.enum(["low", "medium", "high", "critical"]),
+    updatedAt: EventTimestamp,
+  })
+  .strict()
 
 export const WorkProjectionSeed = z
   .object({
@@ -71,6 +86,7 @@ export const WorkProjectionSeed = z
     ownerAgentId: z.string().trim().min(1).max(240).optional(),
     definition: DefinitionFact.default({ kind: "none" }),
     persistedArtifacts: z.array(PersistedArtifactFact).default([]),
+    persistedAttentions: z.array(PersistedAttentionFact).default([]),
     createdAt: EventTimestamp,
     updatedAt: EventTimestamp,
   })
@@ -103,6 +119,8 @@ const EventEnvelope = z
 const knownNoopEvents = new Set([
   "project.created",
   "project.model_changed",
+  "project.archived",
+  "project.restored",
   "repository.created",
   "plan.created",
   "workflow.started",
@@ -110,6 +128,8 @@ const knownNoopEvents = new Set([
   "work_item.source_task_key_set",
   "work_item.reassigned",
   "work_item.agent_selected",
+  "work_item.orchestration_planned",
+  "work_item.delivery_ready_for_review",
   "project_assignment.assigned",
   "project_assignment.reassigned",
   "project_assignment.recovered",
@@ -120,6 +140,7 @@ const knownNoopEvents = new Set([
   "work_receipt.submitted",
   "work_receipt.processed",
   "work_receipt.claimed",
+  "work_receipt.released",
   "graph_decision.recorded",
   "graph_decision.resolved",
   "graph_mutation.applied",
@@ -128,8 +149,10 @@ const knownNoopEvents = new Set([
   "graph.capability.requested",
   "graph.user_decision.requested",
   "validation_gate.created",
+  "validation_gate.evaluation_started",
   "validation_gate.evaluated",
   "validation_gate.recovered",
+  "validation_anchor.checked",
   "failure_diagnosis.recorded",
   "graph_repair.completed",
   "outcome_signal.recorded",
@@ -147,6 +170,7 @@ const knownNoopEvents = new Set([
   "project_action.dispatch_failed",
   "project_action.applied",
   "project_action.rejected",
+  "project.direction_adjusted",
   "work_item.recovered",
   "board_closeout.recorded",
   "worktree_run.created",
@@ -154,7 +178,12 @@ const knownNoopEvents = new Set([
   "worktree_run.verified",
   "worktree_run.merged",
 ])
-const enabledR0ReadActions = new Set<ExperienceActionType>(["view_progress", "open_diagnostics"])
+const enabledR0ReadActions = new Set<ExperienceActionType>([
+  "view_progress",
+  "open_diagnostics",
+  "open_delivery",
+  "view_evidence",
+])
 const implementedMutationActions = new Set<ExperienceActionType>(ExperienceR0ImplementedMutationActions)
 const phaseByStatus: Record<ExperienceUserStatus, string> = {
   draft: "目标定义",
@@ -168,6 +197,7 @@ const phaseByStatus: Record<ExperienceUserStatus, string> = {
   revision: "验证",
   delivered: "交付",
   accepted: "交付",
+  archived: "归档",
   failed: "执行",
   cancelled: "交付",
 }
@@ -351,10 +381,19 @@ function uniqueSourceRefs(refs: ExperienceSourceRef[]) {
   )
 }
 
+const retryBudgetExhaustedPattern = /(?:Seed project|Project) has exhausted a work-item retry budget/i
+
 function knownReason(text: string, sourceRefs: ExperienceSourceRef[]): ExperienceKnownReason {
+  const readableText = /Cause\(\[|SQLiteError|CHECK constraint failed/i.test(text)
+    ? "执行遇到本地数据一致性问题，工作已安全暂停。请刷新状态后重试；若仍失败，请打开诊断。"
+    : retryBudgetExhaustedPattern.test(text)
+      ? "有工作项连续失败并已用尽自动重试次数。现有目标与成果已保留；可重试一次，或打开诊断后调整方向。"
+      : /Research is not cross-validated/i.test(text)
+        ? "研究结论缺少至少两个独立来源的交叉验证。请补充可核验来源，并明确哪些结论仍是假设。"
+        : text
   return {
     availability: "known",
-    text,
+    text: readableText,
     sourceRefs: uniqueSourceRefs(sourceRefs),
   }
 }
@@ -373,8 +412,23 @@ function action(id: ExperienceActionType, targetRef: ExperienceSourceRef): Exper
   }
 }
 
-function actionsFor(status: ExperienceUserStatus, targetRef: ExperienceSourceRef) {
-  return ExperienceAllowedActionTypes[status].map((id) => action(id, targetRef))
+function actionsFor(
+  status: ExperienceUserStatus,
+  targetRef: ExperienceSourceRef,
+  ids: readonly ExperienceActionType[] = ExperienceAllowedActionTypes[status].filter(
+    (id) => id !== "retry" || status === "failed",
+  ),
+) {
+  return ids.map((id) =>
+    id === "request_change" && status !== "delivered"
+      ? {
+          id,
+          targetRef,
+          enabled: false as const,
+          disabledReason: "当前处理器只支持对已形成的交付请求修改。",
+        }
+      : action(id, targetRef),
+  )
 }
 
 type AttentionFact = Omit<AttentionItem, "recommendedAction" | "allowedActions">
@@ -385,10 +439,27 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
   const diagnostics = new Map(prepared.diagnostics.map((item) => [item.id, item]))
   const fatalDiagnosticIDs = new Set(prepared.diagnostics.map((item) => item.id))
   const projectRef: ExperienceSourceRef = { kind: "project", id: seed.workId }
-  const workItems = new Map<string, { title: string; status: string; source: ExperienceSourceRef }>()
+  const workItems = new Map<
+    string,
+    { title: string; status: string; source: ExperienceSourceRef; createdAt: number }
+  >()
   const artifactEvents = new Map<string, { kind: string; source: ExperienceSourceRef }>()
   const persistedArtifacts = new Map(seed.persistedArtifacts.map((artifact) => [artifact.id, artifact]))
   const attention = new Map<string, AttentionFact>()
+  seed.persistedAttentions.forEach((item) => {
+    const sourceRefs = [projectRef]
+    attention.set(item.id, {
+      id: item.id,
+      type: item.risk === "critical" ? "failure" : "blocked",
+      workId: seed.workId,
+      title: item.title,
+      reason: knownReason(item.summary, sourceRefs),
+      impact: item.requiredDecision ?? "该项目需要明确处理后才能继续。",
+      priority: item.risk === "critical" ? "critical" : item.risk === "high" ? "high" : "normal",
+      updatedAt: new Date(item.updatedAt).toISOString(),
+      sourceRefs,
+    })
+  })
   const goalBriefFacts = prepared.events
     .filter((event) => event.projectId === seed.workId && event.createdAt >= seed.createdAt)
     .flatMap((event) => {
@@ -403,7 +474,7 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
         left.event.id.localeCompare(right.event.id),
     )
     .at(-1)
-  let updatedAt = Math.max(seed.createdAt, seed.updatedAt)
+  let updatedAt = Math.max(seed.createdAt, seed.updatedAt, ...seed.persistedAttentions.map((item) => item.updatedAt))
   let latestProjectStatus: { status: z.infer<typeof ProjectStatus>; event: ProjectionEvent } | undefined
   let hasExplicitOverride = false
   let state:
@@ -641,9 +712,15 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
         state = undefined
         return
       }
-      const status =
-        parsed.data === "awaiting_approval" ? "needs_approval" : parsed.data === "rejected" ? "revision" : "blocked"
       const reasonText = stringValue(event.data, "reason", 8_000)
+      const status =
+        parsed.data === "awaiting_approval"
+          ? "needs_approval"
+          : parsed.data === "rejected"
+            ? "revision"
+            : reasonText && retryBudgetExhaustedPattern.test(reasonText)
+              ? "failed"
+              : "blocked"
       const sourceRefs = uniqueSourceRefs([projectRef, sourceRef(event)])
       markState(
         status,
@@ -679,6 +756,16 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
     }
 
     if (event.type === "charter.saved") {
+      if (seed.definition.kind === "goal_brief") {
+        if (
+          !stringArrayValue(event.data, "scope") ||
+          !event.data.policy ||
+          typeof event.data.policy !== "object" ||
+          Array.isArray(event.data.policy)
+        )
+          addDiagnostic("missing_fact", "Charter 事件缺少有效的范围或策略事实。", event, event)
+        return
+      }
       if (seed.definition.kind !== "legacy_charter") {
         addDiagnostic("missing_fact", "Charter 事件没有对应的有效数据库兼容视图。", event, event)
         return
@@ -726,7 +813,7 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
         addDiagnostic("missing_fact", "Work Item 创建事件缺少 ID 或标题。", event, event)
         return
       }
-      workItems.set(id, { title, status: "pending", source: sourceRef(event) })
+      workItems.set(id, { title, status: "pending", source: sourceRef(event), createdAt: event.createdAt })
       return
     }
 
@@ -799,6 +886,9 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
           addDiagnostic("missing_fact", "Work Item 返工事件缺少 Worker ID。", event, event)
           return
         }
+        const reviewerID = stringValue(event.data, "reviewer_id")
+        attention.delete(`work-item:${workerID}`)
+        if (reviewerID) attention.delete(`work-item:${reviewerID}`)
         markKnown("revision", "返工事件确认成果正在按审查结果修改。", event)
         hasExplicitOverride = true
         return
@@ -1064,6 +1154,9 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
     ...(seed.persistedArtifacts.length > MAX_PROJECTION_ITEMS
       ? [{ owner: "persisted_artifacts", count: seed.persistedArtifacts.length }]
       : []),
+    ...(seed.persistedAttentions.length > MAX_PROJECTION_ITEMS
+      ? [{ owner: "persisted_attentions", count: seed.persistedAttentions.length }]
+      : []),
     ...(attention.size > MAX_PROJECTION_ITEMS ? [{ owner: "attention_items", count: attention.size }] : []),
     ...(delivery && delivery.artifacts.length > MAX_PROJECTION_ITEMS
       ? [{ owner: "delivery_artifacts", count: delivery.artifacts.length }]
@@ -1105,14 +1198,33 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
     })
 
   if (!state) throw new Error("Work projection state invariant failed")
-
-  const currentItems = [...workItems.values()].filter((item) => item.status !== "superseded")
+  const directionBoundary =
+    prepared.events.findLast((event) => event.type === "project.direction_adjusted")?.createdAt ?? seed.createdAt
+  const currentItems = [...workItems.values()].filter(
+    (item) => item.createdAt >= directionBoundary && item.status !== "superseded",
+  )
   const totalItems = currentItems.length
   const completedItems = currentItems.filter((item) => item.status === "completed").length
-  const allowedActions = actionsFor(state.userStatus, state.targetRef)
+  const lifecycleEvent = prepared.events.findLast((event) =>
+    event.type === "project.archived" || event.type === "project.restored")
+  const archived = lifecycleEvent?.type === "project.archived"
+  const projectedStatus: ExperienceUserStatus = archived ? "archived" : state.userStatus
+  const projectedSourceRefs = archived && lifecycleEvent
+    ? uniqueSourceRefs([...state.sourceRefs, sourceRef(lifecycleEvent)])
+    : state.sourceRefs
+  const projectedReason = archived
+    ? knownReason("工作已归档，成果与执行记录仍保留；可随时恢复到当前工作。", projectedSourceRefs)
+    : state.reason
+  const allowedActions = actionsFor(projectedStatus, state.targetRef)
   const nextAction = allowedActions.find((item) => item.enabled) ?? null
   const nextMilestone = [...workItems.entries()]
-    .filter(([, item]) => item.status !== "completed" && item.status !== "superseded" && item.status !== "cancelled")
+    .filter(
+      ([, item]) =>
+        item.createdAt >= directionBoundary &&
+        item.status !== "completed" &&
+        item.status !== "superseded" &&
+        item.status !== "cancelled",
+    )
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, item]) => ({ id, title: item.title, completed: false }))
     .at(0)
@@ -1129,9 +1241,10 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
     )
   const deliverySummary =
     delivery &&
-    ((state.userStatus === "delivered" && delivery.acceptanceState === "pending") ||
-      (state.userStatus === "accepted" && delivery.acceptanceState === "accepted") ||
-      (state.userStatus === "revision" && delivery.acceptanceState === "revision_requested"))
+    ((projectedStatus === "delivered" && delivery.acceptanceState === "pending") ||
+      (projectedStatus === "accepted" && delivery.acceptanceState === "accepted") ||
+      (projectedStatus === "archived" && delivery.acceptanceState === "accepted") ||
+      (projectedStatus === "revision" && delivery.acceptanceState === "revision_requested"))
       ? {
           id: delivery.id,
           workId: seed.workId,
@@ -1153,28 +1266,28 @@ export function project(seedInput: unknown, rawEvents: readonly unknown[]): Work
     summary: {
       workId: seed.workId,
       title: seed.title,
-      userStatus: state.userStatus,
-      phase: phaseByStatus[state.userStatus],
+      userStatus: projectedStatus,
+      phase: phaseByStatus[projectedStatus],
       owner: seed.ownerAgentId ? { id: seed.ownerAgentId } : undefined,
       nextMilestone,
-      needsUserAction: ExperienceNeedsUserAction[state.userStatus],
-      reason: state.reason,
+      needsUserAction: ExperienceNeedsUserAction[projectedStatus],
+      reason: projectedReason,
       nextAction,
       updatedAt: finalUpdatedAt,
-      sourceRefs: state.sourceRefs,
+      sourceRefs: projectedSourceRefs,
       allowedActions,
     },
     progress: {
       workId: seed.workId,
-      userStatus: state.userStatus,
-      phase: phaseByStatus[state.userStatus],
+      userStatus: projectedStatus,
+      phase: phaseByStatus[projectedStatus],
       completedItems,
       totalItems,
       ...(totalItems ? { percent: Math.round((completedItems / totalItems) * 100) } : {}),
-      reason: state.reason,
+      reason: projectedReason,
       nextAction,
       updatedAt: finalUpdatedAt,
-      sourceRefs: state.sourceRefs,
+      sourceRefs: projectedSourceRefs,
       allowedActions,
     },
     attentionItems: materializedAttention,
@@ -1285,6 +1398,28 @@ export function rebuild(projectID: string): WorkProjectionValue | undefined {
       .limit(MAX_PROJECTION_ITEMS + 1)
       .all(),
   )
+  const attentions = Database.use((db) =>
+    db
+      .select({
+        id: CompanyAttentionTable.id,
+        title: CompanyAttentionTable.title,
+        summary: CompanyAttentionTable.summary,
+        required_decision: CompanyAttentionTable.required_decision,
+        risk: CompanyAttentionTable.risk,
+        updated_at: CompanyAttentionTable.updated_at,
+      })
+      .from(CompanyAttentionTable)
+      .where(
+        and(
+          eq(CompanyAttentionTable.project_id, projectID),
+          eq(CompanyAttentionTable.status, "open"),
+          eq(CompanyAttentionTable.material, true),
+        ),
+      )
+      .orderBy(asc(CompanyAttentionTable.created_at), asc(CompanyAttentionTable.id))
+      .limit(MAX_PROJECTION_ITEMS + 1)
+      .all(),
+  )
   const events = rawEvents(projectID)
   const projection = (() => {
     try {
@@ -1323,6 +1458,14 @@ export function rebuild(projectID: string): WorkProjectionValue | undefined {
               path: artifact.path,
               content: artifact.content,
             }),
+          })),
+          persistedAttentions: attentions.map((attention) => ({
+            id: attention.id,
+            title: attention.title.slice(0, 240),
+            summary: attention.summary,
+            requiredDecision: attention.required_decision ?? undefined,
+            risk: attention.risk,
+            updatedAt: attention.updated_at,
           })),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
@@ -1373,17 +1516,46 @@ export function rebuild(projectID: string): WorkProjectionValue | undefined {
   return projection
 }
 
-export function list() {
+function archivedProjectIDs() {
+  return Database.use((db) => {
+    const states = new Map<string, boolean>()
+    db
+      .select({
+        id: CompanyProjectEventTable.id,
+        project_id: CompanyProjectEventTable.project_id,
+        type: CompanyProjectEventTable.type,
+        created_at: CompanyProjectEventTable.created_at,
+      })
+      .from(CompanyProjectEventTable)
+      .where(inArray(CompanyProjectEventTable.type, ["project.archived", "project.restored"]))
+      .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+      .all()
+      .forEach((row) => states.set(row.project_id, row.type === "project.archived"))
+    return new Set([...states].flatMap(([projectID, archived]) => archived ? [projectID] : []))
+  })
+}
+
+function listByArchiveState(includeArchived: boolean) {
+  const archived = archivedProjectIDs()
   return WorkProjectionList.parse({
     items: Database.use((db) =>
       db
         .select({ id: CompanyProjectTable.id })
         .from(CompanyProjectTable)
         .orderBy(desc(CompanyProjectTable.updated_at))
-        .all(),
+        .all()
+        .filter((row) => archived.has(row.id) === includeArchived),
     ).flatMap((row) => {
       const projection = rebuild(row.id)
       return projection ? [projection] : []
     }),
   })
+}
+
+export function list() {
+  return listByArchiveState(false)
+}
+
+export function listArchived() {
+  return listByArchiveState(true)
 }

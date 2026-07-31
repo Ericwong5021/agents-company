@@ -33,6 +33,7 @@ export interface VerifyInput {
   submission: unknown
   /** Optional org layer for rigor calibration */
   orgLayer?: string
+  researchMode?: "evidence" | "hypothesis_synthesis"
 }
 
 export type VerifyFn = (input: VerifyInput) => Effect.Effect<VerifyResult>
@@ -189,7 +190,7 @@ const researchVerify: VerifyFn = (input) =>
     const sub = input.submission as ResearchSubmission
     const findings: string[] = []
 
-    if (!sub.sources || sub.sources.length === 0) {
+    if (input.researchMode !== "hypothesis_synthesis" && (!sub.sources || sub.sources.length === 0)) {
       findings.push("Research has no cited sources — include at least one verifiable source")
     }
 
@@ -197,7 +198,7 @@ const researchVerify: VerifyFn = (input) =>
       findings.push("Research has no findings — document concrete discoveries")
     }
 
-    if (!sub.crossValidated) {
+    if (input.researchMode !== "hypothesis_synthesis" && !sub.crossValidated) {
       findings.push(
         "Research is not cross-validated — verify key claims against at least two independent sources",
       )
@@ -261,7 +262,7 @@ const writingVerify: VerifyFn = (input) =>
     }
 
     // Check for readability (basic: average sentence length)
-    const sentences = sub.content.split(/[.!?]+/).filter((s: string) => s.trim().length > 0)
+    const sentences = sub.content.split(/[.!?。！？]+/).filter((s: string) => s.trim().length > 0)
     if (sentences.length > 3) {
       const avgWords = sentences.reduce((sum: number, s: string) => sum + s.trim().split(/\s+/).length, 0) / sentences.length
       if (avgWords > 30) {

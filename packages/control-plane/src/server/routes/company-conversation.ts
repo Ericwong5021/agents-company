@@ -448,6 +448,19 @@ export const CompanyThreadRoutes = lazy(() =>
                 evidenceRefs: [{ kind: "conversation", id: threadID }],
               },
             })
+            yield* conversation.recordProjectUpdate({
+              companyID: company_id,
+              projectScopeID: started.project.id,
+              requestID: `project-start:${input.request_id}`,
+              author: { kind: "agent", id: input.charter.dri_agent_id },
+              body: [
+                `项目已启动：${input.charter.title}`,
+                `目标：${rootNeed.body}`,
+                `当前负责人：${input.charter.dri_agent_id}`,
+                `验收标准：${input.charter.acceptance_criteria.join("；")}`,
+              ].join("\n"),
+              signalType: "plan",
+            })
             return {
               kind: "decide" as const,
               ...started,

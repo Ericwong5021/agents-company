@@ -6,6 +6,10 @@ import {
   controlPlaneSDK,
   requestControlPlaneSDK,
 } from "../utils/control-plane-client"
+import {
+  projectMessageSummary,
+  safeProjectMessageBody,
+} from "../../shared/execution-diagnostics"
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -66,7 +70,12 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectMe
           : message.author.kind === "system"
             ? "系统"
             : message.author.id,
-      body: message.body,
+      ...(() => {
+        if (message.author.kind === "user") return { body: message.body }
+        const detail = safeProjectMessageBody(message.body)
+        const body = projectMessageSummary(detail)
+        return body === detail ? { body } : { body, detail }
+      })(),
       createdAt: message.time.created,
       signalType: typeof message.signalType === "string" ? message.signalType : undefined,
       sourceThreadID: typeof message.sourceThreadID === "string" ? message.sourceThreadID : undefined,

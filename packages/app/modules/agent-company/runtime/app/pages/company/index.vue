@@ -5,11 +5,11 @@ import { useCompanySnapshot } from "../../composables/useCompanySnapshot"
 const { data: snapshot, pending, refresh } = useCompanySnapshot()
 const companyAvailable = computed(() => ["ready", "degraded"].includes(snapshot.value.connection))
 const connectionLabel = computed(() => {
-  if (snapshot.value.connection === "ready") return "Control Plane 已连接"
+  if (snapshot.value.connection === "ready") return "本地运行服务已连接"
   if (snapshot.value.connection === "degraded") return "部分数据不可用"
   if (snapshot.value.connection === "recovering") return "正在重新连接"
   if (snapshot.value.connection === "connecting") return "正在连接"
-  return "Control Plane 未连接"
+  return "本地运行服务未连接"
 })
 </script>
 

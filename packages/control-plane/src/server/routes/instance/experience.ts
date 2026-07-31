@@ -26,7 +26,12 @@ import {
   type ExperienceWorkActionRequest as ExperienceWorkActionRequestValue,
 } from "@agents-company/shared/experience"
 import { GoalBriefModelAdapter, GoalBriefStore } from "@/goal-brief"
-import { CompanyProjectExecution } from "@/company-project"
+import { goalBriefCharter, goalProjectTitle } from "@/goal-brief/project-charter"
+import { Company } from "@/company"
+import { CompanyID } from "@/company/schema"
+import { CompanyProject, CompanyProjectExecution } from "@/company-project"
+import { Conversation } from "@/conversation"
+import { LOCAL_USER_ID } from "@/conversation/conversation.sql"
 import * as ExperienceProjectionService from "@/company-project/experience-projection"
 import * as WorkProjectionService from "@/company-project/work-projection"
 import * as ExperienceArtifactService from "@/company-project/experience-artifact"
@@ -37,6 +42,7 @@ import { runRequest } from "./trace"
 
 const ID = z.object({ briefID: z.string().trim().min(1) }).strict()
 const ProjectID = z.object({ projectID: z.string().trim().min(1) }).strict()
+const RequestID = z.object({ requestID: z.string().trim().min(1) }).strict()
 const ReceiptID = z
   .object({
     projectID: z.string().trim().min(1),
@@ -53,6 +59,40 @@ const ArtifactID = z
 function missing(message: string) {
   return ExperienceApiError.parse({ code: "not_found", message })
 }
+
+const ensureGoalBriefProjectChannel = Effect.fn("ExperienceRoutes.goalBrief.ensureProjectChannel")(function* (
+  projectID: string,
+) {
+  const companyState = yield* (yield* Company.Service).current()
+  if (companyState.state !== "ready") throw new Error("Company is not ready")
+  const project = yield* (yield* CompanyProject.Service).get(projectID)
+  if (!project) throw new Error("Company project not found")
+  const conversation = yield* Conversation.Service
+  yield* conversation.ensureProjectChannel({
+    companyID: CompanyID.parse(companyState.company.id),
+    projectScopeID: project.id,
+    title: project.title,
+    members: [
+      { kind: "user", id: LOCAL_USER_ID },
+      ...(project.owner_agent_id ? [{ kind: "agent" as const, id: project.owner_agent_id }] : []),
+    ],
+  })
+  yield* conversation.recordProjectUpdate({
+    companyID: CompanyID.parse(companyState.company.id),
+    projectScopeID: project.id,
+    requestID: `goal-brief-project-start:${project.id}`,
+    author: project.owner_agent_id
+      ? { kind: "agent", id: project.owner_agent_id }
+      : { kind: "system", id: "control-plane" },
+    body: [
+      `项目已启动：${project.title}`,
+      `目标：${project.goal}`,
+      `负责人：${project.owner_agent_id ?? "待分配"}`,
+    ].join("\n"),
+    signalType: "plan",
+  })
+  return { companyState, project }
+})
 
 function projectActionRequest(project_id: string, input: ExperienceWorkActionRequestValue) {
   const base = {
@@ -91,6 +131,28 @@ function projectActionRequest(project_id: string, input: ExperienceWorkActionReq
         approval_gate_id: "approvalGateId" in input ? input.approvalGateId : undefined,
         decision: "decision" in input ? input.decision : undefined,
       },
+    }
+  if (input.action === "accept_delivery")
+    return {
+      ...base,
+      payload: {
+        delivery_id: input.deliveryId,
+        accepted_criterion_ids: input.acceptedCriterionIds,
+        note: input.note,
+      },
+    }
+  if (input.action === "request_change")
+    return {
+      ...base,
+      payload: {
+        delivery_id: input.deliveryId,
+        reason: input.reason,
+      },
+    }
+  if (input.action === "archive" || input.action === "restore")
+    return {
+      ...base,
+      payload: {},
     }
   return {
     ...base,
@@ -214,6 +276,33 @@ export function createExperienceRoutes(
       },
     )
     .get(
+      "/goal-brief/request/:requestID",
+      describeRoute({
+        summary: "Read the completed Goal Brief for a generation request",
+        operationId: "experience.goalBrief.request",
+        responses: {
+          200: {
+            description: "Generated Goal Brief version",
+            content: { "application/json": { schema: resolver(GoalBrief) } },
+          },
+          404: {
+            description: "Completed Goal Brief not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", RequestID),
+      async (c) => {
+        const result = await runRequest(
+          "ExperienceRoutes.goalBrief.request",
+          c,
+          Effect.sync(() => GoalBriefStore.getByGenerationRequest(c.req.valid("param").requestID)),
+        )
+        if (!result) return c.json(missing("Completed Goal Brief not found"), 404)
+        return c.json(GoalBrief.parse(result))
+      },
+    )
+    .get(
       "/goal-brief/:briefID/versions",
       describeRoute({
         summary: "List Goal Brief versions",
@@ -311,34 +400,53 @@ export function createExperienceRoutes(
             }),
             409,
           )
-        if (reservation.status === "completed")
+        if (reservation.status === "completed") {
+          await runRequest(
+            "ExperienceRoutes.goalBrief.start.replay",
+            c,
+            ensureGoalBriefProjectChannel(reservation.result.projectId),
+          )
           return c.json(GoalBriefStartResult.parse(reservation.result))
+        }
         const outcome = await runRequest(
           "ExperienceRoutes.goalBrief.start",
           c,
           Effect.exit(
-            CompanyProjectExecution.Service.use((execution) =>
-              execution.start({
-                goal: reservation.brief.goal,
-                title: reservation.brief.deliverables[0]?.title,
-                decision_request_id: input.requestId,
-              }),
-            ),
+            Effect.gen(function* () {
+              const companyState = yield* (yield* Company.Service).current()
+              if (companyState.state !== "ready") throw new Error("Company is not ready")
+              const started = yield* CompanyProjectExecution.Service.use((execution) =>
+                execution.start({
+                  company_id: companyState.company.id,
+                  goal: reservation.brief.goal,
+                  title: goalProjectTitle(reservation.brief.goal),
+                  decision_request_id: input.requestId,
+                  provider_id: companyState.company.provider?.provider_id,
+                  model_id: companyState.company.provider?.model_id,
+                  charter: goalBriefCharter(reservation.brief),
+                }),
+              )
+              return started
+            }),
           ),
         )
         if (Exit.isFailure(outcome)) {
           GoalBriefStore.releaseStart(input.requestId, ownerToken)
           throw Cause.squash(outcome.cause)
         }
+        const completed = GoalBriefStore.completeStart(
+          input.requestId,
+          ownerToken,
+          outcome.value.project.id,
+          outcome.value.run_id,
+        )
+        await runRequest(
+          "ExperienceRoutes.goalBrief.start.channel",
+          c,
+          ensureGoalBriefProjectChannel(completed.projectId),
+        )
         return c.json(
-          GoalBriefStartResult.parse(
-            GoalBriefStore.completeStart(
-              input.requestId,
-              ownerToken,
-              outcome.value.project.id,
-              outcome.value.run_id,
-            ),
-          ),
+          GoalBriefStartResult.parse(completed),
         )
       },
     )
@@ -471,6 +579,27 @@ export function createExperienceRoutes(
             "ExperienceRoutes.work.list",
             c,
             Effect.sync(() => WorkProjectionList.parse(WorkProjectionService.list())),
+          ),
+        ),
+    )
+    .get(
+      "/work/archived",
+      describeRoute({
+        summary: "List archived user-facing work projections",
+        operationId: "experience.work.archived",
+        responses: {
+          200: {
+            description: "Archived work projections",
+            content: { "application/json": { schema: resolver(WorkProjectionList) } },
+          },
+        },
+      }),
+      async (c) =>
+        c.json(
+          await runRequest(
+            "ExperienceRoutes.work.archived",
+            c,
+            Effect.sync(() => WorkProjectionList.parse(WorkProjectionService.listArchived())),
           ),
         ),
     )

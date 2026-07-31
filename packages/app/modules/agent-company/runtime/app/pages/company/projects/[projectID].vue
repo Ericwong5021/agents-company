@@ -71,9 +71,9 @@ function agentName(agentID?: string) {
           <div class="company-section__heading">
             <div>
               <p class="company-eyebrow">Approved contract</p>
-              <h2>Project Charter</h2>
+              <h2>项目范围与计划</h2>
             </div>
-            <span class="company-project-badge">DRI · {{ agentName(data.charter.driAgentID) }}</span>
+            <span class="company-project-badge">直接负责人 · {{ agentName(data.charter.driAgentID) }}</span>
           </div>
           <p class="company-project-value">{{ data.charter.value }}</p>
           <div class="company-project-contract">
@@ -100,7 +100,7 @@ function agentName(agentID?: string) {
           <div class="company-section__heading">
             <div>
               <p class="company-eyebrow">Execution</p>
-              <h2>Work Items</h2>
+              <h2>工作项</h2>
             </div>
             <span class="company-project-badge">{{ data.workItems.length }} items</span>
           </div>
@@ -127,7 +127,7 @@ function agentName(agentID?: string) {
               </dl>
               <p v-if="item.error" class="company-work-item__error">{{ item.error }}</p>
             </article>
-            <p v-if="!data.workItems.length" class="company-empty">Work Items are being prepared.</p>
+            <p v-if="!data.workItems.length" class="company-empty">正在准备工作项。</p>
           </div>
         </section>
 
@@ -152,7 +152,7 @@ function agentName(agentID?: string) {
           <div class="company-section__heading">
             <div>
               <p class="company-eyebrow">Evidence</p>
-              <h2>Artifacts and gates</h2>
+              <h2>成果与关口</h2>
             </div>
           </div>
           <div class="company-evidence-list">

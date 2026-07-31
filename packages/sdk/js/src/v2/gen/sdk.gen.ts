@@ -225,8 +225,13 @@ import type {
   ExperienceGoalBriefHistoryResponses,
   ExperienceGoalBriefProjectErrors,
   ExperienceGoalBriefProjectResponses,
+  ExperienceGoalBriefRequestErrors,
+  ExperienceGoalBriefRequestResponses,
+  ExperienceGoalBriefStartErrors,
+  ExperienceGoalBriefStartResponses,
   ExperienceWorkActionErrors,
   ExperienceWorkActionResponses,
+  ExperienceWorkArchivedResponses,
   ExperienceWorkGetErrors,
   ExperienceWorkGetResponses,
   ExperienceWorkGraphErrors,
@@ -3063,636 +3068,6 @@ export class FounderOs extends HeyApiClient {
   }
 }
 
-export class GoalBrief extends HeyApiClient {
-  /**
-   * Create a validated Goal Brief
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectId?: string
-      sourceThreadId?: string
-      source: "user_input" | "system_suggestion" | "user_confirmation"
-      brief: {
-        goal: string
-        deliverables: Array<{
-          id: string
-          title: string
-          description: string
-        }>
-        acceptanceCriteria: Array<{
-          id: string
-          description: string
-          verification: string
-        }>
-        constraints: Array<string>
-        nonGoals: Array<string>
-        assumptions: Array<{
-          id: string
-          description: string
-          confirmed: boolean
-        }>
-        openQuestions: Array<{
-          id: string
-          question: string
-          impact: string
-          blocking: boolean
-          /**
-           * 若用户不回答，系统将采用的默认假设
-           */
-          defaultAssumption: string
-        }>
-        riskLevel: "low" | "medium" | "high" | "critical"
-        recommendedPlan: {
-          summary: string
-          steps: Array<{
-            id: string
-            title: string
-            outcome: string
-          }>
-        }
-        approvalMode: "autonomous" | "balanced" | "strict"
-        sourceRefs: Array<{
-          kind:
-            | "project"
-            | "project_event"
-            | "goal_brief"
-            | "legacy_charter"
-            | "work_item"
-            | "approval_gate"
-            | "artifact"
-            | "delivery"
-            | "conversation"
-            | "goal_request"
-            | "user"
-            | "work_attempt"
-            | "work_receipt"
-            | "graph_mutation"
-            | "project_assignment"
-            | "validation_gate"
-          id: string
-          version?: number
-          eventType?: string
-        }>
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "body", key: "projectId" },
-            { in: "body", key: "sourceThreadId" },
-            { in: "body", key: "source" },
-            { in: "body", key: "brief" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ExperienceGoalBriefCreateResponses, unknown, ThrowOnError>({
-      url: "/experience/goal-brief",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Generate and persist a validated Goal Brief with the configured default model
-   */
-  public generate<ThrowOnError extends boolean = false>(
-    parameters: {
-      requestId: string
-      goal: string
-      context?: string
-      projectId?: string
-      sourceThreadId?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "body", key: "requestId" },
-            { in: "body", key: "goal" },
-            { in: "body", key: "context" },
-            { in: "body", key: "projectId" },
-            { in: "body", key: "sourceThreadId" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperienceGoalBriefGenerateResponses,
-      ExperienceGoalBriefGenerateErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/generate",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Read the Goal Brief or a read-only legacy Charter view for a project
-   */
-  public project<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefProjectResponses,
-      ExperienceGoalBriefProjectErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/project/{projectID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List Goal Brief versions
-   */
-  public history<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "briefID" }] }])
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefHistoryResponses,
-      ExperienceGoalBriefHistoryErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}/versions",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Append a validated Goal Brief version
-   */
-  public append<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-      expectedVersion: number
-      source: "user_input" | "system_suggestion" | "user_confirmation"
-      brief: {
-        goal: string
-        deliverables: Array<{
-          id: string
-          title: string
-          description: string
-        }>
-        acceptanceCriteria: Array<{
-          id: string
-          description: string
-          verification: string
-        }>
-        constraints: Array<string>
-        nonGoals: Array<string>
-        assumptions: Array<{
-          id: string
-          description: string
-          confirmed: boolean
-        }>
-        openQuestions: Array<{
-          id: string
-          question: string
-          impact: string
-          blocking: boolean
-          /**
-           * 若用户不回答，系统将采用的默认假设
-           */
-          defaultAssumption: string
-        }>
-        riskLevel: "low" | "medium" | "high" | "critical"
-        recommendedPlan: {
-          summary: string
-          steps: Array<{
-            id: string
-            title: string
-            outcome: string
-          }>
-        }
-        approvalMode: "autonomous" | "balanced" | "strict"
-        sourceRefs: Array<{
-          kind:
-            | "project"
-            | "project_event"
-            | "goal_brief"
-            | "legacy_charter"
-            | "work_item"
-            | "approval_gate"
-            | "artifact"
-            | "delivery"
-            | "conversation"
-            | "goal_request"
-            | "user"
-            | "work_attempt"
-            | "work_receipt"
-            | "graph_mutation"
-            | "project_assignment"
-            | "validation_gate"
-          id: string
-          version?: number
-          eventType?: string
-        }>
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "briefID" },
-            { in: "body", key: "expectedVersion" },
-            { in: "body", key: "source" },
-            { in: "body", key: "brief" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperienceGoalBriefAppendResponses,
-      ExperienceGoalBriefAppendErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}/versions",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Read the current Goal Brief version
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      briefID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "briefID" }] }])
-    return (options?.client ?? this.client).get<
-      ExperienceGoalBriefGetResponses,
-      ExperienceGoalBriefGetErrors,
-      ThrowOnError
-    >({
-      url: "/experience/goal-brief/{briefID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Artifact extends HeyApiClient {
-  /**
-   * Read a project-bound delivery Artifact without exposing local filesystem paths
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      artifactID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "path", key: "artifactID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceArtifactGetResponses,
-      ExperienceArtifactGetErrors,
-      ThrowOnError
-    >({
-      url: "/experience/projects/{projectID}/artifacts/{artifactID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Work extends HeyApiClient {
-  /**
-   * List stable user-facing work projections
-   */
-  public list<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
-      url: "/experience/work",
-      ...options,
-    })
-  }
-
-  /**
-   * Execute a durable user-facing work action
-   */
-  public action<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      body:
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "adjust_brief"
-            attentionId?: string
-            briefId: string
-            expectedBriefVersion: number
-            expectedPlanVersion: number
-            source: "user_input" | "user_confirmation"
-            brief: {
-              goal: string
-              deliverables: Array<{
-                id: string
-                title: string
-                description: string
-              }>
-              acceptanceCriteria: Array<{
-                id: string
-                description: string
-                verification: string
-              }>
-              constraints: Array<string>
-              nonGoals: Array<string>
-              assumptions: Array<{
-                id: string
-                description: string
-                confirmed: boolean
-              }>
-              openQuestions: Array<{
-                id: string
-                question: string
-                impact: string
-                blocking: boolean
-                /**
-                 * 若用户不回答，系统将采用的默认假设
-                 */
-                defaultAssumption: string
-              }>
-              riskLevel: "low" | "medium" | "high" | "critical"
-              recommendedPlan: {
-                summary: string
-                steps: Array<{
-                  id: string
-                  title: string
-                  outcome: string
-                }>
-              }
-              approvalMode: "autonomous" | "balanced" | "strict"
-              sourceRefs: Array<{
-                kind:
-                  | "project"
-                  | "project_event"
-                  | "goal_brief"
-                  | "legacy_charter"
-                  | "work_item"
-                  | "approval_gate"
-                  | "artifact"
-                  | "delivery"
-                  | "conversation"
-                  | "goal_request"
-                  | "user"
-                  | "work_attempt"
-                  | "work_receipt"
-                  | "graph_mutation"
-                  | "project_assignment"
-                  | "validation_gate"
-                id: string
-                version?: number
-                eventType?: string
-              }>
-            }
-            changeReason: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "pause_work"
-            reason?: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "resume_work"
-            reason?: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "stop_work"
-            reason?: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "retry"
-            workItemIds?: Array<string>
-            reason?: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "resolve_blocker"
-            attentionId: string
-            resolution: string
-          }
-        | {
-            idempotencyKey: string
-            expectedGraphRevision: number
-            action: "resolve_blocker"
-            attentionId?: string
-            approvalGateId: string
-            decision: "approve" | "reject"
-            resolution: string
-          }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { key: "body", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperienceWorkActionResponses,
-      ExperienceWorkActionErrors,
-      ThrowOnError
-    >({
-      url: "/experience/work/{projectID}/actions",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Read the source-traceable project organization projection
-   */
-  public organization<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
-    return (options?.client ?? this.client).get<
-      ExperienceWorkOrganizationResponses,
-      ExperienceWorkOrganizationErrors,
-      ThrowOnError
-    >({
-      url: "/experience/work/{projectID}/organization",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read source-traceable graph change diagnostics without raw mutation operations
-   */
-  public graph<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
-    return (options?.client ?? this.client).get<ExperienceWorkGraphResponses, ExperienceWorkGraphErrors, ThrowOnError>({
-      url: "/experience/work/{projectID}/graph",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read a source-traceable discovery summary for one persisted Work Receipt
-   */
-  public receipt<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      receiptID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "path", key: "receiptID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperienceWorkReceiptResponses,
-      ExperienceWorkReceiptErrors,
-      ThrowOnError
-    >({
-      url: "/experience/work/{projectID}/receipts/{receiptID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read source-traceable validation criteria and evidence summaries
-   */
-  public validation<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
-    return (options?.client ?? this.client).get<
-      ExperienceWorkValidationResponses,
-      ExperienceWorkValidationErrors,
-      ThrowOnError
-    >({
-      url: "/experience/work/{projectID}/validation",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read a stable user-facing work projection
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "projectID" }] }])
-    return (options?.client ?? this.client).get<ExperienceWorkGetResponses, ExperienceWorkGetErrors, ThrowOnError>({
-      url: "/experience/work/{projectID}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Experience extends HeyApiClient {
-  private _goalBrief?: GoalBrief
-  get goalBrief(): GoalBrief {
-    return (this._goalBrief ??= new GoalBrief({ client: this.client }))
-  }
-
-  private _artifact?: Artifact
-  get artifact(): Artifact {
-    return (this._artifact ??= new Artifact({ client: this.client }))
-  }
-
-  private _work?: Work
-  get work(): Work {
-    return (this._work ??= new Work({ client: this.client }))
-  }
-}
-
 export class Auth extends HeyApiClient {
   /**
    * Remove auth credentials
@@ -3853,6 +3228,899 @@ export class App extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+}
+
+export class GoalBrief extends HeyApiClient {
+  /**
+   * Create a validated Goal Brief
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      projectId?: string
+      sourceThreadId?: string
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+          /**
+           * 若用户不回答，系统将采用的默认假设
+           */
+          defaultAssumption: string
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperienceGoalBriefCreateResponses, unknown, ThrowOnError>({
+      url: "/experience/goal-brief",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Generate and persist a validated Goal Brief with the configured default model
+   */
+  public generate<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      requestId: string
+      goal: string
+      context?: string
+      projectId?: string
+      sourceThreadId?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "requestId" },
+            { in: "body", key: "goal" },
+            { in: "body", key: "context" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sourceThreadId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefGenerateResponses,
+      ExperienceGoalBriefGenerateErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/generate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the Goal Brief or a read-only legacy Charter view for a project
+   */
+  public project<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefProjectResponses,
+      ExperienceGoalBriefProjectErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/project/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read the completed Goal Brief for a generation request
+   */
+  public request<ThrowOnError extends boolean = false>(
+    parameters: {
+      requestID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "requestID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefRequestResponses,
+      ExperienceGoalBriefRequestErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/request/{requestID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List Goal Brief versions
+   */
+  public history<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefHistoryResponses,
+      ExperienceGoalBriefHistoryErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append a validated Goal Brief version
+   */
+  public append<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+      expectedVersion: number
+      source: "user_input" | "system_suggestion" | "user_confirmation"
+      brief: {
+        goal: string
+        deliverables: Array<{
+          id: string
+          title: string
+          description: string
+        }>
+        acceptanceCriteria: Array<{
+          id: string
+          description: string
+          verification: string
+        }>
+        constraints: Array<string>
+        nonGoals: Array<string>
+        assumptions: Array<{
+          id: string
+          description: string
+          confirmed: boolean
+        }>
+        openQuestions: Array<{
+          id: string
+          question: string
+          impact: string
+          blocking: boolean
+          /**
+           * 若用户不回答，系统将采用的默认假设
+           */
+          defaultAssumption: string
+        }>
+        riskLevel: "low" | "medium" | "high" | "critical"
+        recommendedPlan: {
+          summary: string
+          steps: Array<{
+            id: string
+            title: string
+            outcome: string
+          }>
+        }
+        approvalMode: "autonomous" | "balanced" | "strict"
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "expectedVersion" },
+            { in: "body", key: "source" },
+            { in: "body", key: "brief" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefAppendResponses,
+      ExperienceGoalBriefAppendErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/versions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Start a Project from the current Goal Brief version
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+      requestId?: string
+      expectedVersion?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "requestId" },
+            { in: "body", key: "expectedVersion" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceGoalBriefStartResponses,
+      ExperienceGoalBriefStartErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the current Goal Brief version
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      briefID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "briefID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceGoalBriefGetResponses,
+      ExperienceGoalBriefGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/goal-brief/{briefID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Artifact extends HeyApiClient {
+  /**
+   * Read a project-bound delivery Artifact without exposing local filesystem paths
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      artifactID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "artifactID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceArtifactGetResponses,
+      ExperienceArtifactGetErrors,
+      ThrowOnError
+    >({
+      url: "/experience/projects/{projectID}/artifacts/{artifactID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Work extends HeyApiClient {
+  /**
+   * List stable user-facing work projections
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkListResponses, unknown, ThrowOnError>({
+      url: "/experience/work",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List archived user-facing work projections
+   */
+  public archived<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkArchivedResponses, unknown, ThrowOnError>({
+      url: "/experience/work/archived",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Execute a durable user-facing work action
+   */
+  public action<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+      body:
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "adjust_brief"
+            attentionId?: string
+            briefId: string
+            expectedBriefVersion: number
+            expectedPlanVersion: number
+            source: "user_input" | "user_confirmation"
+            brief: {
+              goal: string
+              deliverables: Array<{
+                id: string
+                title: string
+                description: string
+              }>
+              acceptanceCriteria: Array<{
+                id: string
+                description: string
+                verification: string
+              }>
+              constraints: Array<string>
+              nonGoals: Array<string>
+              assumptions: Array<{
+                id: string
+                description: string
+                confirmed: boolean
+              }>
+              openQuestions: Array<{
+                id: string
+                question: string
+                impact: string
+                blocking: boolean
+                /**
+                 * 若用户不回答，系统将采用的默认假设
+                 */
+                defaultAssumption: string
+              }>
+              riskLevel: "low" | "medium" | "high" | "critical"
+              recommendedPlan: {
+                summary: string
+                steps: Array<{
+                  id: string
+                  title: string
+                  outcome: string
+                }>
+              }
+              approvalMode: "autonomous" | "balanced" | "strict"
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+            }
+            changeReason: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "pause_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resume_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "stop_work"
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "retry"
+            workItemIds?: Array<string>
+            reason?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resolve_blocker"
+            attentionId: string
+            resolution: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "resolve_blocker"
+            attentionId?: string
+            approvalGateId: string
+            decision: "approve" | "reject"
+            resolution: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "accept_delivery"
+            deliveryId: string
+            acceptedCriterionIds: Array<string>
+            note?: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "request_change"
+            deliveryId: string
+            reason: string
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "archive"
+          }
+        | {
+            idempotencyKey: string
+            expectedGraphRevision: number
+            action: "restore"
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperienceWorkActionResponses,
+      ExperienceWorkActionErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/actions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read the source-traceable project organization projection
+   */
+  public organization<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceWorkOrganizationResponses,
+      ExperienceWorkOrganizationErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/organization",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read source-traceable graph change diagnostics without raw mutation operations
+   */
+  public graph<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkGraphResponses, ExperienceWorkGraphErrors, ThrowOnError>({
+      url: "/experience/work/{projectID}/graph",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read a source-traceable discovery summary for one persisted Work Receipt
+   */
+  public receipt<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      receiptID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "path", key: "receiptID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceWorkReceiptResponses,
+      ExperienceWorkReceiptErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/receipts/{receiptID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read source-traceable validation criteria and evidence summaries
+   */
+  public validation<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceWorkValidationResponses,
+      ExperienceWorkValidationErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/validation",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read a stable user-facing work projection
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperienceWorkGetResponses, ExperienceWorkGetErrors, ThrowOnError>({
+      url: "/experience/work/{projectID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Experience extends HeyApiClient {
+  private _goalBrief?: GoalBrief
+  get goalBrief(): GoalBrief {
+    return (this._goalBrief ??= new GoalBrief({ client: this.client }))
+  }
+
+  private _artifact?: Artifact
+  get artifact(): Artifact {
+    return (this._artifact ??= new Artifact({ client: this.client }))
+  }
+
+  private _work?: Work
+  get work(): Work {
+    return (this._work ??= new Work({ client: this.client }))
   }
 }
 
@@ -11403,11 +11671,6 @@ export class ControlPlaneClient extends HeyApiClient {
     return (this._founderOs ??= new FounderOs({ client: this.client }))
   }
 
-  private _experience?: Experience
-  get experience(): Experience {
-    return (this._experience ??= new Experience({ client: this.client }))
-  }
-
   private _auth?: Auth
   get auth(): Auth {
     return (this._auth ??= new Auth({ client: this.client }))
@@ -11416,6 +11679,11 @@ export class ControlPlaneClient extends HeyApiClient {
   private _app?: App
   get app(): App {
     return (this._app ??= new App({ client: this.client }))
+  }
+
+  private _experience?: Experience
+  get experience(): Experience {
+    return (this._experience ??= new Experience({ client: this.client }))
   }
 
   private _experimental?: Experimental

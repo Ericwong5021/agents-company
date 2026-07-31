@@ -350,10 +350,10 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanySnapshot>
     : providerRequired
       ? issue({
           kind: "provider_required",
-          title: "还未连接模型 Provider",
+          title: "还未连接模型服务",
           detail: "Control Plane 与公司数据已就绪，但团队暂时不能开始新目标。",
-          impact: "可以查看真实历史数据，新的 Agent 执行会保持停用。",
-          nextAction: "在设置中连接 Provider 并选择模型。",
+          impact: "可以查看真实历史数据，新的团队执行会保持停用。",
+          nextAction: "在设置中连接模型服务并选择模型。",
           retryable: false,
           unavailable: [],
           checkedAt,
