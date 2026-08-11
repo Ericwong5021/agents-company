@@ -20,6 +20,7 @@ import {
   parseGoalBriefFailure,
   type GoalBriefFailureView,
 } from "../../../modules/agent-company/runtime/shared/goal-brief-state";
+import { resolveStartDecision } from "../../../modules/agent-company/runtime/shared/goal-brief-clarification";
 import {
   chooseDemo,
   chooseReal,
@@ -33,6 +34,7 @@ import {
   aggregateAttention,
   categorySummaries,
   countByType,
+  type AggregatedAttentionItem,
 } from "../../../modules/agent-company/runtime/shared/inbox-attention";
 
 const goalDraftStorageKey = "agent-company:inbox-goal-draft:v1";
@@ -42,7 +44,8 @@ const goalBriefRecoveryWindowMs = 180_000;
 const goalBriefRecoveryPollMs = 2_000;
 const appConfig = useAppConfig();
 const route = useRoute();
-const { data: snapshot, pending, refresh } = useCompanySnapshot();
+const { data: snapshot, pending, refresh, streamStatus } = useCompanySnapshot();
+const telemetry = useProductTelemetry();
 const goalDraft = useState("agent-company-inbox-goal-draft", () => "");
 const generationRequestID = useState("agent-company-inbox-goal-request-id", () => "");
 const generationRequestGoal = useState("agent-company-inbox-goal-request-goal", () => "");
@@ -67,29 +70,16 @@ const onboardingHydrated = ref(false);
 const available = computed(() => ["ready", "degraded"].includes(snapshot.value.connection));
 const workUnavailable = computed(() => snapshot.value.issue?.unavailable.includes("work") ?? false);
 const unavailableWork = computed(() => snapshot.value.work.filter(work => work.availability === "unavailable"));
-const primaryWorkID = computed(() => {
-  const item = snapshot.value.work[0];
-  if (!item) return "";
-  return item.availability === "available" ? item.summary.workId : item.workId;
-});
 const allAttentionItems = computed(() => aggregateAttention(snapshot.value.work));
-const attentionItems = computed(() =>
-  allAttentionItems.value.filter(item => item.workId === primaryWorkID.value));
-const historicalAttentionItems = computed(() =>
-  allAttentionItems.value.filter(item => item.workId !== primaryWorkID.value));
-const currentUnavailableWork = computed(() =>
-  unavailableWork.value.filter(work => work.workId === primaryWorkID.value));
-const historicalUnavailableWork = computed(() =>
-  unavailableWork.value.filter(work => work.workId !== primaryWorkID.value));
+const attentionItems = computed(() => allAttentionItems.value);
+const currentUnavailableWork = computed(() => unavailableWork.value);
 const attentionCategories = computed(() => categorySummaries(countByType(attentionItems.value)));
 const totalUnhandled = computed(() => attentionItems.value.length + currentUnavailableWork.value.length);
-const historicalUnhandled = computed(() =>
-  historicalAttentionItems.value.length + historicalUnavailableWork.value.length);
-const historicalUnhandledWorkCount = computed(() =>
-  new Set([
-    ...historicalAttentionItems.value.map(item => item.workId),
-    ...historicalUnavailableWork.value.map(work => work.workId),
-  ]).size);
+const attentionHistoryKey = "agent-company:attention-history:v1";
+const observedAttentionKey = "agent-company:observed-attention:v1";
+const handledAttention = ref<{ item: AggregatedAttentionItem; resolvedAt: string }[]>([]);
+const observedAttention = ref<Record<string, AggregatedAttentionItem>>({});
+const attentionHistoryHydrated = ref(false);
 const hasLocalDraft = computed(() => Boolean(goalDraft.value.trim()));
 const firstRun = computed(() =>
   available.value
@@ -122,10 +112,61 @@ const dateTime = new Intl.DateTimeFormat("zh-CN", {
   minute: "2-digit",
 });
 
+function storedJSON(value: string | null): unknown {
+  if (!value) return;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return;
+  }
+}
+
+onMounted(() => {
+  const history = storedJSON(localStorage.getItem(attentionHistoryKey));
+  const observed = storedJSON(localStorage.getItem(observedAttentionKey));
+  handledAttention.value = Array.isArray(history) ? history.slice(0, 100) : [];
+  observedAttention.value = typeof observed === "object" && observed !== null && !Array.isArray(observed)
+    ? observed as Record<string, AggregatedAttentionItem>
+    : {};
+  attentionHistoryHydrated.value = true;
+});
+
+watch(
+  [allAttentionItems, pending, available, workUnavailable],
+  ([items, loading, ready, unavailable]) => {
+    if (!attentionHistoryHydrated.value || loading || !ready || unavailable) return;
+    const current = Object.fromEntries(items.map(item => [item.id, item]));
+    const resolved = Object.values(observedAttention.value).filter(item => !current[item.id]);
+    const reopened = new Set(items.map(item => item.id));
+    handledAttention.value = [
+      ...resolved.map(item => ({ item, resolvedAt: new Date().toISOString() })),
+      ...handledAttention.value.filter(record => !reopened.has(record.item.id) && !resolved.some(item => item.id === record.item.id)),
+    ].slice(0, 100);
+    observedAttention.value = current;
+    localStorage.setItem(attentionHistoryKey, JSON.stringify(handledAttention.value));
+    localStorage.setItem(observedAttentionKey, JSON.stringify(current));
+  },
+  { deep: true },
+);
+
 function localizedReason(value: string) {
   return value
     .replace(/Delivery v(\d+)/g, "交付版本 $1")
     .replace(/\bArtifacts?\b/g, "成果");
+}
+
+function attentionHref(item: AggregatedAttentionItem) {
+  const panel = item.type === "approval"
+    ? "approval"
+    : item.type === "delivery"
+      ? "artifact"
+      : item.type === "input"
+        ? "thread"
+        : "diagnostics";
+  return {
+    path: `/work/${encodeURIComponent(item.workId)}`,
+    query: { panel, attention: item.id },
+  };
 }
 const decisionCenter = ref<DecisionCenterProjection>();
 const decisionCenterPending = ref(false);
@@ -495,6 +536,16 @@ function persistGoalDraft() {
   }
 }
 
+async function useGeneratedBrief(brief: GoalBrief) {
+  generatedBrief.value = brief;
+  telemetry.record("brief_ready", {
+    dedupeKey: `${brief.id}:${brief.version}`,
+    scenario: "goal_to_start",
+    props: { riskLevel: brief.riskLevel, approvalMode: brief.approvalMode },
+  });
+  if (resolveStartDecision(brief).start) await startGoalBrief(brief);
+}
+
 async function recoverGeneratedGoalBrief(requestID: string, requestGoal: string) {
   if (!requestID || !requestGoal || requestGoal !== goalDraft.value.trim() || generatedBrief.value) return;
   const deadline = generationRequestStartedAt.value > 0
@@ -522,9 +573,9 @@ async function recoverGeneratedGoalBrief(requestID: string, requestGoal: string)
     if (result.ok) {
       const response = parseGoalBriefGenerationResponse(result.response.status, result.response._data);
       if (response?.kind === "success" && !response.brief.projectId && !response.brief.sourceThreadId) {
-        generatedBrief.value = response.brief;
         clearGenerationRecoveryWindow();
         recoveringGeneratedBrief.value = false;
+        await useGeneratedBrief(response.brief);
         return;
       }
       if (response?.kind === "structured_failure") {
@@ -614,8 +665,8 @@ async function generateGoalBrief() {
     return;
   }
   if (response.kind === "success") {
-    generatedBrief.value = response.brief;
     clearGenerationRecoveryWindow();
+    await useGeneratedBrief(response.brief);
     return;
   }
   if (response.kind === "structured_failure") {
@@ -663,6 +714,16 @@ async function startGoalBrief(brief: GoalBrief) {
   if (result.response.status === 200) {
     const response = GoalBriefStartResult.safeParse(result.response._data);
     if (response.success) {
+      telemetry.record("goal_created", {
+        dedupeKey: response.data.projectId,
+        scenario: "goal_to_start",
+        props: { approvalMode: brief.approvalMode, riskLevel: brief.riskLevel },
+      });
+      telemetry.record("execution_started", {
+        dedupeKey: response.data.projectId,
+        scenario: "goal_to_start",
+        props: { approvalMode: brief.approvalMode },
+      });
       localStorage.removeItem(goalDraftStorageKey);
       localStorage.removeItem(goalGenerationStartedAtStorageKey);
       await refresh();
@@ -711,6 +772,11 @@ async function startGoalBrief(brief: GoalBrief) {
             />
           </div>
         </header>
+
+        <div v-if="streamStatus === 'degraded'" class="ac-stream-degraded" role="status">
+          <span>实时更新已降级；待处理列表可能需要手动校准。</span>
+          <button type="button" @click="refreshInbox">手动刷新</button>
+        </div>
 
         <section
           v-if="available && decisionCenter"
@@ -1059,7 +1125,7 @@ async function startGoalBrief(brief: GoalBrief) {
           <NuxtLink
             v-for="work in currentUnavailableWork"
             :key="work.workId"
-            :to="`/work/${encodeURIComponent(work.workId)}`"
+            :to="{ path: `/work/${encodeURIComponent(work.workId)}`, query: { panel: 'diagnostics' } }"
             class="ac-attention-card"
             data-priority="critical"
           >
@@ -1081,7 +1147,7 @@ async function startGoalBrief(brief: GoalBrief) {
           <NuxtLink
             v-for="item in attentionItems"
             :key="item.id"
-            :to="`/work/${encodeURIComponent(item.workId)}`"
+            :to="attentionHref(item)"
             class="ac-attention-card"
             :data-priority="item.priority"
           >
@@ -1107,48 +1173,20 @@ async function startGoalBrief(brief: GoalBrief) {
           </NuxtLink>
         </section>
 
-        <details
-          v-if="available && historicalUnhandled"
-          class="ac-detail-panel"
-        >
-          <summary>
-            历史待办事项（{{ historicalUnhandled }} 项，来自 {{ historicalUnhandledWorkCount }} 项工作）
-          </summary>
-          <div class="ac-card-list">
-            <NuxtLink
-              v-for="work in historicalUnavailableWork"
-              :key="work.workId"
-              :to="`/work/${encodeURIComponent(work.workId)}`"
-              class="ac-attention-card"
-              data-priority="critical"
-            >
-              <div class="ac-card-heading">
-                <div>
-                  <p class="ac-card-kicker">历史状态诊断</p>
-                  <h2>{{ work.title }}</h2>
-                </div>
-                <span class="ac-status-badge" data-status="unavailable">状态不可用</span>
-              </div>
-              <p class="ac-card-reason">{{ localizedReason(work.reason.text) }}</p>
-            </NuxtLink>
-            <NuxtLink
-              v-for="item in historicalAttentionItems"
-              :key="item.id"
-              :to="`/work/${encodeURIComponent(item.workId)}`"
-              class="ac-attention-card"
-              :data-priority="item.priority"
-            >
-              <div class="ac-card-heading">
-                <div>
-                  <p class="ac-card-kicker">历史工作 · {{ item.workTitle }}</p>
-                  <h2>{{ item.title }}</h2>
-                </div>
-                <time :datetime="item.updatedAt">{{ dateTime.format(new Date(item.updatedAt)) }}</time>
-              </div>
-              <p class="ac-card-reason">{{ localizedReason(item.reason.text) }}</p>
-              <p class="ac-card-impact">{{ item.impact }}</p>
-            </NuxtLink>
-          </div>
+        <details v-if="handledAttention.length" class="ac-attention-history">
+          <summary>本机最近处理（{{ handledAttention.length }}）</summary>
+          <NuxtLink
+            v-for="record in handledAttention"
+            :key="`${record.item.id}:${record.resolvedAt}`"
+            :to="attentionHref(record.item)"
+            class="ac-attention-history__item"
+          >
+            <span>
+              <strong>{{ record.item.title }}</strong>
+              <small>{{ record.item.workTitle }} · {{ dateTime.format(new Date(record.resolvedAt)) }} 在本机观察为已处理</small>
+            </span>
+            <UIcon name="i-lucide-arrow-right" />
+          </NuxtLink>
         </details>
 
         <OnboardingChoice
@@ -1308,7 +1346,7 @@ async function startGoalBrief(brief: GoalBrief) {
                 :brief="generatedBrief"
                 :readonly="!available"
                 :starting="starting"
-                @updated="generatedBrief = $event"
+                @updated="useGeneratedBrief"
                 @start="startGoalBrief"
               />
               <p v-if="startError" class="ac-goal-generation-state__boundary" role="alert">

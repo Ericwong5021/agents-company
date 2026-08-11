@@ -295,6 +295,12 @@
       "label": "Archive",
       "description": "Remove completed work from active views without deleting its history.",
       "mutatesBusinessState": true
+    },
+    {
+      "id": "restore",
+      "label": "Restore",
+      "description": "Return archived work to active views without changing its retained history.",
+      "mutatesBusinessState": true
     }
   ],
   "states": [
@@ -503,6 +509,22 @@
         {
           "source": "delivery",
           "events": ["delivery.accepted"],
+          "availability": "r0_contract"
+        }
+      ]
+    },
+    {
+      "id": "archived",
+      "label": "Archived",
+      "description": "The work is retained outside active views.",
+      "whyItMatters": "Its history and evidence remain available for restoration.",
+      "needsUserAction": false,
+      "nextStep": "Restore the work when it needs to become active again.",
+      "allowedActions": ["restore"],
+      "eventMappings": [
+        {
+          "source": "work_control",
+          "events": ["work.archived"],
           "availability": "r0_contract"
         }
       ]

@@ -1108,6 +1108,61 @@ describe.serial("ProjectActionExecutor", () => {
     expect(calls.pause).toEqual([project_id])
     expect(calls.resume).toEqual([project_id])
     expect(calls.dispatch).toEqual([project_id])
+
+    const changeAttention = await attention((service) =>
+      service.create({
+        project_id,
+        idempotency_key: "change-attention",
+        issue: {
+          issue_kind: "permission_required",
+          risk: "high",
+          materiality: "permission",
+        },
+        title: "Permission change",
+        summary: "More evidence is required",
+        source_refs: [{ kind: "project", id: project_id }],
+      }),
+    )
+    Database.use((db) =>
+      db
+        .insert(CompanyApprovalGateTable)
+        .values({
+          id: "gate-change-request",
+          project_id,
+          kind: "risk_approval",
+          status: "pending",
+          title: "Permission change",
+          summary: "Review scope",
+          work_item_id,
+          resource_scope_json: "[]",
+          requested_at: Date.now(),
+        })
+        .run(),
+    )
+    expect(
+      await execute({
+        project_id,
+        attention_id: changeAttention.record.id,
+        action: "resolve_blocker",
+        idempotency_key: "request-gate-change",
+        expected_revision: 1,
+        payload: {
+          resolution: "Narrow the resource scope",
+          approval_gate_id: "gate-change-request",
+          decision: "request_change",
+        },
+      }),
+    ).toMatchObject({ action: { status: "applied" } })
+    expect(
+      Database.use((db) =>
+        db.select().from(CompanyAttentionTable).where(eq(CompanyAttentionTable.id, changeAttention.record.id)).get(),
+      ),
+    ).toMatchObject({ status: "open" })
+    expect(
+      Database.use((db) =>
+        db.select().from(CompanyApprovalGateTable).where(eq(CompanyApprovalGateTable.id, "gate-change-request")).get(),
+      ),
+    ).toMatchObject({ status: "pending", decision_note: "Narrow the resource scope" })
   })
 
   test.serial("fails closed on idempotency collisions and stale graph revisions", async () => {

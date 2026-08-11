@@ -11,6 +11,7 @@ import { controlPlaneURL } from "../utils/control-plane-client"
 const Input = z
   .object({
     format: z.enum(["openai", "anthropic"]),
+    provider_id: z.string().trim().min(1).max(100).optional(),
     base_url: z.string().url(),
     api_key: z.string().trim().min(1).max(8_192).optional(),
     headers: z.record(z.string(), z.string()).default({}),

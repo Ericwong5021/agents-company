@@ -81,6 +81,9 @@ const group = computed<WorkGroupId>(() => mode.value === "latest" ? "all" : mode
 const query = ref(typeof route.query.q === "string" ? route.query.q : "");
 const owner = ref<string | null>(typeof route.query.owner === "string" ? route.query.owner : null);
 const filter = computed(() => ({ group: group.value, query: query.value, owner: owner.value }));
+const pageSize = 100;
+const visibleLimit = ref(pageSize);
+const archivedLimit = ref(pageSize);
 
 const matching = computed(() => {
   const byId = new Map(decorated.value.map(row => [row.entry.workId, row.item]));
@@ -89,8 +92,10 @@ const matching = computed(() => {
     return item ? [{ entry, item }] : [];
   });
 });
-const visible = computed(() => mode.value === "latest" ? matching.value.slice(0, 1) : matching.value);
-const archivedVisible = computed(() => {
+const visible = computed(() =>
+  mode.value === "latest" ? matching.value.slice(0, 1) : matching.value.slice(0, visibleLimit.value));
+const hasMore = computed(() => mode.value !== "latest" && visible.value.length < matching.value.length);
+const archivedMatching = computed(() => {
   const byId = new Map(archivedDecorated.value.map(row => [row.entry.workId, row.item]));
   return selectWork(
     archivedDecorated.value.map(row => row.entry),
@@ -100,6 +105,8 @@ const archivedVisible = computed(() => {
     return item ? [{ entry, item }] : [];
   });
 });
+const archivedVisible = computed(() => archivedMatching.value.slice(0, archivedLimit.value));
+const hasMoreArchived = computed(() => archivedVisible.value.length < archivedMatching.value.length);
 
 const hasFilter = computed(() => mode.value !== "latest" || query.value.trim() !== "" || owner.value !== null);
 
@@ -114,6 +121,8 @@ function shortWorkID(value: string) {
 }
 
 watch([mode, query, owner], ([selectedMode, search, selectedOwner]) => {
+  visibleLimit.value = pageSize;
+  archivedLimit.value = pageSize;
   router.replace({
     query: {
       ...(selectedMode !== "latest" ? { group: selectedMode } : {}),
@@ -280,9 +289,17 @@ watch([mode, query, owner], ([selectedMode, search, selectedOwner]) => {
                 </div>
               </template>
             </NuxtLink>
+            <button
+              v-if="hasMore"
+              type="button"
+              class="ac-work-load-more"
+              @click="visibleLimit += pageSize"
+            >
+              加载更多（{{ matching.length - visible.length }}）
+            </button>
           </section>
 
-          <section v-else-if="!archivedVisible.length" key="work-no-results" class="ac-empty-state">
+          <section v-else-if="!archivedMatching.length" key="work-no-results" class="ac-empty-state">
             <div class="ac-empty-state__content">
               <span class="ac-empty-state__icon" aria-hidden="true">
                 <UIcon name="i-lucide-filter-x" />
@@ -294,11 +311,11 @@ watch([mode, query, owner], ([selectedMode, search, selectedOwner]) => {
           </section>
 
           <details
-            v-if="archivedVisible.length"
+            v-if="archivedMatching.length"
             class="ac-detail-panel"
             :open="typeof route.query.archived === 'string' || Boolean(query.trim())"
           >
-            <summary>已归档工作（{{ archivedVisible.length }}）</summary>
+            <summary>已归档工作（{{ archivedMatching.length }}）</summary>
             <div class="ac-card-list">
               <NuxtLink
                 v-for="{ entry, item } in archivedVisible"
@@ -324,6 +341,14 @@ watch([mode, query, owner], ([selectedMode, search, selectedOwner]) => {
                   </span>
                 </div>
               </NuxtLink>
+              <button
+                v-if="hasMoreArchived"
+                type="button"
+                class="ac-work-load-more"
+                @click="archivedLimit += pageSize"
+              >
+                加载更多（{{ archivedMatching.length - archivedVisible.length }}）
+              </button>
             </div>
           </details>
         </template>

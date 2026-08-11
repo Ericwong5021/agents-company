@@ -87,6 +87,11 @@ export default defineNuxtConfig({
     betterAuthUrl: process.env.BETTER_AUTH_URL,
     agentCompanyControlPlaneUrl: process.env.AGENT_COMPANY_CONTROL_PLANE_URL || "http://127.0.0.1:4096",
     agentCompanyControlPlaneAuthorization: process.env.AGENT_COMPANY_CONTROL_PLANE_AUTHORIZATION || "",
-    public: { siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "" },
+    agentCompanyTelemetryUrl: process.env.AGENT_COMPANY_TELEMETRY_URL || "",
+    agentCompanyTelemetryAuthorization: process.env.AGENT_COMPANY_TELEMETRY_AUTHORIZATION || "",
+    public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "",
+      agentCompanyVersion: process.env.AGENT_COMPANY_VERSION || "0.1.2",
+    },
   },
 })

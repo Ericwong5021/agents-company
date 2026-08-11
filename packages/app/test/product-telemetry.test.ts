@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  computeMetricBreakdowns,
   computeMetrics,
   dedupeEvents,
   isForbiddenKey,
@@ -80,6 +81,18 @@ describe("去重与指标口径", () => {
     expect(metrics.deliveryReachRate).toBe(0)
     expect(metrics.interruptionRate).toBe(0)
     expect(productEventTypes.every((type) => metrics.counts[type] === 0)).toBe(true)
+  })
+
+  test("可按版本、场景和批准模式比较同一口径", () => {
+    const events = [
+      event("goal_created", { version: "1.0.0", scenario: "goal", props: { approvalMode: "balanced" } }),
+      event("delivery_viewed", { version: "1.0.0", scenario: "delivery", props: { approvalMode: "balanced" } }),
+      event("goal_created", { version: "2.0.0", scenario: "goal", props: { approvalMode: "strict" } }),
+    ]
+    const breakdowns = computeMetricBreakdowns(events)
+    expect(breakdowns.byVersion.map(item => item.key)).toEqual(["1.0.0", "2.0.0"])
+    expect(breakdowns.byScenario.map(item => item.key)).toEqual(["goal", "delivery"])
+    expect(breakdowns.byApprovalMode.find(item => item.key === "balanced")?.metrics.deliveryReachRate).toBe(1)
   })
 })
 

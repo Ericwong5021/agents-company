@@ -6,7 +6,7 @@ import { CapabilityCatalog } from "@/capability/catalog"
 import { CompanyAgent } from "@/company-agent"
 import { CompanyRecruitment, stableLogicalKey } from "@/company-recruitment"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
-import { CompanyID } from "@/company/schema"
+import { CompanyID, type ApprovalPreset } from "@/company/schema"
 import { Conversation } from "@/conversation"
 import { orchestrationPlan } from "./orchestration"
 import { ConversationThreadID } from "@/conversation/schema"
@@ -82,6 +82,18 @@ const reviewerToolEvent = z
     isError: z.boolean().optional(),
   })
   .passthrough()
+
+function policyForApprovalPreset(preset?: ApprovalPreset): DeliveryPolicy | undefined {
+  if (!preset) return
+  return {
+    source_approval_preset: preset,
+    allow_workspace_write: preset !== "strict",
+    require_high_risk_approval: true,
+    require_human_merge: preset !== "autonomous",
+    require_clean_worktree: true,
+    require_main_branch_verification: true,
+  }
+}
 
 const artifactPromptReference = (project: Project, artifact?: Artifact) =>
   artifact
@@ -1018,6 +1030,19 @@ const riskApprovalCovers = (gate: ApprovalGate, item: WorkItem) =>
   gate.work_item_id === item.id &&
   JSON.stringify(gate.resource_scope) === JSON.stringify(item.resource_scope)
 
+const requiresHighRiskApproval = (item: WorkItem, policy: DeliveryPolicy) =>
+  policy.require_high_risk_approval &&
+  item.risk_level === "high" &&
+  /external write|external action|deploy|publish|release|delete|remove|payment|purchase|upload|外部写入|外部动作|对外|部署|发布|上线|删除|移除|支付|付款|采购|上传/i.test(
+    [
+      item.title,
+      item.description,
+      ...item.decision_scope,
+      ...item.resource_scope,
+      ...item.acceptance_criteria,
+    ].join("\n"),
+  )
+
 const boardBiddingEvidenceRule = (item: WorkItem) =>
   /bidding|董事会/i.test(`${item.source_task_key ?? ""} ${item.title} ${item.description}`)
     ? "产品语义：Bidding 是已有 Group Session/Thread 内选择下一位发言者的机制，不是筛选 Thread 成员。董事会 Thread 可以包含全部固定董事；验收应检查实际产生高信号消息的 winner、选择或 pass 理由，以及全员 pass/预算结束，而不能把候选成员存在误判成其已经发言。"
@@ -1323,6 +1348,7 @@ export interface Interface {
     charter?: BoardProjectCharter
     execution_strategy?: ProjectExecutionStrategyValue
     seed_policy?: SeedPolicyFactsValue
+    approval_preset?: ApprovalPreset
   }) => Effect.Effect<{ project: Project; run_id: string }>
   readonly startFromCharter: (input: {
     company_id: string
@@ -2659,8 +2685,10 @@ const serviceLayer = Layer.effect(
       const gates = yield* projects.listGates(project.id)
       const gated = ready.filter(
         (item) =>
-          item.work_type === "coding" &&
-          charter.policy.source_approval_preset === "strict" &&
+          (
+            (item.work_type === "coding" && charter.policy.source_approval_preset === "strict")
+            || requiresHighRiskApproval(item, charter.policy)
+          ) &&
           !gates.some((gate) => riskApprovalCovers(gate, item)),
       )
       const dispatchable = ready.filter((item) => !gated.some((candidate) => candidate.id === item.id))
@@ -2755,8 +2783,12 @@ const serviceLayer = Layer.effect(
           projects.requestGate({
             project_id: project.id,
             kind: "risk_approval",
-            title: `批准 ${item.purpose === "first_slice" ? "First Slice" : "Worker"} 写入项目工作区`,
-            summary: `仅允许 WorkItem ${item.id} 在资源范围 ${item.resource_scope.join("、")} 内写入并运行验证。`,
+            title: item.risk_level === "high"
+              ? `批准高风险 WorkItem ${item.id}`
+              : `批准 ${item.purpose === "first_slice" ? "First Slice" : "Worker"} 写入项目工作区`,
+            summary: item.risk_level === "high"
+              ? `该动作风险等级为高；批准范围仅限 ${item.resource_scope.join("、")}。`
+              : `仅允许 WorkItem ${item.id} 在资源范围 ${item.resource_scope.join("、")} 内写入并运行验证。`,
             requested_by_agent_id: project.owner_agent_id,
             work_item_id: item.id,
             resource_scope: item.resource_scope,
@@ -3060,8 +3092,10 @@ const serviceLayer = Layer.effect(
       const gated = ready.filter(
         (item) =>
           item.kind === "worker" &&
-          item.work_type === "coding" &&
-          charter.policy.source_approval_preset === "strict" &&
+          (
+            (item.work_type === "coding" && charter.policy.source_approval_preset === "strict")
+            || requiresHighRiskApproval(item, charter.policy)
+          ) &&
           !gates.some((gate) => riskApprovalCovers(gate, item)),
       )
       if (gated.length) {
@@ -3080,8 +3114,12 @@ const serviceLayer = Layer.effect(
             projects.requestGate({
               project_id: project.id,
               kind: "risk_approval",
-              title: `批准 Agent 写入 WorkItem ${item.id}`,
-              summary: `仅允许该 WorkItem 在资源范围 ${item.resource_scope.join("、")} 内写入和运行验证命令。`,
+              title: item.risk_level === "high"
+                ? `批准高风险 WorkItem ${item.id}`
+                : `批准 Agent 写入 WorkItem ${item.id}`,
+              summary: item.risk_level === "high"
+                ? `该动作风险等级为高；批准范围仅限 ${item.resource_scope.join("、")}。`
+                : `仅允许该 WorkItem 在资源范围 ${item.resource_scope.join("、")} 内写入和运行验证命令。`,
               requested_by_agent_id: project.owner_agent_id,
               work_item_id: item.id,
               resource_scope: item.resource_scope,
@@ -3583,6 +3621,7 @@ const serviceLayer = Layer.effect(
       item: WorkItem
       runID: string
       approvedCharter?: BoardProjectCharter
+      approvalPreset?: ApprovalPreset
     }) {
       const result = yield* outcome(input.runID)
       const generatedCharter = input.approvedCharter
@@ -3634,6 +3673,7 @@ const serviceLayer = Layer.effect(
         milestones: parsed.milestones,
         open_decisions: parsed.open_decisions,
         acceptance_criteria: parsed.acceptance_criteria,
+        policy: policyForApprovalPreset(input.approvalPreset),
       })
       const tasks = normalizeStableCopyDependencies(
         savedProjection?.tasks
@@ -3896,10 +3936,12 @@ const serviceLayer = Layer.effect(
       project: Project,
       item: WorkItem,
       charter: BoardProjectCharter,
+      approvalPreset?: ApprovalPreset,
     ) => Effect.Effect<string> = Effect.fn("CompanyProjectExecution.launchApprovedCharter")(function* (
       project: Project,
       item: WorkItem,
       charter: BoardProjectCharter,
+      approvalPreset?: ApprovalPreset,
     ) {
       const runID = yield* startRuntime({
         project,
@@ -3914,13 +3956,14 @@ const serviceLayer = Layer.effect(
           item: { ...item, attempt: item.attempt + 1 },
           runID,
           approvedCharter: charter,
+          approvalPreset,
         }).pipe(
           Effect.catchCause((cause) =>
             Effect.gen(function* () {
               yield* failure(item, String(cause))
               const current = (yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)
               if (current?.status === "pending") {
-                yield* launchApprovedCharter(project, current, charter)
+                yield* launchApprovedCharter(project, current, charter, approvalPreset)
                 return
               }
               yield* blockProject(project.id, String(cause))
@@ -4216,6 +4259,7 @@ const serviceLayer = Layer.effect(
       charter?: BoardProjectCharter
       execution_strategy?: ProjectExecutionStrategyValue
       seed_policy?: SeedPolicyFactsValue
+      approval_preset?: ApprovalPreset
     }) {
       const charterInput = input.charter ? BoardProjectCharter.parse(input.charter) : undefined
       const existing = input.decision_request_id
@@ -4233,7 +4277,7 @@ const serviceLayer = Layer.effect(
             existing.execution_strategy === "seed_and_grow"
               ? yield* startSeedWave(existing.id)
               : charterInput
-                ? yield* launchApprovedCharter(existing, planner, charterInput)
+                ? yield* launchApprovedCharter(existing, planner, charterInput, input.approval_preset)
                 : yield* launchPlanner(existing, planner)
           if (!run_id) throw new Error(`Seed project ${existing.id} has no dispatchable AgentRun`)
           return { project: existing, run_id }
@@ -4284,6 +4328,7 @@ const serviceLayer = Layer.effect(
             milestones: charterInput.milestones,
             open_decisions: charterInput.open_decisions,
             success_criteria: charterInput.deliverables,
+            policy: policyForApprovalPreset(input.approval_preset),
           })
         const team = yield* startSeedProject({
           project,
@@ -4365,7 +4410,7 @@ const serviceLayer = Layer.effect(
       return {
         project: planning,
         run_id: charterInput
-          ? yield* launchApprovedCharter(planning, planner, charterInput)
+          ? yield* launchApprovedCharter(planning, planner, charterInput, input.approval_preset)
           : yield* launchPlanner(planning, planner),
       }
     })

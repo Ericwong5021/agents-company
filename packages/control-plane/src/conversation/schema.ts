@@ -67,6 +67,36 @@ export const ConversationMention = z
   .meta({ ref: "ConversationMention" })
 export type ConversationMention = z.infer<typeof ConversationMention>
 
+export const ConversationResource = z
+  .discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("url"),
+      url: z.string().url().max(4_000),
+      label: z.string().trim().min(1).max(200).optional(),
+    }).strict(),
+    z.object({
+      kind: z.literal("path"),
+      path: z.string().trim().min(1).max(2_000),
+      resource_type: z.enum(["file", "directory", "unknown"]),
+      access: z.literal("read_only"),
+      label: z.string().trim().min(1).max(200).optional(),
+    }).strict(),
+    z.object({
+      kind: z.literal("text_attachment"),
+      name: z.string().trim().min(1).max(255),
+      media_type: z.string().trim().min(1).max(200),
+      byte_length: z.number().int().nonnegative().max(200_000),
+      content: z.string().max(200_000),
+    }).strict(),
+  ])
+  .superRefine((resource, context) => {
+    if (resource.kind !== "text_attachment") return
+    if (new TextEncoder().encode(resource.content).byteLength === resource.byte_length) return
+    context.addIssue({ code: "custom", path: ["byte_length"], message: "Attachment byte length does not match content" })
+  })
+  .meta({ ref: "ConversationResource" })
+export type ConversationResource = z.infer<typeof ConversationResource>
+
 export const RootNeedStatus = z.enum(["open", "in_progress", "resolved", "cancelled"]).meta({ ref: "RootNeedStatus" })
 export type RootNeedStatus = z.infer<typeof RootNeedStatus>
 

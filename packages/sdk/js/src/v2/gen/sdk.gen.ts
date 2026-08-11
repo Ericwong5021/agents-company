@@ -3893,7 +3893,7 @@ export class Work extends HeyApiClient {
             action: "resolve_blocker"
             attentionId?: string
             approvalGateId: string
-            decision: "approve" | "reject"
+            decision: "approve" | "reject" | "request_change"
             resolution: string
           }
         | {

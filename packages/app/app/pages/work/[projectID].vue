@@ -40,7 +40,8 @@ import { safeExecutionSummary } from "../../../modules/agent-company/runtime/sha
 
 const route = useRoute()
 const appConfig = useAppConfig()
-const { data: snapshot, pending, refresh, signalVersion } = useCompanySnapshot()
+const { data: snapshot, pending, refresh, signalVersion, streamStatus } = useCompanySnapshot()
+const telemetry = useProductTelemetry()
 const workID = computed(() =>
   Array.isArray(route.params.projectID) ? route.params.projectID[0] : route.params.projectID,
 )
@@ -140,8 +141,6 @@ const seedProject = computed(() => detail.value?.project.executionStrategy === "
 const seedGrowPending = computed(() => seedGrowStatus.value === "pending")
 const coordinatedRefreshPendingProject = ref<string>()
 const coordinatedRefreshDirty = ref<Record<string, boolean>>({})
-const runtimeRefreshPending = ref(false)
-const runtimeRefreshTimer = ref<ReturnType<typeof setInterval>>()
 
 function clearCoordinatedRefreshDirty(projectID: string) {
   const next = { ...coordinatedRefreshDirty.value }
@@ -170,14 +169,6 @@ async function refreshProjectExperience(projectID = workID.value) {
   if (!nextProjectID || !coordinatedRefreshDirty.value[nextProjectID]) return
   clearCoordinatedRefreshDirty(nextProjectID)
   await refreshProjectExperience(nextProjectID)
-}
-
-function refreshRuntimeExperience() {
-  if (runtimeRefreshPending.value) return
-  runtimeRefreshPending.value = true
-  void Promise.all([refresh(), refreshDetail()]).finally(() => {
-    runtimeRefreshPending.value = false
-  })
 }
 
 async function refreshRestoredProject() {
@@ -209,6 +200,26 @@ const deliveryArtifacts = computed(() =>
 )
 const currentDeliveryVersion = computed(() =>
   work.value?.availability === "available" ? work.value.delivery?.version : undefined,
+)
+watch(
+  [
+    () => work.value?.availability === "available" ? work.value.delivery : undefined,
+    goalBrief,
+    goalBriefStatus,
+  ],
+  ([delivery]) => {
+    if (!delivery || goalBriefStatus.value === "pending") return
+    telemetry.record("delivery_viewed", {
+      dedupeKey: `${delivery.id}:${delivery.version}`,
+      scenario: "delivery",
+      props: {
+        version: delivery.version,
+        artifactCount: delivery.artifacts.length,
+        approvalMode: goalBrief.value?.kind === "goal_brief" ? goalBrief.value.brief.approvalMode : "legacy",
+      },
+    })
+  },
+  { immediate: true },
 )
 const workspaceHeadline = computed(() => {
   if (work.value?.availability !== "available") return ""
@@ -507,44 +518,25 @@ const activePanel = ref<ContextPanelKind>()
 const hydrated = ref(false)
 const selectedArtifactID = ref<string>()
 const selectedAgentID = ref<string>()
+const mainColumn = ref<HTMLElement>()
+const contextColumn = ref<HTMLElement>()
+const mainScrollTop = ref(0)
+const panelScrollTop = ref<Partial<Record<ContextPanelKind, number>>>({})
 const renderedActivePanel = computed(() => hydrated.value ? activePanel.value : panels.value[0])
 
 onMounted(() => {
   hydrated.value = true
   if (route.query.restored === "1") void refreshRestoredProject()
-  runtimeRefreshTimer.value = setInterval(() => {
-    if (
-      work.value?.availability === "available"
-      && ["running", "reviewing", "revision"].includes(work.value.summary.userStatus)
-    )
-      refreshRuntimeExperience()
-  }, 5_000)
 })
 
-onBeforeUnmount(() => {
-  if (runtimeRefreshTimer.value) clearInterval(runtimeRefreshTimer.value)
-})
-
-watch(
-  [workID, panels, detail],
-  () => {
-    const id = workID.value
-    if (!id) return
-    const reconciled = reconcileViewState(viewStateFor(viewStore.value, id), panels.value, {
-      artifacts: detail.value?.artifacts ?? [],
-      agents: detail.value?.recruitment.candidates ?? [],
-    })
-    column.value = reconciled.column
-    activePanel.value = reconciled.activePanel
-    selectedArtifactID.value = reconciled.selectedArtifactID
-    selectedAgentID.value = reconciled.selectedAgentID
-  },
-  { immediate: true },
-)
-
-function persist() {
-  const id = workID.value
+function persistFor(id?: string) {
   if (!id) return
+  mainScrollTop.value = mainColumn.value?.scrollTop ?? mainScrollTop.value
+  if (activePanel.value)
+    panelScrollTop.value = {
+      ...panelScrollTop.value,
+      [activePanel.value]: contextColumn.value?.scrollTop ?? panelScrollTop.value[activePanel.value] ?? 0,
+    }
   viewStore.value = {
     ...viewStore.value,
     [id]: {
@@ -552,14 +544,83 @@ function persist() {
       activePanel: activePanel.value,
       selectedArtifactID: selectedArtifactID.value,
       selectedAgentID: selectedAgentID.value,
+      mainScrollTop: mainScrollTop.value,
+      panelScrollTop: panelScrollTop.value,
     },
   }
 }
 
-function selectPanel(kind: ContextPanelKind) {
+function persist() {
+  persistFor(workID.value)
+}
+
+async function restoreScroll() {
+  await nextTick()
+  if (mainColumn.value) mainColumn.value.scrollTop = mainScrollTop.value
+  if (contextColumn.value && activePanel.value)
+    contextColumn.value.scrollTop = panelScrollTop.value[activePanel.value] ?? 0
+}
+
+watch(
+  workID,
+  async (id, previousID) => {
+    if (previousID && previousID !== id) persistFor(previousID)
+    if (!id) return
+    const preferred = typeof route.query.panel === "string"
+      ? route.query.panel as ContextPanelKind
+      : viewStateFor(viewStore.value, id).activePanel
+    const reconciled = reconcileViewState(
+      { ...viewStateFor(viewStore.value, id), activePanel: preferred },
+      panels.value,
+      {
+        artifacts: detail.value?.artifacts ?? [],
+        agents: detail.value?.recruitment.candidates ?? [],
+      },
+    )
+    column.value = typeof route.query.panel === "string" ? "context" : reconciled.column
+    activePanel.value = reconciled.activePanel
+    selectedArtifactID.value = reconciled.selectedArtifactID
+    selectedAgentID.value = reconciled.selectedAgentID
+    mainScrollTop.value = reconciled.mainScrollTop ?? 0
+    panelScrollTop.value = reconciled.panelScrollTop ?? {}
+    await restoreScroll()
+  },
+  { immediate: true },
+)
+
+watch([panels, detail, () => route.query.panel], () => {
+  const id = workID.value
+  if (!id) return
+  const queryPanel = typeof route.query.panel === "string" && panels.value.includes(route.query.panel as ContextPanelKind)
+    ? route.query.panel as ContextPanelKind
+    : undefined
+  const reconciled = reconcileViewState(
+    {
+      column: column.value,
+      activePanel: queryPanel ?? activePanel.value,
+      selectedArtifactID: selectedArtifactID.value,
+      selectedAgentID: selectedAgentID.value,
+      mainScrollTop: mainScrollTop.value,
+      panelScrollTop: panelScrollTop.value,
+    },
+    panels.value,
+    {
+      artifacts: detail.value?.artifacts ?? [],
+      agents: detail.value?.recruitment.candidates ?? [],
+    },
+  )
+  if (queryPanel) column.value = "context"
+  activePanel.value = reconciled.activePanel
+  selectedArtifactID.value = reconciled.selectedArtifactID
+  selectedAgentID.value = reconciled.selectedAgentID
+})
+
+async function selectPanel(kind: ContextPanelKind) {
+  persistFor(workID.value)
   activePanel.value = resolveActivePanel(kind, panels.value)
   column.value = "context"
-  persist()
+  await restoreScroll()
+  persistFor(workID.value)
 }
 
 function selectArtifact(id: string) {
@@ -606,15 +667,43 @@ const nextActionID = computed(() =>
     : undefined,
 )
 
-// DELIV-04 — 审批决策动作：从投影 allowedActions 中筛出批准/拒绝/请求修改，按真实 enabled/disabledReason 展示。
-// R0 治理契约未解除时这些变更类动作恒为禁用；说明文本由用户填写但在动作可用前不提交。
 const decisionActionIDs = new Set(["approve", "reject", "request_change"])
 const decisionActions = computed(() => controlActions.value.filter((action) => decisionActionIDs.has(action.id)))
-const decisionNote = ref("")
+const gateDecisionNotes = ref<Record<string, string>>({})
+
+function gateAttention(gate: CompanyProjectDetail["gates"][number]) {
+  if (work.value?.availability !== "available") return
+  return work.value.attentionItems.find(item =>
+    item.type === "approval" && item.sourceRefs.some(reference => reference.id === gate.id),
+  ) ?? work.value.attentionItems.find(item => item.type === "approval")
+}
+
+function gateWorkItemTitle(gate: CompanyProjectDetail["gates"][number]) {
+  return detail.value?.workItems.find(item => item.id === gate.workItemID)?.title
+}
+
+function gatePriorityLabel(gate: CompanyProjectDetail["gates"][number]) {
+  return ({ normal: "常规", high: "高", critical: "关键" } as const)[gateAttention(gate)?.priority ?? "normal"]
+}
+
+function sourceTypeLabel(kind: string) {
+  return ({
+    project: "工作",
+    project_event: "工作事件",
+    work_item: "工作项",
+    approval_gate: "审批",
+    artifact: "成果",
+    work_attempt: "执行尝试",
+    work_receipt: "执行回执",
+    validation_gate: "验证",
+    agent_run: "Agent 运行",
+  } as Record<string, string>)[kind] ?? "运行事实"
+}
 
 const actionPending = ref<string>()
 const actionNote = ref("")
 const actionError = ref("")
+const actionFeedback = ref("")
 const revisionImpactPreview = computed(() => {
   const reason = actionNote.value.trim()
   const activePlanVersion = detail.value?.project.activePlanVersion
@@ -686,6 +775,13 @@ function canInvokeFromUI(action: ControlAction) {
   return true
 }
 
+function canInvokeGateDecision(action: ControlAction, gate: CompanyProjectDetail["gates"][number]) {
+  if (!canInvoke(action) || gate.status !== "pending") return false
+  if (action.id === "reject" || action.id === "request_change")
+    return Boolean(gateDecisionNotes.value[gate.id]?.trim())
+  return true
+}
+
 function actionTitle(action: ControlAction) {
   if (action.disabledReason) return action.disabledReason
   if (action.id === "accept_delivery" && !allAcceptanceCriteriaChecked.value) return "请先逐项核对全部验收标准。"
@@ -716,9 +812,27 @@ function actionIntentKey(action: ControlAction, attentionID?: string) {
 function actionPayload(
   action: ControlAction,
   attention?: AttentionItem,
+  gate?: CompanyProjectDetail["gates"][number],
 ): { key: string; body: ExperienceWorkActionRequest } | undefined {
   const graphRevision = detail.value?.project.graphRevision
   if (graphRevision === undefined) return
+  if (gate && decisionActionIDs.has(action.id)) {
+    const note = gateDecisionNotes.value[gate.id]?.trim()
+    if ((action.id === "reject" || action.id === "request_change") && !note) return
+    const key = actionIntentKey(action, gate.id)
+    return {
+      key,
+      body:
+        pendingActionIntents.value[key] ?? {
+          idempotencyKey: crypto.randomUUID(),
+          expectedGraphRevision: graphRevision,
+          action: "resolve_blocker",
+          approvalGateId: gate.id,
+          decision: action.id === "approve" ? "approve" : action.id === "reject" ? "reject" : "request_change",
+          resolution: note || `批准「${gate.title}」`,
+        },
+    }
+  }
   if (action.id === "resolve_blocker") {
     const target =
       attention ??
@@ -884,14 +998,22 @@ function actionPayload(
     }
 }
 
-async function invokeAction(action: ControlAction, attention?: AttentionItem) {
+async function invokeAction(
+  action: ControlAction,
+  attention?: AttentionItem,
+  gate?: CompanyProjectDetail["gates"][number],
+) {
   if (!canInvoke(action)) return
   if (action.id === "accept_delivery" && !allAcceptanceCriteriaChecked.value) {
     actionError.value = "请先逐项核对全部验收标准，再验收交付。"
     return
   }
-  if (action.id === "request_change" && !actionNote.value.trim()) {
+  if (!gate && action.id === "request_change" && !actionNote.value.trim()) {
     actionError.value = "请先填写需要修改的具体内容。"
+    return
+  }
+  if (gate && !canInvokeGateDecision(action, gate)) {
+    actionError.value = "拒绝或请求修改前，请先填写理由。"
     return
   }
   if (action.handler === "navigate_progress" || action.handler === "open_delivery") {
@@ -915,7 +1037,7 @@ async function invokeAction(action: ControlAction, attention?: AttentionItem) {
     actionError.value = "新目标与当前目标相同，不会生成新的目标摘要与计划版本。"
     return
   }
-  const intent = actionPayload(action, attention)
+  const intent = actionPayload(action, attention, gate)
   if (!intent) {
     actionError.value =
       action.id === "resolve_blocker" || action.id === "adjust_brief"
@@ -926,6 +1048,7 @@ async function invokeAction(action: ControlAction, attention?: AttentionItem) {
   pendingActionIntents.value = { ...pendingActionIntents.value, [intent.key]: intent.body }
   actionPending.value = action.id
   actionError.value = ""
+  actionFeedback.value = ""
   const outcome = await $fetch<ExperienceWorkActionResult>(
     `/api/agent-company/projects/${encodeURIComponent(workID.value ?? "")}/actions`,
     {
@@ -941,7 +1064,33 @@ async function invokeAction(action: ControlAction, attention?: AttentionItem) {
     delete next[intent.key]
     pendingActionIntents.value = next
     if (outcome.value.status === "applied") {
+      if (action.id === "accept_delivery") telemetry.record("accepted", {
+        dedupeKey: work.value?.availability === "available" ? work.value.delivery?.id : undefined,
+        scenario: "delivery",
+        props: {
+          criterionCount: acceptedCriterionIDs.value.length,
+          approvalMode: goalBrief.value?.kind === "goal_brief" ? goalBrief.value.brief.approvalMode : "legacy",
+        },
+      })
+      if (action.id === "request_change") telemetry.record("revision_requested", {
+        dedupeKey: gate?.id ?? (work.value?.availability === "available" ? work.value.delivery?.id : undefined),
+        scenario: gate ? "approval_gate" : "delivery",
+        props: {
+          source: gate ? "gate" : "delivery",
+          approvalMode: goalBrief.value?.kind === "goal_brief" ? goalBrief.value.brief.approvalMode : "legacy",
+        },
+      })
       if (action.id !== "pause_work") actionNote.value = ""
+      if (gate) {
+        const nextNotes = { ...gateDecisionNotes.value }
+        delete nextNotes[gate.id]
+        gateDecisionNotes.value = nextNotes
+      }
+      actionFeedback.value = outcome.value.replayed
+        ? "已读取此前提交的同一决策结果，没有重复执行。"
+        : action.id === "request_change" && gate
+          ? "修改请求已记录，审批保持未决，等待更新后再次判断。"
+          : `${action.label}已生效。`
       if (action.id === "archive") {
         await Promise.all([refresh(), refreshArchivedWork()])
         actionPending.value = undefined
@@ -1216,7 +1365,7 @@ function artifactRoute(projectID: string, artifactID: string) {
         </aside>
 
         <!-- 中栏：高信号目标、进展、需处理、交付 -->
-        <section class="ac-work3__col ac-work3__main" aria-label="高信号工作流">
+        <section ref="mainColumn" class="ac-work3__col ac-work3__main" aria-label="高信号工作流">
           <div class="ac-work3__mobile-bar">
             <button type="button" class="ac-work3__mobile-btn" @click="goColumn('prev')">
               <UIcon name="i-lucide-panel-left" /> 列表
@@ -1224,6 +1373,11 @@ function artifactRoute(projectID: string, artifactID: string) {
             <button v-if="panels.length" type="button" class="ac-work3__mobile-btn" @click="goColumn('next')">
               上下文 <UIcon name="i-lucide-panel-right" />
             </button>
+          </div>
+
+          <div v-if="streamStatus === 'degraded'" class="ac-stream-degraded" role="status">
+            <span>实时更新已降级；当前状态不会静默冒充最新。</span>
+            <button type="button" @click="refreshProjectExperience()">手动刷新</button>
           </div>
 
           <CompanyConnectionState
@@ -1649,7 +1803,7 @@ function artifactRoute(projectID: string, artifactID: string) {
         </section>
 
         <!-- 右栏：上下文面板 -->
-        <aside class="ac-work3__col ac-work3__context" aria-label="上下文面板">
+        <aside ref="contextColumn" class="ac-work3__col ac-work3__context" aria-label="上下文面板">
           <div v-if="panels.length" class="ac-work3__tabs" role="tablist">
             <button
               v-for="kind in panels"
@@ -1732,39 +1886,58 @@ function artifactRoute(projectID: string, artifactID: string) {
             <!-- DELIV-04 决策闭环：审批状态可读化 + 按投影如实展示的决策动作 -->
             <template v-else-if="renderedActivePanel === 'approval'">
               <article v-for="approval in detail?.gates ?? []" :key="approval.id" class="ac-inline-item">
-                <h3>{{ approval.title }}</h3>
-                <span class="ac-status-badge" :data-status="approval.status">{{
-                  gateStatusLabel(approval.status)
-                }}</span>
-              </article>
-
-              <div v-if="decisionActions.length" class="ac-approval-decision">
-                <label for="approval-decision-note">决策说明（可选）</label>
-                <textarea
-                  id="approval-decision-note"
-                  v-model="decisionNote"
-                  rows="3"
-                  maxlength="2000"
-                  placeholder="说明批准 / 拒绝 / 请求修改的理由，便于事后追溯。"
-                />
-                <div class="ac-work3__actions" role="group" aria-label="审批决策">
-                  <button
-                    v-for="action in decisionActions"
-                    :key="action.id"
-                    type="button"
-                    class="ac-work3__action"
-                    :disabled="!canInvokeFromUI(action)"
-                    :title="actionTitle(action)"
-                    :aria-disabled="!canInvokeFromUI(action)"
-                    @click="invokeAction(action)"
-                  >
-                    {{ action.label }}
-                  </button>
+                <div class="ac-card-heading">
+                  <div>
+                    <p class="ac-card-kicker">{{ humanLabel(approval.kind) }}</p>
+                    <h3>{{ approval.title }}</h3>
+                  </div>
+                  <span class="ac-status-badge" :data-status="approval.status">{{ gateStatusLabel(approval.status) }}</span>
                 </div>
-                <p class="ac-approval-decision__boundary">
-                  批准 / 拒绝 / 请求修改需在治理契约解除后开放，当前按投影如实显示禁用原因，不伪装可提交。
-                </p>
-              </div>
+                <p>{{ approval.summary || "当前审批没有额外说明。" }}</p>
+                <p v-if="approval.requestedByAgentID">请求方：{{ agentDisplayName(approval.requestedByAgentID) }}</p>
+                <p>风险级别：{{ gatePriorityLabel(approval) }}</p>
+                <p v-if="approval.resourceScope.length">影响范围：{{ approval.resourceScope.join("、") }}</p>
+                <p v-if="gateWorkItemTitle(approval)">关联工作：{{ humanLabel(gateWorkItemTitle(approval) ?? "") }}</p>
+                <p v-if="gateAttention(approval)?.reason.text">请求原因：{{ gateAttention(approval)?.reason.text }}</p>
+                <p v-if="gateAttention(approval)?.impact">若暂不批准：{{ gateAttention(approval)?.impact }}</p>
+                <details v-if="gateAttention(approval)?.sourceRefs.length" class="ac-source-trace">
+                  <summary>查看 {{ gateAttention(approval)?.sourceRefs.length }} 条决策依据</summary>
+                  <ul>
+                    <li v-for="source in gateAttention(approval)?.sourceRefs ?? []" :key="`${source.kind}:${source.id}`">
+                      {{ sourceTypeLabel(source.kind) }}（已记录）
+                    </li>
+                  </ul>
+                </details>
+                <p v-if="approval.decisionNote">最近决定说明：{{ approval.decisionNote }}</p>
+                <time :datetime="new Date(approval.requestedAt).toISOString()">
+                  请求于 {{ dateTime.format(new Date(approval.requestedAt)) }}
+                </time>
+                <template v-if="approval.status === 'pending' && decisionActions.length">
+                  <label :for="`approval-decision-note-${approval.id}`">决策说明</label>
+                  <textarea
+                    :id="`approval-decision-note-${approval.id}`"
+                    v-model="gateDecisionNotes[approval.id]"
+                    rows="3"
+                    maxlength="2000"
+                    placeholder="拒绝或请求修改时必须说明理由；批准时可补充边界。"
+                  />
+                  <div class="ac-work3__actions" role="group" :aria-label="`${approval.title}审批决策`">
+                    <button
+                      v-for="action in decisionActions"
+                      :key="action.id"
+                      type="button"
+                      class="ac-work3__action"
+                      :disabled="!canInvokeGateDecision(action, approval) || Boolean(actionPending)"
+                      :title="action.disabledReason"
+                      @click="invokeAction(action, undefined, approval)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  </div>
+                  <p>批准会恢复符合当前范围的工作；拒绝会阻止该动作；请求修改会保持审批未决并写入可追溯记录。</p>
+                </template>
+              </article>
+              <p v-if="actionFeedback" class="ac-approval-decision__boundary" role="status">{{ actionFeedback }}</p>
             </template>
 
             <!-- Artifact -->

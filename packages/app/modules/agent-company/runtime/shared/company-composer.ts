@@ -6,6 +6,14 @@ import type { CompanyAgent } from "./company-contract"
 
 export type ComposerTarget = { kind: "board" } | { kind: "project"; projectId: string; title: string }
 
+export type ComposerResource =
+  | { kind: "url"; url: string; label?: string }
+  | { kind: "path"; path: string; resource_type: "file" | "directory" | "unknown"; access: "read_only"; label?: string }
+  | { kind: "text_attachment"; name: string; media_type: string; byte_length: number; content: string }
+
+export const MAX_COMPOSER_RESOURCES = 8
+export const MAX_TEXT_ATTACHMENT_BYTES = 200_000
+
 export function composerTargetLabel(target: ComposerTarget): string {
   if (target.kind === "board") return "公司看板"
   return `当前项目 · ${target.title}`
@@ -13,7 +21,7 @@ export function composerTargetLabel(target: ComposerTarget): string {
 
 export function composerIntentHint(target: ComposerTarget): string {
   if (target.kind === "board") return "作为新目标或公司讨论发出，由本地服务按意图分类路由。"
-  return "记录到项目讨论，不会触发团队自动回复或修改已启动计划；需要变更时请使用运行控制。"
+  return "记录到项目讨论，不会创建新项目、触发团队自动回复或修改已启动计划；需要变更时请使用运行控制。"
 }
 
 export const MAX_MENTIONS = 20
@@ -47,6 +55,49 @@ export function shouldRotateRequestID(outcome: "accepted" | "failed"): boolean {
 export function draftStorageKey(target: ComposerTarget): string {
   if (target.kind === "board") return "agent-company-composer:board"
   return `agent-company-composer:project:${target.projectId}`
+}
+
+export function parseComposerDraft(raw: string | null): { body: string; resources: ComposerResource[] } {
+  if (!raw) return { body: "", resources: [] }
+  if (!raw.startsWith("{")) return { body: raw, resources: [] }
+  try {
+    const value = JSON.parse(raw)
+    if (typeof value !== "object" || value === null || typeof value.body !== "string" || !Array.isArray(value.resources))
+      return { body: raw, resources: [] }
+    return { body: value.body, resources: value.resources.slice(0, MAX_COMPOSER_RESOURCES) }
+  } catch {
+    return { body: raw, resources: [] }
+  }
+}
+
+export function serializeComposerDraft(body: string, resources: ComposerResource[]) {
+  return JSON.stringify({ body, resources: resources.slice(0, MAX_COMPOSER_RESOURCES) })
+}
+
+export function resourceLabel(resource: ComposerResource) {
+  if (resource.kind === "url") return resource.label || resource.url
+  if (resource.kind === "path") return resource.label || resource.path
+  return resource.name
+}
+
+export function resourceImpact(resource: ComposerResource) {
+  if (resource.kind === "url") return "执行时可能需要访问外部网络；不会自动授权登录或发布。"
+  if (resource.kind === "path") return "仅提供只读路径线索；不会提升文件权限，也不会自动修改该位置。"
+  return "附件正文会随消息保存在本机并提供给当前任务；不会进入匿名体验数据。"
+}
+
+export function pathResource(value: string, resourceType: "file" | "directory" | "unknown"): ComposerResource | undefined {
+  const path = value.trim()
+  if (!path || path.length > 2_000 || /[\r\n\0]/.test(path)) return
+  return { kind: "path", path, resource_type: resourceType, access: "read_only" }
+}
+
+export function urlResource(value: string): ComposerResource | undefined {
+  const url = value.trim()
+  if (!URL.canParse(url)) return
+  const protocol = new URL(url).protocol
+  if (protocol !== "http:" && protocol !== "https:") return
+  return { kind: "url", url }
 }
 
 // 可发现的文本意图动作：仅做输入辅助前缀，不虚构后端命令。

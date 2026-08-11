@@ -7,6 +7,7 @@ import { AppRuntime } from "@/effect/app-runtime"
 import { Conversation, ConversationRuntime } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
 import { RootNeedTable } from "@/conversation/conversation.sql"
+import { IntentOverride } from "@/conversation/intent"
 import { Company } from "@/company"
 import { RepositoryInstance } from "@/company/repository-instance"
 import { CompanyProjectExecution } from "@/company-project"
@@ -26,6 +27,7 @@ import {
   ChannelNotWritable,
   CompanyNotFound,
   ConversationMention,
+  ConversationResource,
   ConversationThreadID,
   InvalidCursor,
   MentionNotVisible,
@@ -91,6 +93,8 @@ const ChannelSendInput = z
     reply_to: z.string().startsWith("cmsg_").optional(),
     referenced_thread_id: ConversationThreadID.optional(),
     mentions: z.array(ConversationMention).max(20).default([]),
+    resources: z.array(ConversationResource).max(8).default([]),
+    intent_override: IntentOverride.optional(),
   })
   .strict()
   .meta({ ref: "ChannelSendInput" })
@@ -229,6 +233,8 @@ export const CompanyChannelRoutes = lazy(() =>
               replyToID: input.reply_to,
               referencedThreadID: input.referenced_thread_id,
               mentions: input.mentions,
+              resources: input.resources,
+              intentOverride: input.intent_override,
             }),
           ),
         )

@@ -182,8 +182,15 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyProjectDe
     gates: records(raw.gates).map((gate) => ({
       id: text(gate.id),
       title: text(gate.title),
+      summary: text(gate.summary),
       kind: text(gate.kind),
       status: text(gate.status),
+      requestedByAgentID: text(gate.requested_by_agent_id) || undefined,
+      workItemID: text(gate.work_item_id) || undefined,
+      resourceScope: list(gate.resource_scope),
+      decisionNote: text(gate.decision_note) || undefined,
+      requestedAt: number(gate.requested_at),
+      decidedAt: typeof gate.decided_at === "number" ? gate.decided_at : undefined,
     })),
     workAttempts: records(attemptsResult.ok ? attemptsResult.value : raw.work_attempts).map((attempt) => ({
       id: text(attempt.id),

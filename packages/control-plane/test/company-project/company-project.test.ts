@@ -281,7 +281,7 @@ describe("CompanyProject adaptive execution state", () => {
 
         expect(charter.policy).toMatchObject({
           source_approval_preset: "autonomous",
-          require_high_risk_approval: false,
+          require_high_risk_approval: true,
           require_human_merge: false,
         })
       }),

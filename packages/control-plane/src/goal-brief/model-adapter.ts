@@ -474,7 +474,10 @@ const inFlight = new Map<
   }
 >()
 
-function generationPayloadHash(input: ReturnType<typeof GoalBriefGenerateRequest.parse>) {
+function generationPayloadHash(
+  input: ReturnType<typeof GoalBriefGenerateRequest.parse>,
+  approvalMode?: GoalBriefValue["approvalMode"],
+) {
   return createHash("sha256")
     .update(
       JSON.stringify({
@@ -483,6 +486,7 @@ function generationPayloadHash(input: ReturnType<typeof GoalBriefGenerateRequest
         context: input.context ?? null,
         projectId: input.projectId ?? null,
         sourceThreadId: input.sourceThreadId ?? null,
+        approvalMode: approvalMode ?? null,
       }),
     )
     .digest("hex")
@@ -491,9 +495,10 @@ function generationPayloadHash(input: ReturnType<typeof GoalBriefGenerateRequest
 export async function generateAndCreate(
   inputValue: GoalBriefGenerateRequestValue,
   dependencies: GoalBriefGenerationDependencies,
+  approvalMode?: GoalBriefValue["approvalMode"],
 ) {
   const input = GoalBriefGenerateRequest.parse(inputValue)
-  const payloadHash = generationPayloadHash(input)
+  const payloadHash = generationPayloadHash(input, approvalMode)
   const existing = inFlight.get(input.requestId)
   if (existing?.payloadHash !== undefined && existing.payloadHash !== payloadHash)
     throw new GoalBriefRequestConflictError(input.requestId)
@@ -537,7 +542,10 @@ export async function generateAndCreate(
           return resolved.adapterProvider === "anthropic_compatible" ? { input: output } : { output }
         },
       })
-      const brief = applyExternalActionBoundary(generatedBrief)
+      const boundedBrief = applyExternalActionBoundary(generatedBrief)
+      const brief = approvalMode
+        ? GoalBriefDraft.parse({ ...boundedBrief, approvalMode })
+        : boundedBrief
       const completion = completeGeneration(input.requestId, payloadHash, ownerToken, {
         projectId: input.projectId,
         sourceThreadId: input.sourceThreadId,
@@ -567,7 +575,10 @@ export async function generateAndCreate(
   return tracked
 }
 
-export function createFromDefaultModel(input: GoalBriefGenerateRequestValue) {
+export function createFromDefaultModel(
+  input: GoalBriefGenerateRequestValue,
+  approvalMode?: GoalBriefValue["approvalMode"],
+) {
   return Effect.gen(function* () {
     const provider = yield* Provider.Service
     const bridge = yield* EffectBridge.make()
@@ -587,7 +598,7 @@ export function createFromDefaultModel(input: GoalBriefGenerateRequestValue) {
             }
           },
           generate: generateStructured,
-        }),
+        }, approvalMode),
       catch: (error) => error,
     })
   })

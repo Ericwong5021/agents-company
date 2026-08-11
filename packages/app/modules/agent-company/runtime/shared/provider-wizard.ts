@@ -153,9 +153,16 @@ export function classifyProviderError(input: { name?: string; status?: number; m
   return { kind: "unknown", message: message || "连接失败，请检查配置后重试。" }
 }
 
-// 模型发现端点仅返回 {model_id, name}（真实连接测试的产物）；
-// 逐模型的工具调用/结构化输出/中断恢复能力后端尚未暴露，不在此虚构。
-export type DiscoveredModel = { model_id: string; name: string }
+export type ProviderCapabilitySupport = "supported" | "unsupported" | "unknown"
+export type DiscoveredModel = {
+  model_id: string
+  name: string
+  capabilities: {
+    tool_call: ProviderCapabilitySupport
+    structured_output: ProviderCapabilitySupport
+    interrupt_resume: "supported"
+  }
+}
 
 export type ProviderDraft = {
   format: "openai" | "anthropic"
@@ -173,6 +180,7 @@ export function draftFromPreset(preset: ProviderPreset): ProviderDraft {
 export function buildModelsRequest(draft: ProviderDraft) {
   return {
     format: draft.format,
+    provider_id: draft.providerId,
     base_url: draft.baseUrl,
     ...(draft.apiKey ? { api_key: draft.apiKey } : {}),
     headers: draft.headers,

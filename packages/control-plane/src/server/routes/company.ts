@@ -134,6 +134,14 @@ function ensureSupported(providerID: ProviderID) {
   throw new CompanyProviderUnsupported({ provider_id: providerID })
 }
 
+function matchesCatalogEndpoint(baseURL: string, catalogAPI?: string) {
+  if (!catalogAPI || !URL.canParse(catalogAPI)) return false
+  const input = new URL(baseURL)
+  const catalog = new URL(catalogAPI)
+  return input.origin === catalog.origin
+    && input.pathname.replace(/\/+$/, "") === catalog.pathname.replace(/\/+$/, "")
+}
+
 async function customProviderModels(input: CustomProviderModelsInput) {
   const url = new URL(`${input.base_url.replace(/\/+$/, "")}/models`)
   const headers = new Headers(input.headers)
@@ -159,9 +167,31 @@ async function customProviderModels(input: CustomProviderModelsInput) {
     .passthrough()
     .safeParse(body)
   if (!result.success) throw new CustomProviderModelsFailed({ message: "提供商返回的模型列表格式无效" })
+  const catalog = input.provider_id ? await ModelsDev.get().catch(() => undefined) : undefined
+  const catalogCandidate = input.provider_id ? catalog?.[input.provider_id] : undefined
+  const catalogProvider = catalogCandidate && matchesCatalogEndpoint(input.base_url, catalogCandidate.api)
+    ? catalogCandidate
+    : undefined
   return CustomProviderModels.parse(
     result.data.data
-      .map((model) => ({ model_id: model.id, name: model.display_name ?? model.name ?? model.id }))
+      .map((model) => {
+        const catalogModel = catalogProvider?.models[model.id]
+          ?? Object.values(catalogProvider?.models ?? {}).find((candidate) => candidate.id === model.id)
+        const toolCall = catalogModel
+          ? catalogModel.tool_call
+            ? "supported" as const
+            : "unsupported" as const
+          : "unknown" as const
+        return {
+          model_id: model.id,
+          name: model.display_name ?? model.name ?? model.id,
+          capabilities: {
+            tool_call: toolCall,
+            structured_output: toolCall === "supported" ? "supported" as const : "unknown" as const,
+            interrupt_resume: "supported" as const,
+          },
+        }
+      })
       .toSorted((left, right) => left.name.localeCompare(right.name)),
   )
 }
@@ -207,7 +237,7 @@ async function configureProvider(input: CompanyProviderConfigureInputType) {
                 model.model_id,
                 {
                   name: model.name,
-                  tool_call: true,
+                  tool_call: model.capabilities.tool_call === "supported",
                 },
               ]),
             ),

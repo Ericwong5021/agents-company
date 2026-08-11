@@ -6335,6 +6335,13 @@
                               "$ref": "#/components/schemas/ConversationMention"
                             }
                           },
+                          "resources": {
+                            "maxItems": 8,
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ConversationResource"
+                            }
+                          },
                           "time": {
                             "type": "object",
                             "properties": {
@@ -6362,6 +6369,7 @@
                           "body",
                           "visibility",
                           "mentions",
+                          "resources",
                           "time"
                         ],
                         "additionalProperties": false
@@ -7046,6 +7054,13 @@
                                       "$ref": "#/components/schemas/ConversationMention"
                                     }
                                   },
+                                  "resources": {
+                                    "maxItems": 8,
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/components/schemas/ConversationResource"
+                                    }
+                                  },
                                   "time": {
                                     "type": "object",
                                     "properties": {
@@ -7073,6 +7088,7 @@
                                   "body",
                                   "visibility",
                                   "mentions",
+                                  "resources",
                                   "time"
                                 ],
                                 "additionalProperties": false
@@ -20500,7 +20516,8 @@
                         "type": "string",
                         "enum": [
                           "approve",
-                          "reject"
+                          "reject",
+                          "request_change"
                         ]
                       },
                       "resolution": {
@@ -57966,6 +57983,12 @@
               "anthropic"
             ]
           },
+          "provider_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
           "base_url": {
             "type": "string",
             "format": "uri"
@@ -57987,12 +58010,6 @@
               "maxLength": 8192
             }
           },
-          "provider_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "pattern": "^[a-z0-9][a-z0-9._-]*$"
-          },
           "model_id": {
             "type": "string",
             "minLength": 1,
@@ -58001,9 +58018,9 @@
         },
         "required": [
           "format",
+          "provider_id",
           "base_url",
           "api_key",
-          "provider_id",
           "model_id"
         ],
         "additionalProperties": false
@@ -58155,11 +58172,43 @@
             },
             "name": {
               "type": "string"
+            },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "tool_call": {
+                  "type": "string",
+                  "enum": [
+                    "supported",
+                    "unsupported",
+                    "unknown"
+                  ]
+                },
+                "structured_output": {
+                  "type": "string",
+                  "enum": [
+                    "supported",
+                    "unsupported",
+                    "unknown"
+                  ]
+                },
+                "interrupt_resume": {
+                  "type": "string",
+                  "const": "supported"
+                }
+              },
+              "required": [
+                "tool_call",
+                "structured_output",
+                "interrupt_resume"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
             "model_id",
-            "name"
+            "name",
+            "capabilities"
           ],
           "additionalProperties": false
         }
@@ -58173,6 +58222,9 @@
               "openai",
               "anthropic"
             ]
+          },
+          "provider_id": {
+            "type": "string"
           },
           "base_url": {
             "type": "string",
@@ -66379,6 +66431,108 @@
           }
         ]
       },
+      "ConversationResource": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "url"
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 4000,
+                "format": "uri"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "path"
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "resource_type": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "directory",
+                  "unknown"
+                ]
+              },
+              "access": {
+                "type": "string",
+                "const": "read_only"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "resource_type",
+              "access"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "text_attachment"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "media_type": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 200000
+              },
+              "content": {
+                "type": "string",
+                "maxLength": 200000
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "media_type",
+              "byte_length",
+              "content"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "ConversationBoardMessagesDisabled": {
         "type": "object",
         "properties": {
@@ -66715,6 +66869,22 @@
             "items": {
               "$ref": "#/components/schemas/ConversationMention"
             }
+          },
+          "resources": {
+            "default": [],
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationResource"
+            }
+          },
+          "intent_override": {
+            "type": "string",
+            "enum": [
+              "execute",
+              "discuss",
+              "project_followup"
+            ]
           }
         },
         "required": [
@@ -67552,6 +67722,13 @@
                   "$ref": "#/components/schemas/ConversationMention"
                 }
               },
+              "resources": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ConversationResource"
+                }
+              },
               "time": {
                 "type": "object",
                 "properties": {
@@ -67579,6 +67756,7 @@
               "body",
               "visibility",
               "mentions",
+              "resources",
               "time"
             ],
             "additionalProperties": false

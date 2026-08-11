@@ -457,6 +457,8 @@ export const ExperienceR0ImplementedMutationActions = [
   "resume_work",
   "stop_work",
   "resolve_blocker",
+  "approve",
+  "reject",
   "retry",
   "accept_delivery",
   "request_change",
@@ -527,7 +529,7 @@ export const ExperienceWorkActionRequest = z.union([
       action: z.literal("resolve_blocker"),
       attentionId: Identifier.optional(),
       approvalGateId: Identifier,
-      decision: z.enum(["approve", "reject"]),
+      decision: z.enum(["approve", "reject", "request_change"]),
       resolution: LongText,
     })
     .strict(),

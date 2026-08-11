@@ -212,8 +212,15 @@ export type CompanyProjectDetail = {
   gates: {
     id: string
     title: string
+    summary: string
     kind: string
     status: string
+    requestedByAgentID?: string
+    workItemID?: string
+    resourceScope: string[]
+    decisionNote?: string
+    requestedAt: number
+    decidedAt?: number
   }[]
   workAttempts: {
     id: string

@@ -220,7 +220,13 @@ export function createExperienceRoutes(
         const result = await runRequest(
           "ExperienceRoutes.goalBrief.generate",
           c,
-          generateGoalBrief(c.req.valid("json")).pipe(
+          Effect.gen(function* () {
+            const companyState = yield* (yield* Company.Service).current()
+            return yield* generateGoalBrief(
+              c.req.valid("json"),
+              companyState.state === "ready" ? companyState.company.approval_policy.preset : "balanced",
+            )
+          }).pipe(
             Effect.match({
               onSuccess: (brief) => ({ ok: true as const, brief }),
               onFailure: (error) => ({ ok: false as const, error }),
@@ -425,6 +431,7 @@ export function createExperienceRoutes(
                   provider_id: companyState.company.provider?.provider_id,
                   model_id: companyState.company.provider?.model_id,
                   charter: goalBriefCharter(reservation.brief),
+                  approval_preset: reservation.brief.approvalMode,
                 }),
               )
               return started

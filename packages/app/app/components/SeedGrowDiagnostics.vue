@@ -29,13 +29,63 @@ const props = defineProps<{
   awaitingUserAcceptance: boolean
 }>()
 
-const changes = computed(() =>
+const eventFilter = ref("all")
+const agentFilter = ref("all")
+const levelFilter = ref("all")
+const timeFilter = ref("all")
+
+const eventOptions = [
+  { value: "all", label: "全部事件" },
+  { value: "acceptance", label: "验收" },
+  { value: "blocker", label: "阻塞" },
+  { value: "graph", label: "计划变更" },
+  { value: "receipt", label: "尝试与回执" },
+  { value: "validation", label: "核验" },
+  { value: "assignment", label: "责任与人员" },
+  { value: "agent_run", label: "Agent 运行" },
+  { value: "usage", label: "资源使用" },
+  { value: "runtime", label: "运行诊断" },
+]
+
+const agentOptions = computed(() =>
+  (props.detail?.recruitment.candidates ?? [])
+    .map(agent => ({ value: agent.id, label: humanLabel(agent.name) }))
+    .toSorted((left, right) => left.label.localeCompare(right.label, "zh-CN")),
+)
+
+function workItemAgent(workItemID?: string) {
+  if (!workItemID) return
+  return props.detail?.workItems.find(item => item.id === workItemID)?.ownerAgentID
+}
+
+function visible(input: { event: string; level: string; agentID?: string; at?: number | string }) {
+  if (eventFilter.value !== "all" && eventFilter.value !== input.event) return false
+  if (levelFilter.value !== "all" && levelFilter.value !== input.level) return false
+  if (agentFilter.value !== "all" && agentFilter.value !== input.agentID) return false
+  const duration = ({ hour: 3_600_000, day: 86_400_000, week: 604_800_000 } as Record<string, number>)[timeFilter.value]
+  if (!duration) return true
+  if (input.at === undefined) return false
+  const at = typeof input.at === "number" ? input.at : Date.parse(input.at)
+  return Number.isFinite(at) && at >= Date.now() - duration
+}
+
+const allChanges = computed(() =>
   props.graph?.availability === "available" ? props.graph.changes.toReversed() : [],
 )
-const acceptanceItems = computed(() =>
+const changes = computed(() => allChanges.value.filter(change => visible({
+  event: "graph",
+  level: change.status === "rejected" ? "warning" : "info",
+  at: change.appliedAt ?? change.createdAt,
+})))
+const allAcceptanceItems = computed(() =>
   props.acceptance?.availability === "available" ? props.acceptance.items : [],
 )
-const gates = computed(() =>
+const acceptanceItems = computed(() => allAcceptanceItems.value.filter(item => visible({
+  event: "acceptance",
+  level: item.state === "failed" ? "error" : item.state === "verified" ? "info" : "warning",
+  agentID: workItemAgent(item.workItemId),
+})))
+const allGates = computed(() =>
   props.validation?.availability === "available"
     ? props.validation.gates.filter((gate) => {
         if (gate.status === "superseded") return false
@@ -44,23 +94,80 @@ const gates = computed(() =>
       })
     : [],
 )
-const assignments = computed(() =>
+const gates = computed(() => allGates.value.filter(gate => visible({
+  event: "validation",
+  level: gate.status === "failed" ? "error" : gate.status === "passed" ? "info" : "warning",
+  agentID: workItemAgent(gate.workItemId),
+  at: gate.evaluatedAt ?? gate.createdAt,
+})))
+const allAssignments = computed(() =>
   props.organization?.availability === "available"
     ? props.organization.assignments.filter((assignment) => assignment.availability === "available")
     : [],
 )
+const assignments = computed(() => allAssignments.value.filter(assignment => visible({
+  event: "assignment",
+  level: assignment.status === "released" ? "info" : "warning",
+  agentID: assignment.agent.id,
+  at: assignment.releasedAt ?? assignment.startedAt ?? assignment.assignedAt,
+})))
+const discoveries = computed(() => props.discoveries.filter(discovery => visible({
+  event: "receipt",
+  level:
+    discovery.availability === "unavailable" || discovery.outcome === "failed"
+      ? "error"
+      : discovery.outcome === "completed"
+        ? "info"
+        : "warning",
+  agentID: discovery.availability === "available" ? workItemAgent(discovery.workItemId) : undefined,
+  at: discovery.availability === "available" ? discovery.processedAt ?? discovery.createdAt : undefined,
+})))
+const blockedItems = computed(() =>
+  (props.detail?.workItems ?? []).filter(item =>
+    ["blocked", "failed"].includes(item.status)
+    && visible({ event: "blocker", level: "error", agentID: item.ownerAgentID }),
+  ))
+const selections = computed(() => (props.detail?.recruitment.selections ?? []).filter(selection => visible({
+  event: "assignment",
+  level: selection.decision === "rejected" ? "warning" : "info",
+  agentID: selection.agentID,
+})))
+const attempts = computed(() => (props.detail?.workAttempts ?? []).filter(attempt => visible({
+  event: "receipt",
+  level: attempt.status === "failed" ? "error" : attempt.status === "completed" ? "info" : "warning",
+  agentID: props.detail?.agentRuns.find(run => run.id === attempt.agentRunID)?.agentID ?? workItemAgent(attempt.workItemID),
+  at: attempt.finishedAt ?? attempt.startedAt,
+})))
+const receipts = computed(() => (props.detail?.workReceipts ?? []).filter(receipt => visible({
+  event: "receipt",
+  level: receipt.outcome === "failed" ? "error" : receipt.outcome === "completed" ? "info" : "warning",
+  agentID: workItemAgent(receipt.workItemID),
+  at: receipt.processedAt ?? receipt.createdAt,
+})))
+const agentRuns = computed(() => (props.detail?.agentRuns ?? []).filter(run => visible({
+  event: "agent_run",
+  level: run.state === "failed" ? "error" : run.state === "completed" ? "info" : "warning",
+  agentID: run.agentID,
+  at: run.finishedAt ?? run.startedAt,
+})))
+const diagnostics = computed(() => props.diagnostics.filter(diagnostic => visible({
+  event: "runtime",
+  level: /fail|error|失败|错误|不可用/i.test(diagnostic.message) ? "error" : "info",
+})))
+const showUsage = computed(() => Boolean(props.detail?.usage) && visible({ event: "usage", level: "info" }))
 const diagnosticsFactCount = computed(() =>
   changes.value.length +
   acceptanceItems.value.length +
-  props.discoveries.length +
+  blockedItems.value.length +
+  discoveries.value.length +
   gates.value.length +
   assignments.value.length +
-  (props.detail?.recruitment.selections.length ?? 0) +
-  (props.detail?.workAttempts.length ?? 0) +
-  (props.detail?.workReceipts.length ?? 0) +
-  (props.detail?.agentRuns.length ?? 0) +
-  (props.detail?.usage ? 1 : 0) +
-  props.diagnostics.length,
+  selections.value.length +
+  attempts.value.length +
+  receipts.value.length +
+  agentRuns.value.length +
+  (showUsage.value ? 1 : 0) +
+  diagnostics.value.length,
 )
 const tokenUsageAvailable = computed(() =>
   Boolean(
@@ -84,9 +191,6 @@ const costUsageAvailable = computed(() =>
   Boolean(props.detail?.usage && (props.detail.usage.runCount === 0 || props.detail.usage.cost > 0)))
 const failedAttemptCount = computed(() =>
   props.detail?.workAttempts.filter(attempt => attempt.status === "failed").length ?? 0)
-const blockedItems = computed(() =>
-  props.detail?.workItems.filter((item) => ["blocked", "failed"].includes(item.status)) ?? [])
-
 function acceptanceStateLabel(state: string) {
   return ({
     verified: "已验证",
@@ -281,6 +385,40 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
       <strong>{{ detail?.project.activePlanVersion ?? "不可用" }}</strong>
     </div>
 
+    <div class="ac-diagnostic-filters" aria-label="诊断筛选">
+      <label>
+        <span>事件类型</span>
+        <select v-model="eventFilter">
+          <option v-for="option in eventOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+      <label>
+        <span>Agent</span>
+        <select v-model="agentFilter">
+          <option value="all">全部 Agent</option>
+          <option v-for="option in agentOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+      <label>
+        <span>错误级别</span>
+        <select v-model="levelFilter">
+          <option value="all">全部级别</option>
+          <option value="error">错误</option>
+          <option value="warning">提醒</option>
+          <option value="info">信息</option>
+        </select>
+      </label>
+      <label>
+        <span>时间</span>
+        <select v-model="timeFilter">
+          <option value="all">全部时间</option>
+          <option value="hour">最近 1 小时</option>
+          <option value="day">最近 24 小时</option>
+          <option value="week">最近 7 天</option>
+        </select>
+      </label>
+    </div>
+
     <p v-if="pending" class="ac-brief-state" role="status">正在读取工作图与核验依据…</p>
     <p v-else-if="failed" class="ac-brief-state ac-brief-state--error" role="alert">
       结构化诊断暂时不可用。
@@ -464,7 +602,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
     </section>
 
     <section
-      v-if="detail?.recruitment.selections.length"
+      v-if="selections.length"
       class="ac-seed-diagnostics__group"
       aria-labelledby="selection-heading"
     >
@@ -473,9 +611,9 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
         <h3 id="selection-heading">人员选择</h3>
       </div>
       <details class="ac-source-trace">
-        <summary>查看 {{ detail?.recruitment.selections.length ?? 0 }} 条选择依据</summary>
+        <summary>查看 {{ selections.length }} 条选择依据</summary>
       <article
-        v-for="selection in detail.recruitment.selections"
+        v-for="selection in selections"
         :key="selection.id"
         class="ac-seed-diagnostics__item"
       >
@@ -489,7 +627,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
     </section>
 
     <section
-      v-if="detail?.workAttempts.length || detail?.workReceipts.length"
+      v-if="attempts.length || receipts.length"
       class="ac-seed-diagnostics__group"
       aria-labelledby="attempt-heading"
     >
@@ -498,8 +636,8 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
         <h3 id="attempt-heading">执行尝试与回执</h3>
       </div>
       <details class="ac-source-trace">
-        <summary>查看 {{ (detail?.workAttempts.length ?? 0) + (detail?.workReceipts.length ?? 0) }} 条完整执行记录</summary>
-      <article v-for="attempt in detail?.workAttempts ?? []" :key="attempt.id" class="ac-seed-diagnostics__item">
+        <summary>查看 {{ attempts.length + receipts.length }} 条完整执行记录</summary>
+      <article v-for="attempt in attempts" :key="attempt.id" class="ac-seed-diagnostics__item">
         <div class="ac-seed-diagnostics__item-title">
           <h4>{{ workItemTitle(attempt.workItemID) }} · 第 {{ attempt.ordinal }} 次</h4>
           <span>{{ attemptStatusLabel(attempt.status) }}</span>
@@ -509,7 +647,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
           未完成类型：{{ failureKindLabel(attempt.failureKind) }}
         </p>
       </article>
-      <article v-for="receipt in detail?.workReceipts ?? []" :key="receipt.id" class="ac-seed-diagnostics__item">
+      <article v-for="receipt in receipts" :key="receipt.id" class="ac-seed-diagnostics__item">
         <div class="ac-seed-diagnostics__item-title">
           <h4>执行回执</h4>
           <span>{{ receiptStatusLabel(receipt.outcome, receipt.processingStatus) }}</span>
@@ -527,12 +665,12 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
       </details>
     </section>
 
-    <section v-if="detail?.agentRuns.length" class="ac-seed-diagnostics__group" aria-labelledby="agent-run-heading">
+    <section v-if="agentRuns.length" class="ac-seed-diagnostics__group" aria-labelledby="agent-run-heading">
       <div class="ac-seed-diagnostics__heading">
         <p class="ac-card-kicker">运行与能力</p>
         <h3 id="agent-run-heading">运行时与能力证据</h3>
       </div>
-      <article v-for="run in detail.agentRuns" :key="run.id" class="ac-seed-diagnostics__item">
+      <article v-for="run in agentRuns" :key="run.id" class="ac-seed-diagnostics__item">
         <div class="ac-seed-diagnostics__item-title">
           <h4>{{ agentName(run.agentID) }} · {{ runtimeLabel(run.runtime) }}</h4>
           <span>{{ agentRunStateLabel(run.state) }}</span>
@@ -547,7 +685,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
       </article>
     </section>
 
-    <section v-if="detail?.usage" class="ac-seed-diagnostics__group" aria-labelledby="usage-heading">
+    <section v-if="showUsage && detail?.usage" class="ac-seed-diagnostics__group" aria-labelledby="usage-heading">
       <div class="ac-seed-diagnostics__heading">
         <p class="ac-card-kicker">资源使用</p>
         <h3 id="usage-heading">资源使用</h3>
@@ -591,7 +729,7 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
       v-if="!pending && !failed && !diagnosticsFactCount"
       class="ac-brief-state"
     >
-      当前没有持久化诊断事实。
+      当前筛选条件下没有诊断事实。
     </p>
   </div>
 </template>

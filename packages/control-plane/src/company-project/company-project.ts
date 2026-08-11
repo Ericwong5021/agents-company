@@ -717,7 +717,7 @@ export const layer = Layer.effect(
         input.policy ?? {
           source_approval_preset: preset,
           allow_workspace_write: preset !== "strict",
-          require_high_risk_approval: preset !== "autonomous",
+          require_high_risk_approval: true,
           require_human_merge: preset !== "autonomous",
           require_clean_worktree: true,
           require_main_branch_verification: true,

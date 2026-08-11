@@ -224,8 +224,24 @@ describe.serial("/company", () => {
       })
       expect(response.status).toBe(200)
       expect(await response.json()).toEqual([
-        { model_id: "claude-custom", name: "Claude Custom" },
-        { model_id: "zeta", name: "Zeta" },
+        {
+          model_id: "claude-custom",
+          name: "Claude Custom",
+          capabilities: {
+            tool_call: "unknown",
+            structured_output: "unknown",
+            interrupt_resume: "supported",
+          },
+        },
+        {
+          model_id: "zeta",
+          name: "Zeta",
+          capabilities: {
+            tool_call: "unknown",
+            structured_output: "unknown",
+            interrupt_resume: "supported",
+          },
+        },
       ])
       expect(requests).toHaveLength(1)
       expect(requests[0]).toMatchObject({

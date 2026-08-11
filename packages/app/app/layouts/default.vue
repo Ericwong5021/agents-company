@@ -4,9 +4,63 @@ import {
   isShellNavigationActive,
   visibleShellNavigation,
 } from "../utils/shell-navigation";
+import type { CompanySnapshot } from "../../modules/agent-company/runtime/shared/company-contract";
+import { aggregateAttention } from "../../modules/agent-company/runtime/shared/inbox-attention";
 
 const sidebarOpen = useState("agent-company-shell-sidebar-open", () => false);
 const route = useRoute();
+const snapshot = useState<CompanySnapshot | undefined>("agent-company-snapshot-value");
+const telemetry = useProductTelemetry();
+const observedWorkStatuses = ref<Record<string, string>>({});
+const attentionCount = computed(() => snapshot.value
+  ? aggregateAttention(snapshot.value.work).length
+    + snapshot.value.work.filter(work => work.availability === "unavailable").length
+  : 0);
+
+watch(
+  () => snapshot.value?.work,
+  works => {
+    if (!works) return;
+    const nextStatuses: Record<string, string> = {};
+    works.forEach(work => {
+      if (work.availability === "unavailable") {
+        telemetry.record("failed", {
+          dedupeKey: `unavailable:${work.workId}:${work.diagnostics.map(item => item.id).join(":")}`,
+          scenario: "work_projection",
+          props: { availability: "unavailable", diagnosticCount: work.diagnostics.length },
+        });
+        return;
+      }
+      const workID = work.summary.workId;
+      const previous = observedWorkStatuses.value[workID];
+      nextStatuses[workID] = work.summary.userStatus;
+      work.attentionItems.forEach(item => {
+        telemetry.record("attention_requested", {
+          dedupeKey: item.id,
+          scenario: "attention_center",
+          props: { type: item.type, priority: item.priority },
+        });
+        if (item.type === "blocked") telemetry.record("blocked", {
+          dedupeKey: item.id,
+          scenario: "execution",
+          props: { priority: item.priority },
+        });
+        if (item.type === "failure") telemetry.record("failed", {
+          dedupeKey: item.id,
+          scenario: "execution",
+          props: { priority: item.priority },
+        });
+      });
+      if (previous && ["blocked", "failed"].includes(previous) && !["blocked", "failed"].includes(work.summary.userStatus))
+        telemetry.record("recovered", {
+          scenario: "execution",
+          props: { from: previous, to: work.summary.userStatus },
+        });
+    });
+    observedWorkStatuses.value = nextStatuses;
+  },
+  { deep: true, immediate: true },
+);
 const scopedNavigationTargets = new Set(["/company/board", "/team"]);
 const appConfig = useAppConfig();
 const routeProjectID = computed(() => {
@@ -85,6 +139,11 @@ useHead(() => ({
           >
             <UIcon :name="item.icon" class="ac-primary-nav__icon" />
             <span v-if="!collapsed">{{ item.label }}</span>
+            <span
+              v-if="item.to === '/inbox' && attentionCount"
+              class="ac-primary-nav__count"
+              :aria-label="`${attentionCount} 项待处理`"
+            >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
           </NuxtLink>
         </nav>
       </template>

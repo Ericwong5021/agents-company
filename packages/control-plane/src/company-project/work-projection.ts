@@ -420,16 +420,7 @@ function actionsFor(
     (id) => id !== "retry" || status === "failed",
   ),
 ) {
-  return ids.map((id) =>
-    id === "request_change" && status !== "delivered"
-      ? {
-          id,
-          targetRef,
-          enabled: false as const,
-          disabledReason: "当前处理器只支持对已形成的交付请求修改。",
-        }
-      : action(id, targetRef),
-  )
+  return ids.map((id) => action(id, targetRef))
 }
 
 type AttentionFact = Omit<AttentionItem, "recommendedAction" | "allowedActions">

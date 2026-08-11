@@ -73,6 +73,18 @@ type RuntimeInput = {
   boardAgentIDs: string[]
 }
 
+function runtimeMessage(input: typeof ChannelMessageTable.$inferSelect) {
+  if (!input.resources.length) return input.body
+  const resources = input.resources.map((resource, index) => {
+    if (resource.kind === "url")
+      return `[资源 ${index + 1}] URL${resource.label ? ` · ${resource.label}` : ""}: ${resource.url}`
+    if (resource.kind === "path")
+      return `[资源 ${index + 1}] 本地${resource.resource_type === "directory" ? "目录" : resource.resource_type === "file" ? "文件" : "路径"}${resource.label ? ` · ${resource.label}` : ""}: ${resource.path}\n访问范围：只读引用，不授予原本不存在的文件系统权限。`
+    return `[附件 ${index + 1}] ${resource.name} (${resource.media_type}, ${resource.byte_length} bytes)\n<attachment>\n${resource.content}\n</attachment>`
+  })
+  return `${input.body}\n\n用户提供的资源：\n${resources.join("\n\n")}`
+}
+
 function loadRun(runID: ConversationRunID): RuntimeInput | undefined {
   return Database.use((db) => {
     const run = db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get()
@@ -524,7 +536,7 @@ export const layer: Layer.Layer<Service, never, GroupSession.Service | Bus.Servi
             })
             const accepted = yield* groupSessions.chat({
               groupSessionID: group.id,
-              text: input.message.body,
+              text: runtimeMessage(input.message),
               externalMessageID: input.message.id,
             })
             yield* groupSessions.resume({ groupSessionID: group.id, roundNum: accepted.roundNum })

@@ -70,7 +70,7 @@ export function toControlActions(descriptors: ExperienceActionDescriptor[]): Con
     handler: descriptor.enabled
       ? ["pause_work", "resume_work", "stop_work", "resolve_blocker", "adjust_brief", "archive", "restore"].includes(descriptor.id)
         ? "action"
-        : ["accept_delivery", "request_change"].includes(descriptor.id)
+        : ["approve", "reject", "accept_delivery", "request_change"].includes(descriptor.id)
           ? "action"
           : clientHandlerFor(descriptor.id)
       : "none",

@@ -735,12 +735,12 @@ export type CompanyProviderList = {
 
 export type CompanyProviderConfigureInput = {
   format: "openai" | "anthropic"
+  provider_id: string
   base_url: string
   api_key: string
   headers?: {
     [key: string]: string
   }
-  provider_id: string
   model_id: string
 }
 
@@ -780,10 +780,16 @@ export type ProviderAuthMethod = {
 export type CustomProviderModels = Array<{
   model_id: string
   name: string
+  capabilities: {
+    tool_call: "supported" | "unsupported" | "unknown"
+    structured_output: "supported" | "unsupported" | "unknown"
+    interrupt_resume: "supported"
+  }
 }>
 
 export type CustomProviderModelsInput = {
   format: "openai" | "anthropic"
+  provider_id?: string
   base_url: string
   api_key?: string
   headers?: {
@@ -2203,6 +2209,27 @@ export type ConversationMention =
       role: "ceo" | "cto" | "product_lead"
     }
 
+export type ConversationResource =
+  | {
+      kind: "url"
+      url: string
+      label?: string
+    }
+  | {
+      kind: "path"
+      path: string
+      resource_type: "file" | "directory" | "unknown"
+      access: "read_only"
+      label?: string
+    }
+  | {
+      kind: "text_attachment"
+      name: string
+      media_type: string
+      byte_length: number
+      content: string
+    }
+
 export type ConversationBoardMessagesDisabled = {
   name: "ConversationBoardMessagesDisabled"
   data: {
@@ -2294,6 +2321,8 @@ export type ChannelSendInput = {
   reply_to?: string
   referenced_thread_id?: ConversationThreadId
   mentions?: Array<ConversationMention>
+  resources?: Array<ConversationResource>
+  intent_override?: "execute" | "discuss" | "project_followup"
 }
 
 export type ConversationThreadStatus = "active" | "completed" | "interrupted"
@@ -2463,6 +2492,7 @@ export type BoardDecisionResult = {
     dri?: ConversationPrincipal
     visibility: MessageVisibility
     mentions: Array<ConversationMention>
+    resources: Array<ConversationResource>
     time: {
       created: number
       updated: number
@@ -8680,6 +8710,7 @@ export type CompanyChannelMessagesResponses = {
       dri?: ConversationPrincipal
       visibility: MessageVisibility
       mentions: Array<ConversationMention>
+      resources: Array<ConversationResource>
       time: {
         created: number
         updated: number
@@ -8908,6 +8939,7 @@ export type CompanyThreadEntriesResponses = {
             dri?: ConversationPrincipal
             visibility: MessageVisibility
             mentions: Array<ConversationMention>
+            resources: Array<ConversationResource>
             time: {
               created: number
               updated: number
@@ -13456,7 +13488,7 @@ export type ExperienceWorkActionData = {
         action: "resolve_blocker"
         attentionId?: string
         approvalGateId: string
-        decision: "approve" | "reject"
+        decision: "approve" | "reject" | "request_change"
         resolution: string
       }
     | {

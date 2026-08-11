@@ -31,6 +31,43 @@ import {
 } from "../../../shared/provider-wizard"
 
 const { data: snapshot, pending, refresh } = useCompanySnapshot()
+const productTelemetry = useProductTelemetry()
+const telemetryMessage = ref("")
+const telemetryRates = computed(() => [
+  { label: "交付到达率", value: productTelemetry.metrics.value.deliveryReachRate },
+  { label: "打断率", value: productTelemetry.metrics.value.interruptionRate },
+  { label: "失败恢复率", value: productTelemetry.metrics.value.recoveryRate },
+  { label: "验收率", value: productTelemetry.metrics.value.acceptanceRate },
+])
+const telemetryBreakdownGroups = computed(() => [
+  { label: "版本", rows: productTelemetry.breakdowns.value.byVersion },
+  { label: "场景", rows: productTelemetry.breakdowns.value.byScenario },
+  { label: "批准模式", rows: productTelemetry.breakdowns.value.byApprovalMode },
+])
+
+function updateTelemetryConsent(event: Event) {
+  const enabled = (event.currentTarget as HTMLInputElement).checked
+  productTelemetry.setConsent(enabled)
+  telemetryMessage.value = enabled
+    ? "已选择加入匿名体验数据；只有配置了接收端时才会发送脱敏事件。"
+    : "匿名体验数据已关闭；本地指标仍继续工作。"
+}
+
+function exportTelemetry() {
+  const url = URL.createObjectURL(new Blob([productTelemetry.exportJSON()], { type: "application/json" }))
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = `agent-company-product-data-${new Date().toISOString().slice(0, 10)}.json`
+  anchor.click()
+  URL.revokeObjectURL(url)
+  telemetryMessage.value = "本地体验数据已导出。"
+}
+
+function clearTelemetry() {
+  if (!window.confirm("清除全部本地体验事件与聚合指标？此操作不能撤销。")) return
+  productTelemetry.clear()
+  telemetryMessage.value = "本地体验数据已清除；匿名上报选择未改变。"
+}
 
 const connectionLabel = computed(() => ({
   connecting: "正在连接",
@@ -70,6 +107,9 @@ function commonsModeLabel(value?: string | null) {
     "belief-loop": "信念循环",
   } as Record<string, string>)[value ?? "off"] ?? value ?? "关闭"
 }
+function capabilityLabel(value: DiscoveredModel["capabilities"]["tool_call"]) {
+  return ({ supported: "支持", unsupported: "不支持", unknown: "未知" } as const)[value]
+}
 
 const presetId = ref<ProviderPresetId>("openai")
 const preset = computed(() => providerPreset(presetId.value))
@@ -87,6 +127,26 @@ const testing = ref(false)
 const saving = ref(false)
 const errorInfo = ref<ProviderErrorInfo | null>(null)
 const message = ref("")
+const approvalPreset = ref<"autonomous" | "balanced" | "strict">("balanced")
+const approvalSaving = ref(false)
+const approvalMessage = ref("")
+const approvalOptions = [
+  {
+    value: "autonomous" as const,
+    label: "自主",
+    detail: "目标摘要生成后自动开始；高风险动作仍等待你的明确批准。",
+  },
+  {
+    value: "balanced" as const,
+    label: "平衡",
+    detail: "先展示目标摘要，允许你调整后再开始。",
+  },
+  {
+    value: "strict" as const,
+    label: "严格",
+    detail: "等待你明确开始；工作区写入也需要逐项批准。",
+  },
+]
 const onboarding = ref<OnboardingState>(parseOnboardingState(null))
 const founderStudio = ref<FounderStudioProjection | null>(null)
 const founderControl = ref<FounderControlCenterProjection | null>(null)
@@ -169,6 +229,14 @@ onMounted(() => {
   loadFounderModes()
   loadAdvisorReadiness()
 })
+
+watch(
+  () => snapshot.value.company.approvalPolicy,
+  (value) => {
+    if (value === "autonomous" || value === "balanced" || value === "strict") approvalPreset.value = value
+  },
+  { immediate: true },
+)
 
 async function loadFounderStudio() {
   if (!snapshot.value.company.id || studioLoading.value) return
@@ -701,6 +769,21 @@ async function saveProvider() {
     navigateTo("/inbox?newGoal=1")
   }
 }
+
+async function saveApprovalPolicy() {
+  if (approvalSaving.value) return
+  approvalSaving.value = true
+  approvalMessage.value = ""
+  await $fetch("/api/agent-company/approval-policy", {
+    method: "PUT",
+    body: { approval_preset: approvalPreset.value },
+  }).then(
+    () => approvalMessage.value = "审批策略已保存；已启动项目和已等待 Gate 保持原策略。",
+    () => approvalMessage.value = "审批策略未保存，请检查本地服务状态。",
+  )
+  approvalSaving.value = false
+  await refresh()
+}
 </script>
 
 <template>
@@ -755,6 +838,91 @@ async function saveProvider() {
             :pending="pending"
             @retry="refresh()"
           />
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>目标批准策略</h2>
+                <p>决定未来目标何时开始。策略变更不会改写已启动项目或已等待的批准 Gate。</p>
+              </div>
+            </div>
+            <div class="ac-provider-presets" role="radiogroup" aria-label="目标批准策略">
+              <button
+                v-for="option in approvalOptions"
+                :key="option.value"
+                type="button"
+                role="radio"
+                class="ac-provider-preset"
+                :aria-checked="approvalPreset === option.value"
+                :data-active="approvalPreset === option.value"
+                @click="approvalPreset = option.value"
+              >
+                <span class="ac-provider-preset__label">{{ option.label }}</span>
+                <span class="ac-provider-preset__desc">{{ option.detail }}</span>
+              </button>
+            </div>
+            <div class="company-provider-form__actions">
+              <span v-if="approvalMessage" role="status">{{ approvalMessage }}</span>
+              <span v-else>当前保存策略：{{ snapshot.company.approvalPolicy }}</span>
+              <UButton color="neutral" :loading="approvalSaving" @click="saveApprovalPolicy">保存批准策略</UButton>
+            </div>
+          </section>
+
+          <section class="company-settings-section">
+            <div class="company-settings-section__heading">
+              <div>
+                <h2>本地体验数据</h2>
+                <p>指标默认只保存在本机，用于判断目标到交付、打断、失败恢复和验收闭环。</p>
+              </div>
+              <span>口径 v{{ productTelemetry.metrics.value.definitionVersion }}</span>
+            </div>
+            <div class="ac-telemetry-metrics">
+              <div v-for="metric in telemetryRates" :key="metric.label">
+                <span>{{ metric.label }}</span>
+                <strong>{{ Math.round(metric.value * 100) }}%</strong>
+              </div>
+              <div>
+                <span>本地事件</span>
+                <strong>{{ productTelemetry.events.value.length }}</strong>
+              </div>
+            </div>
+            <label class="ac-telemetry-consent">
+              <input
+                type="checkbox"
+                :checked="productTelemetry.consent.value.enabled"
+                @change="updateTelemetryConsent"
+              >
+              <span>
+                <strong>选择加入匿名体验数据</strong>
+                <small>不发送 API Key、完整 Prompt、文件内容或成果正文；未配置接收端时不会产生外部请求。</small>
+              </span>
+            </label>
+            <details v-if="productTelemetry.events.value.length" class="ac-telemetry-breakdowns">
+              <summary>按版本、场景与批准模式比较</summary>
+              <section v-for="group in telemetryBreakdownGroups" :key="group.label">
+                <h3>{{ group.label }}</h3>
+                <div v-if="group.rows.length" class="ac-telemetry-breakdowns__rows">
+                  <div v-for="row in group.rows" :key="row.key">
+                    <strong>{{ row.key }}</strong>
+                    <span>{{ row.eventCount }} 个事件</span>
+                    <span>交付到达 {{ Math.round(row.metrics.deliveryReachRate * 100) }}%</span>
+                    <span>验收 {{ Math.round(row.metrics.acceptanceRate * 100) }}%</span>
+                  </div>
+                </div>
+                <p v-else>当前事件尚未包含该维度。</p>
+              </section>
+            </details>
+            <div class="company-provider-form__actions">
+              <span v-if="telemetryMessage" role="status">{{ telemetryMessage }}</span>
+              <span v-else>你可以随时查看、导出或清除本机记录。</span>
+              <UButton color="neutral" variant="outline" :disabled="!productTelemetry.events.value.length" @click="exportTelemetry">
+                导出数据
+              </UButton>
+              <UButton color="neutral" variant="ghost" :disabled="!productTelemetry.events.value.length" @click="clearTelemetry">
+                清除数据
+              </UButton>
+            </div>
+          </section>
 
           <section class="company-settings-section company-provider-form ac-provider-wizard">
             <div class="company-settings-section__heading">
@@ -841,6 +1009,15 @@ async function saveProvider() {
                 <input v-model="selectedModel" type="radio" name="ac-provider-model" :value="model.model_id">
                 <span class="ac-provider-model__name">{{ model.name }}</span>
                 <span class="ac-provider-model__id">{{ model.model_id }}</span>
+                <span class="ac-provider-model__capabilities">
+                  <span :data-support="model.capabilities.tool_call">
+                    Tool {{ capabilityLabel(model.capabilities.tool_call) }}
+                  </span>
+                  <span :data-support="model.capabilities.structured_output">
+                    结构化输出 {{ capabilityLabel(model.capabilities.structured_output) }}
+                  </span>
+                  <span data-support="supported">运行时可中断恢复</span>
+                </span>
               </label>
             </div>
 

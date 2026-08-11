@@ -97,6 +97,16 @@ describe.serial("M2 board message intake", () => {
       conversation.sendMessage(
         input({
           mentions: [{ kind: "role", role: "ceo" }],
+          resources: [
+            { kind: "path", path: "/tmp/reference", resource_type: "directory", access: "read_only" },
+            {
+              kind: "text_attachment",
+              name: "brief.md",
+              media_type: "text/markdown",
+              byte_length: 6,
+              content: "目标",
+            },
+          ],
         }),
       ),
     )
@@ -113,6 +123,7 @@ describe.serial("M2 board message intake", () => {
     expect(Database.use((db) => db.select().from(ChannelMessageTable).get()?.mentions)).toEqual([
       { kind: "role", role: "ceo" },
     ])
+    expect(Database.use((db) => db.select().from(ChannelMessageTable).get()?.resources)).toHaveLength(2)
   })
 
   test.serial("replays the same request, conflicts on changed input, and reuses a referenced thread root need", async () => {
@@ -141,6 +152,35 @@ describe.serial("M2 board message intake", () => {
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(ConversationThreadTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(2)
+  })
+
+  test.serial("promotes one low-confidence board message to an executable goal without duplicating it", async () => {
+    const request = input({ body: "写一下" })
+    const discussion = await run((conversation) => conversation.sendMessage(request))
+    expect(discussion).toMatchObject({
+      rootNeedID: undefined,
+      threadID: undefined,
+      runID: undefined,
+      autoProjected: false,
+      needsIntentConfirmation: true,
+    })
+
+    const promoted = await run((conversation) =>
+      conversation.sendMessage({ ...request, intentOverride: "execute" }),
+    )
+    expect(promoted).toMatchObject({
+      messageID: discussion.messageID,
+      replayed: true,
+      intent: "goal",
+      autoProjected: true,
+      needsIntentConfirmation: false,
+    })
+    expect(promoted.rootNeedID).toBeString()
+    expect(promoted.threadID).toBeString()
+    expect(promoted.runID).toBeString()
+    expect(Database.use((db) => db.select().from(ChannelMessageTable).all())).toHaveLength(1)
+    expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(1)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(1)
   })
 
   test.serial("rolls back the root need, thread, and run when the final message write fails", async () => {

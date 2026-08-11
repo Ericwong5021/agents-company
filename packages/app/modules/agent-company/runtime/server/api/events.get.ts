@@ -19,6 +19,9 @@ export default defineAgentCompanyHandler(async (event) => {
   const upstream = await fetch(target, {
     headers: {
       accept: "text/event-stream",
+      ...(typeof event.node.req.headers["last-event-id"] === "string"
+        ? { "last-event-id": event.node.req.headers["last-event-id"] }
+        : {}),
       ...(config.agentCompanyControlPlaneAuthorization
         ? { authorization: config.agentCompanyControlPlaneAuthorization }
         : {}),

@@ -24,6 +24,7 @@ import {
   CompanyNotFound,
   ConversationMention,
   ConversationPrincipal,
+  ConversationResource,
   ConversationRunID,
   ConversationThreadID,
   MentionNotVisible,
@@ -47,7 +48,7 @@ export const SendMessageInput = z
     replyToID: ChannelMessageID.optional(),
     referencedThreadID: ConversationThreadID.optional(),
     mentions: z.array(ConversationMention).max(20).default([]),
-    // GOAL-01：用户可显式纠正路由（作为目标执行 / 仅讨论 / 追加到已有项目）。
+    resources: z.array(ConversationResource).max(8).default([]),
     intentOverride: IntentOverride.optional(),
   })
   .strict()
@@ -138,14 +139,15 @@ function acceptedFromMessage(
   )
   // 分类器是确定性的，重放时重新推导意图投影而无需额外持久化。
   const projection = channel.kind === "board" ? classifyMessageIntent(message.body) : undefined
+  const projectedIntent = message.root_need_id && projection && !projection.createsProject ? "goal" : projection?.kind
   return {
     messageID: message.id,
     rootNeedID: message.root_need_id ?? undefined,
     threadID: message.source_thread_id ?? undefined,
     runID: run?.id,
     replayed,
-    intent: projection?.kind,
-    intentConfidence: projection?.confidence,
+    intent: projectedIntent,
+    intentConfidence: projectedIntent === "goal" && projection?.kind !== "goal" ? 1 : projection?.confidence,
     autoProjected: projection ? Boolean(message.root_need_id) : undefined,
     needsIntentConfirmation: projection ? false : undefined,
   }
@@ -160,6 +162,7 @@ function sameRequest(
   if (message.author_kind !== input.principal.kind || message.author_id !== input.principal.id) return false
   if (message.body !== input.body || (message.reply_to_id ?? undefined) !== input.replyToID) return false
   if (JSON.stringify(message.mentions) !== JSON.stringify(input.mentions)) return false
+  if (JSON.stringify(message.resources) !== JSON.stringify(input.resources)) return false
   if (thread) return message.source_thread_id === thread.id
   // Board 消息的根需求/线程投影由意图分类确定；作者/正文/提及/回复已匹配即为同一请求。
   if (channel.kind === "board") return true
@@ -289,19 +292,36 @@ function write(input: ParsedSendMessageInput): TransactionResult {
         .where(and(eq(ChannelMessageTable.channel_id, channel.id), eq(ChannelMessageTable.request_id, input.requestID)))
         .get()
       if (existing && !sameRequest(existing, input, channel, thread)) return { type: "request_conflict" }
-      if (existing) return { type: "accepted", value: acceptedFromMessage(existing, true, channel) }
-
       const now = Date.now()
       // GOAL-01：仅当意图判定为可执行任务/复杂目标（或用户显式要求执行）时才创建项目。
       // 普通消息、知识问题、低置信度或干预/审批回应不静默立项，仅作为讨论保留。
       const classification =
         !thread && channel.kind === "board" ? classifyMessageIntent(input.body, input.intentOverride) : undefined
-      const created = classification?.createsProject ? createBoardThread(input, channel, now) : undefined
+      const promoteExisting = Boolean(
+        existing
+        && input.intentOverride === "execute"
+        && classification?.createsProject
+        && !existing.root_need_id
+        && !existing.source_thread_id,
+      )
+      if (existing && !promoteExisting) return { type: "accepted", value: acceptedFromMessage(existing, true, channel) }
+      const created = (!existing && classification?.createsProject) || promoteExisting
+        ? createBoardThread(input, channel, now)
+        : undefined
       const activeThread = thread ?? created?.thread
       const rootNeedID = thread?.root_need_id ?? created?.rootNeedID
-      const messageID = ChannelMessageID.parse(Identifier.ascending("channelMessage"))
-      db.insert(ChannelMessageTable)
-        .values({
+      const messageID = existing?.id ?? ChannelMessageID.parse(Identifier.ascending("channelMessage"))
+      if (existing)
+        db.update(ChannelMessageTable)
+          .set({
+            root_need_id: rootNeedID ?? null,
+            source_thread_id: activeThread?.id ?? null,
+            time_updated: now,
+          })
+          .where(eq(ChannelMessageTable.id, existing.id))
+          .run()
+      if (!existing)
+        db.insert(ChannelMessageTable).values({
           id: messageID,
           channel_id: channel.id,
           root_need_id: rootNeedID ?? null,
@@ -316,10 +336,10 @@ function write(input: ParsedSendMessageInput): TransactionResult {
           dri_principal_id: null,
           visibility: "channel",
           mentions: input.mentions,
+          resources: input.resources,
           time_created: now,
           time_updated: now,
-        })
-        .run()
+        }).run()
       const runID = activeThread && channel.kind === "board" ? ConversationRunID.parse(Identifier.ascending("conversationRun")) : undefined
       if (runID && activeThread) {
         db.insert(ConversationRunTable)
@@ -344,7 +364,7 @@ function write(input: ParsedSendMessageInput): TransactionResult {
           rootNeedID: rootNeedID ?? undefined,
           threadID: activeThread?.id,
           runID,
-          replayed: false,
+          replayed: Boolean(existing),
           intent: classification?.kind,
           intentConfidence: classification?.confidence,
           autoProjected: classification ? Boolean(created) : undefined,

@@ -91,6 +91,6 @@ describe("seed grow experience view", () => {
   })
 
   test("证据来源标签保持事实 ID", () => {
-    expect(sourceRefLabel({ kind: "work_receipt", id: "receipt-1" })).toBe("Receipt · receipt-1")
+    expect(sourceRefLabel({ kind: "work_receipt", id: "receipt-1" })).toBe("执行回执 · receipt-1")
   })
 })

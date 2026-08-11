@@ -113,6 +113,7 @@ export type ProviderConnection = z.infer<typeof ProviderConnection>
 export const CustomProviderModelsInput = z
   .object({
     format: z.enum(["openai", "anthropic"]),
+    provider_id: ProviderID.zod.optional(),
     base_url: z
       .string()
       .url()
@@ -161,8 +162,25 @@ export const CompanyProviderConfigureInput = CustomProviderModelsInput.extend({
   .meta({ ref: "CompanyProviderConfigureInput" })
 export type CompanyProviderConfigureInput = z.infer<typeof CompanyProviderConfigureInput>
 
+export const ProviderCapabilitySupport = z.enum(["supported", "unsupported", "unknown"])
+export type ProviderCapabilitySupport = z.infer<typeof ProviderCapabilitySupport>
+
 export const CustomProviderModels = z
-  .array(z.object({ model_id: ModelID.zod, name: z.string() }).strict())
+  .array(
+    z
+      .object({
+        model_id: ModelID.zod,
+        name: z.string(),
+        capabilities: z
+          .object({
+            tool_call: ProviderCapabilitySupport,
+            structured_output: ProviderCapabilitySupport,
+            interrupt_resume: z.literal("supported"),
+          })
+          .strict(),
+      })
+      .strict(),
+  )
   .meta({ ref: "CustomProviderModels" })
 export type CustomProviderModels = z.infer<typeof CustomProviderModels>
 

@@ -37,6 +37,7 @@ import {
   CompanyNotFound,
   ConversationMention,
   ConversationPrincipal,
+  ConversationResource,
   ConversationThreadID,
   ConversationThreadStatus,
   ConversationRunState,
@@ -87,6 +88,7 @@ export const ChannelMessage = z
     dri: ConversationPrincipal.optional(),
     visibility: MessageVisibility,
     mentions: z.array(ConversationMention),
+    resources: z.array(ConversationResource).max(8),
     time: z.object({ created: z.number().int(), updated: z.number().int() }),
   })
   .strict()
@@ -438,6 +440,7 @@ function messageFromRow(row: typeof ChannelMessageTable.$inferSelect): ChannelMe
         : undefined,
     visibility: row.visibility,
     mentions: row.mentions,
+    resources: row.resources,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -1216,6 +1219,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
                 dri_principal_id: input.dri?.id ?? null,
                 visibility: "channel" as const,
                 mentions: [],
+                resources: [],
                 time_created: now,
                 time_updated: now,
               }

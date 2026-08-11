@@ -129,12 +129,14 @@ describe.serial("Goal Brief model adapter", () => {
           return call.schema.parse(output)
         },
       },
+      "strict",
     )
 
     expect(result.source).toBe("system_suggestion")
     expect(result.sourceRefs).toEqual([{ kind: "goal_request", id: "request-model-brief" }])
     expect(calls).toHaveLength(1)
     expect(calls[0]?.prompt).toContain("生成可验证的体验重构 Goal Brief")
+    expect(result.approvalMode).toBe("strict")
     expect(Database.use((db) => db.select({ value: count() }).from(GoalBriefTable).get())?.value).toBe(1)
   })
 

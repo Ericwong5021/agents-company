@@ -17,7 +17,7 @@ describe("actionLabels / clientHandlerFor", () => {
     expect(actionLabels.adjust_brief).toBe("调整方向")
   })
 
-  test("导航/查看类与 retry 有客户端处理器，其余变更类为 none", () => {
+  test("导航/查看类、运行控制与审批动作映射到真实处理器", () => {
     expect(clientHandlerFor("view_progress")).toBe("navigate_progress")
     expect(clientHandlerFor("open_diagnostics")).toBe("open_diagnostics")
     expect(clientHandlerFor("open_delivery")).toBe("open_delivery")
@@ -25,7 +25,7 @@ describe("actionLabels / clientHandlerFor", () => {
     expect(clientHandlerFor("retry")).toBe("retry")
     expect(clientHandlerFor("pause_work")).toBe("none")
     expect(clientHandlerFor("stop_work")).toBe("none")
-    expect(clientHandlerFor("approve")).toBe("none")
+    expect(toControlActions([{ id: "approve", enabled: true }])[0]?.handler).toBe("action")
   })
 })
 
@@ -62,7 +62,7 @@ describe("canInvoke", () => {
   })
 
   test("enabled 但无处理器不可点击（避免伪成功按钮）", () => {
-    expect(canInvoke({ id: "approve", label: "批准", enabled: true, mutates: true, handler: "none" })).toBe(false)
+    expect(canInvoke({ id: "answer_question", label: "回答问题", enabled: true, mutates: true, handler: "none" })).toBe(false)
   })
 
   test("有处理器但 disabled 不可点击", () => {

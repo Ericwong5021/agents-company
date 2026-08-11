@@ -375,6 +375,11 @@ async function intervene() {
   await Promise.all([loadBoard(), refresh()])
 }
 
+async function refreshBoardMessages() {
+  await refresh()
+  await loadBoard()
+}
+
 onMounted(loadBoard)
 watch(() => snapshot.value.company.id, (companyId) => {
   if (companyId) loadBoard()
@@ -426,6 +431,13 @@ watch(() => shadowRun.projectId, () => {
         </header>
 
         <CompanyModuleNav />
+
+        <CompanyComposer
+          v-if="!projectScoped"
+          :target="{ kind: 'board' }"
+          :agents="snapshot.agents"
+          @sent="refreshBoardMessages"
+        />
 
         <section class="founder-board-status" aria-label="顾问代理状态">
           <div>

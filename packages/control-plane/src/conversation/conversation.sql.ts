@@ -10,6 +10,7 @@ import type {
   ChannelMemberRole,
   ChannelMessageID,
   ConversationMention,
+  ConversationResource,
   ConversationRunID,
   ConversationRunState,
   ConversationThreadID,
@@ -179,6 +180,7 @@ export const ChannelMessageTable = sqliteTable(
     dri_principal_id: text(),
     visibility: text().$type<MessageVisibility>().notNull().default("channel"),
     mentions: text({ mode: "json" }).$type<ConversationMention[]>().notNull(),
+    resources: text({ mode: "json" }).$type<ConversationResource[]>().notNull().default(sql`'[]'`),
     ...Timestamps,
   },
   (table) => [

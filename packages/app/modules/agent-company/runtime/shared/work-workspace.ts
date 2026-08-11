@@ -76,6 +76,8 @@ export type WorkspaceViewState = {
   activePanel?: ContextPanelKind
   selectedArtifactID?: string
   selectedAgentID?: string
+  mainScrollTop?: number
+  panelScrollTop?: Partial<Record<ContextPanelKind, number>>
 }
 
 export function defaultViewState(): WorkspaceViewState {
@@ -112,5 +114,7 @@ export function reconcileViewState(
     activePanel: resolveActivePanel(state.activePanel, available),
     selectedArtifactID: artifactValid ? state.selectedArtifactID : undefined,
     selectedAgentID: agentValid ? state.selectedAgentID : undefined,
+    mainScrollTop: state.mainScrollTop,
+    panelScrollTop: state.panelScrollTop,
   }
 }

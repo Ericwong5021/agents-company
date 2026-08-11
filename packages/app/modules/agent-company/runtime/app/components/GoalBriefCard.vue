@@ -191,7 +191,7 @@ async function saveEdit() {
       <div class="ac-brief__badges">
         <span class="ac-status-badge" :data-risk="view.riskLevel">风险 · {{ view.riskLabel }}</span>
         <span class="ac-status-badge" :data-autostart="view.autoStart">
-          {{ view.autoStart ? "确认后自动开始" : view.approvalLabel }}
+          {{ view.autoStart ? "自动开始" : view.approvalLabel }}
         </span>
       </div>
     </header>
@@ -371,7 +371,7 @@ async function saveEdit() {
           :loading="!view.hasMaterialQuestions && starting"
           @click="view.hasMaterialQuestions ? beginEdit() : emit('start', props.brief)"
         >
-          {{ view.hasMaterialQuestions ? "回答关键问题" : view.autoStart ? "确认并开始" : "开始执行" }}
+          {{ view.hasMaterialQuestions ? "回答关键问题" : view.autoStart ? "重新开始" : "开始执行" }}
         </UButton>
         <UButton color="neutral" variant="outline" @click="beginEdit">调整</UButton>
       </template>

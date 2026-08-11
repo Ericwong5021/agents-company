@@ -28,6 +28,10 @@ export type ProductEvent = {
   props?: ProductEventProps
 }
 
+export const productTelemetryStorageKey = "agent-company:product-telemetry:v1"
+export const productTelemetryConsentKey = "agent-company:product-telemetry-consent:v1"
+export const productTelemetryEventLimit = 5_000
+
 // 禁止采集的字段（键名命中即视为敏感），覆盖 API Key、Prompt、文件与 Artifact 正文、令牌与密钥。
 const forbiddenKeyPattern =
   /(api[_-]?key|apikey|token|secret|password|credential|prompt|message|content|body|file|artifact)/i
@@ -59,6 +63,55 @@ export function dedupeEvents(events: ProductEvent[]): ProductEvent[] {
   })
 }
 
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function eventProps(value: unknown): ProductEventProps | undefined {
+  if (!record(value)) return
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string | number | boolean] =>
+      typeof entry[1] === "string" || typeof entry[1] === "number" || typeof entry[1] === "boolean",
+  )
+  return sanitizeEventProps(Object.fromEntries(entries))
+}
+
+function productEvent(value: unknown): ProductEvent | undefined {
+  if (!record(value)) return
+  if (!productEventTypes.includes(value.type as ProductEventType)) return
+  if (typeof value.at !== "string" || !Number.isFinite(Date.parse(value.at))) return
+  if (typeof value.version !== "string" || !value.version) return
+  if (value.scenario !== undefined && typeof value.scenario !== "string") return
+  if (value.dedupeKey !== undefined && typeof value.dedupeKey !== "string") return
+  return {
+    type: value.type as ProductEventType,
+    at: value.at,
+    version: value.version,
+    scenario: typeof value.scenario === "string" ? value.scenario : undefined,
+    dedupeKey: typeof value.dedupeKey === "string" ? value.dedupeKey : undefined,
+    props: eventProps(value.props),
+  }
+}
+
+export function parseStoredEvents(raw: string | null): ProductEvent[] {
+  if (!raw) return []
+  const parsed = safeJson(raw)
+  if (!Array.isArray(parsed)) return []
+  return dedupeEvents(parsed.flatMap((value) => {
+    const parsedEvent = productEvent(value)
+    return parsedEvent && isSafeEvent(parsedEvent) ? [parsedEvent] : []
+  })).slice(-productTelemetryEventLimit)
+}
+
+export function appendProductEvent(events: ProductEvent[], event: ProductEvent): ProductEvent[] {
+  const safe = {
+    ...event,
+    props: sanitizeEventProps(event.props),
+  }
+  if (!isSafeEvent(safe)) return events
+  return dedupeEvents([...events, safe]).slice(-productTelemetryEventLimit)
+}
+
 // 指标口径版本：口径变化时递增，历史数据据此比较。
 export const metricDefinitionVersion = "1"
 
@@ -71,6 +124,18 @@ export type ProductMetrics = {
   interruptionRate: number
   recoveryRate: number
   acceptanceRate: number
+}
+
+export type ProductMetricBreakdown = {
+  key: string
+  eventCount: number
+  metrics: ProductMetrics
+}
+
+export type ProductMetricBreakdowns = {
+  byVersion: ProductMetricBreakdown[]
+  byScenario: ProductMetricBreakdown[]
+  byApprovalMode: ProductMetricBreakdown[]
 }
 
 function ratio(numerator: number, denominator: number): number {
@@ -93,13 +158,35 @@ export function computeMetrics(events: ProductEvent[]): ProductMetrics {
   }
 }
 
+function breakdown(events: ProductEvent[], key: (event: ProductEvent) => string | undefined) {
+  const groups = events.reduce<Record<string, ProductEvent[]>>((result, event) => {
+    const value = key(event)
+    if (!value) return result
+    result[value] = [...(result[value] ?? []), event]
+    return result
+  }, {})
+  return Object.entries(groups)
+    .map(([value, grouped]) => ({ key: value, eventCount: grouped.length, metrics: computeMetrics(grouped) }))
+    .toSorted((left, right) => right.eventCount - left.eventCount || left.key.localeCompare(right.key))
+}
+
+export function computeMetricBreakdowns(events: ProductEvent[]): ProductMetricBreakdowns {
+  const safe = dedupeEvents(events).filter(isSafeEvent)
+  return {
+    byVersion: breakdown(safe, event => event.version),
+    byScenario: breakdown(safe, event => event.scenario),
+    byApprovalMode: breakdown(safe, event =>
+      typeof event.props?.approvalMode === "string" ? event.props.approvalMode : undefined),
+  }
+}
+
 // opt-in 同意状态：默认关闭（未决定视为关闭），用户显式选择加入才上报。
 export type TelemetryConsent = { enabled: boolean; decidedAt?: string }
 
 export function parseConsent(raw: string | null): TelemetryConsent {
   if (!raw) return { enabled: false }
   const parsed = safeJson(raw)
-  if (!parsed || typeof parsed.enabled !== "boolean") return { enabled: false }
+  if (!record(parsed) || typeof parsed.enabled !== "boolean") return { enabled: false }
   return { enabled: parsed.enabled, decidedAt: typeof parsed.decidedAt === "string" ? parsed.decidedAt : undefined }
 }
 
@@ -111,10 +198,9 @@ export function shouldReportRemote(consent: TelemetryConsent): boolean {
   return consent.enabled === true
 }
 
-function safeJson(raw: string): Record<string, unknown> | undefined {
+function safeJson(raw: string): unknown {
   try {
-    const value = JSON.parse(raw)
-    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined
+    return JSON.parse(raw)
   } catch {
     return undefined
   }

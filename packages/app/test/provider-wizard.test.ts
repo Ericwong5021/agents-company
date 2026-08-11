@@ -76,6 +76,7 @@ describe("TRUST-03 请求体构造", () => {
   test("模型发现请求：密钥可选，与后端 CustomProviderModelsInput 对齐", () => {
     expect(buildModelsRequest(draft)).toEqual({
       format: "openai",
+      provider_id: "custom",
       base_url: "https://api.example.com/v1",
       api_key: "sk-test",
       headers: { "x-team": "growth" },

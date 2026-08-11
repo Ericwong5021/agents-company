@@ -6,11 +6,17 @@ import {
   composerQuickIntents,
   composerTargetLabel,
   draftStorageKey,
+  MAX_COMPOSER_RESOURCES,
   MAX_MENTIONS,
   mentionOptions,
+  parseComposerDraft,
+  pathResource,
+  resourceImpact,
+  serializeComposerDraft,
   sendFailureText,
   shouldRotateRequestID,
   toggleMention,
+  urlResource,
 } from "../modules/agent-company/runtime/shared/company-composer"
 
 // WORK-04 — 统一 Composer 的纯逻辑：目标标签、提及、幂等、草稿隔离与失败文案。
@@ -81,6 +87,23 @@ describe("draftStorageKey", () => {
       .toBe("agent-company-composer:project:prj-1")
     expect(draftStorageKey({ kind: "project", projectId: "prj-2", title: "另一个" }))
       .not.toBe(draftStorageKey({ kind: "project", projectId: "prj-1", title: "官网改版" }))
+  })
+})
+
+describe("Composer resources", () => {
+  test("persists structured drafts and remains compatible with body-only drafts", () => {
+    const resources = [{ kind: "url" as const, url: "https://example.com" }]
+    expect(parseComposerDraft(serializeComposerDraft("补充材料", resources))).toEqual({ body: "补充材料", resources })
+    expect(parseComposerDraft("旧草稿")).toEqual({ body: "旧草稿", resources: [] })
+  })
+
+  test("accepts http resources and read-only local paths", () => {
+    expect(urlResource("https://example.com/topic")).toEqual({ kind: "url", url: "https://example.com/topic" })
+    expect(urlResource("file:///tmp/secret")).toBeUndefined()
+    const path = pathResource("/tmp/content-methods", "directory")
+    expect(path).toMatchObject({ kind: "path", resource_type: "directory", access: "read_only" })
+    expect(path && resourceImpact(path)).toContain("不会提升文件权限")
+    expect(MAX_COMPOSER_RESOURCES).toBe(8)
   })
 })
 

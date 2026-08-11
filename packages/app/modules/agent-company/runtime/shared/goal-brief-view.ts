@@ -18,7 +18,7 @@ import { classifyOpenQuestions, resolveStartDecision } from "./goal-brief-clarif
 // 其余字段逐字沿用当前版本，避免把目标文本复制成多个字段。
 
 export const approvalModeCopy = {
-  autonomous: { label: "自主执行", autoStart: true, detail: "确认后立即开始，仅在高风险动作前暂停。" },
+  autonomous: { label: "自主执行", autoStart: true, detail: "目标摘要生成后立即开始，高风险动作仍等待明确批准。" },
   balanced: { label: "先看目标摘要", autoStart: false, detail: "展示目标摘要，允许你在开始前调整。" },
   strict: { label: "等待你开始", autoStart: false, detail: "在你明确开始前不会执行。" },
 } as const

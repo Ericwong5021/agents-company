@@ -53,6 +53,10 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       name: "useCompanySnapshot",
       from: resolver.resolve("./runtime/app/composables/useCompanySnapshot"),
     })
+    addImports({
+      name: "useProductTelemetry",
+      from: resolver.resolve("./runtime/app/composables/useProductTelemetry"),
+    })
     addServerHandler({
       route: "/api/agent-company/snapshot",
       method: "get",
@@ -209,6 +213,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       handler: resolver.resolve("./runtime/server/api/events.get"),
     })
     addServerHandler({
+      route: "/api/agent-company/product-telemetry",
+      method: "post",
+      handler: resolver.resolve("./runtime/server/api/product-telemetry.post"),
+    })
+    addServerHandler({
       route: "/api/agent-company/provider",
       method: "put",
       handler: resolver.resolve("./runtime/server/api/provider.put"),
@@ -217,6 +226,11 @@ export default defineNuxtModule<AgentCompanyModuleOptions>({
       route: "/api/agent-company/provider/models",
       method: "post",
       handler: resolver.resolve("./runtime/server/api/provider-models.post"),
+    })
+    addServerHandler({
+      route: "/api/agent-company/approval-policy",
+      method: "put",
+      handler: resolver.resolve("./runtime/server/api/approval-policy.put"),
     })
     addServerHandler({
       route: "/api/agent-company/projects/:projectID",

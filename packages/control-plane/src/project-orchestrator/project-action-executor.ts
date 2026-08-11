@@ -94,7 +94,7 @@ const ResolveBlockerPayload = z
   .object({
     resolution: z.string().trim().min(1).max(8_000),
     approval_gate_id: z.string().trim().min(1).optional(),
-    decision: z.enum(["approve", "reject"]).optional(),
+    decision: z.enum(["approve", "reject", "request_change"]).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -618,7 +618,9 @@ export function makeLayer(hooks: Hooks = {}) {
         if (action.action === "resolve_blocker") {
           const payload = ResolveBlockerPayload.parse(action.payload)
           return {
-            body: `已处理项目阻塞：${payload.resolution}`,
+            body: payload.decision === "request_change"
+              ? `已请求修改审批内容：${payload.resolution}`
+              : `已处理项目阻塞：${payload.resolution}`,
             signalType: "intervention" as const,
           }
         }
@@ -1792,7 +1794,7 @@ export function makeLayer(hooks: Hooks = {}) {
                   throw new Error(`Risk approval ${gate.id} no longer matches an active WorkItem scope`)
               }
               const now = Date.now()
-              if (attention?.status === "open") {
+              if (attention?.status === "open" && payload.decision !== "request_change") {
                 db.update(CompanyAttentionTable)
                   .set({
                     status: "resolved",
@@ -1831,6 +1833,18 @@ export function makeLayer(hooks: Hooks = {}) {
                   gate_id: gate.id,
                   kind: gate.kind,
                   decision: payload.decision,
+                  note: payload.resolution,
+                  action_id: action.id,
+                })
+              }
+              if (gate?.status === "pending" && payload.decision === "request_change") {
+                db.update(CompanyApprovalGateTable)
+                  .set({ decision_note: payload.resolution })
+                  .where(and(eq(CompanyApprovalGateTable.id, gate.id), eq(CompanyApprovalGateTable.status, "pending")))
+                  .run()
+                event(db, action.project_id, "gate.change_requested", {
+                  gate_id: gate.id,
+                  kind: gate.kind,
                   note: payload.resolution,
                   action_id: action.id,
                 })

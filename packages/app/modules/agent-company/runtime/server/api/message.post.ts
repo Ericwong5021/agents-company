@@ -20,9 +20,37 @@ const Input = z
       z.object({ kind: z.literal("project"), project_id: z.string().min(1) }).strict(),
     ]),
     mentions: z
-      .array(z.object({ kind: z.literal("agent"), agent_id: z.string().min(1) }).strict())
+      .array(z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("agent"), agent_id: z.string().min(1) }).strict(),
+        z.object({
+          kind: z.literal("role"),
+          role: z.enum(["ceo", "cto", "product_lead"]),
+        }).strict(),
+      ]))
       .max(20)
       .default([]),
+    resources: z.array(z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("url"),
+        url: z.string().url().max(4_000),
+        label: z.string().trim().min(1).max(200).optional(),
+      }).strict(),
+      z.object({
+        kind: z.literal("path"),
+        path: z.string().trim().min(1).max(2_000),
+        resource_type: z.enum(["file", "directory", "unknown"]),
+        access: z.literal("read_only"),
+        label: z.string().trim().min(1).max(200).optional(),
+      }).strict(),
+      z.object({
+        kind: z.literal("text_attachment"),
+        name: z.string().trim().min(1).max(255),
+        media_type: z.string().trim().min(1).max(200),
+        byte_length: z.number().int().nonnegative().max(200_000),
+        content: z.string().max(200_000),
+      }).strict(),
+    ])).max(8).default([]),
+    intent_override: z.enum(["execute", "discuss", "project_followup"]).optional(),
   })
   .strict()
 
@@ -77,6 +105,8 @@ export default defineAgentCompanyHandler(async (event) => {
         request_id: parsed.data.request_id,
         body: parsed.data.body,
         mentions: parsed.data.mentions,
+        resources: parsed.data.resources,
+        intent_override: parsed.data.intent_override,
       },
     }),
   )
