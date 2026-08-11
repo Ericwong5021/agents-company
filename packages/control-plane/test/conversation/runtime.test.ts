@@ -734,6 +734,7 @@ describe.serial("M2 conversation runtime", () => {
       )
       expect(run?.safe_error_summary).not.toContain(secret)
       expect(run?.safe_error_summary).not.toContain("StructuredOutput")
+      expect(server.captures).toHaveLength(4)
     } finally {
       await Instance.disposeAll()
       await resetDatabase()

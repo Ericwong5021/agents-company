@@ -1038,10 +1038,15 @@ export const layer: Layer.Layer<
           })
 
           if (yield* isInterrupted()) return
-          if (result.statusSummary === "done") {
-            scheduler.afterSpeak(speakerId)
-            speakersThisTurn.add(speakerId)
+          if (result.statusSummary !== "done") {
+            yield* bus.publish(Event.RoundComplete, {
+              groupSessionID: params.groupSessionID,
+              roundNum: params.roundNum,
+            })
+            return
           }
+          scheduler.afterSpeak(speakerId)
+          speakersThisTurn.add(speakerId)
 
           bids = yield* probeRound(`Agent ${speakerName} just spoke in the shared discussion.`)
           if (yield* isInterrupted()) return
