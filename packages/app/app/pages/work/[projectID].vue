@@ -495,6 +495,7 @@ const panels = computed(() =>
       workDiagnostics.value.length +
       (detail.value?.workAttempts.length ?? 0) +
       diagnosticsCount(seedGrow.value?.graph, seedGrow.value?.validation) +
+      (seedGrow.value?.acceptance.availability === "available" ? seedGrow.value.acceptance.trackedWorkItemCount : 0) +
       (seedProject.value ? 1 : 0),
   }),
 )
@@ -1450,6 +1451,7 @@ function artifactRoute(projectID: string, artifactID: string) {
               <SeedGrowOverview
                 v-if="seedProject"
                 :mode="detail?.project.seedMode"
+                :acceptance="seedGrow?.acceptance"
                 :organization="seedGrow?.organization"
                 :graph="seedGrow?.graph"
                 :validation="seedGrow?.validation"
@@ -1914,6 +1916,7 @@ function artifactRoute(projectID: string, artifactID: string) {
             <!-- Diagnostics -->
             <template v-else-if="renderedActivePanel === 'diagnostics'">
               <SeedGrowDiagnostics
+                :acceptance="seedGrow?.acceptance"
                 :graph="seedGrow?.graph"
                 :validation="seedGrow?.validation"
                 :discoveries="seedGrow?.discoveries ?? []"

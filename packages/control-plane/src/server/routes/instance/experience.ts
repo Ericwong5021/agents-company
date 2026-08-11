@@ -3,6 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Hono } from "hono"
 import z from "zod"
 import {
+  AcceptanceSummary,
   ExperienceApiError,
   ExperienceArtifactUnavailable,
   ExperienceArtifactView,
@@ -752,6 +753,33 @@ export function createExperienceRoutes(
         )
         if (!result) return c.json(missing("Work Receipt discovery projection not found"), 404)
         return c.json(DiscoverySummary.parse(result))
+      },
+    )
+    .get(
+      "/work/:projectID/acceptance",
+      describeRoute({
+        summary: "Read current tuple acceptance coverage and explicit legacy-unverified work",
+        operationId: "experience.work.acceptance",
+        responses: {
+          200: {
+            description: "Project acceptance coverage",
+            content: { "application/json": { schema: resolver(AcceptanceSummary) } },
+          },
+          404: {
+            description: "Project not found",
+            content: { "application/json": { schema: resolver(ExperienceApiError) } },
+          },
+        },
+      }),
+      validator("param", ProjectID),
+      async (c) => {
+        const result = await runRequest(
+          "ExperienceRoutes.work.acceptance",
+          c,
+          Effect.promise(() => ExperienceProjectionService.acceptance(c.req.valid("param").projectID)),
+        )
+        if (!result) return c.json(missing("Work acceptance projection not found"), 404)
+        return c.json(AcceptanceSummary.parse(result))
       },
     )
     .get(

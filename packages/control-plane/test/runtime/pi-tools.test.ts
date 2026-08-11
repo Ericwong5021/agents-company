@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, symlink } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { createPiTools } from "../../src/runtime/pi/tools"
@@ -7,7 +7,7 @@ import type { AgentRunSpec } from "../../src/runtime"
 
 const directories: string[] = []
 
-async function workspace(permissionMode: AgentRunSpec["permissionMode"]) {
+async function workspace(permissionMode: AgentRunSpec["permissionMode"], capabilityPacks: string[] = []) {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "agentcompany-pi-tools-"))
   directories.push(cwd)
   return {
@@ -22,7 +22,7 @@ async function workspace(permissionMode: AgentRunSpec["permissionMode"]) {
       runtimeHome: cwd,
       prompt: "work",
       systemPrompt: "",
-      capabilityPacks: [],
+      capabilityPacks,
       requiredRuntimeCapabilities: [],
     } satisfies AgentRunSpec,
   }
@@ -128,6 +128,51 @@ describe("Pi governed tools", () => {
 
     await expect(
       bash.execute("call-3", { command: "rg", args: ["--pre=malicious", "needle"] }, new AbortController().signal),
+    ).rejects.toThrow("not allowed")
+  })
+
+  test("runs bounded mechanical verification commands only for verification-testing", async () => {
+    const input = await workspace("read_only", ["verification-testing@1"])
+    await Bun.write(path.join(input.cwd, "left.json"), '{"ok":true}\n')
+    await Bun.write(path.join(input.cwd, "right.json"), '{"ok":true}\n')
+    const bash = createPiTools(input.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    const checksum = Bun.which("sha256sum") ? { command: "sha256sum", args: ["left.json"] } : { command: "shasum", args: ["-a", "256", "left.json"] }
+
+    await expect(bash.execute("verify-checksum", checksum, new AbortController().signal)).resolves.toBeDefined()
+    await expect(
+      bash.execute("verify-cmp", { command: "cmp", args: ["-s", "left.json", "right.json"] }, new AbortController().signal),
+    ).resolves.toBeDefined()
+    await expect(
+      bash.execute("verify-diff", { command: "diff", args: ["-u", "left.json", "right.json"] }, new AbortController().signal),
+    ).resolves.toBeDefined()
+    await expect(
+      bash.execute("verify-file", { command: "file", args: ["--mime-type", "left.json"] }, new AbortController().signal),
+    ).resolves.toBeDefined()
+    if (Bun.which("jq"))
+      await expect(
+        bash.execute("verify-jq", { command: "jq", args: ["-e", ".ok == true", "left.json"] }, new AbortController().signal),
+      ).resolves.toBeDefined()
+  })
+
+  test("keeps mechanical verification commands scoped and inside the workspace", async () => {
+    const ordinary = await workspace("read_only")
+    await Bun.write(path.join(ordinary.cwd, "input.txt"), "input\n")
+    const ordinaryBash = createPiTools(ordinary.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    await expect(
+      ordinaryBash.execute("ordinary-checksum", { command: "shasum", args: ["input.txt"] }, new AbortController().signal),
+    ).rejects.toThrow("not allowed")
+
+    const verification = await workspace("read_only", ["verification-testing@1"])
+    const outside = await mkdtemp(path.join(os.tmpdir(), "agentcompany-pi-tools-outside-"))
+    directories.push(outside)
+    await Bun.write(path.join(outside, "secret.json"), '{"secret":true}\n')
+    await symlink(path.join(outside, "secret.json"), path.join(verification.cwd, "escape.json"))
+    const verificationBash = createPiTools(verification.spec, ["bash"]).find((tool) => tool.name === "bash")!
+    await expect(
+      verificationBash.execute("escape-jq", { command: "jq", args: [".", "escape.json"] }, new AbortController().signal),
+    ).rejects.toThrow("outside the authorized workspace")
+    await expect(
+      verificationBash.execute("write-command", { command: "rm", args: ["escape.json"] }, new AbortController().signal),
     ).rejects.toThrow("not allowed")
   })
 

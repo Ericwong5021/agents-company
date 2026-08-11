@@ -99,6 +99,7 @@ interface RunEntry {
 }
 
 interface StartInput {
+  runID?: string
   script: string
   sessionID: SessionID
   parentActorID: string
@@ -1391,8 +1392,13 @@ export const layer = Layer.effect(
     const start = Effect.fn("WorkflowRuntime.start")(function* (input: StartInput) {
       const parsed = parseMeta(input.script)
       if (!parsed.ok) return yield* Effect.die(parsed.error)
-      const runID = Identifier.descending("workflow")
-      return yield* launch(input, runID, parsed.meta.name)
+      const runID = input.runID ?? Identifier.descending("workflow")
+      const lock = yield* Effect.promise(() => Lock.write(`workflow-start:${runID}`))
+      return yield* Effect.gen(function* () {
+        if (runs.has(runID) || (yield* WorkflowPersistence.load(runID)))
+          throw new Error(`Workflow run already exists: ${runID}`)
+        return yield* launch(input, runID, parsed.meta.name)
+      }).pipe(Effect.ensuring(Effect.sync(() => lock[Symbol.dispose]())))
     })
 
     const status = Effect.fn("WorkflowRuntime.status")(function* (input: { runID: string }) {

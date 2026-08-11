@@ -109,9 +109,12 @@ export function sourceRefLabel(source: ExperienceSourceRef) {
     user: "用户",
     work_attempt: "执行尝试",
     work_receipt: "执行回执",
+    agent_run: "Agent 运行",
     graph_mutation: "工作调整",
     project_assignment: "责任分配",
     validation_gate: "验收检查",
+    acceptance_criterion: "验收标准",
+    acceptance_fact: "验收事实",
   }
   return `${labels[source.kind]} · ${source.id}`
 }
@@ -131,9 +134,12 @@ export function sourceRefTypeLabel(source: ExperienceSourceRef) {
     user: "用户",
     work_attempt: "执行尝试",
     work_receipt: "执行回执",
+    agent_run: "Agent 运行",
     graph_mutation: "工作调整",
     project_assignment: "责任分配",
     validation_gate: "验证",
+    acceptance_criterion: "验收标准",
+    acceptance_fact: "验收事实",
   }
   return `${labels[source.kind]}（已记录）`
 }

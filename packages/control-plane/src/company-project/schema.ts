@@ -26,6 +26,9 @@ export const WorkItemStatus = z.enum([
 ])
 export type WorkItemStatus = z.infer<typeof WorkItemStatus>
 
+export const AcceptanceContractVersion = z.union([z.literal(1), z.literal(2)])
+export type AcceptanceContractVersion = z.infer<typeof AcceptanceContractVersion>
+
 export const DeliveryPolicy = z
   .object({
     source_approval_preset: z.string().min(1),
@@ -78,6 +81,7 @@ export const Project = z.object({
   orchestration_state: ProjectOrchestrationState,
   orchestrator_version: z.number().int().positive(),
   dispatch_paused: z.boolean(),
+  dispatch_generation: z.number().int().nonnegative(),
   graph_revision: z.number().int().nonnegative(),
   created_at: z.number(),
   updated_at: z.number(),
@@ -164,6 +168,7 @@ export const WorkItem = z.object({
   plan_id: z.string(),
   source_task_key: z.string().optional(),
   parent_id: z.string().optional(),
+  reviews_work_item_id: z.string().nullish(),
   title: z.string(),
   description: z.string(),
   kind: z.enum(["planner", "worker", "reviewer"]),
@@ -189,6 +194,10 @@ export const WorkItem = z.object({
   superseded_by_id: z.string().optional(),
   owner_agent_id: z.string().optional(),
   workflow_run_id: z.string().optional(),
+  dispatch_claim_id: z.string().nullish(),
+  dispatch_claim_generation: z.number().int().nonnegative().nullish(),
+  dispatch_claimed_at: z.number().int().nonnegative().nullish(),
+  validation_contract_version: AcceptanceContractVersion,
   acceptance_criteria: z.array(z.string()),
   attempt: z.number().int(),
   max_attempts: z.number().int(),
@@ -241,6 +250,12 @@ export const Artifact = z.object({
   id: z.string(),
   project_id: z.string(),
   work_item_id: z.string().optional(),
+  attempt_id: z.string().nullish(),
+  version: z.number().int().positive().nullish(),
+  supersedes_artifact_id: z.string().nullish(),
+  content_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullish(),
+  materialized_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullish(),
+  integrity_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullish(),
   kind: z.string(),
   title: z.string(),
   path: z.string().optional(),
@@ -271,6 +286,8 @@ export const WorkAttempt = z.object({
   project_id: z.string(),
   work_item_id: z.string(),
   agent_run_id: z.string().optional(),
+  base_artifact_id: z.string().nullish(),
+  repair_criterion_ids: z.array(z.string()),
   ordinal: z.number().int().positive(),
   status: WorkAttemptStatus,
   failure_kind: WorkAttemptFailureKind.optional(),
@@ -464,6 +481,125 @@ export const ValidationEvaluator = z.enum([
 ])
 export type ValidationEvaluator = z.infer<typeof ValidationEvaluator>
 
+export const AcceptanceCriterionKind = z.enum([
+  "legacy_unscoped",
+  "deterministic",
+  "semantic_review",
+  "human",
+])
+export type AcceptanceCriterionKind = z.infer<typeof AcceptanceCriterionKind>
+
+export const AcceptanceAuthority = z.enum([
+  "legacy",
+  "worker_claim",
+  "control_plane",
+  "independent_reviewer",
+  "human",
+])
+export type AcceptanceAuthority = z.infer<typeof AcceptanceAuthority>
+
+export const AcceptanceVerdict = z.enum(["passed", "failed", "inconclusive"])
+export type AcceptanceVerdict = z.infer<typeof AcceptanceVerdict>
+
+export const AcceptanceRequiredAuthority = z.enum(["control_plane", "independent_reviewer", "human"])
+export type AcceptanceRequiredAuthority = z.infer<typeof AcceptanceRequiredAuthority>
+
+export const AcceptanceEvidenceRef = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("agent_run"), id: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal("artifact"), id: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal("project_event"), id: z.string().trim().min(1) }).strict(),
+])
+export type AcceptanceEvidenceRef = z.infer<typeof AcceptanceEvidenceRef>
+
+export const AcceptanceCriterionCreate = z
+  .object({
+    id: z.string().trim().min(1).max(200).optional(),
+    project_id: z.string().trim().min(1),
+    plan_id: z.string().trim().min(1),
+    work_item_id: z.string().trim().min(1),
+    ordinal: z.number().int().positive(),
+    statement: z.string().trim().min(1).max(8_000),
+    verification_kind: AcceptanceCriterionKind,
+    evaluator: z.string().trim().min(1).max(200).optional(),
+    required: z.boolean().default(true),
+  })
+  .strict()
+export type AcceptanceCriterionCreate = z.infer<typeof AcceptanceCriterionCreate>
+
+export const AcceptanceCriterion = AcceptanceCriterionCreate.omit({ id: true }).extend({
+  id: z.string(),
+  statement_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  required_authority: AcceptanceRequiredAuthority.optional(),
+  created_at: z.number().int().nonnegative(),
+})
+export type AcceptanceCriterion = z.infer<typeof AcceptanceCriterion>
+
+export const AcceptanceFactCreate = z
+  .object({
+    id: z.string().trim().min(1).max(200).optional(),
+    project_id: z.string().trim().min(1),
+    work_item_id: z.string().trim().min(1),
+    attempt_id: z.string().trim().min(1),
+    artifact_id: z.string().trim().min(1),
+    criterion_id: z.string().trim().min(1),
+    gate_id: z.string().trim().min(1).optional(),
+    verdict: AcceptanceVerdict,
+    authority: AcceptanceAuthority,
+    evaluator: z.string().trim().min(1).max(200),
+    observation: z.record(z.string(), z.unknown()),
+    evidence_refs: z.array(AcceptanceEvidenceRef).min(1).max(1_000),
+    idempotency_key: z.string().trim().min(1).max(500),
+    supersedes_fact_id: z.string().trim().min(1).optional(),
+  })
+  .strict()
+export type AcceptanceFactCreate = z.infer<typeof AcceptanceFactCreate>
+
+export const AcceptanceFact = AcceptanceFactCreate.omit({ id: true }).extend({
+  id: z.string(),
+  artifact_integrity_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  evidence_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  input_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  created_at: z.number().int().nonnegative(),
+})
+export type AcceptanceFact = z.infer<typeof AcceptanceFact>
+
+export const AcceptanceCoverageCriterion = z
+  .object({
+    criterion_id: z.string(),
+    statement: z.string(),
+    verification_kind: AcceptanceCriterionKind,
+    required_authority: AcceptanceRequiredAuthority.optional(),
+    required: z.boolean(),
+    state: z.enum(["missing", "passed", "failed", "inconclusive", "stale"]),
+    fact_id: z.string().optional(),
+    authority: AcceptanceAuthority.optional(),
+    evidence_refs: z.array(AcceptanceEvidenceRef),
+  })
+  .strict()
+export type AcceptanceCoverageCriterion = z.infer<typeof AcceptanceCoverageCriterion>
+
+export const AcceptanceCoverage = z
+  .object({
+    project_id: z.string(),
+    work_item_id: z.string(),
+    attempt_id: z.string(),
+    artifact_id: z.string(),
+    contract_version: AcceptanceContractVersion,
+    state: z.enum(["verified", "failed", "pending", "legacy_unverified", "stale"]),
+    criteria: z.array(AcceptanceCoverageCriterion),
+  })
+  .strict()
+export type AcceptanceCoverage = z.infer<typeof AcceptanceCoverage>
+
+export const AcceptanceReceiptLink = z
+  .object({
+    receipt_id: z.string().trim().min(1),
+    artifact_id: z.string().trim().min(1),
+    fact_ids: z.array(z.string().trim().min(1)).min(1).max(500),
+  })
+  .strict()
+export type AcceptanceReceiptLink = z.infer<typeof AcceptanceReceiptLink>
+
 export const ValidationScalar = z.union([z.string(), z.number(), z.boolean()])
 export type ValidationScalar = z.infer<typeof ValidationScalar>
 
@@ -500,6 +636,8 @@ export const ValidationGateCreate = z
     id: z.string().trim().min(1).max(200).optional(),
     project_id: z.string().trim().min(1),
     work_item_id: z.string().trim().min(1).optional(),
+    attempt_id: z.string().trim().min(1).optional(),
+    artifact_id: z.string().trim().min(1).optional(),
     kind: ValidationGateKind,
     criteria: z.array(ValidationCriterion).min(1).max(500),
     blocking_work_item_ids: z.array(z.string().trim().min(1)).min(1).max(500),
@@ -599,6 +737,7 @@ export const NewGraphWorkItem = z
     id: z.string().trim().min(1).max(200),
     plan_id: z.string().trim().min(1),
     parent_id: z.string().trim().min(1).optional(),
+    reviews_work_item_id: z.string().trim().min(1).optional(),
     title: z.string().trim().min(1).max(500),
     description: z.string().trim().min(1).max(8_000),
     kind: z.enum(["planner", "worker", "reviewer"]),
@@ -951,6 +1090,7 @@ export const GraphSnapshotNode = z
     id: z.string(),
     plan_id: z.string(),
     parent_id: z.string().optional(),
+    reviews_work_item_id: z.string().optional(),
     kind: z.enum(["planner", "worker", "reviewer"]),
     status: WorkItemStatus,
     owner_agent_id: z.string().optional(),

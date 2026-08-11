@@ -52,6 +52,7 @@ describe.serial("POST /company/projects/:projectID/work-items/:workItemID/reassi
             project_id: project.id,
             plan_id: plan.id,
             parent_id: worker.id,
+            reviews_work_item_id: worker.id,
             title: "Review evidence",
             description: "Review worker evidence",
             kind: "reviewer",

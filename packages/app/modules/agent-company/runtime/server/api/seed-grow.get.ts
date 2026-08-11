@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import {
+  AcceptanceSummary,
   DiscoverySummary,
   GraphChangeSummary,
   OrganizationProjection,
@@ -48,7 +49,8 @@ export default defineAgentCompanyHandler(async (event): Promise<SeedGrowProjectE
     config.agentCompanyControlPlaneAuthorization || undefined,
   )
   if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
-  const [organizationResult, graphResult, validationResult, receiptListResult] = await Promise.all([
+  const [acceptanceResult, organizationResult, graphResult, validationResult, receiptListResult] = await Promise.all([
+    requestControlPlaneSDK<unknown>(client.experience.work.acceptance({ projectID })),
     requestControlPlaneSDK<unknown>(client.experience.work.organization({ projectID })),
     requestControlPlaneSDK<unknown>(client.experience.work.graph({ projectID })),
     requestControlPlaneSDK<unknown>(client.experience.work.validation({ projectID })),
@@ -58,13 +60,14 @@ export default defineAgentCompanyHandler(async (event): Promise<SeedGrowProjectE
       config.agentCompanyControlPlaneAuthorization || undefined,
     ),
   ])
-  if (!organizationResult.ok || !graphResult.ok || !validationResult.ok || !receiptListResult.ok)
+  if (!acceptanceResult.ok || !organizationResult.ok || !graphResult.ok || !validationResult.ok || !receiptListResult.ok)
     throw createError({ statusCode: 503, statusMessage: "动态组织投影暂时不可用" })
 
+  const acceptance = AcceptanceSummary.safeParse(acceptanceResult.value)
   const organization = OrganizationProjection.safeParse(organizationResult.value)
   const graph = GraphChangeSummary.safeParse(graphResult.value)
   const validation = ValidationSummary.safeParse(validationResult.value)
-  if (!organization.success || !graph.success || !validation.success)
+  if (!acceptance.success || !organization.success || !graph.success || !validation.success)
     throw createError({ statusCode: 502, statusMessage: "动态组织投影响应无法识别" })
 
   const persistedReceiptIDs =
@@ -113,6 +116,7 @@ export default defineAgentCompanyHandler(async (event): Promise<SeedGrowProjectE
       })
     : undefined
   return {
+    acceptance: acceptance.data,
     organization: organization.data,
     graph: graph.data,
     validation: validation.data,

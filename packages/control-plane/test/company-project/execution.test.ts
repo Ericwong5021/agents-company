@@ -7,6 +7,7 @@ import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
 import { CompanyAgent } from "../../src/company-agent"
 import { CompanyAgentID } from "../../src/company-agent/schema"
 import { CompanyProject, CompanyProjectExecution } from "../../src/company-project"
+import { CompanyAcceptanceFactTable } from "../../src/company-project/company-project.sql"
 import { CompanyRecruitment } from "../../src/company-recruitment"
 import { Company } from "../../src/company"
 import { ApprovalPolicyTable, CompanyTable } from "../../src/company/company.sql"
@@ -21,6 +22,8 @@ import * as Reputation from "../../src/reputation/reputation"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage"
 import * as WorkType from "../../src/work-type/work-type"
+import { WorkflowRuntime } from "../../src/workflow/runtime"
+import { WorkflowRunTable } from "../../src/workflow/workflow.sql"
 import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { reply, type Item, type Reply } from "../lib/llm-server"
@@ -41,6 +44,52 @@ const dependencies = Layer.mergeAll(
   WorkType.defaultLayer,
 )
 const it = testEffect(Layer.mergeAll(dependencies, CompanyProjectExecution.layer.pipe(Layer.provide(dependencies))))
+
+let partialWaveStarts = 0
+let partialWaveWaits = 0
+const partialWaveRuntime = Layer.succeed(
+  WorkflowRuntime.Service,
+  WorkflowRuntime.Service.of({
+    start: (input) =>
+      Effect.gen(function* () {
+        partialWaveStarts++
+        if (partialWaveStarts === 2) throw new Error("second runtime start failed")
+        if (!input.runID) throw new Error("reserved Workflow run id is missing")
+        yield* Effect.sync(() =>
+          Database.use((db) =>
+            db
+              .insert(WorkflowRunTable)
+              .values({
+                id: input.runID!,
+                session_id: input.sessionID,
+                name: "partial-wave",
+                status: "running",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
+          ),
+        )
+        return { runID: input.runID }
+      }),
+    status: () => Effect.succeed({ status: "running", agentCount: 0 }),
+    wait: () =>
+      Effect.sync(() => {
+        partialWaveWaits++
+      }).pipe(Effect.andThen(Effect.never)),
+    transcript: () => Effect.succeed([]),
+    cancel: () => Effect.succeed(undefined),
+    list: () => Effect.succeed([]),
+    resume: (input) => Effect.succeed({ runID: input.runID, resumed: false }),
+  }),
+)
+const partialWaveDependencies = Layer.mergeAll(dependencies, partialWaveRuntime)
+const partialWaveIt = testEffect(
+  Layer.mergeAll(
+    partialWaveDependencies,
+    CompanyProjectExecution.layer.pipe(Layer.provide(partialWaveDependencies)),
+  ),
+)
 
 const match = (needle: string) => (hit: { body: Record<string, unknown> }) => JSON.stringify(hit.body).includes(needle)
 
@@ -142,6 +191,20 @@ const queueAdaptiveAnalysis = (llm: {
   ) => Effect.Effect<void>
 }) =>
   Effect.gen(function* () {
+    const acceptedReview = JSON.stringify({
+      accepted: true,
+      summary: "交付物满足验收条件",
+      findings: [],
+      evidence_checked: ["方法", "发现", "结论", "限制"],
+      criterion_results: [
+        {
+          criterion_statement: "列出数据源、方法、发现、结论和限制",
+          verdict: "passed",
+          summary: "数据源、方法、发现、结论和限制均完整",
+          evidence_checked: ["方法", "发现", "结论", "限制"],
+        },
+      ],
+    })
     yield* llm.pushMatch(
       match("临时项目规划者"),
       reply()
@@ -163,6 +226,8 @@ const queueAdaptiveAnalysis = (llm: {
         subtasks: [
           {
             key: "independent_review_and_acceptance",
+            kind: "worker",
+            purpose: "delivery",
             summary: "分析现有证据并形成结论",
             acceptanceCriteria: "列出数据源、方法、发现、结论和限制",
             workType: "analysis",
@@ -198,19 +263,102 @@ const queueAdaptiveAnalysis = (llm: {
     yield* llm.pushMatch(
       match("你没有参与原任务"),
       reply()
-        .text(
-          JSON.stringify({
-            accepted: true,
-            summary: "交付物满足验收条件",
-            findings: [],
-            evidence_checked: ["方法", "发现", "结论", "限制"],
-          }),
-        )
+        .text(acceptedReview)
         .stop(),
+      reply().tool("grep", { query: "证据分析完成", pattern: "artifacts/*.json" }),
+      reply().text(acceptedReview).stop(),
     )
   })
 
 describe.serial("CompanyProject adaptive execution", () => {
+  partialWaveIt.live(
+    "keeps an outcome consumer for a successful start when another item in the wave fails to start",
+    () =>
+      provideTmpdirServer(
+        Effect.fnUntraced(function* () {
+          partialWaveStarts = 0
+          partialWaveWaits = 0
+          const sessions = yield* Session.Service
+          const projects = yield* CompanyProject.Service
+          const recruitment = yield* CompanyRecruitment.Service
+          const execution = yield* CompanyProjectExecution.Service
+          const session = yield* sessions.create({ title: "Partial wave dispatch" })
+          const project = yield* projects.create({
+            goal: "Dispatch two independent deliveries",
+            coordinator_session_id: session.id,
+            provider_id: "test",
+            model_id: "test-model",
+          })
+          yield* projects.transition({ id: project.id, status: "planning" })
+          yield* projects.createCharter({
+            project_id: project.id,
+            scope: [project.goal],
+            success_criteria: ["Both deliveries complete"],
+            acceptance_criteria: ["Each successful runtime remains observed"],
+          })
+          const plan = yield* projects.createPlan({
+            project_id: project.id,
+            phase: "execution",
+            summary: "Two independent deliveries",
+            acceptance_criteria: ["Each successful runtime remains observed"],
+          })
+          const items = yield* Effect.forEach(
+            ["A", "B"],
+            (suffix) =>
+              projects.createWorkItem({
+                project_id: project.id,
+                plan_id: plan.id,
+                title: `Delivery ${suffix}`,
+                description: `Produce delivery ${suffix}`,
+                kind: "worker",
+                work_type: "analysis",
+                role: "analyst",
+                capability_packs: ["research-analysis@1"],
+                resource_scope: [`artifacts/${suffix.toLowerCase()}.json`],
+                model_group: "standard",
+                review_status: "not_required",
+                acceptance_criteria: [`Delivery ${suffix} exists`],
+              }),
+            { concurrency: 1 },
+          )
+          yield* Effect.forEach(
+            items,
+            (item) =>
+              Effect.gen(function* () {
+                const need = yield* recruitment.createNeed({
+                  project_id: project.id,
+                  work_item_id: item.id,
+                  need_key: `partial-wave-${item.title.slice(-1).toLowerCase()}`,
+                  role: item.role,
+                  work_type: item.work_type,
+                  capability_packs: item.capability_packs,
+                  risk_level: item.risk_level,
+                  demand_horizon: "project",
+                  workspace_scopes: item.resource_scope,
+                })
+                yield* recruitment.selectAndAssign({
+                  capability_need_id: need.id,
+                  exclude_agent_ids: [],
+                  permission_mode: "read_only",
+                })
+              }),
+            { concurrency: 1, discard: true },
+          )
+
+          const runID = yield* execution.dispatchReady(project.id)
+          for (let attempt = 0; attempt < 20 && partialWaveWaits === 0; attempt++) yield* Effect.sleep("10 millis")
+          const current = yield* projects.listWorkItems(project.id)
+
+          expect(runID).toBeString()
+          expect(partialWaveStarts).toBe(2)
+          expect(partialWaveWaits).toBe(1)
+          expect(current.filter((item) => item.status === "running")).toHaveLength(1)
+          expect(current.filter((item) => item.status === "pending")).toHaveLength(1)
+          expect(current.find((item) => item.status === "running")).toMatchObject({ workflow_run_id: runID })
+        }),
+      ),
+  )
+
   it.live(
     "creates a dynamic planner-worker-reviewer tree and completes without fixed approval stages",
     () =>
@@ -234,8 +382,18 @@ describe.serial("CompanyProject adaptive execution", () => {
                   if (current?.status === "completed") return current
                   if (current?.status === "blocked") {
                     const items = yield* projects.listWorkItems(current.id)
+                    const artifacts = yield* projects.listArtifacts(current.id)
+                    const attempts = yield* projects.listWorkAttempts(current.id)
                     throw new Error(
-                      `adaptive project blocked: ${JSON.stringify(items.map((item) => ({ title: item.title, error: item.error })))}`,
+                      `adaptive project blocked: ${JSON.stringify({
+                        items: items.map((item) => ({ title: item.title, error: item.error })),
+                        attempts,
+                        artifacts: artifacts.map((artifact) => ({
+                          work_item_id: artifact.work_item_id,
+                          kind: artifact.kind,
+                          content: artifact.content,
+                        })),
+                      })}`,
                     )
                   }
                   yield* Effect.sleep("50 millis")
@@ -270,12 +428,66 @@ describe.serial("CompanyProject adaptive execution", () => {
               })
               const items = yield* projects.listWorkItems(completed.id)
               expect(items.map((item) => item.kind)).toEqual(["planner", "worker", "reviewer"])
+              const reviewer = items.find((item) => item.kind === "reviewer")!
+              expect(
+                (yield* projects.listWorkAttempts(completed.id))
+                  .filter((attempt) => attempt.work_item_id === reviewer.id)
+                  .map((attempt) => ({ status: attempt.status, failure_kind: attempt.failure_kind })),
+              ).toEqual(
+                expect.arrayContaining([
+                  { status: "failed", failure_kind: "validator" },
+                  { status: "completed", failure_kind: undefined },
+                ]),
+              )
+              const reviewFacts = Database.use((db) =>
+                db
+                  .select({
+                    evaluator: CompanyAcceptanceFactTable.evaluator,
+                    evidence_refs_json: CompanyAcceptanceFactTable.evidence_refs_json,
+                  })
+                  .from(CompanyAcceptanceFactTable)
+                  .all(),
+              ).filter((fact) => ["independent_review_v2", "review_contract_v2"].includes(fact.evaluator))
+              expect(reviewFacts.length).toBeGreaterThan(0)
+              expect(
+                reviewFacts.every((fact) =>
+                  JSON.parse(fact.evidence_refs_json).some(
+                    (reference: { kind?: string }) => reference.kind === "agent_run",
+                  ),
+                ),
+              ).toBe(true)
               expect(items.find((item) => item.kind === "worker")).toMatchObject({
                 role: "evidence analyst",
                 work_type: "analysis",
                 model_group: "lite",
                 review_status: "accepted",
               })
+              const ready = (yield* projects.listEvents(completed.id)).findLast(
+                (event) => event.type === "delivery.ready",
+              )!
+              if (
+                !Array.isArray(ready.data.criterion_ids) ||
+                !ready.data.criterion_ids.every((criterion) => typeof criterion === "string")
+              )
+                throw new Error("Delivery criterion binding is missing")
+              const binding = {
+                plan_id: ready.data.plan_id,
+                plan_version: ready.data.plan_version,
+                brief_id: ready.data.brief_id,
+                brief_version: ready.data.brief_version,
+                criterion_ids: ready.data.criterion_ids,
+              }
+              expect(binding).toMatchObject({
+                plan_id: items[0]!.plan_id,
+                plan_version: completed.active_plan_version,
+                brief_id: `legacy:${completed.id}`,
+                brief_version: 1,
+              })
+              expect(binding.criterion_ids).toEqual([])
+              expect(binding.criterion_ids).toEqual(binding.criterion_ids.toSorted())
+              expect(ready.data.sha256).toBe(
+                new Bun.CryptoHasher("sha256").update(JSON.stringify(binding)).digest("hex"),
+              )
               expect(yield* projects.listGates(completed.id)).toEqual([])
               expect(
                 (yield* (yield* AgentRun.Service).list({ companyProjectID: completed.id })).map(
@@ -324,8 +536,10 @@ describe.serial("CompanyProject adaptive execution", () => {
                   subtasks: [
                     {
                       key: "low-risk-selfcheck",
+                      kind: "worker",
+                      purpose: "delivery",
                       summary: "整理现有证据清单",
-                      acceptanceCriteria: "列出数据源、方法、发现、结论和限制",
+                      acceptanceCriteria: "artifact_exists",
                       workType: "analysis",
                       role: "evidence analyst",
                       capabilityPacks: ["research-analysis@1"],
@@ -446,8 +660,10 @@ describe.serial("CompanyProject adaptive execution", () => {
                   subtasks: [
                     {
                       key: "review-rework",
+                      kind: "worker",
+                      purpose: "delivery",
                       summary: "分析现有证据并根据独立复核返工",
-                      acceptanceCriteria: "列出数据源、方法、发现、结论和限制",
+                      acceptanceCriteria: "自然结束状态必须有可复核证据，并列出数据源、方法、发现、结论和限制",
                       workType: "analysis",
                       role: "evidence analyst",
                       capabilityPacks: ["research-analysis@1"],
@@ -498,6 +714,7 @@ describe.serial("CompanyProject adaptive execution", () => {
               )
               yield* llm.pushMatch(
                 match("你没有参与原任务"),
+                reply().tool("grep", { query: "worker-v1", pattern: "artifacts/*.json" }),
                 reply()
                   .text(
                     JSON.stringify({
@@ -505,14 +722,21 @@ describe.serial("CompanyProject adaptive execution", () => {
                       summary: "初稿需要返工",
                       findings: [finding],
                       evidence_checked: ["worker-v1"],
+                      criterion_results: [
+                        {
+                          criterion_statement: "自然结束状态必须有可复核证据，并列出数据源、方法、发现、结论和限制",
+                          verdict: "failed",
+                          summary: finding,
+                          evidence_checked: ["worker-v1"],
+                        },
+                      ],
                     }),
                   )
                   .stop(),
               )
               yield* llm.pushMatch(
-                (hit) =>
-                  match("你没有参与原任务")(hit) &&
-                  containsText(hit.body, '交付物：{"summary":"worker-v2"'),
+                match("你没有参与原任务"),
+                reply().tool("grep", { query: "worker-v2", pattern: "artifacts/*.json" }),
                 reply()
                   .text(
                     JSON.stringify({
@@ -520,6 +744,14 @@ describe.serial("CompanyProject adaptive execution", () => {
                       summary: "修订版满足验收条件",
                       findings: [],
                       evidence_checked: ["worker-v2", finding],
+                      criterion_results: [
+                        {
+                          criterion_statement: "自然结束状态必须有可复核证据，并列出数据源、方法、发现、结论和限制",
+                          verdict: "passed",
+                          summary: "修订版逐项满足验收条件",
+                          evidence_checked: ["worker-v2", finding],
+                        },
+                      ],
                     }),
                   )
                   .stop(),
@@ -576,8 +808,31 @@ describe.serial("CompanyProject adaptive execution", () => {
               const reviewerRequests = hits.filter((hit) => containsText(hit.body, "你没有参与原任务"))
               expect(workerRequests).toHaveLength(2)
               expect(containsText(workerRequests[1]!.body, finding)).toBe(true)
-              expect(reviewerRequests).toHaveLength(2)
-              expect(containsText(reviewerRequests[1]!.body, '交付物：{"summary":"worker-v2"')).toBe(true)
+              expect(reviewerRequests).toHaveLength(4)
+              expect(containsText(reviewerRequests[3]!.body, "交付物引用：")).toBe(true)
+              expect(containsText(reviewerRequests[3]!.body, '"summary":"worker-v2"')).toBe(false)
+              const runService = yield* AgentRun.Service
+              const reviewerRuns = (yield* runService.list({ companyProjectID: completed.id })).filter(
+                (run) => run.workItemID === reviewer.id,
+              )
+              expect(reviewerRuns).toHaveLength(2)
+              expect(
+                yield* Effect.forEach(reviewerRuns, (run) =>
+                  Effect.map(runService.events(run.id), (events) => {
+                    const queued = events.find((event) => event.type === "agent_run.queued")
+                    return (
+                      queued !== undefined &&
+                      !JSON.parse(queued.payloadJSON).capabilityPacks.includes("verification-testing@1") &&
+                      events.some(
+                        (event) =>
+                          event.type === "runtime.tool" &&
+                          JSON.parse(event.payloadJSON).toolName === "grep" &&
+                          JSON.parse(event.payloadJSON).result !== undefined,
+                      )
+                    )
+                  }),
+                ),
+              ).toEqual([true, true])
               expect(yield* llm.pending).toBe(0)
             }),
           )
@@ -765,6 +1020,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 plan_id: plan.id,
                 source_task_key: "delivery-evidence",
                 parent_id: worker.id,
+                reviews_work_item_id: worker.id,
                 title: "独立复核候选复用证据",
                 description: "独立复核改派和跨项目复用历史。",
                 kind: "reviewer",
@@ -867,7 +1123,12 @@ describe.serial("CompanyProject adaptive execution", () => {
                   if (current?.status === "completed") return current
                   if (current?.status === "blocked")
                     throw new Error(
-                      `reassigned evidence project blocked: ${JSON.stringify(yield* projects.listWorkItems(project.id))}`,
+                      `reassigned evidence project blocked: ${JSON.stringify({
+                        items: yield* projects.listWorkItems(project.id),
+                        attempts: yield* projects.listWorkAttempts(project.id),
+                        pending: yield* llm.pending,
+                        misses: (yield* llm.misses).map((hit) => JSON.stringify(hit.body).slice(0, 2_000)),
+                      })}`,
                     )
                   yield* Effect.sleep("50 millis")
                 }
@@ -1101,6 +1362,7 @@ describe.serial("CompanyProject adaptive execution", () => {
                 plan_id: plan.id,
                 source_task_key: "board_closeout_and_organization_decision",
                 parent_id: worker.id,
+                reviews_work_item_id: worker.id,
                 title: "独立复核 Board 最终收口",
                 description: "检查原 Board Thread 中的 DRI 最终决策。",
                 kind: "reviewer",
@@ -1241,7 +1503,7 @@ describe.serial("CompanyProject adaptive execution", () => {
               ).toMatchObject({
                 evidence: {
                   error: expect.stringContaining("must be owned by project DRI board-cto"),
-                  retryable: true,
+                  retryable: false,
                 },
               })
 
@@ -1442,7 +1704,7 @@ describe.serial("CompanyProject adaptive execution", () => {
               expect(items.map((item) => item.kind)).toEqual(["planner", "worker", "reviewer"])
               expect(items[0]).toMatchObject({
                 inputs: expect.arrayContaining(["已批准 Project Charter"]),
-                expected_outputs: ["依赖有序的 worker/reviewer Work Items"],
+                expected_outputs: ["依赖有序的交付 Worker Work Items"],
                 disposition: "retain",
                 status: "completed",
               })

@@ -97,6 +97,13 @@ test(
         orphan_status: "blocked",
         terminal_status: "completed",
         active_status: "running",
+        claimed: {
+          status: "pending",
+          workflow_run_id: null,
+          dispatch_claim_id: null,
+        },
+        claimed_workflow_status: "cancelled",
+        claimed_agent_run_state: "stopped",
         projection_version: PROJECTOR_VERSION,
         projection_rebuilt: true,
         event_counts: {
@@ -105,6 +112,7 @@ test(
           "validation_gate.recovered": 2,
           "attention.requested": 1,
           "work_item.recovered": 2,
+          "dispatch.claim_recovered": 1,
         },
       })
       return { boundary, verification }

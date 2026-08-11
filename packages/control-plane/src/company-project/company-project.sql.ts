@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm"
-import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import {
+  type AnySQLiteColumn,
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core"
 
 export const CompanyProjectTable = sqliteTable(
   "company_project",
@@ -24,6 +33,7 @@ export const CompanyProjectTable = sqliteTable(
     orchestration_state: text().notNull().default("idle"),
     orchestrator_version: integer().notNull().default(1),
     dispatch_paused: integer({ mode: "boolean" }).notNull().default(false),
+    dispatch_generation: integer().notNull().default(0),
     graph_revision: integer().notNull().default(0),
     created_at: integer().notNull(),
     updated_at: integer().notNull(),
@@ -93,6 +103,9 @@ export const CompanyWorkItemTable = sqliteTable(
       .references(() => CompanyPlanTable.id, { onDelete: "cascade" }),
     source_task_key: text(),
     parent_id: text(),
+    reviews_work_item_id: text().references((): AnySQLiteColumn => CompanyWorkItemTable.id, {
+      onDelete: "set null",
+    }),
     title: text().notNull(),
     description: text().notNull(),
     kind: text().notNull(),
@@ -117,6 +130,10 @@ export const CompanyWorkItemTable = sqliteTable(
     superseded_by_id: text(),
     owner_agent_id: text(),
     workflow_run_id: text(),
+    dispatch_claim_id: text(),
+    dispatch_claim_generation: integer(),
+    dispatch_claimed_at: integer(),
+    validation_contract_version: integer().notNull().default(1),
     acceptance_criteria_json: text().notNull(),
     attempt: integer().notNull().default(0),
     max_attempts: integer().notNull().default(3),
@@ -133,6 +150,13 @@ export const CompanyWorkItemTable = sqliteTable(
       table.source_task_key,
       table.kind,
     ),
+    uniqueIndex("company_work_item_active_reviewer_target_idx")
+      .on(table.project_id, table.reviews_work_item_id)
+      .where(
+        sql.raw(
+          "kind = 'reviewer' AND reviews_work_item_id IS NOT NULL AND status NOT IN ('superseded', 'cancelled')",
+        ),
+      ),
     index("company_work_item_project_status_idx").on(table.project_id, table.status),
     index("company_work_item_owner_idx").on(table.owner_agent_id, table.status),
   ],
@@ -191,6 +215,14 @@ export const CompanyArtifactTable = sqliteTable(
     scope_type: text().notNull().default("project"),
     private_owner_id: text(),
     work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    attempt_id: text().references((): AnySQLiteColumn => CompanyWorkAttemptTable.id, { onDelete: "set null" }),
+    version: integer(),
+    supersedes_artifact_id: text().references((): AnySQLiteColumn => CompanyArtifactTable.id, {
+      onDelete: "set null",
+    }),
+    content_sha256: text(),
+    materialized_sha256: text(),
+    integrity_sha256: text(),
     kind: text().notNull(),
     title: text().notNull(),
     path: text(),
@@ -204,6 +236,10 @@ export const CompanyArtifactTable = sqliteTable(
     index("company_artifact_company_scope_idx").on(table.company_id, table.scope_type),
     index("company_artifact_private_owner_idx").on(table.private_owner_id),
     index("company_artifact_work_item_idx").on(table.work_item_id),
+    index("company_artifact_attempt_idx").on(table.attempt_id),
+    uniqueIndex("company_artifact_work_item_kind_version_idx")
+      .on(table.work_item_id, table.kind, table.version)
+      .where(sql.raw("work_item_id IS NOT NULL AND version IS NOT NULL")),
     check(
       "company_artifact_scope_check",
       sql.raw(`(
@@ -228,6 +264,8 @@ export const CompanyWorkAttemptTable = sqliteTable(
       .notNull()
       .references(() => CompanyWorkItemTable.id, { onDelete: "cascade" }),
     agent_run_id: text(),
+    base_artifact_id: text().references((): AnySQLiteColumn => CompanyArtifactTable.id, { onDelete: "set null" }),
+    repair_criterion_ids_json: text().notNull().default("[]"),
     ordinal: integer().notNull(),
     status: text().notNull(),
     failure_kind: text(),
@@ -431,6 +469,8 @@ export const CompanyValidationGateTable = sqliteTable(
       .notNull()
       .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
     work_item_id: text().references(() => CompanyWorkItemTable.id, { onDelete: "set null" }),
+    attempt_id: text().references(() => CompanyWorkAttemptTable.id, { onDelete: "set null" }),
+    artifact_id: text().references(() => CompanyArtifactTable.id, { onDelete: "set null" }),
     kind: text().notNull(),
     status: text().notNull(),
     criteria_json: text().notNull(),
@@ -448,6 +488,121 @@ export const CompanyValidationGateTable = sqliteTable(
   (table) => [
     index("company_validation_gate_project_status_idx").on(table.project_id, table.status),
     index("company_validation_gate_work_item_idx").on(table.work_item_id),
+    index("company_validation_gate_attempt_artifact_idx").on(table.attempt_id, table.artifact_id),
+  ],
+)
+
+export const CompanyAcceptanceCriterionTable = sqliteTable(
+  "company_acceptance_criterion",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    plan_id: text()
+      .notNull()
+      .references(() => CompanyPlanTable.id, { onDelete: "cascade" }),
+    work_item_id: text()
+      .notNull()
+      .references(() => CompanyWorkItemTable.id, { onDelete: "cascade" }),
+    ordinal: integer().notNull(),
+    statement: text().notNull(),
+    statement_sha256: text().notNull(),
+    verification_kind: text().notNull(),
+    required_authority: text(),
+    evaluator: text(),
+    required: integer({ mode: "boolean" }).notNull().default(true),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("company_acceptance_criterion_item_ordinal_idx").on(table.work_item_id, table.ordinal),
+    index("company_acceptance_criterion_project_idx").on(table.project_id, table.work_item_id),
+    check("company_acceptance_criterion_ordinal_check", sql.raw("ordinal > 0")),
+    check(
+      "company_acceptance_criterion_kind_check",
+      sql.raw("verification_kind IN ('legacy_unscoped', 'deterministic', 'semantic_review', 'human')"),
+    ),
+    check(
+      "company_acceptance_criterion_authority_check",
+      sql.raw(
+        "required_authority IS NULL OR required_authority IN ('control_plane', 'independent_reviewer', 'human')",
+      ),
+    ),
+  ],
+)
+
+export const CompanyAcceptanceFactTable = sqliteTable(
+  "company_acceptance_fact",
+  {
+    id: text().primaryKey(),
+    project_id: text()
+      .notNull()
+      .references(() => CompanyProjectTable.id, { onDelete: "cascade" }),
+    work_item_id: text()
+      .notNull()
+      .references(() => CompanyWorkItemTable.id, { onDelete: "cascade" }),
+    attempt_id: text()
+      .notNull()
+      .references(() => CompanyWorkAttemptTable.id, { onDelete: "cascade" }),
+    artifact_id: text()
+      .notNull()
+      .references(() => CompanyArtifactTable.id, { onDelete: "cascade" }),
+    artifact_integrity_sha256: text().notNull(),
+    criterion_id: text()
+      .notNull()
+      .references(() => CompanyAcceptanceCriterionTable.id, { onDelete: "cascade" }),
+    gate_id: text().references(() => CompanyValidationGateTable.id, { onDelete: "set null" }),
+    verdict: text().notNull(),
+    authority: text().notNull(),
+    evaluator: text().notNull(),
+    observation_json: text().notNull(),
+    evidence_refs_json: text().notNull(),
+    evidence_sha256: text().notNull(),
+    input_sha256: text().notNull(),
+    idempotency_key: text().notNull(),
+    supersedes_fact_id: text().references((): AnySQLiteColumn => CompanyAcceptanceFactTable.id, {
+      onDelete: "restrict",
+    }),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    uniqueIndex("company_acceptance_fact_project_idempotency_idx").on(table.project_id, table.idempotency_key),
+    uniqueIndex("company_acceptance_fact_supersedes_idx")
+      .on(table.supersedes_fact_id)
+      .where(sql.raw("supersedes_fact_id IS NOT NULL")),
+    index("company_acceptance_fact_tuple_idx").on(
+      table.work_item_id,
+      table.attempt_id,
+      table.artifact_id,
+      table.criterion_id,
+    ),
+    index("company_acceptance_fact_gate_idx").on(table.gate_id),
+    check("company_acceptance_fact_verdict_check", sql.raw("verdict IN ('passed', 'failed', 'inconclusive')")),
+    check(
+      "company_acceptance_fact_authority_check",
+      sql.raw("authority IN ('legacy', 'worker_claim', 'control_plane', 'independent_reviewer', 'human')"),
+    ),
+    check(
+      "company_acceptance_fact_supersedes_check",
+      sql.raw("supersedes_fact_id IS NULL OR supersedes_fact_id <> id"),
+    ),
+  ],
+)
+
+export const CompanyWorkReceiptAcceptanceFactTable = sqliteTable(
+  "company_work_receipt_acceptance_fact",
+  {
+    receipt_id: text()
+      .notNull()
+      .references(() => CompanyWorkReceiptTable.id, { onDelete: "cascade" }),
+    fact_id: text()
+      .notNull()
+      .references(() => CompanyAcceptanceFactTable.id, { onDelete: "cascade" }),
+    created_at: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.receipt_id, table.fact_id] }),
+    index("company_work_receipt_acceptance_fact_fact_idx").on(table.fact_id),
   ],
 )
 

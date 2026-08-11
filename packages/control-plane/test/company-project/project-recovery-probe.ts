@@ -1,6 +1,13 @@
 import { Effect, Layer } from "effect"
 import { and, eq } from "drizzle-orm"
+import { AgentRun } from "../../src/agent-run/agent-run"
 import { AgentRunTable } from "../../src/agent-run/agent-run.sql"
+import { AgentRunSupervisor } from "../../src/agent-run/supervisor"
+import { ProjectTable } from "../../src/project/project.sql"
+import { ProjectID } from "../../src/project/schema"
+import { SessionTable } from "../../src/session/session.sql"
+import { SessionID } from "../../src/session/schema"
+import { WorkflowRunTable } from "../../src/workflow/workflow.sql"
 import {
   CompanyGraphMutation,
   CompanyProjectRecovery,
@@ -52,6 +59,12 @@ const terminalReceiptID = "receipt-a4-terminal"
 const activeID = "active-a4-runtime"
 const activeAttemptID = "attempt-a4-active"
 const activeRunID = "run-a4-active"
+const claimedID = "claimed-a4-runtime"
+const claimedAttemptID = "attempt-a4-claimed"
+const claimedWorkflowID = "workflow-a4-claimed"
+const claimedAgentRunID = "run-a4-claimed"
+const sessionID = SessionID.make("session-a4-recovery")
+const runtimeProjectID = ProjectID.make("project-a4-runtime")
 const runningGateID = "gate-a4-running"
 const invalidPassGateID = "gate-a4-invalid-pass"
 const circuitGateID = "gate-a4-circuit"
@@ -164,6 +177,27 @@ async function output(value: Record<string, unknown>) {
 
 if (mode === "prepare") {
   const db = Database.Client()
+  db.insert(ProjectTable)
+    .values({
+      id: runtimeProjectID,
+      worktree: "/tmp",
+      sandboxes: [],
+      time_created: now,
+      time_updated: now,
+    })
+    .run()
+  db.insert(SessionTable)
+    .values({
+      id: sessionID,
+      project_id: runtimeProjectID,
+      slug: "a4-recovery",
+      directory: "/tmp",
+      title: "A4 recovery",
+      version: "1",
+      time_created: now,
+      time_updated: now,
+    })
+    .run()
   db.insert(CompanyProjectTable)
     .values({
       id: projectID,
@@ -195,6 +229,13 @@ if (mode === "prepare") {
       workItem(orphanID, "running", 1),
       workItem(terminalID, "running", 1),
       workItem(activeID, "running", 1),
+      {
+        ...workItem(claimedID, "running", 1),
+        workflow_run_id: claimedWorkflowID,
+        dispatch_claim_id: "claim-a4-crash-gap",
+        dispatch_claim_generation: 0,
+        dispatch_claimed_at: now,
+      },
     ])
     .run()
   db.insert(CompanyWorkAttemptTable)
@@ -234,6 +275,14 @@ if (mode === "prepare") {
         status: "running",
         started_at: now,
       },
+      {
+        id: claimedAttemptID,
+        project_id: projectID,
+        work_item_id: claimedID,
+        ordinal: 1,
+        status: "running",
+        started_at: now,
+      },
     ])
     .run()
   db.insert(AgentRunTable)
@@ -249,6 +298,34 @@ if (mode === "prepare") {
       cwd: "/tmp/a4-active",
       runtime_home_path: "/tmp/a4-active/runtime",
       time_started: now,
+      time_created: now,
+      time_updated: now,
+    })
+    .run()
+  db.insert(AgentRunTable)
+    .values({
+      id: claimedAgentRunID,
+      agent_id: "agent-a4-claimed",
+      runtime: "pi",
+      lifecycle: "on_demand",
+      permission_mode: "workspace_write",
+      state: "awaiting_recovery",
+      workflow_run_id: claimedWorkflowID,
+      company_project_id: projectID,
+      work_item_id: claimedID,
+      cwd: "/tmp/a4-claimed",
+      runtime_home_path: "/tmp/a4-claimed/runtime",
+      time_started: now,
+      time_created: now,
+      time_updated: now,
+    })
+    .run()
+  db.insert(WorkflowRunTable)
+    .values({
+      id: claimedWorkflowID,
+      session_id: sessionID,
+      name: "a4-claimed",
+      status: "running",
       time_created: now,
       time_updated: now,
     })
@@ -357,6 +434,8 @@ const recoveryLayer = CompanyProjectRecovery.makeLayer({
   Layer.provide(CompanyWorkFacts.makeLayer({ recoverOnStart: false })),
   Layer.provide(CompanyGraphMutation.makeLayer({ publish: async () => {} })),
   Layer.provide(CompanyValidationGate.defaultLayer),
+  Layer.provide(AgentRun.defaultLayer),
+  Layer.provide(AgentRunSupervisor.defaultLayer),
 )
 
 if (mode === "fault" || mode === "recover") {
@@ -421,6 +500,25 @@ if (mode === "verify") {
     .from(CompanyWorkItemTable)
     .where(eq(CompanyWorkItemTable.id, activeID))
     .get()!
+  const claimed = db
+    .select({
+      status: CompanyWorkItemTable.status,
+      workflow_run_id: CompanyWorkItemTable.workflow_run_id,
+      dispatch_claim_id: CompanyWorkItemTable.dispatch_claim_id,
+    })
+    .from(CompanyWorkItemTable)
+    .where(eq(CompanyWorkItemTable.id, claimedID))
+    .get()!
+  const claimedWorkflow = db
+    .select({ status: WorkflowRunTable.status })
+    .from(WorkflowRunTable)
+    .where(eq(WorkflowRunTable.id, claimedWorkflowID))
+    .get()!
+  const claimedAgentRun = db
+    .select({ state: AgentRunTable.state })
+    .from(AgentRunTable)
+    .where(eq(AgentRunTable.id, claimedAgentRunID))
+    .get()!
   const projection = db
     .select()
     .from(CompanyWorkProjectionTable)
@@ -433,6 +531,7 @@ if (mode === "verify") {
       "validation_gate.recovered",
       "attention.requested",
       "work_item.recovered",
+      "dispatch.claim_recovered",
     ].map((type) => [
       type,
       db
@@ -456,6 +555,9 @@ if (mode === "verify") {
     orphan_status: orphan.status,
     terminal_status: terminal.status,
     active_status: active.status,
+    claimed,
+    claimed_workflow_status: claimedWorkflow.status,
+    claimed_agent_run_state: claimedAgentRun.state,
     projection_version: projection.projector_version,
     projection_rebuilt: projection.source_watermark !== "stale",
     event_counts: eventCounts,

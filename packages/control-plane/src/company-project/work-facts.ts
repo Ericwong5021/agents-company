@@ -6,7 +6,9 @@ import { CompanyWorkReceiptLearningTargetRefTable } from "@/company-learning/com
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
+import { linkReceiptWithDatabase } from "./acceptance-fact"
 import {
+  CompanyAcceptanceFactTable,
   CompanyArtifactTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
@@ -16,6 +18,7 @@ import {
 } from "./company-project.sql"
 import {
   WorkAttempt,
+  type AcceptanceReceiptLink,
   type WorkAttemptFailureKind,
   type WorkAttemptStatus,
   WorkReceipt,
@@ -29,6 +32,8 @@ const attemptFromRow = (row: typeof CompanyWorkAttemptTable.$inferSelect) =>
   WorkAttempt.parse({
     ...row,
     agent_run_id: row.agent_run_id ?? undefined,
+    base_artifact_id: row.base_artifact_id ?? undefined,
+    repair_criterion_ids: parseList(row.repair_criterion_ids_json),
     failure_kind: row.failure_kind ?? undefined,
     safe_summary: row.safe_summary ?? undefined,
     finished_at: row.finished_at ?? undefined,
@@ -204,6 +209,8 @@ export interface Interface {
     ordinal: number
     actor_id?: string
     agent_run_id?: string
+    base_artifact_id?: string
+    repair_criterion_ids?: string[]
   }) => Effect.Effect<WorkAttempt>
   readonly bindAgentRun: (input: { attempt_id: string; agent_run_id: string }) => Effect.Effect<WorkAttempt>
   readonly finishAttempt: (input: {
@@ -213,6 +220,7 @@ export interface Interface {
     safe_summary?: string
     actor_id?: string
     receipt: WorkReceiptSubmissionType
+    acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">
   }) => Effect.Effect<{ attempt: WorkAttempt; receipt: WorkReceipt }>
   readonly processReceipt: (id: string) => Effect.Effect<WorkReceipt>
   readonly claimReceipt: (id: string) => Effect.Effect<ReceiptClaim>
@@ -240,6 +248,7 @@ export interface Interface {
     failure_kind?: WorkAttemptFailureKind
     actor_id?: string
     receipt?: WorkReceiptSubmissionType
+    acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">
   }) => Effect.Effect<{ attempt: WorkAttempt; receipt: WorkReceipt }>
   readonly recover: () => Effect.Effect<{
     reconciled_attempt_ids: string[]
@@ -263,6 +272,8 @@ function makeService(recoverOnStart: boolean) {
       ordinal: number
       actor_id?: string
       agent_run_id?: string
+      base_artifact_id?: string
+      repair_criterion_ids?: string[]
     }) {
       if (!Number.isInteger(input.ordinal) || input.ordinal < 1) {
         throw new Error("Work Attempt ordinal must be a positive integer")
@@ -292,6 +303,13 @@ function makeService(recoverOnStart: boolean) {
               if (input.agent_run_id && existing.agent_run_id && existing.agent_run_id !== input.agent_run_id) {
                 throw new Error(`Work Attempt ${existing.id} is already bound to another AgentRun`)
               }
+              if (input.base_artifact_id && existing.base_artifact_id !== input.base_artifact_id)
+                throw new Error(`Work Attempt ${existing.id} has a different base Artifact`)
+              if (
+                input.repair_criterion_ids &&
+                existing.repair_criterion_ids_json !== JSON.stringify(input.repair_criterion_ids)
+              )
+                throw new Error(`Work Attempt ${existing.id} has different repair criteria`)
               return attemptFromRow(existing)
             }
             if (input.agent_run_id) {
@@ -304,11 +322,49 @@ function makeService(recoverOnStart: boolean) {
                 throw new Error("Work Attempt references an unavailable AgentRun")
               }
             }
+            const baseArtifact = input.base_artifact_id
+              ? db.select().from(CompanyArtifactTable).where(eq(CompanyArtifactTable.id, input.base_artifact_id)).get()
+              : db
+                  .select()
+                  .from(CompanyArtifactTable)
+                  .where(
+                    and(
+                      eq(CompanyArtifactTable.work_item_id, input.work_item_id),
+                      eq(CompanyArtifactTable.kind, item.work_type),
+                    ),
+                  )
+                  .orderBy(desc(CompanyArtifactTable.created_at), desc(CompanyArtifactTable.id))
+                  .get()
+            if (
+              baseArtifact &&
+              (baseArtifact.project_id !== input.project_id || baseArtifact.work_item_id !== input.work_item_id)
+            )
+              throw new Error("Work Attempt base Artifact does not match its Work Item")
+            const baseFacts = baseArtifact
+              ? db
+                  .select()
+                  .from(CompanyAcceptanceFactTable)
+                  .where(eq(CompanyAcceptanceFactTable.artifact_id, baseArtifact.id))
+                  .orderBy(asc(CompanyAcceptanceFactTable.created_at), asc(CompanyAcceptanceFactTable.id))
+                  .all()
+              : []
+            const supersededFactIDs = new Set(
+              baseFacts.flatMap((fact) => (fact.supersedes_fact_id ? [fact.supersedes_fact_id] : [])),
+            )
+            const repairCriterionIDs =
+              input.repair_criterion_ids ??
+              [...new Set(
+                baseFacts
+                  .filter((fact) => !supersededFactIDs.has(fact.id) && fact.verdict === "failed")
+                  .map((fact) => fact.criterion_id),
+              )]
             const row = {
               id: Identifier.ascending("workAttempt"),
               project_id: input.project_id,
               work_item_id: input.work_item_id,
               agent_run_id: input.agent_run_id ?? null,
+              base_artifact_id: baseArtifact?.id ?? null,
+              repair_criterion_ids_json: JSON.stringify(repairCriterionIDs),
               ordinal: input.ordinal,
               status: "running",
               failure_kind: null,
@@ -321,7 +377,13 @@ function makeService(recoverOnStart: boolean) {
               db,
               input.project_id,
               "work_attempt.started",
-              { attempt_id: row.id, work_item_id: input.work_item_id, ordinal: input.ordinal },
+              {
+                attempt_id: row.id,
+                work_item_id: input.work_item_id,
+                ordinal: input.ordinal,
+                base_artifact_id: row.base_artifact_id,
+                repair_criterion_ids: repairCriterionIDs,
+              },
               input.actor_id,
             )
             return attemptFromRow(row)
@@ -375,6 +437,9 @@ function makeService(recoverOnStart: boolean) {
       safe_summary?: string
       actor_id?: string
       receipt: WorkReceiptSubmissionType
+      acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">
+      work_item_status?: "completed" | "blocked"
+      work_item_error?: string
     }) {
       const receiptInput = WorkReceiptSubmission.parse(input.receipt)
       if (input.status === "completed" && receiptInput.outcome !== "completed") {
@@ -392,6 +457,14 @@ function makeService(recoverOnStart: boolean) {
               .where(eq(CompanyWorkAttemptTable.id, input.attempt_id))
               .get()
             if (!attempt) throw new Error(`Work Attempt not found: ${input.attempt_id}`)
+            const workItem = db
+              .select()
+              .from(CompanyWorkItemTable)
+              .where(eq(CompanyWorkItemTable.id, attempt.work_item_id))
+              .get()
+            if (!workItem) throw new Error(`Company work item not found: ${attempt.work_item_id}`)
+            if (input.status === "completed" && workItem.validation_contract_version === 2 && !input.acceptance)
+              throw new Error(`V2 Work Attempt ${attempt.id} requires current Acceptance Facts`)
             const existing = db
               .select()
               .from(CompanyWorkReceiptTable)
@@ -409,6 +482,35 @@ function makeService(recoverOnStart: boolean) {
                 !sameSubmission(existing, receiptInput)
               ) {
                 throw new Error("Work Receipt idempotency key conflicts with persisted facts")
+              }
+              if (input.acceptance)
+                linkReceiptWithDatabase(db, { receipt_id: existing.id, ...input.acceptance })
+              if (input.work_item_status) {
+                const item = workItem
+                if (item.status !== input.work_item_status) {
+                  if (item.status !== "running")
+                    throw new Error(`Work item ${item.id} cannot finish from ${item.status}`)
+                  const now = Date.now()
+                  db.update(CompanyWorkItemTable)
+                    .set({
+                      status: input.work_item_status,
+                      error: input.work_item_error ?? null,
+                      dispatch_claim_id: null,
+                      dispatch_claim_generation: null,
+                      dispatch_claimed_at: null,
+                      completed_at: input.work_item_status === "completed" ? now : null,
+                      updated_at: now,
+                    })
+                    .where(eq(CompanyWorkItemTable.id, item.id))
+                    .run()
+                  insertEvent(
+                    db,
+                    attempt.project_id,
+                    `work_item.${input.work_item_status}`,
+                    { work_item_id: item.id, error: input.work_item_error },
+                    input.actor_id,
+                  )
+                }
               }
               return { attempt: attemptFromRow(attempt), receipt: receiptFromRow(existing) }
             }
@@ -455,6 +557,30 @@ function makeService(recoverOnStart: boolean) {
               processed_at: null,
             }
             db.insert(CompanyWorkReceiptTable).values(row).run()
+            if (input.acceptance) linkReceiptWithDatabase(db, { receipt_id: row.id, ...input.acceptance })
+            if (input.work_item_status) {
+              const item = workItem
+              if (item.status !== "running") throw new Error(`Work item ${item.id} cannot finish from ${item.status}`)
+              db.update(CompanyWorkItemTable)
+                .set({
+                  status: input.work_item_status,
+                  error: input.work_item_error ?? null,
+                  dispatch_claim_id: null,
+                  dispatch_claim_generation: null,
+                  dispatch_claimed_at: null,
+                  completed_at: input.work_item_status === "completed" ? now : null,
+                  updated_at: now,
+                })
+                .where(eq(CompanyWorkItemTable.id, item.id))
+                .run()
+              insertEvent(
+                db,
+                attempt.project_id,
+                `work_item.${input.work_item_status}`,
+                { work_item_id: item.id, error: input.work_item_error },
+                input.actor_id,
+              )
+            }
             insertEvent(
               db,
               attempt.project_id,
@@ -780,6 +906,7 @@ function makeService(recoverOnStart: boolean) {
       failure_kind?: WorkAttemptFailureKind
       actor_id?: string
       receipt?: WorkReceiptSubmissionType
+      acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">
     }) {
       const attempt = yield* startAttempt({
         project_id: input.project_id,
@@ -845,6 +972,9 @@ function makeService(recoverOnStart: boolean) {
           dependency_proposals: [],
           questions: [],
         },
+        acceptance: input.acceptance,
+        work_item_status: input.status === "completed" ? "completed" : "blocked",
+        work_item_error: input.status === "completed" ? undefined : input.summary,
       })
       const project = yield* Effect.sync(() =>
         Database.use((db) =>

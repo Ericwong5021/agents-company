@@ -18,6 +18,7 @@ import {
   CompanyWorkReceiptTable,
 } from "./company-project.sql"
 import { validateGraphPatch } from "./graph-patch-validator"
+import { assertWorkItemContract } from "./work-item-contract"
 import {
   GraphMutation,
   GraphMutationProposal,
@@ -118,6 +119,7 @@ function snapshot(db: TxOrDb, project_id: string) {
         id: row.id,
         plan_id: row.plan_id,
         parent_id: row.parent_id ?? undefined,
+        reviews_work_item_id: row.reviews_work_item_id ?? undefined,
         kind: row.kind,
         status: row.status,
         owner_agent_id: row.owner_agent_id ?? undefined,
@@ -210,6 +212,69 @@ function insertEvent(
     .run()
 }
 
+function assertOperationContracts(db: TxOrDb, proposal: GraphMutationProposalType) {
+  const before = snapshot(db, proposal.project_id)
+  const nodes = new Map(before.nodes.map((node) => [node.id, node]))
+  const dependencies = new Set(before.dependencies.map((edge) => `${edge.work_item_id}\u0000${edge.depends_on_id}`))
+  proposal.operations.forEach((operation) => {
+    if (operation.type === "add_work_item") {
+      nodes.set(operation.item.id, {
+        id: operation.item.id,
+        plan_id: operation.item.plan_id,
+        parent_id: operation.item.parent_id,
+        reviews_work_item_id: operation.item.reviews_work_item_id,
+        kind: operation.item.kind,
+        status: "pending",
+        owner_agent_id: operation.item.owner_agent_id,
+        decision_scope: operation.item.decision_scope,
+        resource_scope: operation.item.resource_scope,
+        acceptance_criteria: operation.item.acceptance_criteria,
+        risk_level: operation.item.risk_level,
+        purpose: operation.item.purpose,
+        validation_mode: operation.item.validation_mode,
+        superseded_by_id: undefined,
+      })
+      return
+    }
+    if (operation.type === "add_dependency") {
+      dependencies.add(`${operation.work_item_id}\u0000${operation.depends_on_id}`)
+      return
+    }
+    if (operation.type === "remove_dependency")
+      dependencies.delete(`${operation.work_item_id}\u0000${operation.depends_on_id}`)
+    if (operation.type === "supersede_work_item") {
+      const item = nodes.get(operation.work_item_id)
+      if (item)
+        nodes.set(operation.work_item_id, {
+          ...item,
+          status: "superseded",
+          superseded_by_id: operation.replacement_id,
+        })
+    }
+  })
+  proposal.operations
+    .filter((operation) => operation.type === "add_work_item")
+    .forEach((operation) =>
+      assertWorkItemContract({
+        item: { ...operation.item, project_id: proposal.project_id },
+        review_target:
+          operation.item.kind === "reviewer"
+            ? operation.item.reviews_work_item_id
+              ? (nodes.get(operation.item.reviews_work_item_id) ?? null)
+              : null
+            : undefined,
+        reviewers: operation.item.kind === "reviewer" ? [...nodes.values()] : undefined,
+        dependency_ids:
+          operation.item.kind === "reviewer"
+            ? [...dependencies]
+                .map((key) => key.split("\u0000"))
+                .filter(([work_item_id]) => work_item_id === operation.item.id)
+                .map(([, depends_on_id]) => depends_on_id!)
+            : undefined,
+      }),
+    )
+}
+
 function applyOperations(
   db: TxOrDb,
   proposal: GraphMutationProposalType,
@@ -217,6 +282,7 @@ function applyOperations(
   applied_revision: number,
   now: number,
 ) {
+  assertOperationContracts(db, proposal)
   proposal.operations.forEach((operation) => {
     if (operation.type === "add_work_item") {
       db.insert(CompanyWorkItemTable)
@@ -226,6 +292,7 @@ function applyOperations(
           plan_id: operation.item.plan_id,
           source_task_key: null,
           parent_id: operation.item.parent_id ?? null,
+          reviews_work_item_id: operation.item.reviews_work_item_id ?? null,
           title: operation.item.title,
           description: operation.item.description,
           kind: operation.item.kind,

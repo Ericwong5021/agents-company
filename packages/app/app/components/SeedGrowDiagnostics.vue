@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  AcceptanceSummary,
   DiscoverySummary,
   GraphChangeSummary,
   OrganizationProjection,
@@ -17,6 +18,7 @@ import { safeExecutionSummary } from "../../modules/agent-company/runtime/shared
 
 const props = defineProps<{
   graph?: GraphChangeSummary
+  acceptance?: AcceptanceSummary
   validation?: ValidationSummary
   organization?: OrganizationProjection
   detail?: CompanyProjectDetail
@@ -29,6 +31,9 @@ const props = defineProps<{
 
 const changes = computed(() =>
   props.graph?.availability === "available" ? props.graph.changes.toReversed() : [],
+)
+const acceptanceItems = computed(() =>
+  props.acceptance?.availability === "available" ? props.acceptance.items : [],
 )
 const gates = computed(() =>
   props.validation?.availability === "available"
@@ -46,6 +51,7 @@ const assignments = computed(() =>
 )
 const diagnosticsFactCount = computed(() =>
   changes.value.length +
+  acceptanceItems.value.length +
   props.discoveries.length +
   gates.value.length +
   assignments.value.length +
@@ -80,6 +86,19 @@ const failedAttemptCount = computed(() =>
   props.detail?.workAttempts.filter(attempt => attempt.status === "failed").length ?? 0)
 const blockedItems = computed(() =>
   props.detail?.workItems.filter((item) => ["blocked", "failed"].includes(item.status)) ?? [])
+
+function acceptanceStateLabel(state: string) {
+  return ({
+    verified: "已验证",
+    failed: "未通过",
+    pending: "待验证",
+    stale: "证据已过期",
+    legacy_unverified: "旧版本未验证",
+    missing: "缺少证据",
+    passed: "通过",
+    inconclusive: "证据不足",
+  } as Record<string, string>)[state] ?? state
+}
 
 const operationLabels = {
   addedWorkItems: "新增工作项",
@@ -247,6 +266,9 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
     graph_mutation: "工作调整",
     project_assignment: "责任分配",
     validation_gate: "验证",
+    agent_run: "Agent 运行",
+    acceptance_criterion: "验收标准",
+    acceptance_fact: "验收事实",
   } as Record<string, string>)[source.kind] ?? "已记录依据"
   return `${label}（已记录）`
 }
@@ -266,6 +288,25 @@ function sourceTypeLabel(source: { kind: string; id: string }) {
     <p v-if="failedAttemptCount" class="ac-brief-state">
       系统共记录 {{ failedAttemptCount }} 次未通过尝试；执行与独立复核分别计数。日常是否需要介入，以工作页当前状态为准。
     </p>
+
+    <section v-if="acceptanceItems.length" class="ac-seed-diagnostics__group" aria-labelledby="acceptance-heading">
+      <div class="ac-seed-diagnostics__heading">
+        <p class="ac-card-kicker">当前版本</p>
+        <h3 id="acceptance-heading">验收覆盖</h3>
+      </div>
+      <article v-for="item in acceptanceItems" :key="item.workItemId" class="ac-seed-diagnostics__item">
+        <div class="ac-seed-diagnostics__item-title">
+          <h4>{{ humanLabel(item.title) }}</h4>
+          <span>{{ acceptanceStateLabel(item.state) }}</span>
+        </div>
+        <ul class="ac-validation-criteria">
+          <li v-for="criterion in item.criteria" :key="criterion.criterionId">
+            <span>{{ humanLabel(criterion.statement) }}</span>
+            <small>{{ acceptanceStateLabel(criterion.state) }} · {{ criterion.evidenceRefs.length }} 条证据</small>
+          </li>
+        </ul>
+      </article>
+    </section>
 
     <section v-if="blockedItems.length" class="ac-seed-diagnostics__group" aria-labelledby="current-blocker-heading">
       <div class="ac-seed-diagnostics__heading">

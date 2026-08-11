@@ -11,6 +11,7 @@ export type OrchestrationInput = {
   work_type: "coding" | "decision" | "research" | "writing" | "design" | "analysis" | "knowledge_reading"
   declared_risk?: "low" | "medium" | "high"
   approval_preset: string
+  requires_semantic_review?: boolean
 }
 
 const riskRank = { low: 0, medium: 1, high: 2 } as const
@@ -35,8 +36,34 @@ export function orchestrationPlan(input: OrchestrationInput) {
     input.approval_preset === "strict" && baseline[risk_level] !== "independent_review"
       ? verificationStrengths[verificationStrengths.indexOf(baseline[risk_level]) + 1]!
       : baseline[risk_level]
-  const strength: VerificationStrength = gate ? "review_with_gate" : raised
+  const strength: VerificationStrength = gate
+    ? "review_with_gate"
+    : input.requires_semantic_review && verificationStrengths.indexOf(raised) < verificationStrengths.indexOf("independent_review")
+      ? "independent_review"
+      : raised
   const reviewer = strength === "independent_review" || strength === "review_with_gate"
+  const worker_validation_mode: "self_check" | "machine" | "independent_review" | "review_and_user_gate" =
+    strength === "self_check"
+      ? "self_check"
+      : strength === "auto_verify"
+        ? "machine"
+        : strength === "independent_review"
+          ? "independent_review"
+          : "review_and_user_gate"
+  const worker_contract = {
+    kind: "worker" as const,
+    purpose: "delivery" as const,
+    review_status: reviewer ? ("pending" as const) : ("not_required" as const),
+    validation_mode: worker_validation_mode,
+  }
+  const reviewer_contract = reviewer
+    ? {
+        kind: "reviewer" as const,
+        purpose: "verification" as const,
+        review_status: "not_required" as const,
+        validation_mode: "independent_review" as const,
+      }
+    : undefined
   const reasons = [
     declared === risk_level
       ? `任务申报风险为 ${declared}。`
@@ -51,6 +78,7 @@ export function orchestrationPlan(input: OrchestrationInput) {
     ...(input.approval_preset === "strict" && raised !== baseline[risk_level]
       ? [`“strict”审批模式将验证强度从 ${baseline[risk_level]} 提升到 ${raised}。`]
       : []),
+    ...(input.requires_semantic_review ? ["语义验收条件必须由未参与执行的 Reviewer 逐项判断。"] : []),
   ]
   const alternatives = verificationStrengths
     .filter((candidate) => candidate !== strength)
@@ -59,5 +87,15 @@ export function orchestrationPlan(input: OrchestrationInput) {
         ? `${candidate}：验证强度低于当前风险等级要求，被规则层拒绝。`
         : `${candidate}：允许，但会为该风险等级增加不必要的延迟与模型调用。`,
     )
-  return { risk_level, strength, reviewer, gate, reasons, alternatives }
+  return {
+    risk_level,
+    strength,
+    reviewer,
+    reviewer_count: reviewer ? 1 : 0,
+    gate,
+    worker_contract,
+    reviewer_contract,
+    reasons,
+    alternatives,
+  }
 }

@@ -2077,9 +2077,12 @@ export type FounderYellowDelegationInput = {
           | "user"
           | "work_attempt"
           | "work_receipt"
+          | "agent_run"
           | "graph_mutation"
           | "project_assignment"
           | "validation_gate"
+          | "acceptance_criterion"
+          | "acceptance_fact"
         id: string
         version?: number
         eventType?: string
@@ -2339,6 +2342,7 @@ export type BoardDecisionResult = {
     orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
     orchestrator_version: number
     dispatch_paused: boolean
+    dispatch_generation: number
     graph_revision: number
     created_at: number
     updated_at: number
@@ -2395,6 +2399,7 @@ export type BoardDecisionResult = {
     plan_id: string
     source_task_key?: string
     parent_id?: string
+    reviews_work_item_id?: string | null
     title: string
     description: string
     kind: "planner" | "worker" | "reviewer"
@@ -2420,6 +2425,10 @@ export type BoardDecisionResult = {
     superseded_by_id?: string
     owner_agent_id?: string
     workflow_run_id?: string
+    dispatch_claim_id?: string | null
+    dispatch_claim_generation?: number | null
+    dispatch_claimed_at?: number | null
+    validation_contract_version: 1 | 2
     acceptance_criteria: Array<string>
     attempt: number
     max_attempts: number
@@ -9648,9 +9657,12 @@ export type ExperienceGoalBriefCreateData = {
           | "user"
           | "work_attempt"
           | "work_receipt"
+          | "agent_run"
           | "graph_mutation"
           | "project_assignment"
           | "validation_gate"
+          | "acceptance_criterion"
+          | "acceptance_fact"
         id: string
         version?: number
         eventType?: string
@@ -9723,9 +9735,12 @@ export type ExperienceGoalBriefCreateResponses = {
         | "user"
         | "work_attempt"
         | "work_receipt"
+        | "agent_run"
         | "graph_mutation"
         | "project_assignment"
         | "validation_gate"
+        | "acceptance_criterion"
+        | "acceptance_fact"
       id: string
       version?: number
       eventType?: string
@@ -9862,9 +9877,12 @@ export type ExperienceGoalBriefGenerateResponses = {
         | "user"
         | "work_attempt"
         | "work_receipt"
+        | "agent_run"
         | "graph_mutation"
         | "project_assignment"
         | "validation_gate"
+        | "acceptance_criterion"
+        | "acceptance_fact"
       id: string
       version?: number
       eventType?: string
@@ -9990,9 +10008,12 @@ export type ExperienceGoalBriefProjectResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -10036,9 +10057,12 @@ export type ExperienceGoalBriefProjectResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -10159,9 +10183,12 @@ export type ExperienceGoalBriefRequestResponses = {
         | "user"
         | "work_attempt"
         | "work_receipt"
+        | "agent_run"
         | "graph_mutation"
         | "project_assignment"
         | "validation_gate"
+        | "acceptance_criterion"
+        | "acceptance_fact"
       id: string
       version?: number
       eventType?: string
@@ -10286,9 +10313,12 @@ export type ExperienceGoalBriefHistoryResponses = {
           | "user"
           | "work_attempt"
           | "work_receipt"
+          | "agent_run"
           | "graph_mutation"
           | "project_assignment"
           | "validation_gate"
+          | "acceptance_criterion"
+          | "acceptance_fact"
         id: string
         version?: number
         eventType?: string
@@ -10364,9 +10394,12 @@ export type ExperienceGoalBriefAppendData = {
           | "user"
           | "work_attempt"
           | "work_receipt"
+          | "agent_run"
           | "graph_mutation"
           | "project_assignment"
           | "validation_gate"
+          | "acceptance_criterion"
+          | "acceptance_fact"
         id: string
         version?: number
         eventType?: string
@@ -10508,9 +10541,12 @@ export type ExperienceGoalBriefAppendResponses = {
         | "user"
         | "work_attempt"
         | "work_receipt"
+        | "agent_run"
         | "graph_mutation"
         | "project_assignment"
         | "validation_gate"
+        | "acceptance_criterion"
+        | "acceptance_fact"
       id: string
       version?: number
       eventType?: string
@@ -10731,9 +10767,12 @@ export type ExperienceGoalBriefGetResponses = {
         | "user"
         | "work_attempt"
         | "work_receipt"
+        | "agent_run"
         | "graph_mutation"
         | "project_assignment"
         | "validation_gate"
+        | "acceptance_criterion"
+        | "acceptance_fact"
       id: string
       version?: number
       eventType?: string
@@ -10895,9 +10934,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -10947,9 +10989,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -10994,9 +11039,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11021,9 +11069,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -11067,9 +11118,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11114,9 +11168,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11166,9 +11223,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11218,9 +11278,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11265,9 +11328,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11292,9 +11358,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -11338,9 +11407,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11385,9 +11457,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11421,9 +11496,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11474,9 +11552,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11521,9 +11602,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11549,9 +11633,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -11595,9 +11682,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11642,9 +11732,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11684,9 +11777,12 @@ export type ExperienceWorkListResponses = {
                   | "user"
                   | "work_attempt"
                   | "work_receipt"
+                  | "agent_run"
                   | "graph_mutation"
                   | "project_assignment"
                   | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
                 id: string
                 version?: number
                 eventType?: string
@@ -11731,9 +11827,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11778,9 +11877,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11805,9 +11907,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -11851,9 +11956,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11898,9 +12006,12 @@ export type ExperienceWorkListResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -11930,9 +12041,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -11971,9 +12085,12 @@ export type ExperienceWorkListResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -12054,9 +12171,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12106,9 +12226,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12153,9 +12276,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12180,9 +12306,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -12226,9 +12355,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12273,9 +12405,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12325,9 +12460,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12377,9 +12515,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12424,9 +12565,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12451,9 +12595,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -12497,9 +12644,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12544,9 +12694,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12580,9 +12733,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12633,9 +12789,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12680,9 +12839,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12708,9 +12870,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -12754,9 +12919,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12801,9 +12969,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12843,9 +13014,12 @@ export type ExperienceWorkArchivedResponses = {
                   | "user"
                   | "work_attempt"
                   | "work_receipt"
+                  | "agent_run"
                   | "graph_mutation"
                   | "project_assignment"
                   | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
                 id: string
                 version?: number
                 eventType?: string
@@ -12890,9 +13064,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12937,9 +13114,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -12964,9 +13144,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -13010,9 +13193,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -13057,9 +13243,12 @@ export type ExperienceWorkArchivedResponses = {
                       | "user"
                       | "work_attempt"
                       | "work_receipt"
+                      | "agent_run"
                       | "graph_mutation"
                       | "project_assignment"
                       | "validation_gate"
+                      | "acceptance_criterion"
+                      | "acceptance_fact"
                     id: string
                     version?: number
                     eventType?: string
@@ -13089,9 +13278,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -13130,9 +13322,12 @@ export type ExperienceWorkArchivedResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -13210,9 +13405,12 @@ export type ExperienceWorkActionData = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -13464,9 +13662,12 @@ export type ExperienceWorkOrganizationResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13494,9 +13695,12 @@ export type ExperienceWorkOrganizationResponses = {
                   | "user"
                   | "work_attempt"
                   | "work_receipt"
+                  | "agent_run"
                   | "graph_mutation"
                   | "project_assignment"
                   | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
                 id: string
                 version?: number
                 eventType?: string
@@ -13548,9 +13752,12 @@ export type ExperienceWorkOrganizationResponses = {
                   | "user"
                   | "work_attempt"
                   | "work_receipt"
+                  | "agent_run"
                   | "graph_mutation"
                   | "project_assignment"
                   | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
                 id: string
                 version?: number
                 eventType?: string
@@ -13584,9 +13791,12 @@ export type ExperienceWorkOrganizationResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13675,9 +13885,12 @@ export type ExperienceWorkGraphResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13727,9 +13940,12 @@ export type ExperienceWorkGraphResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -13755,9 +13971,12 @@ export type ExperienceWorkGraphResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13846,9 +14065,12 @@ export type ExperienceWorkReceiptResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13906,9 +14128,12 @@ export type ExperienceWorkReceiptResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -13924,6 +14149,328 @@ export type ExperienceWorkReceiptResponses = {
 }
 
 export type ExperienceWorkReceiptResponse = ExperienceWorkReceiptResponses[keyof ExperienceWorkReceiptResponses]
+
+export type ExperienceWorkAcceptanceData = {
+  body?: never
+  path: {
+    projectID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experience/work/{projectID}/acceptance"
+}
+
+export type ExperienceWorkAcceptanceErrors = {
+  /**
+   * Project not found
+   */
+  404:
+    | {
+        code: "not_found"
+        message: string
+      }
+    | {
+        code: "version_conflict"
+        message: string
+        currentVersion: number
+      }
+    | {
+        code: "request_conflict"
+        message: string
+      }
+    | {
+        code: "request_in_progress"
+        message: string
+      }
+    | {
+        code: "artifact_unavailable"
+        message: string
+      }
+    | {
+        code: "goal_brief_structured_output_failed"
+        message: string
+        attempts: number
+        recoveryActions: ["retry", "manual_edit"]
+      }
+}
+
+export type ExperienceWorkAcceptanceError = ExperienceWorkAcceptanceErrors[keyof ExperienceWorkAcceptanceErrors]
+
+export type ExperienceWorkAcceptanceResponses = {
+  /**
+   * Project acceptance coverage
+   */
+  200:
+    | {
+        availability: "available"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "agent_run"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        activePlanVersion?: number
+        trackedWorkItemCount: number
+        verifiedWorkItemCount: number
+        unresolvedWorkItemCount: number
+        pendingWorkItemIds: Array<string>
+        items: Array<
+          | {
+              workItemId: string
+              title: string
+              kind: string
+              purpose: string
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "agent_run"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+              contractVersion: 1
+              state: "legacy_unverified"
+              criteria: Array<{
+                criterionId: string
+                statement: string
+                verificationKind: "legacy_unscoped"
+                required: true
+                state: "missing"
+                evidenceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "agent_run"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+                sourceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "agent_run"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+              }>
+            }
+          | {
+              workItemId: string
+              title: string
+              kind: string
+              purpose: string
+              sourceRefs: Array<{
+                kind:
+                  | "project"
+                  | "project_event"
+                  | "goal_brief"
+                  | "legacy_charter"
+                  | "work_item"
+                  | "approval_gate"
+                  | "artifact"
+                  | "delivery"
+                  | "conversation"
+                  | "goal_request"
+                  | "user"
+                  | "work_attempt"
+                  | "work_receipt"
+                  | "agent_run"
+                  | "graph_mutation"
+                  | "project_assignment"
+                  | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
+                id: string
+                version?: number
+                eventType?: string
+              }>
+              attemptId: string
+              attemptOrdinal: number
+              artifactId: string
+              artifactKind: string
+              artifactVersion?: number
+              contractVersion: 2
+              state: "verified" | "failed" | "pending" | "stale"
+              criteria: Array<{
+                criterionId: string
+                statement: string
+                verificationKind: "legacy_unscoped" | "deterministic" | "semantic_review" | "human"
+                requiredAuthority?: "control_plane" | "independent_reviewer" | "human"
+                required: boolean
+                state: "missing" | "passed" | "failed" | "inconclusive" | "stale"
+                factId?: string
+                authority?: "legacy" | "worker_claim" | "control_plane" | "independent_reviewer" | "human"
+                evaluator?: string
+                evidenceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "agent_run"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+                sourceRefs: Array<{
+                  kind:
+                    | "project"
+                    | "project_event"
+                    | "goal_brief"
+                    | "legacy_charter"
+                    | "work_item"
+                    | "approval_gate"
+                    | "artifact"
+                    | "delivery"
+                    | "conversation"
+                    | "goal_request"
+                    | "user"
+                    | "work_attempt"
+                    | "work_receipt"
+                    | "agent_run"
+                    | "graph_mutation"
+                    | "project_assignment"
+                    | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
+                  id: string
+                  version?: number
+                  eventType?: string
+                }>
+              }>
+            }
+        >
+      }
+    | {
+        availability: "unavailable"
+        projectorVersion: number
+        sourceWatermark: string
+        sourceRefs: Array<{
+          kind:
+            | "project"
+            | "project_event"
+            | "goal_brief"
+            | "legacy_charter"
+            | "work_item"
+            | "approval_gate"
+            | "artifact"
+            | "delivery"
+            | "conversation"
+            | "goal_request"
+            | "user"
+            | "work_attempt"
+            | "work_receipt"
+            | "agent_run"
+            | "graph_mutation"
+            | "project_assignment"
+            | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
+          id: string
+          version?: number
+          eventType?: string
+        }>
+        updatedAt: string
+        projectId: string
+        reason: {
+          code: "invalid_persisted_fact" | "projection_overflow"
+          message: string
+        }
+      }
+}
+
+export type ExperienceWorkAcceptanceResponse =
+  ExperienceWorkAcceptanceResponses[keyof ExperienceWorkAcceptanceResponses]
 
 export type ExperienceWorkValidationData = {
   body?: never
@@ -13997,9 +14544,12 @@ export type ExperienceWorkValidationResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -14055,9 +14605,12 @@ export type ExperienceWorkValidationResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -14090,9 +14643,12 @@ export type ExperienceWorkValidationResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -14118,9 +14674,12 @@ export type ExperienceWorkValidationResponses = {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -14242,9 +14801,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14294,9 +14856,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14341,9 +14906,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14368,9 +14936,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -14414,9 +14985,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14461,9 +15035,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14513,9 +15090,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14565,9 +15145,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14612,9 +15195,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14639,9 +15225,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -14685,9 +15274,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14732,9 +15324,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14768,9 +15363,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14821,9 +15419,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14868,9 +15469,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14896,9 +15500,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -14942,9 +15549,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -14989,9 +15599,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -15031,9 +15644,12 @@ export type ExperienceWorkGetResponses = {
                 | "user"
                 | "work_attempt"
                 | "work_receipt"
+                | "agent_run"
                 | "graph_mutation"
                 | "project_assignment"
                 | "validation_gate"
+                | "acceptance_criterion"
+                | "acceptance_fact"
               id: string
               version?: number
               eventType?: string
@@ -15078,9 +15694,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -15125,9 +15744,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -15152,9 +15774,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -15198,9 +15823,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -15245,9 +15873,12 @@ export type ExperienceWorkGetResponses = {
                     | "user"
                     | "work_attempt"
                     | "work_receipt"
+                    | "agent_run"
                     | "graph_mutation"
                     | "project_assignment"
                     | "validation_gate"
+                    | "acceptance_criterion"
+                    | "acceptance_fact"
                   id: string
                   version?: number
                   eventType?: string
@@ -15277,9 +15908,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -15318,9 +15952,12 @@ export type ExperienceWorkGetResponses = {
               | "user"
               | "work_attempt"
               | "work_receipt"
+              | "agent_run"
               | "graph_mutation"
               | "project_assignment"
               | "validation_gate"
+              | "acceptance_criterion"
+              | "acceptance_fact"
             id: string
             version?: number
             eventType?: string
@@ -16484,6 +17121,7 @@ export type CompanyProjectStartResponses = {
       orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
       orchestrator_version: number
       dispatch_paused: boolean
+      dispatch_generation: number
       graph_revision: number
       created_at: number
       updated_at: number
@@ -16535,6 +17173,8 @@ export type CompanyProjectAttemptsResponses = {
     project_id: string
     work_item_id: string
     agent_run_id?: string
+    base_artifact_id?: string | null
+    repair_criterion_ids: Array<string>
     ordinal: number
     status: "running" | "completed" | "failed" | "stopped"
     failure_kind?:
@@ -17165,6 +17805,7 @@ export type CompanyProjectRetryResponses = {
       orchestration_state: "idle" | "processing_receipt" | "dispatching" | "paused" | "quiescent" | "blocked"
       orchestrator_version: number
       dispatch_paused: boolean
+      dispatch_generation: number
       graph_revision: number
       created_at: number
       updated_at: number

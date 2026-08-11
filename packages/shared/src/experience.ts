@@ -24,9 +24,12 @@ export const ExperienceSourceRef = z
       "user",
       "work_attempt",
       "work_receipt",
+      "agent_run",
       "graph_mutation",
       "project_assignment",
       "validation_gate",
+      "acceptance_criterion",
+      "acceptance_fact",
     ]),
     id: Identifier,
     version: z.number().int().positive().optional(),
@@ -1392,6 +1395,142 @@ export const ValidationSummary = z.discriminatedUnion("availability", [
     .strict(),
 ])
 export type ValidationSummary = z.infer<typeof ValidationSummary>
+
+export const AcceptanceCriterionCoverageSummary = z
+  .object({
+    criterionId: Identifier,
+    statement: LongText,
+    verificationKind: z.enum(["legacy_unscoped", "deterministic", "semantic_review", "human"]),
+    requiredAuthority: z.enum(["control_plane", "independent_reviewer", "human"]).optional(),
+    required: z.boolean(),
+    state: z.enum(["missing", "passed", "failed", "inconclusive", "stale"]),
+    factId: Identifier.optional(),
+    authority: z.enum(["legacy", "worker_claim", "control_plane", "independent_reviewer", "human"]).optional(),
+    evaluator: ShortText.optional(),
+    evidenceRefs: z.array(ExperienceSourceRef).max(500),
+    sourceRefs: z.array(ExperienceSourceRef).min(1).max(500),
+  })
+  .strict()
+export type AcceptanceCriterionCoverageSummary = z.infer<typeof AcceptanceCriterionCoverageSummary>
+
+export const AcceptanceLegacyCriterionCoverageSummary = z
+  .object({
+    criterionId: Identifier,
+    statement: LongText,
+    verificationKind: z.literal("legacy_unscoped"),
+    required: z.literal(true),
+    state: z.literal("missing"),
+    evidenceRefs: z.array(ExperienceSourceRef).max(0),
+    sourceRefs: z.array(ExperienceSourceRef).min(1).max(500),
+  })
+  .strict()
+export type AcceptanceLegacyCriterionCoverageSummary = z.infer<typeof AcceptanceLegacyCriterionCoverageSummary>
+
+const AcceptanceWorkItemCoverageFields = {
+  workItemId: Identifier,
+  title: ShortText,
+  kind: ShortText,
+  purpose: ShortText,
+  sourceRefs: z.array(ExperienceSourceRef).min(1).max(500),
+}
+
+export const AcceptanceWorkItemCoverageSummary = z
+  .discriminatedUnion("contractVersion", [
+    z
+      .object({
+        ...AcceptanceWorkItemCoverageFields,
+        contractVersion: z.literal(1),
+        state: z.literal("legacy_unverified"),
+        criteria: z.array(AcceptanceLegacyCriterionCoverageSummary).max(500),
+      })
+      .strict(),
+    z
+      .object({
+        ...AcceptanceWorkItemCoverageFields,
+        attemptId: Identifier,
+        attemptOrdinal: z.number().int().positive(),
+        artifactId: Identifier,
+        artifactKind: ShortText,
+        artifactVersion: z.number().int().positive().optional(),
+        contractVersion: z.literal(2),
+        state: z.enum(["verified", "failed", "pending", "stale"]),
+        criteria: z.array(AcceptanceCriterionCoverageSummary).max(500),
+      })
+      .strict(),
+  ])
+  .superRefine((value, context) => {
+    if (new Set(value.criteria.map((criterion) => criterion.criterionId)).size !== value.criteria.length)
+      context.addIssue({
+        code: "custom",
+        path: ["criteria"],
+        message: "Acceptance criterion IDs must be unique within one Work Item coverage",
+      })
+  })
+export type AcceptanceWorkItemCoverageSummary = z.infer<typeof AcceptanceWorkItemCoverageSummary>
+
+export const AcceptanceSummary = z.discriminatedUnion("availability", [
+  z
+    .object({
+      availability: z.literal("available"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      activePlanVersion: z.number().int().positive().optional(),
+      trackedWorkItemCount: z.number().int().nonnegative(),
+      verifiedWorkItemCount: z.number().int().nonnegative(),
+      unresolvedWorkItemCount: z.number().int().nonnegative(),
+      pendingWorkItemIds: z.array(Identifier).max(499),
+      items: z.array(AcceptanceWorkItemCoverageSummary).max(499),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const pending = new Set(value.pendingWorkItemIds)
+      if (new Set(value.items.map((item) => item.workItemId)).size !== value.items.length)
+        context.addIssue({
+          code: "custom",
+          path: ["items"],
+          message: "Acceptance Work Item IDs must be unique",
+        })
+      if (pending.size !== value.pendingWorkItemIds.length)
+        context.addIssue({
+          code: "custom",
+          path: ["pendingWorkItemIds"],
+          message: "Pending Work Item IDs must be unique",
+        })
+      if (value.items.some((item) => pending.has(item.workItemId)))
+        context.addIssue({
+          code: "custom",
+          path: ["pendingWorkItemIds"],
+          message: "A Work Item cannot have both a current tuple and a pending tuple",
+        })
+      if (value.trackedWorkItemCount !== value.items.length + value.pendingWorkItemIds.length)
+        context.addIssue({
+          code: "custom",
+          path: ["trackedWorkItemCount"],
+          message: "Tracked Work Item count must match projected and pending items",
+        })
+      if (value.verifiedWorkItemCount !== value.items.filter((item) => item.state === "verified").length)
+        context.addIssue({
+          code: "custom",
+          path: ["verifiedWorkItemCount"],
+          message: "Verified Work Item count must match current tuple coverage",
+        })
+      if (value.unresolvedWorkItemCount !== value.trackedWorkItemCount - value.verifiedWorkItemCount)
+        context.addIssue({
+          code: "custom",
+          path: ["unresolvedWorkItemCount"],
+          message: "Unresolved Work Item count must match current tuple coverage",
+        })
+    }),
+  z
+    .object({
+      availability: z.literal("unavailable"),
+      ...ReadProjectionMetadata,
+      projectId: Identifier,
+      reason: ReadProjectionUnavailableReason,
+    })
+    .strict(),
+])
+export type AcceptanceSummary = z.infer<typeof AcceptanceSummary>
 
 export const GoalBriefRecoveryAction = z.enum(["retry", "manual_edit"])
 export type GoalBriefRecoveryAction = z.infer<typeof GoalBriefRecoveryAction>

@@ -1,4 +1,5 @@
 import type {
+  AcceptanceSummary,
   DiscoverySummary,
   GraphChangeSummary,
   OrganizationProjection,
@@ -301,6 +302,7 @@ export type CompanyProjectDetail = {
 }
 
 export type SeedGrowProjectExperience = {
+  acceptance: AcceptanceSummary
   organization: OrganizationProjection
   graph: GraphChangeSummary
   validation: ValidationSummary

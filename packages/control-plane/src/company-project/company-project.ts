@@ -1,7 +1,8 @@
-import fs from "fs/promises"
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs"
+import fs from "node:fs/promises"
 import os from "os"
 import path from "path"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Semaphore } from "effect"
 import { and, asc, desc, eq, gte, inArray, isNotNull, notInArray } from "drizzle-orm"
 import { Database } from "@/storage"
 import { Global } from "@/global"
@@ -15,20 +16,25 @@ import {
 } from "@agents-company/shared/project-orchestration"
 import { Company } from "@/company"
 import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
+import { WorkflowRunTable } from "@/workflow/workflow.sql"
 import {
   CompanyApprovalGateTable,
+  CompanyAcceptanceFactTable,
+  CompanyAttentionTable,
   CompanyArtifactTable,
   CompanyPlanTable,
   CompanyProjectCharterTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
   CompanyValidationGateTable,
+  CompanyWorkAttemptTable,
   CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
   CompanyWorktreeRunTable,
 } from "./company-project.sql"
 import {
   ApprovalGate,
+  type AcceptanceReceiptLink,
   Artifact,
   DeliveryPolicy,
   GateKind,
@@ -40,15 +46,113 @@ import {
   type ProjectStatus,
   WorkItem,
   type WorkAttempt,
+  type WorkAttemptFailureKind,
   type WorkReceipt,
   type WorkReceiptSubmission,
   WorktreeRun,
   type WorktreeRunStatus,
 } from "./schema"
 import { CompanyWorkFacts } from "./work-facts"
+import { assertWorkItemContract } from "./work-item-contract"
+import { acceptanceCriterionVerification, createCriterionWithDatabase } from "./acceptance-fact"
 
 const parseList = (value: string) => JSON.parse(value) as string[]
 const parseRecord = (value: string) => JSON.parse(value) as Record<string, unknown>
+const artifactLocks = new Map<string, Semaphore.Semaphore>()
+
+function artifactLock(key: string) {
+  const existing = artifactLocks.get(key)
+  if (existing) return existing
+  const created = Semaphore.makeUnsafe(1)
+  artifactLocks.set(key, created)
+  return created
+}
+
+function missingPath(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+}
+
+function existingPath(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST"
+}
+
+async function safeArtifactParent(root: string, target: string) {
+  const resolvedRoot = path.resolve(root)
+  const relative = path.relative(resolvedRoot, target)
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    throw new Error("Artifact path escapes project directory")
+  const rootStat = await fs.lstat(resolvedRoot)
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink())
+    throw new Error("Artifact project directory must not be a symlink")
+  const parent = path.dirname(target)
+  const parentRelative = path.relative(resolvedRoot, parent)
+  const segments = parentRelative === "" ? [] : parentRelative.split(path.sep)
+  await segments.reduce(async (ready, segment) => {
+    const current = path.join(await ready, segment)
+    const stat = await fs.lstat(current).catch((error) => {
+      if (!missingPath(error)) throw error
+      return undefined
+    })
+    if (!stat)
+      await fs.mkdir(current).catch((error) => {
+        if (!existingPath(error)) throw error
+      })
+    const created = stat ?? (await fs.lstat(current))
+    if (!created.isDirectory() || created.isSymbolicLink())
+      throw new Error("Artifact path contains a symlink or non-directory component")
+    return current
+  }, Promise.resolve(resolvedRoot))
+  const realRoot = await fs.realpath(resolvedRoot)
+  const realParent = await fs.realpath(parent)
+  if (!AppFileSystem.contains(realRoot, realParent)) throw new Error("Artifact path escapes project directory")
+  return parent
+}
+
+function readArtifactFile(target: string) {
+  const stat = lstatSync(target)
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Artifact path must resolve to a regular file")
+  const descriptor = openSync(target, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    if (!fstatSync(descriptor).isFile()) throw new Error("Artifact path must resolve to a regular file")
+    return readFileSync(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+function artifactFileExists(target: string) {
+  try {
+    lstatSync(target)
+    return true
+  } catch (error) {
+    if (missingPath(error)) return false
+    throw error
+  }
+}
+
+function artifactDigest(bytes: Uint8Array) {
+  return new Bun.CryptoHasher("sha256").update(bytes).digest("hex")
+}
+
+async function stageArtifactFile(parent: string, target: string, bytes: Uint8Array) {
+  const stagedPath = path.join(parent, `.${path.basename(target)}.${crypto.randomUUID()}.tmp`)
+  const handle = await fs.open(stagedPath, "wx", 0o600)
+  try {
+    try {
+      await handle.writeFile(bytes)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    const readback = readArtifactFile(stagedPath)
+    const sha256 = artifactDigest(readback)
+    if (sha256 !== artifactDigest(bytes)) throw new Error("Artifact temporary file failed digest verification")
+    return { path: stagedPath, sha256 }
+  } catch (error) {
+    await fs.rm(stagedPath, { force: true })
+    throw error
+  }
+}
 const projectFromRow = (row: typeof CompanyProjectTable.$inferSelect) =>
   Project.parse({
     ...row,
@@ -77,6 +181,7 @@ const workItemFromRow = (row: typeof CompanyWorkItemTable.$inferSelect, depends_
     ...row,
     source_task_key: row.source_task_key ?? undefined,
     parent_id: row.parent_id ?? undefined,
+    reviews_work_item_id: row.reviews_work_item_id ?? undefined,
     origin_ref_id: row.origin_ref_id ?? undefined,
     superseded_by_id: row.superseded_by_id ?? undefined,
     owner_agent_id: row.owner_agent_id ?? undefined,
@@ -197,6 +302,14 @@ const PROJECT_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   blocked: ["planning", "executing", "reviewing", "rejected"],
 }
 
+export type DispatchClaim = {
+  claim_id: string
+  generation: number
+  attempt_id: string
+  workflow_run_id: string
+  item: WorkItem
+}
+
 export interface Interface {
   readonly create: (input: {
     company_id?: string
@@ -260,6 +373,7 @@ export interface Interface {
     plan_id: string
     source_task_key?: string
     parent_id?: string
+    reviews_work_item_id?: string
     title: string
     description: string
     kind: "planner" | "worker" | "reviewer"
@@ -280,6 +394,7 @@ export interface Interface {
     origin_ref_id?: string
     graph_revision_created?: number
     validation_mode?: "self_check" | "machine" | "independent_review" | "review_and_user_gate"
+    validation_contract_version?: 1 | 2
     owner_agent_id?: string
     acceptance_criteria: string[]
     max_attempts?: number
@@ -292,6 +407,25 @@ export interface Interface {
   }) => Effect.Effect<{ worker: WorkItem; reviewer: WorkItem }>
   readonly listWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
   readonly readyWorkItems: (project_id: string) => Effect.Effect<WorkItem[]>
+  readonly claimWorkItemForDispatch: (id: string) => Effect.Effect<DispatchClaim | undefined>
+  readonly validateDispatchClaim: (input: {
+    id: string
+    claim_id: string
+    generation: number
+    workflow_run_id: string
+  }) => Effect.Effect<WorkItem>
+  readonly bindDispatchClaimRun: (input: {
+    id: string
+    claim_id: string
+    generation: number
+    workflow_run_id: string
+  }) => Effect.Effect<WorkItem>
+  readonly abortDispatchClaim: (input: {
+    id: string
+    claim_id: string
+    generation: number
+    reason: string
+  }) => Effect.Effect<WorkItem | undefined>
   readonly startWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly assignWorkItem: (input: { id: string; owner_agent_id: string; reason: string }) => Effect.Effect<WorkItem>
   readonly setWorkItemRun: (input: { id: string; workflow_run_id?: string }) => Effect.Effect<WorkItem>
@@ -299,12 +433,17 @@ export interface Interface {
     id: string
     review_status: "pending" | "running" | "accepted" | "rejected" | "not_required"
   }) => Effect.Effect<WorkItem>
-  readonly blockWorkItem: (input: { id: string; error: string }) => Effect.Effect<WorkItem>
+  readonly blockWorkItem: (input: {
+    id: string
+    error: string
+    failure_kind?: WorkAttemptFailureKind
+  }) => Effect.Effect<WorkItem>
   readonly retryWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly completeWorkItem: (id: string) => Effect.Effect<WorkItem>
   readonly completeWorkItemWithReceipt: (input: {
     id: string
     receipt: WorkReceiptSubmission
+    acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">
   }) => Effect.Effect<WorkItem>
   readonly createWorktreeRun: (input: {
     project_id: string
@@ -326,6 +465,8 @@ export interface Interface {
   readonly addArtifact: (input: {
     project_id: string
     work_item_id?: string
+    attempt_id?: string
+    supersedes_artifact_id?: string
     kind: string
     title: string
     path?: string
@@ -780,10 +921,17 @@ export const layer = Layer.effect(
         throw new Error("Work item source task key must be a non-empty trimmed string")
       const depends_on = [...new Set(input.depends_on ?? [])].sort()
       const review_status = input.review_status ?? (input.kind === "worker" ? "pending" : "not_required")
+      const purpose = input.purpose ?? (input.kind === "reviewer" ? "verification" : "delivery")
       const validation_mode =
-        input.validation_mode ?? (review_status === "not_required" ? "self_check" : "independent_review")
+        input.validation_mode ??
+        (input.kind === "reviewer"
+          ? "independent_review"
+          : review_status === "not_required"
+            ? "self_check"
+            : "independent_review")
       const facts = {
         parent_id: input.parent_id,
+        reviews_work_item_id: input.reviews_work_item_id,
         title: input.title,
         description: input.description,
         kind: input.kind,
@@ -799,11 +947,12 @@ export const layer = Layer.effect(
         model_group: input.model_group,
         risk_level: input.risk_level ?? "medium",
         review_status,
-        purpose: input.purpose ?? "delivery",
+        purpose,
         origin_kind: input.origin_kind ?? "legacy",
         origin_ref_id: input.origin_ref_id,
         graph_revision_created: input.graph_revision_created ?? 0,
         validation_mode,
+        validation_contract_version: input.validation_contract_version ?? 1,
         owner_agent_id: input.owner_agent_id,
         acceptance_criteria: input.acceptance_criteria,
         max_attempts: input.max_attempts ?? 3,
@@ -813,6 +962,7 @@ export const layer = Layer.effect(
         const existing = hydrateWorkItems([row])[0]!
         const existingFacts = {
           parent_id: existing.parent_id,
+          reviews_work_item_id: existing.reviews_work_item_id,
           title: existing.title,
           description: existing.description,
           kind: existing.kind,
@@ -833,6 +983,7 @@ export const layer = Layer.effect(
           origin_ref_id: existing.origin_ref_id,
           graph_revision_created: existing.graph_revision_created,
           validation_mode: existing.validation_mode,
+          validation_contract_version: existing.validation_contract_version,
           owner_agent_id: existing.owner_agent_id,
           acceptance_criteria: existing.acceptance_criteria,
           max_attempts: existing.max_attempts,
@@ -846,6 +997,10 @@ export const layer = Layer.effect(
       }
       const id = Identifier.ascending("companyWorkItem")
       const now = Date.now()
+      assertWorkItemContract({
+        item: { ...facts, id, project_id: input.project_id, plan_id: input.plan_id },
+        dependency_ids: input.kind === "reviewer" ? depends_on : undefined,
+      })
       const existingRow = yield* Effect.sync(() =>
         Database.transaction(
           (db) => {
@@ -865,6 +1020,32 @@ export const layer = Layer.effect(
                     )
                     .get()
             if (existing) return existing
+            if (input.kind === "reviewer") {
+              const target = input.reviews_work_item_id
+                ? db
+                    .select()
+                    .from(CompanyWorkItemTable)
+                    .where(eq(CompanyWorkItemTable.id, input.reviews_work_item_id))
+                    .get()
+                : undefined
+              assertWorkItemContract({
+                item: { ...facts, id, project_id: input.project_id, plan_id: input.plan_id },
+                review_target: target ? workItemFromRow(target) : null,
+                reviewers: db
+                  .select()
+                  .from(CompanyWorkItemTable)
+                  .where(
+                    and(
+                      eq(CompanyWorkItemTable.project_id, input.project_id),
+                      eq(CompanyWorkItemTable.kind, "reviewer"),
+                      eq(CompanyWorkItemTable.reviews_work_item_id, input.reviews_work_item_id ?? ""),
+                    ),
+                  )
+                  .all()
+                  .map((row) => workItemFromRow(row)),
+                dependency_ids: depends_on,
+              })
+            }
             db.insert(CompanyWorkItemTable)
               .values({
                 id,
@@ -872,36 +1053,50 @@ export const layer = Layer.effect(
                 plan_id: input.plan_id,
                 source_task_key: input.source_task_key ?? null,
                 parent_id: input.parent_id ?? null,
+                reviews_work_item_id: input.reviews_work_item_id ?? null,
                 title: input.title,
                 description: input.description,
                 kind: input.kind,
                 work_type: input.work_type,
                 role: input.role,
-                capability_packs_json: JSON.stringify(input.capability_packs ?? []),
-                decision_scope_json: JSON.stringify(input.decision_scope ?? []),
-                resource_scope_json: JSON.stringify(input.resource_scope ?? []),
-                inputs_json: JSON.stringify(input.inputs ?? []),
-                expected_outputs_json: JSON.stringify(input.expected_outputs ?? []),
-                validators_json: JSON.stringify(input.validators ?? input.acceptance_criteria),
-                disposition: input.disposition ?? "retain",
+                capability_packs_json: JSON.stringify(facts.capability_packs),
+                decision_scope_json: JSON.stringify(facts.decision_scope),
+                resource_scope_json: JSON.stringify(facts.resource_scope),
+                inputs_json: JSON.stringify(facts.inputs),
+                expected_outputs_json: JSON.stringify(facts.expected_outputs),
+                validators_json: JSON.stringify(facts.validators),
+                disposition: facts.disposition,
                 model_group: input.model_group,
-                risk_level: input.risk_level ?? "medium",
+                risk_level: facts.risk_level,
                 review_status,
                 status: "pending",
-                purpose: input.purpose ?? "delivery",
-                origin_kind: input.origin_kind ?? "legacy",
+                purpose,
+                origin_kind: facts.origin_kind,
                 origin_ref_id: input.origin_ref_id ?? null,
-                graph_revision_created: input.graph_revision_created ?? 0,
+                graph_revision_created: facts.graph_revision_created,
                 validation_mode,
                 superseded_by_id: null,
                 owner_agent_id: input.owner_agent_id ?? null,
                 workflow_run_id: null,
+                validation_contract_version: facts.validation_contract_version,
                 acceptance_criteria_json: JSON.stringify(input.acceptance_criteria),
-                max_attempts: input.max_attempts ?? 3,
+                max_attempts: facts.max_attempts,
                 created_at: now,
                 updated_at: now,
               })
               .run()
+            if (facts.validation_contract_version === 2)
+              input.acceptance_criteria.forEach((statement, index) =>
+                createCriterionWithDatabase(db, {
+                  project_id: input.project_id,
+                  plan_id: input.plan_id,
+                  work_item_id: id,
+                  ordinal: index + 1,
+                  statement,
+                  ...acceptanceCriterionVerification(statement),
+                  required: true,
+                }),
+              )
             if (depends_on.length)
               db.insert(CompanyWorkItemDependencyTable)
                 .values(depends_on.map((depends_on_id) => ({ work_item_id: id, depends_on_id })))
@@ -930,7 +1125,7 @@ export const layer = Layer.effect(
           expected_outputs: input.expected_outputs ?? [],
           validators: input.validators ?? input.acceptance_criteria,
           disposition: input.disposition ?? "retain",
-          purpose: input.purpose ?? "delivery",
+          purpose,
           origin_kind: input.origin_kind ?? "legacy",
           origin_ref_id: input.origin_ref_id,
           graph_revision_created: input.graph_revision_created ?? 0,
@@ -1012,11 +1207,15 @@ export const layer = Layer.effect(
               .where(eq(CompanyWorkItemTable.id, input.reviewer_id))
               .get()
             if (!worker || worker.kind !== "worker") throw new Error(`Worker not found: ${input.worker_id}`)
-            if (!reviewer || reviewer.kind !== "reviewer" || reviewer.parent_id !== worker.id)
+            if (
+              !reviewer ||
+              reviewer.kind !== "reviewer" ||
+              (reviewer.reviews_work_item_id ?? reviewer.parent_id) !== worker.id
+            )
               throw new Error(`Reviewer ${input.reviewer_id} does not review worker ${input.worker_id}`)
             if (!["completed", "blocked"].includes(worker.status) || worker.review_status !== "rejected")
               throw new Error(`Worker ${worker.id} is not awaiting rejected-review rework`)
-            if (!["blocked", "failed"].includes(reviewer.status))
+            if (!["blocked", "failed", "completed"].includes(reviewer.status))
               throw new Error(`Reviewer ${reviewer.id} cannot request rework from ${reviewer.status}`)
             const now = Date.now()
             db.update(CompanyWorkItemTable)
@@ -1076,6 +1275,47 @@ export const layer = Layer.effect(
               throw new Error(`Work item ${input.id} cannot be reassigned from ${current.status}`)
             if (current.owner_agent_id === input.owner_agent_id)
               throw new Error(`Work item ${input.id} is already assigned to ${input.owner_agent_id}`)
+            const dependencyIDs = (work_item_id: string) =>
+              db
+                .select({ depends_on_id: CompanyWorkItemDependencyTable.depends_on_id })
+                .from(CompanyWorkItemDependencyTable)
+                .where(eq(CompanyWorkItemDependencyTable.work_item_id, work_item_id))
+                .all()
+                .map((dependency) => dependency.depends_on_id)
+            const reassigned = { ...workItemFromRow(current, dependencyIDs(current.id)), owner_agent_id: input.owner_agent_id }
+            if (current.kind === "reviewer") {
+              const target = current.reviews_work_item_id
+                ? db
+                    .select()
+                    .from(CompanyWorkItemTable)
+                    .where(eq(CompanyWorkItemTable.id, current.reviews_work_item_id))
+                    .get()
+                : undefined
+              assertWorkItemContract({
+                item: reassigned,
+                review_target: target ? workItemFromRow(target, dependencyIDs(target.id)) : null,
+                dependency_ids: reassigned.depends_on,
+              })
+            }
+            if (current.kind === "worker") {
+              const target = reassigned
+              db
+                .select()
+                .from(CompanyWorkItemTable)
+                .where(
+                  and(
+                    eq(CompanyWorkItemTable.project_id, current.project_id),
+                    eq(CompanyWorkItemTable.kind, "reviewer"),
+                    eq(CompanyWorkItemTable.reviews_work_item_id, current.id),
+                  ),
+                )
+                .all()
+                .filter((reviewer) => !["superseded", "cancelled"].includes(reviewer.status))
+                .forEach((reviewer) => {
+                  const item = workItemFromRow(reviewer, dependencyIDs(reviewer.id))
+                  assertWorkItemContract({ item, review_target: target, dependency_ids: item.depends_on })
+                })
+            }
             const now = Date.now()
             db.update(CompanyWorkItemTable)
               .set({ owner_agent_id: input.owner_agent_id, updated_at: now })
@@ -1189,16 +1429,17 @@ export const layer = Layer.effect(
       )
       const reviewableParents = new Set(
         pending
-          .filter((item) => item.kind === "reviewer" && Boolean(item.parent_id))
+          .filter((item) => item.kind === "reviewer" && Boolean(item.reviews_work_item_id ?? item.parent_id))
           .filter((item) =>
             Database.use((db) => {
+              const target = item.reviews_work_item_id ?? item.parent_id
               const parent = db
                 .select({
                   status: CompanyWorkItemTable.status,
                   started_at: CompanyWorkItemTable.started_at,
                 })
                 .from(CompanyWorkItemTable)
-                .where(eq(CompanyWorkItemTable.id, item.parent_id!))
+                .where(eq(CompanyWorkItemTable.id, target!))
                 .get()
               if (parent?.status !== "running" || parent.started_at === null) return false
               return Boolean(
@@ -1208,7 +1449,7 @@ export const layer = Layer.effect(
                   .where(
                     and(
                       eq(CompanyArtifactTable.project_id, project_id),
-                      eq(CompanyArtifactTable.work_item_id, item.parent_id!),
+                      eq(CompanyArtifactTable.work_item_id, target!),
                       gte(CompanyArtifactTable.created_at, parent.started_at),
                     ),
                   )
@@ -1216,7 +1457,7 @@ export const layer = Layer.effect(
               )
             }),
           )
-          .map((item) => item.parent_id!),
+          .map((item) => (item.reviews_work_item_id ?? item.parent_id)!),
       )
       const pendingByID = new Map(pending.map((item) => [item.id, item]))
       const blocked = new Set(
@@ -1226,7 +1467,8 @@ export const layer = Layer.effect(
               incomplete.has(dependency.depends_on_id) &&
               !(
                 pendingByID.get(dependency.work_item_id)?.kind === "reviewer" &&
-                pendingByID.get(dependency.work_item_id)?.parent_id === dependency.depends_on_id &&
+                (pendingByID.get(dependency.work_item_id)?.reviews_work_item_id ??
+                  pendingByID.get(dependency.work_item_id)?.parent_id) === dependency.depends_on_id &&
                 reviewableParents.has(dependency.depends_on_id)
               ),
           )
@@ -1260,11 +1502,416 @@ export const layer = Layer.effect(
         )
     })
 
+    const claimWorkItemForDispatch = Effect.fn("CompanyProject.claimWorkItemForDispatch")(function* (id: string) {
+      const claimed = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const item = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get()
+            if (!item || item.status !== "pending" || item.attempt >= item.max_attempts) return
+            const project = db
+              .select()
+              .from(CompanyProjectTable)
+              .where(eq(CompanyProjectTable.id, item.project_id))
+              .get()
+            if (
+              !project ||
+              project.dispatch_paused ||
+              ["completed", "rejected", "blocked", "awaiting_approval"].includes(project.status)
+            )
+              return
+            const plan = db.select().from(CompanyPlanTable).where(eq(CompanyPlanTable.id, item.plan_id)).get()
+            if (
+              !plan ||
+              plan.status !== "active" ||
+              (project.active_plan_version !== null && plan.version !== project.active_plan_version)
+            )
+              return
+            const dependencies = db
+              .select()
+              .from(CompanyWorkItemDependencyTable)
+              .where(eq(CompanyWorkItemDependencyTable.work_item_id, item.id))
+              .all()
+            const dependencyItems = dependencies.length
+              ? db
+                  .select()
+                  .from(CompanyWorkItemTable)
+                  .where(inArray(CompanyWorkItemTable.id, dependencies.map((dependency) => dependency.depends_on_id)))
+                  .all()
+              : []
+            const dependencyBlocked = dependencyItems.some((dependency) => {
+              if (dependency.status === "completed") return false
+              if (
+                item.kind === "reviewer" &&
+                item.reviews_work_item_id === dependency.id &&
+                dependency.status === "running"
+              )
+                return !db
+                  .select({ id: CompanyArtifactTable.id })
+                  .from(CompanyArtifactTable)
+                  .where(
+                    and(
+                      eq(CompanyArtifactTable.work_item_id, dependency.id),
+                      eq(CompanyArtifactTable.kind, dependency.work_type),
+                      gte(CompanyArtifactTable.created_at, dependency.started_at ?? dependency.updated_at),
+                    ),
+                  )
+                  .get()
+              return true
+            })
+            if (dependencyBlocked) return
+            if (
+              db
+                .select({ blocking_work_item_ids_json: CompanyValidationGateTable.blocking_work_item_ids_json })
+                .from(CompanyValidationGateTable)
+                .where(
+                  and(
+                    eq(CompanyValidationGateTable.project_id, project.id),
+                    notInArray(CompanyValidationGateTable.status, ["passed", "superseded"]),
+                  ),
+                )
+                .all()
+                .some((gate) => parseList(gate.blocking_work_item_ids_json).includes(item.id))
+            )
+              return
+            if (
+              db
+                .select({ id: CompanyApprovalGateTable.id })
+                .from(CompanyApprovalGateTable)
+                .where(
+                  and(
+                    eq(CompanyApprovalGateTable.project_id, project.id),
+                    eq(CompanyApprovalGateTable.status, "pending"),
+                  ),
+                )
+                .get() ||
+              db
+                .select({ id: CompanyAttentionTable.id })
+                .from(CompanyAttentionTable)
+                .where(
+                  and(
+                    eq(CompanyAttentionTable.project_id, project.id),
+                    eq(CompanyAttentionTable.status, "open"),
+                    eq(CompanyAttentionTable.material, true),
+                  ),
+                )
+                .get()
+            )
+              return
+            const assignment = db
+              .select()
+              .from(CompanyProjectAssignmentTable)
+              .where(
+                and(
+                  eq(CompanyProjectAssignmentTable.work_item_id, item.id),
+                  inArray(CompanyProjectAssignmentTable.status, ["assigned", "active"]),
+                ),
+              )
+              .orderBy(desc(CompanyProjectAssignmentTable.version))
+              .get()
+            if (
+              !assignment ||
+              assignment.agent_id !== item.owner_agent_id ||
+              assignment.resource_scope_json !== item.resource_scope_json
+            )
+              return
+            const ordinal = item.attempt + 1
+            const baseArtifact = db
+              .select()
+              .from(CompanyArtifactTable)
+              .where(
+                and(
+                  eq(CompanyArtifactTable.work_item_id, item.id),
+                  eq(CompanyArtifactTable.kind, item.work_type),
+                ),
+              )
+              .orderBy(desc(CompanyArtifactTable.created_at), desc(CompanyArtifactTable.id))
+              .get()
+            const baseFacts = baseArtifact
+              ? db
+                  .select()
+                  .from(CompanyAcceptanceFactTable)
+                  .where(eq(CompanyAcceptanceFactTable.artifact_id, baseArtifact.id))
+                  .orderBy(asc(CompanyAcceptanceFactTable.created_at), asc(CompanyAcceptanceFactTable.id))
+                  .all()
+              : []
+            const supersededFactIDs = new Set(
+              baseFacts.flatMap((fact) => (fact.supersedes_fact_id ? [fact.supersedes_fact_id] : [])),
+            )
+            const repairCriterionIDs = [
+              ...new Set(
+                baseFacts
+                  .filter((fact) => !supersededFactIDs.has(fact.id) && fact.verdict === "failed")
+                  .map((fact) => fact.criterion_id),
+              ),
+            ]
+            const now = Date.now()
+            const claim_id = Identifier.ascending("dispatchClaim")
+            const attempt_id = Identifier.ascending("workAttempt")
+            const workflow_run_id = Identifier.descending("workflow")
+            db.update(CompanyWorkItemTable)
+              .set({
+                status: "running",
+                attempt: ordinal,
+                workflow_run_id,
+                dispatch_claim_id: claim_id,
+                dispatch_claim_generation: project.dispatch_generation,
+                dispatch_claimed_at: now,
+                error: null,
+                started_at: now,
+                completed_at: null,
+                updated_at: now,
+              })
+              .where(
+                and(
+                  eq(CompanyWorkItemTable.id, item.id),
+                  eq(CompanyWorkItemTable.status, "pending"),
+                  eq(CompanyWorkItemTable.attempt, item.attempt),
+                ),
+              )
+              .run()
+            const updated = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, item.id)).get()
+            if (updated?.dispatch_claim_id !== claim_id) return
+            db.insert(CompanyWorkAttemptTable)
+              .values({
+                id: attempt_id,
+                project_id: project.id,
+                work_item_id: item.id,
+                agent_run_id: null,
+                base_artifact_id: baseArtifact?.id ?? null,
+                repair_criterion_ids_json: JSON.stringify(repairCriterionIDs),
+                ordinal,
+                status: "running",
+                failure_kind: null,
+                safe_summary: null,
+                started_at: now,
+                finished_at: null,
+              })
+              .run()
+            db.update(CompanyProjectAssignmentTable)
+              .set({ status: "active", started_at: assignment.started_at ?? now })
+              .where(eq(CompanyProjectAssignmentTable.id, assignment.id))
+              .run()
+            db.insert(CompanyProjectEventTable)
+              .values([
+                {
+                  id: Identifier.ascending("event"),
+                  project_id: project.id,
+                  type: "dispatch.claimed",
+                  actor_id: item.owner_agent_id,
+                  data_json: JSON.stringify({
+                    work_item_id: item.id,
+                    claim_id,
+                    generation: project.dispatch_generation,
+                    attempt_id,
+                    workflow_run_id,
+                  }),
+                  created_at: now,
+                },
+                {
+                  id: Identifier.ascending("event"),
+                  project_id: project.id,
+                  type: "work_attempt.started",
+                  actor_id: item.owner_agent_id,
+                  data_json: JSON.stringify({
+                    attempt_id,
+                    work_item_id: item.id,
+                    ordinal,
+                    base_artifact_id: baseArtifact?.id ?? null,
+                    repair_criterion_ids: repairCriterionIDs,
+                  }),
+                  created_at: now,
+                },
+                {
+                  id: Identifier.ascending("event"),
+                  project_id: project.id,
+                  type: "work_item.running",
+                  actor_id: item.owner_agent_id,
+                  data_json: JSON.stringify({ work_item_id: item.id }),
+                  created_at: now,
+                },
+              ])
+              .run()
+            return { claim_id, generation: project.dispatch_generation, attempt_id, workflow_run_id }
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      if (!claimed) return
+      const item = (yield* listWorkItems(
+        Database.use((db) => db.select({ project_id: CompanyWorkItemTable.project_id }).from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get())!.project_id,
+      )).find((candidate) => candidate.id === id)
+      if (!item) throw new Error(`Company work item not found after dispatch claim: ${id}`)
+      return { ...claimed, item }
+    })
+
+    const validateDispatchClaim = Effect.fn("CompanyProject.validateDispatchClaim")(function* (input: {
+      id: string
+      claim_id: string
+      generation: number
+      workflow_run_id: string
+    }) {
+      const projectID = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const item = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()
+            if (
+              !item ||
+              item.status !== "running" ||
+              item.workflow_run_id !== input.workflow_run_id ||
+              item.dispatch_claim_id !== input.claim_id ||
+              item.dispatch_claim_generation !== input.generation
+            )
+              throw new Error(`Dispatch claim is no longer current for ${input.id}`)
+            const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, item.project_id)).get()
+            if (!project || project.dispatch_paused || project.dispatch_generation !== input.generation)
+              throw new Error(`Dispatch claim generation is closed for ${input.id}`)
+            return item.project_id
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      const item = (yield* listWorkItems(projectID)).find((candidate) => candidate.id === input.id)
+      if (!item) throw new Error(`Company work item not found: ${input.id}`)
+      return item
+    })
+
+    const bindDispatchClaimRun = Effect.fn("CompanyProject.bindDispatchClaimRun")(function* (input: {
+      id: string
+      claim_id: string
+      generation: number
+      workflow_run_id: string
+    }) {
+      const projectID = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const item = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()
+            if (
+              !item ||
+              item.status !== "running" ||
+              item.workflow_run_id !== input.workflow_run_id ||
+              item.dispatch_claim_id !== input.claim_id ||
+              item.dispatch_claim_generation !== input.generation
+            )
+              throw new Error(`Dispatch claim is no longer bindable for ${input.id}`)
+            const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, item.project_id)).get()
+            if (!project || project.dispatch_paused || project.dispatch_generation !== input.generation)
+              throw new Error(`Dispatch claim generation is closed for ${input.id}`)
+            const attempt = db
+              .select()
+              .from(CompanyWorkAttemptTable)
+              .where(
+                and(
+                  eq(CompanyWorkAttemptTable.work_item_id, item.id),
+                  eq(CompanyWorkAttemptTable.ordinal, item.attempt),
+                ),
+              )
+              .get()
+            if (!attempt || attempt.status !== "running") throw new Error(`Current Work Attempt is missing for ${input.id}`)
+            const workflow = db
+              .select({ id: WorkflowRunTable.id })
+              .from(WorkflowRunTable)
+              .where(eq(WorkflowRunTable.id, input.workflow_run_id))
+              .get()
+            if (!workflow) throw new Error(`Reserved Workflow run is missing for ${input.id}`)
+            db.update(CompanyWorkItemTable)
+              .set({
+                dispatch_claim_id: null,
+                dispatch_claim_generation: null,
+                dispatch_claimed_at: null,
+                updated_at: Date.now(),
+              })
+              .where(eq(CompanyWorkItemTable.id, item.id))
+              .run()
+            return project.id
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      const item = (yield* listWorkItems(projectID)).find((candidate) => candidate.id === input.id)
+      if (!item) throw new Error(`Company work item not found: ${input.id}`)
+      return item
+    })
+
+    const abortDispatchClaim = Effect.fn("CompanyProject.abortDispatchClaim")(function* (input: {
+      id: string
+      claim_id: string
+      generation: number
+      reason: string
+    }) {
+      const projectID = yield* Effect.sync(() =>
+        Database.transaction(
+          (db) => {
+            const item = db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.id)).get()
+            if (
+              !item ||
+              item.dispatch_claim_id !== input.claim_id ||
+              item.dispatch_claim_generation !== input.generation
+            )
+              return
+            const now = Date.now()
+            const nextStatus = item.attempt < item.max_attempts ? "pending" : "blocked"
+            db.update(CompanyWorkAttemptTable)
+              .set({ status: "stopped", failure_kind: "environment", safe_summary: input.reason, finished_at: now })
+              .where(
+                and(
+                  eq(CompanyWorkAttemptTable.work_item_id, item.id),
+                  eq(CompanyWorkAttemptTable.ordinal, item.attempt),
+                  eq(CompanyWorkAttemptTable.status, "running"),
+                ),
+              )
+              .run()
+            db.update(CompanyWorkItemTable)
+              .set({
+                status: nextStatus,
+                workflow_run_id: null,
+                dispatch_claim_id: null,
+                dispatch_claim_generation: null,
+                dispatch_claimed_at: null,
+                error: input.reason,
+                updated_at: now,
+              })
+              .where(eq(CompanyWorkItemTable.id, item.id))
+              .run()
+            db.update(CompanyProjectAssignmentTable)
+              .set({ status: "assigned", started_at: null })
+              .where(
+                and(
+                  eq(CompanyProjectAssignmentTable.work_item_id, item.id),
+                  eq(CompanyProjectAssignmentTable.status, "active"),
+                ),
+              )
+              .run()
+            db.insert(CompanyProjectEventTable)
+              .values({
+                id: Identifier.ascending("event"),
+                project_id: item.project_id,
+                type: "dispatch.aborted",
+                actor_id: item.owner_agent_id,
+                data_json: JSON.stringify({
+                  work_item_id: item.id,
+                  claim_id: input.claim_id,
+                  generation: input.generation,
+                  reason: input.reason.slice(0, 2_000),
+                }),
+                created_at: now,
+              })
+              .run()
+            return item.project_id
+          },
+          { behavior: "immediate" },
+        ),
+      )
+      if (!projectID) return
+      return (yield* listWorkItems(projectID)).find((candidate) => candidate.id === input.id)
+    })
+
     const updateWorkItem = Effect.fn("CompanyProject.updateWorkItem")(function* (
       id: string,
       status: "running" | "blocked" | "pending" | "completed",
       error?: string,
       receipt?: WorkReceiptSubmission,
+      acceptance?: Omit<AcceptanceReceiptLink, "receipt_id">,
+      failure_kind?: WorkAttemptFailureKind,
     ) {
       const row = yield* Effect.sync(() =>
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get()),
@@ -1295,37 +1942,47 @@ export const layer = Layer.effect(
           status: status === "completed" ? "completed" : "failed",
           outcome: status === "completed" ? "completed" : "blocked",
           summary: status === "completed" ? `Work item ${row.id} completed` : (error ?? `Work item ${row.id} blocked`),
-          failure_kind: status === "blocked" ? "unknown" : undefined,
+          failure_kind: status === "blocked" ? (failure_kind ?? "unknown") : undefined,
           actor_id: row.owner_agent_id ?? undefined,
           receipt,
+          acceptance,
         })
       }
-      yield* Effect.sync(() =>
-        Database.transaction((db) => {
-          db.update(CompanyWorkItemTable)
-            .set({
-              status,
-              attempt,
-              max_attempts: status === "pending" ? Math.max(row.max_attempts, row.attempt + 1) : row.max_attempts,
-              error: error ?? null,
-              started_at: status === "running" ? now : row.started_at,
-              completed_at: status === "completed" ? now : null,
-              updated_at: now,
-            })
-            .where(eq(CompanyWorkItemTable.id, id))
-            .run()
-          if (status === "running")
-            db.update(CompanyProjectAssignmentTable)
-              .set({ status: "active", started_at: now })
-              .where(
-                and(
-                  eq(CompanyProjectAssignmentTable.work_item_id, id),
-                  eq(CompanyProjectAssignmentTable.status, "assigned"),
-                ),
-              )
+      if (status !== "completed" && status !== "blocked")
+        yield* Effect.sync(() =>
+          Database.transaction((db) => {
+            db.update(CompanyWorkItemTable)
+              .set({
+                status,
+                attempt,
+                max_attempts: status === "pending" ? Math.max(row.max_attempts, row.attempt + 1) : row.max_attempts,
+                error: error ?? null,
+                ...(status === "pending"
+                  ? {
+                      workflow_run_id: null,
+                      dispatch_claim_id: null,
+                      dispatch_claim_generation: null,
+                      dispatch_claimed_at: null,
+                    }
+                  : {}),
+                started_at: status === "running" ? now : row.started_at,
+                completed_at: null,
+                updated_at: now,
+              })
+              .where(eq(CompanyWorkItemTable.id, id))
               .run()
-        }),
-      )
+            if (status === "running")
+              db.update(CompanyProjectAssignmentTable)
+                .set({ status: "active", started_at: now })
+                .where(
+                  and(
+                    eq(CompanyProjectAssignmentTable.work_item_id, id),
+                    eq(CompanyProjectAssignmentTable.status, "assigned"),
+                  ),
+                )
+                .run()
+          }),
+        )
       if (status === "running") {
         yield* facts.startAttempt({
           project_id: row.project_id,
@@ -1334,7 +1991,8 @@ export const layer = Layer.effect(
           actor_id: row.owner_agent_id ?? undefined,
         })
       }
-      yield* event(row.project_id, `work_item.${status}`, { work_item_id: id, error }, row.owner_agent_id ?? undefined)
+      if (status !== "completed" && status !== "blocked")
+        yield* event(row.project_id, `work_item.${status}`, { work_item_id: id, error }, row.owner_agent_id ?? undefined)
       return hydrateWorkItems([
         Database.use((db) => db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, id)).get())!,
       ])[0]!
@@ -1342,7 +2000,6 @@ export const layer = Layer.effect(
 
     const updateWorkItemFields = Effect.fn("CompanyProject.updateWorkItemFields")(function* (input: {
       id: string
-      owner_agent_id?: string
       workflow_run_id?: string | null
       review_status?: "pending" | "running" | "accepted" | "rejected" | "not_required"
     }) {
@@ -1355,7 +2012,6 @@ export const layer = Layer.effect(
           db
             .update(CompanyWorkItemTable)
             .set({
-              ...(input.owner_agent_id !== undefined ? { owner_agent_id: input.owner_agent_id } : {}),
               ...(input.workflow_run_id !== undefined ? { workflow_run_id: input.workflow_run_id } : {}),
               ...(input.review_status !== undefined ? { review_status: input.review_status } : {}),
               updated_at: Date.now(),
@@ -1374,6 +2030,8 @@ export const layer = Layer.effect(
     const addArtifact = Effect.fn("CompanyProject.addArtifact")(function* (input: {
       project_id: string
       work_item_id?: string
+      attempt_id?: string
+      supersedes_artifact_id?: string
       kind: string
       title: string
       path?: string
@@ -1387,32 +2045,168 @@ export const layer = Layer.effect(
       const artifactPath = input.path ? path.resolve(project.output_dir, input.path) : undefined
       if (artifactPath && !AppFileSystem.contains(project.output_dir, artifactPath))
         throw new Error("Artifact path escapes project directory")
-      if (artifactPath && (input.file_content ?? input.content) !== undefined)
-        yield* Effect.promise(async () => {
-          await fs.mkdir(path.dirname(artifactPath), { recursive: true })
-          await Bun.write(artifactPath, (input.file_content ?? input.content)!)
-        })
-      const id = Identifier.ascending("artifact")
-      const row = {
-        id,
-        project_id: input.project_id,
-        company_id: null,
-        scope_type: "project" as const,
-        private_owner_id: null,
-        work_item_id: input.work_item_id ?? null,
-        kind: input.kind,
-        title: input.title,
-        path: artifactPath ?? null,
-        content: input.content ?? null,
-        evidence_json: JSON.stringify(input.evidence ?? {}),
-        created_by_agent_id: input.created_by_agent_id ?? null,
-        created_at: Date.now(),
-      }
-      yield* Effect.sync(() => Database.use((db) => db.insert(CompanyArtifactTable).values(row).run()))
+      const operation = Effect.promise(async () => {
+        const parent = artifactPath ? await safeArtifactParent(project.output_dir, artifactPath) : undefined
+        const existed = artifactPath ? artifactFileExists(artifactPath) : false
+        const previousBytes = artifactPath && existed ? readArtifactFile(artifactPath) : undefined
+        const supplied = input.file_content ?? input.content
+        const materializedBytes = supplied !== undefined ? Buffer.from(supplied) : previousBytes
+        const staged = artifactPath && parent && materializedBytes
+          ? { ...(await stageArtifactFile(parent, artifactPath, materializedBytes)), renamed: false }
+          : undefined
+        const previousSha256 = previousBytes ? artifactDigest(previousBytes) : undefined
+        const restore = async () => {
+          if (!artifactPath || !staged?.renamed) return
+          if (artifactFileExists(artifactPath) && artifactDigest(readArtifactFile(artifactPath)) !== staged.sha256) return
+          if (!previousBytes) {
+            rmSync(artifactPath, { force: true })
+            return
+          }
+          const recovery = await stageArtifactFile(path.dirname(artifactPath), artifactPath, previousBytes)
+          try {
+            renameSync(recovery.path, artifactPath)
+          } finally {
+            await fs.rm(recovery.path, { force: true })
+          }
+        }
+        try {
+          return Database.transaction(
+            (db) => {
+              const item = input.work_item_id
+                ? db.select().from(CompanyWorkItemTable).where(eq(CompanyWorkItemTable.id, input.work_item_id)).get()
+                : undefined
+              if (input.work_item_id && (!item || item.project_id !== input.project_id))
+                throw new Error("Artifact references an unavailable Work Item")
+              const attempt = input.attempt_id
+                ? db.select().from(CompanyWorkAttemptTable).where(eq(CompanyWorkAttemptTable.id, input.attempt_id)).get()
+                : item
+                  ? db
+                      .select()
+                      .from(CompanyWorkAttemptTable)
+                      .where(
+                        and(
+                          eq(CompanyWorkAttemptTable.project_id, input.project_id),
+                          eq(CompanyWorkAttemptTable.work_item_id, item.id),
+                          eq(CompanyWorkAttemptTable.ordinal, item.attempt),
+                          eq(CompanyWorkAttemptTable.status, "running"),
+                        ),
+                      )
+                      .get()
+                  : undefined
+              if (
+                attempt &&
+                (attempt.project_id !== input.project_id || attempt.work_item_id !== input.work_item_id)
+              )
+                throw new Error("Artifact Attempt does not match its Work Item")
+              if (item?.validation_contract_version === 2 && !attempt)
+                throw new Error("Validation contract v2 requires an Attempt-scoped Artifact")
+              const previous = input.work_item_id
+                ? db
+                    .select()
+                    .from(CompanyArtifactTable)
+                    .where(
+                      and(
+                        eq(CompanyArtifactTable.work_item_id, input.work_item_id),
+                        eq(CompanyArtifactTable.kind, input.kind),
+                      ),
+                    )
+                    .orderBy(desc(CompanyArtifactTable.version), desc(CompanyArtifactTable.created_at))
+                    .get()
+                : undefined
+              const supersedes = input.supersedes_artifact_id
+                ? db
+                    .select()
+                    .from(CompanyArtifactTable)
+                    .where(eq(CompanyArtifactTable.id, input.supersedes_artifact_id))
+                    .get()
+                : previous
+              if (
+                supersedes &&
+                (supersedes.project_id !== input.project_id ||
+                  supersedes.work_item_id !== (input.work_item_id ?? null) ||
+                  supersedes.kind !== input.kind)
+              )
+                throw new Error("Artifact can only supersede the previous version of the same Work Item and kind")
+              const content_sha256 = input.content !== undefined
+                ? new Bun.CryptoHasher("sha256").update(input.content).digest("hex")
+                : undefined
+              const materialized_sha256 = staged?.sha256
+              const integrity_sha256 = content_sha256 || materialized_sha256
+                ? new Bun.CryptoHasher("sha256")
+                    .update(JSON.stringify({ content_sha256, materialized_sha256 }))
+                    .digest("hex")
+                : undefined
+              if (
+                artifactPath &&
+                staged &&
+                db
+                  .select({ materialized_sha256: CompanyArtifactTable.materialized_sha256 })
+                  .from(CompanyArtifactTable)
+                  .where(eq(CompanyArtifactTable.path, artifactPath))
+                  .all()
+                  .some((artifact) => artifact.materialized_sha256 !== staged.sha256)
+              )
+                throw new Error("Artifact path is already bound to different materialized bytes")
+              const row = {
+                id: Identifier.ascending("artifact"),
+                project_id: input.project_id,
+                company_id: null,
+                scope_type: "project" as const,
+                private_owner_id: null,
+                work_item_id: input.work_item_id ?? null,
+                attempt_id: attempt?.id ?? null,
+                version: input.work_item_id ? (previous?.version ?? 0) + 1 : null,
+                supersedes_artifact_id: supersedes?.id ?? null,
+                content_sha256: content_sha256 ?? null,
+                materialized_sha256: materialized_sha256 ?? null,
+                integrity_sha256: integrity_sha256 ?? null,
+                kind: input.kind,
+                title: input.title,
+                path: artifactPath ?? null,
+                content: input.content ?? null,
+                evidence_json: JSON.stringify(input.evidence ?? {}),
+                created_by_agent_id: input.created_by_agent_id ?? null,
+                created_at: Date.now(),
+              }
+              db.insert(CompanyArtifactTable).values(row).run()
+              if (artifactPath && staged) {
+                if (artifactFileExists(artifactPath) !== existed)
+                  throw new Error("Artifact target changed while the write was pending")
+                if (existed && artifactDigest(readArtifactFile(artifactPath)) !== previousSha256)
+                  throw new Error("Artifact target changed while the write was pending")
+                if (!AppFileSystem.contains(realpathSync(project.output_dir), realpathSync(path.dirname(artifactPath))))
+                  throw new Error("Artifact path escapes project directory")
+                renameSync(staged.path, artifactPath)
+                staged.renamed = true
+                if (artifactDigest(readArtifactFile(artifactPath)) !== staged.sha256)
+                  throw new Error("Artifact materialized digest does not match the final file")
+              }
+              return row
+            },
+            { behavior: "immediate" },
+          )
+        } catch (error) {
+          await restore()
+          throw error
+        } finally {
+          if (staged && !staged.renamed) await fs.rm(staged.path, { force: true })
+        }
+      })
+      const row = yield* artifactLock(`tuple:${input.project_id}:${input.work_item_id ?? "project"}:${input.kind}`)
+        .withPermits(1)(artifactPath ? artifactLock(`path:${artifactPath}`).withPermits(1)(operation) : operation)
       yield* event(
         input.project_id,
         "artifact.created",
-        { artifact_id: id, work_item_id: input.work_item_id, kind: input.kind, path: artifactPath },
+        {
+          artifact_id: row.id,
+          work_item_id: input.work_item_id,
+          attempt_id: row.attempt_id ?? undefined,
+          kind: input.kind,
+          version: row.version,
+          supersedes_artifact_id: row.supersedes_artifact_id ?? undefined,
+          integrity_sha256: row.integrity_sha256 ?? undefined,
+          path: artifactPath,
+        },
         input.created_by_agent_id,
       )
       return artifactFromRow(row)
@@ -2232,14 +3026,19 @@ export const layer = Layer.effect(
       reworkRejectedReview,
       listWorkItems,
       readyWorkItems,
+      claimWorkItemForDispatch,
+      validateDispatchClaim,
+      bindDispatchClaimRun,
+      abortDispatchClaim,
       startWorkItem: (id) => updateWorkItem(id, "running"),
       assignWorkItem,
       setWorkItemRun: (input) => updateWorkItemFields({ id: input.id, workflow_run_id: input.workflow_run_id ?? null }),
       setWorkItemReview: (input) => updateWorkItemFields({ id: input.id, review_status: input.review_status }),
-      blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error),
+      blockWorkItem: (input) => updateWorkItem(input.id, "blocked", input.error, undefined, undefined, input.failure_kind),
       retryWorkItem: (id) => updateWorkItem(id, "pending"),
       completeWorkItem: (id) => updateWorkItem(id, "completed"),
-      completeWorkItemWithReceipt: (input) => updateWorkItem(input.id, "completed", undefined, input.receipt),
+      completeWorkItemWithReceipt: (input) =>
+        updateWorkItem(input.id, "completed", undefined, input.receipt, input.acceptance),
       createWorktreeRun,
       getWorktreeRun,
       listWorktreeRuns,

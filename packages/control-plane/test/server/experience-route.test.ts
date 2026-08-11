@@ -5,6 +5,7 @@ import path from "node:path"
 import { count, eq } from "drizzle-orm"
 import { Effect } from "effect"
 import {
+  AcceptanceSummary,
   DiscoverySummary,
   ExperienceApiError,
   ExperienceArtifactUnavailable,
@@ -20,7 +21,9 @@ import {
   WorkProjectionList,
 } from "@agents-company/shared/experience"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
+import { AgentRunTable } from "../../src/agent-run/agent-run.sql"
 import {
+  CompanyAcceptanceFactTable,
   CompanyArtifactTable,
   CompanyGraphMutationTable,
   CompanyPlanTable,
@@ -31,6 +34,7 @@ import {
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
 } from "../../src/company-project/company-project.sql"
+import { createCriterionWithDatabase, recordWithDatabase } from "../../src/company-project/acceptance-fact"
 import * as ExperienceArtifact from "../../src/company-project/experience-artifact"
 import {
   CompanyCapabilityNeedTable,
@@ -229,6 +233,7 @@ describe.serial("/experience", () => {
       json("/experience/work/project-missing/organization"),
       json("/experience/work/project-missing/graph"),
       json("/experience/work/project-missing/receipts/receipt-missing"),
+      json("/experience/work/project-missing/acceptance"),
       json("/experience/work/project-missing/validation"),
       json("/experience/goal-brief/brief-missing/versions", {
         method: "POST",
@@ -240,7 +245,7 @@ describe.serial("/experience", () => {
       }),
     ])
 
-    expect(responses.map((item) => item.response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404])
+    expect(responses.map((item) => item.response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404, 404])
     responses.forEach((item) => {
       expect(ExperienceApiError.parse(item.body).code).toBe("not_found")
     })
@@ -668,6 +673,489 @@ describe.serial("/experience", () => {
     )
     const unavailable = DiscoverySummary.parse((await json("/experience/work/project-b4/receipts/receipt-b4")).body)
     expect(unavailable.availability).toBe("unavailable")
+  })
+
+  test.serial("projects v2 criterion coverage only from current tuples and marks v1 Workers legacy unverified", async () => {
+    const contentSha256 = new Bun.CryptoHasher("sha256").update("current artifact").digest("hex")
+    const integritySha256 = new Bun.CryptoHasher("sha256")
+      .update(JSON.stringify({ content_sha256: contentSha256 }))
+      .digest("hex")
+    const oldContentSha256 = new Bun.CryptoHasher("sha256").update("old artifact").digest("hex")
+    const oldIntegritySha256 = new Bun.CryptoHasher("sha256")
+      .update(JSON.stringify({ content_sha256: oldContentSha256 }))
+      .digest("hex")
+
+    Database.use((db) => {
+      db.insert(CompanyProjectTable)
+        .values({
+          id: "project-acceptance-api",
+          goal: "只展示当前 tuple 的逐项验收事实",
+          title: "Acceptance API",
+          status: "executing",
+          output_dir: "/tmp/project-acceptance-api",
+          active_plan_version: 1,
+          created_at: 100,
+          updated_at: 900,
+        })
+        .run()
+      db.insert(CompanyPlanTable)
+        .values({
+          id: "plan-acceptance-api",
+          project_id: "project-acceptance-api",
+          version: 1,
+          phase: "execution",
+          status: "active",
+          summary: "验证当前验收 tuple",
+          assumptions_json: "[]",
+          acceptance_criteria_json: JSON.stringify(["内容检查", "独立复核"]),
+          created_at: 100,
+        })
+        .run()
+      db.insert(CompanyWorkItemTable)
+        .values([
+          {
+            id: "item-acceptance-current",
+            project_id: "project-acceptance-api",
+            plan_id: "plan-acceptance-api",
+            title: "生成当前成果",
+            description: "输出并逐项验证当前成果",
+            kind: "worker",
+            work_type: "analysis",
+            role: "Analyst",
+            capability_packs_json: "[]",
+            decision_scope_json: "[]",
+            resource_scope_json: "[]",
+            inputs_json: "[]",
+            expected_outputs_json: JSON.stringify(["当前成果"]),
+            validators_json: JSON.stringify(["内容检查", "独立复核"]),
+            disposition: "temporary",
+            model_group: "standard",
+            risk_level: "medium",
+            review_status: "accepted",
+            status: "completed",
+            purpose: "delivery",
+            origin_kind: "seed",
+            graph_revision_created: 0,
+            validation_mode: "independent_review",
+            owner_agent_id: "worker-acceptance-agent",
+            validation_contract_version: 2,
+            acceptance_criteria_json: JSON.stringify(["内容检查", "独立复核"]),
+            attempt: 501,
+            max_attempts: 3,
+            started_at: 200,
+            completed_at: 800,
+            created_at: 100,
+            updated_at: 800,
+          },
+          {
+            id: "item-acceptance-reviewer",
+            project_id: "project-acceptance-api",
+            plan_id: "plan-acceptance-api",
+            reviews_work_item_id: "item-acceptance-current",
+            title: "独立复核当前成果",
+            description: "独立读取并复核当前成果",
+            kind: "reviewer",
+            work_type: "analysis",
+            role: "Independent Reviewer",
+            capability_packs_json: JSON.stringify(["independent-review@1"]),
+            decision_scope_json: "[]",
+            resource_scope_json: "[]",
+            inputs_json: JSON.stringify(["artifact-acceptance-current"]),
+            expected_outputs_json: JSON.stringify(["独立复核结论"]),
+            validators_json: JSON.stringify(["review_results_cover_target_criteria"]),
+            disposition: "temporary",
+            model_group: "standard",
+            risk_level: "medium",
+            review_status: "not_required",
+            status: "completed",
+            purpose: "verification",
+            origin_kind: "rule",
+            graph_revision_created: 0,
+            validation_mode: "independent_review",
+            owner_agent_id: "reviewer-acceptance-agent",
+            workflow_run_id: "workflow-acceptance-review",
+            validation_contract_version: 2,
+            acceptance_criteria_json: JSON.stringify(["review_results_cover_target_criteria"]),
+            attempt: 1,
+            max_attempts: 3,
+            started_at: 710,
+            completed_at: 790,
+            created_at: 100,
+            updated_at: 790,
+          },
+          {
+            id: "item-acceptance-pending",
+            project_id: "project-acceptance-api",
+            plan_id: "plan-acceptance-api",
+            title: "等待首次尝试",
+            description: "尚未形成当前验收 tuple",
+            kind: "worker",
+            work_type: "analysis",
+            role: "Analyst",
+            capability_packs_json: "[]",
+            decision_scope_json: "[]",
+            resource_scope_json: "[]",
+            inputs_json: "[]",
+            expected_outputs_json: JSON.stringify(["待生成成果"]),
+            validators_json: JSON.stringify(["内容检查"]),
+            disposition: "temporary",
+            model_group: "standard",
+            risk_level: "low",
+            review_status: "not_required",
+            status: "pending",
+            purpose: "delivery",
+            origin_kind: "seed",
+            graph_revision_created: 0,
+            validation_mode: "machine",
+            validation_contract_version: 2,
+            acceptance_criteria_json: JSON.stringify(["内容检查"]),
+            attempt: 0,
+            max_attempts: 3,
+            created_at: 100,
+            updated_at: 100,
+          },
+          {
+            id: "item-acceptance-legacy",
+            project_id: "project-acceptance-api",
+            plan_id: "plan-acceptance-api",
+            title: "旧合同工作项",
+            description: "没有严格 Attempt 和 Artifact tuple 的旧工作项",
+            kind: "worker",
+            work_type: "analysis",
+            role: "Legacy Analyst",
+            capability_packs_json: "[]",
+            decision_scope_json: "[]",
+            resource_scope_json: "[]",
+            inputs_json: "[]",
+            expected_outputs_json: JSON.stringify(["旧成果"]),
+            validators_json: JSON.stringify(["旧标准只能显式未验证"]),
+            disposition: "temporary",
+            model_group: "standard",
+            risk_level: "low",
+            review_status: "not_required",
+            status: "completed",
+            purpose: "delivery",
+            origin_kind: "legacy",
+            graph_revision_created: 0,
+            validation_mode: "self_check",
+            validation_contract_version: 1,
+            acceptance_criteria_json: JSON.stringify(["旧标准只能显式未验证"]),
+            attempt: 0,
+            max_attempts: 3,
+            created_at: 100,
+            updated_at: 450,
+          },
+        ])
+        .run()
+      db.insert(AgentRunTable)
+        .values([
+          {
+            id: "agent-run-acceptance-review",
+            agent_id: "reviewer-acceptance-agent",
+            runtime: "pi",
+            lifecycle: "on_demand",
+            permission_mode: "read_only",
+            state: "completed",
+            workflow_run_id: "workflow-acceptance-review",
+            company_project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-reviewer",
+            cwd: "/tmp/project-acceptance-api",
+            runtime_home_path: "/tmp/project-acceptance-api/runtime",
+            exit_code: 0,
+            time_started: 710,
+            time_finished: 780,
+            time_created: 700,
+            time_updated: 780,
+          },
+          {
+            id: "agent-run-acceptance-incomplete",
+            agent_id: "reviewer-acceptance-agent",
+            runtime: "pi",
+            lifecycle: "on_demand",
+            permission_mode: "read_only",
+            state: "running",
+            workflow_run_id: "workflow-acceptance-review",
+            company_project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-reviewer",
+            cwd: "/tmp/project-acceptance-api",
+            runtime_home_path: "/tmp/project-acceptance-api/runtime-incomplete",
+            time_started: 710,
+            time_created: 700,
+            time_updated: 720,
+          },
+        ])
+        .run()
+      db.insert(CompanyWorkAttemptTable)
+        .values([
+          {
+            id: "attempt-acceptance-old",
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            ordinal: 1,
+            status: "failed",
+            failure_kind: "validator",
+            safe_summary: "旧尝试不能满足验收",
+            started_at: 200,
+            finished_at: 400,
+          },
+          ...Array.from({ length: 499 }, (_, index) => ({
+            id: `attempt-acceptance-history-${index + 2}`,
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            ordinal: index + 2,
+            status: "failed",
+            failure_kind: "validator",
+            safe_summary: "历史尝试不能影响当前验收投影",
+            started_at: 401 + index,
+            finished_at: 402 + index,
+          })),
+          {
+            id: "attempt-acceptance-current",
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            ordinal: 501,
+            status: "completed",
+            safe_summary: "当前尝试已形成成果",
+            started_at: 500,
+            finished_at: 800,
+          },
+        ])
+        .run()
+      db.insert(CompanyArtifactTable)
+        .values([
+          {
+            id: "artifact-acceptance-old",
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            attempt_id: "attempt-acceptance-old",
+            version: 1,
+            content_sha256: oldContentSha256,
+            integrity_sha256: oldIntegritySha256,
+            kind: "analysis",
+            title: "旧成果",
+            content: "old artifact",
+            evidence_json: "{}",
+            created_at: 400,
+          },
+          {
+            id: "artifact-acceptance-current",
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            attempt_id: "attempt-acceptance-current",
+            version: 2,
+            content_sha256: contentSha256,
+            integrity_sha256: integritySha256,
+            kind: "analysis",
+            title: "当前成果",
+            content: "current artifact",
+            evidence_json: "{}",
+            created_at: 700,
+          },
+        ])
+        .run()
+      db.insert(CompanyValidationGateTable)
+        .values({
+          id: "gate-acceptance-legacy",
+          project_id: "project-acceptance-api",
+          work_item_id: "item-acceptance-current",
+          kind: "unit_test",
+          status: "passed",
+          criteria_json: JSON.stringify([
+            {
+              id: "legacy-criterion",
+              statement: "旧 Gate 已通过",
+              anchor: { kind: "unit_test", reference: "legacy check" },
+              operator: "exit_code",
+              expected: 0,
+            },
+          ]),
+          criteria_sha256: "a".repeat(64),
+          blocking_work_item_ids_json: JSON.stringify(["item-acceptance-current"]),
+          evidence_refs_json: "[]",
+          evaluator: "command_exit_v1",
+          created_at: 650,
+          evaluated_at: 660,
+        })
+        .run()
+      createCriterionWithDatabase(db, {
+        id: "criterion-acceptance-digest",
+        project_id: "project-acceptance-api",
+        plan_id: "plan-acceptance-api",
+        work_item_id: "item-acceptance-current",
+        ordinal: 1,
+        statement: "artifact_exists",
+        verification_kind: "deterministic",
+        evaluator: "artifact_digest_v1",
+        required: true,
+      })
+      createCriterionWithDatabase(db, {
+        id: "criterion-acceptance-review",
+        project_id: "project-acceptance-api",
+        plan_id: "plan-acceptance-api",
+        work_item_id: "item-acceptance-current",
+        ordinal: 2,
+        statement: "满足目标质量标准",
+        verification_kind: "semantic_review",
+        required: true,
+      })
+      Array.of("criterion-acceptance-digest").forEach((criterion_id) => {
+        recordWithDatabase(db, {
+          id: `fact-old-${criterion_id}`,
+          project_id: "project-acceptance-api",
+          work_item_id: "item-acceptance-current",
+          attempt_id: "attempt-acceptance-old",
+          artifact_id: "artifact-acceptance-old",
+          criterion_id,
+          verdict: "passed",
+          authority: "control_plane",
+          evaluator: "artifact_digest_v1",
+          observation: { tuple: "old" },
+          evidence_refs: [{ kind: "artifact", id: "artifact-acceptance-old" }],
+          idempotency_key: `old-${criterion_id}`,
+        })
+      })
+      db.insert(CompanyAcceptanceFactTable)
+        .values(
+          Array.from({ length: 500 }, (_, index) => ({
+            id: `fact-old-history-${index + 1}`,
+            project_id: "project-acceptance-api",
+            work_item_id: "item-acceptance-current",
+            attempt_id: "attempt-acceptance-old",
+            artifact_id: "artifact-acceptance-old",
+            artifact_integrity_sha256: oldIntegritySha256,
+            criterion_id: "criterion-acceptance-digest",
+            verdict: "passed",
+            authority: "control_plane",
+            evaluator: "artifact_digest_v1",
+            observation_json: JSON.stringify({ tuple: "old", index }),
+            evidence_refs_json: JSON.stringify([{ kind: "artifact", id: "artifact-acceptance-old" }]),
+            evidence_sha256: new Bun.CryptoHasher("sha256").update(`old-evidence-${index}`).digest("hex"),
+            input_sha256: new Bun.CryptoHasher("sha256").update(`old-input-${index}`).digest("hex"),
+            idempotency_key: `old-history-${index + 1}`,
+            created_at: 401 + index,
+          })),
+        )
+        .run()
+      recordWithDatabase(db, {
+        id: "fact-current-digest",
+        project_id: "project-acceptance-api",
+        work_item_id: "item-acceptance-current",
+        attempt_id: "attempt-acceptance-current",
+        artifact_id: "artifact-acceptance-current",
+        criterion_id: "criterion-acceptance-digest",
+        verdict: "failed",
+        authority: "control_plane",
+        evaluator: "artifact_digest_v1",
+        observation: { tuple: "current" },
+        evidence_refs: [{ kind: "artifact", id: "artifact-acceptance-current" }],
+        idempotency_key: "current-digest",
+      })
+      expect(() =>
+        recordWithDatabase(db, {
+          id: "fact-current-review-incomplete",
+          project_id: "project-acceptance-api",
+          work_item_id: "item-acceptance-current",
+          attempt_id: "attempt-acceptance-current",
+          artifact_id: "artifact-acceptance-current",
+          criterion_id: "criterion-acceptance-review",
+          verdict: "passed",
+          authority: "independent_reviewer",
+          evaluator: "independent_review_v2",
+          observation: { tuple: "current" },
+          evidence_refs: [
+            { kind: "artifact", id: "artifact-acceptance-current" },
+            { kind: "agent_run", id: "agent-run-acceptance-incomplete" },
+          ],
+          idempotency_key: "current-review-incomplete",
+        }),
+      ).toThrow("Acceptance Fact authority or evaluator is not backed by registered evidence")
+      recordWithDatabase(db, {
+        id: "fact-current-review",
+        project_id: "project-acceptance-api",
+        work_item_id: "item-acceptance-current",
+        attempt_id: "attempt-acceptance-current",
+        artifact_id: "artifact-acceptance-current",
+        criterion_id: "criterion-acceptance-review",
+        verdict: "passed",
+        authority: "independent_reviewer",
+        evaluator: "independent_review_v2",
+        observation: { tuple: "current" },
+        evidence_refs: [
+          { kind: "artifact", id: "artifact-acceptance-current" },
+          { kind: "agent_run", id: "agent-run-acceptance-review" },
+        ],
+        idempotency_key: "current-review",
+      })
+    })
+
+    const result = await json("/experience/work/project-acceptance-api/acceptance")
+    expect(result.response.status).toBe(200)
+    const acceptance = AcceptanceSummary.parse(result.body)
+    if (acceptance.availability !== "available") throw new Error("Expected acceptance projection")
+    expect(acceptance).toMatchObject({
+      activePlanVersion: 1,
+      trackedWorkItemCount: 4,
+      verifiedWorkItemCount: 0,
+      unresolvedWorkItemCount: 4,
+      pendingWorkItemIds: ["item-acceptance-pending", "item-acceptance-reviewer"],
+    })
+    expect(acceptance.items).toHaveLength(2)
+    const current = acceptance.items.find((item) => item.contractVersion === 2)
+    if (!current || current.contractVersion !== 2) throw new Error("Expected current tuple coverage")
+    expect(current).toMatchObject({
+      workItemId: "item-acceptance-current",
+      attemptId: "attempt-acceptance-current",
+      attemptOrdinal: 501,
+      artifactId: "artifact-acceptance-current",
+      artifactVersion: 2,
+      contractVersion: 2,
+      state: "failed",
+    })
+    expect(current.criteria).toEqual([
+      expect.objectContaining({
+        criterionId: "criterion-acceptance-digest",
+        state: "failed",
+        factId: "fact-current-digest",
+        authority: "control_plane",
+      }),
+      expect.objectContaining({
+        criterionId: "criterion-acceptance-review",
+        state: "passed",
+        factId: "fact-current-review",
+        authority: "independent_reviewer",
+      }),
+    ])
+    const legacy = acceptance.items.find((item) => item.contractVersion === 1)
+    if (!legacy || legacy.contractVersion !== 1) throw new Error("Expected legacy unverified coverage")
+    expect(legacy).toMatchObject({
+      workItemId: "item-acceptance-legacy",
+      contractVersion: 1,
+      state: "legacy_unverified",
+      criteria: [
+        {
+          statement: "旧标准只能显式未验证",
+          verificationKind: "legacy_unscoped",
+          required: true,
+          state: "missing",
+          evidenceRefs: [],
+        },
+      ],
+    })
+    expect(legacy).not.toHaveProperty("attemptId")
+    expect(legacy).not.toHaveProperty("artifactId")
+    expect(JSON.stringify(acceptance)).not.toContain("fact-old-")
+    expect(JSON.stringify(acceptance)).not.toContain("gate-acceptance-legacy")
+    expect(new Set(current.criteria.flatMap((criterion) => criterion.sourceRefs.map((ref) => ref.kind)))).toEqual(
+      new Set([
+        "project",
+        "work_item",
+        "work_attempt",
+        "artifact",
+        "acceptance_criterion",
+        "acceptance_fact",
+        "agent_run",
+      ]),
+    )
   })
 
   test.serial("makes every delivered Artifact ref resolve to a safe project-bound view", async () => {
@@ -1200,6 +1688,11 @@ describe.serial("/experience", () => {
       {
         method: "get",
         path: "/experience/work/{projectID}/validation",
+        statuses: ["200", "404"],
+      },
+      {
+        method: "get",
+        path: "/experience/work/{projectID}/acceptance",
         statuses: ["200", "404"],
       },
       { method: "get", path: "/experience/work/{projectID}", statuses: ["200", "404"] },

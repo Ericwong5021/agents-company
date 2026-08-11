@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  AcceptanceSummary,
   DiscoverySummary,
   GraphChangeSummary,
   OrganizationProjection,
@@ -17,6 +18,7 @@ import {
 
 const props = defineProps<{
   mode?: string
+  acceptance?: AcceptanceSummary
   organization?: OrganizationProjection
   graph?: GraphChangeSummary
   validation?: ValidationSummary
@@ -45,8 +47,11 @@ const changes = computed(() =>
 const gates = computed(() =>
   props.validation?.availability === "available" ? props.validation.gates : [],
 )
+const acceptance = computed(() =>
+  props.acceptance?.availability === "available" ? props.acceptance : undefined,
+)
 const unavailable = computed(() =>
-  [props.organization, props.graph, props.validation].filter(
+  [props.acceptance, props.organization, props.graph, props.validation].filter(
     (projection) => projection?.availability === "unavailable",
   ),
 )
@@ -239,6 +244,17 @@ function seedMode(mode?: string) {
         </article>
       </div>
       <p v-else class="ac-seed-flow__empty">当前没有阻断验证条件。</p>
+      <div v-if="acceptance" class="ac-validation-rail">
+        <article>
+          <div>
+            <h4>当前成果验收覆盖</h4>
+            <p>{{ acceptance.verifiedWorkItemCount }} / {{ acceptance.trackedWorkItemCount }} 个工作项具备当前版本证据</p>
+          </div>
+          <span class="ac-status-badge" :data-status="acceptance.unresolvedWorkItemCount ? 'pending' : 'passed'">
+            {{ acceptance.unresolvedWorkItemCount ? `${acceptance.unresolvedWorkItemCount} 项待验证` : "证据闭合" }}
+          </span>
+        </article>
+      </div>
     </div>
 
     <div v-if="unavailable.length" class="ac-resource-notice" role="status">

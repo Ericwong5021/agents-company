@@ -38,6 +38,12 @@ import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import { WorkflowRuntime } from "@/workflow/runtime"
 import { DispatchCoordinator } from "./dispatch"
+import {
+  DeliveryAcceptanceBinding,
+  DeliveryReadySnapshot,
+  deliveryAcceptanceBindingDigest,
+  deliveryAcceptanceSnapshotWithDatabase,
+} from "./quiescence"
 import { authorizeDiscoveryBuilder } from "./seed-team"
 
 const RuntimeAction = z.enum([
@@ -242,8 +248,8 @@ function revisionWorkItemIDs(input: {
       .filter(
         (item) =>
           item.kind === "reviewer" &&
-          item.parent_id &&
-          selected.has(item.parent_id) &&
+          (item.reviews_work_item_id ?? item.parent_id) &&
+          selected.has((item.reviews_work_item_id ?? item.parent_id)!) &&
           !["superseded", "cancelled"].includes(item.status),
       )
       .forEach((item) => {
@@ -334,6 +340,10 @@ function assertRevision(action: ProjectActionRecordValue) {
 }
 
 function safeProjectActionError(error: string) {
+  const deliveryError = error.match(
+    /delivery_(?:legacy_unverified|acceptance_ids_not_unique|acceptance_snapshot_invalid|acceptance_criteria_mismatch)|stale_delivery/,
+  )?.[0]
+  if (deliveryError) return deliveryError
   if (/no_retryable_work_items|has no retryable work items/i.test(error))
     return "当前没有可重试的工作项，请刷新后使用页面提供的可用操作。"
   if (/project_revision_conflict/i.test(error))
@@ -1144,7 +1154,11 @@ export function makeLayer(hooks: Hooks = {}) {
                           Math.max(
                             1,
                             ...projectItems
-                              .filter((candidate) => candidate.kind === "reviewer" && candidate.parent_id === item.id)
+                              .filter(
+                                (candidate) =>
+                                  candidate.kind === "reviewer" &&
+                                  (candidate.reviews_work_item_id ?? candidate.parent_id) === item.id,
+                              )
                               .map((candidate) => candidate.max_attempts - candidate.attempt),
                           ),
                       ),
@@ -1246,6 +1260,83 @@ export function makeLayer(hooks: Hooks = {}) {
                   )
               )
                 throw new Error("delivery_already_decided")
+              const acceptedCriterionIDs = acceptedPayload
+                ? [...acceptedPayload.accepted_criterion_ids].sort()
+                : []
+              if (acceptedPayload) {
+                if (
+                  ![
+                    "version",
+                    "graph_revision",
+                    "plan_id",
+                    "plan_version",
+                    "plan_sha256",
+                    "brief_id",
+                    "brief_version",
+                    "brief_sha256",
+                    "criterion_ids",
+                    "criterion_sha256",
+                    "acceptance_criteria_sha256",
+                    "delivery_package_artifact_id",
+                    "delivery_package_integrity_sha256",
+                    "artifact_ids",
+                    "artifacts",
+                    "receipt_ids",
+                    "receipts_sha256",
+                    "acceptance_fact_ids",
+                    "acceptance_facts_sha256",
+                    "legacy_unverified",
+                    "sha256",
+                  ].every((key) => key in readyData)
+                )
+                  throw new Error("delivery_legacy_unverified")
+                const parsed = DeliveryReadySnapshot.safeParse(readyData)
+                if (!parsed.success) throw new Error("delivery_acceptance_snapshot_invalid")
+                if (!parsed.data.criterion_ids.length || parsed.data.legacy_unverified)
+                  throw new Error("delivery_legacy_unverified")
+                if (new Set(acceptedPayload.accepted_criterion_ids).size !== acceptedPayload.accepted_criterion_ids.length)
+                  throw new Error("delivery_acceptance_ids_not_unique")
+                if (
+                  new Set(parsed.data.criterion_ids).size !== parsed.data.criterion_ids.length ||
+                  JSON.stringify(parsed.data.criterion_ids) !== JSON.stringify([...parsed.data.criterion_ids].sort())
+                )
+                  throw new Error("delivery_acceptance_snapshot_invalid")
+                const binding = {
+                  version: parsed.data.version,
+                  graph_revision: parsed.data.graph_revision,
+                  plan_id: parsed.data.plan_id,
+                  plan_version: parsed.data.plan_version,
+                  plan_sha256: parsed.data.plan_sha256,
+                  brief_id: parsed.data.brief_id,
+                  brief_version: parsed.data.brief_version,
+                  brief_sha256: parsed.data.brief_sha256,
+                  criterion_ids: parsed.data.criterion_ids,
+                  criterion_sha256: parsed.data.criterion_sha256,
+                  acceptance_criteria_sha256: parsed.data.acceptance_criteria_sha256,
+                  delivery_package_artifact_id: parsed.data.delivery_package_artifact_id,
+                  delivery_package_integrity_sha256: parsed.data.delivery_package_integrity_sha256,
+                  artifact_ids: parsed.data.artifact_ids,
+                  artifacts: parsed.data.artifacts,
+                  receipt_ids: parsed.data.receipt_ids,
+                  receipts_sha256: parsed.data.receipts_sha256,
+                  acceptance_fact_ids: parsed.data.acceptance_fact_ids,
+                  acceptance_facts_sha256: parsed.data.acceptance_facts_sha256,
+                  legacy_unverified: parsed.data.legacy_unverified,
+                }
+                if (deliveryAcceptanceBindingDigest(binding) !== parsed.data.sha256)
+                  throw new Error("delivery_acceptance_snapshot_invalid")
+                if (JSON.stringify(acceptedCriterionIDs) !== JSON.stringify(parsed.data.criterion_ids))
+                  throw new Error("delivery_acceptance_criteria_mismatch")
+                if (readyData.delivery_id !== `delivery:${binding.delivery_package_artifact_id}`)
+                  throw new Error("delivery_id_mismatch")
+                const current = deliveryAcceptanceSnapshotWithDatabase(db, {
+                  project_id: action.project_id,
+                  delivery_package_artifact_id: binding.delivery_package_artifact_id,
+                  version: binding.version,
+                })
+                if (JSON.stringify(current) !== JSON.stringify(DeliveryAcceptanceBinding.parse(binding)))
+                  throw new Error("stale_delivery")
+              }
               const deliveryWorkItemIDs = acceptedPayload
                 ? []
                 : [
@@ -1303,7 +1394,7 @@ export function makeLayer(hooks: Hooks = {}) {
               const result = acceptedPayload
                 ? {
                     delivery_id: acceptedPayload.delivery_id,
-                    accepted_criterion_ids: acceptedPayload.accepted_criterion_ids,
+                    accepted_criterion_ids: acceptedCriterionIDs,
                     note: acceptedPayload.note,
                   }
                 : {
@@ -1352,7 +1443,10 @@ export function makeLayer(hooks: Hooks = {}) {
               if (!acceptedPayload) {
                 const now = Date.now()
                 const reviewerByParent = new Map(
-                  reviewerRows.flatMap((reviewer) => (reviewer.parent_id ? [[reviewer.parent_id, reviewer] as const] : [])),
+                  reviewerRows.flatMap((reviewer) => {
+                    const target = reviewer.reviews_work_item_id ?? reviewer.parent_id
+                    return target ? [[target, reviewer] as const] : []
+                  }),
                 )
                 const supersededGates = db
                   .select()
@@ -1881,6 +1975,12 @@ export function makeLayer(hooks: Hooks = {}) {
         replayed: boolean,
       ) {
         if (action.action === "adjust_brief") {
+          const project = yield* Effect.sync(() =>
+            Database.use((db) =>
+              db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, action.project_id)).get(),
+            ),
+          )
+          if (project?.status === "completed") throw new Error("completed_project_requires_revision_workflow")
           const payload = CompanyProjectDirection.AdjustDirectionPayload.parse(action.payload)
           if (action.status === "requested") yield* quiesceDirection(action)
           const result = yield* adjustDirection({

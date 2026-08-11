@@ -18,12 +18,53 @@ import * as Admission from "../../src/admission/admission"
 import * as Reputation from "../../src/reputation/reputation"
 import { TaskRegistry } from "../../src/task/registry"
 import { Delegation } from "../../src/delegation/delegation"
+import { PlannerSubTask } from "../../src/delegation/schema"
 import { AuditEvent } from "../../src/audit-event/audit-event"
 import { TrustDial } from "../../src/trust-dial/trust-dial"
 import { FrontMatter, Workspace } from "../../src/workspace"
 import type { CompanyAgentID } from "../../src/company-agent/schema"
 import type { SessionID } from "../../src/session/schema"
 import type { Task } from "../../src/task/schema"
+
+describe("PlannerSubTask", () => {
+  it("accepts only explicit worker delivery nodes", () => {
+    expect(
+      PlannerSubTask.safeParse({
+        key: "delivery",
+        kind: "worker",
+        purpose: "delivery",
+        summary: "Produce the requested deliverable",
+        acceptanceCriteria: "The deliverable satisfies the brief",
+      }).success,
+    ).toBe(true)
+    expect(
+      PlannerSubTask.safeParse({
+        key: "review",
+        kind: "reviewer",
+        purpose: "verification",
+        summary: "Review another task",
+        acceptanceCriteria: "The other task is accepted",
+      }).success,
+    ).toBe(false)
+    expect(
+      PlannerSubTask.safeParse({
+        key: "implicit",
+        summary: "Produce the requested deliverable",
+        acceptanceCriteria: "The deliverable satisfies the brief",
+      }).success,
+    ).toBe(false)
+    expect(
+      PlannerSubTask.safeParse({
+        key: "policy-fields",
+        kind: "worker",
+        purpose: "delivery",
+        summary: "Produce the requested deliverable",
+        acceptanceCriteria: "The deliverable satisfies the brief",
+        validationMode: "independent_review",
+      }).success,
+    ).toBe(false)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Mock CompanyAgent service

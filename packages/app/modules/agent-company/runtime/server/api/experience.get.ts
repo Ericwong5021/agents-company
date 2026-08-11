@@ -1,7 +1,9 @@
 import {
+  AcceptanceSummary,
   GraphChangeSummary,
   OrganizationProjection,
   ValidationSummary,
+  type AcceptanceSummary as AcceptanceSummaryValue,
   type GraphChangeSummary as GraphChangeSummaryValue,
   type OrganizationProjection as OrganizationProjectionValue,
   type ValidationSummary as ValidationSummaryValue,
@@ -15,6 +17,7 @@ import {
 } from "../utils/control-plane-client"
 
 const projections = {
+  acceptance: AcceptanceSummary,
   organization: OrganizationProjection,
   graph: GraphChangeSummary,
   validation: ValidationSummary,
@@ -23,7 +26,9 @@ const projections = {
 export default defineAgentCompanyHandler(
   async (
     event,
-  ): Promise<OrganizationProjectionValue | GraphChangeSummaryValue | ValidationSummaryValue> => {
+  ): Promise<
+    AcceptanceSummaryValue | OrganizationProjectionValue | GraphChangeSummaryValue | ValidationSummaryValue
+  > => {
     const projectID = getRouterParam(event, "projectID")
     const projection = getRouterParam(event, "projection")
     if (!projectID) throw createError({ statusCode: 400, statusMessage: "工作 ID 无效" })
@@ -37,11 +42,13 @@ export default defineAgentCompanyHandler(
     )
     if (!client) throw createError({ statusCode: 503, statusMessage: "Control Plane 配置不可用" })
     const result = await requestControlPlaneSDK<unknown>(
-      projection === "organization"
-        ? client.experience.work.organization({ projectID })
-        : projection === "graph"
-          ? client.experience.work.graph({ projectID })
-          : client.experience.work.validation({ projectID }),
+      projection === "acceptance"
+        ? client.experience.work.acceptance({ projectID })
+        : projection === "organization"
+          ? client.experience.work.organization({ projectID })
+          : projection === "graph"
+            ? client.experience.work.graph({ projectID })
+            : client.experience.work.validation({ projectID }),
     )
     if (!result.ok) {
       if (result.failure.statusCode === 404)

@@ -6,6 +6,7 @@ import type { AgentRunSpec } from "../interface"
 
 const MAX_OUTPUT_BYTES = 100 * 1024
 const writeTools = new Set(["write", "edit"])
+export const verificationCommands = new Set(["sha256sum", "shasum", "cmp", "diff", "jq", "file"])
 
 function text(content: string) {
   const output = Buffer.byteLength(content) > MAX_OUTPUT_BYTES ? `${content.slice(0, MAX_OUTPUT_BYTES)}\n…(truncated)` : content
@@ -43,11 +44,80 @@ function normalizeCommand(command: string, args: string[]) {
   return { command: tokens[0]!, args: tokens.slice(1) }
 }
 
-function allowedCommand(command: string, args: string[], permissionMode: AgentRunSpec["permissionMode"]) {
+function verificationPaths(command: string, args: string[]) {
+  if (command === "sha256sum") {
+    if (args.some((arg) => arg.startsWith("-") && !["--binary", "--text", "--tag", "--zero"].includes(arg))) return
+    const paths = args.filter((arg) => !arg.startsWith("-"))
+    return paths.length ? paths : undefined
+  }
+  if (command === "shasum") {
+    const paths: string[] = []
+    for (let index = 0; index < args.length; index++) {
+      const arg = args[index]!
+      if (arg === "-a" || arg === "--algorithm") {
+        if (!/^\d+$/.test(args[index + 1] ?? "")) return
+        index++
+        continue
+      }
+      if (["-b", "--binary", "-t", "--text", "-U", "--UNIVERSAL", "-0", "--01"].includes(arg)) continue
+      if (arg.startsWith("-")) return
+      paths.push(arg)
+    }
+    return paths.length ? paths : undefined
+  }
+  if (command === "cmp") {
+    if (args.some((arg) => arg.startsWith("-") && !["-s", "--silent", "--quiet", "-l", "--verbose", "-b", "--print-bytes"].includes(arg))) return
+    const paths = args.filter((arg) => !arg.startsWith("-"))
+    return paths.length === 2 ? paths : undefined
+  }
+  if (command === "diff") {
+    if (
+      args.some(
+        (arg) =>
+          arg.startsWith("-") &&
+          !["-u", "--unified", "-q", "--brief", "-s", "--report-identical-files", "-r", "--recursive", "-N", "--new-file", "-a", "--text", "-b", "--ignore-space-change", "-w", "--ignore-all-space", "-B", "--ignore-blank-lines"].includes(arg) &&
+          !/^-U\d+$/.test(arg),
+      )
+    )
+      return
+    const paths = args.filter((arg) => !arg.startsWith("-"))
+    return paths.length === 2 ? paths : undefined
+  }
+  if (command === "file") {
+    if (
+      args.some(
+        (arg) =>
+          arg.startsWith("-") &&
+          !["-b", "--brief", "-i", "--mime", "--mime-type", "--mime-encoding", "-L", "--dereference", "-h", "--no-dereference", "-p", "--preserve-date", "-s", "--special-files"].includes(arg),
+      )
+    )
+      return
+    const paths = args.filter((arg) => !arg.startsWith("-"))
+    return paths.length ? paths : undefined
+  }
+  if (command === "jq") {
+    const values = [...args]
+    while (values[0]?.startsWith("-")) {
+      if (!["-c", "--compact-output", "-r", "--raw-output", "-e", "--exit-status", "-S", "--sort-keys", "-M", "--monochrome-output", "-C", "--color-output", "-s", "--slurp"].includes(values[0])) return
+      values.shift()
+    }
+    if (values.length < 2) return
+    return values.slice(1)
+  }
+}
+
+function allowedCommand(
+  command: string,
+  args: string[],
+  permissionMode: AgentRunSpec["permissionMode"],
+  capabilityPacks: string[],
+) {
   if (args.some((arg) => /(^|--)(pre|hostname-bin|ext-diff|textconv|script-shell|preload|eval|require)(=|$)/i.test(arg))) {
     return false
   }
   if (permissionMode === "full_access") return true
+  if (capabilityPacks.includes("verification-testing@1") && verificationCommands.has(command))
+    return verificationPaths(command, args) !== undefined
   if (command === "rg") return true
   if (command === "git") return ["diff", "status", "show", "log", "ls-files", "rev-parse"].includes(args[0] ?? "")
   if (command === "bun") {
@@ -184,7 +254,7 @@ export function createPiTools(
       name: "bash",
       label: "Run verification command",
       description:
-        "Run a non-shell repository command. Put the executable in command and arguments in args. Supported commands: rg; read-only git; package-manager checks, start/dev scripts, and bun install for workspace-write runs.",
+        "Run a non-shell repository command. Put the executable in command and arguments in args. Supported commands include rg, read-only git, package-manager checks, and verification-testing checksum, comparison, JSON, and file inspection tools.",
       parameters: Type.Object({
         command: Type.String(),
         args: Type.Array(Type.String(), { maxItems: 100 }),
@@ -193,9 +263,15 @@ export function createPiTools(
       execute: async (_callID, raw, signal) => {
         const input = raw as { command: string; args: string[]; timeoutMs?: number }
         const invocation = normalizeCommand(input.command, input.args)
-        if (!invocation || !allowedCommand(invocation.command, invocation.args, spec.permissionMode)) {
+        if (!invocation || !allowedCommand(invocation.command, invocation.args, spec.permissionMode, spec.capabilityPacks)) {
           throw new Error(`Command is not allowed by the Control Plane: ${input.command}`)
         }
+        if (
+          spec.permissionMode !== "full_access" &&
+          spec.capabilityPacks.includes("verification-testing@1") &&
+          verificationCommands.has(invocation.command)
+        )
+          await Promise.all(verificationPaths(invocation.command, invocation.args)!.map((item) => resolve(item)))
         const executable = Bun.which(invocation.command)
         if (!executable) throw new Error(`Command is not installed: ${invocation.command}`)
         const child = Bun.spawn([executable, ...invocation.args], {

@@ -8,6 +8,8 @@ import type { AgentMessageID } from "@/agent-message/schema"
 export const SubTask = z.object({
   key: z.string().min(1).optional(),
   parentKey: z.string().min(1).optional(),
+  kind: z.literal("worker").optional(),
+  purpose: z.literal("delivery").optional(),
   summary: z.string().min(1),
   acceptanceCriteria: z.string().min(1),
   suggestedAgent: z.string().optional(),
@@ -19,8 +21,14 @@ export const SubTask = z.object({
   modelGroup: z.enum(["standard", "lite"]).optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   dependsOn: z.array(z.string()).optional(),
-})
+}).strict()
 export type SubTask = z.infer<typeof SubTask>
+
+export const PlannerSubTask = SubTask.extend({
+  kind: z.literal("worker"),
+  purpose: z.literal("delivery"),
+}).strict()
+export type PlannerSubTask = z.infer<typeof PlannerSubTask>
 
 // ---------------------------------------------------------------------------
 // Delegation chain tracking

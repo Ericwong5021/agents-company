@@ -6,6 +6,7 @@ import {
   type GraphSnapshot as GraphSnapshotType,
   type WorkReceiptEvidenceRef,
 } from "./schema"
+import { validateWorkItemContract, type WorkItemContractViolation } from "./work-item-contract"
 
 const referenceKey = (reference: WorkReceiptEvidenceRef) => `${reference.kind}:${reference.id}`
 const dependencyKey = (work_item_id: string, depends_on_id: string) => `${work_item_id}\u0000${depends_on_id}`
@@ -70,6 +71,12 @@ function decisionMatches(input: GraphMutationProposal) {
   if (input.decision === "supersede") return types.has("supersede_work_item")
   if (input.decision === "request_capability") return types.has("request_capability")
   return types.has("request_user_decision") || types.has("add_validation_gate")
+}
+
+function graphViolationForContract(violation: WorkItemContractViolation): GraphPolicyViolation {
+  if (violation === "duplicate_reviewer_target") return "duplicate_new_node"
+  if (violation.startsWith("reviewer_")) return "self_review"
+  return "decision_operation_mismatch"
 }
 
 export function validateGraphPatch(input: {
@@ -137,6 +144,7 @@ export function validateGraphPatch(input: {
         id: operation.item.id,
         plan_id: operation.item.plan_id,
         parent_id: operation.item.parent_id,
+        reviews_work_item_id: operation.item.reviews_work_item_id,
         kind: operation.item.kind,
         status: "pending",
         owner_agent_id: operation.item.owner_agent_id,
@@ -153,17 +161,8 @@ export function validateGraphPatch(input: {
   input.proposal.operations.forEach((operation) => {
     if (operation.type === "add_work_item") {
       if (operation.item.parent_id && !nodes.has(operation.item.parent_id)) violations.add("missing_node")
-      const parent = operation.item.parent_id ? nodes.get(operation.item.parent_id) : undefined
-      if (
-        operation.item.kind === "reviewer" &&
-        (operation.item.validation_mode === "self_check" ||
-          !parent ||
-          (operation.item.owner_agent_id &&
-            parent.owner_agent_id &&
-            operation.item.owner_agent_id === parent.owner_agent_id))
-      ) {
-        violations.add("self_review")
-      }
+      if (operation.item.reviews_work_item_id && !nodes.has(operation.item.reviews_work_item_id))
+        violations.add("missing_node")
       return
     }
     if (operation.type === "add_dependency" || operation.type === "remove_dependency") {
@@ -232,6 +231,28 @@ export function validateGraphPatch(input: {
         violations.add("scope_escalation")
     }
   })
+
+  input.proposal.operations
+    .filter((operation) => operation.type === "add_work_item")
+    .forEach((operation) => {
+      validateWorkItemContract({
+        item: { ...operation.item, project_id: input.snapshot.project_id },
+        review_target:
+          operation.item.kind === "reviewer"
+            ? operation.item.reviews_work_item_id
+              ? (nodes.get(operation.item.reviews_work_item_id) ?? null)
+              : null
+            : undefined,
+        reviewers: operation.item.kind === "reviewer" ? [...nodes.values()] : undefined,
+        dependency_ids:
+          operation.item.kind === "reviewer"
+            ? [...dependencies]
+                .map((key) => key.split("\u0000"))
+                .filter(([work_item_id]) => work_item_id === operation.item.id)
+                .map(([, depends_on_id]) => depends_on_id!)
+            : undefined,
+      }).forEach((violation) => violations.add(graphViolationForContract(violation)))
+    })
 
   const preview = GraphSnapshot.parse({
     project_id: input.snapshot.project_id,

@@ -3,11 +3,17 @@ import { Database as SQLite } from "bun:sqlite"
 import fs from "fs/promises"
 import path from "path"
 import { Cause, Effect, Exit, Layer } from "effect"
+import { eq } from "drizzle-orm"
 import { AgentRun } from "../../src/agent-run/agent-run"
 import { Company } from "../../src/company"
-import { CompanyProject, CompanyWorkFacts } from "../../src/company-project"
+import { CompanyAcceptanceFact, CompanyProject, CompanyWorkFacts } from "../../src/company-project"
+import {
+  CompanyArtifactTable,
+  CompanyWorkItemTable,
+} from "../../src/company-project/company-project.sql"
 import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { Instance } from "../../src/project/instance"
+import { Database } from "../../src/storage"
 import { provideTmpdirInstance, tmpdir } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
@@ -57,6 +63,7 @@ const it = testEffect(
   Layer.mergeAll(
     CompanyProject.defaultLayer,
     CompanyWorkFacts.defaultLayer,
+    CompanyAcceptanceFact.defaultLayer,
     Company.defaultLayer,
     AgentRun.defaultLayer,
     CrossSpawnSpawner.defaultLayer,
@@ -211,6 +218,123 @@ describe("Company work Attempt and Receipt facts", () => {
             invalid_reference_rejected: true,
           }),
         )
+      }),
+    ),
+  )
+
+  it.live("[acceptance-fact-shadow] links a completed Receipt to the full current fact set", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const projects = yield* CompanyProject.Service
+        const acceptance = yield* CompanyAcceptanceFact.Service
+        const project = yield* projects.create({ goal: "Close Receipt over scoped Acceptance Facts" })
+        yield* projects.transition({ id: project.id, status: "planning" })
+        const plan = yield* projects.createPlan({
+          project_id: project.id,
+          phase: "execution",
+          summary: "Receipt closure",
+          acceptance_criteria: ["artifact_exists"],
+        })
+        const item = yield* projects.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "Receipt closure",
+          description: "Receipt closure",
+          kind: "worker",
+          work_type: "analysis",
+          role: "analyst",
+          model_group: "standard",
+          review_status: "not_required",
+          acceptance_criteria: ["artifact_exists"],
+        })
+        yield* projects.startWorkItem(item.id)
+        const attempt = (yield* projects.listWorkAttempts(project.id)).find(
+          (candidate) => candidate.work_item_id === item.id,
+        )!
+        const artifact = yield* projects.addArtifact({
+          project_id: project.id,
+          work_item_id: item.id,
+          kind: "analysis",
+          title: "Scoped Artifact",
+          content: JSON.stringify({ complete: true }),
+        })
+        const integrity = artifact.content_sha256!
+        Database.use((db) => {
+          db.update(CompanyWorkItemTable)
+            .set({ validation_contract_version: 2 })
+            .where(eq(CompanyWorkItemTable.id, item.id))
+            .run()
+        })
+        const criterion = yield* acceptance.createCriterion({
+          project_id: project.id,
+          plan_id: plan.id,
+          work_item_id: item.id,
+          ordinal: 1,
+          statement: "artifact_exists",
+          verification_kind: "deterministic",
+          evaluator: "artifact_digest_v1",
+          required: true,
+        })
+        const fact = yield* acceptance.record({
+          project_id: project.id,
+          work_item_id: item.id,
+          attempt_id: attempt.id,
+          artifact_id: artifact.id,
+          criterion_id: criterion.criterion.id,
+          verdict: "passed",
+          authority: "control_plane",
+          evaluator: "artifact_digest_v1",
+          observation: { digest: integrity },
+          evidence_refs: [{ kind: "artifact", id: artifact.id }],
+          idempotency_key: `receipt-fact:${artifact.id}`,
+        })
+        const bypass = yield* Effect.exit(projects.completeWorkItem(item.id))
+        expect(Exit.isFailure(bypass)).toBe(true)
+        if (Exit.isFailure(bypass)) expect(Cause.pretty(bypass.cause)).toMatch(/requires current Acceptance Facts/)
+        yield* projects.completeWorkItemWithReceipt({
+          id: item.id,
+          receipt: {
+            idempotency_key: `v2-receipt:${attempt.id}`,
+            outcome: "completed",
+            summary: "Current Acceptance Facts close the Work Attempt",
+            artifact_ids: [artifact.id],
+            evidence_refs: [{ kind: "artifact", id: artifact.id }],
+            confirmed_facts: [`acceptance:${criterion.criterion.id}:passed`],
+            invalidated_assumptions: [],
+            unknowns: [],
+            blockers: [],
+            capability_gaps: [],
+            task_proposals: [],
+            dependency_proposals: [],
+            questions: [],
+          },
+          acceptance: { artifact_id: artifact.id, fact_ids: [fact.fact.id] },
+        })
+        const receipt = (yield* projects.listWorkReceipts(project.id)).find(
+          (candidate) => candidate.attempt_id === attempt.id,
+        )!
+        expect(
+          yield* acceptance.linkReceipt({
+            receipt_id: receipt.id,
+            artifact_id: artifact.id,
+            fact_ids: [fact.fact.id],
+          }),
+        ).toHaveLength(1)
+        expect(
+          yield* acceptance.linkReceipt({
+            receipt_id: receipt.id,
+            artifact_id: artifact.id,
+            fact_ids: [fact.fact.id],
+          }),
+        ).toHaveLength(1)
+        expect((yield* acceptance.listReceiptFacts(receipt.id)).map((candidate) => candidate.id)).toEqual([
+          fact.fact.id,
+        ])
+        expect(
+          (yield* projects.listEvents(project.id)).filter(
+            (event) => event.type === "work_receipt.acceptance_linked",
+          ),
+        ).toHaveLength(1)
       }),
     ),
   )

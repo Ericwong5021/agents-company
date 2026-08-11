@@ -229,6 +229,8 @@ import type {
   ExperienceGoalBriefRequestResponses,
   ExperienceGoalBriefStartErrors,
   ExperienceGoalBriefStartResponses,
+  ExperienceWorkAcceptanceErrors,
+  ExperienceWorkAcceptanceResponses,
   ExperienceWorkActionErrors,
   ExperienceWorkActionResponses,
   ExperienceWorkArchivedResponses,
@@ -3296,9 +3298,12 @@ export class GoalBrief extends HeyApiClient {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -3547,9 +3552,12 @@ export class GoalBrief extends HeyApiClient {
             | "user"
             | "work_attempt"
             | "work_receipt"
+            | "agent_run"
             | "graph_mutation"
             | "project_assignment"
             | "validation_gate"
+            | "acceptance_criterion"
+            | "acceptance_fact"
           id: string
           version?: number
           eventType?: string
@@ -3834,9 +3842,12 @@ export class Work extends HeyApiClient {
                   | "user"
                   | "work_attempt"
                   | "work_receipt"
+                  | "agent_run"
                   | "graph_mutation"
                   | "project_assignment"
                   | "validation_gate"
+                  | "acceptance_criterion"
+                  | "acceptance_fact"
                 id: string
                 version?: number
                 eventType?: string
@@ -4037,6 +4048,40 @@ export class Work extends HeyApiClient {
       ThrowOnError
     >({
       url: "/experience/work/{projectID}/receipts/{receiptID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Read current tuple acceptance coverage and explicit legacy-unverified work
+   */
+  public acceptance<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperienceWorkAcceptanceResponses,
+      ExperienceWorkAcceptanceErrors,
+      ThrowOnError
+    >({
+      url: "/experience/work/{projectID}/acceptance",
       ...options,
       ...params,
     })

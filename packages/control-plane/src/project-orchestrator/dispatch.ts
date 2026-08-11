@@ -1,10 +1,13 @@
 import { Context, Effect, Layer } from "effect"
 import { and, eq } from "drizzle-orm"
+import { CompanyProjectAssignmentTable } from "@/company-recruitment/company-recruitment.sql"
 import { CompanyProject } from "@/company-project/company-project"
 import {
   CompanyAttentionTable,
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyWorkAttemptTable,
+  CompanyWorkItemTable,
 } from "@/company-project/company-project.sql"
 import { CompanyProjectExecution } from "@/company-project/execution"
 import type { BoardProjectCharter } from "@/company-project/schema"
@@ -12,6 +15,7 @@ import { CompanyRecruitment } from "@/company-recruitment"
 import * as CompanyRollout from "@/company-rollout/company-rollout"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
+import { withProjectDispatchLock } from "./dispatch-lock"
 
 export type DispatchResult = {
   project_id: string
@@ -54,9 +58,11 @@ export const layer = Layer.effect(
       paused: boolean
       reason?: string
     }) {
-      return yield* Effect.sync(() =>
-        Database.transaction(
-          (db) => {
+      return yield* withProjectDispatchLock(
+        input.project_id,
+        Effect.sync(() =>
+          Database.transaction(
+            (db) => {
             const project = db
               .select()
               .from(CompanyProjectTable)
@@ -74,10 +80,67 @@ export const layer = Layer.effect(
               return { changed: false, event_id: event?.id }
             }
             const now = Date.now()
+            const generation = project.dispatch_generation + 1
+            const invalidated = input.paused
+              ? db
+                  .select()
+                  .from(CompanyWorkItemTable)
+                  .where(
+                    and(
+                      eq(CompanyWorkItemTable.project_id, project.id),
+                      eq(CompanyWorkItemTable.status, "running"),
+                    ),
+                  )
+                  .all()
+                  .filter((item) => item.dispatch_claim_id)
+              : []
+            if (invalidated.length) {
+              invalidated.forEach((item) => {
+                db.update(CompanyWorkAttemptTable)
+                  .set({
+                    status: "stopped",
+                    failure_kind: "environment",
+                    safe_summary: "Dispatch barrier invalidated the unlaunched claim",
+                    finished_at: now,
+                  })
+                  .where(
+                    and(
+                      eq(CompanyWorkAttemptTable.work_item_id, item.id),
+                      eq(CompanyWorkAttemptTable.ordinal, item.attempt),
+                      eq(CompanyWorkAttemptTable.status, "running"),
+                    ),
+                  )
+                  .run()
+                db.update(CompanyWorkItemTable)
+                  .set({
+                    status: "pending",
+                    workflow_run_id: null,
+                    dispatch_claim_id: null,
+                    dispatch_claim_generation: null,
+                    dispatch_claimed_at: null,
+                    max_attempts: Math.max(item.max_attempts, item.attempt + 1),
+                    error: null,
+                    completed_at: null,
+                    updated_at: now,
+                  })
+                  .where(eq(CompanyWorkItemTable.id, item.id))
+                  .run()
+                db.update(CompanyProjectAssignmentTable)
+                  .set({ status: "assigned", started_at: null })
+                  .where(
+                    and(
+                      eq(CompanyProjectAssignmentTable.work_item_id, item.id),
+                      eq(CompanyProjectAssignmentTable.status, "active"),
+                    ),
+                  )
+                  .run()
+              })
+            }
             const event_id = Identifier.ascending("event")
             db.update(CompanyProjectTable)
               .set({
                 dispatch_paused: input.paused,
+                dispatch_generation: generation,
                 orchestration_state: input.paused ? "paused" : "idle",
                 updated_at: now,
               })
@@ -89,13 +152,18 @@ export const layer = Layer.effect(
                 project_id: input.project_id,
                 type: input.paused ? "dispatch.paused" : "dispatch.resumed",
                 actor_id: null,
-                data_json: JSON.stringify({ reason: input.reason?.slice(0, 2_000) }),
+                data_json: JSON.stringify({
+                  reason: input.reason?.slice(0, 2_000),
+                  generation,
+                  invalidated_work_item_ids: invalidated.map((item) => item.id),
+                }),
                 created_at: now,
               })
               .run()
             return { changed: true, event_id }
-          },
-          { behavior: "immediate" },
+            },
+            { behavior: "immediate" },
+          ),
         ),
       )
     })
@@ -167,7 +235,13 @@ export const layer = Layer.effect(
           db
             .update(CompanyProjectTable)
             .set({ orchestration_state: "dispatching", updated_at: Date.now() })
-            .where(eq(CompanyProjectTable.id, project_id))
+            .where(
+              and(
+                eq(CompanyProjectTable.id, project_id),
+                eq(CompanyProjectTable.dispatch_paused, false),
+                eq(CompanyProjectTable.dispatch_generation, project.dispatch_generation),
+              ),
+            )
             .run(),
         ),
       )
@@ -180,14 +254,25 @@ export const layer = Layer.effect(
           db
             .update(CompanyProjectTable)
             .set({ orchestration_state: "idle", updated_at: Date.now() })
-            .where(eq(CompanyProjectTable.id, project_id))
+            .where(
+              and(
+                eq(CompanyProjectTable.id, project_id),
+                eq(CompanyProjectTable.dispatch_paused, false),
+                eq(CompanyProjectTable.dispatch_generation, project.dispatch_generation),
+              ),
+            )
             .run(),
         ),
       )
+      const finalProject = yield* projects.get(project_id)
       return {
         project_id,
-        status: dispatched_work_item_ids.length ? ("dispatched" as const) : ("idle" as const),
-        barrier: "open" as const,
+        status: finalProject?.dispatch_paused
+          ? ("paused" as const)
+          : dispatched_work_item_ids.length
+            ? ("dispatched" as const)
+            : ("idle" as const),
+        barrier: finalProject?.dispatch_paused ? ("paused" as const) : ("open" as const),
         eligible_work_item_ids: eligible.map((item) => item.id),
         dispatched_work_item_ids,
         run_id,

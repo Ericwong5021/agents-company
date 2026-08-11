@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect } from "bun:test"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { Effect, Layer } from "effect"
-import { CompanyProject } from "../../src/company-project"
+import { CompanyProject, CompanyProjectExecution } from "../../src/company-project"
+import { CompanyRecruitment } from "../../src/company-recruitment"
 import {
   CompanyGraphMutationTable,
   CompanyProjectEventTable,
@@ -21,7 +22,43 @@ import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
-  Layer.mergeAll(CompanyProject.defaultLayer, DispatchCoordinator.defaultLayer, CrossSpawnSpawner.defaultLayer),
+  Layer.mergeAll(
+    CompanyProject.defaultLayer,
+    CompanyRecruitment.defaultLayer,
+    DispatchCoordinator.defaultLayer,
+    CrossSpawnSpawner.defaultLayer,
+  ),
+)
+
+const pauseRaceExecution = Layer.succeed(
+  CompanyProjectExecution.Service,
+  CompanyProjectExecution.Service.of({
+    start: () => Effect.die("unused"),
+    startFromCharter: () => Effect.die("unused"),
+    replanFromCharter: () => Effect.die("unused"),
+    retry: () => Effect.die("unused"),
+    resolveGate: () => Effect.die("unused"),
+    cancel: () => Effect.die("unused"),
+    dispatchReady: (project_id) =>
+      Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .update(CompanyProjectTable)
+            .set({ dispatch_paused: true, dispatch_generation: 1, orchestration_state: "paused" })
+            .where(eq(CompanyProjectTable.id, project_id))
+            .run(),
+          ),
+      ).pipe(Effect.as(undefined)),
+  }),
+)
+const pauseRaceDependencies = Layer.mergeAll(
+  CompanyProject.defaultLayer,
+  CompanyRecruitment.defaultLayer,
+  pauseRaceExecution,
+  CrossSpawnSpawner.defaultLayer,
+)
+const pauseRaceIt = testEffect(
+  Layer.mergeAll(pauseRaceDependencies, DispatchCoordinator.layer.pipe(Layer.provide(pauseRaceDependencies))),
 )
 
 let previousExecutionMode: string | undefined
@@ -85,6 +122,7 @@ describe("Dispatch barrier", () => {
         })
         expect(yield* projects.get(project.id)).toMatchObject({
           dispatch_paused: true,
+          dispatch_generation: 1,
           orchestration_state: "paused",
         })
         const resumed = yield* dispatch.resumeDispatch(project.id, "resume test")
@@ -100,6 +138,11 @@ describe("Dispatch barrier", () => {
           barrier_event_id: resumed.barrier_event_id,
           idempotency_key: resumed.idempotency_key,
           replayed: true,
+        })
+        expect(yield* projects.get(project.id)).toMatchObject({
+          dispatch_paused: false,
+          dispatch_generation: 2,
+          orchestration_state: "idle",
         })
         const plan = yield* projects.createPlan({
           project_id: project.id,
@@ -129,6 +172,152 @@ describe("Dispatch barrier", () => {
         expect((yield* projects.listWorkItems(project.id)).find((candidate) => candidate.id === item.id)?.status).toBe(
           "pending",
         )
+      }),
+    ),
+  )
+
+  it.live("increments the barrier generation and reclaims an unbound dispatch claim", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const projects = yield* CompanyProject.Service
+        const recruitment = yield* CompanyRecruitment.Service
+        const dispatch = yield* DispatchCoordinator.Service
+        const project = yield* projects.create({ goal: "Pause before an assigned delivery launches" })
+        yield* projects.transition({ id: project.id, status: "planning" })
+        const plan = yield* projects.createPlan({
+          project_id: project.id,
+          phase: "execution",
+          summary: "Pause-safe dispatch",
+          acceptance_criteria: ["Unbound claims are reclaimed"],
+        })
+        const item = yield* projects.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "Prepare delivery",
+          description: "Remain retryable when dispatch pauses before launch",
+          kind: "worker",
+          work_type: "analysis",
+          role: "analyst",
+          capability_packs: ["analysis@1"],
+          resource_scope: ["artifacts/delivery.json"],
+          model_group: "standard",
+          acceptance_criteria: ["Delivery exists"],
+        })
+        const need = yield* recruitment.createNeed({
+          project_id: project.id,
+          work_item_id: item.id,
+          need_key: "pause-safe-dispatch-analyst",
+          role: item.role,
+          work_type: item.work_type,
+          capability_packs: item.capability_packs,
+          risk_level: item.risk_level,
+          demand_horizon: "project",
+          workspace_scopes: item.resource_scope,
+        })
+        const assignment = yield* recruitment.selectAndAssign({
+          capability_need_id: need.id,
+          exclude_agent_ids: [],
+          permission_mode: "read_only",
+        })
+        const claim = yield* projects.claimWorkItemForDispatch(item.id)
+
+        expect(claim).toBeDefined()
+        expect(claim!.generation).toBe(0)
+        expect(claim!.workflow_run_id).toBeString()
+        const paused = yield* dispatch.pauseDispatch(project.id, "pause before runtime launch")
+        const replayed = yield* dispatch.pauseDispatch(project.id, "pause replay")
+        const facts = projectFacts(project.id)
+
+        expect(paused).toMatchObject({ barrier_changed: true, replayed: false })
+        expect(replayed).toMatchObject({
+          barrier_changed: false,
+          barrier_event_id: paused.barrier_event_id,
+          replayed: true,
+        })
+        expect(facts.project).toMatchObject({ dispatch_paused: true, dispatch_generation: 1 })
+        expect(facts.workItems).toMatchObject([
+          {
+            id: item.id,
+            status: "pending",
+            attempt: 1,
+            dispatch_claim_id: null,
+            dispatch_claim_generation: null,
+            dispatch_claimed_at: null,
+            workflow_run_id: null,
+          },
+        ])
+        expect(facts.attempts).toMatchObject([
+          {
+            id: claim!.attempt_id,
+            work_item_id: item.id,
+            ordinal: 1,
+            status: "stopped",
+            failure_kind: "environment",
+          },
+        ])
+        expect(facts.assignments.find((candidate) => candidate.id === assignment.assignment.id)).toMatchObject({
+          status: "assigned",
+          started_at: null,
+        })
+      }),
+    ),
+  )
+
+  pauseRaceIt.live("does not overwrite a concurrent pause when a dispatch wave finishes", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const projects = yield* CompanyProject.Service
+        const recruitment = yield* CompanyRecruitment.Service
+        const dispatch = yield* DispatchCoordinator.Service
+        const project = yield* projects.create({ goal: "Preserve a concurrent dispatch pause" })
+        yield* projects.transition({ id: project.id, status: "planning" })
+        const plan = yield* projects.createPlan({
+          project_id: project.id,
+          phase: "execution",
+          summary: "Pause interleaving",
+          acceptance_criteria: ["Pause remains authoritative"],
+        })
+        const item = yield* projects.createWorkItem({
+          project_id: project.id,
+          plan_id: plan.id,
+          title: "Concurrent pause target",
+          description: "Remain pending while dispatch pauses",
+          kind: "worker",
+          work_type: "analysis",
+          role: "analyst",
+          capability_packs: ["analysis@1"],
+          resource_scope: ["artifacts/pause-race.json"],
+          model_group: "standard",
+          acceptance_criteria: ["Pause remains authoritative"],
+        })
+        const need = yield* recruitment.createNeed({
+          project_id: project.id,
+          work_item_id: item.id,
+          need_key: "pause-race-analyst",
+          role: item.role,
+          work_type: item.work_type,
+          capability_packs: item.capability_packs,
+          risk_level: item.risk_level,
+          demand_horizon: "project",
+          workspace_scopes: item.resource_scope,
+        })
+        yield* recruitment.selectAndAssign({
+          capability_need_id: need.id,
+          exclude_agent_ids: [],
+          permission_mode: "read_only",
+        })
+
+        expect(yield* dispatch.dispatchReady(project.id)).toMatchObject({
+          status: "paused",
+          barrier: "paused",
+          eligible_work_item_ids: [item.id],
+          dispatched_work_item_ids: [],
+        })
+        expect(yield* projects.get(project.id)).toMatchObject({
+          dispatch_paused: true,
+          dispatch_generation: 1,
+          orchestration_state: "paused",
+        })
       }),
     ),
   )

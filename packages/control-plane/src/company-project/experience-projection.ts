@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
-import { asc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, notInArray, or } from "drizzle-orm"
 import z from "zod"
 import {
+  AcceptanceSummary,
   AssignmentSummary,
   DiscoverySummary,
   GraphChangeSummary,
@@ -18,18 +19,32 @@ import {
 import { CapabilityNeed, ProjectAssignment, TeamSelection } from "@/company-recruitment/schema"
 import { Database } from "@/storage"
 import {
+  CompanyAcceptanceCriterionTable,
+  CompanyAcceptanceFactTable,
+  CompanyArtifactTable,
   CompanyGraphMutationTable,
+  CompanyPlanTable,
   CompanyProjectTable,
   CompanyValidationGateTable,
   CompanyWorkAttemptTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
 } from "./company-project.sql"
-import { GraphMutation, ValidationGate, WorkAttempt, WorkReceipt, type WorkReceiptEvidenceRef } from "./schema"
+import { currentCoverageWithDatabase } from "./acceptance-fact"
+import {
+  GraphMutation,
+  ValidationGate,
+  WorkAttempt,
+  WorkReceipt,
+  type AcceptanceEvidenceRef,
+  type WorkReceiptEvidenceRef,
+} from "./schema"
 
 const PROJECTOR_VERSION = 4
+const ACCEPTANCE_PROJECTOR_VERSION = 1
 const MAX_PROJECTION_ITEMS = 499
 const Timestamp = z.number().int().min(0).max(253_402_300_799_999)
+const LegacyAcceptanceCriteria = z.array(z.string().trim().min(1).max(8_000)).max(MAX_PROJECTION_ITEMS)
 const AgentFact = z
   .object({
     id: z.string().trim().min(1).max(240),
@@ -145,6 +160,8 @@ function attemptFromRow(row: typeof CompanyWorkAttemptTable.$inferSelect) {
   return WorkAttempt.safeParse({
     ...row,
     agent_run_id: row.agent_run_id ?? undefined,
+    base_artifact_id: row.base_artifact_id ?? undefined,
+    repair_criterion_ids: parseJSON(row.repair_criterion_ids_json),
     failure_kind: row.failure_kind ?? undefined,
     safe_summary: row.safe_summary ?? undefined,
     finished_at: row.finished_at ?? undefined,
@@ -847,4 +864,392 @@ export function validation(projectID: string) {
     gates: values,
   })
   return projection.success ? projection.data : unavailableValidation(facts, false)
+}
+
+function acceptanceEvidenceSourceRefs(refs: AcceptanceEvidenceRef[]) {
+  return refs.map(
+    (ref): ExperienceSourceRef => ({
+      kind: ref.kind,
+      id: identifier(ref.id, ref.kind),
+    }),
+  )
+}
+
+function unavailableAcceptance(
+  facts: { project: { id: string; updated_at: number }; [key: string]: unknown },
+  overflow: boolean,
+) {
+  const projectId = identifier(facts.project.id, "project")
+  return AcceptanceSummary.parse({
+    availability: "unavailable",
+    projectorVersion: ACCEPTANCE_PROJECTOR_VERSION,
+    sourceWatermark: digest({ projectorVersion: ACCEPTANCE_PROJECTOR_VERSION, facts }),
+    sourceRefs: [projectSourceRef(projectId)],
+    updatedAt: timestamp(facts.project.updated_at) ?? new Date(0).toISOString(),
+    projectId,
+    reason: {
+      code: overflow ? "projection_overflow" : "invalid_persisted_fact",
+      message: overflow
+        ? "Acceptance 事实超过只读投影上限，当前逐项验收状态不可用。"
+        : "Acceptance 持久化事实无法安全解析，当前逐项验收状态不可用。",
+    },
+  })
+}
+
+function acceptanceProjectionFacts(projectID: string) {
+  return Database.transaction((db) => {
+    const project = db
+      .select({
+        id: CompanyProjectTable.id,
+        active_plan_version: CompanyProjectTable.active_plan_version,
+        updated_at: CompanyProjectTable.updated_at,
+      })
+      .from(CompanyProjectTable)
+      .where(eq(CompanyProjectTable.id, projectID))
+      .get()
+    if (!project) return undefined
+    const plan = project.active_plan_version
+      ? db
+          .select()
+          .from(CompanyPlanTable)
+          .where(
+            and(eq(CompanyPlanTable.project_id, projectID), eq(CompanyPlanTable.version, project.active_plan_version)),
+          )
+          .get()
+      : undefined
+    const workItems = plan
+      ? db
+          .select()
+          .from(CompanyWorkItemTable)
+          .where(
+            and(
+              eq(CompanyWorkItemTable.plan_id, plan.id),
+              notInArray(CompanyWorkItemTable.status, ["superseded", "cancelled"]),
+              or(
+                eq(CompanyWorkItemTable.validation_contract_version, 2),
+                and(eq(CompanyWorkItemTable.validation_contract_version, 1), eq(CompanyWorkItemTable.kind, "worker")),
+              ),
+            ),
+          )
+          .orderBy(asc(CompanyWorkItemTable.created_at), asc(CompanyWorkItemTable.id))
+          .limit(MAX_PROJECTION_ITEMS + 1)
+          .all()
+      : []
+    const v2WorkItems = workItems.filter((item) => item.validation_contract_version === 2)
+    const v2WorkItemIDs = v2WorkItems.map((item) => item.id)
+    const legacyAcceptanceCriteria = workItems
+      .filter((item) => item.validation_contract_version === 1)
+      .map((item) => {
+        const parsed = LegacyAcceptanceCriteria.safeParse(parseJSON(item.acceptance_criteria_json))
+        return { work_item_id: item.id, criteria: parsed.success ? parsed.data : undefined }
+      })
+    const attempts = v2WorkItems.flatMap((item) => {
+      const attempt = db
+        .select()
+        .from(CompanyWorkAttemptTable)
+        .where(
+          and(
+            eq(CompanyWorkAttemptTable.project_id, projectID),
+            eq(CompanyWorkAttemptTable.work_item_id, item.id),
+            eq(CompanyWorkAttemptTable.ordinal, item.attempt),
+          ),
+        )
+        .get()
+      return attempt ? [attempt] : []
+    })
+    const attemptByWorkItemID = new Map(attempts.map((attempt) => [attempt.work_item_id, attempt]))
+    const artifacts = v2WorkItems.flatMap((item) => {
+      const attempt = attemptByWorkItemID.get(item.id)
+      if (!attempt) return []
+      const artifact = db
+        .select()
+        .from(CompanyArtifactTable)
+        .where(
+          and(
+            eq(CompanyArtifactTable.project_id, projectID),
+            eq(CompanyArtifactTable.work_item_id, item.id),
+            eq(CompanyArtifactTable.attempt_id, attempt.id),
+            eq(CompanyArtifactTable.kind, item.kind === "reviewer" ? "independent_review" : item.work_type),
+          ),
+        )
+        .orderBy(
+          desc(CompanyArtifactTable.version),
+          desc(CompanyArtifactTable.created_at),
+          desc(CompanyArtifactTable.id),
+        )
+        .limit(1)
+        .get()
+      return artifact ? [artifact] : []
+    })
+    const criteria = v2WorkItemIDs.length
+      ? db
+          .select()
+          .from(CompanyAcceptanceCriterionTable)
+          .where(inArray(CompanyAcceptanceCriterionTable.work_item_id, v2WorkItemIDs))
+          .orderBy(asc(CompanyAcceptanceCriterionTable.ordinal), asc(CompanyAcceptanceCriterionTable.id))
+          .limit(MAX_PROJECTION_ITEMS + 1)
+          .all()
+      : []
+    const acceptanceFacts = artifacts.length
+      ? db
+          .select()
+          .from(CompanyAcceptanceFactTable)
+          .where(inArray(CompanyAcceptanceFactTable.artifact_id, artifacts.map((artifact) => artifact.id)))
+          .orderBy(asc(CompanyAcceptanceFactTable.created_at), asc(CompanyAcceptanceFactTable.id))
+          .limit(MAX_PROJECTION_ITEMS + 1)
+          .all()
+      : []
+    const overflow =
+      [workItems, criteria, acceptanceFacts].some((items) => items.length > MAX_PROJECTION_ITEMS) ||
+      criteria.length + legacyAcceptanceCriteria.reduce((count, item) => count + (item.criteria?.length ?? 0), 0) >
+        MAX_PROJECTION_ITEMS
+    const workItemByID = new Map(workItems.map((item) => [item.id, item]))
+    const attemptByID = new Map(attempts.map((attempt) => [attempt.id, attempt]))
+    const artifactByID = new Map(artifacts.map((artifact) => [artifact.id, artifact]))
+    const criterionByID = new Map(criteria.map((criterion) => [criterion.id, criterion]))
+    const invalidReferences =
+      workItems.some((item) => item.project_id !== projectID || item.plan_id !== plan?.id) ||
+      attempts.some((attempt) => attempt.project_id !== projectID || !workItemByID.has(attempt.work_item_id)) ||
+      artifacts.some(
+        (artifact) =>
+          artifact.project_id !== projectID ||
+          !artifact.work_item_id ||
+          !workItemByID.has(artifact.work_item_id) ||
+          !artifact.attempt_id ||
+          attemptByID.get(artifact.attempt_id)?.work_item_id !== artifact.work_item_id,
+      ) ||
+      criteria.some(
+        (criterion) =>
+          criterion.project_id !== projectID ||
+          criterion.plan_id !== plan?.id ||
+          !workItemByID.has(criterion.work_item_id),
+      ) ||
+      acceptanceFacts.some((fact) => {
+        const attempt = attemptByID.get(fact.attempt_id)
+        const artifact = artifactByID.get(fact.artifact_id)
+        const criterion = criterionByID.get(fact.criterion_id)
+        return (
+          fact.project_id !== projectID ||
+          !workItemByID.has(fact.work_item_id) ||
+          attempt?.work_item_id !== fact.work_item_id ||
+          artifact?.work_item_id !== fact.work_item_id ||
+          artifact.attempt_id !== fact.attempt_id ||
+          criterion?.work_item_id !== fact.work_item_id
+        )
+      })
+    const tuples = overflow
+      ? []
+      : v2WorkItems.flatMap((item) => {
+          const attempt = attemptByWorkItemID.get(item.id)
+          if (!attempt) return []
+          const artifact = artifacts.find((candidate) => candidate.work_item_id === item.id)
+          if (!artifact) return []
+          return [
+            {
+              item,
+              attempt,
+              artifact,
+              coverage: currentCoverageWithDatabase(db, {
+                project_id: projectID,
+                work_item_id: item.id,
+                attempt_id: attempt.id,
+                artifact_id: artifact.id,
+              }),
+            },
+          ]
+        })
+    return {
+      project,
+      plan,
+      invalidPlan: project.active_plan_version !== null && !plan,
+      workItems,
+      v2WorkItems,
+      legacyAcceptanceCriteria,
+      invalidLegacyCriteria: legacyAcceptanceCriteria.some((item) => !item.criteria),
+      attempts,
+      artifacts,
+      criteria,
+      acceptanceFacts,
+      overflow,
+      invalidReferences,
+      tuples,
+    }
+  })
+}
+
+async function materializedArtifactFresh(artifact: typeof CompanyArtifactTable.$inferSelect) {
+  if (!artifact.path) return artifact.materialized_sha256 === null
+  if (!artifact.materialized_sha256) return false
+  const [result] = await Promise.allSettled([Bun.file(artifact.path).arrayBuffer()])
+  if (result.status === "rejected") return false
+  return (
+    new Bun.CryptoHasher("sha256").update(new Uint8Array(result.value)).digest("hex") === artifact.materialized_sha256
+  )
+}
+
+export async function acceptance(projectID: string) {
+  const project = Database.use((db) =>
+    db
+      .select({ id: CompanyProjectTable.id, updated_at: CompanyProjectTable.updated_at })
+      .from(CompanyProjectTable)
+      .where(eq(CompanyProjectTable.id, projectID))
+      .get(),
+  )
+  if (!project) return undefined
+  const loaded = await Promise.resolve()
+    .then(() => acceptanceProjectionFacts(projectID))
+    .then(
+      (facts) => ({ ok: true as const, facts }),
+      () => ({ ok: false as const }),
+    )
+  if (!loaded.ok) return unavailableAcceptance({ project }, false)
+  const facts = loaded.facts
+  if (!facts) return undefined
+  if (facts.invalidPlan || !timestamp(facts.project.updated_at)) return unavailableAcceptance(facts, false)
+  if (facts.overflow) return unavailableAcceptance(facts, true)
+  if (facts.invalidReferences || facts.invalidLegacyCriteria) return unavailableAcceptance(facts, false)
+  if (
+    !validTimestamps([
+      facts.plan?.created_at,
+      ...facts.workItems.flatMap((item) => [
+        item.created_at,
+        item.updated_at,
+        item.started_at ?? undefined,
+        item.completed_at ?? undefined,
+      ]),
+      ...facts.attempts.flatMap((attempt) => [attempt.started_at, attempt.finished_at ?? undefined]),
+      ...facts.artifacts.map((artifact) => artifact.created_at),
+      ...facts.criteria.map((criterion) => criterion.created_at),
+      ...facts.acceptanceFacts.map((fact) => fact.created_at),
+    ])
+  )
+    return unavailableAcceptance(facts, false)
+  const freshness = new Map(
+    await Promise.all(
+      facts.tuples.map(async (tuple) => [tuple.artifact.id, await materializedArtifactFresh(tuple.artifact)] as const),
+    ),
+  )
+  const currentItems = facts.tuples.map((tuple) => {
+    const coverage = freshness.get(tuple.artifact.id)
+      ? tuple.coverage
+      : {
+          ...tuple.coverage,
+          state: "stale" as const,
+          criteria: tuple.coverage.criteria.map((criterion) =>
+            criterion.required ? { ...criterion, state: "stale" as const } : criterion,
+          ),
+        }
+    const tupleSourceRefs = uniqueSourceRefs([
+      projectSourceRef(projectID),
+      { kind: "work_item", id: tuple.item.id },
+      { kind: "work_attempt", id: tuple.attempt.id },
+      {
+        kind: "artifact",
+        id: tuple.artifact.id,
+        ...(tuple.artifact.version ? { version: tuple.artifact.version } : {}),
+      },
+    ])
+    return {
+      workItemId: tuple.item.id,
+      title: tuple.item.title,
+      kind: tuple.item.kind,
+      purpose: tuple.item.purpose,
+      attemptId: tuple.attempt.id,
+      attemptOrdinal: tuple.attempt.ordinal,
+      artifactId: tuple.artifact.id,
+      artifactKind: tuple.artifact.kind,
+      artifactVersion: tuple.artifact.version ?? undefined,
+      contractVersion: coverage.contract_version,
+      state: coverage.state,
+      criteria: coverage.criteria.map((criterion) => {
+        const persistedCriterion = facts.criteria.find((candidate) => candidate.id === criterion.criterion_id)
+        const persistedFact = criterion.fact_id
+          ? facts.acceptanceFacts.find((candidate) => candidate.id === criterion.fact_id)
+          : undefined
+        const evidenceRefs = acceptanceEvidenceSourceRefs(criterion.evidence_refs)
+        return {
+          criterionId: criterion.criterion_id,
+          statement: criterion.statement,
+          verificationKind: criterion.verification_kind,
+          requiredAuthority: criterion.required_authority,
+          required: criterion.required,
+          state: criterion.state,
+          factId: criterion.fact_id,
+          authority: criterion.authority,
+          evaluator: persistedFact?.evaluator ?? persistedCriterion?.evaluator ?? undefined,
+          evidenceRefs,
+          sourceRefs: uniqueSourceRefs([
+            ...tupleSourceRefs,
+            { kind: "acceptance_criterion", id: criterion.criterion_id },
+            ...(criterion.fact_id ? [{ kind: "acceptance_fact" as const, id: criterion.fact_id }] : []),
+            ...evidenceRefs,
+          ]),
+        }
+      }),
+      sourceRefs: tupleSourceRefs,
+    }
+  })
+  const legacyItems = facts.workItems.flatMap((item) => {
+    if (item.validation_contract_version !== 1) return []
+    const criteria = facts.legacyAcceptanceCriteria.find((candidate) => candidate.work_item_id === item.id)?.criteria
+    if (!criteria) return []
+    const sourceRefs = uniqueSourceRefs([projectSourceRef(projectID), { kind: "work_item", id: item.id }])
+    return [
+      {
+        workItemId: item.id,
+        title: item.title,
+        kind: item.kind,
+        purpose: item.purpose,
+        contractVersion: 1 as const,
+        state: "legacy_unverified" as const,
+        criteria: criteria.map((statement, index) => ({
+          criterionId: identifier(`${item.id}:legacy:${index + 1}`, "legacyAcceptanceCriterion"),
+          statement,
+          verificationKind: "legacy_unscoped" as const,
+          required: true as const,
+          state: "missing" as const,
+          evidenceRefs: [],
+          sourceRefs,
+        })),
+        sourceRefs,
+      },
+    ]
+  })
+  const itemByWorkItemID = new Map([...currentItems, ...legacyItems].map((item) => [item.workItemId, item] as const))
+  const items = facts.workItems.flatMap((item) => {
+    const coverage = itemByWorkItemID.get(item.id)
+    return coverage ? [coverage] : []
+  })
+  const projectedV2WorkItemIDs = new Set(currentItems.map((item) => item.workItemId))
+  const pendingWorkItemIds = facts.v2WorkItems
+    .filter((item) => !projectedV2WorkItemIDs.has(item.id))
+    .map((item) => item.id)
+    .sort()
+  const projection = AcceptanceSummary.safeParse({
+    availability: "available",
+    projectorVersion: ACCEPTANCE_PROJECTOR_VERSION,
+    sourceWatermark: digest({ projectorVersion: ACCEPTANCE_PROJECTOR_VERSION, facts }),
+    sourceRefs: uniqueSourceRefs([
+      projectSourceRef(projectID),
+      ...facts.workItems.map((item): ExperienceSourceRef => ({ kind: "work_item", id: item.id })),
+    ]),
+    updatedAt:
+      latestTimestamp([
+        facts.project.updated_at,
+        facts.plan?.created_at,
+        ...facts.workItems.map((item) => item.updated_at),
+        ...facts.attempts.flatMap((attempt) => [attempt.started_at, attempt.finished_at]),
+        ...facts.artifacts.map((artifact) => artifact.created_at),
+        ...facts.criteria.map((criterion) => criterion.created_at),
+        ...facts.acceptanceFacts.map((fact) => fact.created_at),
+      ]) ?? new Date(0).toISOString(),
+    projectId: facts.project.id,
+    activePlanVersion: facts.project.active_plan_version ?? undefined,
+    trackedWorkItemCount: facts.workItems.length,
+    verifiedWorkItemCount: items.filter((item) => item.state === "verified").length,
+    unresolvedWorkItemCount: facts.workItems.length - items.filter((item) => item.state === "verified").length,
+    pendingWorkItemIds,
+    items,
+  })
+  return projection.success ? projection.data : unavailableAcceptance(facts, false)
 }

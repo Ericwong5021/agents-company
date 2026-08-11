@@ -1,8 +1,13 @@
 import { Context, Effect, Layer, Semaphore } from "effect"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm"
+import { GoalBriefAcceptanceCriterion } from "@agents-company/shared/experience"
+import z from "zod"
+import { existsSync, readFileSync } from "node:fs"
 import { CompanyID } from "@/company/schema"
 import {
   CompanyApprovalGateTable,
+  CompanyAcceptanceCriterionTable,
+  CompanyAcceptanceFactTable,
   CompanyArtifactTable,
   CompanyAttentionTable,
   CompanyGraphDecisionTable,
@@ -16,8 +21,10 @@ import {
   CompanyWorkAttemptTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
+  CompanyWorkReceiptAcceptanceFactTable,
 } from "@/company-project/company-project.sql"
 import { CompanyRecruitment } from "@/company-recruitment"
+import { GoalBriefTable, GoalBriefVersionTable } from "@/goal-brief"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 
@@ -65,18 +72,344 @@ const parseEvidence = (value: string) =>
 const terminalWorkItemStatuses = new Set(["completed", "superseded", "cancelled"])
 const completableProjectStatuses = new Set(["planning", "executing", "reviewing", "awaiting_approval", "completed"])
 
+const sha256 = (value: string) => new Bun.CryptoHasher("sha256").update(value).digest("hex")
+
+const DeliveryArtifactBinding = z
+  .object({
+    id: z.string().trim().min(1),
+    work_item_id: z.string().trim().min(1).nullable(),
+    attempt_id: z.string().trim().min(1).nullable(),
+    version: z.number().int().positive().nullable(),
+    content_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+    materialized_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+    integrity_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+  })
+  .strict()
+
+export const DeliveryAcceptanceBinding = z
+  .object({
+    version: z.number().int().positive(),
+    graph_revision: z.number().int().nonnegative(),
+    plan_id: z.string().trim().min(1),
+    plan_version: z.number().int().positive(),
+    plan_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    brief_id: z.string().trim().min(1),
+    brief_version: z.number().int().positive(),
+    brief_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    criterion_ids: z.array(z.string().trim().min(1)).max(200),
+    criterion_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    acceptance_criteria_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    delivery_package_artifact_id: z.string().trim().min(1),
+    delivery_package_integrity_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    artifact_ids: z.array(z.string().trim().min(1)).max(2_000),
+    artifacts: z.array(DeliveryArtifactBinding).max(2_000),
+    receipt_ids: z.array(z.string().trim().min(1)).max(2_000),
+    receipts_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    acceptance_fact_ids: z.array(z.string().trim().min(1)).max(10_000),
+    acceptance_facts_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    legacy_unverified: z.boolean(),
+  })
+  .strict()
+
+export const DeliveryReadySnapshot = DeliveryAcceptanceBinding.extend({
+  delivery_id: z.string().trim().min(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict()
+
+export function deliveryAcceptanceBindingDigest(input: z.infer<typeof DeliveryAcceptanceBinding>) {
+  return sha256(JSON.stringify(DeliveryAcceptanceBinding.parse(input)))
+}
+
+function artifactBinding(row: typeof CompanyArtifactTable.$inferSelect) {
+  const content_sha256 = row.content === null ? null : sha256(row.content)
+  const materialized_sha256 = row.path
+    ? existsSync(row.path)
+      ? new Bun.CryptoHasher("sha256").update(readFileSync(row.path)).digest("hex")
+      : null
+    : null
+  const integrity_sha256 = content_sha256 || materialized_sha256
+    ? sha256(
+        JSON.stringify({
+          content_sha256: content_sha256 ?? undefined,
+          materialized_sha256: materialized_sha256 ?? undefined,
+        }),
+      )
+    : null
+  if (
+    row.content_sha256 !== content_sha256 ||
+    row.materialized_sha256 !== materialized_sha256 ||
+    row.integrity_sha256 !== integrity_sha256
+  )
+    throw new Error("stale_delivery")
+  return DeliveryArtifactBinding.parse({
+    id: row.id,
+    work_item_id: row.work_item_id,
+    attempt_id: row.attempt_id,
+    version: row.version,
+    content_sha256,
+    materialized_sha256,
+    integrity_sha256,
+  })
+}
+
+export function deliveryAcceptanceSnapshotWithDatabase(
+  db: Database.TxOrDb,
+  input: { project_id: string; delivery_package_artifact_id: string; version: number },
+) {
+  const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, input.project_id)).get()
+  if (!project?.active_plan_version) throw new Error("stale_delivery")
+  const activePlans = db
+    .select()
+    .from(CompanyPlanTable)
+    .where(and(eq(CompanyPlanTable.project_id, input.project_id), eq(CompanyPlanTable.status, "active")))
+    .all()
+  const plan = activePlans[0]
+  if (activePlans.length !== 1 || plan?.version !== project.active_plan_version) throw new Error("stale_delivery")
+  const briefRoot = db.select().from(GoalBriefTable).where(eq(GoalBriefTable.project_id, input.project_id)).get()
+  const briefVersion = briefRoot
+    ? db
+        .select()
+        .from(GoalBriefVersionTable)
+        .where(eq(GoalBriefVersionTable.brief_id, briefRoot.id))
+        .orderBy(desc(GoalBriefVersionTable.version))
+        .get()
+    : undefined
+  const legacyCharter = briefRoot
+    ? undefined
+    : db
+        .select({ project_id: CompanyProjectCharterTable.project_id })
+        .from(CompanyProjectCharterTable)
+        .where(eq(CompanyProjectCharterTable.project_id, input.project_id))
+        .get()
+  if ((briefRoot && !briefVersion) || (!briefRoot && !legacyCharter)) throw new Error("stale_delivery")
+  const briefCriteria = briefVersion
+    ? GoalBriefAcceptanceCriterion.array()
+        .max(200)
+        .parse(JSON.parse(briefVersion.acceptance_criteria_json))
+    : []
+  const criterion_ids = briefCriteria.map((criterion) => criterion.id).sort()
+  if (new Set(criterion_ids).size !== criterion_ids.length) throw new Error("stale_delivery")
+  const workItems = db
+    .select()
+    .from(CompanyWorkItemTable)
+    .where(
+      and(
+        eq(CompanyWorkItemTable.project_id, input.project_id),
+        eq(CompanyWorkItemTable.plan_id, plan.id),
+        notInArray(CompanyWorkItemTable.status, ["superseded", "cancelled"]),
+      ),
+    )
+    .orderBy(asc(CompanyWorkItemTable.id))
+    .all()
+  if (!workItems.length || workItems.some((item) => item.status !== "completed")) throw new Error("stale_delivery")
+  const receipts = workItems.length
+    ? db
+        .select()
+        .from(CompanyWorkReceiptTable)
+        .where(inArray(CompanyWorkReceiptTable.work_item_id, workItems.map((item) => item.id)))
+        .orderBy(desc(CompanyWorkReceiptTable.created_at), desc(CompanyWorkReceiptTable.id))
+        .all()
+        .filter(
+          (receipt, index, values) =>
+            values.findIndex((candidate) => candidate.work_item_id === receipt.work_item_id) === index,
+        )
+        .sort((left, right) => left.id.localeCompare(right.id))
+    : []
+  if (receipts.length !== workItems.length || receipts.some((receipt) => receipt.outcome !== "completed"))
+    throw new Error("stale_delivery")
+  const artifact_ids = [
+    ...new Set(receipts.flatMap((receipt) => z.array(z.string().trim().min(1)).parse(JSON.parse(receipt.artifact_ids_json)))),
+  ].sort()
+  const artifactRows = artifact_ids.length
+    ? db
+        .select()
+        .from(CompanyArtifactTable)
+        .where(inArray(CompanyArtifactTable.id, artifact_ids))
+        .all()
+        .sort((left, right) => left.id.localeCompare(right.id))
+    : []
+  if (artifactRows.length !== artifact_ids.length || artifactRows.some((artifact) => artifact.project_id !== input.project_id))
+    throw new Error("stale_delivery")
+  const artifacts = artifactRows.map(artifactBinding)
+  if (artifacts.some((artifact) => !artifact.integrity_sha256)) throw new Error("stale_delivery")
+  const receiptByID = new Map(receipts.map((receipt) => [receipt.id, receipt]))
+  const attemptRows = receipts.length
+    ? db
+        .select()
+        .from(CompanyWorkAttemptTable)
+        .where(inArray(CompanyWorkAttemptTable.id, receipts.map((receipt) => receipt.attempt_id)))
+        .all()
+    : []
+  if (
+    attemptRows.length !== receipts.length ||
+    receipts.some((receipt) => {
+      const item = workItems.find((candidate) => candidate.id === receipt.work_item_id)
+      const attempt = attemptRows.find((candidate) => candidate.id === receipt.attempt_id)
+      const receiptArtifactIDs = z.array(z.string().trim().min(1)).parse(JSON.parse(receipt.artifact_ids_json))
+      return (
+        !item ||
+        !attempt ||
+        attempt.project_id !== input.project_id ||
+        attempt.work_item_id !== item.id ||
+        attempt.ordinal !== item.attempt ||
+        attempt.status !== "completed" ||
+        receiptArtifactIDs.some((artifactID) => {
+          const artifact = artifactRows.find((candidate) => candidate.id === artifactID)
+          return !artifact || artifact.work_item_id !== item.id || artifact.attempt_id !== attempt.id
+        })
+      )
+    })
+  )
+    throw new Error("stale_delivery")
+  const acceptanceLinks = receipts.length
+    ? db
+        .select()
+        .from(CompanyWorkReceiptAcceptanceFactTable)
+        .where(inArray(CompanyWorkReceiptAcceptanceFactTable.receipt_id, receipts.map((receipt) => receipt.id)))
+        .all()
+    : []
+  const acceptance_fact_ids = [...new Set(acceptanceLinks.map((link) => link.fact_id))].sort()
+  const receiptByWorkItemID = new Map(receipts.map((receipt) => [receipt.work_item_id, receipt]))
+  const acceptanceCriteria = workItems.length
+    ? db
+        .select()
+        .from(CompanyAcceptanceCriterionTable)
+        .where(inArray(CompanyAcceptanceCriterionTable.work_item_id, workItems.map((item) => item.id)))
+        .orderBy(asc(CompanyAcceptanceCriterionTable.id))
+        .all()
+    : []
+  if (
+    acceptanceCriteria.some(
+      (criterion) =>
+        criterion.project_id !== input.project_id ||
+        criterion.plan_id !== plan.id ||
+        sha256(criterion.statement) !== criterion.statement_sha256,
+    )
+  )
+    throw new Error("stale_delivery")
+  if (
+    workItems.some(
+      (item) =>
+        item.validation_contract_version === 2 &&
+        (!acceptanceCriteria.some((criterion) => criterion.work_item_id === item.id) ||
+          !acceptanceLinks.some((link) => link.receipt_id === receiptByWorkItemID.get(item.id)?.id)),
+    )
+  )
+    throw new Error("stale_delivery")
+  const facts = acceptance_fact_ids.length
+    ? db
+        .select()
+        .from(CompanyAcceptanceFactTable)
+        .where(inArray(CompanyAcceptanceFactTable.id, acceptance_fact_ids))
+        .all()
+        .sort((left, right) => left.id.localeCompare(right.id))
+    : []
+  const supersedingFacts = acceptance_fact_ids.length
+    ? db
+        .select({ id: CompanyAcceptanceFactTable.id })
+        .from(CompanyAcceptanceFactTable)
+        .where(inArray(CompanyAcceptanceFactTable.supersedes_fact_id, acceptance_fact_ids))
+        .all()
+    : []
+  if (
+    facts.length !== acceptance_fact_ids.length ||
+    supersedingFacts.length > 0 ||
+    acceptanceCriteria.some(
+      (criterion) =>
+        criterion.required &&
+        !facts.some(
+          (fact) =>
+            fact.work_item_id === criterion.work_item_id &&
+            fact.criterion_id === criterion.id &&
+            fact.verdict === "passed" &&
+            acceptanceLinks.some(
+              (link) =>
+                link.fact_id === fact.id &&
+                link.receipt_id === receiptByWorkItemID.get(criterion.work_item_id)?.id,
+            ),
+        ),
+    ) ||
+    facts.some(
+      (fact) =>
+        fact.verdict !== "passed" ||
+        !acceptanceCriteria.some(
+          (criterion) => criterion.id === fact.criterion_id && criterion.work_item_id === fact.work_item_id,
+        ) ||
+        artifacts.find((artifact) => artifact.id === fact.artifact_id)?.integrity_sha256 !==
+          fact.artifact_integrity_sha256,
+    ) ||
+    acceptanceLinks.some((link) => {
+      const receipt = receiptByID.get(link.receipt_id)
+      const fact = facts.find((candidate) => candidate.id === link.fact_id)
+      return (
+        !receipt ||
+        !fact ||
+        fact.project_id !== input.project_id ||
+        fact.work_item_id !== receipt.work_item_id ||
+        fact.attempt_id !== receipt.attempt_id ||
+        !artifact_ids.includes(fact.artifact_id)
+      )
+    })
+  )
+    throw new Error("stale_delivery")
+  const deliveryPackage = db
+    .select()
+    .from(CompanyArtifactTable)
+    .where(eq(CompanyArtifactTable.id, input.delivery_package_artifact_id))
+    .get()
+  if (!deliveryPackage || deliveryPackage.project_id !== input.project_id || deliveryPackage.kind !== "delivery_package")
+    throw new Error("stale_delivery")
+  if (deliveryPackage.version !== input.version) throw new Error("stale_delivery")
+  const packageBinding = artifactBinding(deliveryPackage)
+  if (!packageBinding.integrity_sha256) throw new Error("stale_delivery")
+  return DeliveryAcceptanceBinding.parse({
+    version: input.version,
+    graph_revision: project.graph_revision,
+    plan_id: plan.id,
+    plan_version: plan.version,
+    plan_sha256: sha256(JSON.stringify(plan)),
+    brief_id: briefRoot?.id ?? `legacy:${input.project_id}`,
+    brief_version: briefVersion?.version ?? 1,
+    brief_sha256: sha256(JSON.stringify(briefVersion ?? legacyCharter)),
+    criterion_ids,
+    criterion_sha256: sha256(JSON.stringify(briefCriteria)),
+    acceptance_criteria_sha256: sha256(JSON.stringify(acceptanceCriteria)),
+    delivery_package_artifact_id: deliveryPackage.id,
+    delivery_package_integrity_sha256: packageBinding.integrity_sha256,
+    artifact_ids,
+    artifacts,
+    receipt_ids: receipts.map((receipt) => receipt.id),
+    receipts_sha256: sha256(JSON.stringify(receipts)),
+    acceptance_fact_ids,
+    acceptance_facts_sha256: sha256(JSON.stringify(facts)),
+    legacy_unverified: !briefCriteria.length || workItems.some((item) => item.validation_contract_version === 1),
+  })
+}
+
 function inspectAndFinalize(project_id: string) {
   return Database.transaction(
     (db) => {
       const project = db.select().from(CompanyProjectTable).where(eq(CompanyProjectTable.id, project_id)).get()
       if (!project) throw new Error(`Company project not found: ${project_id}`)
-      const existingPackage = db
+      const deliveryEvents = db
+        .select()
+        .from(CompanyProjectEventTable)
+        .where(eq(CompanyProjectEventTable.project_id, project_id))
+        .orderBy(asc(CompanyProjectEventTable.created_at), asc(CompanyProjectEventTable.id))
+        .all()
+      const latestReady = deliveryEvents.findLast((event) => event.type === "delivery.ready")
+      const revisionPending =
+        deliveryEvents.findLastIndex((event) => event.type === "delivery.revision_requested") >
+        deliveryEvents.findLastIndex((event) => event.type === "delivery.ready")
+      const deliveryPackages = db
         .select()
         .from(CompanyArtifactTable)
         .where(eq(CompanyArtifactTable.project_id, project_id))
         .orderBy(asc(CompanyArtifactTable.created_at), asc(CompanyArtifactTable.id))
         .all()
-        .find((artifact) => artifact.kind === "delivery_package")
+        .filter((artifact) => artifact.kind === "delivery_package")
+      const latestPackage = deliveryPackages.at(-1)
+      const existingPackage = revisionPending ? undefined : latestPackage
       const ensureDeliveryReady = (artifactID: string, createdAt: number) => {
         const exists = db
           .select({ data_json: CompanyProjectEventTable.data_json })
@@ -90,9 +423,20 @@ function inspectAndFinalize(project_id: string) {
           .all()
           .some((event) => {
             const data = JSON.parse(event.data_json) as Record<string, unknown>
-            return Array.isArray(data.artifact_ids) && data.artifact_ids.includes(artifactID)
+            return data.delivery_package_artifact_id === artifactID
           })
         if (exists) return
+        const version = latestReady
+          ? z
+              .object({ version: z.number().int().positive() })
+              .passthrough()
+              .parse(JSON.parse(latestReady.data_json)).version + 1
+          : 1
+        const binding = deliveryAcceptanceSnapshotWithDatabase(db, {
+          project_id,
+          delivery_package_artifact_id: artifactID,
+          version,
+        })
         db.insert(CompanyProjectEventTable)
           .values({
             id: Identifier.ascending("event"),
@@ -101,8 +445,8 @@ function inspectAndFinalize(project_id: string) {
             actor_id: null,
             data_json: JSON.stringify({
               delivery_id: `delivery:${artifactID}`,
-              version: 1,
-              artifact_ids: [artifactID],
+              ...binding,
+              sha256: deliveryAcceptanceBindingDigest(binding),
             }),
             created_at: createdAt,
           })
@@ -449,31 +793,42 @@ function inspectAndFinalize(project_id: string) {
           },
         }
       const now = Date.now()
+      const deliveryPackageContent = `${JSON.stringify(
+        {
+          schema_version: 1,
+          project_id,
+          graph_revision: project.graph_revision,
+          quiesce_decision_id: quiesce!.id,
+          acceptance_coverage: acceptanceCoverage,
+          work_item_ids: workItems.map((item) => item.id),
+          receipt_ids: receipts.map((receipt) => receipt.id),
+          validation_gate_ids: validationGates
+            .filter((gate) => gate.status === "passed")
+            .map((gate) => gate.id)
+            .sort(),
+          limitations: acceptanceCoverage.flatMap((coverage) => coverage.limitations),
+        },
+        null,
+        2,
+      )}\n`
+      const deliveryPackageContentSha256 = sha256(deliveryPackageContent)
       const deliveryPackage = existingPackage ?? {
         id: Identifier.ascending("artifact"),
         project_id,
+        company_id: null,
+        scope_type: "project" as const,
+        private_owner_id: null,
         work_item_id: null,
+        attempt_id: null,
+        version: latestPackage?.version ? latestPackage.version + 1 : 1,
+        supersedes_artifact_id: latestPackage?.id ?? null,
+        content_sha256: deliveryPackageContentSha256,
+        materialized_sha256: null,
+        integrity_sha256: sha256(JSON.stringify({ content_sha256: deliveryPackageContentSha256 })),
         kind: "delivery_package",
         title: `${project.title} Delivery Package`,
         path: null,
-        content: `${JSON.stringify(
-          {
-            schema_version: 1,
-            project_id,
-            graph_revision: project.graph_revision,
-            quiesce_decision_id: quiesce!.id,
-            acceptance_coverage: acceptanceCoverage,
-            work_item_ids: workItems.map((item) => item.id),
-            receipt_ids: receipts.map((receipt) => receipt.id),
-            validation_gate_ids: validationGates
-              .filter((gate) => gate.status === "passed")
-              .map((gate) => gate.id)
-              .sort(),
-            limitations: acceptanceCoverage.flatMap((coverage) => coverage.limitations),
-          },
-          null,
-          2,
-        )}\n`,
+        content: deliveryPackageContent,
         evidence_json: JSON.stringify({
           quiesce_decision_id: quiesce!.id,
           graph_revision: project.graph_revision,

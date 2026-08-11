@@ -12,6 +12,7 @@ import {
   CompanyProjectTable,
   CompanyValidationGateTable,
   CompanyValidationRepairTable,
+  CompanyWorkAttemptTable,
   CompanyWorkItemDependencyTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
@@ -97,6 +98,8 @@ function gateFromRow(row: typeof CompanyValidationGateTable.$inferSelect) {
     id: row.id,
     project_id: row.project_id,
     work_item_id: row.work_item_id ?? undefined,
+    attempt_id: row.attempt_id ?? undefined,
+    artifact_id: row.artifact_id ?? undefined,
     kind: row.kind,
     status: row.status,
     criteria: JSON.parse(row.criteria_json),
@@ -258,6 +261,8 @@ function sameGate(
   return (
     row.project_id === input.project_id &&
     row.work_item_id === (input.work_item_id ?? null) &&
+    row.attempt_id === (input.attempt_id ?? null) &&
+    row.artifact_id === (input.artifact_id ?? null) &&
     row.kind === input.kind &&
     row.criteria_json === JSON.stringify(criteria) &&
     row.blocking_work_item_ids_json === JSON.stringify([...input.blocking_work_item_ids].sort()) &&
@@ -471,6 +476,38 @@ export function makeLayer() {
               if (workItemIDs.some((id) => !existingWorkItemIDs.has(id))) {
                 throw new Error("Validation Gate references work outside its project")
               }
+              if ((input.attempt_id || input.artifact_id) && !input.work_item_id) {
+                throw new Error("Validation Gate lineage requires a Work Item")
+              }
+              const attempt = input.attempt_id
+                ? db
+                    .select()
+                    .from(CompanyWorkAttemptTable)
+                    .where(eq(CompanyWorkAttemptTable.id, input.attempt_id))
+                    .get()
+                : undefined
+              if (
+                input.attempt_id &&
+                (!attempt || attempt.project_id !== input.project_id || attempt.work_item_id !== input.work_item_id)
+              ) {
+                throw new Error("Validation Gate Attempt does not match its project and Work Item")
+              }
+              const artifact = input.artifact_id
+                ? db
+                    .select()
+                    .from(CompanyArtifactTable)
+                    .where(eq(CompanyArtifactTable.id, input.artifact_id))
+                    .get()
+                : undefined
+              if (
+                input.artifact_id &&
+                (!artifact ||
+                  artifact.project_id !== input.project_id ||
+                  artifact.work_item_id !== input.work_item_id ||
+                  artifact.attempt_id !== (input.attempt_id ?? null))
+              ) {
+                throw new Error("Validation Gate Artifact does not match its project, Work Item, and Attempt")
+              }
               const previous = input.supersedes_gate_id
                 ? db
                     .select()
@@ -515,6 +552,8 @@ export function makeLayer() {
                   id,
                   project_id: input.project_id,
                   work_item_id: input.work_item_id ?? null,
+                  attempt_id: input.attempt_id ?? null,
+                  artifact_id: input.artifact_id ?? null,
                   kind: input.kind,
                   status: "pending",
                   criteria_json: JSON.stringify(criteria),

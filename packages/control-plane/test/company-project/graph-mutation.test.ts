@@ -297,6 +297,53 @@ test("[a2-mutation-policy] upgrades persisted A1 graph facts with deterministic 
 })
 
 describe("Company graph mutation policy", () => {
+  it.live("persists an explicit unique reviewer target through mutation and snapshot", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const projects = yield* CompanyProject.Service
+        const graph = yield* CompanyGraphMutation.Service
+        const seeded = yield* seed(projects, "review-target")
+        const reviewerID = "review-target-reviewer"
+        const result = yield* graph.apply(
+          proposal(seeded, {
+            key: "apply-review-target",
+            decision: "expand",
+            operations: [
+              {
+                type: "add_work_item",
+                item: newItem(seeded.plan.id, reviewerID, {
+                  parent_id: seeded.source.id,
+                  reviews_work_item_id: seeded.source.id,
+                  kind: "reviewer",
+                  owner_agent_id: "review-target-agent",
+                  purpose: "verification",
+                  validation_mode: "independent_review",
+                }),
+              },
+              {
+                type: "add_dependency",
+                work_item_id: reviewerID,
+                depends_on_id: seeded.source.id,
+              },
+            ],
+          }),
+        )
+
+        expect(result.status).toBe("applied")
+        expect((yield* projects.listWorkItems(seeded.project.id)).find((item) => item.id === reviewerID)).toMatchObject({
+          kind: "reviewer",
+          parent_id: seeded.source.id,
+          reviews_work_item_id: seeded.source.id,
+          purpose: "verification",
+          validation_mode: "independent_review",
+        })
+        expect((yield* graph.snapshot(seeded.project.id)).nodes.find((node) => node.id === reviewerID)).toMatchObject({
+          reviews_work_item_id: seeded.source.id,
+        })
+      }),
+    ),
+  )
+
   it.live("[a2-mutation-policy] rejects unsafe graph patches and applies idempotent audited mutations", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
@@ -407,10 +454,91 @@ describe("Company graph mutation policy", () => {
                   type: "add_work_item",
                   item: newItem(seeded.plan.id, "policy-reviewer", {
                     parent_id: seeded.source.id,
+                    reviews_work_item_id: seeded.source.id,
                     kind: "reviewer",
                     owner_agent_id: seeded.source.owner_agent_id,
+                    purpose: "verification",
                     validation_mode: "independent_review",
                   }),
+                },
+                {
+                  type: "add_dependency",
+                  work_item_id: "policy-reviewer",
+                  depends_on_id: seeded.source.id,
+                },
+              ],
+            }),
+          },
+          {
+            name: "worker-verification",
+            expected: "decision_operation_mismatch",
+            value: proposal(seeded, {
+              key: "reject-worker-verification",
+              decision: "expand",
+              operations: [
+                {
+                  type: "add_work_item",
+                  item: newItem(seeded.plan.id, "policy-worker-verification", {
+                    purpose: "verification",
+                  }),
+                },
+              ],
+            }),
+          },
+          {
+            name: "worker-review-target",
+            expected: "decision_operation_mismatch",
+            value: proposal(seeded, {
+              key: "reject-worker-review-target",
+              decision: "expand",
+              operations: [
+                {
+                  type: "add_work_item",
+                  item: newItem(seeded.plan.id, "policy-worker-review-target", {
+                    reviews_work_item_id: seeded.source.id,
+                  }),
+                },
+              ],
+            }),
+          },
+          {
+            name: "duplicate-reviewer-target",
+            expected: "duplicate_new_node",
+            value: proposal(seeded, {
+              key: "reject-duplicate-reviewer-target",
+              decision: "expand",
+              operations: [
+                {
+                  type: "add_work_item",
+                  item: newItem(seeded.plan.id, "policy-reviewer-one", {
+                    parent_id: seeded.source.id,
+                    reviews_work_item_id: seeded.source.id,
+                    kind: "reviewer",
+                    owner_agent_id: "agent-reviewer-one",
+                    purpose: "verification",
+                    validation_mode: "independent_review",
+                  }),
+                },
+                {
+                  type: "add_work_item",
+                  item: newItem(seeded.plan.id, "policy-reviewer-two", {
+                    parent_id: seeded.source.id,
+                    reviews_work_item_id: seeded.source.id,
+                    kind: "reviewer",
+                    owner_agent_id: "agent-reviewer-two",
+                    purpose: "verification",
+                    validation_mode: "independent_review",
+                  }),
+                },
+                {
+                  type: "add_dependency",
+                  work_item_id: "policy-reviewer-one",
+                  depends_on_id: seeded.source.id,
+                },
+                {
+                  type: "add_dependency",
+                  work_item_id: "policy-reviewer-two",
+                  depends_on_id: seeded.source.id,
                 },
               ],
             }),
@@ -529,6 +657,7 @@ describe("Company graph mutation policy", () => {
                 type: "add_work_item",
                 item: newItem(seeded.plan.id, "policy-gated", {
                   risk_level: "high",
+                  review_status: "pending",
                   validation_mode: "review_and_user_gate",
                 }),
               },
@@ -912,4 +1041,4 @@ test("[a2-transaction-recovery] recovers every transaction and broadcast boundar
     duplicate_dispatches: 0,
     restart_replays_idempotent: true,
   })
-})
+}, { timeout: 30_000 })

@@ -4,7 +4,20 @@ import { orchestrationPlan, verificationStrengths, type OrchestrationInput } fro
 describe("orchestrationPlan", () => {
   test("low-risk reversible task runs with a single agent and self check", () => {
     const plan = orchestrationPlan({ work_type: "analysis", declared_risk: "low", approval_preset: "balanced" })
-    expect(plan).toMatchObject({ risk_level: "low", strength: "self_check", reviewer: false, gate: false })
+    expect(plan).toMatchObject({
+      risk_level: "low",
+      strength: "self_check",
+      reviewer: false,
+      reviewer_count: 0,
+      gate: false,
+      worker_contract: {
+        kind: "worker",
+        purpose: "delivery",
+        review_status: "not_required",
+        validation_mode: "self_check",
+      },
+    })
+    expect(plan.reviewer_contract).toBeUndefined()
     expect(plan.reasons.join("")).toContain("自检")
   })
 
@@ -20,7 +33,25 @@ describe("orchestrationPlan", () => {
 
   test("high-value conclusions get an independent reviewer without a gate", () => {
     const plan = orchestrationPlan({ work_type: "analysis", declared_risk: "high", approval_preset: "balanced" })
-    expect(plan).toMatchObject({ risk_level: "high", strength: "independent_review", reviewer: true, gate: false })
+    expect(plan).toMatchObject({
+      risk_level: "high",
+      strength: "independent_review",
+      reviewer: true,
+      reviewer_count: 1,
+      gate: false,
+      worker_contract: {
+        kind: "worker",
+        purpose: "delivery",
+        review_status: "pending",
+        validation_mode: "independent_review",
+      },
+      reviewer_contract: {
+        kind: "reviewer",
+        purpose: "verification",
+        review_status: "not_required",
+        validation_mode: "independent_review",
+      },
+    })
   })
 
   test("high-risk external actions require reviewer plus user gate under non-autonomous presets", () => {
@@ -66,6 +97,8 @@ describe("orchestrationPlan", () => {
             expect(alternative).toMatch(/被规则层拒绝|允许，但/)
           const reviewerRequired = plan.strength === "independent_review" || plan.strength === "review_with_gate"
           expect(plan.reviewer).toBe(reviewerRequired)
+          expect(plan.reviewer_count).toBe(reviewerRequired ? 1 : 0)
+          expect(Boolean(plan.reviewer_contract)).toBe(reviewerRequired)
           if (plan.risk_level === "high") expect(plan.reviewer).toBe(true)
           if (work_type === "coding") expect(plan.risk_level).toBe("high")
         }

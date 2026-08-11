@@ -13,7 +13,7 @@ import { TrustDial } from "@/trust-dial/trust-dial"
 import { stringifyFrontMatter } from "@/workspace/front-matter"
 import { workspaceRoot } from "@/workspace/workspace"
 import { canDelegate, parseOrgLayer, OrgLayer, MAX_DELEGATION_DEPTH } from "./primitives"
-import type { SubTask, DelegationResult, AdmissionResult } from "./schema"
+import { PlannerSubTask, type SubTask, type DelegationResult, type AdmissionResult } from "./schema"
 import type { AdmissionResult as GradedAdmissionResult, Submission } from "@/admission/schema"
 import type { ReputationInfo } from "@/reputation/schema"
 import type { SessionID } from "@/session/schema"
@@ -40,9 +40,12 @@ const DECOMPOSE_SCHEMA = {
       type: "array",
       items: {
         type: "object",
+        additionalProperties: false,
         properties: {
           key: { type: "string" },
           parentKey: { type: "string" },
+          kind: { type: "string", enum: ["worker"] },
+          purpose: { type: "string", enum: ["delivery"] },
           summary: { type: "string" },
           acceptanceCriteria: { type: "string" },
           suggestedAgent: { type: "string" },
@@ -58,11 +61,12 @@ const DECOMPOSE_SCHEMA = {
           riskLevel: { type: "string", enum: ["low", "medium", "high"] },
           dependsOn: { type: "array", items: { type: "string" } },
         },
-        required: ["summary", "acceptanceCriteria"],
+        required: ["kind", "purpose", "summary", "acceptanceCriteria"],
       },
     },
   },
   required: ["subtasks"],
+  additionalProperties: false,
 }
 
 const ADMIT_SCHEMA = {
@@ -354,6 +358,8 @@ function buildDecomposePrompt(goal: string, context?: string): string {
     "For each sub-task, provide:",
     "- key: A unique lowercase identifier; parents and dependencies must appear earlier in the array",
     "- parentKey: (optional) The parent task key for the visible execution tree",
+    "- kind: Always worker; the Planner may only propose executable delivery work",
+    "- purpose: Always delivery",
     "- summary: A clear, actionable description (1-2 sentences)",
     "- acceptanceCriteria: A specific, testable criterion for completion",
     "- suggestedAgent: (optional) The best agent ID or name for this task",
@@ -366,6 +372,7 @@ function buildDecomposePrompt(goal: string, context?: string): string {
     "- riskLevel: low, medium, or high",
     "- dependsOn: Keys that must be independently accepted before this task starts",
     "",
+    "Never create a separate planning, review, reviewer, audit, verification, quality-gate, or acceptance task for another sub-task. Reviewer and Gate nodes are created exactly once by deterministic orchestration policy.",
     "Produce 2-6 domain-neutral sub-tasks ordered by dependency. Use at most one coding task. Do not force software delivery when the goal only needs research, analysis, design, a decision, or a document.",
   )
   return parts.join("\n")
@@ -1090,9 +1097,9 @@ export const layer = Layer.effect(
         )
       }
 
-      const parsed = outcome.structured as { subtasks: SubTask[] }
-      log.info("decompose: completed", { count: parsed.subtasks.length })
-      return parsed.subtasks
+      const parsed = PlannerSubTask.array().parse((outcome.structured as Record<string, unknown>).subtasks)
+      log.info("decompose: completed", { count: parsed.length })
+      return parsed
     })
 
     // ---- delegateSubtasks ----

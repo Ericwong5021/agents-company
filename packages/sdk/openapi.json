@@ -9230,9 +9230,12 @@
                                 "user",
                                 "work_attempt",
                                 "work_receipt",
+                                "agent_run",
                                 "graph_mutation",
                                 "project_assignment",
-                                "validation_gate"
+                                "validation_gate",
+                                "acceptance_criterion",
+                                "acceptance_fact"
                               ]
                             },
                             "id": {
@@ -9532,9 +9535,12 @@
                               "user",
                               "work_attempt",
                               "work_receipt",
+                              "agent_run",
                               "graph_mutation",
                               "project_assignment",
-                              "validation_gate"
+                              "validation_gate",
+                              "acceptance_criterion",
+                              "acceptance_fact"
                             ]
                           },
                           "id": {
@@ -9935,9 +9941,12 @@
                               "user",
                               "work_attempt",
                               "work_receipt",
+                              "agent_run",
                               "graph_mutation",
                               "project_assignment",
-                              "validation_gate"
+                              "validation_gate",
+                              "acceptance_criterion",
+                              "acceptance_fact"
                             ]
                           },
                           "id": {
@@ -10511,9 +10520,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -10712,9 +10724,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -11231,9 +11246,12 @@
                               "user",
                               "work_attempt",
                               "work_receipt",
+                              "agent_run",
                               "graph_mutation",
                               "project_assignment",
-                              "validation_gate"
+                              "validation_gate",
+                              "acceptance_criterion",
+                              "acceptance_fact"
                             ]
                           },
                           "id": {
@@ -11762,9 +11780,12 @@
                                     "user",
                                     "work_attempt",
                                     "work_receipt",
+                                    "agent_run",
                                     "graph_mutation",
                                     "project_assignment",
-                                    "validation_gate"
+                                    "validation_gate",
+                                    "acceptance_criterion",
+                                    "acceptance_fact"
                                   ]
                                 },
                                 "id": {
@@ -12304,9 +12325,12 @@
                                 "user",
                                 "work_attempt",
                                 "work_receipt",
+                                "agent_run",
                                 "graph_mutation",
                                 "project_assignment",
-                                "validation_gate"
+                                "validation_gate",
+                                "acceptance_criterion",
+                                "acceptance_fact"
                               ]
                             },
                             "id": {
@@ -12607,9 +12631,12 @@
                               "user",
                               "work_attempt",
                               "work_receipt",
+                              "agent_run",
                               "graph_mutation",
                               "project_assignment",
-                              "validation_gate"
+                              "validation_gate",
+                              "acceptance_criterion",
+                              "acceptance_fact"
                             ]
                           },
                           "id": {
@@ -13690,9 +13717,12 @@
                               "user",
                               "work_attempt",
                               "work_receipt",
+                              "agent_run",
                               "graph_mutation",
                               "project_assignment",
-                              "validation_gate"
+                              "validation_gate",
+                              "acceptance_criterion",
+                              "acceptance_fact"
                             ]
                           },
                           "id": {
@@ -14421,9 +14451,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -14540,9 +14573,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -14626,9 +14662,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -14705,9 +14744,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -14786,9 +14828,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -14872,9 +14917,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -15018,9 +15066,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -15137,9 +15188,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -15223,9 +15277,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -15302,9 +15359,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -15383,9 +15443,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -15469,9 +15532,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -15599,9 +15665,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -15723,9 +15792,12 @@
                                                         "user",
                                                         "work_attempt",
                                                         "work_receipt",
+                                                        "agent_run",
                                                         "graph_mutation",
                                                         "project_assignment",
-                                                        "validation_gate"
+                                                        "validation_gate",
+                                                        "acceptance_criterion",
+                                                        "acceptance_fact"
                                                       ]
                                                     },
                                                     "id": {
@@ -15809,9 +15881,12 @@
                                                         "user",
                                                         "work_attempt",
                                                         "work_receipt",
+                                                        "agent_run",
                                                         "graph_mutation",
                                                         "project_assignment",
-                                                        "validation_gate"
+                                                        "validation_gate",
+                                                        "acceptance_criterion",
+                                                        "acceptance_fact"
                                                       ]
                                                     },
                                                     "id": {
@@ -15896,9 +15971,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -15977,9 +16055,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -16063,9 +16144,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -16230,9 +16314,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -16318,9 +16405,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -16404,9 +16494,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -16483,9 +16576,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -16564,9 +16660,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -16650,9 +16749,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -16762,9 +16864,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -16921,9 +17026,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -17159,9 +17267,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -17278,9 +17389,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -17364,9 +17478,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -17443,9 +17560,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -17524,9 +17644,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -17610,9 +17733,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -17756,9 +17882,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -17875,9 +18004,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -17961,9 +18093,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -18040,9 +18175,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -18121,9 +18259,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -18207,9 +18348,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -18337,9 +18481,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -18461,9 +18608,12 @@
                                                         "user",
                                                         "work_attempt",
                                                         "work_receipt",
+                                                        "agent_run",
                                                         "graph_mutation",
                                                         "project_assignment",
-                                                        "validation_gate"
+                                                        "validation_gate",
+                                                        "acceptance_criterion",
+                                                        "acceptance_fact"
                                                       ]
                                                     },
                                                     "id": {
@@ -18547,9 +18697,12 @@
                                                         "user",
                                                         "work_attempt",
                                                         "work_receipt",
+                                                        "agent_run",
                                                         "graph_mutation",
                                                         "project_assignment",
-                                                        "validation_gate"
+                                                        "validation_gate",
+                                                        "acceptance_criterion",
+                                                        "acceptance_fact"
                                                       ]
                                                     },
                                                     "id": {
@@ -18634,9 +18787,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -18715,9 +18871,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -18801,9 +18960,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -18968,9 +19130,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -19056,9 +19221,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -19142,9 +19310,12 @@
                                                       "user",
                                                       "work_attempt",
                                                       "work_receipt",
+                                                      "agent_run",
                                                       "graph_mutation",
                                                       "project_assignment",
-                                                      "validation_gate"
+                                                      "validation_gate",
+                                                      "acceptance_criterion",
+                                                      "acceptance_fact"
                                                     ]
                                                   },
                                                   "id": {
@@ -19221,9 +19392,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -19302,9 +19476,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -19388,9 +19565,12 @@
                                                     "user",
                                                     "work_attempt",
                                                     "work_receipt",
+                                                    "agent_run",
                                                     "graph_mutation",
                                                     "project_assignment",
-                                                    "validation_gate"
+                                                    "validation_gate",
+                                                    "acceptance_criterion",
+                                                    "acceptance_fact"
                                                   ]
                                                 },
                                                 "id": {
@@ -19500,9 +19680,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -19659,9 +19842,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -20051,9 +20237,12 @@
                                     "user",
                                     "work_attempt",
                                     "work_receipt",
+                                    "agent_run",
                                     "graph_mutation",
                                     "project_assignment",
-                                    "validation_gate"
+                                    "validation_gate",
+                                    "acceptance_criterion",
+                                    "acceptance_fact"
                                   ]
                                 },
                                 "id": {
@@ -20923,9 +21112,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -21010,9 +21202,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -21250,9 +21445,12 @@
                                             "user",
                                             "work_attempt",
                                             "work_receipt",
+                                            "agent_run",
                                             "graph_mutation",
                                             "project_assignment",
-                                            "validation_gate"
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
                                           ]
                                         },
                                         "id": {
@@ -21383,9 +21581,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -21695,9 +21896,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -21875,9 +22079,12 @@
                                         "user",
                                         "work_attempt",
                                         "work_receipt",
+                                        "agent_run",
                                         "graph_mutation",
                                         "project_assignment",
-                                        "validation_gate"
+                                        "validation_gate",
+                                        "acceptance_criterion",
+                                        "acceptance_fact"
                                       ]
                                     },
                                     "id": {
@@ -21970,9 +22177,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -22291,9 +22501,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -22553,9 +22766,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -22796,6 +23012,1018 @@
         ]
       }
     },
+    "/experience/work/{projectID}/acceptance": {
+      "get": {
+        "operationId": "experience.work.acceptance",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "projectID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "summary": "Read current tuple acceptance coverage and explicit legacy-unverified work",
+        "responses": {
+          "200": {
+            "description": "Project acceptance coverage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "available"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "agent_run",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "activePlanVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "trackedWorkItemCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "verifiedWorkItemCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "unresolvedWorkItemCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pendingWorkItemIds": {
+                          "maxItems": 499,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 240
+                          }
+                        },
+                        "items": {
+                          "maxItems": 499,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "workItemId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "purpose": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "sourceRefs": {
+                                    "minItems": 1,
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "project",
+                                            "project_event",
+                                            "goal_brief",
+                                            "legacy_charter",
+                                            "work_item",
+                                            "approval_gate",
+                                            "artifact",
+                                            "delivery",
+                                            "conversation",
+                                            "goal_request",
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "agent_run",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
+                                          ]
+                                        },
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "version": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "eventType": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "id"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "contractVersion": {
+                                    "type": "number",
+                                    "const": 1
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "const": "legacy_unverified"
+                                  },
+                                  "criteria": {
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "criterionId": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "statement": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 8000
+                                        },
+                                        "verificationKind": {
+                                          "type": "string",
+                                          "const": "legacy_unscoped"
+                                        },
+                                        "required": {
+                                          "type": "boolean",
+                                          "const": true
+                                        },
+                                        "state": {
+                                          "type": "string",
+                                          "const": "missing"
+                                        },
+                                        "evidenceRefs": {
+                                          "maxItems": 0,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "project",
+                                                  "project_event",
+                                                  "goal_brief",
+                                                  "legacy_charter",
+                                                  "work_item",
+                                                  "approval_gate",
+                                                  "artifact",
+                                                  "delivery",
+                                                  "conversation",
+                                                  "goal_request",
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "agent_run",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
+                                                ]
+                                              },
+                                              "id": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              },
+                                              "version": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "eventType": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "id"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "sourceRefs": {
+                                          "minItems": 1,
+                                          "maxItems": 500,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "project",
+                                                  "project_event",
+                                                  "goal_brief",
+                                                  "legacy_charter",
+                                                  "work_item",
+                                                  "approval_gate",
+                                                  "artifact",
+                                                  "delivery",
+                                                  "conversation",
+                                                  "goal_request",
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "agent_run",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
+                                                ]
+                                              },
+                                              "id": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              },
+                                              "version": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "eventType": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "id"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "criterionId",
+                                        "statement",
+                                        "verificationKind",
+                                        "required",
+                                        "state",
+                                        "evidenceRefs",
+                                        "sourceRefs"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "workItemId",
+                                  "title",
+                                  "kind",
+                                  "purpose",
+                                  "sourceRefs",
+                                  "contractVersion",
+                                  "state",
+                                  "criteria"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "workItemId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "purpose": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "sourceRefs": {
+                                    "minItems": 1,
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "project",
+                                            "project_event",
+                                            "goal_brief",
+                                            "legacy_charter",
+                                            "work_item",
+                                            "approval_gate",
+                                            "artifact",
+                                            "delivery",
+                                            "conversation",
+                                            "goal_request",
+                                            "user",
+                                            "work_attempt",
+                                            "work_receipt",
+                                            "agent_run",
+                                            "graph_mutation",
+                                            "project_assignment",
+                                            "validation_gate",
+                                            "acceptance_criterion",
+                                            "acceptance_fact"
+                                          ]
+                                        },
+                                        "id": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "version": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "eventType": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "id"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "attemptId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "attemptOrdinal": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "artifactId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "artifactKind": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 240
+                                  },
+                                  "artifactVersion": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "contractVersion": {
+                                    "type": "number",
+                                    "const": 2
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "verified",
+                                      "failed",
+                                      "pending",
+                                      "stale"
+                                    ]
+                                  },
+                                  "criteria": {
+                                    "maxItems": 500,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "criterionId": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "statement": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 8000
+                                        },
+                                        "verificationKind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "legacy_unscoped",
+                                            "deterministic",
+                                            "semantic_review",
+                                            "human"
+                                          ]
+                                        },
+                                        "requiredAuthority": {
+                                          "type": "string",
+                                          "enum": [
+                                            "control_plane",
+                                            "independent_reviewer",
+                                            "human"
+                                          ]
+                                        },
+                                        "required": {
+                                          "type": "boolean"
+                                        },
+                                        "state": {
+                                          "type": "string",
+                                          "enum": [
+                                            "missing",
+                                            "passed",
+                                            "failed",
+                                            "inconclusive",
+                                            "stale"
+                                          ]
+                                        },
+                                        "factId": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "authority": {
+                                          "type": "string",
+                                          "enum": [
+                                            "legacy",
+                                            "worker_claim",
+                                            "control_plane",
+                                            "independent_reviewer",
+                                            "human"
+                                          ]
+                                        },
+                                        "evaluator": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 240
+                                        },
+                                        "evidenceRefs": {
+                                          "maxItems": 500,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "project",
+                                                  "project_event",
+                                                  "goal_brief",
+                                                  "legacy_charter",
+                                                  "work_item",
+                                                  "approval_gate",
+                                                  "artifact",
+                                                  "delivery",
+                                                  "conversation",
+                                                  "goal_request",
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "agent_run",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
+                                                ]
+                                              },
+                                              "id": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              },
+                                              "version": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "eventType": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "id"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "sourceRefs": {
+                                          "minItems": 1,
+                                          "maxItems": 500,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "project",
+                                                  "project_event",
+                                                  "goal_brief",
+                                                  "legacy_charter",
+                                                  "work_item",
+                                                  "approval_gate",
+                                                  "artifact",
+                                                  "delivery",
+                                                  "conversation",
+                                                  "goal_request",
+                                                  "user",
+                                                  "work_attempt",
+                                                  "work_receipt",
+                                                  "agent_run",
+                                                  "graph_mutation",
+                                                  "project_assignment",
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
+                                                ]
+                                              },
+                                              "id": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              },
+                                              "version": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "eventType": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 240
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "id"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "criterionId",
+                                        "statement",
+                                        "verificationKind",
+                                        "required",
+                                        "state",
+                                        "evidenceRefs",
+                                        "sourceRefs"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "workItemId",
+                                  "title",
+                                  "kind",
+                                  "purpose",
+                                  "sourceRefs",
+                                  "attemptId",
+                                  "attemptOrdinal",
+                                  "artifactId",
+                                  "artifactKind",
+                                  "contractVersion",
+                                  "state",
+                                  "criteria"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "trackedWorkItemCount",
+                        "verifiedWorkItemCount",
+                        "unresolvedWorkItemCount",
+                        "pendingWorkItemIds",
+                        "items"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "availability": {
+                          "type": "string",
+                          "const": "unavailable"
+                        },
+                        "projectorVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sourceWatermark": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sourceRefs": {
+                          "minItems": 1,
+                          "maxItems": 500,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "project",
+                                  "project_event",
+                                  "goal_brief",
+                                  "legacy_charter",
+                                  "work_item",
+                                  "approval_gate",
+                                  "artifact",
+                                  "delivery",
+                                  "conversation",
+                                  "goal_request",
+                                  "user",
+                                  "work_attempt",
+                                  "work_receipt",
+                                  "agent_run",
+                                  "graph_mutation",
+                                  "project_assignment",
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
+                                ]
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 240
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                        },
+                        "projectId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 240
+                        },
+                        "reason": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "invalid_persisted_fact",
+                                "projection_overflow"
+                              ]
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 8000
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "availability",
+                        "projectorVersion",
+                        "sourceWatermark",
+                        "sourceRefs",
+                        "updatedAt",
+                        "projectId",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "not_found"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "version_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "currentVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "currentVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_conflict"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "request_in_progress"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "artifact_unavailable"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "const": "goal_brief_structured_output_failed"
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "attempts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 3
+                        },
+                        "recoveryActions": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "const": "retry"
+                            },
+                            {
+                              "type": "string",
+                              "const": "manual_edit"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "attempts",
+                        "recoveryActions"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.experience.work.acceptance({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/experience/work/{projectID}/validation": {
       "get": {
         "operationId": "experience.work.validation",
@@ -22871,9 +24099,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -23067,9 +24298,12 @@
                                         "user",
                                         "work_attempt",
                                         "work_receipt",
+                                        "agent_run",
                                         "graph_mutation",
                                         "project_assignment",
-                                        "validation_gate"
+                                        "validation_gate",
+                                        "acceptance_criterion",
+                                        "acceptance_fact"
                                       ]
                                     },
                                     "id": {
@@ -23159,9 +24393,12 @@
                                         "user",
                                         "work_attempt",
                                         "work_receipt",
+                                        "agent_run",
                                         "graph_mutation",
                                         "project_assignment",
-                                        "validation_gate"
+                                        "validation_gate",
+                                        "acceptance_criterion",
+                                        "acceptance_fact"
                                       ]
                                     },
                                     "id": {
@@ -23257,9 +24494,12 @@
                                   "user",
                                   "work_attempt",
                                   "work_receipt",
+                                  "agent_run",
                                   "graph_mutation",
                                   "project_assignment",
-                                  "validation_gate"
+                                  "validation_gate",
+                                  "acceptance_criterion",
+                                  "acceptance_fact"
                                 ]
                               },
                               "id": {
@@ -23666,9 +24906,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -23785,9 +25028,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -23871,9 +25117,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -23950,9 +25199,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -24031,9 +25283,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -24117,9 +25372,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -24263,9 +25521,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -24382,9 +25643,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -24468,9 +25732,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -24547,9 +25814,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -24628,9 +25898,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -24714,9 +25987,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -24844,9 +26120,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -24968,9 +26247,12 @@
                                                   "user",
                                                   "work_attempt",
                                                   "work_receipt",
+                                                  "agent_run",
                                                   "graph_mutation",
                                                   "project_assignment",
-                                                  "validation_gate"
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
                                                 ]
                                               },
                                               "id": {
@@ -25054,9 +26336,12 @@
                                                   "user",
                                                   "work_attempt",
                                                   "work_receipt",
+                                                  "agent_run",
                                                   "graph_mutation",
                                                   "project_assignment",
-                                                  "validation_gate"
+                                                  "validation_gate",
+                                                  "acceptance_criterion",
+                                                  "acceptance_fact"
                                                 ]
                                               },
                                               "id": {
@@ -25141,9 +26426,12 @@
                                         "user",
                                         "work_attempt",
                                         "work_receipt",
+                                        "agent_run",
                                         "graph_mutation",
                                         "project_assignment",
-                                        "validation_gate"
+                                        "validation_gate",
+                                        "acceptance_criterion",
+                                        "acceptance_fact"
                                       ]
                                     },
                                     "id": {
@@ -25222,9 +26510,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -25308,9 +26599,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -25475,9 +26769,12 @@
                                           "user",
                                           "work_attempt",
                                           "work_receipt",
+                                          "agent_run",
                                           "graph_mutation",
                                           "project_assignment",
-                                          "validation_gate"
+                                          "validation_gate",
+                                          "acceptance_criterion",
+                                          "acceptance_fact"
                                         ]
                                       },
                                       "id": {
@@ -25563,9 +26860,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -25649,9 +26949,12 @@
                                                 "user",
                                                 "work_attempt",
                                                 "work_receipt",
+                                                "agent_run",
                                                 "graph_mutation",
                                                 "project_assignment",
-                                                "validation_gate"
+                                                "validation_gate",
+                                                "acceptance_criterion",
+                                                "acceptance_fact"
                                               ]
                                             },
                                             "id": {
@@ -25728,9 +27031,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -25809,9 +27115,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -25895,9 +27204,12 @@
                                               "user",
                                               "work_attempt",
                                               "work_receipt",
+                                              "agent_run",
                                               "graph_mutation",
                                               "project_assignment",
-                                              "validation_gate"
+                                              "validation_gate",
+                                              "acceptance_criterion",
+                                              "acceptance_fact"
                                             ]
                                           },
                                           "id": {
@@ -26007,9 +27319,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -26166,9 +27481,12 @@
                                       "user",
                                       "work_attempt",
                                       "work_receipt",
+                                      "agent_run",
                                       "graph_mutation",
                                       "project_assignment",
-                                      "validation_gate"
+                                      "validation_gate",
+                                      "acceptance_criterion",
+                                      "acceptance_fact"
                                     ]
                                   },
                                   "id": {
@@ -29419,6 +30737,11 @@
                         "dispatch_paused": {
                           "type": "boolean"
                         },
+                        "dispatch_generation": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
                         "graph_revision": {
                           "type": "integer",
                           "minimum": 0,
@@ -29444,6 +30767,7 @@
                         "orchestration_state",
                         "orchestrator_version",
                         "dispatch_paused",
+                        "dispatch_generation",
                         "graph_revision",
                         "created_at",
                         "updated_at"
@@ -29787,6 +31111,22 @@
                       "agent_run_id": {
                         "type": "string"
                       },
+                      "base_artifact_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "repair_criterion_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "ordinal": {
                         "type": "integer",
                         "exclusiveMinimum": 0,
@@ -29828,6 +31168,7 @@
                       "id",
                       "project_id",
                       "work_item_id",
+                      "repair_criterion_ids",
                       "ordinal",
                       "status",
                       "started_at"
@@ -32571,6 +33912,11 @@
                         "dispatch_paused": {
                           "type": "boolean"
                         },
+                        "dispatch_generation": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
                         "graph_revision": {
                           "type": "integer",
                           "minimum": 0,
@@ -32596,6 +33942,7 @@
                         "orchestration_state",
                         "orchestrator_version",
                         "dispatch_paused",
+                        "dispatch_generation",
                         "graph_revision",
                         "created_at",
                         "updated_at"
@@ -64538,9 +65885,12 @@
                             "user",
                             "work_attempt",
                             "work_receipt",
+                            "agent_run",
                             "graph_mutation",
                             "project_assignment",
-                            "validation_gate"
+                            "validation_gate",
+                            "acceptance_criterion",
+                            "acceptance_fact"
                           ]
                         },
                         "id": {
@@ -65511,6 +66861,11 @@
               "dispatch_paused": {
                 "type": "boolean"
               },
+              "dispatch_generation": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
               "graph_revision": {
                 "type": "integer",
                 "minimum": 0,
@@ -65536,6 +66891,7 @@
               "orchestration_state",
               "orchestrator_version",
               "dispatch_paused",
+              "dispatch_generation",
               "graph_revision",
               "created_at",
               "updated_at"
@@ -65820,6 +67176,16 @@
               "parent_id": {
                 "type": "string"
               },
+              "reviews_work_item_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "title": {
                 "type": "string"
               },
@@ -65979,6 +67345,52 @@
               "workflow_run_id": {
                 "type": "string"
               },
+              "dispatch_claim_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dispatch_claim_generation": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dispatch_claimed_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "validation_contract_version": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 1
+                  },
+                  {
+                    "type": "number",
+                    "const": 2
+                  }
+                ]
+              },
               "acceptance_criteria": {
                 "type": "array",
                 "items": {
@@ -66036,6 +67448,7 @@
               "origin_kind",
               "graph_revision_created",
               "validation_mode",
+              "validation_contract_version",
               "acceptance_criteria",
               "attempt",
               "max_attempts",

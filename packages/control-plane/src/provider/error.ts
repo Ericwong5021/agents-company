@@ -25,6 +25,8 @@ const OVERFLOW_PATTERNS = [
   /prompt too long; exceeded (?:max )?context length/i, // Ollama explicit overflow error
   /too large for model with \d+ maximum context length/i, // Mistral
   /model_context_window_exceeded/i, // z.ai non-standard finish_reason surfaced as error text
+  /execution context budget/i,
+  /task evidence exceeds the execution context budget/i,
 ]
 
 function isOpenAiErrorRetryable(e: APICallError) {
@@ -36,7 +38,7 @@ function isOpenAiErrorRetryable(e: APICallError) {
 
 // Providers not reliably handled in this function:
 // - z.ai: can accept overflow silently (needs token-count/context-window checks)
-function isOverflow(message: string) {
+export function isContextOverflowMessage(message: string) {
   if (OVERFLOW_PATTERNS.some((p) => p.test(message))) return true
 
   // Providers/status patterns handled outside of regex list:
@@ -195,7 +197,7 @@ export type ParsedAPICallError =
 export function parseAPICallError(input: { providerID: ProviderID; error: APICallError }): ParsedAPICallError {
   const m = message(input.providerID, input.error)
   const body = json(input.error.responseBody)
-  if (isOverflow(m) || input.error.statusCode === 413 || body?.error?.code === "context_length_exceeded") {
+  if (isContextOverflowMessage(m) || input.error.statusCode === 413 || body?.error?.code === "context_length_exceeded") {
     return {
       type: "context_overflow",
       message: m,
