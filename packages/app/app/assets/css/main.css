@@ -4018,3 +4018,48 @@ textarea:focus-visible {
     border-bottom: 0;
   }
 }
+
+@media (min-width: 961px) {
+  .ac-work3 {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .ac-work3__list {
+    display: none;
+  }
+}
+
+.ac-organization-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  margin-top: 8px;
+}
+
+.ac-organization-workspace > :first-child {
+  min-width: 0;
+  padding-right: 24px;
+}
+
+.ac-team-directory {
+  margin-top: 28px;
+  border-top: 1px solid var(--ac-line);
+  padding-top: 18px;
+}
+
+.ac-team-directory > summary {
+  min-height: 40px;
+  color: var(--ac-ink-muted);
+  font-size: var(--ac-text-caption);
+  font-weight: 620;
+}
+
+@media (max-width: 960px) {
+  .ac-organization-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .ac-organization-workspace > :first-child {
+    padding-right: 0;
+  }
+}

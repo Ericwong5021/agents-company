@@ -188,10 +188,18 @@ export type CompanyProjectDetail = {
     id: string
     sourceTaskKey?: string
     title: string
+    description: string
     status: string
     kind: string
+    workType: string
     ownerAgentID?: string
     dependsOn: string[]
+    inputs: string[]
+    expectedOutputs: string[]
+    validators: string[]
+    resourceScope: string[]
+    riskLevel: string
+    validationMode: string
     reviewStatus: string
     attempt: number
     maxAttempts: number
@@ -200,6 +208,8 @@ export type CompanyProjectDetail = {
     role?: string
     originKind?: string
     planVersion?: number
+    createdAt: number
+    updatedAt: number
   }[]
   artifacts: {
     id: string

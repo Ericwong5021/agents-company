@@ -489,6 +489,7 @@ const composerTarget = computed<ComposerTarget | undefined>(() =>
 // 目标摘要读取失败时仍保留“目标”面板入口，如实展示不可用状态而不是隐藏整个面板；404 表示本来就没有目标摘要，不制造面板。
 const panels = computed(() =>
   availableContextPanels({
+    tasks: currentPlanWorkItems.value.length,
     hasGoalBrief:
       goalBriefStatus.value === "pending" ||
       (Boolean(goalBriefError.value) && goalBriefError.value?.statusCode !== 404) ||
@@ -518,6 +519,7 @@ const activePanel = ref<ContextPanelKind>()
 const hydrated = ref(false)
 const selectedArtifactID = ref<string>()
 const selectedAgentID = ref<string>()
+const selectedWorkItemID = ref<string>()
 const mainColumn = ref<HTMLElement>()
 const contextColumn = ref<HTMLElement>()
 const mainScrollTop = ref(0)
@@ -544,6 +546,7 @@ function persistFor(id?: string) {
       activePanel: activePanel.value,
       selectedArtifactID: selectedArtifactID.value,
       selectedAgentID: selectedAgentID.value,
+      selectedWorkItemID: selectedWorkItemID.value,
       mainScrollTop: mainScrollTop.value,
       panelScrollTop: panelScrollTop.value,
     },
@@ -575,12 +578,14 @@ watch(
       {
         artifacts: detail.value?.artifacts ?? [],
         agents: detail.value?.recruitment.candidates ?? [],
+        workItems: detail.value?.workItems ?? [],
       },
     )
     column.value = typeof route.query.panel === "string" ? "context" : reconciled.column
     activePanel.value = reconciled.activePanel
     selectedArtifactID.value = reconciled.selectedArtifactID
     selectedAgentID.value = reconciled.selectedAgentID
+    selectedWorkItemID.value = reconciled.selectedWorkItemID
     mainScrollTop.value = reconciled.mainScrollTop ?? 0
     panelScrollTop.value = reconciled.panelScrollTop ?? {}
     await restoreScroll()
@@ -600,6 +605,7 @@ watch([panels, detail, () => route.query.panel], () => {
       activePanel: queryPanel ?? activePanel.value,
       selectedArtifactID: selectedArtifactID.value,
       selectedAgentID: selectedAgentID.value,
+      selectedWorkItemID: selectedWorkItemID.value,
       mainScrollTop: mainScrollTop.value,
       panelScrollTop: panelScrollTop.value,
     },
@@ -607,12 +613,14 @@ watch([panels, detail, () => route.query.panel], () => {
     {
       artifacts: detail.value?.artifacts ?? [],
       agents: detail.value?.recruitment.candidates ?? [],
+      workItems: detail.value?.workItems ?? [],
     },
   )
   if (queryPanel) column.value = "context"
   activePanel.value = reconciled.activePanel
   selectedArtifactID.value = reconciled.selectedArtifactID
   selectedAgentID.value = reconciled.selectedAgentID
+  selectedWorkItemID.value = reconciled.selectedWorkItemID
 })
 
 async function selectPanel(kind: ContextPanelKind) {
@@ -655,6 +663,62 @@ function goColumn(direction: "next" | "prev") {
 const selectedAgent = computed(() =>
   detail.value?.recruitment.candidates.find((item) => item.id === selectedAgentID.value),
 )
+const taskFlowOwnerNames = computed(() => Object.fromEntries(
+  (detail.value?.workItems ?? []).flatMap(item => item.ownerAgentID
+    ? [[item.ownerAgentID, agentDisplayName(item.ownerAgentID)] as const]
+    : []),
+))
+const selectedWorkItem = computed(() =>
+  currentPlanWorkItems.value.find(item => item.id === selectedWorkItemID.value)
+  ?? currentPlanWorkItems.value.find(item => item.status === "running")
+  ?? currentPlanWorkItems.value.find(item => ["blocked", "failed"].includes(item.status))
+  ?? currentPlanWorkItems.value[0],
+)
+const selectedWorkItemDependencies = computed(() =>
+  selectedWorkItem.value?.dependsOn.flatMap(id => {
+    const item = currentPlanWorkItems.value.find(candidate => candidate.id === id)
+    return item ? [item] : []
+  }) ?? [],
+)
+const selectedWorkItemArtifacts = computed(() =>
+  detail.value?.artifacts.filter(artifact => artifact.workItemID === selectedWorkItem.value?.id)
+    .toSorted((left, right) => right.createdAt - left.createdAt) ?? [],
+)
+const selectedWorkItemAttempts = computed(() =>
+  detail.value?.workAttempts.filter(attempt => attempt.workItemID === selectedWorkItem.value?.id)
+    .toSorted((left, right) => right.ordinal - left.ordinal) ?? [],
+)
+const selectedWorkItemReceipts = computed(() =>
+  detail.value?.workReceipts.filter(receipt => receipt.workItemID === selectedWorkItem.value?.id)
+    .toSorted((left, right) => right.createdAt - left.createdAt) ?? [],
+)
+
+async function selectWorkItem(id: string) {
+  selectedWorkItemID.value = id
+  await selectPanel("task")
+  persist()
+}
+
+function taskWhyNow() {
+  if (!selectedWorkItemDependencies.value.length) return "该任务没有未声明的上游前置条件。"
+  const completed = selectedWorkItemDependencies.value.filter(item => item.status === "completed")
+  if (completed.length === selectedWorkItemDependencies.value.length)
+    return `上游 ${completed.length} 项任务均已完成，当前责任可以开始执行。`
+  const pending = selectedWorkItemDependencies.value.filter(item => item.status !== "completed")
+  return `仍在等待 ${pending.map(item => humanLabel(item.title)).join("、")}。`
+}
+
+function latestTaskEvidence() {
+  const receipt = selectedWorkItemReceipts.value[0]
+  if (receipt) return receipt.summary
+  const attempt = selectedWorkItemAttempts.value[0]
+  if (attempt?.summary) return attempt.summary
+  const run = detail.value?.agentRuns
+    .filter(item => item.workItemID === selectedWorkItem.value?.id)
+    .toSorted((left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0))[0]
+  if (run?.startedAt) return `${dateTime.format(new Date(run.startedAt))} 开始执行，当前状态为 ${run.state}。`
+  return "还没有可显示的执行证据。"
+}
 
 // WORK-07 — 运行控制：只渲染投影下发的 allowedActions，保留真实 enabled/disabledReason，
 // 仅在客户端有真实处理器且投影允许时才可点击（retry 走真实代理，导航类在客户端处理）。
@@ -1424,6 +1488,15 @@ function artifactRoute(projectID: string, artifactID: string) {
               </span>
             </header>
 
+            <TaskFlowCanvas
+              v-if="detail && currentPlanWorkItems.length"
+              :detail="detail"
+              :work-items="currentPlanWorkItems"
+              :owner-names="taskFlowOwnerNames"
+              :selected-id="selectedWorkItem?.id"
+              @select="selectWorkItem"
+            />
+
             <section class="ac-runtime-boundary" aria-label="数据与模型边界">
               <div>
                 <span>公司记录</span>
@@ -1832,8 +1905,21 @@ function artifactRoute(projectID: string, artifactID: string) {
             :aria-labelledby="renderedActivePanel ? `work-context-tab-${renderedActivePanel}` : undefined"
             tabindex="0"
           >
-            <!-- Goal Brief -->
-            <template v-if="renderedActivePanel === 'goal_brief'">
+            <TaskFactsPanel
+              v-if="renderedActivePanel === 'task' && selectedWorkItem"
+              :item="selectedWorkItem"
+              :dependencies="selectedWorkItemDependencies"
+              :artifacts="selectedWorkItemArtifacts"
+              :owner-name="selectedWorkItem.ownerAgentID ? agentDisplayName(selectedWorkItem.ownerAgentID) : '尚未分配负责人'"
+              :why-now="taskWhyNow()"
+              :latest-evidence="latestTaskEvidence()"
+              :attempt-count="selectedWorkItemAttempts.length"
+              :receipt-count="selectedWorkItemReceipts.length"
+              @open-thread="selectPanel('thread')"
+              @open-diagnostics="selectPanel('diagnostics')"
+            />
+
+            <template v-else-if="renderedActivePanel === 'goal_brief'">
               <div v-if="goalBriefStatus === 'pending'" class="ac-brief-state">正在读取目标摘要…</div>
               <div v-else-if="goalBriefError" class="ac-brief-state ac-brief-state--error">
                 <h3>目标摘要暂时不可用</h3>

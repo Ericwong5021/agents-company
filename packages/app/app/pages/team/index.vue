@@ -7,6 +7,10 @@ import {
   selectionEvidenceLabel,
   sourceRefTypeLabel,
 } from "../../../modules/agent-company/runtime/shared/seed-grow-view"
+import type {
+  OrganizationGraphAssignment,
+  OrganizationGraphNode,
+} from "../../../modules/agent-company/runtime/shared/organization-graph"
 
 const appConfig = useAppConfig()
 const route = useRoute()
@@ -87,6 +91,50 @@ const primaryWorkAwaitingAcceptance = computed(() =>
 const primaryWorkBlocked = computed(() =>
   primaryWork.value?.availability === "available"
   && primaryWork.value.summary.userStatus === "blocked")
+const organizationAgents = computed(() => [
+  ...snapshot.value.agents.filter(agent => agent.employment === "employee"),
+  ...temporaries.value,
+  ...projectedAssignments.value.flatMap(assignment =>
+    snapshot.value.agents.some(agent => agent.id === assignment.agent.id)
+      ? []
+      : [{
+          id: assignment.agent.id,
+          name: roleLabel(assignment.agent.name ?? assignment.temporaryRole),
+          role: roleLabel(assignment.temporaryRole),
+          department: undefined,
+          responsibilities: [assignment.responsibility],
+          employment: assignment.currentLifecycle === "employee" ? "employee" as const : "temporary" as const,
+          activity: assignment.status === "released" ? "completed" as const : "working" as const,
+          presence: assignment.status === "released" ? "offline" as const : "online" as const,
+          workload: { active: assignment.status === "released" ? 0 : 1, blocked: 0 },
+        }]),
+])
+const organizationAssignments = computed<OrganizationGraphAssignment[]>(() => currentAssignments.value.map(assignment => ({
+  id: assignment.assignmentId,
+  agentID: assignment.agent.id,
+  agentName: roleLabel(assignment.agent.name ?? assignment.temporaryRole),
+  projectID: assignment.projectId,
+  workItemID: assignment.workItemId,
+  role: roleLabel(assignment.temporaryRole),
+  responsibility: assignment.responsibility,
+  status: assignment.status,
+  permissionMode: assignment.permissionMode,
+  selectionReason: selectionReasonLabel(assignment.selectionReason),
+  needRole: roleLabel(assignment.need.role),
+})))
+const selectedOrganizationNode = ref<OrganizationGraphNode>()
+watch(primaryWorkID, () => {
+  selectedOrganizationNode.value = undefined
+})
+const selectedOrganizationNodeID = computed(() => selectedOrganizationNode.value?.id ?? "company")
+const displayedOrganizationNode = computed<OrganizationGraphNode>(() => selectedOrganizationNode.value ?? {
+  id: "company",
+  kind: "company",
+  title: snapshot.value.company.name,
+  employeeCount: organizationAgents.value.filter(agent => agent.employment === "employee").length,
+  temporaryCount: organizationAgents.value.filter(agent => agent.employment === "temporary").length,
+  departmentCount: new Set(organizationAgents.value.flatMap(agent => agent.department ? [agent.department] : [])).size,
+})
 
 function ownedWork(agentID: string) {
   return snapshot.value.work
@@ -210,7 +258,7 @@ async function retry() {
           </div>
         </div>
 
-        <template v-else-if="employees.length || temporaries.length || projectedAssignments.length">
+        <template v-else-if="organizationAgents.length">
           <p v-if="organizationError" class="ac-resource-notice" role="alert">
             责任分配证据暂时不可用，已保留可验证的成员活动信息。
           </p>
@@ -221,13 +269,26 @@ async function retry() {
             当前工作的责任分配投影不可用，不会显示为零分配。
           </p>
 
-          <template
-            v-for="group in [
-              { key: 'employees', title: '正式员工', members: employees },
-              { key: 'temporaries', title: '本工作临时角色', members: temporaries },
-            ]"
-            :key="group.key"
-          >
+          <div class="ac-organization-workspace">
+            <OrganizationCanvas
+              :company-name="snapshot.company.name"
+              :agents="organizationAgents"
+              :assignments="organizationAssignments"
+              :selected-id="selectedOrganizationNodeID"
+              @select="selectedOrganizationNode = $event"
+            />
+            <OrganizationFactsPanel :node="displayedOrganizationNode" :project-id="primaryWorkID" />
+          </div>
+
+          <details class="ac-team-directory">
+            <summary>查看成员卡片与责任证据（{{ organizationAgents.length }}）</summary>
+            <template
+              v-for="group in [
+                { key: 'employees', title: '正式员工', members: employees },
+                { key: 'temporaries', title: '本工作临时角色', members: temporaries },
+              ]"
+              :key="group.key"
+            >
             <section v-if="group.members.length" class="ac-team-section" :aria-label="group.title">
               <h2 class="ac-team-section__title">
                 {{ group.title }}
@@ -351,9 +412,9 @@ async function retry() {
                 </article>
               </div>
             </section>
-          </template>
+            </template>
 
-          <section v-if="projectedAssignments.length" class="ac-team-section" aria-label="当前工作的临时成员">
+            <section v-if="projectedAssignments.length" class="ac-team-section" aria-label="当前工作的临时成员">
             <h2 class="ac-team-section__title">
               当前工作的临时成员
               <span class="ac-team-section__count">{{ projectedAssignments.length }}</span>
@@ -426,7 +487,8 @@ async function retry() {
                 </div>
               </article>
             </div>
-          </section>
+            </section>
+          </details>
 
           <details
             v-if="historicalTemporaries.length || historicalProjectedAssignments.length"

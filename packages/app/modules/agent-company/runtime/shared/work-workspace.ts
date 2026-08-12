@@ -4,10 +4,11 @@ import type { CompanyProjectDetail } from "./company-contract"
 // 窄屏列优先级切换，以及切换项目时防止上一项目上下文残留。
 // 保持纯函数、无副作用，可脱离 Vue 单测。
 
-export type ContextPanelKind = "goal_brief" | "approval" | "artifact" | "agent" | "thread" | "diagnostics"
+export type ContextPanelKind = "task" | "goal_brief" | "approval" | "artifact" | "agent" | "thread" | "diagnostics"
 
 // 右侧上下文面板固定展示顺序（Goal Brief、Approval、Artifact、Agent、Thread、Diagnostics）。
 export const contextPanelOrder: ContextPanelKind[] = [
+  "task",
   "goal_brief",
   "approval",
   "artifact",
@@ -17,6 +18,7 @@ export const contextPanelOrder: ContextPanelKind[] = [
 ]
 
 export const contextPanelLabels: Record<ContextPanelKind, string> = {
+  task: "任务",
   goal_brief: "目标",
   approval: "审批",
   artifact: "成果",
@@ -27,6 +29,7 @@ export const contextPanelLabels: Record<ContextPanelKind, string> = {
 
 // 派生右侧面板可用性只依据真实数据存在与否，空数据不制造面板。
 export type ContextPanelInput = {
+  tasks: number
   hasGoalBrief: boolean
   gates: number
   artifacts: number
@@ -37,6 +40,7 @@ export type ContextPanelInput = {
 
 export function availableContextPanels(input: ContextPanelInput): ContextPanelKind[] {
   return contextPanelOrder.filter((kind) => {
+    if (kind === "task") return input.tasks > 0
     if (kind === "goal_brief") return input.hasGoalBrief
     if (kind === "approval") return input.gates > 0
     if (kind === "artifact") return input.artifacts > 0
@@ -76,6 +80,7 @@ export type WorkspaceViewState = {
   activePanel?: ContextPanelKind
   selectedArtifactID?: string
   selectedAgentID?: string
+  selectedWorkItemID?: string
   mainScrollTop?: number
   panelScrollTop?: Partial<Record<ContextPanelKind, number>>
 }
@@ -94,6 +99,7 @@ export function viewStateFor(
 type ReconcileInput = {
   artifacts: CompanyProjectDetail["artifacts"]
   agents: { id: string }[]
+  workItems: { id: string }[]
 }
 
 // 依据当前项目真实数据校正视图状态：丢弃在本项目不存在的选中制品/成员与不可用面板，
@@ -109,11 +115,15 @@ export function reconcileViewState(
   const agentValid = state.selectedAgentID
     ? detail.agents.some((agent) => agent.id === state.selectedAgentID)
     : false
+  const workItemValid = state.selectedWorkItemID
+    ? detail.workItems.some((item) => item.id === state.selectedWorkItemID)
+    : false
   return {
     column: state.column,
     activePanel: resolveActivePanel(state.activePanel, available),
     selectedArtifactID: artifactValid ? state.selectedArtifactID : undefined,
     selectedAgentID: agentValid ? state.selectedAgentID : undefined,
+    selectedWorkItemID: workItemValid ? state.selectedWorkItemID : undefined,
     mainScrollTop: state.mainScrollTop,
     panelScrollTop: state.panelScrollTop,
   }

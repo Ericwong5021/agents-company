@@ -15,6 +15,7 @@ import {
 // WORK-02 — 右侧上下文面板派生、活动面板解析、窄屏列切换与切换项目防残留的纯逻辑。
 
 const fullInput = {
+  tasks: 5,
   hasGoalBrief: true,
   gates: 2,
   artifacts: 3,
@@ -31,6 +32,7 @@ describe("availableContextPanels", () => {
   test("空数据不制造面板", () => {
     expect(
       availableContextPanels({
+        tasks: 0,
         hasGoalBrief: false,
         gates: 0,
         artifacts: 0,
@@ -43,6 +45,7 @@ describe("availableContextPanels", () => {
 
   test("部分数据只暴露有数据的面板", () => {
     expect(availableContextPanels({ ...fullInput, gates: 0, threadAvailable: false })).toEqual([
+      "task",
       "goal_brief",
       "artifact",
       "agent",
@@ -102,15 +105,18 @@ describe("viewStateFor / reconcileViewState", () => {
       activePanel: "approval",
       selectedArtifactID: "old-artifact",
       selectedAgentID: "old-agent",
+      selectedWorkItemID: "old-work-item",
     }
     const reconciled = reconcileViewState(stale, ["goal_brief", "artifact"], {
       artifacts: [{ id: "new-artifact", title: "t", kind: "file", createdAt: 0 }],
       agents: [{ id: "new-agent" }],
+      workItems: [{ id: "new-work-item" }],
     })
     expect(reconciled.column).toBe("context")
     expect(reconciled.activePanel).toBe("goal_brief")
     expect(reconciled.selectedArtifactID).toBeUndefined()
     expect(reconciled.selectedAgentID).toBeUndefined()
+    expect(reconciled.selectedWorkItemID).toBeUndefined()
   })
 
   test("校正保留仍有效的选中项", () => {
@@ -119,13 +125,16 @@ describe("viewStateFor / reconcileViewState", () => {
       activePanel: "artifact",
       selectedArtifactID: "a-1",
       selectedAgentID: "g-1",
+      selectedWorkItemID: "w-1",
     }
     const reconciled = reconcileViewState(state, ["artifact", "agent"], {
       artifacts: [{ id: "a-1", title: "t", kind: "file", createdAt: 0 }],
       agents: [{ id: "g-1" }],
+      workItems: [{ id: "w-1" }],
     })
     expect(reconciled.selectedArtifactID).toBe("a-1")
     expect(reconciled.selectedAgentID).toBe("g-1")
+    expect(reconciled.selectedWorkItemID).toBe("w-1")
     expect(reconciled.activePanel).toBe("artifact")
   })
 })
