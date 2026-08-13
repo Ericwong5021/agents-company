@@ -144,6 +144,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await capture(page, "delivery")
 
   await open(page, "/team")
+  await page.locator("summary").filter({ hasText: "查看成员卡片与责任证据" }).click()
   await expect(page.getByRole("heading", { level: 2, name: "小岚" })).toBeVisible()
   await expect(page.getByRole("heading", { level: 2, name: "阿衡" })).toBeVisible()
   await capture(page, "team")
