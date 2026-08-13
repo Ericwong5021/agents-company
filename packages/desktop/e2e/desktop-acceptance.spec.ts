@@ -183,10 +183,10 @@ test("closes the native Desktop R0 gate through shared WebUI and restart recover
   expect((await companyBeforeRestart.json()) as unknown).toMatchObject({ company: { id: "cmp_local" } })
 
   await desktopPage.goto(`${webUIURL}/inbox`)
-  await expect(desktopPage.getByRole("heading", { level: 2, name: "团队需要你的决定" })).toBeVisible()
+  await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   await expect(desktopPage.getByRole("group", { name: "选择开始方式" }).getByRole("button")).toHaveCount(2)
   await desktopPage.getByRole("button", { name: "跳过引导，直接进入空工作区" }).click()
-  await expect(desktopPage.getByRole("heading", { level: 2, name: "团队需要你的决定" })).toBeVisible()
+  await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   const draft = desktopPage.getByLabel("描述你希望团队交付的结果")
   await draft.fill(goalDraft)
   await expect(desktopPage.getByRole("link", { name: "先连接模型服务" })).toHaveAttribute("href", "/settings")
