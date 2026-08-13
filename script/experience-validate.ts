@@ -803,8 +803,8 @@ check(
 )
 check(
   [
-    '{ from: "/company", to: "/inbox" }',
-    '{ from: "/company/board", to: "/work" }',
+    '{ from: "/company", to: "/company" }',
+    '{ from: "/company/board", to: "/company/board" }',
     '{ from: "/company/employees", to: "/team" }',
     '{ from: "/company/projects/legacy", to: "/work/legacy" }',
     '{ from: "/chat", to: "/work" }',
