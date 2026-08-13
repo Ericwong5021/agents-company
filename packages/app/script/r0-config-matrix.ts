@@ -271,7 +271,7 @@ async function runScenario(
         })
 
         const page = await context.newPage()
-        const loginResponse = await context.request.post("/api/auth/local", { headers: { origin: webuiURL } })
+        const loginResponse = await context.request.post(`${webuiURL}/api/auth/local`, { headers: { origin: webuiURL } })
         assert.equal(loginResponse.ok(), true)
         await page.goto("/inbox")
         await expect(page).toHaveURL((url) => url.pathname === "/inbox")
