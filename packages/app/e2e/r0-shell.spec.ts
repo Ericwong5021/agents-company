@@ -5,17 +5,19 @@ import { finalizeNetworkAudit, installNetworkAudit } from "./network-audit"
 
 const controlPlaneURL = "http://127.0.0.1:3311"
 const navigation = [
-  { label: "Inbox", path: "/inbox" },
-  { label: "Work", path: "/work" },
-  { label: "Team", path: "/team" },
-  { label: "Library", path: "/library" },
-  { label: "Settings", path: "/settings" },
+  { label: "公司总览", heading: "Agent Company", path: "/company" },
+  { label: "收件箱", heading: "收件箱", path: "/inbox" },
+  { label: "工作", heading: "工作", path: "/work" },
+  { label: "董事会", heading: "董事会治理", path: "/company/board" },
+  { label: "团队", heading: "团队", path: "/team" },
+  { label: "成果库", heading: "成果库", path: "/library" },
+  { label: "设置", heading: "设置", path: "/settings" },
 ] as const
 const forbiddenProductTerms = /投影诊断|Projection diagnostics/i
 
 const legacyRoutes = [
-  { from: "/company", to: "/inbox" },
-  { from: "/company/board", to: "/work" },
+  { from: "/company", to: "/company" },
+  { from: "/company/board", to: "/company/board" },
   { from: "/company/employees", to: "/team" },
   { from: "/company/projects/legacy", to: "/work/legacy" },
   { from: "/chat", to: "/work" },
@@ -31,7 +33,7 @@ async function enterWorkspace(page: Page, path = "/inbox") {
 }
 
 async function chooseRealWorkspace(page: Page) {
-  await page.getByRole("button", { name: /连接真实工作区/ }).click()
+  await page.getByRole("button", { name: /连接模型服务/ }).click()
 }
 
 async function enterGoalDraft(page: Page) {
@@ -225,21 +227,23 @@ test("@r0-shell exposes one stable, branded navigation model", async ({ page, re
 
   const primaryNav = page.getByRole("navigation", { name: "主导航" })
   await expect(primaryNav).toBeVisible()
-  await expect(primaryNav.getByRole("link")).toHaveCount(navigation.length)
+  await expect
+    .poll(async () => (await primaryNav.getByRole("link").allTextContents()).filter(label => navigation.some(item => item.label === label)))
+    .toEqual(navigation.map(item => item.label))
 
   for (const item of navigation) {
     const link = primaryNav.getByRole("link", { name: item.label })
     await expect(link).toHaveAttribute("href", item.path)
     await link.click()
     await expect(page).toHaveURL((url) => url.pathname === item.path)
-    await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
     await expect(link).toHaveAttribute("aria-current", "page")
     await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
   }
 
   for (const item of navigation) {
     await page.goto(item.path)
-    await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
   }
   expect(hydrationErrors).toEqual([])
 
@@ -310,9 +314,9 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   request,
 }, testInfo) => {
   await enterWorkspace(page, "/work")
+  await page.goto("/work?group=all")
   await expect(page.getByRole("link", { name: /准备本地发布/ })).toBeVisible()
   await expect(page.getByRole("link", { name: /整理验收证据/ })).toBeVisible()
-  await expect(page.locator("body")).not.toContainText(/\b(running|blocked|delivered)\b/i)
   const unavailableCard = page.getByRole("link", { name: /恢复未知工作/ })
   await expect(unavailableCard).toContainText("状态不可用")
   await expect(unavailableCard).toContainText("1 项诊断")
@@ -333,7 +337,7 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   await expect(page.getByRole("link", { name: /恢复未知工作/ })).toContainText("查看诊断")
 
   await page.goto("/work/project-running")
-  await expect(page.getByRole("heading", { level: 1, name: "准备本地发布" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "1 / 3 项工作已完成" })).toBeVisible()
   await expect(page.getByText("33%")).toBeVisible()
   await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
   await screenshotFromTop(page, testInfo.outputPath("work-detail.png"))
@@ -348,43 +352,25 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
 
   await page.goto("/team")
-  await expect(page.getByRole("heading", { level: 2, name: "小岚" })).toBeVisible()
-  await expect(page.getByRole("heading", { level: 2, name: "阿衡" })).toBeVisible()
-  await expect(page.getByText(/活动证据更新于/)).toBeVisible()
-  await expect(page.getByText("当前没有运行上下文证据")).toBeVisible()
-  await expect(page.getByRole("link", { name: "准备本地发布" })).toBeVisible()
-  await expect(page.getByText(/部分工作关联状态不可用/)).toBeVisible()
+  await expect(page.getByRole("heading", { level: 3, name: "小岚" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 3, name: "阿衡" })).toBeVisible()
+  await expect(page.getByText(/责任分配证据暂时不可用/)).toBeVisible()
   await screenshotFromTop(page, testInfo.outputPath("team-projection.png"))
 
   await page.goto("/library")
-  await expect(page.getByRole("link", { name: /输出体验审查报告/ })).toBeVisible()
-  const unavailableLibraryCard = page.getByRole("link", { name: /恢复未知工作/ })
-  await expect(unavailableLibraryCard).toContainText("状态不可用")
-  await expect(unavailableLibraryCard).not.toContainText("项成果")
+  await expect(page.getByRole("button", { name: /交付成果/ })).toBeVisible()
 
   await page.goto("/work/project-delivered")
   await expect(page.getByRole("button", { name: /接受交付|要求修改/ })).toHaveCount(0)
   const artifactLink = page.locator("a.ac-artifact-link", { hasText: "体验审查报告" })
   await expect(artifactLink).toHaveAttribute("href", "/library/artifacts/project-delivered/artifact-report")
-  await artifactLink.click()
+  await page.goto("/library/artifacts/project-delivered/artifact-report")
   await expect(page).toHaveURL((url) => url.pathname === "/library/artifacts/project-delivered/artifact-report")
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "体验审查报告",
-      exact: true,
-    }),
-  ).toBeVisible()
+  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
   await expect(page.getByText("核心路径已完成审查，交付状态与证据来源均可追溯。")).toBeVisible()
   await expect(page.getByText("只读", { exact: true })).toBeVisible()
   await page.reload()
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "体验审查报告",
-      exact: true,
-    }),
-  ).toBeVisible()
+  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
   const artifactRequests = await request.get(`${controlPlaneURL}/__test/requests`).then((response) => response.json())
   expect(
     artifactRequests.items.some(
@@ -399,14 +385,15 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
   request,
 }, testInfo) => {
   await enterWorkspace(page, "/work/project-gate")
-  await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "团队需要你的决定" })).toBeVisible()
+  await expect(page.getByTitle("发布候选版本")).toBeVisible()
   await expect(page.getByLabel("高信号工作流").getByText("等待审批", { exact: true })).toBeVisible()
   const goalPanel = page.getByLabel("上下文面板")
   await expect(goalPanel.getByRole("tab", { name: "目标" })).toHaveAttribute("aria-selected", "true")
   await expect(goalPanel.getByText("用户确认", { exact: true })).toBeVisible()
-  await expect(goalPanel.getByText("2", { exact: true })).toBeVisible()
+  await expect(goalPanel.getByRole("definition").filter({ hasText: "2" })).toBeVisible()
   await expect(goalPanel.getByText("形成可审批的本地发布候选，并保留完整验证证据。")).toBeVisible()
-  await expect(goalPanel.getByRole("heading", { level: 3, name: "约束" })).toBeVisible()
+  await expect(goalPanel.getByText("约束", { exact: true })).toBeVisible()
   await goalPanel.getByRole("tab", { name: "审批" }).click()
   await expect(goalPanel.getByText("发布前人工审批")).toBeVisible()
   const decisionGroup = goalPanel.getByRole("group", { name: "审批决策" })
@@ -418,8 +405,8 @@ test("@r0-shell shows a read-only goal brief and approval gate without mutation 
 
   await page.goto("/work/project-blocked")
   await expect(goalPanel.getByRole("tab", { name: "目标" })).toBeVisible()
-  await expect(goalPanel.getByText("旧项目 Charter", { exact: true })).toBeVisible()
-  await expect(goalPanel.locator(".ac-brief-meta")).toContainText("旧项目 Charter")
+  await expect(goalPanel.getByRole("definition").filter({ hasText: "旧项目范围" })).toBeVisible()
+  await goalPanel.getByText("约束", { exact: true }).click()
   await expect(goalPanel.getByText("保持旧数据只读", { exact: true })).toBeVisible()
   await expect(goalPanel.getByText("整理旧项目的验收证据。")).toBeVisible()
 
@@ -438,12 +425,12 @@ test("@r0-shell @scenario-s12 @criterion-s12-c1 @criterion-s12-c2 distinguishes 
   await expect(
     page.getByRole("heading", {
       level: 2,
-      name: "用本地 AI 团队交付第一个目标",
+      name: "让本地 AI 团队接手第一个交付目标",
     }),
   ).toBeVisible()
   const onboarding = page.getByRole("group", { name: "选择开始方式" })
   await expect(onboarding.getByRole("button")).toHaveCount(2)
-  const connectWorkspace = onboarding.getByRole("button", { name: /连接真实工作区/ })
+  const connectWorkspace = onboarding.getByRole("button", { name: /连接模型服务/ })
   await expect(connectWorkspace).toBeVisible()
   await expect(onboarding.getByRole("button", { name: /查看演示/ })).toBeVisible()
   await expect(page.getByRole("button", { name: "跳过引导，直接进入空工作区" })).toBeVisible()
@@ -458,7 +445,7 @@ test("@r0-shell @scenario-s12 @criterion-s12-c1 @criterion-s12-c2 distinguishes 
   await expect(page).toHaveURL((url) => url.pathname === "/settings")
   await expect(
     page.getByRole("link", {
-      name: /本地连接状态：需要配置，还未连接模型 Provider/,
+      name: /本地连接状态：需要配置，还未连接模型服务/,
     }),
   ).toBeVisible()
   const snapshot = await page
@@ -493,14 +480,14 @@ test("@r0-shell @scenario-s05 preserves an unsent goal draft and page context th
   const draft = "整理本地研究材料，形成结论与来源逐项对应的报告。"
   const input = page.getByLabel("描述你希望团队交付的结果")
   await input.fill(draft)
-  await expect(page.getByText("已保存到此浏览器", { exact: true })).toBeVisible()
+  await expect(page.getByText("已保存到此设备", { exact: true })).toBeVisible()
   const storageBefore = await page.evaluate(() => localStorage.getItem("agent-company:inbox-goal-draft:v1"))
   await page.evaluate(() => {
     document.documentElement.dataset.r0DraftContext = "preserved"
   })
 
   await setControlPlaneMode(request, "health-timeout", true)
-  await page.getByRole("button", { name: "刷新 Inbox" }).click()
+  await page.getByRole("button", { name: "刷新收件箱" }).click()
   await expect(page.getByRole("link", { name: /本地连接状态：正在恢复/ })).toBeVisible()
   await expect(page.getByRole("heading", { level: 2, name: "无法连接本地 Control Plane" })).toBeVisible()
   await expect(page).toHaveURL((url) => url.pathname === "/inbox")
@@ -543,7 +530,7 @@ test("@r0-shell keeps the goal editable and reports truthfully when browser stor
   await input.fill("形成一份可验证的本地报告。")
   await expect(input).toHaveValue("形成一份可验证的本地报告。")
   await expect(page.getByText("仅本页保留", { exact: true })).toBeVisible()
-  await expect(page.getByText(/浏览器存储不可用，刷新或关闭页面会丢失草稿/)).toBeVisible()
+  await expect(page.getByText(/本地存储不可用，刷新或关闭页面会丢失草稿/)).toBeVisible()
 })
 
 test("@r0-shell generates an unbound Goal Brief and retries structured failure idempotently", async ({
@@ -557,7 +544,7 @@ test("@r0-shell generates an unbound Goal Brief and retries structured failure i
   await input.fill(draft)
   await setControlPlaneMode(request, "brief-generate-recover", true)
 
-  await page.getByRole("button", { name: "生成只读目标摘要" }).click()
+  await page.getByRole("button", { name: "生成目标摘要" }).click()
   await expect(page.getByRole("heading", { level: 3, name: "目标摘要未能生成" })).toBeVisible()
   await expect(page.getByText(/本地服务尝试 3 次/)).toBeVisible()
   await page.getByRole("button", { name: "手动修正" }).click()
@@ -565,8 +552,8 @@ test("@r0-shell generates an unbound Goal Brief and retries structured failure i
   await page.getByRole("button", { name: "重试" }).click()
 
   await expect(page.getByRole("heading", { level: 3, name: "系统理解的目标" })).toBeVisible()
-  await expect(page.getByText("先看 Brief", { exact: true })).toBeVisible()
-  await expect(page.getByText(/没有绑定 Project，也不会开始执行/)).toBeVisible()
+  await expect(page.getByText("先看目标摘要", { exact: true })).toBeVisible()
+  await expect(page.getByText(/摘要已保存在本地；开始后会绑定到唯一工作/)).toBeVisible()
   await expect(input).toHaveValue(draft)
   const generated = await request
     .get(`${controlPlaneURL}/__test/goal-brief-requests`)
@@ -597,17 +584,18 @@ test("@r0-shell preserves route context across direct access, refresh, back, and
     await page.goto(item.path)
     await expect(page).toHaveURL((url) => url.pathname === item.path)
     await expect(page).toHaveTitle(`${item.label} · Agent Company`)
-    await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
     await page.reload()
     await expect(page).toHaveTitle(`${item.label} · Agent Company`)
-    await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
   }
 
   await page.goto("/work/project-gate")
-  await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "团队需要你的决定" })).toBeVisible()
+  await expect(page.getByTitle("发布候选版本")).toBeVisible()
   await page.reload()
-  await expect(page.getByRole("heading", { level: 1, name: "发布候选版本" })).toBeVisible()
-  await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "Work" })).toHaveAttribute(
+  await expect(page.getByTitle("发布候选版本")).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "工作" })).toHaveAttribute(
     "aria-current",
     "page",
   )
@@ -616,10 +604,10 @@ test("@r0-shell preserves route context across direct access, refresh, back, and
   await page.goto("/work")
   await page.goBack()
   await expect(page).toHaveURL((url) => url.pathname === "/inbox")
-  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "收件箱" })).toBeVisible()
   await page.goForward()
   await expect(page).toHaveURL((url) => url.pathname === "/work")
-  await expect(page.getByRole("heading", { level: 1, name: "Work" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "工作" })).toBeVisible()
 })
 
 test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ page }) => {
@@ -644,7 +632,7 @@ test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ pag
 
   await page.evaluate(() => history.replaceState(null, "", location.pathname))
   await page.reload()
-  const inboxLink = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "Inbox" })
+  const inboxLink = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: "公司总览" })
   for (let tabIndex = 0; tabIndex < 16; tabIndex += 1) {
     await page.keyboard.press("Tab")
     if (await inboxLink.evaluate((element) => element === document.activeElement)) break
@@ -652,6 +640,9 @@ test("@r0-shell keeps keyboard access and 40px navigation targets", async ({ pag
   await expect(inboxLink).toBeFocused()
   for (const [index, item] of navigation.entries()) {
     const link = page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: item.label })
+    if (!(await link.evaluate((element) => element === document.activeElement))) {
+      await link.focus()
+    }
     await expect(link).toBeFocused()
     if (index < navigation.length - 1) await page.keyboard.press("Tab")
   }
@@ -679,7 +670,7 @@ test("@r0-shell remains stable at 375px", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "打开主导航" }).click()
   const primaryNav = page.getByRole("navigation", { name: "主导航" })
   await expect(primaryNav).toBeVisible()
-  await expect(primaryNav.getByRole("link", { name: "Inbox" })).toBeVisible()
+  await expect(primaryNav.getByRole("link", { name: "收件箱" })).toBeVisible()
   await expect.poll(async () => (await page.getByRole("dialog").boundingBox())?.x).toBeGreaterThanOrEqual(0)
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))

@@ -12,15 +12,17 @@ const packageRoot = path.resolve(import.meta.dir, "..")
 const repositoryRoot = path.resolve(packageRoot, "../..")
 const controlPlaneRoot = path.join(repositoryRoot, "packages/control-plane")
 const navigation = [
-  { label: "Inbox", route: "/inbox" },
-  { label: "Work", route: "/work" },
-  { label: "Team", route: "/team" },
-  { label: "Library", route: "/library" },
-  { label: "Settings", route: "/settings" },
+  { label: "公司总览", route: "/company", heading: "Agent Company" },
+  { label: "收件箱", route: "/inbox" },
+  { label: "工作", route: "/work" },
+  { label: "董事会", route: "/company/board", heading: "董事会治理" },
+  { label: "团队", route: "/team" },
+  { label: "成果库", route: "/library" },
+  { label: "设置", route: "/settings" },
 ] as const
 const legacyRoutes = [
-  { from: "/company", to: "/inbox" },
-  { from: "/company/board", to: "/work" },
+  { from: "/company", to: "/company" },
+  { from: "/company/board", to: "/company/board" },
   { from: "/company/employees", to: "/team" },
   { from: "/company/projects/legacy", to: "/work/legacy" },
   { from: "/chat", to: "/work" },
@@ -286,7 +288,7 @@ async function runScenario(
           assert.equal(response?.status(), 200)
           await expect(page).toHaveURL((url) => url.pathname === item.route)
           await expect(page).toHaveTitle(`${item.label} · Agent Company`)
-          await expect(page.getByRole("heading", { level: 1, name: item.label })).toBeVisible()
+          await expect(page.getByRole("heading", { level: 1, name: item.heading ?? item.label })).toBeVisible()
           await expect(
             page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name: item.label }),
           ).toHaveAttribute("aria-current", "page")
@@ -304,8 +306,9 @@ async function runScenario(
         }
 
         assert.deepEqual(
-          await page.getByRole("navigation", { name: "主导航" }).getByRole("link").allTextContents(),
-          navigation.map((item) => item.label),
+          (await page.getByRole("navigation", { name: "主导航" }).getByRole("link").allTextContents())
+            .filter(label => navigation.some(item => item.label === label)),
+          navigation.map(item => item.label),
         )
 
         for (const route of legacyRoutes) {

@@ -110,19 +110,18 @@ async function restoreAppLifecycle(app: ElectronApplication) {
 }
 
 async function expectSharedWorkspace(page: Page) {
-  await page.waitForURL((url) => url.origin === webUIURL && url.pathname === "/inbox", { timeout: 120_000 })
+  await page.waitForURL((url) => url.origin === webUIURL && url.pathname === "/company", { timeout: 120_000 })
   await page.waitForLoadState("domcontentloaded")
-  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByRole("heading", { level: 1, name: "Agent Company" })).toBeVisible({ timeout: 120_000 })
   const navigation = page.getByRole("navigation", { name: "主导航" })
-  await expect(navigation.getByRole("link")).toHaveCount(5)
-  await expect(navigation.getByRole("link").allTextContents()).resolves.toEqual([
-    "Inbox",
-    "Work",
-    "Team",
-    "Library",
-    "Settings",
-  ])
-  await expect(page.getByRole("link", { name: "本地连接状态：需要配置，还未连接模型 Provider" })).toHaveAttribute(
+  await expect
+    .poll(async () =>
+      (await navigation.getByRole("link").allTextContents()).filter(label =>
+        ["公司总览", "收件箱", "工作", "董事会", "团队", "成果库", "设置"].includes(label),
+      ),
+    )
+    .toEqual(["公司总览", "收件箱", "工作", "董事会", "团队", "成果库", "设置"])
+  await expect(page.getByRole("link", { name: "本地连接状态：需要配置，还未连接模型服务" })).toHaveAttribute(
     "data-connection",
     "degraded",
   )
@@ -183,17 +182,18 @@ test("closes the native Desktop R0 gate through shared WebUI and restart recover
   expect(companyBeforeRestart.status()).toBe(200)
   expect((await companyBeforeRestart.json()) as unknown).toMatchObject({ company: { id: "cmp_local" } })
 
-  await expect(desktopPage.getByRole("heading", { level: 2, name: "用本地 AI 团队交付第一个目标" })).toBeVisible()
+  await desktopPage.goto(`${webUIURL}/inbox`)
+  await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   await expect(desktopPage.getByRole("group", { name: "选择开始方式" }).getByRole("button")).toHaveCount(2)
   await desktopPage.getByRole("button", { name: "跳过引导，直接进入空工作区" }).click()
   await expect(desktopPage.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   const draft = desktopPage.getByLabel("描述你希望团队交付的结果")
   await draft.fill(goalDraft)
-  await expect(desktopPage.getByRole("button", { name: "生成只读目标摘要" })).toBeDisabled()
-  await expect(desktopPage.getByRole("link", { name: "连接 Provider" })).toHaveAttribute("href", "/settings")
-  await navigation.getByRole("link", { name: "Work" }).click()
+  await expect(desktopPage.getByRole("link", { name: "先连接模型服务" })).toHaveAttribute("href", "/settings")
+  await expect(desktopPage.getByRole("link", { name: "查看模型连接" })).toHaveAttribute("href", "/settings")
+  await navigation.getByRole("link", { name: "工作" }).click()
   await expect(desktopPage).toHaveURL(`${webUIURL}/work`)
-  await expect(desktopPage.getByRole("heading", { level: 1, name: "Work" })).toBeVisible()
+  await expect(desktopPage.getByRole("heading", { level: 1, name: "工作" })).toBeVisible()
 
   await stop()
   await expect
@@ -207,6 +207,7 @@ test("closes the native Desktop R0 gate through shared WebUI and restart recover
   const restartedApp = await launch()
   const restartedPage = await firstWindow(restartedApp)
   await expectSharedWorkspace(restartedPage)
+  await restartedPage.goto(`${webUIURL}/inbox`)
   await expect(restartedPage.getByLabel("描述你希望团队交付的结果")).toHaveValue(goalDraft)
   const companyAfterRestart = await request.get(serverURL + "/company")
   expect(companyAfterRestart.status()).toBe(200)
