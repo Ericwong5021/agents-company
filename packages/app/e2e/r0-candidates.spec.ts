@@ -138,7 +138,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   const delivery = page.locator(".ac-detail-panel", { hasText: "交付版本 1" })
   await expect(delivery).toBeVisible()
   await expect(delivery.getByRole("heading", { level: 2, name: "交付版本 1" })).toBeVisible()
-  await expect(delivery.locator("#delivery-package").getByText("1 项成果", { exact: false })).toBeVisible()
+  await expect(page.locator("#delivery-package").locator("p").filter({ hasText: "1 项成果 · 已核对" })).toBeVisible()
   await expect(delivery.locator(".ac-status-badge[data-stage]")).toHaveText("待验收")
   await expect(delivery.getByRole("link", { name: /体验审查报告/ })).toBeVisible()
   await capture(page, "delivery")
