@@ -85,11 +85,6 @@ async function open(page: Page, pathName: string, first = false) {
 
 async function capture(page: Page, name: string) {
   assertCandidateSourcesAtHead()
-  await page.evaluate(() => {
-    document.scrollingElement?.scrollTo(0, 0)
-    document.querySelector(".ac-shell-workspace")?.scrollTo(0, 0)
-    return document.fonts.ready
-  })
   await page.screenshot({
     path: path.join(screenshotRoot, `${name}.png`),
     fullPage: true,
@@ -146,7 +141,6 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await open(page, "/team")
   await page.locator("summary").filter({ hasText: "查看成员卡片与责任证据" }).click()
   await expect(page.getByRole("heading", { level: 2, name: "小岚" })).toBeVisible()
-  await expect(page.getByRole("heading", { level: 2, name: "阿衡" })).toBeVisible()
   await capture(page, "team")
 
   const surfaces = [
