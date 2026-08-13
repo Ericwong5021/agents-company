@@ -691,11 +691,11 @@ export const layer = Layer.effect(
           const companyAgent = o.companyAgentID && companyAgents
             ? await bridge.promise(companyAgents.get(o.companyAgentID))
             : undefined
-          const runtime = o.runtime ?? companyAgent?.preferred_runtime ?? (parsed.ok ? parsed.meta.defaultRuntime : undefined) ?? "pi"
+          const runtime = o.runtime ?? companyAgent?.preferred_runtime ?? (parsed.ok ? parsed.meta.defaultRuntime : undefined) ?? "codex"
           const started = await bridge.promise(
             agentRunSupervisor.start({
               agentID: o.companyAgentID ?? o.role ?? o.agentType ?? "workflow-agent",
-              runtime: runtime === "codex" || runtime === "claude-code" ? runtime : "pi",
+              runtime: runtime === "pi" || runtime === "claude-code" ? runtime : "codex",
               lifecycle: "on_demand",
               permissionMode,
               cwd: o.workspace ?? isolated?.directory ?? workspaceRoot,

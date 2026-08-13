@@ -2,7 +2,7 @@ export const meta = {
   name: "delivery-recovery",
   version: "1",
   description: "Classifies an interrupted delivery and produces a safe retry, handoff or stop decision.",
-  defaultRuntime: "pi",
+  defaultRuntime: "codex",
   capabilityPacks: ["delivery-governance@1"],
   requiredRuntimeCapabilities: ["structuredOutput", "workspaceRead"],
   phases: [{ title: "Triage" }, { title: "Recovery" }],

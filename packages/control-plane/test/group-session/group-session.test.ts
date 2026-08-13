@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { Company } from "../../src/company"
+import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import { ChannelMessageTable, BOARD_CHANNEL_ID } from "../../src/conversation/conversation.sql"
 import { ChannelMessageID } from "../../src/conversation/schema"
 import { AppRuntime } from "../../src/effect/app-runtime"
@@ -82,7 +83,7 @@ async function bootstrap(directory: string) {
   )
   ;(Global.Path as { config: string }).config = config
   testGlobalConfig = config
-  return Instance.provide({
+  const state = await Instance.provide({
     directory,
     fn: () =>
       AppRuntime.runPromise(
@@ -99,6 +100,8 @@ async function bootstrap(directory: string) {
         ),
       ),
   })
+  Database.use((db) => db.update(CompanyAgentTable).set({ preferred_runtime: "pi" }).run())
+  return state
 }
 
 async function groupSession<A, E>(directory: string, fn: (service: GroupSession.Interface) => Effect.Effect<A, E>) {

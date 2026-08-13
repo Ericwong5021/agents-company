@@ -4,6 +4,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { AgentRunEventTable, AgentRunTable } from "../../src/agent-run/agent-run.sql"
 import { Company } from "../../src/company"
+import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import { RepositoryBindingTable } from "../../src/company/company.sql"
 import { BootstrapInput, CompanyID } from "../../src/company/schema"
 import { Config } from "../../src/config"
@@ -99,7 +100,7 @@ async function bootstrap(directory: string, baseURL: string) {
   await Bun.write(path.join(testGlobalConfig, "provider-settings.json"), JSON.stringify(providerConfig(baseURL)))
   ;(Global.Path as { config: string }).config = testGlobalConfig
   await AppRuntime.runPromise(Config.Service.use((config) => config.invalidate(true)))
-  return Instance.provide({
+  const state = await Instance.provide({
     directory,
     fn: () =>
       AppRuntime.runPromise(
@@ -116,6 +117,8 @@ async function bootstrap(directory: string, baseURL: string) {
         ),
       ),
   })
+  Database.use((db) => db.update(CompanyAgentTable).set({ preferred_runtime: "pi" }).run())
+  return state
 }
 
 async function start(directory: string, runID: (typeof ConversationRunTable.$inferSelect)["id"]) {

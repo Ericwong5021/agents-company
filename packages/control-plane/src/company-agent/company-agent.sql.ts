@@ -16,7 +16,7 @@ export const CompanyAgentTable = sqliteTable(
     description: text(),
     system_prompt: text(),
     model: text(),
-    preferred_runtime: text().notNull().default("pi"),
+    preferred_runtime: text().notNull().default("codex"),
     color: text(),
     icon: text(),
     org_layer: text(),

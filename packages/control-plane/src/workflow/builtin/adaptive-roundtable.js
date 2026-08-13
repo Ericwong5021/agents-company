@@ -3,7 +3,7 @@ export const meta = {
   version: "1",
   description: "Runs a dynamically sized expert roundtable and converges on a structured decision.",
   whenToUse: "Use when a decision benefits from several independent professional perspectives.",
-  defaultRuntime: "pi",
+  defaultRuntime: "codex",
   capabilityPacks: ["board-strategy@1"],
   requiredRuntimeCapabilities: ["structuredOutput"],
   phases: [{ title: "Select" }, { title: "Discuss" }, { title: "Converge" }],

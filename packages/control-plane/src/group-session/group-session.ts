@@ -484,7 +484,7 @@ function loadPublicCompanyAgent(id: CompanyAgentID): PublicCompanyAgent | undefi
     role: row.role ?? id,
     responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : [],
     model: row.model ?? undefined,
-    runtime: row.runtime === "claude-code" || row.runtime === "codex" ? row.runtime : "pi",
+    runtime: row.runtime === "claude-code" || row.runtime === "pi" ? row.runtime : "codex",
   }
 }
 
@@ -940,11 +940,11 @@ export const layer: Layer.Layer<
                   permissionMode: "read_only",
                   model:
                     turn.model ??
-                    (companyModel ? `${companyModel.providerID}/${companyModel.modelID}` : undefined),
+                    (turn.runtime === "pi" && companyModel ? `${companyModel.providerID}/${companyModel.modelID}` : undefined),
                   cwd: Instance.worktree,
                   prompt: turn.prompt,
                   capabilityPacks: [],
-                  requiredRuntimeCapabilities: ["dynamicSkills", "governanceSignals", "usageAccounting"],
+                  requiredRuntimeCapabilities: ["structuredEvents", "toolCalls", "usageAccounting", "governanceSignals"],
                   allowSignalPublishing: true,
                   systemPrompt: turn.systemPrompt,
                   groupSessionID: params.groupSessionID,

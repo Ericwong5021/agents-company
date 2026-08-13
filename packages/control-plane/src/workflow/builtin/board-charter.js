@@ -3,7 +3,7 @@ export const meta = {
   version: "1",
   description: "Turns a software product goal into an approved, bounded company charter.",
   whenToUse: "Use before planning delivery for a new product goal or a material change of direction.",
-  defaultRuntime: "pi",
+  defaultRuntime: "codex",
   capabilityPacks: ["board-strategy@1", "product-charter@1"],
   requiredRuntimeCapabilities: ["structuredOutput", "workspaceRead"],
   phases: [{ title: "Perspectives" }, { title: "Charter" }],

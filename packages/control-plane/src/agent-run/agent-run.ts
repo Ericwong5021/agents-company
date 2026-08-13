@@ -203,7 +203,7 @@ export interface Interface {
   readonly recordUsage: (input: Omit<Usage, "timeUpdated">) => Effect.Effect<Usage>
   readonly enqueue: (input: EnqueueInput) => Effect.Effect<string>
   readonly claim: (input: { agentID: string; limit?: number }) => Effect.Effect<Array<{ id: string; priority: z.infer<typeof InternalMessagePriority>; body: string }>>
-  readonly recordRuntimeHome: (input: { runID: string; path: string; credentialMode: "keychain" | "ephemeral"; state: "active" | "orphaned" | "destroyed" }) => Effect.Effect<void>
+  readonly recordRuntimeHome: (input: { runID: string; path: string; credentialMode: "keychain" | "ephemeral"; state: "active" | "orphaned" | "destroyed"; disposition?: "retain" | "destroy" }) => Effect.Effect<void>
   readonly recordSkillSnapshot: (input: { runID: string; skillID: string; version: string; checksum: string; sourcePath: string; snapshotPath: string; activationReason: string }) => Effect.Effect<void>
 }
 
@@ -469,7 +469,7 @@ export const layer = Layer.effect(
       )
     })
 
-    const recordRuntimeHome = Effect.fn("AgentRun.recordRuntimeHome")(function* (input: { runID: string; path: string; credentialMode: "keychain" | "ephemeral"; state: "active" | "orphaned" | "destroyed" }) {
+    const recordRuntimeHome = Effect.fn("AgentRun.recordRuntimeHome")(function* (input: { runID: string; path: string; credentialMode: "keychain" | "ephemeral"; state: "active" | "orphaned" | "destroyed"; disposition?: "retain" | "destroy" }) {
       const now = Date.now()
       yield* Effect.sync(() =>
         Database.use((db) =>
@@ -481,10 +481,20 @@ export const layer = Layer.effect(
               path: input.path,
               state: input.state,
               credential_mode: input.credentialMode,
+              disposition: input.disposition ?? null,
               time_created: now,
               time_updated: now,
             })
-            .onConflictDoUpdate({ target: RuntimeHomeTable.agent_run_id, set: { path: input.path, state: input.state, credential_mode: input.credentialMode, time_updated: now } })
+            .onConflictDoUpdate({
+              target: RuntimeHomeTable.agent_run_id,
+              set: {
+                path: input.path,
+                state: input.state,
+                credential_mode: input.credentialMode,
+                ...(input.disposition ? { disposition: input.disposition } : {}),
+                time_updated: now,
+              },
+            })
             .run(),
         ),
       )

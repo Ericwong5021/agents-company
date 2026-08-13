@@ -54,7 +54,7 @@ const adapter = (
 })
 
 describe("RuntimeResolver", () => {
-  test("selects explicit, workflow, agent preference, then Pi in that order", async () => {
+  test("selects explicit, workflow, agent preference, then Codex in that order", async () => {
     const resolver = new RuntimeResolver(
       new RuntimeRegistry([adapter("pi"), adapter("codex"), adapter("claude-code")]),
     )
@@ -62,7 +62,7 @@ describe("RuntimeResolver", () => {
     expect((await resolver.resolve({ explicitRuntime: "codex", workflowRuntime: "claude-code", agentRuntime: "pi" })).runtime).toBe("codex")
     expect((await resolver.resolve({ workflowRuntime: "claude-code", agentRuntime: "codex" })).runtime).toBe("claude-code")
     expect((await resolver.resolve({ agentRuntime: "codex" })).runtime).toBe("codex")
-    expect((await resolver.resolve({})).runtime).toBe("pi")
+    expect((await resolver.resolve({})).runtime).toBe("codex")
   })
 
   test("does not silently downgrade an unavailable explicit runtime", async () => {
@@ -77,11 +77,11 @@ describe("RuntimeResolver", () => {
 
   test("rejects a runtime missing a required capability before start", async () => {
     const resolver = new RuntimeResolver(
-      new RuntimeRegistry([adapter("pi", { capabilities: { workspaceWrite: false } })]),
+      new RuntimeRegistry([adapter("codex", { capabilities: { workspaceWrite: false } })]),
     )
 
     await expect(resolver.resolve({ requiredCapabilities: ["workspaceWrite"] })).rejects.toThrow(
-      "Runtime pi does not support required capabilities: workspaceWrite",
+      "Runtime codex does not support required capabilities: workspaceWrite",
     )
   })
 

@@ -1,11 +1,13 @@
 # Agent Company 产品 PRD
 
 > 状态：当前 / 首次公开版本基线
-> 版本：0.4
-> 更新日期：2026-07-26
+> 版本：0.5
+> 更新日期：2026-08-13
 > 上位文档：[产品宪法](product-design/PRODUCT-CONSTITUTION.md)
 > 当前排期：[体验重构计划](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)（R0-R4）
 > 架构路径：[implementation-plan.md](product-design/implementation-plan.md)（M0-M6）
+
+> 0.5 变更说明：全体 Agent 的默认 Runtime 统一为 Codex。默认董事会成员、动态招聘、内置 Workflow 和未显式覆盖的 Agent Run 均继承该默认值；显式选择 Pi 或 Claude Code 仍然有效，能力不兼容时必须在启动前失败，不得静默切换 Runtime。
 
 > 0.4 变更说明：吸收 2026-07-25 生效的体验重构范围决定，消除本文与下位计划在**目标用户**（2.1）、**版本范围与 Life 层排序**（4.1）、**一级导航**（5.1）三处的冲突。本文继续定义首次公开版本的完整验收目标；体验重构计划决定这些目标按 R0-R4 的哪一段交付。
 
@@ -276,6 +278,8 @@ Ambient 行为可以形成关系变化、人格经历、企业文化理解、改
 | LCP-07 | 异常退出后恢复公司、项目、Thread、Gate、Agent Run 和受管资源状态 |
 | LCP-08 | 支持版本迁移、备份、导出和恢复 |
 | LCP-09 | 当前本地单用户阶段不认证用户；非回环监听不属于当前产品主路径，未来开放前必须补充认证与威胁模型 |
+| LCP-10 | 全体 Agent 默认使用 Codex；默认董事会成员、动态招聘、内置 Workflow 和任何未显式指定 Runtime 的执行均解析为 Codex |
+| LCP-11 | Agent 或受治理流程可以显式选择 Pi 或 Claude Code；显式选择优先于 Codex 默认值，所选 Runtime 不满足能力、生命周期、模型、权限或工作区要求时必须在启动前失败，不得静默改用其他 Runtime |
 
 ### 7.2 IM 与 Thread
 
@@ -446,7 +450,7 @@ Ambient 行为可以形成关系变化、人格经历、企业文化理解、改
 
 ### 9.2 Agent
 
-`id, lifecycle(candidate|employee|archived), role, department, capabilities, reputation, homePath`
+`id, lifecycle(candidate|employee|archived), role, department, capabilities, reputation, preferredRuntime(default: codex), homePath`
 
 人格化自述不与系统职位事实混存为一个可任意编辑字段。
 

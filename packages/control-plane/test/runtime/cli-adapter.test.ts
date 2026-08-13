@@ -20,5 +20,8 @@ describe("Codex CLI adapter", () => {
     expect(codexPrompt(spec)).toContain("You are the board director")
     expect(codexPrompt(spec)).toContain("Discuss the proposal")
     expect(cliCommand(spec).args.at(-1)).toBe(codexPrompt(spec))
+    expect(cliCommand(spec).args).toContain("approval_policy=\"never\"")
+    expect(cliCommand(spec).args).toContain("--ignore-user-config")
+    expect(cliCommand(spec).args).not.toContain("--ask-for-approval")
   })
 })

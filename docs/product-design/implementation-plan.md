@@ -2,8 +2,9 @@
 
 > 角色：本文是**架构收敛路径与里程碑退出标准**的事实源，不决定当前排期。当前执行顺序由[体验重构计划](Agent-Company-Experience-Refactor-Plan-v1.0.md)的 R0-R4 决定（自 2026-07-25 起 `In Execution`，当前批次为 R0）。
 > 状态：M0、M1 已完成；M2 控制面契约与 Board 治理面已恢复，完整群聊闭环仍由体验重构裁决；M3A/M3B 已有纵向实现；M4、M5、M6 未在本文重新裁决
-> 事实基线更新：2026-07-30
+> 事实基线更新：2026-08-13
 > 增量事实：Founder OS v1 已完成 W0–W7、E0、K0–K2 产品开发与精确提交机器 Gate；运行模式提高和真实样本仍走独立授权
+> 运行时默认决策：全体 Agent 的默认 Runtime 已统一为 Codex；Pi 与 Claude Code 只在显式选择时使用，能力不兼容不得触发静默回退
 > 视觉决策：Company Workspace 的产品信息架构保留；其 Solid/Vite 实现已由 Eve/Nuxt WebUI 迁移取代
 > 上位文档：[产品宪法](PRODUCT-CONSTITUTION.md)
 > 产品验收：[产品 PRD](../Agent%20Company%20产品%20PRD.md)
@@ -212,13 +213,13 @@ Local Control Plane（唯一权威写入者）
 
 #### M3A — Agent Execution Kernel
 
-目标：建立以 Pi 为内置默认、Codex 与 Claude Code 为可选平级实现的统一 Agent Runtime；Workflow Engine 负责公司流程，不建设第二套 CLI、数据库或产品消息系统。
+目标：建立以 Codex 为全体 Agent 默认、Pi 与 Claude Code 为可显式选择平级实现的统一 Agent Runtime；Workflow Engine 负责公司流程，不建设第二套 CLI、数据库或产品消息系统。
 
-状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通。M3A-1 的第一批（自然董事会聊天）与第三批（Pi 显式 Skill）已合并，第二批（统一 AgentTurn）部分完成——`src/agent-turn` 目前只做 prompt 组装，身份逻辑与 `session/llm.ts` 并存两份，且只被 GroupSession 调用；第四批的控制面证据已就绪，但 WebUI 契约丢弃了 skills/tools/usage 字段。Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。
+状态：实施中。统一 Runtime Port、Pi 0.80.7、能力包/工作流目录、AgentRun 事实表、受控 Pi 工具、Codex/Claude CLI 兼容适配和产品 API 已接通。M3A-1 的第一批（自然董事会聊天）与第三批（Pi 显式 Skill）已合并，第二批（统一 AgentTurn）部分完成——`src/agent-turn` 目前只做 prompt 组装，身份逻辑与 `session/llm.ts` 并存两份，且只被 GroupSession 调用；第四批的控制面证据已就绪，但 WebUI 契约丢弃了 skills/tools/usage 字段。Pi 的跨进程会话恢复、正式 Codex app-server/Claude Agent SDK 适配及跨领域真实交付 Gate 仍是关闭项。2026-08-13 起，新建 Agent、默认董事会、动态招聘、内置 Workflow 与无显式覆盖的 Agent Run 均默认解析为 Codex；历史 `pi` 记录在升级时迁移为 `codex`，已有非 Pi 显式选择保持不变。动态 Skill 仍只有 Pi 路径具备；Pi 与 Codex 均支持受治理的高信号发布。需要动态 Skill 的组合在 Codex 下必须于启动前失败，不能静默回退到 Pi。
 
 主要工作：
 
-1. 在 `packages/control-plane/src/runtime` 建立统一 `AgentRuntimePort`，固定 discover、capabilities、start/resume、deliver、interrupt、stop 和结构化事件；Pi、Codex、Claude Code 是平级实现，Pi 使用现有 Provider 凭据并作为默认选择；
+1. 在 `packages/control-plane/src/runtime` 建立统一 `AgentRuntimePort`，固定 discover、capabilities、start/resume、deliver、interrupt、stop 和结构化事件；Pi、Codex、Claude Code 是平级实现，Codex 作为所有无显式覆盖路径的默认选择；
 2. 新建持久化 `AgentRun` 状态机：queued → starting → running → interrupting/recovering → completed/failed/stopped，并将 Agent、Session、GroupSession、Workflow、Project、Work Item 和 WorktreeRun 作为显式关联；
 3. 建立 runtime × lifecycle × model × permission × workspace 能力矩阵；不支持 resume、中断、工具或写入范围的组合在启动前返回结构化错误，不允许静默降级；
 4. 将内部 `steer` 定义为经授权、可审计的当前运行中断，将 `follow_up` 定义为持久化队列投递；领取和 delivered 状态在同一事务完成，重试使用幂等键避免重复执行；
@@ -240,7 +241,7 @@ M3A 退出标准：
 
 #### M3A-1 — 自然 Agent Turn 与显式 Skill（第一、三批已合并；第二、四批未完成）
 
-目标：所有员工使用 Pi Agent 作为默认心智运行时；角色只定义身份、职责、关注范围和决策权限，不规定固定回答模式；普通话题以自然语言交流，专业话题由 Agent 在运行中显式调用获准 Skill。董事会、项目群、Direct 和后续 Ambient 共用同一个 Agent Turn 内核，不再各自拼装人格和工作流 Prompt。
+目标：所有员工使用 Codex 作为默认心智运行时；角色只定义身份、职责、关注范围和决策权限，不规定固定回答模式；普通话题以自然语言交流，专业话题由 Agent 在运行中显式调用获准 Skill。董事会、项目群、Direct 和后续 Ambient 共用同一个 Agent Turn 内核，不再各自拼装人格和工作流 Prompt。
 
 该工作预计涉及 `packages/control-plane` 与 `packages/app` 中 12–16 个实现和测试文件，属于跨越 GroupSession、AgentRun、Pi Runtime、Skill、Conversation Projection 和 WebUI 的纵向改造。四批必须按顺序实施，但每一批都能独立合并、独立验收；任何后续批次停止时，已合并系统仍保持可用。
 
@@ -334,7 +335,7 @@ Assembler    Resolver     名称与描述
 3. 身份上下文按 Identity、Responsibility、Relationship/Memory、Situation 四层组装；职责描述参与关注和判断，不包含固定输出格式；
 4. 所有资料继续通过 `ContextResolver` 先做硬权限过滤，AgentTurn 不直接扫描其他 Agent 的 private 空间；
 5. GroupSession 改为只负责 Bidding 和轮次推进，每次实际发言统一调用 AgentTurn；
-6. AgentTurn 继续通过现有 `AgentRuntimePort` 选择 Pi、Codex 或 Claude Code，Pi 保持默认，不在 GroupSession 中加入 Runtime 专属分支；
+6. AgentTurn 继续通过现有 `AgentRuntimePort` 选择 Pi、Codex 或 Claude Code，Codex 保持默认，不在 GroupSession 中加入 Runtime 专属分支；
 7. 为身份注入、私域拒绝、关系可见性、模型解析、Runtime 失败和 Thread 连续性新增测试。
 
 第二批退出标准：
@@ -343,7 +344,7 @@ Assembler    Resolver     名称与描述
 - 不同 Agent 对同一消息表现出不同关注点，差异可以追溯到身份、职责或关系事实；
 - 无权限 Agent 无法通过群聊、Prompt 注入或上下文组装读取 private 内容；
 - GroupSession 不再直接拼装角色专属系统 Prompt 或 Runtime 工具；
-- Pi 不可用时返回结构化运行失败，已持久消息与 Thread 不丢失。
+- 所选 Runtime 不可用或不兼容时返回结构化运行失败；无显式覆盖时不得从 Codex 静默切换到 Pi 或 Claude Code，且已持久消息与 Thread 不丢失。
 
 ##### 第三批 — Pi 运行时显式 Skill
 

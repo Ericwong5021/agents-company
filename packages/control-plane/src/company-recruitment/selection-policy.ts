@@ -107,7 +107,7 @@ export function compatibleRuntimeForNeed(need: CapabilityNeed) {
   const required = requirements(need)
   if (!required.permissionMode) return undefined
   if (required.tools.some((tool) => !required.availableTools.has(tool))) return undefined
-  return RuntimeID.options.find((runtime) =>
+  return (["codex", "pi", "claude-code"] as const).find((runtime) =>
     required.capabilities.every((capability) => RuntimeCapabilityMatrix[runtime][capability]),
   )
 }

@@ -1,4 +1,7 @@
 import { spawn } from "child_process"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
+import os from "os"
+import path from "path"
 import { createInterface } from "readline"
 import type {
   AgentRunEvent,
@@ -21,7 +24,8 @@ function record(value: unknown): Record<string, unknown> {
 function text(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim()) return value
   if (Array.isArray(value)) return value.map(text).find((item): item is string => Boolean(item))
-  const item = record(value)
+  if (!value || typeof value !== "object") return
+  const item = value as Record<string, unknown>
   return [item.text, item.result, item.message, item.content, item.output_text].map(text).find((item): item is string => Boolean(item))
 }
 
@@ -38,16 +42,34 @@ export function codexPrompt(input: Pick<AgentRunSpec, "prompt" | "systemPrompt">
   ].join("\n")
 }
 
+function signalPrompt(input: Pick<AgentRunSpec, "allowSignalPublishing">) {
+  if (!input.allowSignalPublishing) return ""
+  return [
+    "When you reach a concrete conclusion, plan, status, risk, or intervention worth showing outside this worklog, run exactly one command:",
+    "agent-company-publish-signal <conclusion|plan|status|risk|intervention> <body>",
+    "Use it only for a real high-signal result. Ordinary discussion needs no signal.",
+  ].join("\n")
+}
+
 export function cliCommand(input: AgentRunSpec): { binary: string; args: string[] } {
   if (input.runtime === "codex") {
     const sandbox = input.permissionMode === "read_only" ? "read-only" : input.permissionMode === "full_access" ? "danger-full-access" : "workspace-write"
+    const options = [
+      "--json",
+      "-c",
+      "approval_policy=\"never\"",
+      "-c",
+      "cli_auth_credentials_store=\"file\"",
+      "--ignore-user-config",
+    ]
     const args = input.resumeSessionID
-      ? ["exec", "resume", "--json", "-c", `sandbox_mode=\"${sandbox}\"`, "-c", "approval_policy=\"never\""]
-      : ["exec", "--json", "--sandbox", sandbox, "--ask-for-approval", "never", "--cd", input.cwd]
-    if (input.model) args.push("--model", input.model)
+      ? ["exec", "resume", ...options, "-c", `sandbox_mode=\"${sandbox}\"`]
+      : ["exec", ...options, "--sandbox", sandbox, "--cd", input.cwd]
+    if (input.model) args.push("--model", input.model.split("/").slice(1).join("/") || input.model)
+    if (input.outputSchema) args.push("--output-schema", path.join(input.runtimeHome, "output-schema.json"))
     if (input.reasoningEffort) args.push("-c", `model_reasoning_effort=\"${input.reasoningEffort}\"`)
     if (input.resumeSessionID) args.push(input.resumeSessionID)
-    args.push(codexPrompt(input))
+    args.push(codexPrompt({ ...input, systemPrompt: [input.systemPrompt, signalPrompt(input)].filter(Boolean).join("\n\n") }))
     return { binary: "codex", args }
   }
 
@@ -61,12 +83,71 @@ export function cliCommand(input: AgentRunSpec): { binary: string; args: string[
   return { binary: "claude", args }
 }
 
+function prepareCodexHome(input: AgentRunSpec) {
+  if (input.runtime !== "codex") return
+  const source = path.join(
+    process.env.CODEX_HOME ?? path.join(process.env.HOME || process.env.USERPROFILE || os.homedir(), ".codex"),
+    "auth.json",
+  )
+  if (!existsSync(source)) return
+  const target = path.join(input.runtimeHome, "auth.json")
+  copyFileSync(source, target)
+  chmodSync(target, 0o600)
+  return target
+}
+
+function prepareOutputSchema(input: AgentRunSpec) {
+  if (input.runtime !== "codex" || !input.outputSchema) return
+  const target = path.join(input.runtimeHome, "output-schema.json")
+  const strict = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(strict)
+    if (!value || typeof value !== "object") return value
+    const schema = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, strict(item)]))
+    if (schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)) {
+      schema.required = Object.keys(schema.properties)
+      schema.additionalProperties = false
+    }
+    return schema
+  }
+  writeFileSync(target, JSON.stringify(strict(input.outputSchema)))
+  return target
+}
+
+function prepareSignalPublisher(input: AgentRunSpec) {
+  if (input.runtime !== "codex" || !input.allowSignalPublishing) return
+  const directory = path.join(input.runtimeHome, "bin")
+  const target = path.join(directory, "agent-company-publish-signal")
+  mkdirSync(directory, { recursive: true, mode: 0o700 })
+  writeFileSync(
+    target,
+    [
+      "#!/usr/bin/env bun",
+      "const [, , signal_type, ...parts] = Bun.argv",
+      "const body = parts.join(\" \").trim()",
+      "const types = new Set([\"conclusion\", \"plan\", \"status\", \"risk\", \"intervention\"])",
+      "if (!types.has(signal_type) || !body) process.exit(2)",
+      "process.stdout.write([\"AGENT_COMPANY_SIGNAL\", signal_type, Buffer.from(body).toString(\"base64\")].join(\"\\t\"))",
+    ].join("\n"),
+  )
+  chmodSync(target, 0o700)
+}
+
+function publishedSignal(value: unknown) {
+  const line = text(value)?.split(/\r?\n/).find((item) => item.trim().startsWith("AGENT_COMPANY_SIGNAL\t"))?.trim()
+  if (!line) return
+  const [, signal_type, encoded] = line.split("\t")
+  const body = encoded ? Buffer.from(encoded, "base64").toString().trim() : ""
+  if (!signal_type || !body || !["conclusion", "plan", "status", "risk", "intervention"].includes(signal_type)) return
+  return { signal_type, body }
+}
+
 function environment(input: AgentRunSpec): NodeJS.ProcessEnv {
   return {
     ...process.env,
     HOME: input.runtimeHome,
     USERPROFILE: input.runtimeHome,
     ...(input.runtime === "codex" ? { CODEX_HOME: input.runtimeHome } : {}),
+    ...(input.runtime === "codex" ? { PATH: `${path.join(input.runtimeHome, "bin")}${path.delimiter}${process.env.PATH ?? ""}` } : {}),
     DISABLE_AUTOUPDATER: "1",
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
@@ -76,6 +157,9 @@ function environment(input: AgentRunSpec): NodeJS.ProcessEnv {
 
 function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): AgentRunHandle {
   const startedAt = Date.now()
+  const temporaryCredential = prepareCodexHome(input)
+  const temporaryOutputSchema = prepareOutputSchema(input)
+  prepareSignalPublisher(input)
   const processCommand = cliCommand(input)
   const child = spawn(processCommand.binary, processCommand.args, {
     cwd: input.cwd,
@@ -87,6 +171,7 @@ function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): Ag
   let sessionID: string | undefined
   let content = ""
   let settled = false
+  let interrupted = false
   let resolveCompletion!: (result: AgentRunResult) => void
   const completion = new Promise<AgentRunResult>((resolve) => {
     resolveCompletion = resolve
@@ -97,8 +182,11 @@ function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): Ag
   const complete = (exitCode: number) => {
     if (settled) return
     settled = true
-    const result = { runID: input.runID, runtime: input.runtime, content, exitCode, sessionID, startedAt, finishedAt: Date.now() }
-    emit(exitCode === 0 ? "completed" : "failed", { exitCode, sessionID, content })
+    if (temporaryCredential) rmSync(temporaryCredential, { force: true })
+    if (temporaryOutputSchema) rmSync(temporaryOutputSchema, { force: true })
+    const normalizedExitCode = interrupted ? 130 : exitCode
+    const result = { runID: input.runID, runtime: input.runtime, content, exitCode: normalizedExitCode, sessionID, startedAt, finishedAt: Date.now() }
+    emit(normalizedExitCode === 0 ? "completed" : "failed", { exitCode: normalizedExitCode, sessionID, content, interrupted })
     resolveCompletion(result)
   }
 
@@ -118,6 +206,36 @@ function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): Ag
       const event = record(parsed)
       emit("runtime", event)
       const type = text(event.type)
+      const item = record(event.item)
+      if ((type === "item.started" || type === "item.completed") && text(item.type) === "command_execution") {
+        const rawCommand = text(item.command) ?? ""
+        const shellCommand = rawCommand.match(/^(?:\/bin\/)?(?:zsh|bash|sh)\s+-lc\s+([\s\S]+)$/)?.[1]
+        const command = shellCommand && shellCommand[0] === shellCommand.at(-1) && ['"', "'"].includes(shellCommand[0]!)
+          ? shellCommand.slice(1, -1)
+          : shellCommand ?? rawCommand
+        const toolCallID = text(item.id) ?? `command-${sequence}`
+        emit("tool", {
+          piEvent: "tool",
+          toolCallID,
+          toolName: "bash",
+          ...(type === "item.started"
+            ? { args: { command, args: [] } }
+            : { result: `exit code: ${Number(item.exit_code ?? 0)}\n${text(item.aggregated_output) ?? ""}`, isError: item.status !== "completed" }),
+        })
+        const signal = type === "item.completed" && /^agent-company-publish-signal\s+/.test(command.trim())
+          ? publishedSignal(item.aggregated_output)
+          : undefined
+        if (signal) {
+          emit("tool", {
+            piEvent: "tool",
+            toolCallID,
+            toolName: "publish_signal",
+            args: signal,
+            result: `Recorded ${signal.signal_type} signal`,
+            isError: false,
+          })
+        }
+      }
       const candidateSession = text(event.session_id) ?? text(event.thread_id)
       if (candidateSession && candidateSession !== sessionID) {
         sessionID = candidateSession
@@ -143,6 +261,7 @@ function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): Ag
     completion,
     interrupt() {
       if (child.exitCode !== null) return
+      interrupted = true
       child.kill("SIGTERM")
       const timer = setTimeout(() => {
         if (child.exitCode === null) child.kill("SIGKILL")

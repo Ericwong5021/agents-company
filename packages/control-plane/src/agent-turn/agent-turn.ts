@@ -43,7 +43,7 @@ export const prepare = Effect.fn("AgentTurn.prepare")(function* (input: PrepareI
 
   return {
     runtime:
-      agent.preferred_runtime === "codex" || agent.preferred_runtime === "claude-code" ? agent.preferred_runtime : "pi",
+      agent.preferred_runtime === "pi" || agent.preferred_runtime === "claude-code" ? agent.preferred_runtime : "codex",
     model: agent.model,
     systemPrompt,
     prompt: [

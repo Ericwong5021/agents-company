@@ -50,7 +50,7 @@ export const RuntimeCapabilityMatrix: Record<RuntimeID, RuntimeCapabilities> = {
     subagents: true,
     usageAccounting: true,
     dynamicSkills: false,
-    governanceSignals: false,
+    governanceSignals: true,
   },
 }
 

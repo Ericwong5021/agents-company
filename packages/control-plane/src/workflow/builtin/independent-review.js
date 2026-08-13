@@ -2,7 +2,7 @@ export const meta = {
   name: "independent-review",
   version: "1",
   description: "Reviews a software change in an isolated reviewer context and returns a gate decision.",
-  defaultRuntime: "pi",
+  defaultRuntime: "codex",
   capabilityPacks: ["independent-review@1"],
   requiredRuntimeCapabilities: ["toolCalls", "structuredOutput", "workspaceRead"],
   phases: [{ title: "Review" }],

@@ -761,7 +761,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               department: input.department ?? null,
               reports_to: input.reports_to ?? null,
               responsibilities: input.responsibilities ? JSON.stringify(input.responsibilities) : null,
-              preferred_runtime: input.preferred_runtime ?? "pi",
+              preferred_runtime: input.preferred_runtime ?? "codex",
               time_created: now,
               time_updated: now,
             })

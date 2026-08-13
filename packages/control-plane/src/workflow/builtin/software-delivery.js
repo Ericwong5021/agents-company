@@ -2,7 +2,7 @@ export const meta = {
   name: "software-delivery",
   version: "1",
   description: "Plans, implements, verifies, independently reviews and governs one software delivery assignment.",
-  defaultRuntime: "pi",
+  defaultRuntime: "codex",
   capabilityPacks: ["technical-planning@1", "software-implementation@1", "verification-testing@1", "independent-review@1", "delivery-governance@1"],
   requiredRuntimeCapabilities: ["toolCalls", "structuredOutput", "workspaceRead", "workspaceWrite"],
   phases: [{ title: "Plan" }, { title: "Implement" }, { title: "Verify" }, { title: "Review" }, { title: "Gate" }],

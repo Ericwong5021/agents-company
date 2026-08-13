@@ -12,7 +12,7 @@ export class RuntimeResolver {
   constructor(private readonly registry: RuntimeRegistry) {}
 
   async resolve(input: RuntimeResolutionInput): Promise<AgentRuntimePort> {
-    const runtime = input.explicitRuntime ?? input.workflowRuntime ?? input.agentRuntime ?? "pi"
+    const runtime = input.explicitRuntime ?? input.workflowRuntime ?? input.agentRuntime ?? "codex"
     const port = this.registry.get(runtime)
     if (!port) {
       const prefix = input.explicitRuntime ? "Explicit runtime" : "Runtime"
