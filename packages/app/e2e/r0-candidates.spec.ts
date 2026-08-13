@@ -134,7 +134,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await capture(page, "gate")
 
   await open(page, "/work/project-delivered")
-  await expect(page.getByLabel("高信号工作流").getByText("已交付", { exact: true })).toBeVisible()
+  await expect(page.getByLabel("高信号工作流").getByText("待验收", { exact: true })).toBeVisible()
   const delivery = page.locator(".ac-detail-panel", { hasText: "交付版本 1" })
   await expect(delivery).toBeVisible()
   await expect(delivery.getByRole("heading", { level: 2, name: "交付版本 1" })).toBeVisible()
