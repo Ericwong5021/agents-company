@@ -7,6 +7,8 @@ const root = path.resolve(import.meta.dir, "../..")
 const worker = `
 const Database = await import("./src/storage/db.ts")
 Database.Client().run("SELECT 1")
+const journalMode = Database.Client().$client.query("PRAGMA journal_mode").get()
+if (journalMode?.journal_mode !== "wal") process.exit(1)
 Database.close()
 `
 
@@ -33,7 +35,6 @@ describe.serial("Database.Client cold start", () => {
       await using directory = await tmpdir()
       const database = path.join(directory.path, "cold-start.db")
       expect((await coldStart(database)).exitCode).toBe(0)
-      expect(await Bun.file(database + "-wal").exists()).toBe(true)
 
       for (let attempt = 0; attempt < 30; attempt++) {
         await fs.rm(database + "-shm", { force: true })
