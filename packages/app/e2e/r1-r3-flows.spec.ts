@@ -46,7 +46,7 @@ test("@r1-r3-flows @scenario-deliv05 presents a result-centric delivery package 
   const stage = delivery.locator(".ac-status-badge[data-stage]")
   await expect(stage).toHaveAttribute("data-stage", "delivered")
   await expect(stage).toHaveText("待验收")
-  await expect(delivery.locator(".ac-delivery-hint").first()).toContainText("已交付但尚未验收")
+  await expect(delivery.locator(".ac-delivery-hint").first()).toContainText("执行工作项已完成，成果仍待你逐项核对")
 
   // 可消费成果链接必须真实指向 Artifact 详情页。
   const artifactLink = delivery.getByRole("link", { name: /体验审查报告/ })
@@ -55,7 +55,7 @@ test("@r1-r3-flows @scenario-deliv05 presents a result-centric delivery package 
   // 验收标准逐项核对清单来自最初的 Goal Brief；逐项结论未由后端下发时统一标记为“未逐项核对”，不伪造 pass。
   const checklist = delivery.locator(".ac-acceptance__item")
   await expect(checklist).toHaveCount(2)
-  await expect(checklist.locator(".ac-acceptance__verdict")).toHaveText(["未逐项核对", "未逐项核对"])
+  await expect(checklist.locator(".ac-acceptance__verdict")).toHaveText(["待你核对", "待你核对"])
   await expect(delivery).toContainText("报告可直接打开并阅读。")
   await expect(delivery).toContainText("关键结论保留来源。")
 
@@ -67,7 +67,7 @@ test("@r1-r3-flows @scenario-deliv03 opens a delivered artifact with inline prev
 }, testInfo) => {
   await enterWorkspace(page, "/library/artifacts/project-delivered/artifact-report")
 
-  await expect(page.getByRole("heading", { level: 1, name: "体验审查报告" })).toBeVisible()
+  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
 
   // DELIV-03：真实成果必须可打开、可下载、可复制链接，而不是只展示 kind/title/status。
   const download = page.getByRole("link", { name: "下载成果" })
@@ -75,11 +75,11 @@ test("@r1-r3-flows @scenario-deliv03 opens a delivered artifact with inline prev
   await expect(page.getByRole("button", { name: "复制链接" })).toBeVisible()
 
   // Markdown 走安全的内联文本预览，并携带正文真实内容。
-  const preview = page.locator(".ac-artifact-content[data-mode='markdown']")
+  const preview = page.locator(".ac-readable-artifact")
   await expect(preview).toBeVisible()
-  await expect(preview).toContainText("# 体验审查报告")
+  await expect(preview).toContainText("体验审查报告")
   await expect(preview).toContainText("核心路径已完成审查，交付状态与证据来源均可追溯。")
-  await expect(page.locator(".ac-artifact-meta")).toContainText("text/markdown")
+  await expect(page.locator(".ac-artifact-meta")).toContainText("Markdown 文档")
 
   await screenshotFromTop(page, testInfo.outputPath("artifact-markdown.png"))
 })

@@ -105,7 +105,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
 
   await setControlPlaneMode(request, "empty-work")
   await open(page, "/inbox", true)
-  await expect(page.getByRole("heading", { name: "用本地 AI 团队交付第一个目标" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 2, name: "让本地 AI 团队接手第一个交付目标" })).toBeVisible()
   await expect(page.getByRole("group", { name: "选择开始方式" }).getByRole("button")).toHaveCount(2)
   await capture(page, "first-run")
 
@@ -195,6 +195,7 @@ test("renders the twelve label-hidden HR-01 state cards", async ({ page, request
   await page.setViewportSize({ width: 1440, height: 1600 })
   await setControlPlaneMode(request, "hr01-states")
   await open(page, "/work", true)
+  await page.goto("/work?group=all")
 
   const protocolSource = await readFile(protocolPath, "utf8")
   const protocol = JSON.parse(protocolSource) as {
