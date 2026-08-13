@@ -271,7 +271,9 @@ async function runScenario(
         })
 
         const page = await context.newPage()
-        await page.goto("/login?redirect=%2Finbox")
+        const loginResponse = await context.request.post("/api/auth/local")
+        assert.equal(loginResponse.ok(), true)
+        await page.goto("/inbox")
         await expect(page).toHaveURL((url) => url.pathname === "/inbox")
 
         const snapshotResponse = await context.request.get("/api/agent-company/snapshot")
