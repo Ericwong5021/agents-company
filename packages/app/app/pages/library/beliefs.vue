@@ -177,7 +177,7 @@ async function actOnExperiment(experiment: Experiment, action: "refresh_authorit
             <NuxtLink to="/library/patches" class="ac-work-tab">Patches</NuxtLink>
           </nav>
           <span class="ac-learning-gate" :data-status="learning.evidencePackage.weak_gate">
-            E2E weak gate · {{ learning.evidencePackage.weak_gate }}
+            E2E 弱证据状态 · {{ learning.evidencePackage.weak_gate }}
           </span>
         </div>
 

@@ -778,7 +778,7 @@ async function saveApprovalPolicy() {
     method: "PUT",
     body: { approval_preset: approvalPreset.value },
   }).then(
-    () => approvalMessage.value = "审批策略已保存；已启动项目和已等待 Gate 保持原策略。",
+    () => approvalMessage.value = "审批策略已保存；已启动项目和已等待审批保持原策略。",
     () => approvalMessage.value = "审批策略未保存，请检查本地服务状态。",
   )
   approvalSaving.value = false
@@ -843,7 +843,7 @@ async function saveApprovalPolicy() {
             <div class="company-settings-section__heading">
               <div>
                 <h2>目标批准策略</h2>
-                <p>决定未来目标何时开始。策略变更不会改写已启动项目或已等待的批准 Gate。</p>
+                <p>决定未来目标何时开始。策略变更不会改写已启动项目或已等待的批准审批。</p>
               </div>
             </div>
             <div class="ac-provider-presets" role="radiogroup" aria-label="目标批准策略">

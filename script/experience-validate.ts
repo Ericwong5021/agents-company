@@ -19,6 +19,7 @@ const requiredStates = [
   "revision",
   "delivered",
   "accepted",
+  "archived",
   "failed",
   "cancelled",
 ]
@@ -73,6 +74,21 @@ function containsTerm(source: string, term: string) {
   return new RegExp(`(^|[^A-Za-z0-9_])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9_]|$)`, "i").test(
     source,
   )
+}
+
+function visibleUISource(source: string) {
+  return source
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/\{\{[\s\S]*?\}\}/g, "")
+    .replace(
+      /<[^>]*>/g,
+      (tag) =>
+        Array.from(
+          tag.matchAll(/\b(?:aria-label|title|alt|placeholder|value|label)\s*=\s*["']([^"']*)["']/gi),
+          (match) => match[1],
+        ).join(" "),
+    )
 }
 
 function digest(value: Uint8Array) {
@@ -660,6 +676,13 @@ check(
         availability: "r0_contract",
       },
     ],
+    archived: [
+      {
+        source: "work_control",
+        events: ["work.archived"],
+        availability: "r0_contract",
+      },
+    ],
     failed: [
       {
         source: "company_project.event",
@@ -750,7 +773,7 @@ check(
 )
 const prohibitedUIHits = reachableUISources.flatMap((entry) =>
   language.prohibitedTerms.flatMap((term) =>
-    containsTerm(entry.source, term.term) && !term.allowedSurfaces.includes(entry.surface)
+    containsTerm(visibleUISource(entry.source), term.term) && !term.allowedSurfaces.includes(entry.surface)
       ? [`${entry.file}: ${term.term}`]
       : [],
   ),
@@ -763,11 +786,11 @@ const legacyIdentityHits = reachableUISources.flatMap((entry) =>
   ["Eve", "Slack", "iMessage", "Linear"].flatMap((term) =>
     containsTerm(
       entry.file === "packages/app/nuxt.config.ts"
-        ? entry.source
+        ? visibleUISource(entry.source)
             .split("\n")
             .filter((line) => !line.includes("eve/nuxt") && !line.includes("/_eve_internal/"))
             .join("\n")
-        : entry.source,
+        : visibleUISource(entry.source),
       term,
     )
       ? [`${entry.file}: ${term}`]

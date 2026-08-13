@@ -15,6 +15,7 @@ const forbiddenProductTerms = /投影诊断|Projection diagnostics/i
 
 const legacyRoutes = [
   { from: "/company", to: "/inbox" },
+  { from: "/company/board", to: "/work" },
   { from: "/company/employees", to: "/team" },
   { from: "/company/projects/legacy", to: "/work/legacy" },
   { from: "/chat", to: "/work" },

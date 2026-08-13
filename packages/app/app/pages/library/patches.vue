@@ -298,8 +298,8 @@ async function submitPatchAction(patch: LearningPatch) {
 
             <footer>
               <span>{{ patch.evidence.length }} evidence refs</span>
-              <span v-if="patch.approval_gate_id">Gate {{ patch.approval_gate_id }}</span>
-              <span v-else>无已建 ApprovalGate</span>
+              <span v-if="patch.approval_gate_id">审批 {{ patch.approval_gate_id }}</span>
+              <span v-else>无已建审批</span>
               <time>{{ dateTime.format(patch.updated_at) }}</time>
             </footer>
 

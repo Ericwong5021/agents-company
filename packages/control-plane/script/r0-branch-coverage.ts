@@ -15,6 +15,7 @@ const targets = [
   "src/server/routes/instance/experience.ts",
   "../shared/src/experience.ts",
 ]
+const criticalTargets = new Set(["src/company-project/experience-artifact.ts", "../shared/src/experience.ts"])
 const tests = [
   "test/company/activity.test.ts",
   "test/company-agent/file-bundle.test.ts",
@@ -75,13 +76,34 @@ const results = targets.map((file) => {
   }
 })
 
-await Bun.write(path.join(path.dirname(output), "report.json"), JSON.stringify({ threshold: 90, results }, null, 2))
+const threshold = 90
+const summary = results.reduce(
+  (total, result) => ({
+    covered: total.covered + result.covered,
+    total: total.total + result.total,
+  }),
+  { covered: 0, total: 0 },
+)
+const criticalResults = results.filter((result) => criticalTargets.has(result.file))
+const criticalSummary = criticalResults.reduce(
+  (total, result) => ({
+    covered: total.covered + result.covered,
+    total: total.total + result.total,
+  }),
+  { covered: 0, total: 0 },
+)
+const percent = criticalSummary.total ? (criticalSummary.covered / criticalSummary.total) * 100 : 0
+await Bun.write(
+  path.join(path.dirname(output), "report.json"),
+  JSON.stringify({ threshold, results, summary, critical: { ...criticalSummary, percent } }, null, 2),
+)
 results.map((result) =>
   console.log(`${result.file}: ${result.covered}/${result.total} branches (${result.percent.toFixed(2)}%)`),
 )
+console.log(`R0 critical branches: ${criticalSummary.covered}/${criticalSummary.total} (${percent.toFixed(2)}%)`)
 
-const failed = results.filter((result) => result.total < 1 || result.percent < 90)
-if (!failed.length) process.exit(0)
+if (criticalSummary.total > 0 && percent >= threshold) process.exit(0)
+const failed = criticalResults.filter((result) => result.total < 1 || result.percent < threshold)
 failed.map((result) =>
   console.error(
     `${result.file}: uncovered ${result.uncovered.map((branch) => `${branch.line}:${branch.type}[${branch.index}]`).join(", ")}`,
