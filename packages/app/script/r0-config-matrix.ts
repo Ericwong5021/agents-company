@@ -16,6 +16,7 @@ const navigation = [
   { label: "收件箱", route: "/inbox" },
   { label: "工作", route: "/work" },
   { label: "董事会", route: "/company/board", heading: "董事会治理" },
+  { label: "运营日志", route: "/company/operations", heading: "每一项运行，都有据可查" },
   { label: "团队", route: "/team" },
   { label: "成果库", route: "/library" },
   { label: "设置", route: "/settings" },

@@ -161,7 +161,7 @@ useHead(() => ({
             <Logo />
           </NuxtLink>
 
-          <nav class="ac-shell-rail__nav">
+          <nav class="ac-shell-rail__nav" aria-label="主导航">
             <NuxtLink
               v-for="item in railNavigation"
               :key="item.to"
