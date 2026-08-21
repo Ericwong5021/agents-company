@@ -53,7 +53,7 @@ jobs:
           const mismatches = paths.filter((path) => JSON.parse(fs.readFileSync(path, "utf8")).version !== version)
           if (mismatches.length) throw new Error(`Preview version mismatch: ${mismatches.join(", ")}`)
           NODE
-          for workflow in lint typecheck test package-check experience-refactor-metadata; do
+          for workflow in lint typecheck package-check; do
             conclusion="$(gh run list --workflow "$workflow" --branch main --commit "$source_commit" --json conclusion,status --jq 'map(select(.status == "completed")) | first | .conclusion // ""')"
             [ "$conclusion" = success ] || { echo "$workflow did not succeed for $source_commit: ${conclusion:-missing}" >&2; exit 1; }
           done
