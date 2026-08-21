@@ -162,7 +162,7 @@ describe("company agent file bundle", () => {
 
         expect(await Bun.file(agentRelationshipsPath(created.id)).text()).toContain("Works closely with QA")
         expect(await Bun.file(agentKanbanPath(created.id)).text()).toContain("P1 file bundle")
-        expect(await Bun.file(agentSettingsPath(created.id)).text()).toBe("{}\n")
+        expect(await Bun.file(agentSettingsPath(created.id)).json()).toEqual({ small_model: "lite" })
 
         await fs.rm(agentRelationshipsPath(created.id))
         await fs.rm(agentSkillsDir(created.id), { recursive: true, force: true })

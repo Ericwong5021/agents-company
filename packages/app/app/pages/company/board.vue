@@ -633,7 +633,7 @@ watch(() => shadowRun.projectId, () => {
                 <div><dt>顾问发言</dt><dd>{{ board?.advisorCanSpeak ? "允许" : "已停止" }}</dd></div>
                 <div><dt>决策台账</dt><dd>{{ visibleDecisions.length }} 条</dd></div>
               </dl>
-              <p>群聊只形成讨论与决策意图。执行仍需进入 Decision Ledger，并通过 Founder OS 权限与审批 Gate。</p>
+              <p>群聊只形成讨论与决策意图。执行仍需进入 Decision Ledger，并通过 Founder OS 权限与审批门槛。</p>
             </section>
 
             <section v-if="boardThreadId" class="company-section founder-board-takeover">
