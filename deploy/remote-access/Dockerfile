@@ -1,5 +1,8 @@
-FROM oven/bun:1.3.14 AS dependencies
+FROM oven/bun:1.3.14 AS bun
+
+FROM node:24-bookworm-slim AS dependencies
 WORKDIR /workspace
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 
