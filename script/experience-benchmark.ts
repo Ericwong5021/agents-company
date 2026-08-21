@@ -1683,7 +1683,10 @@ function verifyCommittedSource(ref: string) {
   ]
   requiredAtRef.forEach((file) => runGit(["cat-file", "-e", `${ref}:${file}`]))
   const tracked = runGit(["diff", "--quiet", ref, "--", ...governedSourcePaths], [0, 1])
-  if (tracked.exitCode !== 0) throw new Error("Governed benchmark source differs from the requested committed SHA.")
+  if (tracked.exitCode !== 0) {
+    const changes = runGit(["diff", "--name-status", ref, "--", ...governedSourcePaths]).stdout.trim()
+    throw new Error(`Governed benchmark source differs from the requested committed SHA:\n${changes}`)
+  }
   const untracked = runGit(["ls-files", "--others", "--exclude-standard", "--", ...governedSourcePaths])
     .stdout.split(/\r?\n/)
     .filter(Boolean)
