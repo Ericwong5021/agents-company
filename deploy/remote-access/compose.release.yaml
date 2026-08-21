@@ -1,0 +1,96 @@
+name: agent-company-remote
+
+services:
+  relay:
+    image: ${AGENT_COMPANY_RELAY_IMAGE:?AGENT_COMPANY_RELAY_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      AGENT_COMPANY_RELAY_HOST: 127.0.0.1
+      AGENT_COMPANY_RELAY_PORT: 4318
+      AGENT_COMPANY_RELAY_DB: /data/agent-company-relay.db
+      AGENT_COMPANY_RELAY_PUBLIC_URL: https://${AGENT_COMPANY_DOMAIN}
+      AGENT_COMPANY_RELAY_ALLOWED_HOSTS: ${AGENT_COMPANY_DOMAIN}
+      AGENT_COMPANY_RELAY_SERVICE_TOKEN: ${AGENT_COMPANY_RELAY_SERVICE_TOKEN}
+      AGENT_COMPANY_RELEASE: ${AGENT_COMPANY_RELEASE}
+      AGENT_COMPANY_SOURCE_COMMIT: ${AGENT_COMPANY_SOURCE_COMMIT}
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - relay-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const response = await fetch('http://127.0.0.1:4318/healthz'); process.exit(response.ok ? 0 : 1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  webui:
+    image: ${AGENT_COMPANY_WEBUI_IMAGE:?AGENT_COMPANY_WEBUI_IMAGE is required}
+    restart: unless-stopped
+    network_mode: service:relay
+    depends_on:
+      relay:
+        condition: service_healthy
+    environment:
+      HOST: 127.0.0.1
+      PORT: 3000
+      AGENT_COMPANY_WEBUI_DATA_DIR: /data
+      AGENT_COMPANY_CONTROL_PLANE_URL: http://127.0.0.1:4318
+      AGENT_COMPANY_CONTROL_PLANE_AUTHORIZATION: Bearer ${AGENT_COMPANY_RELAY_SERVICE_TOKEN}
+      AGENT_COMPANY_RELAY_INTERNAL_URL: http://127.0.0.1:4318
+      AGENT_COMPANY_RELAY_SERVICE_TOKEN: ${AGENT_COMPANY_RELAY_SERVICE_TOKEN}
+      NUXT_AGENT_COMPANY_CONTROL_PLANE_URL: http://127.0.0.1:4318
+      NUXT_AGENT_COMPANY_CONTROL_PLANE_AUTHORIZATION: Bearer ${AGENT_COMPANY_RELAY_SERVICE_TOKEN}
+      NUXT_AGENT_COMPANY_RELAY_INTERNAL_URL: http://127.0.0.1:4318
+      NUXT_AGENT_COMPANY_RELAY_SERVICE_TOKEN: ${AGENT_COMPANY_RELAY_SERVICE_TOKEN}
+      AGENT_COMPANY_REMOTE_EMAIL: ${AGENT_COMPANY_REMOTE_EMAIL}
+      AGENT_COMPANY_REMOTE_PASSWORD: ${AGENT_COMPANY_REMOTE_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://${AGENT_COMPANY_DOMAIN}
+      NUXT_BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      NUXT_BETTER_AUTH_URL: https://${AGENT_COMPANY_DOMAIN}
+      NUXT_PUBLIC_SITE_URL: https://${AGENT_COMPANY_DOMAIN}
+      AGENT_COMPANY_RELEASE: ${AGENT_COMPANY_RELEASE}
+      AGENT_COMPANY_SOURCE_COMMIT: ${AGENT_COMPANY_SOURCE_COMMIT}
+    volumes:
+      - webui-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    network_mode: service:relay
+    depends_on:
+      relay:
+        condition: service_healthy
+      webui:
+        condition: service_healthy
+    environment:
+      AGENT_COMPANY_DOMAIN: ${AGENT_COMPANY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  relay-data:
+  webui-data:
+  caddy-data:
+  caddy-config:

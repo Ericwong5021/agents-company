@@ -1,0 +1,182 @@
+name: Preview
+
+on:
+  push:
+    tags:
+      - "v*-beta.*"
+
+permissions:
+  actions: read
+  attestations: write
+  contents: write
+  id-token: write
+  packages: write
+
+concurrency:
+  group: agent-company-preview
+  cancel-in-progress: false
+
+jobs:
+  validate-preview:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      source_commit: ${{ steps.version.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate Preview source and gates
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+          version="${GITHUB_REF_NAME#v}"
+          source_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          git fetch origin main --tags --force
+          git merge-base --is-ancestor "$source_commit" origin/main
+          node - "$version" <<'NODE'
+          const fs = require("node:fs")
+          const version = process.argv[2]
+          const paths = [
+            "packages/app/package.json",
+            "packages/control-plane/package.json",
+            "packages/plugin/package.json",
+            "packages/relay/package.json",
+            "packages/sdk/js/package.json",
+            "packages/shared/package.json",
+            "packages/slack/package.json",
+            "packages/ui/package.json",
+          ]
+          const mismatches = paths.filter((path) => JSON.parse(fs.readFileSync(path, "utf8")).version !== version)
+          if (mismatches.length) throw new Error(`Preview version mismatch: ${mismatches.join(", ")}`)
+          NODE
+          for workflow in lint typecheck test package-check experience-refactor-metadata; do
+            conclusion="$(gh run list --workflow "$workflow" --branch main --commit "$source_commit" --json conclusion,status --jq 'map(select(.status == "completed")) | first | .conclusion // ""')"
+            [ "$conclusion" = success ] || { echo "$workflow did not succeed for $source_commit: ${conclusion:-missing}" >&2; exit 1; }
+          done
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+
+  package-local:
+    needs: validate-preview
+    runs-on: ubuntu-latest
+    env:
+      AGENTCOMPANY_VERSION: ${{ needs.validate-preview.outputs.version }}
+      AGENTCOMPANY_CHANNEL: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bun
+      - name: Install cross-platform native dependencies
+        working-directory: packages/control-plane
+        run: |
+          watcher_version="$(node -p "require('./package.json').dependencies['@parcel/watcher']")"
+          bun install --os="*" --cpu="*" "@parcel/watcher@$watcher_version"
+      - name: Build local platform packages
+        working-directory: packages/control-plane
+        run: bun run script/build.ts --skip-install
+      - name: Archive local platform packages
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for directory in packages/control-plane/dist/agentcompany-*; do
+            name="$(basename "$directory")"
+            case "$name" in
+              agentcompany-linux-*) tar -C "$directory" -czf "release/$name.tar.gz" . ;;
+              *) (cd "$directory" && zip -qr "$GITHUB_WORKSPACE/release/$name.zip" .) ;;
+            esac
+          done
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/agentcompany-*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-platform-packages
+          path: release
+
+  remote-image:
+    needs: validate-preview
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: relay
+            image: ghcr.io/ericwong5021/agents-company-relay
+            environment: AGENT_COMPANY_RELAY_IMAGE
+          - target: webui
+            image: ghcr.io/ericwong5021/agents-company-webui
+            environment: AGENT_COMPANY_WEBUI_IMAGE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and publish ${{ matrix.target }} image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/remote-access/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ matrix.image }}:${{ github.ref_name }}
+            ${{ matrix.image }}:sha-${{ needs.validate-preview.outputs.source_commit }}
+          cache-from: type=gha,scope=remote-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=remote-${{ matrix.target }}
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ matrix.image }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - name: Record immutable image
+        run: printf '%s=%s@%s\n' '${{ matrix.environment }}' '${{ matrix.image }}' '${{ steps.image.outputs.digest }}' > '${{ matrix.target }}.env'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-image-${{ matrix.target }}
+          path: ${{ matrix.target }}.env
+
+  release-preview:
+    needs: [validate-preview, package-local, remote-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: local-platform-packages
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: remote-image-*
+          path: remote-images
+          merge-multiple: true
+      - name: Assemble immutable release
+        run: |
+          set -euo pipefail
+          cp deploy/remote-access/compose.release.yaml release/compose.yaml
+          cp deploy/remote-access/Caddyfile release/Caddyfile
+          cp deploy/remote-access/install.sh deploy/remote-access/selfhost.sh release/
+          printf '%s\n' '${{ needs.validate-preview.outputs.source_commit }}' > release/source-commit.txt
+          {
+            printf 'AGENT_COMPANY_RELEASE=%s\n' '${{ github.ref_name }}'
+            printf 'AGENT_COMPANY_SOURCE_COMMIT=%s\n' '${{ needs.validate-preview.outputs.source_commit }}'
+            cat remote-images/*.env | sort
+          } > release/remote.env
+          (cd release && find . -maxdepth 1 -type f ! -name checksums.txt -printf '%f\n' | sort | xargs sha256sum > checksums.txt)
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*
+      - name: Publish Preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create '${{ github.ref_name }}' release/* --prerelease --latest=false --generate-notes --verify-tag

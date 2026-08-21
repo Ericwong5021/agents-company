@@ -47,6 +47,8 @@ export type RelayOptions = {
   serviceToken: string
   publicURL: string
   allowedHosts: string[]
+  release?: string
+  sourceCommit?: string
   heartbeatIntervalMs?: number
 }
 
@@ -155,6 +157,8 @@ export function createRelay(options: RelayOptions) {
       ok: true,
       name: "Agent Company Relay",
       protocol_version: remoteProtocolVersion,
+      release: options.release ?? "development",
+      source_commit: options.sourceCommit ?? "unknown",
       runtime_connected: Boolean(runtime),
     }),
   )
@@ -537,5 +541,7 @@ export function relayOptions(): RelayOptions {
       .split(",")
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean),
+    release: process.env.AGENT_COMPANY_RELEASE,
+    sourceCommit: process.env.AGENT_COMPANY_SOURCE_COMMIT,
   }
 }
