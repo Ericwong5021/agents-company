@@ -22,7 +22,7 @@ const exitCode = await (async () => {
         BETTER_AUTH_SECRET: Bun.env.BETTER_AUTH_SECRET || `${crypto.randomUUID()}${crypto.randomUUID()}`,
         BETTER_AUTH_URL: Bun.env.BETTER_AUTH_URL || "http://127.0.0.1:3210",
         INTERNAL_API_SECRET: Bun.env.INTERNAL_API_SECRET || `${crypto.randomUUID()}${crypto.randomUUID()}`,
-        NODE_OPTIONS: "--max-old-space-size=8192",
+        NODE_OPTIONS: Bun.env.NODE_OPTIONS || "--max-old-space-size=8192",
         AGENT_COMPANY_NUXT_WRAPPER_PID: String(process.pid),
         AGENT_COMPANY_NUXT_LOCK_MODE: "direct",
       },
