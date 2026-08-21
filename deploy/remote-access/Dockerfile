@@ -8,7 +8,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM dependencies AS webui-build
 ENV AGENT_COMPANY_WEBUI_DATA_DIR=/data
-ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN bun run --cwd packages/app build
 
 FROM dependencies AS relay-build
