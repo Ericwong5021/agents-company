@@ -36,6 +36,7 @@ export default defineNuxtConfig({
     "/chat/**": { ssr: true, headers: privateNoStore },
     "/settings/**": { ssr: true, headers: privateNoStore },
     "/api/auth/**": { headers: noStore },
+    "/api/remote/**": { headers: noStore },
     "/api/internal/**": { headers: noStore },
     "/api/agent-company/**": { headers: noStore },
     "/_eve_internal/**": { headers: noStore },
@@ -89,6 +90,8 @@ export default defineNuxtConfig({
     agentCompanyControlPlaneAuthorization: process.env.AGENT_COMPANY_CONTROL_PLANE_AUTHORIZATION || "",
     agentCompanyTelemetryUrl: process.env.AGENT_COMPANY_TELEMETRY_URL || "",
     agentCompanyTelemetryAuthorization: process.env.AGENT_COMPANY_TELEMETRY_AUTHORIZATION || "",
+    agentCompanyRelayInternalUrl: process.env.AGENT_COMPANY_RELAY_INTERNAL_URL || "http://127.0.0.1:4318",
+    agentCompanyRelayServiceToken: process.env.AGENT_COMPANY_RELAY_SERVICE_TOKEN || "",
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || "",
       agentCompanyVersion: process.env.AGENT_COMPANY_VERSION || "0.1.2",

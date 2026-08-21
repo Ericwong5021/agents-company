@@ -237,6 +237,19 @@
         "typescript": "catalog:",
       },
     },
+    "packages/relay": {
+      "name": "@agents-company/relay",
+      "version": "0.1.2",
+      "dependencies": {
+        "@agents-company/shared": "workspace:*",
+        "hono": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/script": {
       "name": "@agents-company/script",
       "dependencies": {

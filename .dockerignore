@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/.nuxt
+**/.output
+**/.artifacts
+**/.eve
+**/dist
+reports
+plans

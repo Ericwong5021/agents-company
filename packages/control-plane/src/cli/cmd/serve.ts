@@ -1,6 +1,7 @@
 import { Server } from "../../server/server"
 import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
+import { RemoteAccessClient } from "../../remote-access/client"
 
 export const ServeCommand = cmd({
   command: "serve",
@@ -9,6 +10,8 @@ export const ServeCommand = cmd({
   handler: async (args) => {
     const opts = await resolveNetworkOptions(args)
     const server = await Server.listen(opts)
+    const remote = new RemoteAccessClient(server.url, server.credentials)
+    await remote.start()
     console.log(`agentcompany server listening on http://${server.hostname}:${server.port}`)
     if (opts.noAuth) {
       console.warn("Warning: authentication is disabled; this server is unauthenticated.")
@@ -29,6 +32,7 @@ export const ServeCommand = cmd({
     }
 
     await new Promise(() => {})
+    remote.stop()
     await server.stop()
   },
 })

@@ -2,108 +2,125 @@
 definePageMeta({
   layout: false,
   prerender: true,
-});
+})
 
-const route = useRoute();
-const loading = ref(false);
-const error = ref("");
+const route = useRoute()
+const mode = ref<"local" | "remote">("local")
+const loading = ref(false)
+const error = ref("")
+const email = ref("")
+const password = ref("")
 const redirectTo = computed(() => {
-  const value = route.query.redirect;
-  return typeof value === "string"
-    && value.startsWith("/")
-    && !value.startsWith("//")
-    && !value.includes("\\")
+  const value = route.query.redirect
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") && !value.includes("\\")
     ? value
-    : "/inbox";
-});
+    : "/inbox"
+})
 
-useHead({
-  script: [{
-    key: "agent-company-local-login-deadline",
-    tagPosition: "bodyClose",
-    innerHTML: `window.setTimeout(function(){document.documentElement.dataset.localLoginTimedOut="true";var pending=document.getElementById("local-login-pending");var failure=document.getElementById("local-login-failure");if(pending)pending.style.display="none";if(failure)failure.style.display="block"},10000)`,
-  }],
-});
-
-async function enterCompany() {
-  if (loading.value) return;
-  loading.value = true;
-  error.value = "";
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 10_000);
+async function enterLocalCompany() {
+  if (loading.value) return
+  loading.value = true
+  error.value = ""
   const result = await $fetch("/api/auth/local", {
     method: "POST",
     retry: 0,
-    signal: controller.signal,
+    signal: AbortSignal.timeout(8_000),
   })
-    .then(() => ({ ok: true as const }))
-    .catch(() => ({ ok: false as const }));
-  window.clearTimeout(timeout);
-  loading.value = false;
-  if (!result.ok) {
-    error.value = "本地账号暂时无法准备，请确认 WebUI 仍在本机运行后重试。";
-    return;
+    .then(() => true)
+    .catch(() => false)
+  loading.value = false
+  if (result) {
+    window.location.replace(redirectTo.value)
+    return
   }
-
-  window.location.replace(redirectTo.value);
+  mode.value = "remote"
 }
 
-onNuxtReady(() => {
-  if (document.documentElement.dataset.localLoginTimedOut === "true") {
-    error.value = "连接本地工作区超过十秒，请重新进入。";
-    return;
+async function enterRemoteCompany() {
+  if (loading.value) return
+  loading.value = true
+  error.value = ""
+  const result = await $fetch("/api/auth/remote", {
+    method: "POST",
+    body: { email: email.value, password: password.value },
+    retry: 0,
+  })
+    .then(() => true)
+    .catch(() => false)
+  loading.value = false
+  if (!result) {
+    error.value = "邮箱或密码不正确，请检查后重试。"
+    return
   }
-  void enterCompany();
-});
+  window.location.replace(redirectTo.value)
+}
+
+onNuxtReady(() => void enterLocalCompany())
 </script>
 
 <template>
   <main class="flex min-h-svh items-center justify-center bg-default px-6 py-10 text-default">
-    <section class="w-full max-w-sm text-center">
-      <Logo class="mx-auto size-10" />
-      <p class="mt-6 text-xs font-medium uppercase tracking-[0.18em] text-muted">
-        Local AI team
-      </p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight text-highlighted">
-        正在进入 Agent Company
-      </h1>
-      <p class="mt-3 text-sm leading-relaxed text-muted">
-        使用本机默认账号准备工作区，无需注册或登录，通常十秒内完成。
-      </p>
+    <section class="w-full max-w-sm">
+      <div class="text-center">
+        <Logo class="mx-auto size-10" />
+        <p class="mt-6 text-xs font-medium uppercase tracking-[0.18em] text-muted">Agent Company</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-highlighted">
+          {{ mode === "local" ? "正在进入工作区" : "登录远程工作区" }}
+        </h1>
+        <p class="mt-3 text-sm leading-relaxed text-muted">
+          {{
+            mode === "local" ? "正在确认本机身份，通常几秒内完成。" : "远程 WebUI 只连接你已授权的本机 Control Plane。"
+          }}
+        </p>
+      </div>
 
       <div
-        id="local-login-pending"
-        v-show="!error"
+        v-if="mode === 'local'"
         class="mt-7 flex items-center justify-center gap-2 text-sm text-toned"
         role="status"
         aria-live="polite"
       >
-        <UIcon
-          name="i-lucide-loader-circle"
-          class="size-4 animate-spin"
-        />
+        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         正在连接本地工作区
       </div>
 
-      <div
-        id="local-login-failure"
-        v-show="Boolean(error)"
-        class="mt-7"
-      >
-        <p
-          class="text-sm leading-relaxed text-error"
-          role="alert"
-        >
-          {{ error || "连接本地工作区超过十秒，请重新进入。" }}
+      <form v-else class="mt-7 space-y-4" @submit.prevent="enterRemoteCompany">
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-toned">邮箱</span>
+          <input
+            v-model.trim="email"
+            type="email"
+            name="email"
+            autocomplete="username"
+            required
+            autofocus
+            class="h-11 w-full rounded-lg border border-default bg-elevated px-3 text-sm text-highlighted outline-none transition-[border-color,box-shadow] focus:border-accented focus:ring-2 focus:ring-primary/20"
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1.5 block text-xs font-medium text-toned">密码</span>
+          <input
+            v-model="password"
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            minlength="12"
+            required
+            class="h-11 w-full rounded-lg border border-default bg-elevated px-3 text-sm text-highlighted outline-none transition-[border-color,box-shadow] focus:border-accented focus:ring-2 focus:ring-primary/20"
+          />
+        </label>
+        <p v-if="error" class="text-sm leading-relaxed text-error" role="alert">
+          {{ error }}
         </p>
-        <a
-          :href="route.fullPath"
-          class="mt-4 inline-flex items-center justify-center rounded-md bg-inverted px-3 py-2 text-sm font-medium text-inverted"
-          @click.prevent="enterCompany"
+        <button
+          type="submit"
+          :disabled="loading"
+          class="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-inverted px-4 text-sm font-medium text-inverted transition-[transform,opacity] active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
         >
-          重新进入
-        </a>
-      </div>
+          <UIcon v-if="loading" name="i-lucide-loader-circle" class="size-4 animate-spin" />
+          {{ loading ? "正在登录" : "进入工作区" }}
+        </button>
+      </form>
     </section>
   </main>
 </template>

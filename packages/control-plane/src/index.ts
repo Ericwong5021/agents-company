@@ -43,6 +43,7 @@ import { CompanyAgentCommand } from "./cli/cmd/company-agent"
 import { GroupCommand } from "./cli/cmd/group"
 import { QuestionCommand } from "./cli/cmd/question"
 import { PermissionCommand } from "./cli/cmd/permission"
+import { RemoteCommand } from "./cli/cmd/remote"
 import { printFailure } from "./cli/output"
 
 const processMetadata = ensureProcessMetadata("main")
@@ -208,6 +209,7 @@ const cli = yargs(args)
   .command(GroupCommand)
   .command(QuestionCommand)
   .command(PermissionCommand)
+  .command(RemoteCommand)
   .command(PluginCommand)
   .command(DbCommand)
   .fail((msg, err) => {
