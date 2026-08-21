@@ -24,7 +24,7 @@ current_ci_mode: local_exact_sha_fallback
 - SQLite、Project、Plan、WorkItem、Artifact、ProjectEvent、ApprovalGate；
 - AgentRun、Runtime Home、SkillSnapshot、恢复机制；
 - CompanyRecruitment、Candidate、Performance、Employment Review、Department；
-- Experience WorkProjection、Nuxt WebUI、Electron；
+- Experience WorkProjection、Nuxt WebUI；
 - 软件领域的 Worktree、宿主验证、Review、Merge Gate、主分支复验。
 
 替换：
@@ -602,7 +602,7 @@ O0–O9 是稳定的能力包编号，不等于实际开发顺序。开发阶段
 1. 每个开发批次收敛为独立提交，运行与改动面相称的 typecheck、targeted test、migration 或 build 作为快速反馈；失败必须记录并修复，但不阻塞其他无依赖批次继续开发；
 2. 各分支完成后基于最新 `main`，按 A0–B5 依赖顺序统一集成；冲突解决、SDK 生成物和迁移顺序都以集成后的事实为准；
 3. 全部集成完成后冻结一个精确候选 SHA，runner 从该 SHA 创建隔离工作树、临时 Runtime Home、临时数据目录和动态端口；
-4. 在同一候选上集中执行静态检查、全量包级测试、迁移、真实本地 Control Plane、Browser/Desktop E2E、重启恢复、候选部署、回滚和两轮本地同 SHA 复现；
+4. 在同一候选上集中执行静态检查、全量包级测试、迁移、真实本地 Control Plane、WebUI E2E、重启恢复、候选部署、回滚和两轮本地同 SHA 复现；
 5. 确定性 Gate 校验退出码、JUnit/JSON、运行态断言、候选 SHA、文件摘要和证据覆盖；任何失败进入统一 Diagnose → Fix → Reverify，直至全部机器项通过；
 6. 人工研究、人工截图审批、SUS 与主观设计意见只写入 `advisory`，缺失时不阻塞开发、集成或 Pre-Public 自动验收；
 7. 产品运行时 ApprovalGate 的正确阻塞本身可以成为自动验收的 `pass`，无需真人点击批准。
@@ -1208,7 +1208,7 @@ GET /experience/work/:projectID/validation
 - 后端缺字段时显示不可用，不虚构成功；
 - 两 Agent 启动和组织增长能被用户理解；
 - 键盘、读屏、Loading/Empty/Error/Offline 完整。
-- B4 runner 使用真实本地 Control Plane 和 production WebUI build 执行 Browser E2E，并在桌面受影响时执行原生 Desktop E2E；
+- B4 runner 使用真实本地 Control Plane 和 production WebUI build 执行 WebUI E2E；
 - DOM/交互、可访问性、截图差异和 sourceRef 完整性为机器阻断项；AI 视觉评审只生成 advisory finding，不能单独判定通过或失败。
 
 ---
@@ -1322,7 +1322,7 @@ GET /experience/work/:projectID/validation
 - 开发期间的静态检查和 targeted test 是快速反馈，不是阶段准入 Gate；全部代码集成后，单元测试、集成测试、候选构建、本地部署、运行态 E2E、重启恢复、同 SHA 复现和默认切换才构成统一机器 Gate；
 - 每次运行只接受一个精确候选 SHA，所有命令、构建物和运行态结论必须绑定同一 SHA；
 - 最终 Gate 从精确提交创建隔离工作树并使用独立 Runtime Home、SQLite、WebUI data/build/output 目录和动态端口，不读取当前开发工作区的脏状态作为通过证据；
-- Browser E2E 必须连接真实本地 Control Plane；Desktop E2E 使用真实内嵌 Control Plane；不得用 fake-control-plane、生产 Fixture、静态截图或直接改库伪造业务完成；
+- WebUI E2E 必须连接真实本地 Control Plane；不得用 fake-control-plane、生产 Fixture、静态截图或直接改库伪造业务完成；
 - AI 负责 preflight、执行、观察、诊断、修复和复验；确定性 runner 负责裁决，模型自述、代码总结或“看起来正确”不能改变 Gate 状态；
 - 停在预期 ApprovalGate、权限拒绝或风险边界可算场景通过；绕过 Gate 执行动作必须失败；
 - 首个失败不变量立即停止后续有副作用步骤，保留已产生证据；
@@ -1367,8 +1367,7 @@ Implementer AI 可在独立 worktree 并行工作；Validation AI 必须在所�
 │   ├── migration.json
 │   └── invariants.json
 ├── playwright/
-│   ├── browser/
-│   └── desktop/
+│   └── browser/
 ├── deployment/
 │   ├── local-preview.json
 │   └── rollback.json
@@ -1445,12 +1444,10 @@ stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false
    - 构建 production WebUI；
    - 在 loopback 动态端口启动候选 Control Plane 与 WebUI preview；
    - 验证健康、资源加载、连接、关键路由和候选 SHA 绑定；
-   - 若阶段影响 Desktop，构建并启动临时 Electron 测试实例；
    - 关闭后确认端口、进程和临时锁释放，证据目录保留。
 
 6. `e2e.real-surfaces`
-   - Browser 走真实本地 Control Plane；
-   - Desktop 走真实内嵌 Control Plane；
+   - WebUI 走真实本地 Control Plane；
    - 运行 A0–B5 全部 benchmark、异常路径、权限路径和恢复路径；
    - 核心场景至少重复两轮并比较归一化结果。
 
@@ -1486,7 +1483,7 @@ stage contract 必须记录 `githubActions.status=unavailable`、`blocking=false
 | B1   | O3     | S13、S14、S15，两 Agent 分离、Wayfinder read-only、off 回退             | assignment snapshot、permission trace、flag diff                        |
 | B2   | O5     | S13、S17、S21、S24、1–3 节点预算、evidence-backed quiescence            | graph decisions、sourceRefs、quiescence report                          |
 | B3   | O7-R4  | 材料性路由、真实 action handler、Assignment/Attention 恢复              | action trace、attention precision、recovery report                      |
-| B4   | O8     | real Control Plane Browser/Desktop、SSE 重连、刷新/重启、a11y、视觉差异 | Playwright、axe/DOM assertions、screenshots、watermark                  |
+| B4   | O8     | real Control Plane WebUI、SSE 重连、刷新/重启、a11y、视觉差异 | Playwright、axe/DOM assertions、screenshots、watermark                  |
 | B5   | O9     | Shadow comparison、Dogfood、两候选两轮、local rollback、legacy fallback | metric report、local exact-SHA repeats、rollback report、final decision |
 
 ## 8.7 测试层
@@ -1564,9 +1561,6 @@ bun run test:e2e
 bun run test:production
 bun run qa:visual
 
-cd ../desktop
-bun typecheck
-bun run test:e2e
 ```
 
 runner 为 Playwright、production preview 和 `qa:visual` 注入本次动态 URL，包括 `AGENT_COMPANY_QA_BASE_URL`，不得依赖历史占用端口。仓库级 metadata、format 和 diff 检查由 runner 在根目录执行；测试和 `bun typecheck` 始终从包目录执行，不直接调用 `tsc`。
@@ -1770,7 +1764,7 @@ Feature Flag 切回 `off`：
 - 主界面只显示高信号变化；
 - Diagnostics 可完整追溯；
 - R3/R4 基准集通过；
-- SDK、Browser、Desktop 共用同一 Control Plane 事实；
+- SDK 与 WebUI 共用同一 Control Plane 事实；
 - 无生产 Fixture 假成功；
 - false completion 为 0；
 - legacy 路径在默认切换前始终可回滚；
@@ -1796,7 +1790,7 @@ Feature Flag 切回 `off`：
 - fake-control-plane 使用范围；
 - SSE 与快照恢复；
 - Delivery/Artifact 投影；
-- Browser 与 Desktop E2E 差异；
+- WebUI 浏览器与响应式 E2E 差异；
 - 运行控制 handler 缺口。
 
 ### First-slice Builder

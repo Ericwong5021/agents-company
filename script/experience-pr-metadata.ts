@@ -5,7 +5,6 @@ const relevantPrefixes = [
   "packages/app/",
   "packages/control-plane/",
   "packages/shared/",
-  "packages/desktop/",
   "packages/sdk/",
   "script/experience-",
   ".github/workflows/",

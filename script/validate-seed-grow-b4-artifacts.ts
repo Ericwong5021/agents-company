@@ -52,12 +52,8 @@ export async function validateSeedGrowB4Artifacts() {
     project.workProjectionAvailability !== "available" ||
     project.independentAgents !== true ||
     !Array.isArray(project.realProviderCalls) ||
-    !project.realProviderCalls.some(
-      (request) => record(request, "B4 provider request").kind === "wayfinder",
-    ) ||
-    !project.realProviderCalls.some(
-      (request) => record(request, "B4 provider request").kind === "builder",
-    )
+    !project.realProviderCalls.some((request) => record(request, "B4 provider request").kind === "wayfinder") ||
+    !project.realProviderCalls.some((request) => record(request, "B4 provider request").kind === "builder")
   )
     throw new Error("B4 Seed Pair project result is incomplete.")
 
@@ -78,24 +74,6 @@ export async function validateSeedGrowB4Artifacts() {
   if (typeof states.offlineDiagnostic !== "string" || !states.offlineDiagnostic.trim())
     throw new Error("B4 Browser offline diagnostic is missing.")
   allTrue(browser.accessibility, "B4 Browser accessibility")
-
-  const desktop = record(report.desktop, "B4 Desktop result")
-  for (const key of [
-    "productionWebUI",
-    "embeddedControlPlane",
-    "persistedCompanyHome",
-    "sourceWatermarkConverged",
-    "productionWebUIProjectionConverged",
-    "seedPairVisible",
-    "assignmentEvidenceVisible",
-    "diagnosticsVisible",
-  ])
-    if (desktop[key] !== true) throw new Error(`B4 Desktop check failed: ${key}`)
-  allTrue(desktop.accessibility, "B4 Desktop accessibility")
-  if (
-    Object.values(record(desktop.projectionStatuses, "B4 Desktop projection statuses")).some((status) => status !== 200)
-  )
-    throw new Error("B4 Desktop projection status is not successful.")
 
   const screenshotDiff = record(report.screenshotDiff, "B4 screenshot diff")
   if (

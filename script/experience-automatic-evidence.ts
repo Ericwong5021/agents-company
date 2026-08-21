@@ -806,7 +806,8 @@ async function stateEntries(
     const source = new Uint8Array(await Bun.file(target).arrayBuffer())
     return [{ path: relative, sha256: sha256(source), byteLength: source.byteLength }]
   }
-  if (!info.isDirectory()) throw new Error(`Automatic evidence state target must be a regular file or directory: ${target}`)
+  if (!info.isDirectory())
+    throw new Error(`Automatic evidence state target must be a regular file or directory: ${target}`)
   const children = (await fs.readdir(target)).sort()
   if (!children.length) return [{ path: `${relative}/`, sha256: sha256(""), byteLength: 0 }]
   return (
@@ -936,13 +937,9 @@ async function validateAttemptIsolationAttestation(options: {
     invalid()
     return
   }
-  const command = options.commands.find(
-    (item) => isRecord(item) && item.id === b5CandidateCommandId,
-  )
+  const command = options.commands.find((item) => isRecord(item) && item.id === b5CandidateCommandId)
   const reports = isRecord(command) && Array.isArray(command.reports) ? command.reports : []
-  const report = reports.find(
-    (item) => isRecord(item) && item.sourcePath === b5CandidateSummarySourcePath,
-  )
+  const report = reports.find((item) => isRecord(item) && item.sourcePath === b5CandidateSummarySourcePath)
   if (
     !isRecord(command) ||
     command.startedAt !== options.value.command.startedAt ||
@@ -976,11 +973,9 @@ async function validateAttemptIsolationAttestation(options: {
     summaryValue.window.finishedAt > Date.parse(String(options.value.command.finishedAt)) ||
     canonicalize(options.value.b5Summary) !== canonicalize(expected) ||
     expected.outputIsolationSha256 !== expected.environment.output.stateSha256 ||
-    options.value.automatic.worktreeAbsolutePathSha256 !==
-      expected.environment.worktree.absolutePathSha256 ||
+    options.value.automatic.worktreeAbsolutePathSha256 !== expected.environment.worktree.absolutePathSha256 ||
     options.value.automatic.outputAbsolutePathSha256 === expected.environment.output.absolutePathSha256 ||
-    options.value.automatic.isolationRootAbsolutePathSha256 ===
-      expected.environment.isolationRoot.absolutePathSha256 ||
+    options.value.automatic.isolationRootAbsolutePathSha256 === expected.environment.isolationRoot.absolutePathSha256 ||
     new Set(Object.values(expected.environment).map((binding) => binding.absolutePathSha256)).size !== 5
   ) {
     invalid()
@@ -1974,7 +1969,6 @@ async function cleanIgnoredRuntimePaths(worktree: string) {
       "packages/control-plane/.artifacts",
       "packages/shared/.artifacts",
       "packages/sdk/js/.artifacts",
-      "packages/desktop/.artifacts",
     ].map((relativePath) => fs.rm(path.join(worktree, relativePath), { recursive: true, force: true })),
   )
 }
@@ -2458,33 +2452,25 @@ async function inspectPlaywrightBrowsers(directory: string, isolationRoot: strin
 }
 
 async function resolvePlaywrightInstallation(worktree: string) {
-  const [rootManifest, appManifest, desktopManifest] = (await Promise.all(
-    ["package.json", "packages/app/package.json", "packages/desktop/package.json"].map((relativePath) =>
+  const [rootManifest, appManifest] = (await Promise.all(
+    ["package.json", "packages/app/package.json"].map((relativePath) =>
       Bun.file(path.join(worktree, relativePath)).json(),
     ),
   )) as unknown[]
-  if (!rootManifest || !appManifest || !desktopManifest) {
+  if (!rootManifest || !appManifest) {
     throw new Error("Exact-build Playwright package manifests are missing.")
   }
   const rootCatalog =
     isRecord(rootManifest) && isRecord(rootManifest.workspaces) && isRecord(rootManifest.workspaces.catalog)
       ? rootManifest.workspaces.catalog
       : {}
-  const declaredVersions = [appManifest, desktopManifest].map((manifest) => {
-    const specifier =
-      isRecord(manifest) && isRecord(manifest.devDependencies)
-        ? manifest.devDependencies["@playwright/test"]
-        : undefined
-    return specifier === "catalog:" ? rootCatalog["@playwright/test"] : specifier
-  })
-  if (
-    declaredVersions.some(
-      (version) => typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version),
-    ) ||
-    new Set(declaredVersions).size !== 1
-  ) {
-    throw new Error("App and desktop must resolve one exact Playwright version from the exact-build manifests.")
-  }
+  const specifier =
+    isRecord(appManifest) && isRecord(appManifest.devDependencies)
+      ? appManifest.devDependencies["@playwright/test"]
+      : undefined
+  const declaredVersion = specifier === "catalog:" ? rootCatalog["@playwright/test"] : specifier
+  if (typeof declaredVersion !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(declaredVersion))
+    throw new Error("App must resolve one exact Playwright version from the exact-build manifests.")
   const worktreeRealPath = await fs.realpath(worktree)
   const playwrightTestDirectory = await fs.realpath(path.join(worktree, "packages/app/node_modules/@playwright/test"))
   const playwrightDirectory = await fs.realpath(path.join(playwrightTestDirectory, "../../playwright"))
@@ -2506,7 +2492,7 @@ async function resolvePlaywrightInstallation(worktree: string) {
       (manifest, index) =>
         !isRecord(manifest) ||
         manifest.name !== ["@playwright/test", "playwright", "playwright-core"][index] ||
-        manifest.version !== declaredVersions[0],
+        manifest.version !== declaredVersion,
     )
   ) {
     throw new Error("Installed Playwright package versions do not match the exact-build manifest.")
@@ -3251,7 +3237,6 @@ async function dependencyIsolationSelfTest(directory: string) {
       PLAYWRIGHT_APP_SERVER_COMMAND: "malicious-command",
       PLAYWRIGHT_BASE_URL: "http://127.0.0.1:9997",
       PLAYWRIGHT_BROWSERS_PATH: "/host/mutable-playwright-cache",
-      PLAYWRIGHT_DESKTOP_SERVER_PORT: "9996",
       PORT: "9995",
     },
     commandDirectories,
@@ -3272,7 +3257,6 @@ async function dependencyIsolationSelfTest(directory: string) {
     "OPENROUTER_API_KEY",
     "PLAYWRIGHT_APP_SERVER_COMMAND",
     "PLAYWRIGHT_BASE_URL",
-    "PLAYWRIGHT_DESKTOP_SERVER_PORT",
     "PORT",
   ]
   const worktreeRealPath = await fs.realpath(worktree)
@@ -3396,7 +3380,7 @@ export async function runAutomaticEvidenceSelfTest() {
       () => true,
     )
   const missingCommand = await writeMutatedPackage(directory, "missing-command", fixture.packageValue, (value) => {
-    value.commands.pop()
+    value.commands = value.commands.filter((command) => command.id !== fixture.governance.requirements.commands[0]!.id)
   })
   const failedCommand = await writeMutatedPackage(directory, "failed-command", fixture.packageValue, (value) => {
     value.commands[0]!.exitCode = 1

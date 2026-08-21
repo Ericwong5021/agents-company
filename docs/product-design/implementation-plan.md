@@ -15,13 +15,13 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 
 本计划用 M0–M6 纵向里程碑替代原来按 W1–W8 子系统铺开的实施顺序，但不改变宪法和 PRD 的首次公开版本范围。
 
-> WebUI 迁移说明：本文 M0–M2 中关于 Solid App Chrome、`packages/app/src` 和其 Electron renderer 的实现证据均为历史记录，不再构成当前实现路径。正式 WebUI 已收敛为 `packages/app` 的 Eve/Nuxt 应用；Desktop 需加载该应用，不再维护 Solid renderer。
+> WebUI 迁移说明：本文 M0–M2 中关于 Solid App Chrome 和 `packages/app/src` 的实现证据均为历史记录，不再构成当前实现路径。正式产品面已收敛为 `packages/app` 的 Eve/Nuxt WebUI。
 
 核心决定：
 
 - 保留当前 Company Workspace 的视觉语言，以 Marvis 的办公室氛围、角色辨识和结果分层为重要参照，继续提升群聊工作台的完成度；
 - 先修复共享 App Shell，再接入真实业务，避免把演示状态扩散成第二套产品；
-- 先建立 Company/Channel/Thread/Message 的权威契约，再让共享 WebUI 与 Desktop 消费；
+- 先建立 Company/Channel/Thread/Message 的权威契约，再让共享 WebUI 消费；
 - 先建立领域中立的交付内核，并用研究或分析、文档或本地应用、真实软件仓库三类任务验证，再扩展候选池、Agent Home 和生命层；
 - 第一阶段用员工卡片统一呈现真实行为状态，后续二维或三维办公室复用同一状态契约；
 - 隐私硬边界必须早于 Direct 和 Dreaming；
@@ -38,10 +38,9 @@ Agent Company 已完成产品事实收敛，也验证了共享 WebUI 的视觉�
 | Local Server / Runtime | M1/M2 已提供仅绑定 loopback 的 trusted Company/Conversation API、SQLite 事务、GroupSession 来源桥、终态竞争保护与跨进程恢复 | M0–M2 闭环已完成，不代表 M3–M6 已完成；非回环监听仍不属于当前主路径 |
 | Company Project | 默认路径已是自适应 planner 与动态任务树；Charter、三预设继承、WorktreeRun 状态机、`merge --no-ff` 与主分支复验已落地（`fc45cc7`、`02d3406`、`09c2692`），有约 2700 行专项测试 | 固定游戏 MVP 已不是默认路径。仍缺：只能在 `output_dir` 下新建空仓库、不能绑定用户已有主仓库；WorktreeRun 无 destroyable/destroyed 状态与销毁实现；`recovery_needed` 无赋值点，启动不做 `git worktree list` 交叉核对 |
 | SDK | M1 Company/Local Auth 与 M2 Conversation operation 已生成具体 response/error 类型 | 新产品接口不以 `unknown` 作为契约 |
-| Desktop | Windows 原生 Electron Gate 已覆盖目录选择、bootstrap、trusted loopback API 与重启恢复；发布目录包含 sidecar 运行依赖。托盘（Show/Hide/Quit）与关窗后台已存在于 `src/main/index.ts` | M4 缺的是产品语义而非基础设施：暂停公司/停止新动作、窗口销毁后从托盘或协议重建、通知的事件生产者与高信号定位、Gate/受管资源恢复注册表、备份恢复与导出 |
 | Agent Identity | 有 CompanyAgent、SOUL、INSTRUCT、Memory、Relationship 等基础 | 文件包仍是平面结构；candidate/employee 和 private/professional/public 未实现；现有关系/委派规则不能直接用于私域 |
 | Worktree | 有通用创建、重置、强制删除能力 | 没有项目级生命周期、合并/验证 Gate 和孤儿恢复；不能让产品直接调用强制删除作为交付完成 |
-| E2E / 发布 | Browser Playwright 与 Windows 原生 Electron Gate 已进入 CI，Windows unpacked 打包已验证运行依赖 | 浏览器 Gate 当前跑在 `packages/app/e2e/fake-control-plane.ts` 测试替身上，只有 Desktop Gate 走真实内嵌 Control Plane；M2 的“真实发送/Thread 纵向”在浏览器侧已无载体。Windows/macOS 干净设备安装、签名、升级矩阵仍在 M6 |
+| E2E / 发布 | Browser Playwright 与生产 WebUI Gate 已进入 CI | 浏览器 Gate 必须覆盖真实 Control Plane、生产构建、恢复和关键用户旅程；桌面安装、签名与升级矩阵不再属于发布范围 |
 
 因此，当前阶段不是“产品主体已完成、只差接 API”，而是：
 
@@ -58,7 +57,7 @@ Agent 生命层与 Pre-Public 发布：尚未进入验收
 ## 3. 目标架构与边界
 
 ```text
-Electron / Browser
+WebUI
           │
           ▼
 Generated SDK + loopback-only trusted local API + SSE invalidation
@@ -78,7 +77,7 @@ Local Control Plane（唯一权威写入者）
 
 架构约束：
 
-- WebUI 和 Electron renderer 不直接写 SQLite、身份文件或 Git；
+- WebUI 不直接写 SQLite、身份文件或 Git；
 - SQLite 是事务状态权威源，身份文件是人格内容权威源，各领域受管资源保留自己的事实源，Git 是代码与合并事实权威源；
 - SSE 只负责实时失效通知和增量体验，断线后必须从权威快照重建，不能把内存事件总线当作正式记录；
 - 当前 `thread` 表表示 Agent 执行线程，不能直接冒充产品 IM Thread；产品层使用 `ConversationThread`，并通过 `runtime_thread_id` / `session_id` 关联执行过程；
@@ -113,7 +112,7 @@ Local Control Plane（唯一权威写入者）
 1. 先写失败的领域、权限、恢复或 Git 事实测试；
 2. 建立 SQLite schema、Effect service 和完整 Zod response schema；
 3. 生成 JavaScript SDK，禁止新增产品接口返回 `unknown`；
-4. 接入共享 WebUI，并通过同一服务语义供 Desktop 和 Browser 使用；
+4. 接入共享 WebUI，并通过统一服务语义供浏览器使用；
 5. 增加真实后端 E2E，不使用 fixture 证明业务完成；
 6. 更新实现状态和产品文案，只陈述已经通过退出标准的能力。
 
@@ -156,7 +155,7 @@ Local Control Plane（唯一权威写入者）
 
 目标：在干净或半初始化的数据目录中自动修复并创建一家公司和最小董事会，将 Provider、公司名称与仓库绑定改为可在主工作台后续完成的渐进式配置。
 
-状态：已完成（2026-07-17）。浏览器与 Windows 原生 Electron Gate 均通过；原生 Gate 以真实 main/preload/renderer/sidecar 覆盖目录选择、bootstrap、trusted loopback、消息、Thread 与重启恢复。
+状态：已完成（2026-07-17）。WebUI Gate 覆盖 bootstrap、trusted loopback、消息、Thread 与重启恢复。
 
 主要工作：
 
@@ -164,9 +163,8 @@ Local Control Plane（唯一权威写入者）
 2. 实现渐进式首次进入：固定数据目录后自动创建 CEO/CTO/Product Lead、默认平衡预设并直接打开 Company Workspace；
 3. Provider 通过 Settings 配置；未配置时，对话将目标持久化为设置卡，不启动董事会运行；仓库可由 Agent 按需在受管本地目录初始化，软件交付按可独立验收的交付单元保存仓库绑定；
 4. 新建带完整 Zod response 的 `/company` 产品路由，修复 SDK `unknown`，并运行 `./packages/sdk/js/script/build.ts`；
-5. 将 Desktop 品牌、App ID、协议和新数据目录切换为 Agent Company；本产品不为旧 AgentCompany/OpenCode 数据布局提供隐式兼容桥；
-6. Desktop sidecar 与本地浏览器共享仅绑定 loopback 的 trusted 服务契约；当前单用户阶段不认证用户；
-7. 默认 Company 创建幂等；空库和孤立 Company 记录会自动修复为默认空工作台，不再进入首次引导。
+5. WebUI 与本地 Control Plane 使用仅绑定 loopback 的 trusted 服务契约；当前单用户阶段不认证用户；
+6. 默认 Company 创建幂等；空库和孤立 Company 记录会自动修复为默认空工作台，不再进入首次引导。
 
 退出标准：
 
@@ -182,7 +180,7 @@ Local Control Plane（唯一权威写入者）
 
 状态：**控制面完成；Nuxt Board 治理承载面已于 2026-07-30 恢复，完整公司群聊与 Thread 闭环继续由 R2/R3 验收**。
 
-- 真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry、SSE 重连和 Desktop sidecar 已收口；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
+- 真实消息、Runtime 启动、终态竞争、恢复关联、来源 hydrate、Thread entry 和 SSE 重连已收口；`capabilities.board_messages` 生产默认开启，紧急回滚使用 `AGENTCOMPANY_DISABLE_BOARD_MESSAGES=true`。
 - `/company/board` 已读取真实 Board、Ledger、Shadow/Advisor 与人工接管投影，不再重定向到 `/work`。
 - 公司群聊、完整 Thread 工作日志、Artifact/Delivery 消费与高信号覆盖仍按体验重构计划的 WORK/DELIV Task 验收，不能由 Board 页面存在推断完成。
 
@@ -403,7 +401,7 @@ bun test test/conversation/runtime.test.ts test/conversation/signal-projector.te
 bun typecheck
 ```
 
-涉及共享 WebUI 后，从 `packages/app` 执行该包现有类型检查、单元测试、生产构建和真实本地 Server Playwright。若产品 Interface 或 Zod response 发生变化，运行 `./packages/sdk/js/script/build.ts` 重新生成 JavaScript SDK，再验证 Desktop/Browser 共用契约。
+涉及共享 WebUI 后，从 `packages/app` 执行该包现有类型检查、单元测试、生产构建和真实本地 Server Playwright。若产品 Interface 或 Zod response 发生变化，运行 `./packages/sdk/js/script/build.ts` 重新生成 JavaScript SDK，再验证 WebUI 服务契约。
 
 人工验收固定使用同一组场景：
 
@@ -460,30 +458,29 @@ bun typecheck
 - 当前固定游戏 MVP execution 不再是产品默认路径；
 - 三类任务复用同一组织、消息、治理和交付契约，全程不需要用户手工编排 Agent、修改数据库或补资源状态。
 
-### M4 — Desktop 常驻、通知与恢复
+### M4 — WebUI 连续性与恢复
 
-目标：窗口不是公司进程，关闭窗口和系统重启都不破坏已授权工作。
+目标：浏览器页面不是公司进程，关闭页面、刷新和系统重启都不破坏已授权工作。
 
 预计：2–3 周；M1 完成后可与 M2/M3 并行，但 Dogfood Alpha 前必须完成。
 
 主要工作：
 
-1. 增加 Windows/Linux Tray 与 macOS Status Item；
-2. 区分关闭窗口、暂停公司、停止新动作和退出进程；
-3. BrowserWindow 销毁后可从托盘、协议或通知重新创建；
-4. 建立 Presence、Attention、Activity、Location、Subject、Interruptibility、Evidence、Since 正交状态投影；
-5. 状态栏与第一版员工卡片只消费该投影，展示真实工作、等待、Review、闲逛、社交、反思、暂停和异常；
-6. 审批、阻塞、完成和异常通知定位到对应高信号消息与 Thread；
-7. 建立 Project、ConversationThread、Workflow、AgentRun、RuntimeHome、SkillSnapshot、Gate 和受管资源的恢复注册表；
-8. 启动时执行 schema migration、运行恢复和孤儿资源扫描；
-9. 建立备份、导出、恢复和脱敏诊断包的最小可用路径。
+1. 区分关闭页面、暂停公司、停止新动作和退出 Control Plane；
+2. WebUI 重开或 SSE 重连后从权威快照恢复；
+3. 建立 Presence、Attention、Activity、Location、Subject、Interruptibility、Evidence、Since 正交状态投影；
+4. 第一版员工卡片只消费该投影，展示真实工作、等待、Review、暂停和异常；
+5. 审批、阻塞、完成和异常状态定位到对应高信号消息与 Thread；
+6. 建立 Project、ConversationThread、Workflow、AgentRun、RuntimeHome、SkillSnapshot、Gate 和受管资源的恢复注册表；
+7. 启动时执行 schema migration、运行恢复和孤儿资源扫描；
+8. 建立备份、导出、恢复和脱敏诊断包的最小可用路径。
 
 退出标准：
 
-- 长任务运行时关闭窗口，任务继续且托盘可重开；
-- 应用或系统异常终止后能恢复或进入明确待处置状态；
-- 通知不泄漏 private/Direct 正文；
-- 员工卡片、托盘和恢复界面使用同一真实状态来源；
+- 长任务运行时关闭页面，任务继续且重新打开 WebUI 后状态收敛；
+- Control Plane 或系统异常终止后能恢复或进入明确待处置状态；
+- 状态提示不泄漏 private/Direct 正文；
+- 员工卡片和恢复界面使用同一真实状态来源；
 - 备份恢复后公司、项目、审批和受管资源关联一致；
 - PRD 6.5 与 14.1 第 8、12 步通过。
 
@@ -560,7 +557,7 @@ M0 App Shell 修复
        ├─ M2 Real IM / Board
        │    └─ M3 Governed Delivery
        │         └─ M5 Identity / Life
-       └─ M4 Desktop Continuity ─────────┐
+       └─ M4 WebUI Continuity ───────────┐
                                          ├─ M6 Pre-Public / RC
                  M3 Governed Delivery ───┤
                  M5 Identity / Life ─────┘
@@ -571,8 +568,8 @@ M0 App Shell 修复
 | 工作流 | 责任 | 首要约束 |
 |---|---|---|
 | Control Plane / Domain | schema、服务、策略、领域适配、恢复与资源事实 | 先写权威状态和非法转换测试 |
-| WebUI / Desktop | 群聊、Thread、员工卡片、App Chrome、托盘、通知、无障碍 | 只消费生成 SDK，不复制领域规则或行为状态机 |
-| Verification / Release | 跨领域 E2E、真实仓库 E2E、故障注入、打包、文档事实 | 从 M0 起持续进入 CI，不在 M6 临时补测试 |
+| WebUI | 群聊、Thread、员工卡片、App Chrome、状态提示、无障碍 | 只消费生成 SDK，不复制领域规则或行为状态机 |
+| Verification / Release | 跨领域 E2E、真实仓库 E2E、故障注入、WebUI 生产构建、文档事实 | 从 M0 起持续进入 CI，不在 M6 临时补测试 |
 
 发布检查点：
 
@@ -583,7 +580,7 @@ M0 App Shell 修复
 | Pre-Public Beta | M5 | 完成 Agent 职业连续性、私域、真实闲逛与人格成长 |
 | Release Candidate | M6 | 安装、恢复、隐私和纵向验收达到发布门槛 |
 
-工期假设：一条主实现流加一条可并行的 Desktop/Verification 流，且模型供应商、代码签名和发布账号不阻塞。按此假设，M0 到 Release Candidate 约 11–14 个日历周；单线串行约 16–20 周。里程碑退出标准优先于日期，不以压缩 Gate 换取表面进度。
+工期假设：一条主实现流加一条可并行的 WebUI/Verification 流，且模型供应商和发布账号不阻塞。按此假设，M0 到 Release Candidate 约 11–14 个日历周；单线串行约 16–20 周。里程碑退出标准优先于日期，不以压缩 Gate 换取表面进度。
 
 ## 7. 产品数据与 API 决策
 
@@ -629,8 +626,8 @@ M0 App Shell 修复
 
 | PRD 需求族 | 负责里程碑 | 覆盖说明 |
 |---|---|---|
-| LCP-01–03、LCP-09 | M1 | loopback trusted 本地 API、单写者、Desktop/Browser 共享契约；非回环监听不在当前主路径 |
-| LCP-04–08 | M4，M6 硬化 | 关窗继续、托盘/状态栏、通知、重启恢复、备份导出 |
+| LCP-01–03、LCP-09 | M1 | loopback trusted 本地 API、单写者、WebUI 服务契约；非回环监听不在当前主路径 |
+| LCP-04–08 | M4，M6 硬化 | 关页继续、WebUI 状态恢复、重启恢复、备份导出 |
 | IM-01 | M2 + M5 | M2 完成公司/董事会/项目；M5 在私域硬边界后开放部门和 Direct |
 | IM-02–09 | M2 | 项目群、高信号、Thread、来源、工具折叠、@/动作、辅助视图 |
 | IM-10 | M3B + M4 | Thread 工作日志、Attempt、产出物、预览与群聊高信号投影 |
@@ -678,9 +675,8 @@ M0 App Shell 修复
 - App Playwright 使用真实本地 Server，不用 fixture 证明业务；
 - 研究或分析、文档或本地应用、软件研发三类任务复用同一组织和交付契约；
 - 临时真实 Git 仓库覆盖成功、冲突、验证失败、取消和恢复；
-- Electron 覆盖关窗继续、托盘重开、通知定位和系统重启；
 - 自主/平衡/严格以及 Worktree 开/关两种模式；
-- Windows/macOS 干净设备执行 PRD 14.1；
+- 主流桌面浏览器在本地生产 WebUI 执行 PRD 14.1；
 - private/Direct 从 API、路径、搜索、摘要、日志、通知、错误、备份、导出、UI 和 Context 注入做负向攻击。
 
 ## 9. 迁移、回滚与故障策略
@@ -695,7 +691,7 @@ M0 App Shell 修复
 
 ## 10. 明确范围与拒绝的路线
 
-本计划包含首次公开版本要求的单用户、本地、领域中立 Agent 自组织与自治理、跨领域代表性任务、软件深度适配器、Desktop/Browser、员工状态卡片、Agent Home 和生命层。
+本计划包含首次公开版本要求的单用户、本地、领域中立 Agent 自组织与自治理、跨领域代表性任务、软件深度适配器、WebUI、员工状态卡片、Agent Home 和生命层。
 
 本计划不包含：
 
@@ -713,9 +709,8 @@ M0 App Shell 修复
 - 直接把 Company Workspace 接到当前 `/company-project`：其 schema、资源和交付语义不满足 PRD；
 - 继续先做更多静态管理页面：会扩大演示壳而不缩短纵向交付路径；
 - 先实现 Dreaming 再补私域：会把硬权限问题带入最敏感的数据；
-- 让 Desktop 托盘展示 fixture 状态：状态栏只能报告 Control Plane 的真实事件；
-- 为员工卡片、托盘和办公室分别维护状态：所有界面必须消费同一 AgentActivityProjection；
-- 为产品方向再次整体重写 Eve/Nuxt、Electron、Bun/Effect 技术栈，或维护平行的正式 WebUI；
+- 为员工卡片和办公室分别维护状态：所有界面必须消费同一 AgentActivityProjection；
+- 为产品方向再次整体重写 Eve/Nuxt、Bun/Effect 技术栈，或维护平行的正式 WebUI；
 - 为旧 API 保留长期双轨消息或项目模型：新产品不承担默认兼容义务。
 
 ## 11. 关键假设与里程碑剩余项
@@ -735,6 +730,6 @@ M0 App Shell 修复
 - M2：用户可见的会话与 Thread 界面待在 R2 重建；approval 与 delivery 两种高信号待接入投影器。
 - M3A：Pi 跨进程会话恢复、正式 Codex app-server 与 Claude Code Agent SDK 适配、CLI 适配器的实时投递、持久 follow_up 队列的消费者接线。
 - M3B：受管资源处置（WorktreeRun 销毁与孤儿扫描）、绑定用户已有主仓库、文档与本地应用适配器、跨领域验收。
-- M4：暂停与停止语义、窗口重建、通知生产者、恢复注册表、备份恢复与导出。
+- M4：暂停与停止语义、WebUI 重连、状态提示、恢复注册表、备份恢复与导出。
 - M5：私域硬边界闭环（当前 `PATCH /company_agent/:id` 可直接改写 SOUL/INSTRUCT，dream 子代理对全部 agent home 可读写），以及 Direct、Reflection、Ambient、人格型 Dreaming。这些能力受 PRD 4.1 的 Life 层解冻条件约束。
-- M6：隐私越权负向测试（当前为零）、领域测试进 CI（当前 CI 只跑 16 个 control-plane 测试文件）、macOS CI、打包签名与安装升级演练。
+- M6：隐私越权负向测试（当前为零）、领域测试进 CI（当前 CI 只跑 16 个 control-plane 测试文件）、WebUI 生产构建与升级演练。

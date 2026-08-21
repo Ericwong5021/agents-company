@@ -81,13 +81,11 @@ function visibleUISource(source: string) {
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/\{\{[\s\S]*?\}\}/g, "")
-    .replace(
-      /<[^>]*>/g,
-      (tag) =>
-        Array.from(
-          tag.matchAll(/\b(?:aria-label|title|alt|placeholder|value|label)\s*=\s*["']([^"']*)["']/gi),
-          (match) => match[1],
-        ).join(" "),
+    .replace(/<[^>]*>/g, (tag) =>
+      Array.from(
+        tag.matchAll(/\b(?:aria-label|title|alt|placeholder|value|label)\s*=\s*["']([^"']*)["']/gi),
+        (match) => match[1],
+      ).join(" "),
     )
 }
 
@@ -1075,7 +1073,6 @@ check(
     "control-plane-typecheck",
     "app-typecheck",
     "sdk-js-typecheck",
-    "desktop-typecheck",
     "control-plane-r0-unit",
     "control-plane-r0-branches",
     "shared-unit",
@@ -1087,7 +1084,6 @@ check(
     "app-r0-shell",
     "app-r0-candidates",
     "app-production",
-    "desktop-e2e",
   ].every((command) => automaticCommandIDs.includes(command)) &&
     automaticCommandIDs.every((command) => automaticCriterionRefs.includes(`command:${command}`)) &&
     automaticEvidenceRequirements.tasks
@@ -1108,7 +1104,7 @@ check(
         "SHELL-03-SINGLE-NAVIGATION-CONFIG",
       ],
     ),
-  "Automatic evidence commands omit config, type, SDK, Desktop, candidate provenance, or SHELL-03 acceptance gates.",
+  "Automatic evidence commands omit config, type, SDK, candidate provenance, or SHELL-03 acceptance gates.",
 )
 const automaticEvidenceDefinitions = isRecord(automaticEvidencePackage.$defs) ? automaticEvidencePackage.$defs : {}
 const automaticEvidenceProperties = isRecord(automaticEvidencePackage.properties)
@@ -1304,7 +1300,7 @@ check(
 )
 check(
   workflow.includes("bun script/experience-pr-metadata.ts") &&
-    ["packages/app/", "packages/control-plane/", "packages/shared/", "packages/desktop/"].every((value) =>
+    ["packages/app/", "packages/control-plane/", "packages/shared/"].every((value) =>
       metadataValidator.includes(value),
     ),
   "PR metadata workflow does not cover every required product package.",

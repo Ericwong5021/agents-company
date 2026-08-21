@@ -322,26 +322,6 @@ const realSurfaceDeployment = z
           .strict(),
       })
       .strict(),
-    desktop: z
-      .object({
-        productionWebUI: z.literal(true),
-        embeddedControlPlane: z.literal(true),
-        persistedCompanyHome: z.literal(true),
-        sourceWatermarkConverged: z.literal(true),
-        productionWebUIProjectionConverged: z.literal(true),
-        projectionStatuses: z
-          .object({
-            work: z.literal(200),
-            organization: z.literal(200),
-            graph: z.literal(200),
-            validation: z.literal(200),
-          })
-          .strict(),
-        rendererURL: z.string().url(),
-        seedPairVisible: z.literal(true),
-        assignmentEvidenceVisible: z.literal(true),
-      })
-      .strict(),
     screenshotDiff: z
       .object({
         width: z.number().int().min(390),
@@ -1185,16 +1165,6 @@ async function validateDeploymentAttempt(
         },
         accessibility: deployment.browser.accessibility,
       },
-      desktop: {
-        productionWebUI: deployment.desktop.productionWebUI,
-        embeddedControlPlane: deployment.desktop.embeddedControlPlane,
-        persistedCompanyHome: deployment.desktop.persistedCompanyHome,
-        sourceWatermarkConverged: deployment.desktop.sourceWatermarkConverged,
-        productionWebUIProjectionConverged: deployment.desktop.productionWebUIProjectionConverged,
-        projectionStatuses: deployment.desktop.projectionStatuses,
-        seedPairVisible: deployment.desktop.seedPairVisible,
-        assignmentEvidenceVisible: deployment.desktop.assignmentEvidenceVisible,
-      },
       screenshotDiff: deployment.screenshotDiff,
       visualQA: deployment.visualQA,
       uncovered: deployment.uncovered,
@@ -1327,8 +1297,7 @@ async function validateB5Attempt(
     }) ||
     attestation.automatic.worktreeAbsolutePathSha256 !== summary.environment.worktree.absolutePathSha256 ||
     attestation.automatic.outputAbsolutePathSha256 === summary.environment.output.absolutePathSha256 ||
-    attestation.automatic.isolationRootAbsolutePathSha256 ===
-      summary.environment.isolationRoot.absolutePathSha256 ||
+    attestation.automatic.isolationRootAbsolutePathSha256 === summary.environment.isolationRoot.absolutePathSha256 ||
     new Set(Object.values(attestation.automatic)).size !== 3
   )
     fail("invalid", `${label} outer attempt attestation is not bound to its B5 summary`)
@@ -1455,8 +1424,7 @@ async function validateB5Attempt(
     (result) => result.metricId === summary.singleAttemptMetricGate.deferredMetricIds[0],
   )
   const unexpectedMetricResults = persistedMetric.results.filter(
-    (result) =>
-      result.metricId !== summary.singleAttemptMetricGate.deferredMetricIds[0] && result.status !== "pass",
+    (result) => result.metricId !== summary.singleAttemptMetricGate.deferredMetricIds[0] && result.status !== "pass",
   )
   if (
     !same(persistedMetric, recomputed.metric) ||
@@ -2273,9 +2241,7 @@ async function executePromotionChild(inputPath: string) {
   })
   delete process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION
   for (const target of ["kill_switch", "legacy_fallback"] as const) {
-    const rollback = input.rollbacks.find(
-      (candidate) => candidate.observation.target === target,
-    )!
+    const rollback = input.rollbacks.find((candidate) => candidate.observation.target === target)!
     const index = input.rollbacks.indexOf(rollback)
     const replay = await ProjectInstance.Instance.provide({
       directory: process.cwd(),
@@ -2293,28 +2259,20 @@ async function executePromotionChild(inputPath: string) {
             yield* projects.transition({ id: existing.id, status: "planning" })
             yield* projects.transition({ id: existing.id, status: "executing" })
             const existingBefore = (yield* projects.get(existing.id))!
-            const businessStateSha256Before =
-              CompanyRollout.projectBusinessStateSha256(existing.id)
+            const businessStateSha256Before = CompanyRollout.projectBusinessStateSha256(existing.id)
             const before = CompanyRollout.status()
-            process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION =
-              target === "kill_switch" ? "off" : "active"
+            process.env.AGENTCOMPANY_SEED_GROW_ORCHESTRATION = target === "kill_switch" ? "off" : "active"
             const dispatchResult = yield* dispatch.dispatchReady(existing.id)
             const after = CompanyRollout.status()
-            const resolvedNewProjectStrategy =
-              CompanyRollout.resolveNewProjectStrategy(
-                target === "legacy_fallback"
-                  ? "legacy_full_plan"
-                  : undefined,
-              )
-            const resolvedExplicitFallbackStrategy =
-              CompanyRollout.resolveNewProjectStrategy("legacy_full_plan")
+            const resolvedNewProjectStrategy = CompanyRollout.resolveNewProjectStrategy(
+              target === "legacy_fallback" ? "legacy_full_plan" : undefined,
+            )
+            const resolvedExplicitFallbackStrategy = CompanyRollout.resolveNewProjectStrategy("legacy_full_plan")
             const created = yield* projects.create({
               goal: `Verify ${target} fallback strategy`,
               title: `Pre-Public ${target} fallback project`,
               execution_strategy: resolvedNewProjectStrategy,
-              ...(resolvedNewProjectStrategy === "seed_and_grow"
-                ? { seed_mode: "direct_single" as const }
-                : {}),
+              ...(resolvedNewProjectStrategy === "seed_and_grow" ? { seed_mode: "direct_single" as const } : {}),
             })
             const existingAfter = (yield* projects.get(existing.id))!
             return {
@@ -2327,19 +2285,10 @@ async function executePromotionChild(inputPath: string) {
               existingStrategyBefore: existingBefore.execution_strategy,
               existingStrategyAfter: existingAfter.execution_strategy,
               businessStateSha256Before,
-              businessStateSha256After:
-                CompanyRollout.projectBusinessStateSha256(existing.id),
-              newProjectStrategy: (yield* projects.get(created.id))!
-                .execution_strategy,
+              businessStateSha256After: CompanyRollout.projectBusinessStateSha256(existing.id),
+              newProjectStrategy: (yield* projects.get(created.id))!.execution_strategy,
             }
-          }).pipe(
-            Effect.provide(
-              Layer.mergeAll(
-                CompanyProject.defaultLayer,
-                DispatchCoordinator.defaultLayer,
-              ),
-            ),
-          ),
+          }).pipe(Effect.provide(Layer.mergeAll(CompanyProject.defaultLayer, DispatchCoordinator.defaultLayer))),
         ),
     })
     const dispatchSemantics = (value: {
@@ -2358,27 +2307,16 @@ async function executePromotionChild(inputPath: string) {
     if (
       !same(replay.before, rollback.observation.before) ||
       !same(replay.after, rollback.observation.after) ||
-      !same(
-        dispatchSemantics(replay.dispatchResult),
-        dispatchSemantics(rollback.observation.dispatch.result),
-      ) ||
+      !same(dispatchSemantics(replay.dispatchResult), dispatchSemantics(rollback.observation.dispatch.result)) ||
       replay.existingStatus !== rollback.observation.inFlightProject.status ||
-      replay.existingStrategyBefore !==
-        rollback.observation.inFlightProject.strategyBefore ||
-      replay.existingStrategyAfter !==
-        rollback.observation.inFlightProject.strategyAfter ||
+      replay.existingStrategyBefore !== rollback.observation.inFlightProject.strategyBefore ||
+      replay.existingStrategyAfter !== rollback.observation.inFlightProject.strategyAfter ||
       replay.businessStateSha256Before !== replay.businessStateSha256After ||
-      replay.newProjectStrategy !==
-        rollback.observation.businessRows.newProjectStrategy ||
-      replay.resolvedNewProjectStrategy !==
-        rollback.observation.resolvedNewProjectStrategy ||
-      replay.resolvedExplicitFallbackStrategy !==
-        rollback.observation.resolvedExplicitFallbackStrategy
+      replay.newProjectStrategy !== rollback.observation.businessRows.newProjectStrategy ||
+      replay.resolvedNewProjectStrategy !== rollback.observation.resolvedNewProjectStrategy ||
+      replay.resolvedExplicitFallbackStrategy !== rollback.observation.resolvedExplicitFallbackStrategy
     )
-      fail(
-        "failed",
-        `Fresh candidate rollback replay differs from ${target} evidence`,
-      )
+      fail("failed", `Fresh candidate rollback replay differs from ${target} evidence`)
     CompanyRollout.recordAction({
       kind: "record_rollback",
       idempotencyKey: `record-${rollback.id}`,

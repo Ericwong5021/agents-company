@@ -2,7 +2,7 @@
 
 > 状态：当前
 > 更新日期：2026-07-30
-> 适用范围：Agent Company WebUI 与 Electron 桌面端
+> 适用范围：Agent Company WebUI
 
 本文规定如何让隔离 Subagent 以精准用户画像操作真实产品 UI，并产出不受源码、设计文档或既有缺陷污染的体验报告。它补充[体验重构计划](product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)中的可用性测试要求，不替代真实用户研究、SUS 或发布 Gate。
 
@@ -12,7 +12,7 @@
 
 - 测试者只读取指定的 [README.zh.md](../README.zh.md)。
 - 测试者不得读取源码、设计文档、`AGENTS.md`、Git、测试、数据库、内部日志或网络接口。
-- 测试者只通过 Computer Use 操作桌面端；测试 WebUI 时可额外使用 Browser。
+- 测试者只通过 Browser 操作 WebUI。
 - 主持者只负责准备运行环境、提供入口和处理工具级中断，不解释正确导航。
 - 找不到入口、概念不懂、错误不可恢复均属于体验证据。
 - 不执行部署、上传、OTA、发布、付款、外部消息、批量删除或其他不可逆动作。
@@ -51,19 +51,6 @@ bun run dev:all
 ```
 
 确认本地 WebUI 可访问后，仅把产品入口交给测试者。启动命令、端口诊断和终端输出不交给测试者。
-
-### 3.3 Electron 桌面端
-
-主持者先启动共享 WebUI，确认就绪后再启动 Electron：
-
-```bash
-bun run dev:web
-bun run dev:desktop
-```
-
-测试者从真实 Agent Company 窗口开始，只使用 Computer Use。若首次 Company Home 不存在，由测试者通过 macOS 文件选择器自行判断是否创建；主持者不得代选。
-
-开发进程退出、窗口消失或底层错误页出现时，测试者先按普通用户方式恢复。两次失败后，主持者最多只重启一次应用，不解释故障或导航；重启前后的观察都保留。
 
 ## 4. 凭证规则
 
@@ -128,7 +115,7 @@ bun run dev:desktop
 
 ## 8. 收尾
 
-- 停止本轮启动的 WebUI、Control Plane 和 Electron 开发进程。
+- 停止本轮启动的 WebUI 和 Control Plane 开发进程。
 - 不擅自删除 Company Home、数据库、配置或测试目标。
 - 向用户列出留下的目录和数据，以及是否可安全恢复。
 - 确认没有部署、上传、OTA、发布或不可逆外部动作。

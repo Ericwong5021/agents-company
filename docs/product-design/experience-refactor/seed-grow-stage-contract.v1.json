@@ -56,7 +56,6 @@
       "control-plane-typecheck",
       "app-typecheck",
       "sdk-js-typecheck",
-      "desktop-typecheck",
       "control-plane-migrations",
       "a1-fresh-db",
       "a1-migrated-db",
@@ -96,8 +95,7 @@
       "app-production",
       "seed-grow-real-surfaces",
       "b4-projection-recovery",
-      "b5-candidate-facts",
-      "desktop-e2e"
+      "b5-candidate-facts"
     ],
     "plannedStageCommands": []
   },
@@ -160,7 +158,6 @@
         "control-plane-typecheck",
         "app-typecheck",
         "sdk-js-typecheck",
-        "desktop-typecheck",
         "control-plane-migrations",
         "control-plane-r0-unit",
         "control-plane-all-unit",
@@ -177,8 +174,7 @@
         "app-e2e",
         "app-build",
         "app-production",
-        "seed-grow-real-surfaces",
-        "desktop-e2e"
+        "seed-grow-real-surfaces"
       ],
       "repeats": 2,
       "criteria": [
@@ -205,7 +201,6 @@
             "command:control-plane-typecheck",
             "command:app-typecheck",
             "command:sdk-js-typecheck",
-            "command:desktop-typecheck",
             "command:control-plane-migrations",
             "command:control-plane-r0-unit",
             "command:control-plane-all-unit",
@@ -240,8 +235,8 @@
         },
         {
           "id": "A0-REAL-LOCAL-SURFACES",
-          "statement": "A real local Control Plane, production WebUI and Desktop path pass health, routing, data, restart and cleanup checks.",
-          "evidenceRefs": ["command:app-build", "command:seed-grow-real-surfaces", "command:desktop-e2e"]
+          "statement": "A real local Control Plane and production WebUI pass health, routing, data, restart and cleanup checks.",
+          "evidenceRefs": ["command:app-build", "command:seed-grow-real-surfaces"]
         },
         {
           "id": "A0-LOCAL-REPRODUCIBILITY",
@@ -560,19 +555,13 @@
       "releaseWindow": "R4",
       "dependsOn": ["B3"],
       "taskIds": ["UX-01", "UX-02", "UX-03", "UX-04", "UX-05", "UX-06", "UX-07", "UX-08", "UX-09", "SDK-01", "QA-09"],
-      "governedPaths": [
-        "packages/app",
-        "packages/desktop",
-        "packages/control-plane/src/server",
-        "packages/shared",
-        "packages/sdk"
-      ],
+      "governedPaths": ["packages/app", "packages/control-plane/src/server", "packages/shared", "packages/sdk"],
       "requiredCommandIds": ["seed-grow-real-surfaces", "b4-projection-recovery"],
       "repeats": 2,
       "criteria": [
         {
           "id": "B4-REAL-SURFACES",
-          "statement": "Browser and Desktop use the real candidate Control Plane and never a production Fixture.",
+          "statement": "WebUI uses the real candidate Control Plane and never a production Fixture.",
           "evidenceRefs": ["command:seed-grow-real-surfaces"]
         },
         {
@@ -596,7 +585,6 @@
       "governedPaths": [
         "packages/control-plane",
         "packages/app",
-        "packages/desktop",
         "packages/shared",
         "packages/sdk",
         "docs/product-design/experience-refactor"

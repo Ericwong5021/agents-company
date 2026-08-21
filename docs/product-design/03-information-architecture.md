@@ -12,7 +12,7 @@
 3. 私人空间和 Direct 形成真实、不可越级的空间边界；
 4. 上下文压缩不改变权限；
 5. 磁盘文件、数据库和 UI 对同一事实有清晰权威源；
-6. 员工卡片、托盘和未来办公室画面不会各自发明 Agent 状态。
+6. 员工卡片、组织视图和未来办公室画面不会各自发明 Agent 状态。
 
 ## 2. 四类信息
 
@@ -155,7 +155,7 @@ flowchart LR
 
 客户端不能直接修改 SQLite 或身份文件；写入必须经 Control Plane 的授权 API。用户在文件系统做的外部修改只作为可检测输入，不绕过身份协议。
 
-Agent 行为状态至少包含 Presence、Attention、Activity、Location、Subject、Interruptibility、Evidence 和 Since。员工卡片、组织视图、托盘以及后续二维或三维办公室只能读取该投影，不能把动画播放状态写回为公司事实。
+Agent 行为状态至少包含 Presence、Attention、Activity、Location、Subject、Interruptibility、Evidence 和 Since。员工卡片、组织视图以及后续二维或三维办公室只能读取该投影，不能把动画播放状态写回为公司事实。
 
 ## 10. 隐私验收
 

@@ -2,14 +2,14 @@
 
 Command-oriented tooling for automation, repository work, and diagnostics.
 
-Agent Company CLI is retained for maintainers, scripts, and one-shot Agent runs. It is not a separate product UI and does not carry feature-parity commitments with the shared Web/Desktop product.
+Agent Company CLI is retained for maintainers, scripts, and one-shot Agent runs. It is not a separate product UI and does not carry feature-parity commitments with the WebUI product.
 
 ```bash
 npm install -g @agents-company/control-plane
 agents --help
 ```
 
-This npm package exposes a headless local server and command-line operations. New Agent Company product journeys are designed for the shared WebUI and Electron application; Web and desktop binaries are not distributed through this package.
+This npm package exposes the headless local server and command-line operations used by the WebUI. New Agent Company product journeys are designed only for the shared WebUI.
 
 ## Existing CLI usage
 
@@ -39,7 +39,7 @@ agents models
 
 ## What It Does
 
-This package supports repository work and automation through explicit commands. The broader Agent Company product is domain-neutral and uses the shared Web/Desktop group workspace as its primary surface.
+This package supports repository work and automation through explicit commands. The broader Agent Company product is domain-neutral and uses the shared WebUI group workspace as its primary surface.
 
 Use it for:
 

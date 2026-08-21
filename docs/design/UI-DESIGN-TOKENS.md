@@ -1,7 +1,7 @@
 # Agent Company UI Design Tokens
 
 > 状态：Pre-Public 当前视觉规范
-> 适用范围：`packages/app` 共享 Company WebUI、Electron renderer 与 Pencil 设计稿
+> 适用范围：`packages/app` 共享 Company WebUI 与 Pencil 设计稿
 > 参考：Marvis macOS 客户端的浅色桌面氛围、留白节奏与结果分层
 
 ## 1. 视觉主题与氛围

@@ -472,7 +472,7 @@ R0 不依赖任何完整的 R1 Task。为解除原计划中 SHELL-02 → FND-04�
 | 发布候选素材 | 8 张核心界面截图、12 张 HR-01 状态卡均绑定候选 SHA；两份清单 SHA-256 分别为 `6937c477d638bb263437920e0510387afeb2314e52b1aba4ba6129bd91791fc0`、`7e112a24887583c5cc62d61016ffa74b9d7301bbbdc5153efb05f50bdfcdb1ef` |
 | 独立复现 | 20 张图片与 2 份清单共 22 个文件逐字节一致 |
 | Gate 当前进程复跑 | `automaticEvidenceStatus: pass`、`automaticEvidenceExecution: current_process`、`failures: []`、`errors: []` |
-| 云端 CI | 5 个工作流全部通过；`test` 中 unit、Linux M2 browser、Windows M2 native Desktop 均通过 |
+| 云端 CI | 5 个工作流全部通过；`test` 中 unit 与 Linux M2 browser 均通过 |
 
 上述结果只适用于该候选 SHA。后续仅记录进度的文档提交不替换候选版本；运行时源码、证据契约或候选素材发生变化时，必须冻结新的候选 SHA 并重新执行全部自动验收。
 
@@ -700,7 +700,7 @@ flowchart LR
 
 
 - 本文档与 `experience-refactor/manifest.v1.json` 固定唯一范围、前置切片和验证命令。
-- `.github/workflows/experience-refactor-metadata.yml` 调用 `script/experience-pr-metadata.ts`，覆盖 App、Control Plane、Shared、Desktop 与 SDK 体验改动，并拒绝空白验收证据。
+- `.github/workflows/experience-refactor-metadata.yml` 调用 `script/experience-pr-metadata.ts`，覆盖 App、Control Plane、Shared 与 SDK 体验改动，并拒绝空白验收证据。
 - 功能开关、默认导航和旧 Life 数据回归仍属于产品实现验收；治理文件不能替代运行证据。
 
 

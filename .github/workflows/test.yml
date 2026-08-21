@@ -162,37 +162,3 @@ jobs:
           name: r0-experience-benchmark
           path: .artifacts/experience-refactor
           if-no-files-found: warn
-
-  m2-desktop:
-    needs: unit
-    runs-on: windows-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: ./.github/actions/setup-bun
-
-      - name: Configure git identity
-        run: |
-          git config --global user.email "ci@agentscompany.dev"
-          git config --global user.name "agents-company-ci"
-
-      - name: Run M2 native Desktop gate
-        working-directory: packages/desktop
-        env:
-          PLAYWRIGHT_JUNIT_OUTPUT: .artifacts/m2-desktop/junit.xml
-          MODELS_DEV_API_JSON: test/tool/fixtures/models-api.json
-        run: bun run test:e2e
-
-      - name: Upload M2 Desktop artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m2-desktop-gate
-          path: |
-            packages/desktop/.artifacts/m2-desktop/junit.xml
-            packages/desktop/.artifacts/m2-desktop/test-results
-            packages/desktop/.artifacts/m2-desktop/app-data/user-data/logs
-          if-no-files-found: warn

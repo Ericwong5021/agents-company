@@ -72,7 +72,7 @@ Founder OS v1 建立三项能力：
 | Green/Yellow 委派、接管 fence、成本上限、checkpoint、摘要和回滚已落地 | `packages/control-plane/src/project-orchestrator/founder-delegation.ts` 与 `packages/control-plane/src/founder-os/yellow.ts` | Founder Twin 不直接依赖 Runtime、Tool 或 Graph 写链 |
 | 独立 Outcome Signal、来源验证、幂等恢复和 Decision 关联已落地 | `packages/control-plane/src/company-project/outcome-signal.ts` | run completed、Artifact 或 AI 自述不能单独成为 Outcome |
 | Commons、Reading、Interpretation、Belief、Experiment 与 Learning Patch 已落地 | `packages/control-plane/src/company-commons/`、`company-reading/` 与 `company-learning/` | 原始来源和 Agent 观点不能自动成为公司政策 |
-| Shared、JavaScript SDK、Nuxt WebUI 与 Desktop 消费同一 Control Plane 合同 | `packages/shared/src/founder-os.ts`、`packages/sdk/js/src/v2/founder-os.ts` 与 `packages/app` | 客户端不维护第二套治理状态 |
+| Shared、JavaScript SDK 与 Nuxt WebUI 消费同一 Control Plane 合同 | `packages/shared/src/founder-os.ts`、`packages/sdk/js/src/v2/founder-os.ts` 与 `packages/app` | 客户端不维护第二套治理状态 |
 | W0–W7、E0、K0–K2 精确提交 Gate 均通过 | `script/founder-os-gate.ts` 与 `script/founder-os-stage-*.ts` | 机器通过不构成人工授权或模式提高 |
 
 现有 `WorkReceipt` 是执行事实源之一，但其中的 `outcome` 字段、`attempt_failure` Artifact、验证结果或 Reputation 回写都不能替代独立 `OutcomeSignal`。
@@ -1021,7 +1021,7 @@ feature-flags
 migration-report
 contract-report
 unit-and-integration-report
-browser-and-desktop-report
+webui-report
 restart-and-kill-point-report
 authorization-report
 metric-report

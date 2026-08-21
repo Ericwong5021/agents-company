@@ -58,7 +58,7 @@
 
 ## 测试与验收
 
-- [Persona UX Test 真实环境盲测 Runbook](persona-ux-test-runbook.md)：隔离 Subagent、精准用户画像、WebUI/Electron 真实环境、凭证边界、证据分级与报告格式。
+- [Persona UX Test 真实环境盲测 Runbook](persona-ux-test-runbook.md)：隔离 Subagent、精准用户画像、WebUI 真实环境、凭证边界、证据分级与报告格式。
 - [Pre-Public 弱门禁登记](product-design/pre-public-acceptance-register.md)：人工研究、真实样本和主观验收状态；模拟 Persona 报告不能代替真人证据。
 
 ## 维护规则

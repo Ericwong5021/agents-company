@@ -32,15 +32,15 @@ describe("network authentication", () => {
   })
 
   test("uses the configured CORS allowlist and does not trust legacy origins", async () => {
-    const built = Server.create({ auth: { mode: "network", basic: credentials }, cors: ["ac://renderer"] })
+    const built = Server.create({ auth: { mode: "network", basic: credentials }, cors: ["http://127.0.0.1:3210"] })
     const legacy = await built.app.request("/global/health", {
       headers: { origin: "https://app.controlPlane.ai" },
     })
-    const desktop = await built.app.request("/global/health", {
-      headers: { origin: "ac://renderer" },
+    const webui = await built.app.request("/global/health", {
+      headers: { origin: "http://127.0.0.1:3210" },
     })
 
     expect(legacy.headers.get("access-control-allow-origin")).toBeNull()
-    expect(desktop.headers.get("access-control-allow-origin")).toBe("ac://renderer")
+    expect(webui.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:3210")
   })
 })

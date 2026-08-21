@@ -11,7 +11,7 @@ You set the direction. The company forms the right team, delivers verifiable res
 </div>
 
 > [!IMPORTANT]
-> Agent Company is an in-development **Pre-Public** product. The [experience refactor](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) still controls the R0–R4 release order. The local Control Plane, agent runtime, shared WebUI, Electron shell, dynamic-organization foundations, and Founder OS v1 are implemented; release acceptance, strict private spaces, and the Agent life layer remain separate work or deliberately frozen.
+> Agent Company is an in-development **Pre-Public** product. The [experience refactor](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md) still controls the R0–R4 release order. The local Control Plane, agent runtime, shared WebUI, dynamic-organization foundations, and Founder OS v1 are implemented; release acceptance, strict private spaces, and the Agent life layer remain separate work or deliberately frozen.
 >
 > Implemented does not mean enabled or publicly released. Founder Twin and Company Commons default to `off`, and machine Gate success does not substitute for human authorization or real-sample acceptance. See the [current Founder OS contract](docs/product-design/Founder-OS-v1.md) and [documentation index](docs/README.md).
 
@@ -35,13 +35,13 @@ The product has three inseparable layers:
 - **Visible failures.** Failed attempts, their causes, changed strategy, and recovery state remain traceable instead of disappearing behind a polished final answer.
 - **Visual quality is product capability.** Marvis is an important UI reference for office atmosphere, legible characters, activity states, and layered results. Agent Company adapts those strengths to a multi-agent group workspace.
 - **Real employee presence.** Employee cards read one activity projection derived from real runs, never a decorative animation. Today that projection covers working, waiting, recovering, and failure states; roaming, socializing, reflection, and the relationships and personality growth they feed belong to the frozen Life layer. Future 2D/3D office views must reuse the same state contract rather than inventing activity.
-- **Local-first.** Browser and desktop consume one local Control Plane through the same shared WebUI. Electron provides the persistent local product experience.
+- **Local-first.** The WebUI consumes one loopback-only local Control Plane and is the sole product access surface.
 - **Domain-neutral core, deep adapters.** Research, documents, local applications, and software delivery share one company model. Software adds strict repository, Worktree, review, merge, and verification rules without defining the whole product.
 
 ## Architecture
 
 ```text
-Electron / Browser
+WebUI
           │ local API + event stream
           ▼
 Local Control Plane
@@ -57,7 +57,6 @@ Local Control Plane
 | Package | Role |
 |---|---|
 | `packages/app` | Shared Nuxt WebUI |
-| `packages/desktop` | Electron shell, local server host, and packaging |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane, runtime, SQLite, Git, workflows, and internal CLI tooling |
 | `packages/sdk` | Generated and hand-written client SDKs |
 | `packages/ui` | Shared UI primitives |
@@ -78,7 +77,7 @@ Founder OS v1 passed W0–W7, E0, and K0–K2 machine Gates twice on candidate `
 
 ## Development
 
-Requirements: Bun 1.3.x and the platform dependencies needed by Electron and node-pty.
+Requirements: Bun 1.3.x and the platform dependencies needed by node-pty.
 
 ```bash
 git clone https://github.com/Ericwong5021/agents-company.git
@@ -87,8 +86,7 @@ bun install
 ```
 
 ```bash
-bun run dev:web      # shared WebUI
-bun run dev:desktop  # Electron shell
+bun run dev:all      # Control Plane + WebUI
 ```
 
 Run tests and type checks from the package you changed, never from the repository root:

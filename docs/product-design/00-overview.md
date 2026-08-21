@@ -52,8 +52,7 @@ flowchart TB
 
 ### 4.1 主要入口
 
-- **桌面工作台**：默认使用方式，承载常驻公司体验；
-- **浏览器工作台**：连接同一个本地 Control Plane，使用同一套 WebUI。
+- **WebUI 工作台**：唯一产品入口，连接本地 Control Plane。
 
 ### 4.2 信息层级
 
@@ -107,8 +106,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    E["Electron"] --> API["Local API + Event Stream"]
-    B["Browser"] --> API
+    B["WebUI"] --> API["Local API + Event Stream"]
     API --> CP["Control Plane：唯一权威写入者"]
     CP --> R["Runtime / Workflow / Policy / Context"]
     CP --> DB["SQLite"]
@@ -116,12 +114,11 @@ flowchart TB
     CP --> Git["Git repositories / Worktrees"]
 ```
 
-Electron 负责桌面生命周期、托盘/状态栏和系统通知；WebUI 不直接写数据库；Control Plane 负责权限边界、单写者语义、任务恢复和孤儿 Worktree 恢复。
+WebUI 不直接写数据库；Control Plane 负责权限边界、单写者语义、任务恢复和孤儿 Worktree 恢复。
 
 现有技术基础继续复用：
 
 - `packages/app`：基于 Eve 的 Nuxt 共享 WebUI；
-- `packages/desktop`：Electron 桌面壳；
 - `packages/control-plane`：Bun、Effect、Hono、SQLite、工作流与 Agent Runtime。
 
 ## 8. 设计文档分工

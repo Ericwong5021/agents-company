@@ -11,7 +11,7 @@
 </div>
 
 > [!IMPORTANT]
-> Agent Company 是仍在开发中的 **Pre-Public** 产品。[体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)继续决定 R0–R4 的发布顺序。本地 Control Plane、Agent Runtime、共享 WebUI、Electron、动态组织基础和 Founder OS v1 已实现；发布验收、严格私人空间与 Agent 生命层仍是独立工作或保持冻结。
+> Agent Company 是仍在开发中的 **Pre-Public** 产品。[体验重构计划](docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md)继续决定 R0–R4 的发布顺序。本地 Control Plane、Agent Runtime、共享 WebUI、动态组织基础和 Founder OS v1 已实现；发布验收、严格私人空间与 Agent 生命层仍是独立工作或保持冻结。
 >
 > 已实现不等于已启用或已公开发布。Founder Twin 与 Company Commons 默认 `off`，机器 Gate 通过不能替代人工授权或真实样本验收。当前合同见 [Founder OS v1](docs/product-design/Founder-OS-v1.md)，文档分工见[文档导航](docs/README.md)。
 
@@ -35,13 +35,13 @@ Agent Company 让一个用户在自己的电脑上经营一个持续存在的 AI
 - **失败真实可见。** 失败原因、策略调整与恢复状态不会被最终答案掩盖，而是成为可追踪、可审计的正式事实。
 - **视觉品质就是产品能力。** Marvis 是办公室氛围、角色辨识、行为状态和结果分层的重要 UI 参照；Agent Company 将这些优点融合进多 Agent 群聊工作台。
 - **员工真实存在。** 员工卡片读取同一份来自真实运行的活动投影，不做装饰性动画。当前投影覆盖工作、等待、恢复和失败状态；闲逛、社交、反思，以及由它们产生的关系与人格成长属于冻结中的生命层。后续二维或三维办公室必须复用同一状态契约，不得自行编造活动。
-- **Local-first。** 浏览器和桌面端通过同一套共享 WebUI 消费本地 Control Plane，Electron 提供常驻的本地产品体验。
+- **Local-first。** WebUI 通过仅监听回环地址的本地 Control Plane 工作，并且是唯一产品访问面。
 - **领域中立内核，深度领域适配器。** 研究、文档、本地应用和软件交付复用同一公司模型；软件适配器额外提供严格仓库、Worktree、审查、合并与验证规则，但不定义整个产品。
 
 ## 架构
 
 ```text
-Electron / Browser
+WebUI
           │ 本地 API + 事件流
           ▼
 Local Control Plane
@@ -57,7 +57,6 @@ Local Control Plane
 | Package | 职责 |
 |---|---|
 | `packages/app` | Nuxt 共享 WebUI |
-| `packages/desktop` | Electron 桌面壳、本地 Server 宿主与打包 |
 | `packages/control-plane` | Bun/Effect/Hono Control Plane、Runtime、SQLite、Git、Workflow 与内部 CLI 工具 |
 | `packages/sdk` | 生成与手写的客户端 SDK |
 | `packages/ui` | 共享 UI 原语 |
@@ -78,7 +77,7 @@ Founder OS v1 在候选提交 `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8` 上完�
 
 ## 本地开发
 
-需要 Bun 1.3.x，以及 Electron 和 node-pty 所需的平台依赖。
+需要 Bun 1.3.x，以及 node-pty 所需的平台依赖。
 
 ```bash
 git clone https://github.com/Ericwong5021/agents-company.git
@@ -87,8 +86,7 @@ bun install
 ```
 
 ```bash
-bun run dev:web      # 共享 WebUI
-bun run dev:desktop  # Electron
+bun run dev:all      # Control Plane + WebUI
 ```
 
 测试和类型检查必须从实际修改的 package 运行，不能从仓库根目录运行测试：

@@ -10,11 +10,8 @@ import { validateSeedGrowB4Artifacts } from "./validate-seed-grow-b4-artifacts"
 const root = path.resolve(import.meta.dir, "..")
 const appRoot = path.join(root, "packages/app")
 const controlPlaneRoot = path.join(root, "packages/control-plane")
-const desktopRoot = path.join(root, "packages/desktop")
 const appRequire = createRequire(path.join(appRoot, "package.json"))
-const desktopRequire = createRequire(path.join(desktopRoot, "package.json"))
 const chromium = appRequire("@playwright/test").chromium
-const electronPath = desktopRequire("electron") as string
 const candidateSha = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
   cwd: root,
   stdout: "pipe",
@@ -195,10 +192,7 @@ async function json<T>(url: string, init?: RequestInit) {
   return (await response.json()) as T
 }
 
-async function sdkValue<T>(
-  label: string,
-  request: Promise<{ data?: T; error?: unknown; response: Response }>,
-) {
+async function sdkValue<T>(label: string, request: Promise<{ data?: T; error?: unknown; response: Response }>) {
   const result = await request
   if (result.data !== undefined) return result.data
   throw new Error(`${label} returned ${result.response.status}: ${JSON.stringify(result.error)}`)
@@ -421,13 +415,8 @@ const providerServer = Bun.serve({
     return completion(content, body.stream === true)
   },
 })
-const [controlPlanePort, controlPlaneProxyPort, webUIPort, desktopDebugPort] = await Promise.all([
-  freePort(),
-  freePort(),
-  freePort(),
-  freePort(),
-])
-if (new Set([providerServer.port, controlPlanePort, controlPlaneProxyPort, webUIPort, desktopDebugPort]).size !== 5) {
+const [controlPlanePort, controlPlaneProxyPort, webUIPort] = await Promise.all([freePort(), freePort(), freePort()])
+if (new Set([providerServer.port, controlPlanePort, controlPlaneProxyPort, webUIPort]).size !== 4) {
   await providerServer.stop(true)
   throw new Error("Dynamic ports must be unique.")
 }
@@ -439,9 +428,11 @@ const controlPlaneClient = createControlPlaneClient({
   baseUrl: controlPlaneURL,
   fetch: (input, init) => {
     const request = new Request(input, init)
-    return fetch(new Request(request, {
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
-    }))
+    return fetch(
+      new Request(request, {
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
+      }),
+    )
   },
 })
 let projectionFault: "none" | "delay" | "error" = "none"
@@ -534,7 +525,6 @@ const webUIEnvironment = {
 let controlPlane = startControlPlane()
 let webUI: ReturnType<typeof start> | undefined
 let browserClose: (() => Promise<void>) | undefined
-let desktop: ReturnType<typeof start> | undefined
 let result: Record<string, unknown> | undefined
 let failure: unknown
 const uncovered: string[] = []
@@ -543,7 +533,6 @@ let cleanup:
       providerPortClosed: boolean
       controlPlanePortClosed: boolean
       controlPlaneProxyPortClosed: boolean
-      desktopDebugPortClosed: boolean
       webUIPortClosed: boolean
     }
   | undefined
@@ -845,8 +834,7 @@ try {
         .map((channel) => asRecord(channel, "SDK company channel is invalid."))
         .find((channel) => channel.kind === "project" && channel.scopeID === projectID)
     : undefined
-  if (!projectChannel || typeof projectChannel.id !== "string")
-    throw new Error("SDK project channel is unavailable.")
+  if (!projectChannel || typeof projectChannel.id !== "string") throw new Error("SDK project channel is unavailable.")
   const convergenceMessage = "B4 事件后 DOM 协同刷新已收敛"
   const projectPath = `/api/agent-company/projects/${encodeURIComponent(projectID)}`
   const coordinatedResponses = Promise.all([
@@ -1142,189 +1130,6 @@ try {
   })
   const deterministicScreenshot = await screenshotDiff(beforeScreenshot, afterScreenshot)
 
-  const desktopBuild = start([process.execPath, "--no-orphans", "run", "build"], desktopRoot, {
-    ...process.env,
-    MODELS_DEV_API_JSON: modelsSnapshotPath,
-    VITE_AGENTCOMPANY_WEB_URL: webUIURL,
-  })
-  if ((await desktopBuild.child.exited) !== 0) {
-    await Promise.allSettled([desktopBuild.stdout.completed, desktopBuild.stderr.completed])
-    throw new Error(`Desktop build failed: ${desktopBuild.stderr.read()}\n${desktopBuild.stdout.read()}`)
-  }
-  await Promise.all([desktopBuild.stdout.completed, desktopBuild.stderr.completed])
-  await terminate(controlPlane)
-  if (!(await portClosed(`${controlPlaneURL}/global/health`)))
-    throw new Error("Control Plane port remained open before Desktop embedded takeover.")
-  const desktopUserData = path.join(temporaryRoot, "desktop-user-data")
-  await fs.mkdir(desktopUserData, { recursive: true })
-  await fs.writeFile(
-    path.join(desktopUserData, "agent-company.settings"),
-    `${JSON.stringify({ companyHome }, null, 2)}\n`,
-  )
-  desktop = start(
-    [electronPath, desktopRoot, "--disable-gpu", "--lang=zh-CN", `--remote-debugging-port=${desktopDebugPort}`],
-    desktopRoot,
-    {
-      ...controlPlaneEnvironment,
-      APPDATA: path.join(temporaryRoot, "desktop-app-data"),
-      AGENTCOMPANY_USER_DATA: desktopUserData,
-      AGENTCOMPANY_PORT: String(controlPlanePort),
-      VITE_AGENTCOMPANY_WEB_URL: webUIURL,
-    },
-  )
-  await waitForResponse(`${controlPlaneURL}/global/health`, desktop, 120_000)
-  const desktopReadiness = await waitForValue(
-    () =>
-      json<{ ready?: boolean; checks?: Array<{ status?: string }> }>(`${controlPlaneURL}/global/readiness`).catch(
-        () => null,
-      ),
-    (value) => value?.ready === true,
-    120_000,
-    "Desktop embedded Control Plane did not become ready",
-  )
-  if (!desktopReadiness) throw new Error("Desktop embedded Control Plane readiness is unavailable.")
-  assertReadiness(desktopReadiness, "Desktop embedded Control Plane readiness response is not ready.")
-  await waitForResponse(`http://127.0.0.1:${desktopDebugPort}/json/version`, desktop, 120_000)
-  const desktopTarget = (
-    await waitForValue(
-      () => json<Array<{ type?: string; url?: string }>>(`http://127.0.0.1:${desktopDebugPort}/json/list`),
-      (targets) =>
-        targets.some(
-          (target) =>
-            target.type === "page" && target.url?.startsWith(webUIURL) && new URL(target.url).pathname === "/inbox",
-        ),
-      120_000,
-      "Desktop renderer did not complete local authentication and reach the Company",
-    )
-  ).find(
-    (target) => target.type === "page" && target.url?.startsWith(webUIURL) && new URL(target.url).pathname === "/inbox",
-  )
-  if (!desktopTarget?.url) throw new Error("Desktop authenticated Company target is unavailable.")
-  const desktopBrowser = await chromium.connectOverCDP(`http://127.0.0.1:${desktopDebugPort}`)
-  const desktopRenderer = desktopBrowser
-    .contexts()
-    .flatMap((desktopContext) => desktopContext.pages())
-    .find((candidate) => candidate.url().startsWith(webUIURL))
-  if (!desktopRenderer) throw new Error("Desktop native renderer page is unavailable.")
-  await desktopRenderer.goto(`${webUIURL}/work/${encodeURIComponent(projectID)}`, { waitUntil: "domcontentloaded" })
-  await desktopRenderer.getByRole("heading", { name: projectTitle, exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByRole("heading", { name: "动态组织进展", exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByText("Wayfinder", { exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByText("First slice", { exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByRole("tab", { name: "诊断", exact: true }).click()
-  await desktopRenderer.getByText("Graph revision", { exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByRole("heading", { name: "执行尝试与回执", exact: true }).waitFor({ state: "visible" })
-  const desktopWorkScreenReader = await screenReaderGate(
-    desktopRenderer,
-    [
-      `heading "${projectTitle}"`,
-      'tab "诊断" [selected]',
-      "tabpanel",
-      'heading "执行尝试与回执"',
-    ],
-    "Desktop Work diagnostics",
-  )
-  const desktopSeedPairVisible = true
-  await desktopRenderer.goto(`${webUIURL}/team`, { waitUntil: "domcontentloaded" })
-  await desktopRenderer.getByRole("heading", { name: "Team", exact: true }).waitFor({ state: "visible" })
-  await desktopRenderer.getByText("Assignment evidence", { exact: true }).first().waitFor({ state: "visible" })
-  await desktopRenderer.getByText("加入原因", { exact: true }).first().waitFor({ state: "visible" })
-  const desktopTrace = desktopRenderer.getByText("查看选择事实", { exact: true }).first()
-  await desktopTrace.focus()
-  await desktopTrace.press("Enter")
-  if ((await desktopTrace.locator("..").locator("li").count()) === 0)
-    throw new Error("Desktop native Team Assignment sourceRefs are not visible.")
-  const desktopTeamScreenReader = await screenReaderGate(
-    desktopRenderer,
-    ['heading "Team"', "Assignment evidence", "查看选择事实", "evidence analyst"],
-    "Desktop Team",
-  )
-  const desktopAssignmentEvidenceVisible = true
-  const desktopSnapshotResponse = await context.request.get(`${webUIURL}/api/agent-company/snapshot`)
-  if (!desktopSnapshotResponse.ok())
-    throw new Error(`Desktop-backed WebUI snapshot returned ${desktopSnapshotResponse.status()}.`)
-  const desktopSnapshot = asRecord(await desktopSnapshotResponse.json(), "Desktop-backed WebUI snapshot is invalid.")
-  const desktopSnapshotCompany = asRecord(desktopSnapshot.company, "Desktop-backed WebUI company snapshot is invalid.")
-  const desktopSnapshotWork = Array.isArray(desktopSnapshot.work)
-    ? desktopSnapshot.work
-        .map((item) => asRecord(item, "Desktop-backed snapshot work item is invalid."))
-        .find((item) => workProjectionID(item, "Desktop-backed snapshot work item") === projectID)
-    : undefined
-  if (
-    desktopSnapshot.connection !== "ready" ||
-    desktopSnapshot.issue ||
-    desktopSnapshotCompany.id !== companyBeforeRestart.id ||
-    !desktopSnapshotWork ||
-    watermark(desktopSnapshotWork, "Desktop-backed WebUI Work projection") !== beforeWatermarks.work
-  )
-    throw new Error("Desktop-backed WebUI did not converge to the embedded Control Plane.")
-  const desktopCompany = durableCompanyIdentity(await json(`${controlPlaneURL}/company`))
-  if (JSON.stringify(desktopCompany) !== JSON.stringify(companyBeforeRestart))
-    throw new Error("Desktop embedded Control Plane did not reuse the persisted Company Home.")
-  const desktopDirectResponses = await Promise.all(
-    [
-      ["work", `${controlPlaneURL}/experience/work/${encodeURIComponent(projectID)}`],
-      ["organization", `${controlPlaneURL}/experience/work/${encodeURIComponent(projectID)}/organization`],
-      ["graph", `${controlPlaneURL}/experience/work/${encodeURIComponent(projectID)}/graph`],
-      ["validation", `${controlPlaneURL}/experience/work/${encodeURIComponent(projectID)}/validation`],
-    ].map(async ([name, url]) => {
-      const response = await fetch(url)
-      return { name, status: response.status, body: await response.text() }
-    }),
-  )
-  const desktopDirectValues = desktopDirectResponses.every((response) => response.status === 200)
-    ? (Object.fromEntries(
-        desktopDirectResponses.map((response) => [response.name, JSON.parse(response.body) as unknown]),
-      ) as Record<string, unknown>)
-    : null
-  const desktopDirectWatermarks = desktopDirectValues
-    ? {
-        work: watermark(desktopDirectValues.work, "Desktop embedded Work projection"),
-        organization: watermark(desktopDirectValues.organization, "Desktop embedded Organization projection"),
-        graph: watermark(desktopDirectValues.graph, "Desktop embedded Graph projection"),
-        validation: watermark(desktopDirectValues.validation, "Desktop embedded Validation projection"),
-      }
-    : null
-  const desktopDirectConverged =
-    desktopDirectWatermarks !== null && JSON.stringify(desktopDirectWatermarks) === JSON.stringify(beforeWatermarks)
-  if (!desktopDirectConverged)
-    uncovered.push(
-      `Desktop embedded Control Plane projections did not converge: ${JSON.stringify(
-        desktopDirectResponses.map((response) => ({
-          name: response.name,
-          status: response.status,
-          body: response.status === 200 ? undefined : response.body,
-        })),
-      )}`,
-    )
-  const desktopSeedGrowResponse = await context.request.get(
-    `${webUIURL}/api/agent-company/projects/${encodeURIComponent(projectID)}/seed-grow`,
-  )
-  const desktopSeedGrowBody = await desktopSeedGrowResponse.text()
-  const desktopSeedGrowConverged =
-    desktopSeedGrowResponse.status() === 200 &&
-    (() => {
-      const projection = asRecord(JSON.parse(desktopSeedGrowBody), "Desktop-backed Seed-and-Grow response is invalid.")
-      return (
-        watermark(projection.organization, "Desktop-backed Organization projection") ===
-          beforeWatermarks.organization &&
-        watermark(projection.graph, "Desktop-backed Graph projection") === beforeWatermarks.graph &&
-        watermark(projection.validation, "Desktop-backed Validation projection") === beforeWatermarks.validation
-      )
-    })()
-  if (!desktopSeedGrowConverged)
-    uncovered.push(
-      `Desktop-backed production WebUI Seed-and-Grow projection did not converge: ${JSON.stringify({
-        status: desktopSeedGrowResponse.status(),
-        body: desktopSeedGrowBody,
-      })}`,
-    )
-  await desktopBrowser.close()
-  await terminate(desktop)
-  desktop = undefined
-  if (!(await portClosed(`${controlPlaneURL}/global/health`)))
-    throw new Error("Desktop embedded Control Plane port remained open after Desktop exit.")
-
   result = {
     result: uncovered.length === 0 ? "pass" : "fail",
     candidateSha,
@@ -1378,28 +1183,6 @@ try {
         team: browserTeamScreenReader.sha256,
       },
     },
-    desktop: {
-      productionWebUI: true,
-      embeddedControlPlane: true,
-      persistedCompanyHome: true,
-      sourceWatermarkConverged: desktopDirectConverged,
-      productionWebUIProjectionConverged: desktopSeedGrowConverged,
-      projectionStatuses: Object.fromEntries(
-        desktopDirectResponses.map((response) => [response.name, response.status]),
-      ),
-      rendererURL: desktopTarget.url,
-      seedPairVisible: desktopSeedPairVisible,
-      assignmentEvidenceVisible: desktopAssignmentEvidenceVisible,
-      diagnosticsVisible: desktopSeedPairVisible,
-      accessibility: {
-        workAccessibilityTree: desktopWorkScreenReader.captured,
-        teamAccessibilityTree: desktopTeamScreenReader.captured,
-      },
-      accessibilityTreeDigests: {
-        work: desktopWorkScreenReader.sha256,
-        team: desktopTeamScreenReader.sha256,
-      },
-    },
     screenshotDiff: deterministicScreenshot,
     visualQA: "pass",
     evidence: {
@@ -1426,7 +1209,6 @@ try {
     uncovered,
   }
 } finally {
-  if (desktop) await terminate(desktop)
   if (browserClose) await browserClose()
   if (webUI) await terminate(webUI)
   await terminate(controlPlane)
@@ -1436,7 +1218,6 @@ try {
     providerPortClosed: await portClosed(providerURL),
     controlPlanePortClosed: await portClosed(`${controlPlaneURL}/global/health`),
     controlPlaneProxyPortClosed: await portClosed(controlPlaneProxyURL),
-    desktopDebugPortClosed: await portClosed(`http://127.0.0.1:${desktopDebugPort}/json/version`),
     webUIPortClosed: await portClosed(`${webUIURL}/login`),
   }
   await fs.rm(temporaryRoot, { recursive: true, force: true })
@@ -1448,7 +1229,6 @@ const cleanupPassed =
   cleanup?.providerPortClosed === true &&
   cleanup.controlPlanePortClosed &&
   cleanup.controlPlaneProxyPortClosed &&
-  cleanup.desktopDebugPortClosed &&
   cleanup.webUIPortClosed
 if (!cleanupPassed && result) {
   result.result = "error"
@@ -1461,7 +1241,6 @@ if (
   !cleanup?.providerPortClosed ||
   !cleanup.controlPlanePortClosed ||
   !cleanup.controlPlaneProxyPortClosed ||
-  !cleanup.desktopDebugPortClosed ||
   !cleanup.webUIPortClosed
 )
   throw new Error(`Real surface cleanup failed: ${JSON.stringify(cleanup)}`)

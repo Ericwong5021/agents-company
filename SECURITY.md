@@ -12,7 +12,7 @@ For untrusted repositories, tools, plugins, MCP servers, or prompts, use a dispo
 
 ### Local server
 
-The Electron shell starts a local server. The current single-user Pre-Public path trusts loopback clients; CLI/server modes can be configured separately.
+The WebUI uses a local Control Plane server. The current single-user Pre-Public path trusts loopback clients; CLI/server modes can be configured separately.
 
 - Keep the server bound to loopback unless remote access is an intentional, reviewed choice.
 - Set `AGENTCOMPANY_SERVER_PASSWORD` when running a separately reachable server.

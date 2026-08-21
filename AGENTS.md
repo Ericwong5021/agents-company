@@ -16,7 +16,7 @@ Current execution order comes from `docs/product-design/Agent-Company-Experience
 
 Founder OS v1 product development is complete at candidate `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8`; this does not change the R0–R4 release order or authorize higher runtime modes. `founderTwinMode` and `companyCommonsMode` remain fail-closed behind their global maxima, and human authorization or real-sample acceptance must never be inferred from machine Gate success.
 
-- The shared WebUI in `packages/app` and the Electron shell in `packages/desktop` are the primary product surfaces.
+- The shared WebUI in `packages/app` is the only product access surface.
 - The local Control Plane and agent runtime live in `packages/control-plane`.
 - The terminal UI has been removed. Keep the non-interactive CLI and local server headless; do not reintroduce a terminal product surface unless another explicit product decision restores that scope.
 - The first public release focuses on a single-user, local-first, domain-neutral Agent company whose core differentiator is dynamic self-organization and self-governance. Do not reduce the product to software development or a preconfigured team of specialist Agents.

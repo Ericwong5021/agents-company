@@ -1,6 +1,6 @@
 # @agents-company/control-plane and local runtime
 
-This package contains Agent Company's Bun/Effect runtime, local Hono server, SQLite services, Git/worktree support, workflow engine, and non-interactive CLI. It also provides the backend bundled by `packages/desktop` and used by `packages/app`.
+This package contains Agent Company's Bun/Effect runtime, local Hono server, SQLite services, Git/worktree support, workflow engine, and non-interactive CLI. It provides the backend used by `packages/app`.
 
 ## Commands
 
@@ -17,7 +17,7 @@ Run focused tests by passing their paths to `bun test`. Do not run repository te
 
 ## Product role
 
-This package is the current foundation of the local Control Plane, but existing modules are not automatically public product features. Browser, desktop, and automation clients should consume common service and event semantics; renderer clients must not write SQLite or Agent identity files directly.
+This package is the current foundation of the local Control Plane, but existing modules are not automatically public product features. Browser and automation clients should consume common service and event semantics; WebUI clients must not write SQLite or Agent identity files directly.
 
 The terminal UI has been removed. The primary Pre-Public information architecture is the shared WebUI in `packages/app`; the remaining CLI is headless and non-interactive.
 

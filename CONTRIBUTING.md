@@ -17,7 +17,7 @@ Core product or UI changes should begin with an issue or design discussion. Smal
 
 ## Development setup
 
-Requirements: Bun 1.3.x and any platform dependencies needed by Electron and node-pty.
+Requirements: Bun 1.3.x and any platform dependencies needed by node-pty.
 
 ```bash
 git clone https://github.com/Ericwong5021/agents-company.git
@@ -31,27 +31,25 @@ Run the local Control Plane server:
 bun run dev
 ```
 
-Run the shared WebUI or Electron desktop shell:
+Run the shared WebUI with its local Control Plane:
 
 ```bash
-bun run dev:web
-bun run dev:desktop
+bun run dev:all
 ```
 
-The standalone WebUI expects a local backend, normally on port 4096. The Electron app builds and hosts the backend from `packages/control-plane` itself.
+The WebUI expects a local backend, normally on port 4096.
 
 ## Repository map
 
 | Path | Responsibility |
 |---|---|
-| `packages/app` | Shared Eve/Nuxt WebUI for browser; Electron integration is migrated separately |
-| `packages/desktop` | Electron main/preload/renderer shell and packaging |
+| `packages/app` | Shared Eve/Nuxt WebUI |
 | `packages/control-plane` | Bun/Effect runtime, server, SQLite, Git, workflows, internal CLI tooling, and Control Plane services |
 | `packages/ui` | Shared UI primitives |
 | `packages/sdk` | Generated and hand-written client SDKs |
 | `docs/product-design` | Canonical product design and implementation plan |
 
-The CLI is a non-interactive automation and maintenance surface, not a separate product interface. New user journeys belong in the shared WebUI and Electron experience.
+The CLI is a non-interactive automation and maintenance surface, not a separate product interface. New user journeys belong in the shared WebUI.
 
 ## Checks
 
@@ -69,12 +67,6 @@ bun typecheck
 bun test
 ```
 
-```bash
-cd packages/desktop
-bun typecheck
-bun run build
-```
-
 Use focused tests during development and record the exact commands and results in the pull request. UI changes should include screenshots or a short recording for relevant states and platforms.
 
 To regenerate the JavaScript SDK after API changes:
@@ -90,15 +82,6 @@ Build a single CLI/runtime artifact:
 ```bash
 bun run packages/control-plane/script/build.ts --single
 ```
-
-Build or package the Electron app from `packages/desktop`:
-
-```bash
-bun run build
-bun run package
-```
-
-Use `package:win`, `package:mac`, or `package:linux` for a specific target.
 
 ## Pull requests
 
