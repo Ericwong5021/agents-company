@@ -5,7 +5,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM dependencies AS webui-build
 ENV AGENT_COMPANY_WEBUI_DATA_DIR=/data
-RUN bun --cwd packages/app run build
+RUN bun run --cwd packages/app build
 
 FROM dependencies AS relay-build
 RUN bun build packages/relay/src/index.ts --target=bun --outfile=/workspace/relay.js
