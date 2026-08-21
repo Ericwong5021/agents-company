@@ -8,6 +8,12 @@
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
 - Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
 
+## Report Output
+
+- Every report delivered to the user must be written to disk in both Markdown (`.md`) and standalone HTML (`.html`) formats.
+- Use the same base filename and equivalent content for both files. Markdown is the canonical source; HTML must be rendered from it and remain readable without the repository or a development server.
+- The final response must include clickable paths to both files. A chat-only report, JSON artifact, or a single-format file does not satisfy report delivery.
+
 ## Core Focus (as of 2026-07-30)
 
 The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.

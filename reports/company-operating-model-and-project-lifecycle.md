@@ -1,0 +1,235 @@
+---
+title: Agent Company 公司运转模式与项目完整生命周期
+status: current-design-analysis
+as_of: 2026-08-21
+scope: Pre-Public 产品目标、当前 R0-R4 发布顺序与已存在的核心领域合同
+---
+
+# Agent Company 公司运转模式与项目完整生命周期
+
+## 结论
+
+Agent Company 的运转模式可以概括为：
+
+> **用户定方向和边界，最小董事会把目标变成可验收的 Project Charter，系统围绕 Charter 动态组队，在本地 Control Plane 的统一事实与权限治理下自主执行，通过独立验证、Gate、审批和交付后复核完成闭环，再把项目结果沉淀为组织能力。**
+
+它不是固定专家 Agent 的流水线，也不是让用户维护任务看板。固定的是治理协议、责任、权限、证据和交付标准；动态变化的是项目团队、临时角色、能力包、执行图和验证强度。
+
+## 一、公司怎样运转
+
+### 1. 权力与责任结构
+
+| 主体 | 常态责任 | 不应承担的常态工作 |
+|---|---|---|
+| 用户 / Founder | 设定方向、预算、批准等级和硬边界；处理重大歧义、权限升级和高风险外部动作；暂停、终止或接管 | 手工选择每个 Agent、编排每一步、持续盯盘 |
+| 最小固定董事会 | CEO 判断价值与优先级，CTO 判断能力、技术和资源风险，Product Lead 定义用户问题、范围与验收 | 把模糊目标原样转发给执行层 |
+| 项目 DRI | 对单个项目的结果、范围、节奏、升级和正式决定负责 | 用集体讨论稀释唯一责任人 |
+| 动态项目团队 | 按 Charter 承担本次执行、研究、设计、验证或审查责任 | 因一次临时责任自动获得永久职位或无限权限 |
+| Control Plane | 作为正式状态、Agent Run、SQLite、受管资源、权限、恢复和广播的唯一权威写入者 | 让客户端、内存事件或 Agent 子进程绕过正式事实直接改状态 |
+
+默认董事会只有 CEO、CTO 和 Product Lead。复杂任务可以形成子团队，简单任务可以由项目负责人直接委派，但任何正式决定都必须只有一个 DRI，组织深度和递归委派都有上限。
+
+### 2. 公司的日常运转循环
+
+```text
+目标进入
+  ↓
+董事会判断价值、范围、风险和验收
+  ↓
+形成 Charter 与项目 DRI
+  ↓
+按能力、可用性、历史质量、成本和风险动态组队
+  ↓
+拆解、受管执行、验证、审查与有限重试
+  ↓
+重大事项升级，低风险事项自动推进
+  ↓
+交付、回读验证、资源处置
+  ↓
+Reflection、声誉更新、候选回池或岗位演化
+  ↺ 为下一项目提供更好的选人与治理依据
+```
+
+公司的核心不是“让 Agent 多说话”，而是让目标、责任、权限、执行、证据、决定和交付形成连续事实链。
+
+### 3. 三个同时运行的系统
+
+1. **工作系统**：Goal、Charter、Project、Work Item、Thread、Agent Run、Artifact 和 Delivery 推动实际产出。
+2. **治理系统**：DRI、批准策略、Gate、Decision、Admission、Audit 和紧急控制决定什么可以继续、谁负责、何时需要用户。
+3. **组织学习系统**：失败 Attempt、返工、审查质量、成本、速度和协作结果更新候选池、声誉、验证强度与岗位建议。
+
+长期设计中的 Agent 人格与生命层属于第三层之外的连续身份体验，但当前仍被冻结；现在不能把 Ambient、Reflection、Direct、Dreaming 或 Agent Home 描述成已经完整开放的产品能力。
+
+### 4. 沟通方式：IM-first，事实分层
+
+用户主要在公司群、董事会群和项目群中工作。主会话只显示结论、决定、计划、状态、风险、审批和交付等高信号信息；具体执行日志、工具输出、失败尝试、制品版本和审查过程进入可展开 Thread。
+
+因此，同一件工作有两种视图：
+
+- **经营视图**：现在是谁负责、到哪一步、有什么风险、是否需要用户介入；
+- **证据视图**：这一结论由哪些运行、制品、验证、失败和决定形成。
+
+高信号会话不是审计日志，审计日志也不是用户界面。二者都必须来自已持久化的正式事实。
+
+## 二、一个项目的完整生命周期
+
+### 生命周期总图
+
+```text
+[0 目标进入]
+      ↓
+[1 Goal Brief / 意图澄清]
+      ↓
+[2 Charter Ready Gate]
+      ↓
+[3 立项、项目群、DRI、策略与资源]
+      ↓
+[4 动态组队与 Execution Ready Gate]
+      ↓
+[5 Work Item 图与执行计划]
+      ↓
+[6 受管执行、Attempt、Artifact、有限重试]
+      ↓
+[7 领域验证与独立 Review]
+      ↓ 退回则回到 5/6；重大变化则回到 1/2
+[8 Delivery Approval / 用户审批]
+      ↓
+[9 交付与外部副作用]
+      ↓
+[10 Post-delivery Verification]
+      ↓ 失败则返工或恢复
+[11 关闭、资源处置、复盘与人员回池]
+```
+
+### 阶段明细
+
+| 阶段 | 核心动作 | 主要产物 / 事实 | 责任主体 | 退出条件 |
+|---|---|---|---|---|
+| 0. 目标进入 | 接收用户原始目标，记录来源和上下文 | Goal / Root Need | 用户、董事会 | 目标被识别为正式项目意图，而非普通消息 |
+| 1. Goal Brief | 判断价值、交付物、范围、约束和重大歧义；只在缺失信息会实质改变结果时询问用户 | Goal Brief、假设、待决策项 | 董事会 | 不再存在未处理的重大开放决定 |
+| 2. Charter Ready | 把目标变成可治理、可验收的 Charter | 价值、明确交付物、验收标准、范围、非目标、资源、风险、DRI、里程碑、批准策略 | 董事会、Product DRI | Definition of Ready 全部通过 |
+| 3. 正式立项 | 创建 Project 与项目群，绑定预算、受管资源、权限和项目策略 | Project、项目频道、策略覆盖、资源清单 | 项目 DRI、Control Plane | 项目边界、责任与事实源建立 |
+| 4. 动态组队 | 先按 Charter 推导能力，再结合可用性、声誉、成本、关系和风险选人；独立审查需要职责分离 | 临时责任、Agent 选择及拒绝理由、最小权限、验证强度 | 项目 DRI、组织编排 | Execution Ready Gate 通过 |
+| 5. 计划与分解 | 形成有依赖关系的 Work Item 图；每项声明输入、输出、负责人、资源、能力包、验证器、风险和重试预算 | Plan、Work Items、依赖图、里程碑 | 项目 DRI、规划 Agent | 每项工作都可在有限 Thread 中执行和验收 |
+| 6. 受管执行 | 创建 Agent Run，在限定目录、权限和运行时中工作；持续保存 Attempt、事件、用量和 Artifact | Agent Run、Thread、Attempt、Artifact、Receipt | 执行 Agent、Control Plane | 产生可审查制品，或形成完整升级包 |
+| 7. 验证与 Review | 自检、领域验证、独立审查；按 Charter 验收映射 findings，区分必须修复、可接受风险和信息项 | Acceptance Facts、Review findings、Admission 结果 | 验证 / Review Agent | Domain Review 通过；执行者的“完成”本身不算通过 |
+| 8. Gate 与批准 | 判断范围、风险、外部副作用、合并或发布是否需要用户；支持仅本次、项目同类或公司规则级授权 | Gate、Approval、Decision、授权范围与到期条件 | 策略、用户、项目 DRI | 所有必需审批完成，拒绝项已处理 |
+| 9. 正式交付 | 物化可消费成果，执行被批准的外部写入、合并或发布 | Delivery Package、最终 Artifact、外部回执 | 项目团队、Control Plane | 交付动作成功，但项目尚未因此自动完成 |
+| 10. 交付后复核 | 回读文件、数据、网页、应用状态或主分支；核对来源、版本、完整性和外部结果 | Post-delivery Verification、回读证据 | 自动验证器、项目 DRI | 实际结果仍满足 Charter；失败则回流返工 |
+| 11. 关闭与学习 | 关闭项目，处置临时资源，回写决定和风险，执行必要 Reflection，更新声誉，候选 Agent 回池 | Closeout、审计闭环、资源处置记录、学习与人员状态 | 项目 DRI、董事会、Control Plane | 所有完成定义同时满足 |
+
+### 项目真正“完成”的定义
+
+以下条件必须同时成立：
+
+- Charter 的所有必须验收项通过；
+- 最终制品、版本、来源与验证证据可追溯；
+- 所需 Gate 和用户审批已经完成；
+- 交付后复核证明实际结果仍然有效；
+- 失败尝试、返工和已接受风险没有被后续成功覆盖；
+- 临时目录、授权、运行环境和其他受管资源已安全处置，或明确进入可恢复的待处置状态；
+- 正式决定、范围变化和重要风险已回写项目群；
+- 软件项目的合并结果已在主分支验证，Worktree 才能销毁；
+- 必要的 Reflection、声誉更新和候选回池已经完成。
+
+“Agent 说完成了”“生成了文件”“测试命令通过了”或“外部动作已发起”都只是一项事实，不能单独代表项目完成。
+
+## 三、生命周期中的回流与异常
+
+项目不是单向流水线，以下回流是正常设计：
+
+| 触发 | 回流方式 |
+|---|---|
+| 目标仍有重大歧义 | 回到 Goal Brief，请用户做一个会改变结果的决定 |
+| Charter 不可验收 | 继续拆分、补充资源与验证方式，不能下发执行 |
+| Work Item 太大或依赖不清 | 回到计划层重新分解或生成新 Plan 版本 |
+| 执行失败 | 保存独立 Attempt，在预算内调整后重试；超出预算则带完整升级包向上升级 |
+| Review 拒绝 | findings 精确回到对应 Work Item 和 Artifact 版本，修复后重新验证 |
+| 范围、验收、资源或风险发生重大变化 | 重新评估 Charter、团队、权限和批准策略，不得静默扩张 |
+| 用户拒绝 Gate | 记录拒绝理由，返工、缩小范围、接受限制或终止 |
+| 页面关闭或 Control Plane 重启 | 从持久化状态恢复；无法确认的进程、Runtime Home 或 Worktree 保留现场并进入待处置 |
+| 交付后回读失败 | 回到执行或恢复路径，不能把“已发布”当成“已验证” |
+| 取消或终止 | 停止新动作，保留证据并安全处置资源；不能默认删除现场 |
+
+批准等级控制用户介入频率，而不是改变硬边界：自主模式主要拦截高风险与越权；平衡模式默认在重大变化、外部副作用和最终交付介入；严格模式会在更多计划、写入和合并节点请求确认。Agent 可以主动提高严格度，不能自行降低。
+
+## 四、软件研发项目的领域适配
+
+软件研发复用同一生命周期，只在执行与交付之间增加更严格的仓库治理：
+
+```text
+Charter
+→ Planned
+→ Worktree Ready
+→ Implementing
+→ Testing
+→ Agent Review
+→ Waiting Approval
+→ Merging
+→ Verifying Main
+→ Delivered
+→ Worktree Destroyed
+```
+
+一个可独立验收的软件交付单元优先对应一个主仓库。跨仓库目标仍可属于同一业务 Project，但必须拆成关联交付单元，分别声明写入范围、基础提交、负责人、验证、合并顺序与失败处置。
+
+Worktree 默认开启。未确认合并并验证主分支前不得销毁；冲突或审批后的新增变更必须重新审查；失败、取消和异常退出必须保留现场。关闭 Worktree 时则进入单工作区直接模式，并限制为单写者。
+
+## 五、用户在产品里应该看到什么
+
+| 位置 | 用户关注的问题 |
+|---|---|
+| Inbox / Attention | 现在有什么风险、阻塞、Gate 或需要我决定的事项？ |
+| Company / Board | 公司当前方向、项目组合、重大决定与跨项目风险是什么？ |
+| Project Room | 这个项目的目标、里程碑、DRI、当前阶段、交付物和限制是什么？ |
+| 主会话 | 最近形成了什么结论、计划、状态、风险、批准和交付？ |
+| Thread Worklog | Agent 做过哪些尝试、为何失败、如何调整、证据在哪里？ |
+| Artifact / Preview | 成果能否打开、预览、下载、比较版本并映射到验收标准？ |
+| Employees | 谁正在承担什么责任、负载如何、状态来源于哪个真实 Run 或 Thread？ |
+
+用户可以随时暂停、停止、调整方向或撤销授权，但正常情况下不需要管理内部任务图。
+
+## 六、当前产品状态与目标模型的边界
+
+这份生命周期首先描述产品宪法、PRD 和专题设计定义的 **Pre-Public 目标模型**，不是对当前所有 UI 路径已完整可用的声明。
+
+当前代码已经存在 Project、Charter、Plan、Work Item、依赖、Work Attempt、Artifact、Gate、Acceptance Fact、Agent Run、Worktree Run 和恢复等核心领域合同。内部项目状态目前使用 `intake → planning → executing → reviewing → awaiting_approval → completed`，并带有 `rejected`、`blocked` 等旁路；PRD 面向用户的目标状态则是 `draft → ready → active → waiting_user → validating → delivering → verifying → delivered`，另有 `blocked`、`paused`、`failed`、`cancelled`。两者应由投影层转换，不能直接把内部状态当成最终用户语言。
+
+当前仓库明确仍按 R0–R4 串行推进：
+
+| 阶段 | 产品能力 |
+|---|---|
+| R0 | Truthful Product Shell：产品身份、连接和状态必须真实 |
+| R1 | Goal → Start：用户无需理解内部模型即可从目标启动项目 |
+| R2 | Controllable Execution：执行高信号、实时、可干预 |
+| R3 | Verified Delivery：成果可打开、核验、接受和返工 |
+| R4 | Dynamic Organization：选人、验证强度和组织生命周期真正动态 |
+
+项目当前执行阶段仍是 R0。因此，完整生命周期是产品收敛方向；在 R1–R4 的对应 Gate 通过前，不能把完整 Goal → Verified Delivery → Dynamic Organization 体验表述为已经端到端交付。Founder OS 的机器开发完成也不代表更高运行模式、真实样本验收或用户授权已经取得。Life 层继续冻结，直到 R3 连续候选、核心任务指标、可消费交付、SUS、打断率和真实用户需求同时满足解冻条件。
+
+## 七、最简判断框架
+
+判断公司和项目是否真的在运转，只需连续问七个问题：
+
+1. 目标是否已经变成可验收 Charter？
+2. 是否有唯一 DRI、合适团队和最小权限？
+3. 每个 Work Item 是否有输入、输出、依赖和验证器？
+4. 执行是否留下可恢复的 Run、Attempt、Artifact 和失败事实？
+5. 审查与 Gate 是否真正基于当前制品和证据？
+6. 交付后是否回读并确认真实结果？
+7. 资源是否处置、决定是否回写、人员和组织是否从结果中学习？
+
+任一问题回答“否”，项目就仍在生命周期中，不能称为完成。
+
+## Source Materials
+
+| 文件 | 用途 |
+|---|---|
+| `docs/product-design/PRODUCT-CONSTITUTION.md` | 产品使命、组织、自治、项目与交付硬边界 |
+| `docs/Agent Company 产品 PRD.md` | 首次公开版本用户旅程、目标状态和纵向验收 |
+| `docs/product-design/01-organization-structure.md` | 最小董事会、动态组织、候选池与岗位生命周期 |
+| `docs/product-design/02-execution-model.md` | Goal 到可验证交付的通用执行闭环 |
+| `docs/product-design/06-governance.md` | Definition of Ready、批准等级、Gate 与审计 |
+| `docs/product-design/07-work-types.md` | 领域中立工作契约与软件研发适配器 |
+| `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` | 当前 R0–R4 串行执行顺序与 Life 层解冻条件 |
+| `packages/control-plane/src/company-project/schema.ts` | 当前核心领域对象与内部状态合同 |

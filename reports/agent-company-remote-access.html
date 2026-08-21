@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Company Remote Access 交付报告</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #f4f7f9; color: #102235; }
+    body { margin: 0; }
+    main { width: min(920px, calc(100% - 40px)); margin: 40px auto; padding: 40px; box-sizing: border-box; border-radius: 18px; background: #fff; box-shadow: 0 18px 60px rgba(25, 52, 78, .1); }
+    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.02em; }
+    h2 { margin: 34px 0 12px; font-size: 19px; }
+    p, li { font-size: 15px; line-height: 1.75; }
+    .date { color: #64778a; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid #dfe7ed; text-align: left; vertical-align: top; }
+    th { color: #52697d; font-weight: 650; background: #f5f8fa; }
+    code { padding: 2px 5px; border-radius: 5px; background: #edf2f5; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    ul { padding-left: 22px; }
+    @media (max-width: 640px) { main { width: 100%; margin: 0; padding: 26px 20px 40px; border-radius: 0; box-shadow: none; } h1 { font-size: 26px; } table { display: block; overflow-x: auto; } }
+    @media (prefers-color-scheme: dark) { :root { background: #0d1720; color: #e8f0f5; } main { background: #13212c; box-shadow: none; } .date { color: #9cb0be; } th, td { border-color: #29404f; } th { color: #b3c4cf; background: #172a36; } code { background: #203541; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Agent Company Remote Access 交付报告</h1>
+  <p class="date">日期：2026-08-21</p>
+
+  <h2>结论</h2>
+  <p>已按 Better Codex 的远程访问边界完成首版实现。VPS 只运行 WebUI、Relay 和 Caddy，本地 Control Plane 继续作为唯一运行时和业务数据权威，不在 VPS 部署 Runtime。</p>
+  <p>当前代码已具备设备授权、出站 WSS 隧道、HTTP 与 SSE 转发、远程单用户登录、设备令牌吊销、Relay 最小持久化和 VPS 容器编排能力。</p>
+
+  <h2>架构边界</h2>
+  <table><thead><tr><th>位置</th><th>运行内容</th><th>持久化内容</th></tr></thead><tbody>
+    <tr><td>本机</td><td>Control Plane、Agent Runtime、Tunnel Client</td><td>项目、会话、消息、任务、产物和本地配置</td></tr>
+    <tr><td>VPS WebUI</td><td>Nuxt WebUI、单用户会话</td><td>WebUI 账号、会话和现有 WebUI 数据</td></tr>
+    <tr><td>VPS Relay</td><td>WSS Relay、设备授权、请求流转发</td><td>设备、一次性授权状态、审计事件</td></tr>
+    <tr><td>VPS Caddy</td><td>TLS、HTTP 路由、WSS 升级</td><td>TLS 相关状态</td></tr>
+  </tbody></table>
+  <p>Relay 不保存业务请求体、响应体、会话、消息、任务或产物。远程写入在本机离线时直接返回 <code>runtime_offline</code>，首版不排队、不重放。</p>
+
+  <h2>已完成能力</h2>
+  <ul>
+    <li>新增版本化远程协议，包含握手、连接代次、心跳、请求流、响应流、取消、帧大小和请求大小限制。</li>
+    <li>新增独立 <code>@agents-company/relay</code> 包，使用 SQLite 保存设备、授权和审计三类最小数据。</li>
+    <li>新增本地 Tunnel Client，通过出站 WSS 连接 Relay，并把请求转发到回环地址上的现有 Control Plane。</li>
+    <li>新增 <code>agents remote connect</code>、<code>agents remote status</code>、<code>agents remote disconnect</code>。</li>
+    <li>新增浏览器设备审批页，审批要求有效 WebUI 会话、同源请求和 Relay 内部服务令牌。</li>
+    <li>新增公网单用户登录端点，关闭公共注册路径，登录失败带进程内速率限制。</li>
+    <li>新增设备令牌独立吊销，<code>disconnect</code> 会先尝试在 Relay 吊销，再删除本地凭据。</li>
+    <li>保留现有 Control Plane 回环地址校验，WebUI 和 Relay 通过共享容器网络命名空间通信。</li>
+    <li>新增 Caddy 路由，只公开健康检查、设备授权、设备吊销和 WSS 连接，Relay 内部管理接口不对公网开放。</li>
+    <li>新增容器健康检查和持久卷，WebUI 数据与 Relay 数据分开保存。</li>
+  </ul>
+
+  <h2>验证结果</h2>
+  <table><thead><tr><th>检查</th><th>结果</th></tr></thead><tbody>
+    <tr><td>Relay <code>bun typecheck</code></td><td>通过</td></tr>
+    <tr><td>Control Plane <code>bun typecheck</code></td><td>通过</td></tr>
+    <tr><td>WebUI <code>bun typecheck</code></td><td>通过</td></tr>
+    <tr><td><code>git diff --check</code></td><td>通过</td></tr>
+    <tr><td>Docker Compose 配置解析</td><td>通过</td></tr>
+    <tr><td>设备授权到令牌签发</td><td>通过</td></tr>
+    <tr><td>WSS 握手与连接代次</td><td>通过</td></tr>
+    <tr><td>Relay 到本地 HTTP 往返</td><td>通过，状态码 200，路径保持正确</td></tr>
+    <tr><td>设备令牌吊销</td><td>通过，吊销后令牌失效</td></tr>
+    <tr><td>Relay SQLite 表边界</td><td>通过，仅有 <code>remote_devices</code>、<code>remote_authorizations</code>、<code>remote_audit</code></td></tr>
+  </tbody></table>
+
+  <h2>尚未执行</h2>
+  <ul>
+    <li>未构建生产镜像。</li>
+    <li>未启动或部署到真实 VPS。</li>
+    <li>未执行真实域名、TLS、跨网络大请求和长时间 SSE 验收。</li>
+    <li>未启动 WebUI 做桌面与 375px 浏览器截图验收。</li>
+  </ul>
+  <p>这些步骤没有执行，是因为当前授权范围是实现方案，仓库规则要求未经单独授权不主动编译，部署和真实 VPS 变更也需要单独授权。</p>
+
+  <h2>部署所需变量</h2>
+  <p>部署前需要提供以下环境变量：</p>
+  <ul>
+    <li><code>AGENT_COMPANY_DOMAIN</code></li>
+    <li><code>AGENT_COMPANY_RELAY_SERVICE_TOKEN</code>，至少 32 个字符的随机值</li>
+    <li><code>AGENT_COMPANY_REMOTE_EMAIL</code></li>
+    <li><code>AGENT_COMPANY_REMOTE_PASSWORD</code>，至少 12 个字符</li>
+    <li><code>BETTER_AUTH_SECRET</code></li>
+  </ul>
+  <p>部署入口位于 <code>deploy/remote-access/compose.yaml</code>，Caddy 配置位于 <code>deploy/remote-access/Caddyfile</code>。</p>
+
+  <h2>下一验收门槛</h2>
+  <p>下一步应在获得部署授权后完成生产镜像构建、VPS 启动、真实域名 TLS、设备首次配对、WebUI 登录、真实消息读写、SSE 持续连接、50 MB 请求上限和断线失败语义验收。只有这些证据全部成立，才能把状态从“代码实现完成”提升为“VPS 远程访问已部署并验收”。</p>
+</main>
+</body>
+</html>

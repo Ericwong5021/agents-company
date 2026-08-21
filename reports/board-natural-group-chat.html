@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>董事会自然群聊机制 — Final Report</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.65; }
+    body { margin: 0; background: #11100f; color: #eee9e2; }
+    main { max-width: 920px; margin: 0 auto; padding: 56px 28px 80px; }
+    h1 { font-size: 2.25rem; line-height: 1.2; margin: 0 0 2rem; }
+    h2 { margin-top: 2.4rem; padding-top: 1rem; border-top: 1px solid #3a3631; }
+    h3 { margin-top: 1.8rem; }
+    p, li { color: #d7d0c7; }
+    code { color: #ffb36b; background: #26221f; padding: .12rem .35rem; border-radius: .3rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #3a3631; padding: .7rem; text-align: left; vertical-align: top; }
+    th { background: #211e1b; }
+    .meta { color: #aaa198; background: #191715; border: 1px solid #312d29; border-radius: 12px; padding: 16px 18px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="meta">feature: board-natural-group-chat<br>status: delivered<br>specs: []<br>plans: []<br>branch: main<br>commits: uncommitted-working-tree</div>
+  <h1>董事会自然群聊机制 — Final Report</h1>
+
+  <h2>What Was Built</h2>
+  <p>董事会群聊改为 Cumora 风格的独立唤醒机制。用户或 Agent 的新消息会唤醒尚未处理该消息的其他成员，每个 Agent 根据身份、职责、直接提及和最新对话独立判断是否回应；非必要补充、附和和重复内容保持沉默，不再经过中央竞标、评分和唯一发言人选举。</p>
+  <p>多个有实质贡献的 Agent 最多同时思考 3 个。每条草稿发布前都会在串行门禁中核对群聊最新消息；上下文已经变化时，旧草稿不会直接发送，Agent 会基于新消息重新分诊并最多重新生成一次。系统禁止连续自我回复，并保留每轮最多 6 条 Agent 消息的安全上限。</p>
+
+  <h2>Architecture</h2>
+  <p><code>GroupSession.runConversationLoop</code> 维护本轮已读消息水位、并行唤醒和发布锁。<code>probeOne</code> 使用每个 Agent 的小脑模型完成独立分诊，<code>AgentTurn.prepare</code> 使用大脑模型生成自然、简洁的群聊回复。已存在的 <code>group_session_bidding</code> 数据结构继续作为内部诊断记录，记录每次唤醒的分诊结果，但不再参与中央评分或发言人选举，因此无需数据库迁移。</p>
+  <p><code>natural-turn.ts</code> 集中定义实质回应门槛、直接提及兜底、反独白规则和 6 条上限。旧的 <code>BiddingScheduler</code>、冷却分、陈旧度加权和评分配置已移除。</p>
+
+  <h3>Design Decisions</h3>
+  <ul>
+    <li>选择每个 Agent 独立分诊，因为角色相关性和是否有新增价值应由 Agent 自己判断，而不是由中央分数替代。</li>
+    <li>选择“并行思考、串行发布”，因为它保留群聊即时性，同时让发布前新鲜度检查可以原子地阻止抢话和过时回答。</li>
+    <li>选择一次有界重判，因为上下文变化需要重新判断，但无限重试会放大成本并制造新的对话循环。</li>
+    <li>保留原诊断表而不迁移数据库，因为用户可见行为不依赖旧竞标语义，当前改造可以安全回滚。</li>
+  </ul>
+
+  <h2>Usage</h2>
+  <p>该机制自动应用于现有董事会 GroupSession，不新增配置、API 或用户操作。用户继续在董事会频道发送消息；被直接点名或有明确职责的 Agent 优先回应，其他成员只有在能提供不同且必要的信息时才发言。</p>
+
+  <h2>Verification</h2>
+  <ul>
+    <li><code>bun test test/group-session/scheduler/natural-turn.test.ts test/group-session/scheduler/probe.test.ts</code>：7 项通过，0 项失败。</li>
+    <li><code>git diff --check -- src/group-session src/agent-turn test/group-session</code>：通过。</li>
+    <li>旧中央竞标器、评分器和配置引用扫描：无剩余引用。</li>
+    <li><code>bun test test/group-session/group-session.test.ts</code>：5 项均在测试夹具初始化阶段被共享 WIP 的 <code>Service not found: @control-plane/Auth</code> 阻塞，未进入本次群聊代码。</li>
+    <li><code>bun typecheck</code>：被共享 WIP 的 <code>src/remote-access/client.ts:218</code> 类型错误阻塞；错误为联合类型缺少 <code>connection_epoch</code>，本次未越界修改。</li>
+    <li>未运行产品构建或浏览器验收。</li>
+  </ul>
+
+  <h2>Journey Log</h2>
+  <ul>
+    <li>[pivot] 将“全员竞标后选唯一发言人”替换为“全员独立判断后自然回应”，因为机械感来自调度模型而不是单条提示词。</li>
+    <li>[lesson] 并行生成必须配合发布前水位检查，否则多个正确的独立判断仍可能形成重复或过时消息。</li>
+    <li>[lesson] 共享脏工作区中的验证失败必须追溯到进入目标代码之前还是之后，不能把 Auth 夹具错误归因于群聊重构。</li>
+  </ul>
+
+  <h2>Source Materials</h2>
+  <table>
+    <thead><tr><th>File</th><th>Role</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>packages/control-plane/src/group-session/group-session.ts</code></td><td>群聊运行时</td><td>独立唤醒、新鲜度门禁、恢复与中断</td></tr>
+      <tr><td><code>packages/control-plane/src/group-session/scheduler/natural-turn.ts</code></td><td>发言约束</td><td>回应门槛、兜底、反独白和上限</td></tr>
+      <tr><td><code>packages/control-plane/src/group-session/scheduler/probe.ts</code></td><td>小脑分诊</td><td>自然群聊分诊提示与 Agent 小脑模型</td></tr>
+      <tr><td><code>packages/control-plane/src/agent-turn/agent-turn.ts</code></td><td>大脑回复</td><td>Agent 身份与自然群聊回复提示</td></tr>
+      <tr><td><code>/Users/wangyidong/project/cumora/docs/COORDINATION.md</code></td><td>参考机制</td><td>独立唤醒、新鲜度检查和防碰撞原则</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>
