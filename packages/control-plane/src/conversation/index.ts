@@ -1,5 +1,5 @@
 export * as Conversation from "./conversation"
-export * as ConversationRuntime from "./runtime"
+export * as ConversationRoomRuntime from "./room-runtime"
 export * as ConversationCommand from "./command"
 export * as ConversationRecovery from "./recovery"
 export * as SignalProjector from "./signal-projector"

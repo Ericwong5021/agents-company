@@ -14,15 +14,18 @@ Consolidate a feature's spec history into a single human-readable final report. 
 
 **Announce at start:** "I'm using the report skill to write the final report for this feature."
 
-**Save reports to:** the `reports/` directory given in the `<compose_docs_dir>` block of your prompt, as `<feature-name>.md`
-- No date in filename — the report is overwritten in place when the feature evolves
+**Save reports to:** the `reports/` directory given in the `<compose_docs_dir>` block of your prompt, as both `<feature-name>.md` and `<feature-name>.html`
+- Markdown is the canonical source; render the standalone HTML from the completed Markdown report
+- The two files MUST use the same base filename and contain equivalent report content
+- HTML MUST be readable without the repository, external assets, or a development server
+- No date in filenames — both reports are overwritten in place when the feature evolves
 - Git history tracks revisions
 - User preferences for report location override this default
 
 ## Update Semantics
 
-Specs are **accumulative** (new file per iteration). Final reports are **overwrite** (same file updated in place):
-- If a report already exists for this feature, read it first, then overwrite with updated content
+Specs are **accumulative** (new file per iteration). Final reports are **overwrite** (the same Markdown and HTML files are updated in place):
+- If a report already exists for this feature, read the Markdown report first, then overwrite both formats with updated content
 - Append new Journey Log entries from this iteration (don't discard previous entries)
 - Update the `specs` and `plans` lists to include any new entries
 
@@ -40,8 +43,8 @@ Standard step after implementation is complete and verified — write a final re
 2. **Read the implemented code** — understand what actually shipped (code is truth, not specs)
 3. **Draft main sections** — What Was Built, Architecture, Usage, Verification (scale each section to complexity: a few sentences if straightforward, detailed for complex features, but never longer than the plan)
 4. **Draft Journey Log** — brief flat bullet list, max 5 items
-5. **Assemble report** — combine sections, add frontmatter, save to reports/
-6. **Self-review** — verify report against code (not specs), check for placeholders, confirm length is proportional to feature complexity
+5. **Assemble report** — combine sections, add frontmatter, save the canonical Markdown report to reports/, then render the matching standalone HTML report
+6. **Self-review** — verify the report against code (not specs), check for placeholders, confirm length is proportional to feature complexity, and compare both formats for content parity
 7. **Mark specs and plans** — prepend NOTE header to each spec and plan file
 8. **Commit and transition** — commit report + markers, invoke compose:merge
 
@@ -159,6 +162,8 @@ After assembling the report, check:
 3. **No placeholders** — No "TBD", "TODO", or "fill in later"
 4. **Length proportional** — Not longer than the plan, not shorter than 1 paragraph per section
 5. **Journey Log brief** — Max 5 items, each 1-2 sentences
+6. **Dual-format delivery** — Both `.md` and `.html` exist, share a base filename, and contain equivalent content
+7. **Standalone HTML** — Open the HTML directly and confirm it is readable without external assets or a development server
 
 ## Key Principles
 
@@ -169,6 +174,7 @@ After assembling the report, check:
 - **Non-destructive** — Specs and plans get soft markers, never deleted or moved
 - **Machine-readable** — Frontmatter `specs`/`plans` lists enable tooling
 - **Bidirectional** — Report links to specs/plans, they link back to report
+- **Dual-format** — Markdown is canonical and every report is delivered with a standalone HTML rendering
 
 ## Integration
 
@@ -177,4 +183,4 @@ After assembling the report, check:
 
 After saving the report and marking specs, offer transition:
 
-> "Final report written and committed to `<path>`. Related specs marked. Ready to finish the branch — invoking compose:merge."
+> "Final reports written and committed to `<markdown-path>` and `<html-path>`. Related specs marked. Ready to finish the branch — invoking compose:merge."

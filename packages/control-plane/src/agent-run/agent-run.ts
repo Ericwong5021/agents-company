@@ -172,6 +172,33 @@ function eventFromRow(row: typeof AgentRunEventTable.$inferSelect): EventInfo {
   })
 }
 
+function appendEvent(
+  db: Database.TxOrDb,
+  input: { runID: string; type: string; payload: Record<string, unknown>; timeCreated?: number },
+) {
+  const sequence = (db
+    .select({ sequence: AgentRunEventTable.sequence })
+    .from(AgentRunEventTable)
+    .where(eq(AgentRunEventTable.agent_run_id, input.runID))
+    .orderBy(desc(AgentRunEventTable.sequence))
+    .limit(1)
+    .get()?.sequence ?? -1) + 1
+  const row = db
+    .insert(AgentRunEventTable)
+    .values({
+      id: Identifier.ascending("agentRunEvent"),
+      agent_run_id: input.runID,
+      sequence,
+      type: input.type,
+      payload_json: JSON.stringify(input.payload),
+      time_created: input.timeCreated ?? Date.now(),
+    })
+    .returning()
+    .get()
+  if (!row) throw new Error(`AgentRun event insert failed for run="${input.runID}"`)
+  return eventFromRow(row)
+}
+
 function usageFromRow(row: typeof AgentRunUsageTable.$inferSelect): Usage {
   return Usage.parse({
     runID: row.agent_run_id,
@@ -215,9 +242,9 @@ export const layer = Layer.effect(
     const create = Effect.fn("AgentRun.create")(function* (input: CreateInput) {
       const now = Date.now()
       const id = input.id ?? Identifier.ascending("agentRun")
-      yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
+      const row = yield* Effect.sync(() =>
+        Database.transaction((db) => {
+          const row = db
             .insert(AgentRunTable)
             .values({
               id,
@@ -244,13 +271,13 @@ export const layer = Layer.effect(
               time_created: now,
               time_updated: now,
             })
-            .run(),
-        ),
+            .returning()
+            .get()
+          if (!row) throw new Error(`AgentRun.create: insert failed for id="${id}"`)
+          appendEvent(db, { runID: id, type: "lifecycle.queued", payload: { state: "queued" }, timeCreated: now })
+          return row
+        }, { behavior: "immediate" }),
       )
-      const row = yield* Effect.sync(() =>
-        Database.use((db) => db.select().from(AgentRunTable).where(eq(AgentRunTable.id, id)).get()),
-      )
-      if (!row) return yield* Effect.die(new Error(`AgentRun.create: insert failed for id="${id}"`))
       const info = fromRow(row)
       yield* Effect.sync(() =>
         GlobalBus.emit("event", { directory: "global", payload: { type: Event.Created.type, properties: info } }),
@@ -330,9 +357,11 @@ export const layer = Layer.effect(
     const transition = Effect.fn("AgentRun.transition")(function* (input: TransitionInput) {
       const now = Date.now()
       const terminal = input.state === "completed" || input.state === "failed" || input.state === "stopped"
-      const row = yield* Effect.sync(() =>
-        Database.use((db) =>
-          db
+      const result = yield* Effect.sync(() =>
+        Database.transaction((db) => {
+          const current = db.select().from(AgentRunTable).where(eq(AgentRunTable.id, input.id)).get()
+          if (!current) return undefined
+          const row = db
             .update(AgentRunTable)
             .set({
               state: input.state,
@@ -345,42 +374,40 @@ export const layer = Layer.effect(
             })
             .where(eq(AgentRunTable.id, input.id))
             .returning()
-            .get(),
-        ),
+            .get()
+          if (!row) return undefined
+          const event = current.state !== input.state
+            ? appendEvent(db, {
+                runID: input.id,
+                type: `lifecycle.${input.state}`,
+                payload: {
+                  state: input.state,
+                  ...(input.exitCode !== undefined ? { exitCode: input.exitCode } : {}),
+                },
+                timeCreated: now,
+              })
+            : undefined
+          return { row, event }
+        }, { behavior: "immediate" }),
       )
-      if (!row) return undefined
-      const info = fromRow(row)
+      if (!result) return undefined
+      const info = fromRow(result.row)
       yield* Effect.sync(() =>
         GlobalBus.emit("event", { directory: "global", payload: { type: Event.Updated.type, properties: info } }),
       )
+      if (result.event)
+        yield* Effect.sync(() =>
+          GlobalBus.emit("event", { directory: "global", payload: { type: Event.RuntimeEvent.type, properties: result.event } }),
+        )
       return info
     })
 
     const recordEvent = Effect.fn("AgentRun.recordEvent")(function* (input: { runID: string; type: string; payload: Record<string, unknown> }) {
       const info = yield* Effect.sync(() =>
-        Database.transaction((db) => {
-          const sequence = (db
-            .select({ sequence: AgentRunEventTable.sequence })
-            .from(AgentRunEventTable)
-            .where(eq(AgentRunEventTable.agent_run_id, input.runID))
-            .orderBy(AgentRunEventTable.sequence)
-            .all()
-            .at(-1)?.sequence ?? -1) + 1
-          const row = db
-            .insert(AgentRunEventTable)
-            .values({
-              id: Identifier.ascending("agentRunEvent"),
-              agent_run_id: input.runID,
-              sequence,
-              type: input.type,
-              payload_json: JSON.stringify(input.payload),
-              time_created: Date.now(),
-            })
-            .returning()
-            .get()
-          if (!row) throw new Error(`AgentRun.recordEvent: insert failed for run="${input.runID}"`)
-          return eventFromRow(row)
-        }, { behavior: "immediate" }),
+        Database.transaction(
+          (db) => appendEvent(db, { runID: input.runID, type: input.type, payload: input.payload }),
+          { behavior: "immediate" },
+        ),
       )
       yield* Effect.sync(() =>
         GlobalBus.emit("event", { directory: "global", payload: { type: Event.RuntimeEvent.type, properties: info } }),
@@ -389,9 +416,10 @@ export const layer = Layer.effect(
     })
 
     const recordUsage = Effect.fn("AgentRun.recordUsage")(function* (input: Omit<Usage, "timeUpdated">) {
-      const row = yield* Effect.sync(() =>
+      const result = yield* Effect.sync(() =>
         Database.transaction((db) => {
           const existing = db.select().from(AgentRunUsageTable).where(eq(AgentRunUsageTable.agent_run_id, input.runID)).get()
+          const now = Date.now()
           const next = {
             source: input.source === "runtime" ? "runtime" : existing?.source ?? "unavailable",
             input_tokens: input.inputTokens ?? existing?.input_tokens ?? null,
@@ -399,16 +427,41 @@ export const layer = Layer.effect(
             reasoning_tokens: input.reasoningTokens ?? existing?.reasoning_tokens ?? null,
             cache_read_tokens: input.cacheReadTokens ?? existing?.cache_read_tokens ?? null,
             cache_write_tokens: input.cacheWriteTokens ?? existing?.cache_write_tokens ?? null,
-            time_updated: Date.now(),
+            time_updated: now,
           }
-          if (existing) {
-            return db.update(AgentRunUsageTable).set(next).where(eq(AgentRunUsageTable.agent_run_id, input.runID)).returning().get()
-          }
-          return db.insert(AgentRunUsageTable).values({ agent_run_id: input.runID, ...next }).returning().get()
+          const row = existing
+            ? db.update(AgentRunUsageTable).set(next).where(eq(AgentRunUsageTable.agent_run_id, input.runID)).returning().get()
+            : db.insert(AgentRunUsageTable).values({ agent_run_id: input.runID, ...next }).returning().get()
+          const changed = row && (
+            row.input_tokens !== (existing?.input_tokens ?? null)
+            || row.output_tokens !== (existing?.output_tokens ?? null)
+            || row.reasoning_tokens !== (existing?.reasoning_tokens ?? null)
+            || row.cache_read_tokens !== (existing?.cache_read_tokens ?? null)
+            || row.cache_write_tokens !== (existing?.cache_write_tokens ?? null)
+          )
+          const event = changed
+            ? appendEvent(db, {
+                runID: input.runID,
+                type: "usage.recorded",
+                payload: {
+                  ...(row.input_tokens !== null ? { inputTokens: row.input_tokens } : {}),
+                  ...(row.output_tokens !== null ? { outputTokens: row.output_tokens } : {}),
+                  ...(row.reasoning_tokens !== null ? { reasoningTokens: row.reasoning_tokens } : {}),
+                  ...(row.cache_read_tokens !== null ? { cacheReadTokens: row.cache_read_tokens } : {}),
+                  ...(row.cache_write_tokens !== null ? { cacheWriteTokens: row.cache_write_tokens } : {}),
+                },
+                timeCreated: now,
+              })
+            : undefined
+          return { row, event }
         }, { behavior: "immediate" }),
       )
-      if (!row) return yield* Effect.die(new Error(`AgentRun.recordUsage: write failed for run="${input.runID}"`))
-      return usageFromRow(row)
+      if (!result.row) return yield* Effect.die(new Error(`AgentRun.recordUsage: write failed for run="${input.runID}"`))
+      if (result.event)
+        yield* Effect.sync(() =>
+          GlobalBus.emit("event", { directory: "global", payload: { type: Event.RuntimeEvent.type, properties: result.event } }),
+        )
+      return usageFromRow(result.row)
     })
 
     const enqueue = Effect.fn("AgentRun.enqueue")(function* (input: EnqueueInput) {

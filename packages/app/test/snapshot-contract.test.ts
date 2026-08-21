@@ -89,8 +89,13 @@ describe("company snapshot contract", () => {
     }]
     const message = {
       id: "message-1",
+      sequence: 1,
+      kind: "text",
       author: { kind: "agent", id: "agent-1" },
       body: "Evidence collected",
+      reactions: [],
+      pollVotes: [],
+      deliveries: [],
       time: { created: 1_750_000_000_000 },
     }
 

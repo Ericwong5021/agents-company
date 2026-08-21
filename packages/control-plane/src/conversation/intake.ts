@@ -16,9 +16,12 @@ import {
   RootNeedTable,
 } from "./conversation.sql"
 import { classifyMessageIntent, IntentOverride, MessageIntentKind } from "./intent"
+import { claimChannelSequence } from "./room.sql"
 import {
   ChannelID,
+  ChannelMessageKind,
   ChannelMessageID,
+  ChannelPoll,
   ChannelNotVisible,
   ChannelNotWritable,
   CompanyNotFound,
@@ -45,6 +48,8 @@ export const SendMessageInput = z
     principal: ConversationUser,
     requestID: z.string().uuid(),
     body: z.string().trim().min(1).max(20_000),
+    kind: ChannelMessageKind.default("text"),
+    poll: ChannelPoll.optional(),
     replyToID: ChannelMessageID.optional(),
     referencedThreadID: ConversationThreadID.optional(),
     mentions: z.array(ConversationMention).max(20).default([]),
@@ -52,6 +57,11 @@ export const SendMessageInput = z
     intentOverride: IntentOverride.optional(),
   })
   .strict()
+  .superRefine((input, context) => {
+    if (input.kind === "poll" && input.poll) return
+    if (input.kind !== "poll" && !input.poll) return
+    context.addIssue({ code: "custom", path: ["poll"], message: "Poll payload must match message kind" })
+  })
 export type SendMessageInput = z.input<typeof SendMessageInput>
 type ParsedSendMessageInput = z.output<typeof SendMessageInput>
 
@@ -161,6 +171,7 @@ function sameRequest(
 ) {
   if (message.author_kind !== input.principal.kind || message.author_id !== input.principal.id) return false
   if (message.body !== input.body || (message.reply_to_id ?? undefined) !== input.replyToID) return false
+  if (message.kind !== input.kind || JSON.stringify(message.poll ?? undefined) !== JSON.stringify(input.poll)) return false
   if (JSON.stringify(message.mentions) !== JSON.stringify(input.mentions)) return false
   if (JSON.stringify(message.resources) !== JSON.stringify(input.resources)) return false
   if (thread) return message.source_thread_id === thread.id
@@ -324,6 +335,9 @@ function write(input: ParsedSendMessageInput): TransactionResult {
         db.insert(ChannelMessageTable).values({
           id: messageID,
           channel_id: channel.id,
+          sequence: claimChannelSequence(db, channel.id, now),
+          kind: input.kind,
+          poll: input.poll ?? null,
           root_need_id: rootNeedID ?? null,
           source_thread_id: activeThread?.id ?? null,
           reply_to_id: input.replyToID ?? null,
@@ -340,30 +354,12 @@ function write(input: ParsedSendMessageInput): TransactionResult {
           time_created: now,
           time_updated: now,
         }).run()
-      const runID = activeThread && channel.kind === "board" ? ConversationRunID.parse(Identifier.ascending("conversationRun")) : undefined
-      if (runID && activeThread) {
-        db.insert(ConversationRunTable)
-          .values({
-            id: runID,
-            conversation_thread_id: activeThread.id,
-            channel_message_id: messageID,
-            state: "queued",
-            attempt: 0,
-            retryable: false,
-            time_started: null,
-            time_finished: null,
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-      }
       return {
         type: "accepted",
         value: {
           messageID,
           rootNeedID: rootNeedID ?? undefined,
           threadID: activeThread?.id,
-          runID,
           replayed: Boolean(existing),
           intent: classification?.kind,
           intentConfidence: classification?.confidence,

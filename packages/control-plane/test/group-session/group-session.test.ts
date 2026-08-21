@@ -122,48 +122,6 @@ beforeEach(reset)
 afterEach(reset)
 
 describe.serial("M2 GroupSession runtime source bridge", () => {
-  test.serial("routes work-scoped bidding through the Company model instead of the global fallback", async () => {
-    const companyServer = startScriptedLLMServer(
-      Array.from({ length: 24 }, () => ({
-        lines: textStopResponse('{"level":"pass","type":"info","addressedAs":"none","reason":"not needed"}'),
-      })),
-    )
-    const fallbackServer = startScriptedLLMServer([
-      { lines: textStopResponse("wrong model"), status: 503 },
-    ])
-    const repository = await tmpdir({
-      git: true,
-      config: providerConfig(`${companyServer.origin}/v1`, `${fallbackServer.origin}/v1`),
-    })
-
-    try {
-      await bootstrap(repository.path)
-      const group = await groupSession(repository.path, (service) =>
-        service.create({ title: "Company model routing", agentIDs: boardAgents, contextPolicy: "work_scoped" }),
-      )
-      await groupSession(repository.path, (service) =>
-        service.chat({ groupSessionID: group.id, text: "Use the configured Company model." }),
-      )
-      await waitFor(async () =>
-        groupSession(repository.path, (service) =>
-          Effect.gen(function* () {
-            const messages = yield* service.messages(group.id)
-            return !(yield* service.isBusy(group.id)) && messages.filter((message) => message.role === "agent").length === 0
-          }),
-        ),
-      )
-
-      expect(companyServer.captures.length).toBeGreaterThan(0)
-      expect(fallbackServer.captures).toHaveLength(0)
-    } finally {
-      await Instance.disposeAll()
-      await resetDatabase()
-      await Bun.sleep(500)
-      await Promise.all([companyServer.stop(), fallbackServer.stop()])
-      await repository[Symbol.asyncDispose]()
-    }
-  }, 15_000)
-
   test.serial("routes work-scoped structured prompts through the Company model", async () => {
     const companyServer = startScriptedLLMServer([
       {

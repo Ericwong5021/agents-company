@@ -11,7 +11,7 @@ import {
 import { Identifier } from "@/id/id"
 import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, or } from "@/storage"
 import * as Database from "@/storage/db"
-import { GroupMessageTable, GroupSessionBiddingTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
+import { GroupMessageTable, GroupSessionMemberTable } from "@/group-session/group-session.sql"
 import { GroupSessionID } from "@/group-session/schema"
 import { AgentRunEventTable, AgentRunTable, AgentRunUsageTable } from "@/agent-run/agent-run.sql"
 import { MessageTable, PartTable } from "@/session/session.sql"
@@ -20,6 +20,7 @@ import {
   ChannelMemberTable,
   ChannelMessageTable,
   ChannelTable,
+  LOCAL_USER_ID,
   ConversationRunTable,
   ConversationThreadMemberTable,
   ConversationThreadTable,
@@ -53,6 +54,8 @@ import {
   ThreadNotVisible,
 } from "./schema"
 import * as Intake from "./intake"
+import { claimChannelSequence } from "./room.sql"
+import { ChannelDeliveryTable, ChannelPollVoteTable, ChannelReactionTable, ChannelReadStateTable } from "./room.sql"
 
 export { MessageAccepted, SendMessageInput } from "./intake"
 
@@ -78,6 +81,26 @@ export const ChannelMessage = z
   .object({
     id: ChannelMessageID,
     channelID: ChannelID,
+    sequence: z.number().int().nonnegative(),
+    kind: z.enum(["text", "poll", "system"]),
+    poll: z
+      .object({
+        question: z.string(),
+        options: z.array(z.object({ id: z.string(), label: z.string() }).strict()),
+        multiple: z.boolean(),
+        closed_at: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    reactions: z.array(
+      z.object({ emoji: z.string(), count: z.number().int().positive(), reacted: z.boolean() }).strict(),
+    ),
+    pollVotes: z.array(
+      z.object({ optionID: z.string(), count: z.number().int().positive(), selected: z.boolean() }).strict(),
+    ),
+    deliveries: z.array(
+      z.object({ agentID: z.string(), status: z.string(), reason: z.string().optional() }).strict(),
+    ),
     rootNeedID: RootNeedID.optional(),
     sourceThreadID: ConversationThreadID.optional(),
     replyToID: ChannelMessageID.optional(),
@@ -173,28 +196,6 @@ export const ThreadAgentMessage = z
   })
   .strict()
 
-export const ThreadBidding = z
-  .object({
-    id: z.string().min(1),
-    roundNum: z.number().int().nonnegative(),
-    state: z.enum(["bidding", "decided"]).default("decided"),
-    winnerAgentID: z.string().optional(),
-    bids: z.array(
-      z.object({
-        agentId: z.string().min(1),
-        state: z.enum(["queued", "analyzing", "completed"]).default("completed"),
-        level: z.enum(["must", "want", "could", "pass"]).optional(),
-        type: z.enum(["objection", "answer", "question", "claim", "info", "support"]).optional(),
-        addressedAs: z.enum(["direct", "mention", "none"]).optional(),
-        reason: z.string().optional(),
-        score: z.number().optional(),
-        eligible: z.boolean().optional(),
-      }),
-    ),
-    time: z.object({ created: z.number().int(), updated: z.number().int() }),
-  })
-  .strict()
-
 export const ThreadEntry = z.discriminatedUnion("type", [
   z
     .object({
@@ -207,12 +208,6 @@ export const ThreadEntry = z.discriminatedUnion("type", [
     .object({
       type: z.literal("agent_message"),
       message: ThreadAgentMessage,
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal("bidding"),
-      bidding: ThreadBidding,
     })
     .strict(),
 ])
@@ -424,9 +419,34 @@ function channelFromRow(row: typeof ChannelTable.$inferSelect): ChannelSummary {
 }
 
 function messageFromRow(row: typeof ChannelMessageTable.$inferSelect): ChannelMessage {
+  const reactions = Database.use((db) => db.select().from(ChannelReactionTable).where(eq(ChannelReactionTable.message_id, row.id)).all())
+  const votes = Database.use((db) => db.select().from(ChannelPollVoteTable).where(eq(ChannelPollVoteTable.message_id, row.id)).all())
+  const deliveries = Database.use((db) => db.select().from(ChannelDeliveryTable).where(eq(ChannelDeliveryTable.message_id, row.id)).all())
   return {
     id: row.id,
     channelID: row.channel_id,
+    sequence: row.sequence,
+    kind: row.kind,
+    poll: row.poll ?? undefined,
+    reactions: [...new Set(reactions.map((reaction) => reaction.emoji))].map((emoji) => ({
+      emoji,
+      count: reactions.filter((reaction) => reaction.emoji === emoji).length,
+      reacted: reactions.some(
+        (reaction) => reaction.emoji === emoji && reaction.principal_kind === "user" && reaction.principal_id === LOCAL_USER_ID,
+      ),
+    })),
+    pollVotes: [...new Set(votes.map((vote) => vote.option_id))].map((optionID) => ({
+      optionID,
+      count: votes.filter((vote) => vote.option_id === optionID).length,
+      selected: votes.some(
+        (vote) => vote.option_id === optionID && vote.principal_kind === "user" && vote.principal_id === LOCAL_USER_ID,
+      ),
+    })),
+    deliveries: deliveries.map((delivery) => ({
+      agentID: delivery.agent_id,
+      status: delivery.status,
+      reason: delivery.reason ?? undefined,
+    })),
     rootNeedID: row.root_need_id ?? undefined,
     sourceThreadID: row.source_thread_id ?? undefined,
     replyToID: row.reply_to_id ?? undefined,
@@ -544,7 +564,7 @@ function decodeCursor(before?: string) {
 }
 
 function encodeCursor(row: typeof ChannelMessageTable.$inferSelect) {
-  return Buffer.from(JSON.stringify({ id: row.id, time_created: row.time_created })).toString("base64url")
+  return Buffer.from(JSON.stringify({ id: row.id, sequence: row.sequence, time_created: row.time_created })).toString("base64url")
 }
 
 const ThreadEntryCursor = z.object({
@@ -602,7 +622,9 @@ function readChannelMessages(input: {
 }) {
   return Database.use((db) => {
     const mainFeedMessage =
-      input.channel.kind === "project"
+      input.channel.kind === "board"
+        ? undefined
+        : input.channel.kind === "project"
         ? or(
             eq(ChannelMessageTable.author_kind, "user"),
             isNotNull(ChannelMessageTable.signal_type),
@@ -715,13 +737,6 @@ function readThreadEntries(input: {
           .where(and(inArray(GroupMessageTable.group_session_id, runtimeIDs), eq(GroupMessageTable.role, "agent")))
           .all()
       : []
-    const biddings = runtimeIDs.length
-      ? db
-          .select()
-          .from(GroupSessionBiddingTable)
-          .where(inArray(GroupSessionBiddingTable.group_session_id, runtimeIDs))
-          .all()
-      : []
     const evidenceByRun = new Map(
       agentMessages
         .flatMap((message) => (message.agent_run_id ? [message.agent_run_id] : []))
@@ -800,25 +815,6 @@ function readThreadEntries(input: {
           },
         },
       })),
-      ...biddings.flatMap((row) => {
-        const bids = ThreadBidding.shape.bids.safeParse(row.bids_json)
-        if (!bids.success) return []
-        return [{
-          id: `bidding:${row.id}`,
-          time_created: row.time_created,
-          entry: {
-            type: "bidding" as const,
-            bidding: {
-              id: row.id,
-              roundNum: row.round_num,
-              state: row.state,
-              winnerAgentID: row.winner_agent_id ?? undefined,
-              bids: bids.data,
-              time: { created: row.time_created, updated: row.time_updated },
-            },
-          },
-        }]
-      }),
     ]
       .filter(
         (row) =>
@@ -923,6 +919,9 @@ export interface Interface {
   readonly pageEntries: (input: PageEntriesInput) => Effect.Effect<ThreadEntryPage, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof InvalidCursor>>
   readonly getSource: (input: GetSourceInput) => Effect.Effect<ThreadSource, InstanceType<typeof ThreadNotVisible> | InstanceType<typeof SourceNotFound>>
   readonly sendMessage: (input: Intake.SendMessageInput) => Effect.Effect<Intake.MessageAccepted, Intake.SendMessageError>
+  readonly toggleReaction: (input: ChannelAccess & { messageID: ChannelMessageID; emoji: string }) => Effect.Effect<ChannelMessage, InstanceType<typeof ChannelNotVisible>>
+  readonly votePoll: (input: ChannelAccess & { messageID: ChannelMessageID; optionID: string }) => Effect.Effect<ChannelMessage, InstanceType<typeof ChannelNotVisible>>
+  readonly markRead: (input: ChannelAccess & { sequence: number }) => Effect.Effect<void, InstanceType<typeof ChannelNotVisible>>
   readonly ensureCompanyChannels: (input: EnsureCompanyChannelsInput) => Effect.Effect<void>
   readonly ensureProjectChannel: (input: EnsureProjectChannelInput) => Effect.Effect<ChannelSummary, InstanceType<typeof CompanyNotFound>>
   readonly recordProjectUpdate: (input: RecordProjectUpdateInput) => Effect.Effect<ChannelMessage, Error>
@@ -1207,6 +1206,9 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               const created = {
                 id: ChannelMessageID.parse(Identifier.ascending("channelMessage")),
                 channel_id: channel.id,
+                sequence: claimChannelSequence(db, channel.id, now),
+                kind: "text" as const,
+                poll: null,
                 root_need_id: null,
                 source_thread_id: null,
                 reply_to_id: null,
@@ -1441,6 +1443,150 @@ export const layer: Layer.Layer<Service> = Layer.effect(
 
     const sendMessage = Intake.sendMessage
 
+    const toggleReaction = Effect.fn("Conversation.toggleReaction")(function* (
+      input: ChannelAccess & { messageID: ChannelMessageID; emoji: string },
+    ) {
+      if (!(yield* Effect.sync(() => findVisibleChannel(input)))) {
+        return yield* Effect.fail(new ChannelNotVisible({ company_id: input.companyID, channel_id: input.channelID }))
+      }
+      const row = yield* Effect.sync(() =>
+        Database.transaction((db) => {
+          const message = db
+            .select()
+            .from(ChannelMessageTable)
+            .where(and(eq(ChannelMessageTable.id, input.messageID), eq(ChannelMessageTable.channel_id, input.channelID)))
+            .get()
+          if (!message) return
+          const existing = db
+            .select()
+            .from(ChannelReactionTable)
+            .where(
+              and(
+                eq(ChannelReactionTable.message_id, input.messageID),
+                eq(ChannelReactionTable.principal_kind, input.principal.kind),
+                eq(ChannelReactionTable.principal_id, input.principal.id),
+                eq(ChannelReactionTable.emoji, input.emoji),
+              ),
+            )
+            .get()
+          if (existing) {
+            db.delete(ChannelReactionTable)
+              .where(
+                and(
+                  eq(ChannelReactionTable.message_id, input.messageID),
+                  eq(ChannelReactionTable.principal_kind, input.principal.kind),
+                  eq(ChannelReactionTable.principal_id, input.principal.id),
+                  eq(ChannelReactionTable.emoji, input.emoji),
+                ),
+              )
+              .run()
+            return message
+          }
+          const now = Date.now()
+          db.insert(ChannelReactionTable)
+            .values({
+              message_id: input.messageID,
+              principal_kind: input.principal.kind,
+              principal_id: input.principal.id,
+              emoji: input.emoji,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          return message
+        }),
+      )
+      if (!row) return yield* Effect.fail(new ChannelNotVisible({ company_id: input.companyID, channel_id: input.channelID }))
+      return messageFromRow(row)
+    })
+
+    const votePoll = Effect.fn("Conversation.votePoll")(function* (
+      input: ChannelAccess & { messageID: ChannelMessageID; optionID: string },
+    ) {
+      if (!(yield* Effect.sync(() => findVisibleChannel(input)))) {
+        return yield* Effect.fail(new ChannelNotVisible({ company_id: input.companyID, channel_id: input.channelID }))
+      }
+      const row = yield* Effect.sync(() =>
+        Database.transaction((db) => {
+          const message = db
+            .select()
+            .from(ChannelMessageTable)
+            .where(and(eq(ChannelMessageTable.id, input.messageID), eq(ChannelMessageTable.channel_id, input.channelID)))
+            .get()
+          if (!message?.poll || message.poll.closed_at || !message.poll.options.some((option) => option.id === input.optionID)) return
+          const current = db
+            .select()
+            .from(ChannelPollVoteTable)
+            .where(
+              and(
+                eq(ChannelPollVoteTable.message_id, input.messageID),
+                eq(ChannelPollVoteTable.principal_kind, input.principal.kind),
+                eq(ChannelPollVoteTable.principal_id, input.principal.id),
+              ),
+            )
+            .all()
+          current.filter((vote) => !message.poll!.multiple || vote.option_id === input.optionID).forEach((vote) =>
+            db.delete(ChannelPollVoteTable)
+              .where(
+                and(
+                  eq(ChannelPollVoteTable.message_id, vote.message_id),
+                  eq(ChannelPollVoteTable.option_id, vote.option_id),
+                  eq(ChannelPollVoteTable.principal_kind, vote.principal_kind),
+                  eq(ChannelPollVoteTable.principal_id, vote.principal_id),
+                ),
+              )
+              .run(),
+          )
+          if (current.some((vote) => vote.option_id === input.optionID)) return message
+          const now = Date.now()
+          db.insert(ChannelPollVoteTable)
+            .values({
+              message_id: input.messageID,
+              option_id: input.optionID,
+              principal_kind: input.principal.kind,
+              principal_id: input.principal.id,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          return message
+        }),
+      )
+      if (!row) return yield* Effect.fail(new ChannelNotVisible({ company_id: input.companyID, channel_id: input.channelID }))
+      return messageFromRow(row)
+    })
+
+    const markRead = Effect.fn("Conversation.markRead")(function* (input: ChannelAccess & { sequence: number }) {
+      if (!(yield* Effect.sync(() => findVisibleChannel(input)))) {
+        return yield* Effect.fail(new ChannelNotVisible({ company_id: input.companyID, channel_id: input.channelID }))
+      }
+      yield* Effect.sync(() => {
+        const now = Date.now()
+        Database.use((db) =>
+          db.insert(ChannelReadStateTable)
+            .values({
+              channel_id: input.channelID,
+              principal_kind: input.principal.kind,
+              principal_id: input.principal.id,
+              last_read_sequence: input.sequence,
+              last_shown_sequence: input.sequence,
+              last_processed_sequence: input.sequence,
+              time_created: now,
+              time_updated: now,
+            })
+            .onConflictDoUpdate({
+              target: [
+                ChannelReadStateTable.channel_id,
+                ChannelReadStateTable.principal_kind,
+                ChannelReadStateTable.principal_id,
+              ],
+              set: { last_read_sequence: input.sequence, last_shown_sequence: input.sequence, time_updated: now },
+            })
+            .run(),
+        )
+      })
+    })
+
     return Service.of({
       listChannels,
       pageMessages,
@@ -1448,6 +1594,9 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       pageEntries,
       getSource,
       sendMessage,
+      toggleReaction,
+      votePoll,
+      markRead,
       ensureCompanyChannels,
       ensureProjectChannel,
       recordProjectUpdate,

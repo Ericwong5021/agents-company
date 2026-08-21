@@ -23,6 +23,7 @@ import {
   SignalProjectionID,
   SignalProjectionSource,
 } from "./schema"
+import { claimChannelSequence } from "./room.sql"
 
 const PROJECTOR_VERSION = 1
 const M2_SIGNAL_TYPES = new Set(["conclusion", "plan", "status", "risk", "intervention"])
@@ -201,6 +202,7 @@ function write(input: ParsedProjectInput): Projected | RejectionReason {
         .values({
           id: channelMessageID,
           channel_id: channel.id,
+          sequence: claimChannelSequence(db, channel.id, now),
           root_need_id: thread.root_need_id ?? null,
           source_thread_id: thread.id,
           reply_to_id: null,

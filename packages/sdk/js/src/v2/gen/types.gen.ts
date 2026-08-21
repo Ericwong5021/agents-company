@@ -72,6 +72,64 @@ export type CompanyDepartmentRecurringDemandNotProven = {
   }
 }
 
+export type CompanyOperationItem = {
+  id: string
+  category: "governance" | "work" | "runtime" | "quality" | "delivery" | "organization" | "system"
+  severity: "info" | "warning" | "error"
+  importance: "primary" | "normal" | "diagnostic"
+  eventType: string
+  title: string
+  summary?: string
+  occurredAt: number
+  source: {
+    kind: string
+    id: string
+  }
+  refs: {
+    rootNeedID?: string
+    projectID?: string
+    threadID?: string
+    agentID?: string
+    runID?: string
+    workItemID?: string
+  }
+  context: {
+    project?: {
+      id: string
+      title: string
+    }
+    agent?: {
+      id: string
+      name: string
+    }
+    run?: {
+      id: string
+      state: string
+    }
+    workItem?: {
+      id: string
+      title: string
+    }
+  }
+  href: string
+  details?: Array<{
+    label: string
+    value: string
+  }>
+}
+
+export type CompanyOperationPage = {
+  items: Array<CompanyOperationItem>
+  nextCursor?: string
+}
+
+export type LocalAuthUnauthorized = {
+  name: "LocalAuthUnauthorized"
+  data: {
+    [key: string]: never
+  }
+}
+
 export type CompanySetupGoal = {
   body: string
   created_at: number
@@ -127,13 +185,6 @@ export type CompanyState = {
   }
 }
 
-export type LocalAuthUnauthorized = {
-  name: "LocalAuthUnauthorized"
-  data: {
-    [key: string]: never
-  }
-}
-
 export type CompanyCorruptState = {
   name: "CompanyCorruptState"
   data: {
@@ -150,6 +201,10 @@ export type AgentActivityProjection = {
     lifecycle: "employee" | "assigned"
     department?: string
     responsibilities: Array<string>
+    brain: {
+      big_model: string
+      small_model: string
+    }
   }
   employment: "employee" | "temporary"
   presence: "online" | "offline"
@@ -2315,9 +2370,23 @@ export type BoardProjectDecisionConflict = {
   }
 }
 
+export type ChannelMessageKind = "text" | "poll" | "system"
+
+export type ChannelPoll = {
+  question: string
+  options: Array<{
+    id: string
+    label: string
+  }>
+  multiple?: boolean
+  closed_at?: number
+}
+
 export type ChannelSendInput = {
   request_id: string
   body: string
+  kind?: ChannelMessageKind
+  poll?: ChannelPoll
   reply_to?: string
   referenced_thread_id?: ConversationThreadId
   mentions?: Array<ConversationMention>
@@ -2482,6 +2551,32 @@ export type BoardDecisionResult = {
   decision_message: {
     id: ChannelMessageId
     channelID: ChannelId
+    sequence: number
+    kind: "text" | "poll" | "system"
+    poll?: {
+      question: string
+      options: Array<{
+        id: string
+        label: string
+      }>
+      multiple: boolean
+      closed_at?: number
+    }
+    reactions: Array<{
+      emoji: string
+      count: number
+      reacted: boolean
+    }>
+    pollVotes: Array<{
+      optionID: string
+      count: number
+      selected: boolean
+    }>
+    deliveries: Array<{
+      agentID: string
+      status: string
+      reason?: string
+    }>
     rootNeedID?: RootNeedId
     sourceThreadID?: ConversationThreadId
     replyToID?: ChannelMessageId
@@ -2866,7 +2961,8 @@ export type EventCompanyAgentCreated = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -2899,7 +2995,8 @@ export type EventCompanyAgentUpdated = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -2969,7 +3066,7 @@ export type EventGroupSessionBiddingCompleted = {
       type: "objection" | "answer" | "question" | "claim" | "info" | "support"
       addressedAs: "direct" | "mention" | "none"
       reason: string
-      score: number
+      score?: number
       eligible: boolean
     }>
   }
@@ -6215,6 +6312,108 @@ export type CompanyRecruitmentDepartmentEnsureResponses = {
   200: unknown
 }
 
+export type CompanyOperationsListData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+    limit?: number
+    cursor?: string
+    category?: "governance" | "work" | "runtime" | "quality" | "delivery" | "organization" | "system"
+    severity?: "info" | "warning" | "error"
+    importance?: "primary" | "normal" | "diagnostic"
+    project_id?: string
+    agent_id?: string
+    from?: number
+    to?: number
+  }
+  url: "/company/operations"
+}
+
+export type CompanyOperationsListErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+}
+
+export type CompanyOperationsListError = CompanyOperationsListErrors[keyof CompanyOperationsListErrors]
+
+export type CompanyOperationsListResponses = {
+  /**
+   * Company operations ordered by occurrence time
+   */
+  200: CompanyOperationPage
+}
+
+export type CompanyOperationsListResponse = CompanyOperationsListResponses[keyof CompanyOperationsListResponses]
+
+export type CompanyOperationsSummaryData = {
+  body?: never
+  path?: never
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/operations/summary"
+}
+
+export type CompanyOperationsSummaryErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+}
+
+export type CompanyOperationsSummaryError = CompanyOperationsSummaryErrors[keyof CompanyOperationsSummaryErrors]
+
+export type CompanyOperationsSummaryResponses = {
+  /**
+   * Company operation summary
+   */
+  200: {
+    total24h: number
+    errors24h: number
+    warnings24h: number
+    recoveries24h: number
+  }
+}
+
+export type CompanyOperationsSummaryResponse =
+  CompanyOperationsSummaryResponses[keyof CompanyOperationsSummaryResponses]
+
+export type CompanyOperationsGetData = {
+  body?: never
+  path: {
+    operationID: string
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/operations/{operationID}"
+}
+
+export type CompanyOperationsGetErrors = {
+  /**
+   * Authentication required
+   */
+  401: LocalAuthUnauthorized
+  /**
+   * Company operation not found
+   */
+  404: unknown
+}
+
+export type CompanyOperationsGetError = CompanyOperationsGetErrors[keyof CompanyOperationsGetErrors]
+
+export type CompanyOperationsGetResponses = {
+  /**
+   * Safe company operation detail
+   */
+  200: CompanyOperationItem
+}
+
+export type CompanyOperationsGetResponse = CompanyOperationsGetResponses[keyof CompanyOperationsGetResponses]
+
 export type CompanyCurrentData = {
   body?: never
   path?: never
@@ -8700,6 +8899,32 @@ export type CompanyChannelMessagesResponses = {
     items: Array<{
       id: ChannelMessageId
       channelID: ChannelId
+      sequence: number
+      kind: "text" | "poll" | "system"
+      poll?: {
+        question: string
+        options: Array<{
+          id: string
+          label: string
+        }>
+        multiple: boolean
+        closed_at?: number
+      }
+      reactions: Array<{
+        emoji: string
+        count: number
+        reacted: boolean
+      }>
+      pollVotes: Array<{
+        optionID: string
+        count: number
+        selected: boolean
+      }>
+      deliveries: Array<{
+        agentID: string
+        status: string
+        reason?: string
+      }>
       rootNeedID?: RootNeedId
       sourceThreadID?: ConversationThreadId
       replyToID?: ChannelMessageId
@@ -8790,6 +9015,152 @@ export type CompanyChannelSendResponses = {
 }
 
 export type CompanyChannelSendResponse = CompanyChannelSendResponses[keyof CompanyChannelSendResponses]
+
+export type CompanyChannelReactionToggleData = {
+  body?: {
+    emoji: string
+  }
+  path: {
+    channelID: ChannelId
+    messageID: ChannelMessageId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/channels/{channelID}/messages/{messageID}/reactions"
+}
+
+export type CompanyChannelReactionToggleErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400:
+    | ProductValidationError
+    | ConversationMessageInvalidInput
+    | ConversationInvalidCursor
+    | BoardProjectDecisionNotReady
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationBoardMessagesDisabled
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelReactionToggleError =
+  CompanyChannelReactionToggleErrors[keyof CompanyChannelReactionToggleErrors]
+
+export type CompanyChannelReactionToggleResponses = {
+  /**
+   * Updated message
+   */
+  200: unknown
+}
+
+export type CompanyChannelPollVoteData = {
+  body?: {
+    option_id: string
+  }
+  path: {
+    channelID: ChannelId
+    messageID: ChannelMessageId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/channels/{channelID}/messages/{messageID}/votes"
+}
+
+export type CompanyChannelPollVoteErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400:
+    | ProductValidationError
+    | ConversationMessageInvalidInput
+    | ConversationInvalidCursor
+    | BoardProjectDecisionNotReady
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationBoardMessagesDisabled
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelPollVoteError = CompanyChannelPollVoteErrors[keyof CompanyChannelPollVoteErrors]
+
+export type CompanyChannelPollVoteResponses = {
+  /**
+   * Updated message
+   */
+  200: unknown
+}
+
+export type CompanyChannelReadStateData = {
+  body?: {
+    sequence: number
+  }
+  path: {
+    channelID: ChannelId
+  }
+  query: {
+    company_id: CompanyId
+  }
+  url: "/company/channels/{channelID}/read-state"
+}
+
+export type CompanyChannelReadStateErrors = {
+  /**
+   * Invalid conversation request
+   */
+  400:
+    | ProductValidationError
+    | ConversationMessageInvalidInput
+    | ConversationInvalidCursor
+    | BoardProjectDecisionNotReady
+  /**
+   * Conversation resource not visible or writable
+   */
+  403:
+    | ConversationBoardMessagesDisabled
+    | ConversationChannelNotVisible
+    | ConversationChannelNotWritable
+    | ConversationThreadNotWritable
+    | ConversationReplyNotVisible
+    | ConversationMentionNotVisible
+  /**
+   * Unable to complete conversation operation
+   */
+  500: UnknownError
+}
+
+export type CompanyChannelReadStateError = CompanyChannelReadStateErrors[keyof CompanyChannelReadStateErrors]
+
+export type CompanyChannelReadStateResponses = {
+  /**
+   * Read watermark advanced
+   */
+  204: void
+}
+
+export type CompanyChannelReadStateResponse = CompanyChannelReadStateResponses[keyof CompanyChannelReadStateResponses]
 
 export type CompanyThreadData = {
   body?: never
@@ -8929,6 +9300,32 @@ export type CompanyThreadEntriesResponses = {
           message: {
             id: ChannelMessageId
             channelID: ChannelId
+            sequence: number
+            kind: "text" | "poll" | "system"
+            poll?: {
+              question: string
+              options: Array<{
+                id: string
+                label: string
+              }>
+              multiple: boolean
+              closed_at?: number
+            }
+            reactions: Array<{
+              emoji: string
+              count: number
+              reacted: boolean
+            }>
+            pollVotes: Array<{
+              optionID: string
+              count: number
+              selected: boolean
+            }>
+            deliveries: Array<{
+              agentID: string
+              status: string
+              reason?: string
+            }>
             rootNeedID?: RootNeedId
             sourceThreadID?: ConversationThreadId
             replyToID?: ChannelMessageId
@@ -8972,29 +9369,6 @@ export type CompanyThreadEntriesResponses = {
             }
             body: string
             status?: string
-            time: {
-              created: number
-              updated: number
-            }
-          }
-        }
-      | {
-          type: "bidding"
-          bidding: {
-            id: string
-            roundNum: number
-            state?: "bidding" | "decided"
-            winnerAgentID?: string
-            bids: Array<{
-              agentId: string
-              state?: "queued" | "analyzing" | "completed"
-              level?: "must" | "want" | "could" | "pass"
-              type?: "objection" | "answer" | "question" | "claim" | "info" | "support"
-              addressedAs?: "direct" | "mention" | "none"
-              reason?: string
-              score?: number
-              eligible?: boolean
-            }>
             time: {
               created: number
               updated: number
@@ -16504,7 +16878,8 @@ export type CompanyAgentListResponses = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -16532,6 +16907,7 @@ export type CompanyAgentCreateData = {
     system_prompt?: string
     instruct?: string
     model?: string
+    small_model?: string
     preferred_runtime?: "pi" | "claude-code" | "codex"
     color?: string
     icon?: string
@@ -16570,7 +16946,8 @@ export type CompanyAgentCreateResponses = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -16655,7 +17032,8 @@ export type CompanyAgentGetResponses = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -16681,6 +17059,7 @@ export type CompanyAgentUpdateData = {
     relationships?: string
     kanban?: string
     model?: string
+    small_model?: string
     preferred_runtime?: "pi" | "claude-code" | "codex"
     color?: string
     icon?: string
@@ -16725,7 +17104,8 @@ export type CompanyAgentUpdateResponses = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -16780,7 +17160,8 @@ export type CompanyAgentPromoteResponses = {
     description?: string
     public_profile?: string
     skills?: Array<string>
-    model?: string
+    model: string
+    small_model: string
     preferred_runtime: string
     color?: string
     icon?: string
@@ -20096,7 +20477,8 @@ export type AgentLifecycleStartResponses = {
       description?: string
       public_profile?: string
       skills?: Array<string>
-      model?: string
+      model: string
+      small_model: string
       preferred_runtime: string
       color?: string
       icon?: string
@@ -20213,7 +20595,8 @@ export type AgentLifecycleStatusResponses = {
       description?: string
       public_profile?: string
       skills?: Array<string>
-      model?: string
+      model: string
+      small_model: string
       preferred_runtime: string
       color?: string
       icon?: string
@@ -20281,7 +20664,8 @@ export type AgentLifecycleStatusAllResponses = {
         description?: string
         public_profile?: string
         skills?: Array<string>
-        model?: string
+        model: string
+        small_model: string
         preferred_runtime: string
         color?: string
         icon?: string

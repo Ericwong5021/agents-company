@@ -59,6 +59,7 @@ const prefixes = {
   rootNeed: "need",
   conversationThread: "cth",
   channelMessage: "cmsg",
+  channelDelivery: "cdlv",
   conversationRun: "crun",
   signalProjection: "spr",
   agentRun: "arun",

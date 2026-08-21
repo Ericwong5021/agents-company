@@ -10,6 +10,7 @@ export {
   CompanyDepartmentTable,
 } from "../company-recruitment/company-recruitment.sql"
 export { CompanyTable, ApprovalPolicyTable, RepositoryBindingTable } from "../company/company.sql"
+export { CompanyOperationTable } from "../company-operation/company-operation.sql"
 export {
   DecisionRecordTable,
   DecisionTransitionTable,
@@ -137,3 +138,11 @@ export {
   FounderInterventionFenceTable,
   FounderInterventionTable,
 } from "../founder-os/advisor.sql"
+export {
+  ChannelCounterTable,
+  ChannelDeliveryTable,
+  ChannelReadStateTable,
+  ChannelMessageHoldTable,
+  ChannelReactionTable,
+  ChannelPollVoteTable,
+} from "../conversation/room.sql"

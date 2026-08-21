@@ -69,7 +69,7 @@ import { LocalAuth } from "@/local-auth"
 import { GroupSession } from "@/group-session"
 import { Conversation } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
-import { ConversationRuntime } from "@/conversation/runtime"
+import { ConversationRoomRuntime } from "@/conversation/room-runtime"
 import {
   CompanyProject,
   CompanyProjectDirection,
@@ -98,8 +98,29 @@ export const AppLayer = Layer.suspend(() => {
   const bus = Bus.defaultLayer
   const groupSession = GroupSession.defaultLayer
   const conversation = Conversation.defaultLayer
-  const conversationRuntime = ConversationRuntime.layer.pipe(
-    Layer.provide(Layer.mergeAll(groupSession, bus, conversation)),
+  const agentRunSupervisor = AgentRunSupervisor.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        AgentRun.defaultLayer,
+        Provider.defaultLayer,
+        Auth.defaultLayer,
+        Skill.defaultLayer,
+        CompanyAgent.defaultLayer,
+      ),
+    ),
+  )
+  const roomRuntime = ConversationRoomRuntime.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Agent.defaultLayer,
+        agentRunSupervisor,
+        bus,
+        CompanyAgent.defaultLayer,
+        Config.defaultLayer,
+        LLM.defaultLayer,
+        Provider.defaultLayer,
+      ),
+    ),
   )
   return Layer.mergeAll(
     Npm.defaultLayer,
@@ -165,12 +186,12 @@ export const AppLayer = Layer.suspend(() => {
     LocalAuth.defaultLayer,
     groupSession,
     conversation,
-    conversationRuntime,
+    roomRuntime,
     ConversationCommand.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
           conversation,
-          conversationRuntime,
+          roomRuntime,
           bus,
           Company.defaultLayer,
           Git.defaultLayer,
@@ -194,7 +215,7 @@ export const AppLayer = Layer.suspend(() => {
     Thread.defaultLayer,
     AgentMessage.defaultLayer,
     AgentRun.defaultLayer,
-    AgentRunSupervisor.layer.pipe(Layer.provide(AgentRun.defaultLayer)),
+    agentRunSupervisor,
     AuditEvent.defaultLayer,
     Org.defaultLayer,
     ReputationLayer,

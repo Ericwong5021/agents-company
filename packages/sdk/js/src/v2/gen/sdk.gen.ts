@@ -33,6 +33,7 @@ import type {
   BeliefLoopActivationInput,
   BootstrapInput,
   ChannelId,
+  ChannelMessageId,
   ChannelSendInput,
   CommandListResponses,
   CompanyAgentCreateErrors,
@@ -62,6 +63,12 @@ import type {
   CompanyBootstrapResponses,
   CompanyChannelMessagesErrors,
   CompanyChannelMessagesResponses,
+  CompanyChannelPollVoteErrors,
+  CompanyChannelPollVoteResponses,
+  CompanyChannelReactionToggleErrors,
+  CompanyChannelReactionToggleResponses,
+  CompanyChannelReadStateErrors,
+  CompanyChannelReadStateResponses,
   CompanyChannelSendErrors,
   CompanyChannelSendResponses,
   CompanyChannelsErrors,
@@ -136,6 +143,12 @@ import type {
   CompanyLearningProposeExperimentResponses,
   CompanyLearningProposePatchResponses,
   CompanyLearningResolveTargetResponses,
+  CompanyOperationsGetErrors,
+  CompanyOperationsGetResponses,
+  CompanyOperationsListErrors,
+  CompanyOperationsListResponses,
+  CompanyOperationsSummaryErrors,
+  CompanyOperationsSummaryResponses,
   CompanyProjectAttemptsResponses,
   CompanyProjectCancelResponses,
   CompanyProjectGetResponses,
@@ -1285,6 +1298,109 @@ export class Recruitment extends HeyApiClient {
   }
 }
 
+export class Operations extends HeyApiClient {
+  /**
+   * List the company's persisted operational history
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+      limit?: number
+      cursor?: string
+      category?: "governance" | "work" | "runtime" | "quality" | "delivery" | "organization" | "system"
+      severity?: "info" | "warning" | "error"
+      importance?: "primary" | "normal" | "diagnostic"
+      project_id?: string
+      agent_id?: string
+      from?: number
+      to?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "company_id" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "category" },
+            { in: "query", key: "severity" },
+            { in: "query", key: "importance" },
+            { in: "query", key: "project_id" },
+            { in: "query", key: "agent_id" },
+            { in: "query", key: "from" },
+            { in: "query", key: "to" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyOperationsListResponses,
+      CompanyOperationsListErrors,
+      ThrowOnError
+    >({
+      url: "/company/operations",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get the company's operational summary for the last 24 hours
+   */
+  public summary<ThrowOnError extends boolean = false>(
+    parameters: {
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "company_id" }] }])
+    return (options?.client ?? this.client).get<
+      CompanyOperationsSummaryResponses,
+      CompanyOperationsSummaryErrors,
+      ThrowOnError
+    >({
+      url: "/company/operations/summary",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get a safe company operation detail projection
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      operationID: string
+      company_id: CompanyId
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "operationID" },
+            { in: "query", key: "company_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      CompanyOperationsGetResponses,
+      CompanyOperationsGetErrors,
+      ThrowOnError
+    >({
+      url: "/company/operations/{operationID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class WorkItem extends HeyApiClient {
   /**
    * Reassign a rejected worker before explicitly retrying a blocked project
@@ -2390,6 +2506,127 @@ export class Company extends HeyApiClient {
   }
 
   /**
+   * Toggle a reaction on a channel message
+   */
+  public channelReactionToggle<ThrowOnError extends boolean = false>(
+    parameters: {
+      channelID: ChannelId
+      messageID: ChannelMessageId
+      company_id: CompanyId
+      emoji?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "channelID" },
+            { in: "path", key: "messageID" },
+            { in: "query", key: "company_id" },
+            { in: "body", key: "emoji" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyChannelReactionToggleResponses,
+      CompanyChannelReactionToggleErrors,
+      ThrowOnError
+    >({
+      url: "/company/channels/{channelID}/messages/{messageID}/reactions",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Toggle a vote on a channel poll
+   */
+  public channelPollVote<ThrowOnError extends boolean = false>(
+    parameters: {
+      channelID: ChannelId
+      messageID: ChannelMessageId
+      company_id: CompanyId
+      option_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "channelID" },
+            { in: "path", key: "messageID" },
+            { in: "query", key: "company_id" },
+            { in: "body", key: "option_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyChannelPollVoteResponses,
+      CompanyChannelPollVoteErrors,
+      ThrowOnError
+    >({
+      url: "/company/channels/{channelID}/messages/{messageID}/votes",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Advance the local user's read watermark
+   */
+  public channelReadState<ThrowOnError extends boolean = false>(
+    parameters: {
+      channelID: ChannelId
+      company_id: CompanyId
+      sequence?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "channelID" },
+            { in: "query", key: "company_id" },
+            { in: "body", key: "sequence" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      CompanyChannelReadStateResponses,
+      CompanyChannelReadStateErrors,
+      ThrowOnError
+    >({
+      url: "/company/channels/{channelID}/read-state",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Get a conversation thread detail
    */
   public thread<ThrowOnError extends boolean = false>(
@@ -2523,6 +2760,11 @@ export class Company extends HeyApiClient {
   private _recruitment?: Recruitment
   get recruitment(): Recruitment {
     return (this._recruitment ??= new Recruitment({ client: this.client }))
+  }
+
+  private _operations?: Operations
+  get operations(): Operations {
+    return (this._operations ??= new Operations({ client: this.client }))
   }
 
   private _project?: Project2
@@ -5072,6 +5314,7 @@ export class CompanyAgent extends HeyApiClient {
       system_prompt?: string
       instruct?: string
       model?: string
+      small_model?: string
       preferred_runtime?: "pi" | "claude-code" | "codex"
       color?: string
       icon?: string
@@ -5098,6 +5341,7 @@ export class CompanyAgent extends HeyApiClient {
             { in: "body", key: "system_prompt" },
             { in: "body", key: "instruct" },
             { in: "body", key: "model" },
+            { in: "body", key: "small_model" },
             { in: "body", key: "preferred_runtime" },
             { in: "body", key: "color" },
             { in: "body", key: "icon" },
@@ -5204,6 +5448,7 @@ export class CompanyAgent extends HeyApiClient {
       relationships?: string
       kanban?: string
       model?: string
+      small_model?: string
       preferred_runtime?: "pi" | "claude-code" | "codex"
       color?: string
       icon?: string
@@ -5229,6 +5474,7 @@ export class CompanyAgent extends HeyApiClient {
             { in: "body", key: "relationships" },
             { in: "body", key: "kanban" },
             { in: "body", key: "model" },
+            { in: "body", key: "small_model" },
             { in: "body", key: "preferred_runtime" },
             { in: "body", key: "color" },
             { in: "body", key: "icon" },

@@ -26,6 +26,12 @@ export default defineAppConfig({
         description: "董事会讨论、决策与人工接管",
       },
       {
+        label: "运营日志",
+        to: "/company/operations",
+        icon: "i-lucide-list-tree",
+        description: "公司运行记录、风险信号与交付轨迹",
+      },
+      {
         label: "团队",
         to: "/team",
         icon: "i-lucide-users-round",

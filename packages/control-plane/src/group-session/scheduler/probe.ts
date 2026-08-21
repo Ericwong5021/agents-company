@@ -9,6 +9,7 @@ import type { ModelID, ProviderID } from "@/provider/schema"
 
 export interface ProbeInput {
   persona: { name: string; role: string; description: string }
+  brain?: { big?: string; small?: string }
   lastEvent: string
   transcript: string
   members: Array<{ name: string; role: string }>
@@ -36,9 +37,10 @@ export function buildProbePrompt(input: ProbeInput): string {
     input.transcript,
     `</recent_transcript>`,
     ``,
-    `Decide whether this agent has a distinct, useful contribution now. Do not speak merely because of seniority or to acknowledge prior speakers.`,
-    `Use must for a blocker, correction, direct responsibility, or material objection; want for a new answer or high-value addition; could for a non-essential addition; pass when there is no new value or the role is not relevant.`,
-    `Use addressedAs=direct only when the user explicitly addresses this agent, mention for a role or @ mention, otherwise none.`,
+    `Decide independently whether this agent should respond to the latest unread group message. Do not speak merely because of seniority, turn order, or to acknowledge prior speakers.`,
+    `A human message deserves engagement from the group, not a reply from every agent. Use must for a direct request, blocker, correction, direct responsibility, or material objection; want for a distinct answer or action that materially advances the conversation; could for a non-essential addition that should normally stay silent; pass for agreement, acknowledgement, repetition, or no new value.`,
+    `After another agent speaks, respond only to a direct ask, a material correction, or a necessary next action. If the latest visible message is your own, pass.`,
+    `Use addressedAs=direct only when the user or another agent explicitly addresses this agent, mention for a role or @ mention, otherwise none.`,
     `Output ONLY a JSON object with fields: level, type, addressedAs, reason.`,
     `reason must be a complete public decision note in the language of the last event: explain relevance, distinct value or why passing, material risk or opportunity, and the proposed next action. Do not reveal private hidden reasoning.`,
   ]
@@ -106,15 +108,7 @@ export function probeOne(
   return Effect.gen(function* () {
     const probeAgent = ctx.probeAgent
     if (!probeAgent) return fallbackPass("probe agent unavailable")
-    const model = ctx.model
-      ? yield* ctx.provider.getModel(ctx.model.providerID, ctx.model.modelID)
-      : yield* Effect.gen(function* () {
-          const defaultConfig = yield* ctx.provider.defaultModel()
-          return (
-            (yield* ctx.provider.getSmallModel(defaultConfig.providerID)) ??
-            (yield* ctx.provider.getModel(defaultConfig.providerID, defaultConfig.modelID))
-          )
-        })
+    const model = yield* ctx.provider.resolveBrainModel(input.brain ?? {}, "support", ctx.model?.providerID)
     if (!model) return fallbackPass("no model available")
 
     const probePrompt = buildProbePrompt(input)

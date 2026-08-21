@@ -15,6 +15,12 @@ const board = ref<FounderBoardGovernanceProjection | null>(null)
 const thread = ref<CompanyBoardThread | null>(null)
 const loading = ref(false)
 const actionMessage = ref("")
+const replyTarget = ref<{ id: string; author: string; body: string }>()
+const pollOpen = ref(false)
+const pollQuestion = ref("")
+const pollOptions = ref(["", ""])
+const pollMultiple = ref(false)
+const readSequenceAtOpen = ref(0)
 const companyScopeConfirmed = ref(false)
 const scopeInitialized = ref(Boolean(initialRouteProject))
 const appliedRouteProject = ref(initialRouteProject)
@@ -56,12 +62,14 @@ const visibleBoardMessages = computed(() =>
   projectScoped.value
     ? snapshot.value.messages.filter((message) => message.body.includes(scopeProjectID.value))
     : snapshot.value.messages)
+const chatMessages = computed(() => [...visibleBoardMessages.value].sort((a, b) => a.sequence - b.sequence))
 const boardThreadId = computed(() =>
-  [...visibleBoardMessages.value].reverse().find((message) => message.threadID)?.threadID)
+  chatMessages.value.findLast((message) => message.threadID)?.threadID)
 const boardMessages = computed(() =>
   visibleBoardMessages.value.filter((message) => message.threadID === boardThreadId.value))
 const currentRequest = computed(() =>
-  [...boardMessages.value].reverse().find((message) => message.kind === "user") ?? boardMessages.value.at(-1))
+  [...boardMessages.value].sort((a, b) => b.sequence - a.sequence).find((message) => message.kind === "user")
+  ?? boardMessages.value.at(-1))
 const visibleShadowDecisions = computed(() =>
   (board.value?.shadow.decisions ?? []).filter((decision) =>
     !projectScoped.value || (decision.scope.kind === "project" && decision.scope.ref === scopeProjectID.value)))
@@ -175,6 +183,74 @@ function boardPersonLabel(name: string, role?: string | null) {
   const nameLabel = personLabel(name)
   const roleLabel = personLabel(role)
   return roleLabel && roleLabel !== nameLabel ? `${nameLabel} · ${roleLabel}` : nameLabel
+}
+
+function deliveryLabel(message: typeof chatMessages.value[number]) {
+  const active = message.deliveries.filter((delivery) => ["pending", "triaging", "running", "held"].includes(delivery.status))
+  if (!active.length) return ""
+  const names = active.map((delivery) => snapshot.value.agents.find((agent) => agent.id === delivery.agentID)?.name ?? delivery.agentID)
+  if (active.some((delivery) => delivery.reason === "rate_limit_cooldown")) return `${names.join("、")} 遇到限流，保留未读并等待恢复…`
+  if (active.some((delivery) => delivery.status === "running")) return `${names.join("、")} 正在回复…`
+  if (active.some((delivery) => delivery.status === "held")) return `${names.join("、")} 正在重新阅读新消息…`
+  return `${names.join("、")} 正在判断是否需要回应…`
+}
+
+function replyTo(message: typeof chatMessages.value[number]) {
+  replyTarget.value = { id: message.id, author: message.author, body: message.body }
+}
+
+async function react(messageID: string, emoji: string) {
+  await $fetch("/api/agent-company/board-action", {
+    method: "POST",
+    body: { kind: "reaction", message_id: messageID, emoji },
+  })
+  await refresh()
+}
+
+async function vote(messageID: string, optionID: string) {
+  await $fetch("/api/agent-company/board-action", {
+    method: "POST",
+    body: { kind: "vote", message_id: messageID, option_id: optionID },
+  })
+  await refresh()
+}
+
+async function createPoll() {
+  const options = pollOptions.value.map((option) => option.trim()).filter(Boolean)
+  if (!pollQuestion.value.trim() || options.length < 2 || loading.value) return
+  loading.value = true
+  await $fetch("/api/agent-company/board-action", {
+    method: "POST",
+    body: {
+      kind: "poll",
+      request_id: crypto.randomUUID(),
+      question: pollQuestion.value.trim(),
+      options,
+      multiple: pollMultiple.value,
+    },
+  }).then(() => {
+    pollQuestion.value = ""
+    pollOptions.value = ["", ""]
+    pollMultiple.value = false
+    pollOpen.value = false
+  })
+  loading.value = false
+  await refreshBoardMessages()
+}
+
+function replyPreview(message: typeof chatMessages.value[number]) {
+  if (!message.replyToID) return
+  return chatMessages.value.find((candidate) => candidate.id === message.replyToID)
+}
+
+function startsUnread(index: number) {
+  const message = chatMessages.value[index]
+  const previous = chatMessages.value[index - 1]
+  return Boolean(
+    message
+    && message.sequence > readSequenceAtOpen.value
+    && (!previous || previous.sequence <= readSequenceAtOpen.value),
+  )
 }
 
 function seedForms() {
@@ -308,7 +384,6 @@ async function convergeAdvisor() {
   const boardRunId = thread.value?.run?.id
   if (
     !boardThreadId.value
-    || !boardRunId
     || !convergence.channelMessageId
     || !convergence.shadowDecisionId
     || !convergence.driAgentId
@@ -325,7 +400,7 @@ async function convergeAdvisor() {
       idempotencyKey: crypto.randomUUID(),
       source: {
         boardThreadId: boardThreadId.value,
-        boardRunId,
+        ...(boardRunId ? { boardRunId } : {}),
         channelMessageId: convergence.channelMessageId,
         shadowDecisionId: convergence.shadowDecisionId,
       },
@@ -378,11 +453,30 @@ async function intervene() {
 async function refreshBoardMessages() {
   await refresh()
   await loadBoard()
+  const sequence = chatMessages.value.at(-1)?.sequence
+  if (sequence !== undefined) {
+    await $fetch("/api/agent-company/board-action", {
+      method: "POST",
+      body: { kind: "read", sequence },
+    }).catch(() => undefined)
+    if (import.meta.client && snapshot.value.company.id) {
+      localStorage.setItem(`agent-company:board-read:${snapshot.value.company.id}`, String(sequence))
+    }
+  }
 }
 
-onMounted(loadBoard)
+onMounted(() => {
+  if (snapshot.value.company.id) {
+    readSequenceAtOpen.value = Number(localStorage.getItem(`agent-company:board-read:${snapshot.value.company.id}`)) || 0
+  }
+  void loadBoard()
+})
 watch(() => snapshot.value.company.id, (companyId) => {
-  if (companyId) loadBoard()
+  if (!companyId) return
+  if (import.meta.client && readSequenceAtOpen.value === 0) {
+    readSequenceAtOpen.value = Number(localStorage.getItem(`agent-company:board-read:${companyId}`)) || 0
+  }
+  loadBoard()
 })
 watch(
   () => [route.query.project, snapshot.value.projects.map((project) => project.id).join(",")],
@@ -409,7 +503,7 @@ watch(() => shadowRun.projectId, () => {
     </template>
 
     <template #body>
-      <main id="main-content" class="company-page founder-board-page" lang="zh">
+      <div class="company-page founder-board-page" lang="zh">
         <header class="company-page__header founder-board-page__header">
           <div>
             <p class="company-eyebrow">创始人治理</p>
@@ -432,27 +526,133 @@ watch(() => shadowRun.projectId, () => {
 
         <CompanyModuleNav />
 
-        <CompanyComposer
-          v-if="!projectScoped"
-          :target="{ kind: 'board' }"
-          :agents="snapshot.agents"
-          @sent="refreshBoardMessages"
-        />
+        <div class="founder-chat-shell">
+          <section class="company-section founder-board-chat" aria-label="董事会群聊">
+            <div class="founder-board-chat__head">
+              <div>
+                <p class="company-eyebrow">Board room</p>
+                <h2>董事会群聊</h2>
+                <span>每位董事独立阅读、判断与回应；没有主持人抢答排序。</span>
+              </div>
+              <div class="founder-board-chat__members" aria-label="群成员">
+                <span v-for="agent in snapshot.agents" :key="agent.id" :title="boardPersonLabel(agent.name, agent.role)">
+                  {{ agent.name.slice(0, 1) }}
+                </span>
+              </div>
+            </div>
 
-        <section class="founder-board-status" aria-label="顾问代理状态">
-          <div>
-            <span>当前模式</span>
-            <strong>{{ modeLabel(board?.mode.effective.founderTwinMode) }}</strong>
-          </div>
-          <div>
-            <span>治理授权</span>
-            <strong>{{ governanceStatusLabel(board?.authorization.status) }}</strong>
-          </div>
-          <div>
-            <span>代理发言</span>
-            <strong>{{ board?.advisorCanSpeak ? "允许" : "已停止" }}</strong>
-          </div>
-        </section>
+            <div class="founder-board-messages founder-board-messages--chat">
+              <template v-for="(message, index) in chatMessages" :key="message.id">
+              <div v-if="startsUnread(index)" class="founder-board-unread"><span>未读消息</span></div>
+              <article :class="{ 'is-founder': message.kind === 'user' }">
+                <div class="founder-board-message__avatar" aria-hidden="true">
+                  {{ message.kind === "user" ? "我" : personLabel(message.author).slice(0, 1) }}
+                </div>
+                <div class="founder-board-message__content">
+                  <header>
+                    <strong>{{ personLabel(message.author) }}</strong>
+                    <span>#{{ message.sequence }} · {{ personLabel(message.role) ? `${personLabel(message.role)} · ` : "" }}{{ message.time }}</span>
+                  </header>
+                  <blockquote v-if="replyPreview(message)">
+                    {{ replyPreview(message)?.author }}：{{ replyPreview(message)?.body }}
+                  </blockquote>
+                  <p>{{ message.body }}</p>
+                  <div v-if="message.mentions.length || message.resources.length" class="founder-board-message__references">
+                    <span v-for="mention in message.mentions" :key="`${mention.kind}:${mention.value}`">@{{ snapshot.agents.find((agent) => agent.id === mention.value)?.name ?? personLabel(mention.value) }}</span>
+                    <span v-for="resource in message.resources" :key="`${resource.kind}:${resource.label}`">{{ resource.kind }} · {{ resource.label }}</span>
+                  </div>
+                  <div v-if="message.poll" class="founder-board-poll">
+                    <button
+                      v-for="option in message.poll.options"
+                      :key="option.id"
+                      type="button"
+                      :data-selected="message.pollVotes.some((vote) => vote.optionID === option.id && vote.selected)"
+                      @click="vote(message.id, option.id)"
+                    >
+                      <span>{{ option.label }}</span>
+                      <strong>{{ message.pollVotes.find((item) => item.optionID === option.id)?.count ?? 0 }}</strong>
+                    </button>
+                  </div>
+                  <div class="founder-board-message__actions">
+                    <button type="button" @click="replyTo(message)">回复</button>
+                    <button
+                      v-for="reaction in message.reactions"
+                      :key="reaction.emoji"
+                      type="button"
+                      :data-active="reaction.reacted"
+                      @click="react(message.id, reaction.emoji)"
+                    >
+                      {{ reaction.emoji }} {{ reaction.count }}
+                    </button>
+                    <button v-if="!message.reactions.some((reaction) => reaction.emoji === '👍')" type="button" @click="react(message.id, '👍')">＋ 👍</button>
+                    <button v-if="!message.reactions.some((reaction) => reaction.emoji === '✅')" type="button" @click="react(message.id, '✅')">＋ ✅</button>
+                  </div>
+                  <span v-if="deliveryLabel(message)" class="founder-board-message__activity">{{ deliveryLabel(message) }}</span>
+                </div>
+              </article>
+              </template>
+              <p v-if="!chatMessages.length" class="company-empty">
+                {{ projectScoped ? "当前工作暂无董事会群聊消息。" : "群聊还是空的。发出第一条消息，董事会成员会独立判断是否回应。" }}
+              </p>
+            </div>
+
+            <template v-if="!projectScoped">
+              <CompanyComposer
+                :target="{ kind: 'board' }"
+                :agents="snapshot.agents"
+                :reply-to="replyTarget"
+                @cancel-reply="replyTarget = undefined"
+                @sent="replyTarget = undefined; refreshBoardMessages()"
+              />
+              <button type="button" class="founder-board-poll-toggle" @click="pollOpen = !pollOpen">
+                {{ pollOpen ? "收起投票" : "发起投票" }}
+              </button>
+              <form v-if="pollOpen" class="founder-board-poll-form" @submit.prevent="createPoll">
+                <input v-model="pollQuestion" maxlength="500" placeholder="投票问题">
+                <input v-for="(_, index) in pollOptions" :key="index" v-model="pollOptions[index]" maxlength="300" :placeholder="`选项 ${index + 1}`">
+                <div>
+                  <button v-if="pollOptions.length < 12" type="button" @click="pollOptions.push('')">添加选项</button>
+                  <label><input v-model="pollMultiple" type="checkbox">允许多选</label>
+                  <UButton type="submit" color="neutral" :loading="loading" :disabled="!pollQuestion.trim() || pollOptions.filter((option) => option.trim()).length < 2">发布投票</UButton>
+                </div>
+              </form>
+            </template>
+          </section>
+
+          <aside class="founder-governance-rail">
+            <section class="company-section founder-board-takeover">
+              <div class="company-section__heading">
+                <div>
+                  <p class="company-eyebrow">Governance</p>
+                  <h2>治理边界</h2>
+                </div>
+              </div>
+              <dl class="founder-governance-facts">
+                <div><dt>当前模式</dt><dd>{{ modeLabel(board?.mode.effective.founderTwinMode) }}</dd></div>
+                <div><dt>治理授权</dt><dd>{{ governanceStatusLabel(board?.authorization.status) }}</dd></div>
+                <div><dt>顾问发言</dt><dd>{{ board?.advisorCanSpeak ? "允许" : "已停止" }}</dd></div>
+                <div><dt>决策台账</dt><dd>{{ visibleDecisions.length }} 条</dd></div>
+              </dl>
+              <p>群聊只形成讨论与决策意图。执行仍需进入 Decision Ledger，并通过 Founder OS 权限与审批 Gate。</p>
+            </section>
+
+            <section v-if="boardThreadId" class="company-section founder-board-takeover">
+              <div class="company-section__heading">
+                <div>
+                  <p class="company-eyebrow">人工控制</p>
+                  <h2>立即接管</h2>
+                </div>
+              </div>
+              <p>{{ interventionEffect }}</p>
+              <label><span>动作</span><select v-model="intervention.kind"><option value="takeover">接管</option><option value="pause">暂停</option><option value="correct">纠正</option><option value="reject">否决</option><option value="redefine_goal">重定义目标</option></select></label>
+              <label><span>关联项目</span><select v-model="intervention.projectId"><option value="">仅停止当前董事会代理</option><option v-for="project in snapshot.projects" :key="project.id" :value="project.id">{{ project.title }}</option></select></label>
+              <label><span>原因</span><textarea v-model="intervention.reason" rows="3" /></label>
+              <label v-if="intervention.kind === 'redefine_goal'"><span>新目标</span><textarea v-model="intervention.newGoal" rows="3" /></label>
+              <UButton color="error" :loading="loading" :disabled="!intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())" @click="intervene">提交“{{ interventionActionLabel }}”</UButton>
+              <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
+            </section>
+          </aside>
+        </div>
 
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
           当前模式或真实授权尚未满足，顾问代理保持安全关闭，页面不能提高模式。
@@ -550,7 +750,7 @@ watch(() => shadowRun.projectId, () => {
         </div>
 
         <section
-          v-if="board?.advisorCanSpeak && thread?.run?.id"
+          v-if="board?.advisorCanSpeak && boardThreadId"
           class="company-section founder-board-takeover"
         >
           <div class="company-section__heading">
@@ -558,7 +758,7 @@ watch(() => shadowRun.projectId, () => {
               <p class="company-eyebrow">顾问代理收敛</p>
               <h2>形成决策意图</h2>
             </div>
-            <span>{{ thread?.run?.id ? "董事会讨论已连接" : "缺少董事会讨论" }}</span>
+            <span>{{ boardThreadId ? "董事会群聊已连接" : "缺少董事会讨论" }}</span>
           </div>
           <div class="founder-board-layout">
             <label>
@@ -604,83 +804,13 @@ watch(() => shadowRun.projectId, () => {
           <UButton
             color="neutral"
             :loading="loading"
-            :disabled="!board?.advisorCanSpeak || !thread?.run?.id || !convergence.channelMessageId || !convergence.shadowDecisionId || !convergence.driAgentId || !convergence.subject.trim() || !convergence.context.trim()"
+            :disabled="!board?.advisorCanSpeak || !boardThreadId || !convergence.channelMessageId || !convergence.shadowDecisionId || !convergence.driAgentId || !convergence.subject.trim() || !convergence.context.trim()"
             @click="convergeAdvisor"
           >
             写入决策意图
           </UButton>
           <p class="company-provider-form__message">只写入治理意图与决策台账，不创建工作项或执行。</p>
         </section>
-
-        <div class="founder-board-layout">
-          <section class="company-section founder-board-discussion">
-            <div class="company-section__heading">
-              <div>
-                <p class="company-eyebrow">董事会记录</p>
-                <h2>真实讨论记录</h2>
-              </div>
-            </div>
-            <div class="founder-board-messages">
-              <article v-for="message in visibleBoardMessages" :key="message.id">
-                <header>
-                  <strong>{{ personLabel(message.author) }}</strong>
-                  <span>{{ personLabel(message.role) ? `${personLabel(message.role)} · ` : "" }}{{ message.time }}</span>
-                </header>
-                <p>{{ message.body }}</p>
-              </article>
-              <p v-if="!visibleBoardMessages.length" class="company-empty">
-                {{ projectScoped ? "当前工作暂无董事会治理消息；执行协作请回到工作页查看项目讨论。" : "暂无已保存的董事会消息。" }}
-              </p>
-            </div>
-          </section>
-
-          <aside v-if="boardThreadId" class="company-section founder-board-takeover">
-            <div class="company-section__heading">
-              <div>
-                <p class="company-eyebrow">人工控制</p>
-                <h2>立即接管</h2>
-              </div>
-            </div>
-            <p>{{ interventionEffect }}</p>
-            <label>
-              <span>动作</span>
-              <select v-model="intervention.kind">
-                <option value="takeover">接管</option>
-                <option value="pause">暂停</option>
-                <option value="correct">纠正</option>
-                <option value="reject">否决</option>
-                <option value="redefine_goal">重定义目标</option>
-              </select>
-            </label>
-            <label>
-              <span>关联项目</span>
-              <select v-model="intervention.projectId">
-                <option value="">仅停止当前董事会代理</option>
-                <option v-for="project in snapshot.projects" :key="project.id" :value="project.id">
-                  {{ project.title }}
-                </option>
-              </select>
-            </label>
-            <label>
-              <span>原因</span>
-              <textarea v-model="intervention.reason" rows="4" />
-            </label>
-            <label v-if="intervention.kind === 'redefine_goal'">
-              <span>新目标</span>
-              <textarea v-model="intervention.newGoal" rows="3" />
-            </label>
-            <UButton
-              color="error"
-              :loading="loading"
-              :disabled="!boardThreadId || !intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())"
-              @click="intervene"
-            >
-              提交“{{ interventionActionLabel }}”{{ intervention.projectId ? "并暂停项目" : "并锁定代理" }}
-            </UButton>
-            <p v-if="!boardThreadId" class="company-provider-form__message">当前没有可关联的董事会讨论。</p>
-            <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
-          </aside>
-        </div>
 
         <section class="company-section">
           <div class="company-section__heading">
@@ -812,7 +942,7 @@ watch(() => shadowRun.projectId, () => {
             </article>
           </div>
         </section>
-      </main>
+      </div>
     </template>
   </UDashboardPanel>
 </template>

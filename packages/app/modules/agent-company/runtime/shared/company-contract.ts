@@ -47,6 +47,10 @@ export type CompanyAgent = {
   role?: string
   department?: string
   responsibilities: string[]
+  brain: {
+    bigModel: string
+    smallModel: string
+  }
   // TEAM-01/TEAM-05：组织身份区分正式员工与在岗临时实例。
   employment: "employee" | "temporary"
   attention: "none" | "available" | "focused" | "urgent"
@@ -111,12 +115,27 @@ export type CompanyAgentDetail = {
 
 export type CompanyMessage = {
   id: string
+  sequence: number
   author: string
+  authorID: string
   role: string
   body: string
   time: string
   kind: "user" | "agent" | "system"
+  messageKind: "text" | "poll" | "system"
   threadID?: string
+  replyToID?: string
+  mentions: { kind: "agent" | "role"; value: string }[]
+  resources: { kind: string; label: string }[]
+  reactions: { emoji: string; count: number; reacted: boolean }[]
+  poll?: {
+    question: string
+    options: { id: string; label: string }[]
+    multiple: boolean
+    closedAt?: number
+  }
+  pollVotes: { optionID: string; count: number; selected: boolean }[]
+  deliveries: { agentID: string; status: string; reason?: string }[]
 }
 
 export type CompanyProjectMessage = {
@@ -153,11 +172,6 @@ export type CompanyBoardThread = {
     status?: string
     time: string
   }[]
-  bidding?: {
-    roundNum: number
-    state: "bidding" | "decided"
-    winnerAgentID?: string
-  }
 }
 
 export type CompanyProjectDetail = {

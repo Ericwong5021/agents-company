@@ -53,6 +53,7 @@ import {
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage"
 import type { TxOrDb } from "@/storage/db"
+import { claimChannelSequence } from "@/conversation/room.sql"
 import {
   DecisionCurrentProjectionTable,
   DecisionDispatchCurrentTable,
@@ -899,6 +900,7 @@ export function reconcileBoardDecisionProjectionsInTransaction(db: TxOrDb) {
           .values({
             id: messageID,
             channel_id: channelID,
+            sequence: claimChannelSequence(db, channelID, input.createdAt),
             root_need_id: rootNeedID,
             source_thread_id: threadID,
             reply_to_id: null,

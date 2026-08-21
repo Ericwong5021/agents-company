@@ -883,6 +883,7 @@ const agents = [
       lifecycle: "employee",
       department: "Delivery",
       responsibilities: ["发布检查", "交付验收"],
+      brain: { big_model: "standard", small_model: "lite" },
     },
     employment: "employee",
     workload: {
@@ -918,6 +919,7 @@ const agents = [
       lifecycle: "employee",
       department: "Research",
       responsibilities: ["事实核验"],
+      brain: { big_model: "standard", small_model: "lite" },
     },
     employment: "employee",
     workload: { active: 0, blocked: 0 },

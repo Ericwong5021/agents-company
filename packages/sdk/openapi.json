@@ -667,6 +667,284 @@
         ]
       }
     },
+    "/company/operations": {
+      "get": {
+        "operationId": "company.operations.list",
+        "summary": "List the company's persisted operational history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "governance",
+                "work",
+                "runtime",
+                "quality",
+                "delivery",
+                "organization",
+                "system"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "importance",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "primary",
+                "normal",
+                "diagnostic"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Company operations ordered by occurrence time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyOperationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalAuthUnauthorized"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.operations.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company/operations/summary": {
+      "get": {
+        "operationId": "company.operations.summary",
+        "summary": "Get the company's operational summary for the last 24 hours",
+        "responses": {
+          "200": {
+            "description": "Company operation summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total24h": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "errors24h": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "warnings24h": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "recoveries24h": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "total24h",
+                    "errors24h",
+                    "warnings24h",
+                    "recoveries24h"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalAuthUnauthorized"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.operations.summary({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company/operations/{operationID}": {
+      "get": {
+        "operationId": "company.operations.get",
+        "summary": "Get a safe company operation detail projection",
+        "responses": {
+          "200": {
+            "description": "Safe company operation detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyOperationItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/LocalAuthUnauthorized"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Company operation not found"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operationID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.operations.get({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company": {
       "get": {
         "operationId": "company.current",
@@ -6302,6 +6580,132 @@
                           "channelID": {
                             "$ref": "#/components/schemas/ChannelID"
                           },
+                          "sequence": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "poll",
+                              "system"
+                            ]
+                          },
+                          "poll": {
+                            "type": "object",
+                            "properties": {
+                              "question": {
+                                "type": "string"
+                              },
+                              "options": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "multiple": {
+                                "type": "boolean"
+                              },
+                              "closed_at": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "question",
+                              "options",
+                              "multiple"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "emoji": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "reacted": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "emoji",
+                                "count",
+                                "reacted"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "pollVotes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "optionID": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "selected": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "optionID",
+                                "count",
+                                "selected"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "deliveries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "agentID": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "agentID",
+                                "status"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
                           "rootNeedID": {
                             "$ref": "#/components/schemas/RootNeedID"
                           },
@@ -6365,6 +6769,11 @@
                         "required": [
                           "id",
                           "channelID",
+                          "sequence",
+                          "kind",
+                          "reactions",
+                          "pollVotes",
+                          "deliveries",
                           "author",
                           "body",
                           "visibility",
@@ -6721,6 +7130,385 @@
         ]
       }
     },
+    "/company/channels/{channelID}/messages/{messageID}/reactions": {
+      "post": {
+        "operationId": "company.channelReactionToggle",
+        "summary": "Toggle a reaction on a channel message",
+        "responses": {
+          "200": {
+            "description": "Updated message"
+          },
+          "400": {
+            "description": "Invalid conversation request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMessageInvalidInput"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationInvalidCursor"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BoardProjectDecisionNotReady"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Conversation resource not visible or writable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationBoardMessagesDisabled"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationThreadNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationReplyNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMentionNotVisible"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to complete conversation operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UnknownError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channelID",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelID"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "messageID",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelMessageID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "emoji": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16
+                  }
+                },
+                "required": [
+                  "emoji"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.channelReactionToggle({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company/channels/{channelID}/messages/{messageID}/votes": {
+      "post": {
+        "operationId": "company.channelPollVote",
+        "summary": "Toggle a vote on a channel poll",
+        "responses": {
+          "200": {
+            "description": "Updated message"
+          },
+          "400": {
+            "description": "Invalid conversation request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMessageInvalidInput"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationInvalidCursor"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BoardProjectDecisionNotReady"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Conversation resource not visible or writable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationBoardMessagesDisabled"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationThreadNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationReplyNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMentionNotVisible"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to complete conversation operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UnknownError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channelID",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelID"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "messageID",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelMessageID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "option_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "option_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.channelPollVote({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/company/channels/{channelID}/read-state": {
+      "post": {
+        "operationId": "company.channelReadState",
+        "summary": "Advance the local user's read watermark",
+        "responses": {
+          "204": {
+            "description": "Read watermark advanced"
+          },
+          "400": {
+            "description": "Invalid conversation request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMessageInvalidInput"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationInvalidCursor"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BoardProjectDecisionNotReady"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Conversation resource not visible or writable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationBoardMessagesDisabled"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationChannelNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationThreadNotWritable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationReplyNotVisible"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConversationMentionNotVisible"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unable to complete conversation operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UnknownError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channelID",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelID"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "company_id",
+            "schema": {
+              "$ref": "#/components/schemas/CompanyID"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sequence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "sequence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createControlPlaneClient } from \"@agents-company/sdk\n\nconst client = createControlPlaneClient()\nawait client.company.channelReadState({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/company/threads/{threadID}": {
       "get": {
         "operationId": "company.thread",
@@ -7021,6 +7809,132 @@
                                   "channelID": {
                                     "$ref": "#/components/schemas/ChannelID"
                                   },
+                                  "sequence": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text",
+                                      "poll",
+                                      "system"
+                                    ]
+                                  },
+                                  "poll": {
+                                    "type": "object",
+                                    "properties": {
+                                      "question": {
+                                        "type": "string"
+                                      },
+                                      "options": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "id",
+                                            "label"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "multiple": {
+                                        "type": "boolean"
+                                      },
+                                      "closed_at": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "question",
+                                      "options",
+                                      "multiple"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "reactions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "emoji": {
+                                          "type": "string"
+                                        },
+                                        "count": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "reacted": {
+                                          "type": "boolean"
+                                        }
+                                      },
+                                      "required": [
+                                        "emoji",
+                                        "count",
+                                        "reacted"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "pollVotes": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "optionID": {
+                                          "type": "string"
+                                        },
+                                        "count": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "selected": {
+                                          "type": "boolean"
+                                        }
+                                      },
+                                      "required": [
+                                        "optionID",
+                                        "count",
+                                        "selected"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "deliveries": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "agentID": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "agentID",
+                                        "status"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
                                   "rootNeedID": {
                                     "$ref": "#/components/schemas/RootNeedID"
                                   },
@@ -7084,6 +7998,11 @@
                                 "required": [
                                   "id",
                                   "channelID",
+                                  "sequence",
+                                  "kind",
+                                  "reactions",
+                                  "pollVotes",
+                                  "deliveries",
                                   "author",
                                   "body",
                                   "visibility",
@@ -7249,132 +8168,6 @@
                             "required": [
                               "type",
                               "message"
-                            ],
-                            "additionalProperties": false
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "type": {
-                                "type": "string",
-                                "const": "bidding"
-                              },
-                              "bidding": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string",
-                                    "minLength": 1
-                                  },
-                                  "roundNum": {
-                                    "type": "integer",
-                                    "minimum": 0,
-                                    "maximum": 9007199254740991
-                                  },
-                                  "state": {
-                                    "default": "decided",
-                                    "type": "string",
-                                    "enum": [
-                                      "bidding",
-                                      "decided"
-                                    ]
-                                  },
-                                  "winnerAgentID": {
-                                    "type": "string"
-                                  },
-                                  "bids": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "agentId": {
-                                          "type": "string",
-                                          "minLength": 1
-                                        },
-                                        "state": {
-                                          "default": "completed",
-                                          "type": "string",
-                                          "enum": [
-                                            "queued",
-                                            "analyzing",
-                                            "completed"
-                                          ]
-                                        },
-                                        "level": {
-                                          "type": "string",
-                                          "enum": [
-                                            "must",
-                                            "want",
-                                            "could",
-                                            "pass"
-                                          ]
-                                        },
-                                        "type": {
-                                          "type": "string",
-                                          "enum": [
-                                            "objection",
-                                            "answer",
-                                            "question",
-                                            "claim",
-                                            "info",
-                                            "support"
-                                          ]
-                                        },
-                                        "addressedAs": {
-                                          "type": "string",
-                                          "enum": [
-                                            "direct",
-                                            "mention",
-                                            "none"
-                                          ]
-                                        },
-                                        "reason": {
-                                          "type": "string"
-                                        },
-                                        "score": {
-                                          "type": "number"
-                                        },
-                                        "eligible": {
-                                          "type": "boolean"
-                                        }
-                                      },
-                                      "required": [
-                                        "agentId"
-                                      ]
-                                    }
-                                  },
-                                  "time": {
-                                    "type": "object",
-                                    "properties": {
-                                      "created": {
-                                        "type": "integer",
-                                        "minimum": -9007199254740991,
-                                        "maximum": 9007199254740991
-                                      },
-                                      "updated": {
-                                        "type": "integer",
-                                        "minimum": -9007199254740991,
-                                        "maximum": 9007199254740991
-                                      }
-                                    },
-                                    "required": [
-                                      "created",
-                                      "updated"
-                                    ]
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "roundNum",
-                                  "bids",
-                                  "time"
-                                ],
-                                "additionalProperties": false
-                              }
-                            },
-                            "required": [
-                              "type",
-                              "bidding"
                             ],
                             "additionalProperties": false
                           }
@@ -29042,6 +29835,9 @@
                       "model": {
                         "type": "string"
                       },
+                      "small_model": {
+                        "type": "string"
+                      },
                       "preferred_runtime": {
                         "type": "string"
                       },
@@ -29086,6 +29882,8 @@
                       "id",
                       "lifecycle",
                       "name",
+                      "model",
+                      "small_model",
                       "preferred_runtime",
                       "time"
                     ]
@@ -29166,6 +29964,9 @@
                     "model": {
                       "type": "string"
                     },
+                    "small_model": {
+                      "type": "string"
+                    },
                     "preferred_runtime": {
                       "type": "string"
                     },
@@ -29210,6 +30011,8 @@
                     "id",
                     "lifecycle",
                     "name",
+                    "model",
+                    "small_model",
                     "preferred_runtime",
                     "time"
                   ]
@@ -29269,6 +30072,9 @@
                     "type": "string"
                   },
                   "model": {
+                    "type": "string"
+                  },
+                  "small_model": {
                     "type": "string"
                   },
                   "preferred_runtime": {
@@ -29397,6 +30203,9 @@
                     "model": {
                       "type": "string"
                     },
+                    "small_model": {
+                      "type": "string"
+                    },
                     "preferred_runtime": {
                       "type": "string"
                     },
@@ -29441,6 +30250,8 @@
                     "id",
                     "lifecycle",
                     "name",
+                    "model",
+                    "small_model",
                     "preferred_runtime",
                     "time"
                   ]
@@ -29538,6 +30349,9 @@
                     "model": {
                       "type": "string"
                     },
+                    "small_model": {
+                      "type": "string"
+                    },
                     "preferred_runtime": {
                       "type": "string"
                     },
@@ -29582,6 +30396,8 @@
                     "id",
                     "lifecycle",
                     "name",
+                    "model",
+                    "small_model",
                     "preferred_runtime",
                     "time"
                   ]
@@ -29636,6 +30452,9 @@
                     "type": "string"
                   },
                   "model": {
+                    "type": "string"
+                  },
+                  "small_model": {
                     "type": "string"
                   },
                   "preferred_runtime": {
@@ -29827,6 +30646,9 @@
                     "model": {
                       "type": "string"
                     },
+                    "small_model": {
+                      "type": "string"
+                    },
                     "preferred_runtime": {
                       "type": "string"
                     },
@@ -29871,6 +30693,8 @@
                     "id",
                     "lifecycle",
                     "name",
+                    "model",
+                    "small_model",
                     "preferred_runtime",
                     "time"
                   ]
@@ -43775,6 +44599,9 @@
                         "model": {
                           "type": "string"
                         },
+                        "small_model": {
+                          "type": "string"
+                        },
                         "preferred_runtime": {
                           "type": "string"
                         },
@@ -43819,6 +44646,8 @@
                         "id",
                         "lifecycle",
                         "name",
+                        "model",
+                        "small_model",
                         "preferred_runtime",
                         "time"
                       ]
@@ -44146,6 +44975,9 @@
                         "model": {
                           "type": "string"
                         },
+                        "small_model": {
+                          "type": "string"
+                        },
                         "preferred_runtime": {
                           "type": "string"
                         },
@@ -44190,6 +45022,8 @@
                         "id",
                         "lifecycle",
                         "name",
+                        "model",
+                        "small_model",
                         "preferred_runtime",
                         "time"
                       ]
@@ -44408,6 +45242,9 @@
                               "model": {
                                 "type": "string"
                               },
+                              "small_model": {
+                                "type": "string"
+                              },
                               "preferred_runtime": {
                                 "type": "string"
                               },
@@ -44452,6 +45289,8 @@
                               "id",
                               "lifecycle",
                               "name",
+                              "model",
+                              "small_model",
                               "preferred_runtime",
                               "time"
                             ]
@@ -54768,6 +55607,238 @@
           "data"
         ]
       },
+      "CompanyOperationItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "governance",
+              "work",
+              "runtime",
+              "quality",
+              "delivery",
+              "organization",
+              "system"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ]
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "normal",
+              "diagnostic"
+            ]
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "refs": {
+            "type": "object",
+            "properties": {
+              "rootNeedID": {
+                "type": "string"
+              },
+              "projectID": {
+                "type": "string"
+              },
+              "threadID": {
+                "type": "string"
+              },
+              "agentID": {
+                "type": "string"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "workItemID": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "project": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title"
+                ],
+                "additionalProperties": false
+              },
+              "agent": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "workItem": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "href": {
+            "type": "string"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "severity",
+          "importance",
+          "eventType",
+          "title",
+          "occurredAt",
+          "source",
+          "refs",
+          "context",
+          "href"
+        ],
+        "additionalProperties": false
+      },
+      "CompanyOperationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyOperationItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "LocalAuthUnauthorized": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "LocalAuthUnauthorized"
+          },
+          "data": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "CompanySetupGoal": {
         "type": "object",
         "properties": {
@@ -55027,24 +56098,6 @@
         ],
         "additionalProperties": false
       },
-      "LocalAuthUnauthorized": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "const": "LocalAuthUnauthorized"
-          },
-          "data": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "name",
-          "data"
-        ]
-      },
       "CompanyCorruptState": {
         "type": "object",
         "properties": {
@@ -55096,13 +56149,30 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "brain": {
+                "type": "object",
+                "properties": {
+                  "big_model": {
+                    "type": "string"
+                  },
+                  "small_model": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "big_model",
+                  "small_model"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "id",
               "name",
               "lifecycle",
-              "responsibilities"
+              "responsibilities",
+              "brain"
             ],
             "additionalProperties": false
           },
@@ -66842,6 +67912,64 @@
           "data"
         ]
       },
+      "ChannelMessageKind": {
+        "default": "text",
+        "type": "string",
+        "enum": [
+          "text",
+          "poll",
+          "system"
+        ]
+      },
+      "ChannelPoll": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "id",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "multiple": {
+            "default": false,
+            "type": "boolean"
+          },
+          "closed_at": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "question",
+          "options"
+        ],
+        "additionalProperties": false
+      },
       "ChannelSendInput": {
         "type": "object",
         "properties": {
@@ -66854,6 +67982,12 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 20000
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChannelMessageKind"
+          },
+          "poll": {
+            "$ref": "#/components/schemas/ChannelPoll"
           },
           "reply_to": {
             "type": "string",
@@ -67689,6 +68823,132 @@
               "channelID": {
                 "$ref": "#/components/schemas/ChannelID"
               },
+              "sequence": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "poll",
+                  "system"
+                ]
+              },
+              "poll": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "multiple": {
+                    "type": "boolean"
+                  },
+                  "closed_at": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "question",
+                  "options",
+                  "multiple"
+                ],
+                "additionalProperties": false
+              },
+              "reactions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "emoji": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "reacted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "emoji",
+                    "count",
+                    "reacted"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "pollVotes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "optionID": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "selected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "optionID",
+                    "count",
+                    "selected"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "deliveries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "agentID": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "agentID",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              },
               "rootNeedID": {
                 "$ref": "#/components/schemas/RootNeedID"
               },
@@ -67752,6 +69012,11 @@
             "required": [
               "id",
               "channelID",
+              "sequence",
+              "kind",
+              "reactions",
+              "pollVotes",
+              "deliveries",
               "author",
               "body",
               "visibility",
@@ -69357,6 +70622,9 @@
               "model": {
                 "type": "string"
               },
+              "small_model": {
+                "type": "string"
+              },
               "preferred_runtime": {
                 "type": "string"
               },
@@ -69401,6 +70669,8 @@
               "id",
               "lifecycle",
               "name",
+              "model",
+              "small_model",
               "preferred_runtime",
               "time"
             ]
@@ -69481,6 +70751,9 @@
               "model": {
                 "type": "string"
               },
+              "small_model": {
+                "type": "string"
+              },
               "preferred_runtime": {
                 "type": "string"
               },
@@ -69525,6 +70798,8 @@
               "id",
               "lifecycle",
               "name",
+              "model",
+              "small_model",
               "preferred_runtime",
               "time"
             ]
@@ -69779,7 +71054,6 @@
                     "type",
                     "addressedAs",
                     "reason",
-                    "score",
                     "eligible"
                   ]
                 }

@@ -74,6 +74,11 @@ function makeMockCompanyAgentService(agents: CompanyAgent.Info[]) {
   return CompanyAgent.Service.of({
     create: () => Effect.die("unexpected create"),
     get: (id: CompanyAgentID) => Effect.succeed(agents.find((a) => a.id === id)),
+    getBrain: (id: CompanyAgentID) =>
+      Effect.sync(() => {
+        const agent = agents.find((item) => item.id === id)
+        return agent ? { big: agent.model, small: agent.small_model } : undefined
+      }),
     list: () => Effect.succeed(agents),
     update: () => Effect.die("unexpected update"),
     assign: () => Effect.die("unexpected assign"),
@@ -308,6 +313,8 @@ function provideDelegation(
 const runtimeDefaults = {
   lifecycle: "employee" as const,
   preferred_runtime: "pi",
+  model: "standard",
+  small_model: "lite",
 }
 
 const boardAgent: CompanyAgent.Info = {

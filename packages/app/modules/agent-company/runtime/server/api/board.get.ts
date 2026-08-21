@@ -56,7 +56,6 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyBoardThre
       ]
     })
     .reverse()
-  const bidding = items.find((entry) => record(entry) && entry.type === "bidding" && record(entry.bidding))
   const run = record(thread.run) ? thread.run : undefined
 
   return {
@@ -79,13 +78,5 @@ export default defineAgentCompanyHandler(async (event): Promise<CompanyBoardThre
         }
       : undefined,
     messages,
-    bidding:
-      record(bidding) && record(bidding.bidding)
-        ? {
-            roundNum: typeof bidding.bidding.roundNum === "number" ? bidding.bidding.roundNum : 0,
-            state: bidding.bidding.state === "bidding" ? "bidding" : "decided",
-            winnerAgentID: text(bidding.bidding.winnerAgentID) || undefined,
-          }
-        : undefined,
   }
 })

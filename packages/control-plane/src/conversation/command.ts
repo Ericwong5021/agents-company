@@ -8,7 +8,7 @@ import { BoardMessagesDisabled, ChannelID } from "./schema"
 import { Event as ServerEvent } from "@/server/event"
 import { Context, Effect, Layer } from "effect"
 import { Conversation } from "./conversation"
-import { ConversationRuntime } from "./runtime"
+import { ConversationRoomRuntime } from "./room-runtime"
 import type { MessageAccepted, SendMessageError, SendMessageInput } from "./intake"
 
 export interface Interface {
@@ -20,12 +20,12 @@ export class Service extends Context.Service<Service, Interface>()("@control-pla
 export const layer: Layer.Layer<
   Service,
   never,
-  Conversation.Service | ConversationRuntime.Service | Bus.Service | Company.Service | Git.Service | Project.Service
+  Conversation.Service | ConversationRoomRuntime.Service | Bus.Service | Company.Service | Git.Service | Project.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
     const conversation = yield* Conversation.Service
-    const runtime = yield* ConversationRuntime.Service
+    const roomRuntime = yield* ConversationRoomRuntime.Service
     const bus = yield* Bus.Service
     const company = yield* Company.Service
     const git = yield* Git.Service
@@ -66,9 +66,9 @@ export const layer: Layer.Layer<
           { discard: true },
         ),
       ).pipe(Effect.ignore)
-      if (accepted.runID) {
-        yield* runtime.start(accepted.runID).pipe(Effect.catch(() => Effect.void))
-      }
+      yield* roomRuntime
+        .enqueueMessage({ companyID: CompanyID.parse(input.companyID), messageID: accepted.messageID })
+        .pipe(Effect.catch(() => Effect.void))
       return accepted
     })
 

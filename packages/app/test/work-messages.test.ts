@@ -12,11 +12,19 @@ import type { CompanyMessage } from "../modules/agent-company/runtime/shared/com
 function message(overrides: Partial<CompanyMessage>): CompanyMessage {
   return {
     id: "m-1",
+    sequence: 1,
     author: "系统",
+    authorID: "system",
     role: "system",
     body: "已完成里程碑",
     time: "10:00",
     kind: "system",
+    messageKind: "text",
+    mentions: [],
+    resources: [],
+    reactions: [],
+    pollVotes: [],
+    deliveries: [],
     ...overrides,
   }
 }

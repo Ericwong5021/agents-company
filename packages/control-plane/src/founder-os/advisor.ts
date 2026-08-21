@@ -29,6 +29,7 @@ import {
   ConversationRunTable,
   ConversationThreadTable,
 } from "@/conversation/conversation.sql"
+import { ChannelDeliveryTable } from "@/conversation/room.sql"
 import {
   ChannelMessageID,
   ConversationRunID,
@@ -320,6 +321,19 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
           .where(eq(ConversationRunTable.id, ConversationRunID.parse(input.source.boardRunId)))
           .get()
       : undefined
+    const roomDelivery = message
+      ? db
+          .select()
+          .from(ChannelDeliveryTable)
+          .where(
+            and(
+              eq(ChannelDeliveryTable.message_id, message.id),
+              eq(ChannelDeliveryTable.status, "responded"),
+            ),
+          )
+          .orderBy(desc(ChannelDeliveryTable.time_finished))
+          .get()
+      : undefined
     const shadow = db
       .select()
       .from(FounderShadowDecisionTable)
@@ -339,9 +353,9 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       || !message.request_id
         ? "Channel Message must be the current request in the verified Board Thread."
         : undefined,
-      !run
-      || run.conversation_thread_id !== thread?.id
-      || run.channel_message_id !== message?.id
+      (input.source.boardRunId
+        ? !run || run.conversation_thread_id !== thread?.id || run.channel_message_id !== message?.id
+        : !roomDelivery || roomDelivery.channel_id !== channel?.id)
         ? "Conversation Run must reference the verified Board Thread and Channel Message."
         : undefined,
       !shadow || shadow.company_id !== input.companyId || shadow.status !== "suggested"
@@ -369,8 +383,10 @@ export function converge(raw: FounderAdvisorConvergenceInputValue) {
       && channel.kind === "board"
       && message.channel_id === channel.id
       && message.source_thread_id === thread.id
-      && run?.conversation_thread_id === thread.id
-      && run.channel_message_id === message.id
+      && (
+        (run?.conversation_thread_id === thread.id && run.channel_message_id === message.id)
+        || roomDelivery?.channel_id === channel.id
+      )
       ? message.request_id
       : blockedCurrentRequestKey(input)
     const current = db

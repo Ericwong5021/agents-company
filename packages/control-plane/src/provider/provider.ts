@@ -953,6 +953,13 @@ export const ListResult = Schema.Struct({
 }).pipe(withStatics((s) => ({ zod: zod(s) })))
 export type ListResult = Types.DeepMutable<Schema.Schema.Type<typeof ListResult>>
 
+export type BrainPurpose = "support" | "task"
+
+export type BrainConfig = {
+  small?: string
+  big?: string
+}
+
 export const ConfigProvidersResult = Schema.Struct({
   providers: Schema.Array(Info),
   default: DefaultModelIDs,
@@ -974,6 +981,11 @@ export interface Interface {
   ) => Effect.Effect<{ providerID: ProviderID; modelID: string } | undefined>
   readonly getSmallModel: (providerID: ProviderID) => Effect.Effect<Model | undefined>
   readonly resolveModelRef: (ref: string, contextProviderID?: ProviderID) => Effect.Effect<Model>
+  readonly resolveBrainModel: (
+    brain: BrainConfig,
+    purpose: BrainPurpose,
+    contextProviderID?: ProviderID,
+  ) => Effect.Effect<Model>
   readonly defaultModel: () => Effect.Effect<{ providerID: ProviderID; modelID: ModelID }>
 }
 
@@ -1725,6 +1737,26 @@ const layer: Layer.Layer<
       return yield* resolveModelRef("lite", providerID)
     })
 
+    const resolveBrainModel = Effect.fn("Provider.resolveBrainModel")(function* (
+      brain: BrainConfig,
+      purpose: BrainPurpose,
+      contextProviderID?: ProviderID,
+    ) {
+      if (purpose === "task") {
+        if (brain.big) return yield* resolveModelRef(brain.big, contextProviderID)
+        const fallback = yield* defaultModel()
+        return yield* getModel(fallback.providerID, fallback.modelID)
+      }
+
+      if (brain.small) return yield* resolveModelRef(brain.small, contextProviderID)
+      const taskModel = brain.big
+        ? yield* resolveModelRef(brain.big, contextProviderID)
+        : yield* defaultModel().pipe(
+            Effect.flatMap((fallback) => getModel(fallback.providerID, fallback.modelID)),
+          )
+      return (yield* getSmallModel(taskModel.providerID)) ?? taskModel
+    })
+
     const defaultModel = Effect.fn("Provider.defaultModel")(function* () {
       const cfg = yield* config.get()
       if (cfg.model) return parseModel(cfg.model)
@@ -1764,7 +1796,17 @@ const layer: Layer.Layer<
       }
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel, resolveModelRef })
+    return Service.of({
+      list,
+      getProvider,
+      getModel,
+      getLanguage,
+      closest,
+      getSmallModel,
+      defaultModel,
+      resolveModelRef,
+      resolveBrainModel,
+    })
   }),
 )
 

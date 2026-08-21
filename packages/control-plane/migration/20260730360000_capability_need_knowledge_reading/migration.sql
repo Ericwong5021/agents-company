@@ -107,7 +107,36 @@ CREATE TABLE company_project_assignment (
 --> statement-breakpoint
 INSERT INTO company_capability_need SELECT * FROM company_capability_need_knowledge_legacy;
 --> statement-breakpoint
-INSERT INTO company_team_selection SELECT * FROM company_team_selection_knowledge_legacy;
+INSERT INTO company_team_selection (
+  id,
+  company_id,
+  project_id,
+  capability_need_id,
+  agent_id,
+  decision,
+  source,
+  lifecycle_at_selection,
+  reason,
+  score_json,
+  time_released,
+  time_created,
+  time_updated
+)
+SELECT
+  id,
+  company_id,
+  project_id,
+  capability_need_id,
+  agent_id,
+  decision,
+  source,
+  lifecycle_at_selection,
+  reason,
+  score_json,
+  time_released,
+  time_created,
+  time_updated
+FROM company_team_selection_knowledge_legacy;
 --> statement-breakpoint
 INSERT INTO company_agent_performance SELECT * FROM company_agent_performance_knowledge_legacy;
 --> statement-breakpoint

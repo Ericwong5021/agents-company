@@ -53,6 +53,12 @@ export const AgentActivityProjection = z
         lifecycle: z.enum(["employee", "assigned"]),
         department: z.string().optional(),
         responsibilities: z.array(z.string()),
+        brain: z
+          .object({
+            big_model: z.string(),
+            small_model: z.string(),
+          })
+          .strict(),
       })
       .strict(),
     // TEAM-01/TEAM-05：组织身份区分正式员工与在岗临时实例，供组织视图消费。
@@ -157,6 +163,10 @@ export function list(companyID: CompanyID): AgentActivityProjection[] {
           lifecycle: agent.lifecycle === "employee" ? "employee" : "assigned",
           ...(agent.department ? { department: agent.department } : {}),
           responsibilities: responsibilities(agent.responsibilities),
+          brain: {
+            big_model: agent.model,
+            small_model: agent.small_model,
+          },
         }
         const employment = agent.lifecycle === "employee" ? "employee" : "temporary"
         const ownedItems = db

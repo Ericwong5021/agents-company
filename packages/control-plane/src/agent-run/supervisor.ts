@@ -28,6 +28,8 @@ import { Skill } from "@/skill"
 import { listCompanyProjectSummaries } from "@/company-project/read-model"
 import { readDoc } from "@/workspace/read-doc"
 import { AgentRun } from "./agent-run"
+import { CompanyAgent } from "@/company-agent"
+import type { CompanyAgentID } from "@/company-agent/schema"
 
 export const StartInput = AgentRunSpec.omit({ runID: true, runtimeHome: true }).extend({
   runID: z.string().optional(),
@@ -74,6 +76,7 @@ export const layer = Layer.effect(
     const auth = yield* Auth.Service
     const provider = yield* Provider.Service
     const skills = yield* Skill.Service
+    const companyAgents = yield* CompanyAgent.Service
     const loadedSkillSnapshots = new Map<string, Set<string>>()
 
     const loadSkill = async (spec: AgentRunSpec, name: string) => {
@@ -166,6 +169,22 @@ export const layer = Layer.effect(
     })
 
     const start = Effect.fn("AgentRunSupervisor.start")(function* (input: StartInput) {
+      const brain = yield* companyAgents.getBrain(input.agentID as CompanyAgentID)
+      const selectedModel = input.model ?? brain?.big
+      const brainModel = selectedModel
+        ? yield* provider.resolveBrainModel(
+            { big: selectedModel, small: brain?.small },
+            "task",
+          ).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        : undefined
+      const resolvedInput = {
+        ...input,
+        model: brainModel
+          ? `${brainModel.providerID}/${brainModel.id}`
+          : brain
+            ? undefined
+            : input.model,
+      }
       const packs = input.capabilityPacks.map((reference) => CapabilityCatalog.resolve(reference))
       const availableSkills = yield* skills.available(undefined, input.agentID)
       const requiredCapabilities = [...new Set([
@@ -202,7 +221,7 @@ export const layer = Layer.effect(
         companyProjectID: input.companyProjectID,
         workItemID: input.workItemID,
         worktreeRunID: input.worktreeRunID,
-        model: input.model,
+        model: resolvedInput.model,
         reasoningEffort: input.reasoningEffort,
         cwd: input.cwd,
         runtimeHomePath: home.home,
@@ -231,7 +250,13 @@ export const layer = Layer.effect(
       yield* runs.recordEvent({
         runID: run.id,
         type: "agent_run.queued",
-        payload: { runtime: runtime.runtime, cwd: input.cwd, capabilityPacks: input.capabilityPacks },
+        payload: {
+          runtime: runtime.runtime,
+          cwd: input.cwd,
+          capabilityPacks: input.capabilityPacks,
+          brain: brain ? "big" : undefined,
+          model: resolvedInput.model,
+        },
       })
 
       let writes = Promise.resolve()
@@ -246,7 +271,7 @@ export const layer = Layer.effect(
         })
       }
       const handle = supervisor.start({
-        ...input,
+        ...resolvedInput,
         runtime: runtime.runtime,
         runID: run.id,
         runtimeHome: home.home,
@@ -408,4 +433,5 @@ export const defaultLayer = layer.pipe(
   Layer.provide(Provider.defaultLayer),
   Layer.provide(Auth.defaultLayer),
   Layer.provide(Skill.defaultLayer),
+  Layer.provide(CompanyAgent.defaultLayer),
 )

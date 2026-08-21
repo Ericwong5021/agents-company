@@ -31,9 +31,10 @@ import type { CompanyAgent } from "../../shared/company-contract";
 const props = defineProps<{
   target: ComposerTarget;
   agents: CompanyAgent[];
+  replyTo?: { id: string; author: string; body: string };
 }>();
 
-const emit = defineEmits<{ sent: [] }>();
+const emit = defineEmits<{ sent: []; cancelReply: [] }>();
 
 const body = ref("");
 const selectedMentions = ref<string[]>([]);
@@ -200,6 +201,7 @@ async function send() {
         ...submittedRoles.map(role => ({ kind: "role" as const, role })),
       ],
       resources: submittedResources,
+      ...(props.replyTo ? { reply_to: props.replyTo.id } : {}),
       ...(props.target.kind === "board" && routeMode.value !== "auto"
         ? { intent_override: routeMode.value }
         : {}),
@@ -288,6 +290,11 @@ function onKeydown(event: KeyboardEvent) {
       </span>
       <small>{{ composerIntentHint(target) }}</small>
     </header>
+
+    <div v-if="replyTo" class="ac-composer__reply">
+      <span>回复 {{ replyTo.author }}：{{ replyTo.body }}</span>
+      <button type="button" @click="emit('cancelReply')">取消</button>
+    </div>
 
     <div v-if="target.kind === 'board'" class="ac-composer__routing" role="radiogroup" aria-label="消息用途">
       <button type="button" role="radio" :aria-checked="routeMode === 'auto'" :data-active="routeMode === 'auto'" @click="routeMode = 'auto'">

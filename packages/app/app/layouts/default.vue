@@ -78,6 +78,50 @@ const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigat
     ? { ...item, to: `${item.to}?project=${encodeURIComponent(routeProjectID.value)}` }
     : item));
 const pageTitle = computed(() => activeShellNavigationItem(navigation.value, route.path)?.label);
+const railNavigation = computed(() => navigation.value.filter(item => item.to.split("?", 1)[0] !== "/settings"));
+const settingsNavigation = computed(() => navigation.value.find(item => item.to.split("?", 1)[0] === "/settings"));
+const paneGroups = computed(() => [
+  {
+    label: "公司",
+    items: navigation.value.filter(item => ["/company", "/company/board", "/company/operations"].includes(item.to.split("?", 1)[0] ?? "")),
+  },
+  {
+    label: "执行",
+    items: navigation.value.filter(item => ["/inbox", "/work"].includes(item.to.split("?", 1)[0] ?? "")),
+  },
+  {
+    label: "组织与成果",
+    items: navigation.value.filter(item => ["/team", "/library"].includes(item.to.split("?", 1)[0] ?? "")),
+  },
+  {
+    label: "系统",
+    items: navigation.value.filter(item => item.to.split("?", 1)[0] === "/settings"),
+  },
+].filter(group => group.items.length));
+const recentWork = computed(() => (snapshot.value?.work ?? []).flatMap(work => {
+  if (work.availability === "unavailable") return [];
+  if (["accepted", "archived", "cancelled", "failed"].includes(work.summary.userStatus)) return [];
+  return [{
+    id: work.summary.workId,
+    phase: work.summary.phase,
+    status: work.summary.userStatus,
+    title: work.summary.title,
+  }];
+}).slice(0, 5));
+const windowConnection = computed(() => snapshot.value?.connection ?? "connecting");
+const windowConnectionLabel = computed(() => {
+  if (windowConnection.value === "ready") return "本地已连接";
+  if (windowConnection.value === "degraded") return "部分可用";
+  if (windowConnection.value === "disconnected") return "本地未连接";
+  if (windowConnection.value === "recovering") return "正在恢复";
+  return "正在连接";
+});
+
+function closeSidebar() {
+  sidebarOpen.value = false;
+}
+
+watch(() => route.fullPath, closeSidebar);
 
 useHead(() => ({
   title: pageTitle.value,
@@ -89,75 +133,153 @@ useHead(() => ({
     跳到主要内容
   </a>
 
-  <UDashboardGroup unit="rem" class="ac-shell">
-    <UDashboardSidebar
-      id="primary"
-      v-model:open="sidebarOpen"
-      :default-size="16"
-      :min-size="15"
-      :max-size="19"
-      :collapsed-size="4.5"
-      collapsible
-      resizable
-      :menu="{ inset: true }"
-      class="ac-shell-sidebar"
-    >
-      <template #header="{ collapsed }">
-        <NuxtLink
-          to="/company"
-          class="ac-shell-brand"
-          :class="{ 'ac-shell-brand--collapsed': collapsed }"
-          aria-label="Agent Company 公司总览"
-        >
-          <Logo class="ac-shell-brand__mark" />
-          <span v-if="!collapsed" class="ac-shell-brand__text">
-            Agent Company
-          </span>
-        </NuxtLink>
-
-        <UDashboardSidebarCollapse
-          v-if="!collapsed"
-          class="ac-shell-collapse"
-          aria-label="收起主导航"
-        />
-      </template>
-
-      <template #default="{ collapsed }">
-        <nav class="ac-primary-nav" aria-label="主导航">
-          <NuxtLink
-            v-for="item in navigation"
-            :key="item.to"
-            :to="item.to"
-            class="ac-primary-nav__item"
-            :class="{
-              'ac-primary-nav__item--active': isShellNavigationActive(item, route.path),
-              'ac-primary-nav__item--collapsed': collapsed,
-            }"
-            :aria-label="collapsed ? item.label : undefined"
-            :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
-            :title="collapsed ? item.label : undefined"
-          >
-            <UIcon :name="item.icon" class="ac-primary-nav__icon" />
-            <span v-if="!collapsed">{{ item.label }}</span>
-            <span
-              v-if="item.to === '/inbox' && attentionCount"
-              class="ac-primary-nav__count"
-              :aria-label="`${attentionCount} 项待处理`"
-            >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
-          </NuxtLink>
-        </nav>
-      </template>
-
-      <template #footer="{ collapsed }">
-        <div class="ac-shell-account" :class="{ 'ac-shell-account--collapsed': collapsed }">
-          <UserMenu />
-          <span v-if="!collapsed">本地工作区</span>
+  <div class="ac-window-stage">
+    <div class="ac-window">
+      <header class="ac-window-titlebar">
+        <div class="ac-window-controls" aria-hidden="true">
+          <span class="ac-window-control ac-window-control--close" />
+          <span class="ac-window-control ac-window-control--minimize" />
+          <span class="ac-window-control ac-window-control--maximize" />
         </div>
-      </template>
-    </UDashboardSidebar>
 
-    <main id="main-content" tabindex="-1" class="ac-shell-workspace">
-      <slot />
-    </main>
-  </UDashboardGroup>
+        <div class="ac-window-title">
+          <Logo class="ac-window-title__mark" />
+          <span>Agent Company</span>
+          <span class="ac-window-title__separator">·</span>
+          <em>{{ pageTitle ?? "公司总览" }}</em>
+        </div>
+
+        <div class="ac-window-status" :data-connection="windowConnection">
+          <span aria-hidden="true" />
+          {{ windowConnectionLabel }}
+        </div>
+      </header>
+
+      <UDashboardGroup unit="rem" class="ac-shell">
+        <aside class="ac-shell-rail" aria-label="主要区域">
+          <NuxtLink to="/company" class="ac-shell-rail__brand" aria-label="Agent Company 公司总览">
+            <Logo />
+          </NuxtLink>
+
+          <nav class="ac-shell-rail__nav">
+            <NuxtLink
+              v-for="item in railNavigation"
+              :key="item.to"
+              :to="item.to"
+              class="ac-shell-rail__item"
+              :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(item, route.path) }"
+              :aria-label="item.label"
+              :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
+              :title="item.label"
+            >
+              <UIcon :name="item.icon" />
+              <span
+                v-if="item.to === '/inbox' && attentionCount"
+                class="ac-shell-rail__badge"
+                :aria-label="`${attentionCount} 项待处理`"
+              >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
+            </NuxtLink>
+          </nav>
+
+          <div class="ac-shell-rail__footer">
+            <NuxtLink
+              v-if="settingsNavigation"
+              :to="settingsNavigation.to"
+              class="ac-shell-rail__item"
+              :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(settingsNavigation, route.path) }"
+              :aria-label="settingsNavigation.label"
+              :aria-current="isShellNavigationActive(settingsNavigation, route.path) ? 'page' : undefined"
+              :title="settingsNavigation.label"
+            >
+              <UIcon :name="settingsNavigation.icon" />
+            </NuxtLink>
+            <UserMenu />
+          </div>
+        </aside>
+
+        <button
+          v-if="sidebarOpen"
+          type="button"
+          class="ac-navigation-scrim"
+          aria-label="关闭导航"
+          @click="closeSidebar"
+        />
+
+        <aside class="ac-navigation-pane" :data-open="sidebarOpen">
+          <header class="ac-navigation-pane__header">
+            <div class="ac-navigation-pane__company">
+              <span class="ac-navigation-pane__mark"><Logo /></span>
+              <span>
+                <strong>{{ snapshot?.company.name ?? "Agent Company" }}</strong>
+                <small>本地 AI 公司</small>
+              </span>
+            </div>
+            <button type="button" class="ac-navigation-pane__close" aria-label="关闭导航" @click="closeSidebar">
+              <UIcon name="i-lucide-x" />
+            </button>
+          </header>
+
+          <div class="ac-navigation-pane__body">
+            <nav class="ac-navigation-pane__nav" aria-label="工作区导航">
+              <section v-for="group in paneGroups" :key="group.label" class="ac-navigation-pane__group">
+                <h2>{{ group.label }}</h2>
+                <NuxtLink
+                  v-for="item in group.items"
+                  :key="item.to"
+                  :to="item.to"
+                  class="ac-navigation-pane__item"
+                  :class="{ 'ac-navigation-pane__item--active': isShellNavigationActive(item, route.path) }"
+                  :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
+                >
+                  <span class="ac-navigation-pane__item-icon"><UIcon :name="item.icon" /></span>
+                  <span class="ac-navigation-pane__item-copy">
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.description }}</small>
+                  </span>
+                  <span v-if="item.to === '/inbox' && attentionCount" class="ac-navigation-pane__count">
+                    {{ attentionCount > 99 ? "99+" : attentionCount }}
+                  </span>
+                </NuxtLink>
+              </section>
+            </nav>
+
+            <section class="ac-navigation-pane__work" aria-labelledby="active-work-heading">
+              <header>
+                <h2 id="active-work-heading">进行中的工作</h2>
+                <NuxtLink to="/work">查看全部</NuxtLink>
+              </header>
+              <div v-if="recentWork.length" class="ac-navigation-pane__work-list">
+                <NuxtLink
+                  v-for="work in recentWork"
+                  :key="work.id"
+                  :to="`/work/${encodeURIComponent(work.id)}`"
+                  class="ac-navigation-pane__work-item"
+                  :data-status="work.status"
+                >
+                  <span class="ac-navigation-pane__work-dot" aria-hidden="true" />
+                  <span>
+                    <strong>{{ work.title }}</strong>
+                    <small>{{ appConfig.experience.statusLabels[work.status] }} · {{ work.phase }}</small>
+                  </span>
+                </NuxtLink>
+              </div>
+              <p v-else class="ac-navigation-pane__empty">当前没有进行中的工作</p>
+            </section>
+          </div>
+
+          <footer class="ac-navigation-pane__footer" :data-connection="windowConnection">
+            <span aria-hidden="true" />
+            <span>
+              <strong>{{ windowConnectionLabel }}</strong>
+              <small>Control Plane</small>
+            </span>
+          </footer>
+        </aside>
+
+        <main id="main-content" tabindex="-1" class="ac-shell-workspace">
+          <slot />
+        </main>
+      </UDashboardGroup>
+    </div>
+  </div>
 </template>

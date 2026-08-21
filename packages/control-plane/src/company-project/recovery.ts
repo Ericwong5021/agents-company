@@ -11,6 +11,7 @@ import { workflowRef } from "@/workflow/runtime-ref"
 import {
   CompanyProjectEventTable,
   CompanyProjectTable,
+  CompanyArtifactTable,
   CompanyWorkAttemptTable,
   CompanyWorkItemTable,
   CompanyWorkReceiptTable,
@@ -159,6 +160,111 @@ function reconcileWorkItems() {
               .run()
             reclaimed_work_item_ids.push(item.id)
             return
+          }
+          if (item.kind === "worker" && attempt && ["pending", "running"].includes(item.review_status)) {
+            const deliveryArtifact = db
+              .select()
+              .from(CompanyArtifactTable)
+              .where(
+                and(
+                  eq(CompanyArtifactTable.work_item_id, item.id),
+                  eq(CompanyArtifactTable.attempt_id, attempt.id),
+                  eq(CompanyArtifactTable.kind, item.work_type),
+                ),
+              )
+              .orderBy(desc(CompanyArtifactTable.created_at), desc(CompanyArtifactTable.id))
+              .get()
+            const verificationArtifact = db
+              .select()
+              .from(CompanyArtifactTable)
+              .where(
+                and(
+                  eq(CompanyArtifactTable.work_item_id, item.id),
+                  eq(CompanyArtifactTable.attempt_id, attempt.id),
+                  eq(CompanyArtifactTable.kind, "system_verification"),
+                ),
+              )
+              .orderBy(desc(CompanyArtifactTable.created_at), desc(CompanyArtifactTable.id))
+              .get()
+            const reviewer = db
+              .select()
+              .from(CompanyWorkItemTable)
+              .where(
+                and(
+                  eq(CompanyWorkItemTable.project_id, item.project_id),
+                  eq(CompanyWorkItemTable.kind, "reviewer"),
+                  eq(CompanyWorkItemTable.reviews_work_item_id, item.id),
+                ),
+              )
+              .get()
+            const latestReview = reviewer
+              ? db
+                  .select()
+                  .from(CompanyArtifactTable)
+                  .where(
+                    and(
+                      eq(CompanyArtifactTable.work_item_id, reviewer.id),
+                      eq(CompanyArtifactTable.kind, "independent_review"),
+                    ),
+                  )
+                  .orderBy(desc(CompanyArtifactTable.created_at), desc(CompanyArtifactTable.id))
+                  .get()
+              : undefined
+            const staleReviewer =
+              reviewer &&
+              ["completed", "blocked", "failed"].includes(reviewer.status) &&
+              deliveryArtifact &&
+              (!latestReview || latestReview.created_at < deliveryArtifact.created_at)
+            if (
+              deliveryArtifact &&
+              verificationArtifact &&
+              reviewer &&
+              (["pending", "running"].includes(reviewer.status) || staleReviewer)
+            ) {
+              if (staleReviewer) {
+                const now = Date.now()
+                db.update(CompanyWorkItemTable)
+                  .set({
+                    status: "pending",
+                    workflow_run_id: null,
+                    error: null,
+                    started_at: null,
+                    completed_at: null,
+                    max_attempts: Math.max(reviewer.max_attempts, reviewer.attempt + 1),
+                    updated_at: now,
+                  })
+                  .where(eq(CompanyWorkItemTable.id, reviewer.id))
+                  .run()
+                const assignment = db
+                  .select()
+                  .from(CompanyProjectAssignmentTable)
+                  .where(eq(CompanyProjectAssignmentTable.work_item_id, reviewer.id))
+                  .orderBy(desc(CompanyProjectAssignmentTable.version))
+                  .get()
+                if (assignment && !["assigned", "active"].includes(assignment.status))
+                  db.update(CompanyProjectAssignmentTable)
+                    .set({ status: "assigned", started_at: null, released_at: null, release_reason: null })
+                    .where(eq(CompanyProjectAssignmentTable.id, assignment.id))
+                    .run()
+                db.insert(CompanyProjectEventTable)
+                  .values({
+                    id: Identifier.ascending("event"),
+                    project_id: item.project_id,
+                    type: "work_item.reviewer_recovered",
+                    actor_id: null,
+                    data_json: JSON.stringify({
+                      work_item_id: item.id,
+                      reviewer_id: reviewer.id,
+                      artifact_id: deliveryArtifact.id,
+                    }),
+                    created_at: now,
+                  })
+                  .run()
+                reclaimed_work_item_ids.push(reviewer.id)
+              }
+              confirmed_work_item_ids.push(item.id)
+              return
+            }
           }
           const receipt = attempt
             ? db.select().from(CompanyWorkReceiptTable).where(eq(CompanyWorkReceiptTable.attempt_id, attempt.id)).get()

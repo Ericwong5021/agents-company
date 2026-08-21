@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { authorization, Server } from "../../src/server/server"
 import { CompanyAgentTable } from "../../src/company-agent/company-agent.sql"
 import { CompanyAgentID } from "../../src/company-agent/schema"
-import { ApprovalPolicyTable, CompanyTable } from "../../src/company/company.sql"
+import { ApprovalPolicyTable, CompanyTable, RepositoryBindingTable } from "../../src/company/company.sql"
 import { CompanyID } from "../../src/company/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import {
@@ -25,6 +25,7 @@ import {
   SignalProjectionID,
 } from "../../src/conversation/schema"
 import { GroupMessageTable, GroupSessionTable } from "../../src/group-session/group-session.sql"
+import { ChannelDeliveryTable, ChannelPollVoteTable, ChannelReactionTable, ChannelReadStateTable } from "../../src/conversation/room.sql"
 import { GroupSessionID } from "../../src/group-session/schema"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -45,6 +46,9 @@ function requestID() {
 
 function seed() {
   Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({ id: "conversation-server-project" as ProjectID, worktree: "/tmp/company", sandboxes: [], time_created: 1, time_updated: 1 })
+      .run()
     db.insert(CompanyTable)
       .values({
         id: companyID,
@@ -54,6 +58,19 @@ function seed() {
         default_model_id: ModelID.zod.parse("test"),
         bootstrap_request_id: "018f84f8-9c21-7d4d-a850-d63f8f9344cc",
         bootstrap_input_path: "/tmp/company",
+        time_created: 1,
+        time_updated: 1,
+      })
+      .run()
+    db.insert(RepositoryBindingTable)
+      .values({
+        id: "rbd_primary",
+        company_id: companyID,
+        project_id: "conversation-server-project" as ProjectID,
+        root_path: "/tmp/company",
+        default_branch: "main",
+        bootstrap_head_commit: null,
+        bootstrap_dirty: false,
         time_created: 1,
         time_updated: 1,
       })
@@ -256,7 +273,7 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     expect(accepted.messageID).toMatch(/^cmsg_/)
     expect(accepted.rootNeedID).toMatch(/^need_/)
     expect(accepted.threadID).toMatch(/^cth_/)
-    expect(accepted.runID).toMatch(/^crun_/)
+    expect(accepted.runID).toBeUndefined()
     expect(accepted.replayed).toBe(false)
 
     // The user message is persisted before the 202 is returned.
@@ -267,23 +284,62 @@ describe.serial("/company/channels and /company/threads HTTP contract", () => {
     expect(persisted?.body).toBe("Ship the scoped board intake.")
   })
 
-  test.serial("dispatches a newly persisted run without waiting for process restart", async () => {
+  test.serial("creates one durable delivery per board agent without a centralized conversation run", async () => {
     const response = await send(BOARD_CHANNEL_ID, "Dispatch immediately.", requestID())
     expect(response.status).toBe(202)
-    const { runID } = await response.json()
-
-    const deadline = Date.now() + 2_000
-    while (
-      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
-        ?.state === "queued" &&
-      Date.now() < deadline
-    ) {
-      await Bun.sleep(20)
-    }
+    const { messageID, runID } = await response.json()
+    expect(runID).toBeUndefined()
     expect(
-      Database.use((db) => db.select().from(ConversationRunTable).where(eq(ConversationRunTable.id, runID)).get())
-        ?.state,
-    ).not.toBe("queued")
+      Database.use((db) =>
+        db.select().from(ChannelDeliveryTable).where(eq(ChannelDeliveryTable.message_id, messageID)).all(),
+      ).map((delivery) => delivery.agent_id).sort(),
+    ).toEqual(["board-ceo", "board-cto", "board-product-lead"])
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
+  })
+
+  test.serial("persists reactions, poll votes, and the user read watermark", async () => {
+    const messageResponse = await send(BOARD_CHANNEL_ID, "Discuss the release options.", requestID())
+    const message = await messageResponse.json()
+    const reaction = await Server.Default().app.request(
+      `/company/channels/${BOARD_CHANNEL_ID}/messages/${message.messageID}/reactions?company_id=${companyID}`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ emoji: "✅" }) },
+    )
+    expect(reaction.status).toBe(200)
+    expect(Database.use((db) => db.select().from(ChannelReactionTable).all())).toHaveLength(1)
+
+    const poll = await Server.Default().app.request(
+      `/company/channels/${BOARD_CHANNEL_ID}/messages?company_id=${companyID}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          request_id: requestID(),
+          body: "Which release window?",
+          kind: "poll",
+          poll: {
+            question: "Which release window?",
+            options: [{ id: "today", label: "Today" }, { id: "tomorrow", label: "Tomorrow" }],
+            multiple: false,
+          },
+          intent_override: "discuss",
+        }),
+      },
+    )
+    expect(poll.status).toBe(202)
+    const pollMessage = await poll.json()
+    const vote = await Server.Default().app.request(
+      `/company/channels/${BOARD_CHANNEL_ID}/messages/${pollMessage.messageID}/votes?company_id=${companyID}`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ option_id: "today" }) },
+    )
+    expect(vote.status).toBe(200)
+    expect(Database.use((db) => db.select().from(ChannelPollVoteTable).all())).toHaveLength(1)
+
+    const read = await Server.Default().app.request(
+      `/company/channels/${BOARD_CHANNEL_ID}/read-state?company_id=${companyID}`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sequence: 2 }) },
+    )
+    expect(read.status).toBe(204)
+    expect(Database.use((db) => db.select().from(ChannelReadStateTable).get())?.last_read_sequence).toBe(2)
   })
 
   test.serial("replays an identical request idempotently and 409s on a different body", async () => {

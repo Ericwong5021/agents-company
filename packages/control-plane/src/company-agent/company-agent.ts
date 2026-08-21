@@ -46,7 +46,8 @@ export const Info = Schema.Struct({
   relationships: Schema.optional(Schema.String),
   kanban: Schema.optional(Schema.String),
   skills: Schema.optional(Schema.Array(Schema.String)),
-  model: Schema.optional(Schema.String),
+  model: Schema.String,
+  small_model: Schema.String,
   preferred_runtime: Schema.String,
   color: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.String),
@@ -73,7 +74,8 @@ export const PublicInfo = z.object({
   description: z.string().optional(),
   public_profile: z.string().optional(),
   skills: z.array(z.string()).optional(),
-  model: z.string().optional(),
+  model: z.string(),
+  small_model: z.string(),
   preferred_runtime: z.string(),
   color: z.string().optional(),
   icon: z.string().optional(),
@@ -84,6 +86,11 @@ export const PublicInfo = z.object({
   time: z.object({ created: z.number(), updated: z.number() }),
 })
 export type PublicInfo = z.infer<typeof PublicInfo>
+
+export type Brain = {
+  big: string
+  small: string
+}
 
 export function toPublicInfo(info: Info): PublicInfo {
   return PublicInfo.parse({
@@ -96,6 +103,7 @@ export function toPublicInfo(info: Info): PublicInfo {
     public_profile: info.public_profile,
     skills: info.skills,
     model: info.model,
+    small_model: info.small_model,
     preferred_runtime: info.preferred_runtime,
     color: info.color,
     icon: info.icon,
@@ -124,6 +132,7 @@ export const CreateInput = z.object({
   system_prompt: z.string().optional(),
   instruct: z.string().optional(),
   model: z.string().optional(),
+  small_model: z.string().optional(),
   preferred_runtime: z.enum(["pi", "claude-code", "codex"]).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
@@ -143,6 +152,7 @@ export const UpdateInput = z.object({
   relationships: z.string().optional(),
   kanban: z.string().optional(),
   model: z.string().optional(),
+  small_model: z.string().optional(),
   preferred_runtime: z.enum(["pi", "claude-code", "codex"]).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
@@ -169,6 +179,7 @@ export const Event = {
 
 const AgentSettings = z.object({
   model: z.string().optional(),
+  small_model: z.string().optional(),
 })
 type AgentSettings = z.infer<typeof AgentSettings>
 
@@ -260,7 +271,7 @@ function orgContextFromRow(row: Row): OrgContext | undefined {
   }
 }
 
-function fromRow(row: Row): Omit<Info, "system_prompt" | "model"> {
+function fromRow(row: Row): Omit<Info, "system_prompt" | "model" | "small_model"> {
   return {
     id: row.id as CompanyAgentID,
     company_id: row.company_id ?? undefined,
@@ -370,7 +381,8 @@ async function fromRowWithFiles(row: Row): Promise<Info> {
     relationships,
     kanban,
     skills: skills.length > 0 ? skills : undefined,
-    model: settings.model,
+    model: settings.model ?? row.model,
+    small_model: settings.small_model ?? row.small_model,
   }
 }
 
@@ -681,7 +693,14 @@ async function validateFileBundle(id: CompanyAgentID, name: string, org?: OrgCon
 
 async function writeAgentFiles(
   id: CompanyAgentID,
-  patch: { system_prompt?: string; instruct?: string; relationships?: string; kanban?: string; model?: string },
+  patch: {
+    system_prompt?: string
+    instruct?: string
+    relationships?: string
+    kanban?: string
+    model?: string
+    small_model?: string
+  },
   org?: OrgContext,
 ): Promise<void> {
   await Promise.all([
@@ -706,10 +725,15 @@ async function writeAgentFiles(
     await Bun.write(agentKanbanPath(id), agentDocument(id, "kanban", patch.kanban))
   }
 
-  if (patch.model !== undefined) {
+  if (patch.model !== undefined || patch.small_model !== undefined) {
     const current = await readSettings(id)
-    const updated: AgentSettings = { ...current, model: patch.model || undefined }
+    const updated: AgentSettings = {
+      ...current,
+      ...(patch.model !== undefined ? { model: patch.model || undefined } : {}),
+      ...(patch.small_model !== undefined ? { small_model: patch.small_model || undefined } : {}),
+    }
     if (!updated.model) delete updated.model
+    if (!updated.small_model) delete updated.small_model
     await Bun.write(agentSettingsPath(id), JSON.stringify(updated, null, 2) + "\n")
   }
 }
@@ -721,6 +745,7 @@ async function writeAgentFiles(
 export interface Interface {
   readonly create: (input: CreateInput) => Effect.Effect<Info>
   readonly get: (id: CompanyAgentID) => Effect.Effect<Info | undefined>
+  readonly getBrain: (id: CompanyAgentID) => Effect.Effect<Brain | undefined>
   readonly list: (input?: {
     company_id?: string
     lifecycle?: "candidate" | "assigned" | "employee" | "archived"
@@ -742,6 +767,27 @@ export class Service extends Context.Service<Service, Interface>()("@control-pla
 export const layer: Layer.Layer<Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
+    yield* Effect.promise(async () => {
+      const rows = Database.use((db) => db.select().from(CompanyAgentTable).all())
+      const updates = await Promise.all(
+        rows.map(async (row) => ({ row, settings: await readSettings(row.id as CompanyAgentID) })),
+      )
+      updates
+        .filter((item) => item.settings.model || item.settings.small_model)
+        .forEach((item) =>
+          Database.use((db) =>
+            db
+              .update(CompanyAgentTable)
+              .set({
+                model: item.settings.model ?? item.row.model,
+                small_model: item.settings.small_model ?? item.row.small_model,
+              })
+              .where(eq(CompanyAgentTable.id, item.row.id))
+              .run(),
+          ),
+        )
+    })
+
     const create = Effect.fn("CompanyAgent.create")(function* (input: CreateInput) {
       const now = Date.now()
       yield* Effect.sync(() =>
@@ -761,6 +807,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               department: input.department ?? null,
               reports_to: input.reports_to ?? null,
               responsibilities: input.responsibilities ? JSON.stringify(input.responsibilities) : null,
+              model: input.model ?? "standard",
+              small_model: input.small_model ?? "lite",
               preferred_runtime: input.preferred_runtime ?? "codex",
               time_created: now,
               time_updated: now,
@@ -784,7 +832,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
           {
             system_prompt: input.system_prompt,
             instruct: input.instruct,
-            model: input.model,
+            model: input.model ?? "standard",
+            small_model: input.small_model ?? "lite",
           },
           org,
         )
@@ -812,6 +861,20 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       )
       if (!row) return undefined
       return yield* Effect.promise(() => fromRowWithFiles(row))
+    })
+
+    const getBrain = Effect.fn("CompanyAgent.getBrain")(function* (id: CompanyAgentID) {
+      const row = yield* Effect.sync(() =>
+        Database.use((db) =>
+          db
+            .select({ model: CompanyAgentTable.model, small_model: CompanyAgentTable.small_model })
+            .from(CompanyAgentTable)
+            .where(eq(CompanyAgentTable.id, id))
+            .get(),
+        ),
+      )
+      if (!row) return undefined
+      return { big: row.model, small: row.small_model }
     })
 
     const list = Effect.fn("CompanyAgent.list")(function* (input?: {
@@ -842,6 +905,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       if (input.reports_to !== undefined) dbPatch.reports_to = input.reports_to
       if (input.responsibilities !== undefined) dbPatch.responsibilities = JSON.stringify(input.responsibilities)
       if (input.preferred_runtime !== undefined) dbPatch.preferred_runtime = input.preferred_runtime
+      if (input.model !== undefined) dbPatch.model = input.model || "standard"
+      if (input.small_model !== undefined) dbPatch.small_model = input.small_model || "lite"
 
       const row = yield* Effect.sync(() =>
         Database.use((db) =>
@@ -855,7 +920,8 @@ export const layer: Layer.Layer<Service> = Layer.effect(
         input.instruct !== undefined ||
         input.relationships !== undefined ||
         input.kanban !== undefined ||
-        input.model !== undefined
+        input.model !== undefined ||
+        input.small_model !== undefined
       if (hasFileUpdates) {
         yield* Effect.promise(() =>
           writeAgentFiles(
@@ -866,6 +932,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
               ...(input.relationships !== undefined && { relationships: input.relationships }),
               ...(input.kanban !== undefined && { kanban: input.kanban }),
               ...(input.model !== undefined && { model: input.model }),
+              ...(input.small_model !== undefined && { small_model: input.small_model }),
             },
             orgContextFromRow(row!),
           ),
@@ -960,7 +1027,7 @@ export const layer: Layer.Layer<Service> = Layer.effect(
       )
     })
 
-    return { create, get, list, update, assign, release, promote, archive, remove }
+    return { create, get, getBrain, list, update, assign, release, promote, archive, remove }
   }),
 )
 

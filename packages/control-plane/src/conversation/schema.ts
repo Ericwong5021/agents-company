@@ -126,11 +126,34 @@ export type SignalProjectionSourceKind = z.infer<typeof SignalProjectionSourceKi
 export const ChannelMessageCursor = z
   .object({
     id: ChannelMessageID,
+    sequence: z.number().int().nonnegative(),
     time_created: z.number().int().nonnegative(),
   })
   .strict()
   .meta({ ref: "ChannelMessageCursor" })
 export type ChannelMessageCursor = z.infer<typeof ChannelMessageCursor>
+
+export const ChannelMessageKind = z.enum(["text", "poll", "system"]).meta({ ref: "ChannelMessageKind" })
+export type ChannelMessageKind = z.infer<typeof ChannelMessageKind>
+
+export const ChannelPoll = z
+  .object({
+    question: z.string().trim().min(1).max(500),
+    options: z
+      .array(z.object({ id: z.string().trim().min(1).max(100), label: z.string().trim().min(1).max(300) }).strict())
+      .min(2)
+      .max(12),
+    multiple: z.boolean().default(false),
+    closed_at: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .meta({ ref: "ChannelPoll" })
+export type ChannelPoll = z.infer<typeof ChannelPoll>
+
+export const ChannelDeliveryStatus = z
+  .enum(["pending", "triaging", "running", "held", "responded", "passed", "failed", "cancelled"])
+  .meta({ ref: "ChannelDeliveryStatus" })
+export type ChannelDeliveryStatus = z.infer<typeof ChannelDeliveryStatus>
 
 export const HighSignalDraft = z
   .object({

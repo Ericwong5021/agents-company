@@ -70,6 +70,7 @@ export namespace ProviderTest {
             }
             return Effect.succeed(mdl)
           }),
+          resolveBrainModel: Effect.fn("TestProvider.resolveBrainModel")(() => Effect.succeed(mdl)),
           getLanguage: Effect.fn("TestProvider.getLanguage")(() =>
             Effect.die(new Error("ProviderTest.getLanguage not configured")),
           ),

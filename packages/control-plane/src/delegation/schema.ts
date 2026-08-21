@@ -1,13 +1,15 @@
 import { z } from "zod"
 import type { AgentMessageID } from "@/agent-message/schema"
 
+const optionalKey = z.preprocess((input) => (input === "" ? undefined : input), z.string().min(1).optional())
+
 // ---------------------------------------------------------------------------
 // Sub-task produced by decompose
 // ---------------------------------------------------------------------------
 
 export const SubTask = z.object({
-  key: z.string().min(1).optional(),
-  parentKey: z.string().min(1).optional(),
+  key: optionalKey,
+  parentKey: optionalKey,
   kind: z.literal("worker").optional(),
   purpose: z.literal("delivery").optional(),
   summary: z.string().min(1),

@@ -427,13 +427,7 @@ describe.serial("M2 conversation read model", () => {
       ),
     ).rejects.toMatchObject({ name: "ConversationThreadNotVisible" })
     const entries = await run((conversation) => conversation.pageEntries({ companyID, threadID, principal: user }))
-    expect(entries.items.map((entry) => entry.type)).toEqual(["bidding", "agent_message", "message"])
-    expect(entries.items.find((entry) => entry.type === "bidding")).toMatchObject({
-      bidding: {
-        state: "decided",
-        bids: [{ agentId: "board-cto", state: "completed", reason: "技术评估能补充当前讨论。" }],
-      },
-    })
+    expect(entries.items.map((entry) => entry.type)).toEqual(["agent_message", "message"])
     expect(
       await run((conversation) =>
         conversation.getSource({

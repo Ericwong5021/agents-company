@@ -141,6 +141,22 @@ function selectionReasonLabel(value: string) {
             </div>
           </header>
 
+          <section class="ac-detail-panel ac-agent-panel" aria-label="认知配置">
+            <p class="ac-card-kicker">认知配置</p>
+            <ul class="ac-agent-list">
+              <li>
+                <strong>小脑 · 先判断</strong>
+                <span>{{ detail.agent.brain.smallModel }}</span>
+                <span>处理相关性判断、发言竞价与轻量辅助工作，不直接承担正式交付。</span>
+              </li>
+              <li>
+                <strong>大脑 · 再执行</strong>
+                <span>{{ detail.agent.brain.bigModel }}</span>
+                <span>只在存在真实任务或需要公开发言时唤醒，并继续服从工作档位与权限边界。</span>
+              </li>
+            </ul>
+          </section>
+
           <section class="ac-detail-panel ac-agent-panel" aria-label="能力证据">
             <p class="ac-card-kicker">能力证据</p>
             <ul v-if="detail.capabilities.length" class="ac-agent-list">

@@ -1,5 +1,5 @@
 import z from "zod"
-import { Context, Effect, Layer, Ref, Stream } from "effect"
+import { Context, Effect, Layer, Ref, Semaphore, Stream } from "effect"
 import { Database, eq, and, desc } from "../storage"
 import { GroupSessionTable, GroupSessionMemberTable, GroupMessageTable, GroupSessionBiddingTable } from "./group-session.sql"
 import { GroupContextPolicy, GroupSessionID } from "./schema"
@@ -17,10 +17,8 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { BiddingScheduler } from "./scheduler/BiddingScheduler"
 import { probeOne } from "./scheduler/probe"
-import type { ProbeInput } from "./scheduler/probe"
-import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
+import { canPublish, idleReason, MAX_AGENT_TURNS, pickFallbackAgent, shouldRespond } from "./scheduler/natural-turn"
 import { Agent, BOARD_DISCUSSION_AGENT_ID } from "@/agent/agent"
 import { Provider } from "@/provider"
 import type { ModelID, ProviderID } from "@/provider/schema"
@@ -209,7 +207,7 @@ export const Event = {
           type: z.enum(["objection", "answer", "question", "claim", "info", "support"]),
           addressedAs: z.enum(["direct", "mention", "none"]),
           reason: z.string(),
-          score: z.number(),
+          score: z.number().optional(),
           eligible: z.boolean(),
         }),
       ),
@@ -457,34 +455,28 @@ type PublicCompanyAgent = {
   description: string
   role: string
   responsibilities: string[]
-  model?: string
+  brain: {
+    big: string
+    small: string
+  }
   runtime: "pi" | "claude-code" | "codex"
 }
 
-function loadPublicCompanyAgent(id: CompanyAgentID): PublicCompanyAgent | undefined {
-  const row = Database.use((db) =>
-    db
-      .select({
-        name: CompanyAgentTable.name,
-        description: CompanyAgentTable.description,
-        role: CompanyAgentTable.role_key,
-        responsibilities: CompanyAgentTable.responsibilities,
-        model: CompanyAgentTable.model,
-        runtime: CompanyAgentTable.preferred_runtime,
-        lifecycle: CompanyAgentTable.lifecycle,
-      })
-      .from(CompanyAgentTable)
-      .where(eq(CompanyAgentTable.id, id))
-      .get(),
-  )
-  if (!row || row.lifecycle !== "employee") return
+function publicCompanyAgent(agent: CompanyAgent.Info | undefined): PublicCompanyAgent | undefined {
+  if (!agent || agent.lifecycle !== "employee") return
   return {
-    name: row.name,
-    description: row.description ?? "",
-    role: row.role ?? id,
-    responsibilities: row.responsibilities ? JSON.parse(row.responsibilities) : [],
-    model: row.model ?? undefined,
-    runtime: row.runtime === "claude-code" || row.runtime === "pi" ? row.runtime : "codex",
+    name: agent.name,
+    description: agent.description ?? "",
+    role: agent.role_key ?? agent.id,
+    responsibilities: agent.responsibilities ?? [],
+    brain: {
+      big: agent.model,
+      small: agent.small_model,
+    },
+    runtime:
+      agent.preferred_runtime === "claude-code" || agent.preferred_runtime === "pi"
+        ? agent.preferred_runtime
+        : "codex",
   }
 }
 
@@ -734,74 +726,50 @@ export const layer: Layer.Layer<
       )
     }
 
-    /**
-     * The core bidding loop:
-     * 1. Parallel probe all members
-     * 2. Arbitrate to select a speaker
-     * 3. If idle: human fallback (if user-msg triggered) or natural stop
-     * 4. If yield: publish TurnYielded and stop
-     * 5. If winner: prompt the speaker, save response, settle rights, re-bid
-     */
-    const runBiddingLoop = Effect.fn("GroupSession.runBiddingLoop")(function* (params: {
+    const runConversationLoop = Effect.fn("GroupSession.runConversationLoop")(function* (params: {
       info: Info
       roundNum: number
       groupSessionID: GroupSessionID
       userText: string
-      priorAgentMessages?: GroupMessage[]
     }) {
-      const memberIds = params.info.members.map((m) => m.companyAgentID)
-      const scheduler = new BiddingScheduler(params.groupSessionID, memberIds)
       const companyModel =
         params.info.contextPolicy === "work_scoped" ? yield* resolveCompanyModel(params.info.projectID) : undefined
-
-      // Work-scoped sessions deliberately use only public company fields.
       const agentInfos: Record<string, PublicCompanyAgent> = {}
       for (const m of params.info.members) {
-        const ag = yield* Effect.sync(() => loadPublicCompanyAgent(m.companyAgentID as CompanyAgentID))
+        const ag = publicCompanyAgent(yield* companyAgentSvc.get(m.companyAgentID as CompanyAgentID))
         if (ag) agentInfos[m.companyAgentID] = ag
       }
-
       const isInterrupted = Effect.fn("GroupSession.isInterrupted")(function* () {
         return (yield* Ref.get(interruptedSchedulers)).has(params.groupSessionID)
       })
-
-      // Resolve probe dependencies (from closure)
       const probeAgent = yield* agentSvc.get("probe").pipe(Effect.orElseSucceed(() => undefined))
-
       const probeCtx = { agentSvc, provider, llm: llmSvc, probeAgent, model: companyModel }
-
-      // Fairness survives user turns for the lifetime of a Group Session. Historical
-      // speakers restore cooldown and staleness without consuming the new turn's K
-      // budget; a resumed in-flight round still restores its full turn state.
-      const historicalSpeakerIDs = (yield* messages(params.groupSessionID))
-        .filter(
-          (message) =>
-            message.role === "agent" && message.roundNum < params.roundNum && message.statusSummary === "done",
+      const attentionRound = yield* Ref.make(0)
+      const seenMessages = yield* Ref.make(new Map<string, string>())
+      const publishLock = Semaphore.makeUnsafe(1)
+      const roundMessages = () =>
+        messages(params.groupSessionID).pipe(
+          Effect.map((items) => items.filter((message) => message.roundNum === params.roundNum)),
         )
-        .map((message) => message.companyAgentID)
-        .filter((companyAgentID): companyAgentID is string => Boolean(companyAgentID))
-      historicalSpeakerIDs.forEach((companyAgentID) => scheduler.restoreRightsAfterSpeaker(companyAgentID))
-
-      // A resumed process has only persisted group messages, not scheduler state.
-      // Replaying completed speakers restores the current round's K budget and
-      // prevents the first finished agent from being prompted a second time.
-      const priorAgentMessages = (params.priorAgentMessages ?? []).filter((message) => message.statusSummary === "done")
-      const priorSpeakerIDs = priorAgentMessages
-        .map((message) => message.companyAgentID)
-        .filter((companyAgentID): companyAgentID is string => Boolean(companyAgentID))
-      priorSpeakerIDs.forEach((companyAgentID) => scheduler.afterSpeak(companyAgentID))
-
-      // Round 1: triggered by user message
-      const speakersThisTurn = new Set(priorSpeakerIDs)
-
-      const probeRound = (lastEvent: string) =>
+      const updateSeen = (agentID: string, messageID: string) =>
+        Ref.update(seenMessages, (seen) => {
+          const next = new Map(seen)
+          next.set(agentID, messageID)
+          return next
+        })
+      const eventText = (message: GroupMessage) => {
+        if (message.role === "user") return `User sent a new message: ${message.content}`
+        const name = message.companyAgentID ? agentInfos[message.companyAgentID]?.name ?? message.companyAgentID : "Agent"
+        return `Agent ${name} added a message: ${message.content}`
+      }
+      const probeMembers = (members: MemberInfo[], latest: GroupMessage) =>
         Effect.gen(function* () {
-          const roundNum = scheduler.state.round + 1
+          const roundNum = yield* Ref.updateAndGet(attentionRound, (round) => round + 1)
           const record = yield* Ref.make<Omit<GroupBidding, "id" | "time">>({
             groupSessionID: params.groupSessionID,
             roundNum,
             state: "bidding",
-            bids: params.info.members.map((member) => ({ agentId: member.companyAgentID, state: "queued" })),
+            bids: members.map((member) => ({ agentId: member.companyAgentID, state: "queued" })),
           })
           const persist = Effect.flatMap(Ref.get(record), (bidding) => Effect.sync(() => persistBidding(bidding)))
           const update = (agentID: string, bid: Partial<GroupBidding["bids"][number]>) =>
@@ -814,23 +782,25 @@ export const layer: Layer.Layer<
             })
           yield* persist
           yield* bus.publish(Event.BiddingStarted, { groupSessionID: params.groupSessionID, roundNum })
-          return yield* Effect.forEach(
-            params.info.members,
+          const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
+          const decisions = yield* Effect.forEach(
+            members,
             (member) =>
               Effect.gen(function* () {
+                yield* updateSeen(member.companyAgentID, latest.id)
                 yield* update(member.companyAgentID, { state: "analyzing" })
                 const agent = agentInfos[member.companyAgentID]
-                const transcript = yield* Effect.sync(() => buildGroupContext(params.groupSessionID))
                 const bid = yield* probeOne(probeCtx, {
                   persona: {
                     name: agent?.name ?? member.companyAgentID,
                     role: member.companyAgentID,
                     description: agent?.description ?? "",
                   },
-                  lastEvent,
+                  lastEvent: eventText(latest),
                   transcript,
                   members: Object.values(agentInfos).map((a) => ({ name: a.name, role: a.description ?? a.name })),
                   groupSessionID: params.groupSessionID,
+                  brain: agent?.brain,
                   onPublicRationale: (reason) => update(member.companyAgentID, { state: "analyzing", reason }),
                 })
                 yield* update(member.companyAgentID, { ...bid, state: "completed" })
@@ -838,109 +808,53 @@ export const layer: Layer.Layer<
               }),
             { concurrency: MEMBER_CONCURRENCY },
           )
-        })
-
-      let bids = yield* probeRound(`User sent a new message: ${params.userText}`)
-
-      if (yield* isInterrupted()) return
-
-      let selection = scheduler.decide(bids)
-      if (selection.type === "idle" && needsHumanFallback(params.userText)) selection = scheduler.decideFallback()
-
-      // Emit BiddingCompleted with full scored-bid data
-      {
-        const arb = scheduler.lastArbitration
-        if (arb) {
-          const bidding = {
-            groupSessionID: params.groupSessionID,
-            roundNum: scheduler.state.round,
-            state: "decided" as const,
-            winnerAgentID:
-              selection.type === "winner" || selection.type === "human_fallback" ? selection.agentId : arb.winnerId ?? undefined,
-            bids: arb.scored.map((s) => ({
-              agentId: s.agentId,
-              state: "completed" as const,
-              level: s.bid.level,
-              type: s.bid.type,
-              addressedAs: s.bid.addressedAs,
-              reason: s.bid.reason,
-              score: s.score,
-              eligible: s.eligible,
-            })),
+          return {
+            decisions,
+            complete: (fallbackAgentID?: string) =>
+              Effect.gen(function* () {
+                const bidding = {
+                  ...(yield* Ref.get(record)),
+                  state: "decided" as const,
+                  winnerAgentID: fallbackAgentID,
+                  bids: decisions.map((decision) => ({
+                    agentId: decision.agentId,
+                    state: "completed" as const,
+                    level: decision.bid.level,
+                    type: decision.bid.type,
+                    addressedAs: decision.bid.addressedAs,
+                    reason: decision.bid.reason,
+                    eligible: shouldRespond(decision.bid),
+                  })),
+                }
+                yield* Effect.sync(() => persistBidding(bidding))
+                yield* bus.publish(Event.BiddingCompleted, {
+                  groupSessionID: bidding.groupSessionID,
+                  roundNum: bidding.roundNum,
+                  winnerId: fallbackAgentID ?? null,
+                  bids: bidding.bids,
+                })
+              }),
           }
-          yield* Effect.sync(() => persistBidding(bidding))
-          yield* bus.publish(Event.BiddingCompleted, {
-            groupSessionID: bidding.groupSessionID,
-            roundNum: bidding.roundNum,
-            winnerId: bidding.winnerAgentID ?? null,
-            bids: bidding.bids,
-          })
-        }
-      }
-
-      // Re-bid loop
-      while (true) {
-        if (yield* isInterrupted()) return
-        if (selection.type === "yielded") {
-          yield* bus.publish(Event.TurnYielded, {
-            groupSessionID: params.groupSessionID,
-            consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
-            reason: "budget_K_reached",
-          })
-          yield* bus.publish(Event.RoundComplete, {
-            groupSessionID: params.groupSessionID,
-            roundNum: params.roundNum,
-          })
-          return
-        }
-
-        if (selection.type === "idle") {
-          yield* bus.publish(Event.TurnYielded, {
-            groupSessionID: params.groupSessionID,
-            consecutiveAgentTurns: scheduler.state.consecutiveAgentTurns,
-            reason: selection.reason === "none_over_threshold" ? "no_bid_over_threshold" : "all_pass",
-          })
-          yield* bus.publish(Event.RoundComplete, {
-            groupSessionID: params.groupSessionID,
-            roundNum: params.roundNum,
-          })
-          return
-        }
-
-        if (selection.type === "winner" || selection.type === "human_fallback") {
-          const speakerId = selection.agentId
-
-          const member = params.info.members.find((m) => m.companyAgentID === speakerId)
-          if (!member) break
-
+        })
+      const runRuntime = (member: MemberInfo, transcript: string, triggerMessage: string) =>
+        Effect.gen(function* () {
+          const speakerId = member.companyAgentID
           const agentInfo = agentInfos[speakerId]
-          const speakerName = agentInfo?.name ?? speakerId
-
-          yield* bus.publish(Event.AgentStarted, {
-            groupSessionID: params.groupSessionID,
-            roundNum: params.roundNum,
-            sessionID: member.sessionID,
-            companyAgentID: speakerId,
-          })
-
           const turn = yield* AgentTurn.prepare({
             agentID: speakerId as CompanyAgentID,
-            transcript: yield* Effect.sync(() => buildGroupContext(params.groupSessionID)),
-            message: params.userText,
+            transcript,
+            message: triggerMessage,
             companyAgents: companyAgentSvc,
             config,
           })
-
-          const result = yield* agentInfo
+          return yield* agentInfo
             ? Effect.gen(function* () {
                 const started = yield* agentRunSupervisor.start({
                   agentID: speakerId,
                   runtime: turn.runtime,
                   lifecycle: "on_demand",
                   permissionMode: "read_only",
-                  model:
-                    turn.model ??
-                    (turn.runtime === "pi" && companyModel ? `${companyModel.providerID}/${companyModel.modelID}` : undefined),
+                  model: turn.brain.big,
                   cwd: Instance.worktree,
                   prompt: turn.prompt,
                   capabilityPacks: [],
@@ -1014,80 +928,158 @@ export const layer: Layer.Layer<
                       }),
                   }),
                 )
-
-          yield* Effect.sync(() =>
-            insertGroupMessage({
-              groupSessionID: params.groupSessionID,
-              roundNum: params.roundNum,
-              role: "agent",
-              companyAgentID: speakerId as CompanyAgentID,
-              sessionID: member.sessionID as SessionID,
-              content: result.content,
-              statusSummary: result.statusSummary,
-              runtimeMessageID: result.runtimeMessageID,
-              agentRunID: result.agentRunID,
-            }),
+        })
+      const tryPublish = (input: {
+        member: MemberInfo
+        baselineMessageID: string
+        result: {
+          content: string
+          runtimeMessageID?: MessageID
+          agentRunID?: string
+          statusSummary: "done" | "error" | "interrupted"
+        }
+      }) =>
+        publishLock.withPermits(1)(
+          Effect.gen(function* () {
+            const current = yield* roundMessages()
+            const latest = current.at(-1)
+            const publishedTurns = current.filter((message) => message.role === "agent").length
+            if (!latest || !canPublish({
+              agentID: input.member.companyAgentID,
+              lastSpeakerID: latest.role === "agent" ? latest.companyAgentID : undefined,
+              publishedTurns,
+            })) return { type: "skipped" as const }
+            if (latest.id !== input.baselineMessageID) return { type: "stale" as const, latest }
+            if (input.result.statusSummary === "done" && !input.result.content.trim()) return { type: "skipped" as const }
+            yield* Effect.sync(() =>
+              insertGroupMessage({
+                groupSessionID: params.groupSessionID,
+                roundNum: params.roundNum,
+                role: "agent",
+                companyAgentID: input.member.companyAgentID as CompanyAgentID,
+                sessionID: input.member.sessionID as SessionID,
+                content: input.result.content,
+                statusSummary: input.result.statusSummary,
+                runtimeMessageID: input.result.runtimeMessageID,
+                agentRunID: input.result.agentRunID,
+              })
+            )
+            return { type: "published" as const }
+          }),
+        )
+      const respond = (member: MemberInfo, latest: GroupMessage) =>
+        Effect.gen(function* () {
+          yield* bus.publish(Event.AgentStarted, {
+            groupSessionID: params.groupSessionID,
+            roundNum: params.roundNum,
+            sessionID: member.sessionID,
+            companyAgentID: member.companyAgentID,
+          })
+          const first = yield* runRuntime(
+            member,
+            yield* Effect.sync(() => buildGroupContext(params.groupSessionID)),
+            latest.content,
           )
-
+          const firstPublish = yield* tryPublish({ member, baselineMessageID: latest.id, result: first })
+          const outcome = firstPublish.type !== "stale" || first.statusSummary !== "done"
+            ? { published: firstPublish.type === "published", statusSummary: first.statusSummary }
+            : yield* Effect.gen(function* () {
+                yield* updateSeen(member.companyAgentID, firstPublish.latest.id)
+                const agent = agentInfos[member.companyAgentID]
+                const bid = yield* probeOne(probeCtx, {
+                  persona: {
+                    name: agent?.name ?? member.companyAgentID,
+                    role: member.companyAgentID,
+                    description: agent?.description ?? "",
+                  },
+                  lastEvent: eventText(firstPublish.latest),
+                  transcript: yield* Effect.sync(() => buildGroupContext(params.groupSessionID)),
+                  members: Object.values(agentInfos).map((item) => ({ name: item.name, role: item.description ?? item.name })),
+                  groupSessionID: params.groupSessionID,
+                  brain: agent?.brain,
+                })
+                if (!shouldRespond(bid) || (yield* isInterrupted()))
+                  return { published: false, statusSummary: "done" as const }
+                const second = yield* runRuntime(
+                  member,
+                  yield* Effect.sync(() => buildGroupContext(params.groupSessionID)),
+                  firstPublish.latest.content,
+                )
+                const secondPublish = yield* tryPublish({
+                  member,
+                  baselineMessageID: firstPublish.latest.id,
+                  result: second,
+                })
+                return { published: secondPublish.type === "published", statusSummary: second.statusSummary }
+              })
           yield* bus.publish(Event.AgentCompleted, {
             groupSessionID: params.groupSessionID,
             roundNum: params.roundNum,
             sessionID: member.sessionID,
-            companyAgentID: speakerId,
-            statusSummary: result.statusSummary,
+            companyAgentID: member.companyAgentID,
+            statusSummary: outcome.statusSummary,
           })
-
+          return outcome
+        })
+      const finish = (reason: "budget_K_reached" | "all_pass" | "no_bid_over_threshold", turns: number) =>
+        Effect.gen(function* () {
+          yield* bus.publish(Event.TurnYielded, {
+            groupSessionID: params.groupSessionID,
+            consecutiveAgentTurns: turns,
+            reason,
+          })
+          yield* bus.publish(Event.RoundComplete, {
+            groupSessionID: params.groupSessionID,
+            roundNum: params.roundNum,
+          })
+        })
+      const wake = (allowHumanFallback: boolean): Effect.Effect<void> =>
+        Effect.gen(function* () {
           if (yield* isInterrupted()) return
-          if (result.statusSummary !== "done") {
-            yield* bus.publish(Event.RoundComplete, {
-              groupSessionID: params.groupSessionID,
-              roundNum: params.roundNum,
-            })
-            return
-          }
-          scheduler.afterSpeak(speakerId)
-          speakersThisTurn.add(speakerId)
-
-          bids = yield* probeRound(`Agent ${speakerName} just spoke in the shared discussion.`)
+          const current = yield* roundMessages()
+          const latest = current.at(-1)
+          const publishedTurns = current.filter((message) => message.role === "agent").length
+          if (!latest) return yield* finish("all_pass", publishedTurns)
+          if (publishedTurns >= MAX_AGENT_TURNS) return yield* finish("budget_K_reached", publishedTurns)
+          const seen = yield* Ref.get(seenMessages)
+          const wakingMembers = params.info.members.filter(
+            (member) => member.companyAgentID !== latest.companyAgentID && seen.get(member.companyAgentID) !== latest.id,
+          )
+          if (!wakingMembers.length) return yield* finish("all_pass", publishedTurns)
+          const probed = yield* probeMembers(wakingMembers, latest)
           if (yield* isInterrupted()) return
-          selection = scheduler.decide(bids)
-
-          // Emit BiddingCompleted for the re-bid round
-          {
-            const arb = scheduler.lastArbitration
-            if (arb) {
-              const bidding = {
-                groupSessionID: params.groupSessionID,
-                roundNum: scheduler.state.round,
-                state: "decided" as const,
-                winnerAgentID: arb.winnerId ?? undefined,
-                bids: arb.scored.map((s) => ({
-                  agentId: s.agentId,
-                  state: "completed" as const,
-                  level: s.bid.level,
-                  type: s.bid.type,
-                  addressedAs: s.bid.addressedAs,
-                  reason: s.bid.reason,
-                  score: s.score,
-                  eligible: s.eligible,
-                })),
-              }
-              yield* Effect.sync(() => persistBidding(bidding))
-              yield* bus.publish(Event.BiddingCompleted, {
-                groupSessionID: bidding.groupSessionID,
-                roundNum: bidding.roundNum,
-                winnerId: bidding.winnerAgentID ?? null,
-                bids: bidding.bids,
-              })
-            }
-          }
-        }
-      }
-
-      yield* bus.publish(Event.RoundComplete, {
-        groupSessionID: params.groupSessionID,
-        roundNum: params.roundNum,
-      })
+          const naturalAgentIDs = probed.decisions
+            .filter((decision) => shouldRespond(decision.bid))
+            .map((decision) => decision.agentId)
+          const fallbackAgentID =
+            naturalAgentIDs.length === 0 && allowHumanFallback && publishedTurns === 0 && needsHumanFallback(params.userText)
+              ? pickFallbackAgent(
+                  wakingMembers.map((member) => member.companyAgentID),
+                  probed.decisions,
+                  latest.role === "agent" ? latest.companyAgentID : undefined,
+                )
+              : undefined
+          yield* probed.complete(fallbackAgentID)
+          const respondingAgentIDs = naturalAgentIDs.length ? naturalAgentIDs : fallbackAgentID ? [fallbackAgentID] : []
+          if (!respondingAgentIDs.length)
+            return yield* finish(idleReason(probed.decisions.map((decision) => decision.bid)), publishedTurns)
+          const outcomes = yield* Effect.forEach(
+            respondingAgentIDs.flatMap((agentID) => {
+              const member = wakingMembers.find((candidate) => candidate.companyAgentID === agentID)
+              return member ? [member] : []
+            }),
+            (member) => respond(member, latest),
+            { concurrency: MEMBER_CONCURRENCY },
+          )
+          if (yield* isInterrupted()) return
+          const after = yield* roundMessages()
+          const afterTurns = after.filter((message) => message.role === "agent").length
+          if (afterTurns >= MAX_AGENT_TURNS) return yield* finish("budget_K_reached", afterTurns)
+          if (outcomes.some((outcome) => outcome.published) || after.at(-1)?.id !== latest.id)
+            return yield* wake(false)
+          return yield* finish(idleReason(probed.decisions.map((decision) => decision.bid)), afterTurns)
+        })
+      yield* wake(true)
     })
 
     const startScheduler = Effect.fn("GroupSession.startScheduler")(function* (input: {
@@ -1095,7 +1087,6 @@ export const layer: Layer.Layer<
       roundNum: number
       groupSessionID: GroupSessionID
       userText: string
-      priorAgentMessages?: GroupMessage[]
     }) {
       yield* Ref.update(interruptedSchedulers, (s) => {
         const next = new Set(s)
@@ -1103,7 +1094,7 @@ export const layer: Layer.Layer<
         return next
       })
       yield* Ref.update(activeSchedulers, (s) => new Set(s).add(input.groupSessionID))
-      yield* runBiddingLoop(input).pipe(
+      yield* runConversationLoop(input).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
             yield* Ref.update(activeSchedulers, (s) => {
@@ -1151,7 +1142,6 @@ export const layer: Layer.Layer<
         roundNum: input.roundNum,
         groupSessionID: input.groupSessionID,
         userText: userMessage.content,
-        priorAgentMessages: roundMessages.filter((message) => message.role === "agent"),
       })
     })
 

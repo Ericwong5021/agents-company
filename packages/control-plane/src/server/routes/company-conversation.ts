@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import z from "zod"
 import { ProjectExecutionStrategy, SeedPolicyFacts } from "@agents-company/shared/project-orchestration"
 import { AppRuntime } from "@/effect/app-runtime"
-import { Conversation, ConversationRuntime } from "@/conversation"
+import { Conversation, ConversationRoomRuntime } from "@/conversation"
 import { ConversationCommand } from "@/conversation/command"
 import { RootNeedTable } from "@/conversation/conversation.sql"
 import { IntentOverride } from "@/conversation/intent"
@@ -23,6 +23,9 @@ import {
 import {
   BoardMessagesDisabled,
   ChannelID,
+  ChannelMessageKind,
+  ChannelMessageID,
+  ChannelPoll,
   ChannelNotVisible,
   ChannelNotWritable,
   CompanyNotFound,
@@ -90,6 +93,8 @@ const ChannelSendInput = z
   .object({
     request_id: z.string().uuid(),
     body: z.string().trim().min(1).max(20_000),
+    kind: ChannelMessageKind.default("text"),
+    poll: ChannelPoll.optional(),
     reply_to: z.string().startsWith("cmsg_").optional(),
     referenced_thread_id: ConversationThreadID.optional(),
     mentions: z.array(ConversationMention).max(20).default([]),
@@ -112,6 +117,10 @@ const PageQuery = z
     limit: z.coerce.number().int().min(1).max(100).optional(),
   })
   .strict()
+
+const ReactionInput = z.object({ emoji: z.string().trim().min(1).max(16) }).strict()
+const PollVoteInput = z.object({ option_id: z.string().trim().min(1).max(100) }).strict()
+const ReadStateInput = z.object({ sequence: z.number().int().nonnegative() }).strict()
 
 const localPrincipal = () => ({ kind: "user" as const, id: LOCAL_USER_ID })
 
@@ -230,6 +239,8 @@ export const CompanyChannelRoutes = lazy(() =>
               principal: localPrincipal(),
               requestID: input.request_id,
               body: input.body,
+              kind: input.kind,
+              poll: input.poll,
               replyToID: input.reply_to,
               referencedThreadID: input.referenced_thread_id,
               mentions: input.mentions,
@@ -239,6 +250,70 @@ export const CompanyChannelRoutes = lazy(() =>
           ),
         )
         return c.json(accepted, 202)
+      },
+    )
+    .post(
+      "/:channelID/messages/:messageID/reactions",
+      describeRoute({
+        operationId: "company.channelReactionToggle",
+        summary: "Toggle a reaction on a channel message",
+        responses: { 200: { description: "Updated message" }, 400: badRequest, 403: forbidden, 500: internalError },
+      }),
+      validator("param", z.object({ channelID: ChannelID, messageID: ChannelMessageID }).strict(), productValidationHook),
+      validator("query", CompanyQuery, productValidationHook),
+      validator("json", ReactionInput, productValidationHook),
+      async (c) => {
+        const { channelID, messageID } = c.req.valid("param")
+        const { company_id } = c.req.valid("query")
+        const { emoji } = c.req.valid("json")
+        return c.json(await AppRuntime.runPromise(
+          Conversation.Service.use((service) =>
+            service.toggleReaction({ companyID: company_id, channelID, messageID, principal: localPrincipal(), emoji }),
+          ),
+        ))
+      },
+    )
+    .post(
+      "/:channelID/messages/:messageID/votes",
+      describeRoute({
+        operationId: "company.channelPollVote",
+        summary: "Toggle a vote on a channel poll",
+        responses: { 200: { description: "Updated message" }, 400: badRequest, 403: forbidden, 500: internalError },
+      }),
+      validator("param", z.object({ channelID: ChannelID, messageID: ChannelMessageID }).strict(), productValidationHook),
+      validator("query", CompanyQuery, productValidationHook),
+      validator("json", PollVoteInput, productValidationHook),
+      async (c) => {
+        const { channelID, messageID } = c.req.valid("param")
+        const { company_id } = c.req.valid("query")
+        const { option_id } = c.req.valid("json")
+        return c.json(await AppRuntime.runPromise(
+          Conversation.Service.use((service) =>
+            service.votePoll({ companyID: company_id, channelID, messageID, principal: localPrincipal(), optionID: option_id }),
+          ),
+        ))
+      },
+    )
+    .post(
+      "/:channelID/read-state",
+      describeRoute({
+        operationId: "company.channelReadState",
+        summary: "Advance the local user's read watermark",
+        responses: { 204: { description: "Read watermark advanced" }, 400: badRequest, 403: forbidden, 500: internalError },
+      }),
+      validator("param", z.object({ channelID: ChannelID }).strict(), productValidationHook),
+      validator("query", CompanyQuery, productValidationHook),
+      validator("json", ReadStateInput, productValidationHook),
+      async (c) => {
+        const { channelID } = c.req.valid("param")
+        const { company_id } = c.req.valid("query")
+        const { sequence } = c.req.valid("json")
+        await AppRuntime.runPromise(
+          Conversation.Service.use((service) =>
+            service.markRead({ companyID: company_id, channelID, principal: localPrincipal(), sequence }),
+          ),
+        )
+        return c.body(null, 204)
       },
     ),
 )
@@ -358,11 +433,12 @@ export const CompanyThreadRoutes = lazy(() =>
         const { company_id } = c.req.valid("query")
         const input = c.req.valid("json")
         if (input.kind === "interrupt") {
-          const thread = await AppRuntime.runPromise(
-            ConversationRuntime.Service.use((service) =>
-              service.interruptThread({ companyID: company_id, threadID, principal: localPrincipal() }),
-            ),
-          )
+          const thread = await AppRuntime.runPromise(Effect.gen(function* () {
+            const conversation = yield* Conversation.Service
+            yield* conversation.getThread({ companyID: company_id, threadID, principal: localPrincipal() })
+            yield* ConversationRoomRuntime.Service.use((service) => service.interruptThread({ companyID: company_id, threadID }))
+            return yield* conversation.getThread({ companyID: company_id, threadID, principal: localPrincipal() })
+          }))
           return c.json(thread)
         }
         const result = await AppRuntime.runPromise(

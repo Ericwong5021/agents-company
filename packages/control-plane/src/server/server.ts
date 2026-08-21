@@ -25,13 +25,14 @@ import { UIRoutes } from "./routes/ui"
 import { GlobalHealthRoutes, GlobalRoutes } from "./routes/global"
 import { CompanyRoutes } from "./routes/company"
 import { CompanyRecruitmentRoutes } from "./routes/company-recruitment"
+import { CompanyOperationRoutes } from "./routes/company-operation"
 import { LocalAuthPublicRoutes, LocalAuthRoutes } from "./routes/local-auth"
 import { WorkspaceRouterMiddleware } from "./workspace"
 import { InstanceMiddleware } from "./routes/instance/middleware"
 import { WorkspaceRoutes } from "./routes/control/workspace"
 import { ExperienceRoutes } from "./routes/instance/experience"
 import { AgentRunSupervisor } from "@/agent-run/supervisor"
-import { ConversationRuntime } from "@/conversation/runtime"
+import { ConversationRoomRuntime } from "@/conversation/room-runtime"
 import { AppRuntime } from "@/effect/app-runtime"
 import { CompanyOutcomeSignal, CompanyProjectRecovery } from "@/company-project"
 import { CompanyCommons } from "@/company-commons"
@@ -90,6 +91,7 @@ export function create(opts: CreateOptions = {}) {
   const protectedApp = new Hono<ServerEnv>()
     .use(AuthMiddleware(auth))
     .route("/company/recruitment", CompanyRecruitmentRoutes())
+    .route("/company/operations", CompanyOperationRoutes())
     .route("/company", CompanyRoutes())
     .route("/global", GlobalRoutes())
     .route("/local-auth", LocalAuthRoutes())
@@ -171,7 +173,7 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   const auth = listenAuth(opts)
   const built = create({ cors: opts.cors, auth })
   await AppRuntime.runPromise(DecisionLedger.Service.use((ledger) => ledger.recover()))
-  await AppRuntime.runPromise(ConversationRuntime.Service.use((runtime) => runtime.recover()).pipe(Effect.ignore))
+  await AppRuntime.runPromise(ConversationRoomRuntime.Service.use((runtime) => runtime.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(AgentRunSupervisor.Service.use((supervisor) => supervisor.recover()).pipe(Effect.ignore))
   await AppRuntime.runPromise(CompanyProjectRecovery.Service.use((recovery) => recovery.recover()))
   await AppRuntime.runPromise(CompanyOutcomeSignal.Service.use((outcomes) => outcomes.recover()))

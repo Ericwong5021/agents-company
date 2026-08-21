@@ -15,7 +15,10 @@ export type PrepareInput = {
 
 export type Prepared = {
   runtime: "pi" | "codex" | "claude-code"
-  model?: string
+  brain: {
+    big: string
+    small: string
+  }
   systemPrompt: string
   prompt: string
 }
@@ -36,7 +39,7 @@ export const prepare = Effect.fn("AgentTurn.prepare")(function* (input: PrepareI
     section("agent_instructions", agent.instruct),
     section("agent_relationships", agent.relationships),
     section("agent_workspace_context", workspace?.standingSummary),
-    "Speak naturally as this person. Your responsibilities guide what you notice and decide; they do not require a fixed response format. A brief greeting, acknowledgement, or follow-up question is useful when the user opens a casual conversation.",
+    "Speak naturally as this person in a live group conversation. Your responsibilities guide what you notice and decide; they do not require a fixed response format. Prefer one concise message that directly advances the latest point.",
   ]
     .filter(Boolean)
     .join("\n\n")
@@ -44,12 +47,15 @@ export const prepare = Effect.fn("AgentTurn.prepare")(function* (input: PrepareI
   return {
     runtime:
       agent.preferred_runtime === "pi" || agent.preferred_runtime === "claude-code" ? agent.preferred_runtime : "codex",
-    model: agent.model,
+    brain: {
+      big: agent.model,
+      small: agent.small_model,
+    },
     systemPrompt,
     prompt: [
       input.transcript,
       `<current_message>\n${input.message}\n</current_message>`,
-      "Respond only if you have something useful to add. Do not repeat the transcript or invent a formal review unless the user asks for one.",
+      "Respond to the latest message in context. Do not repeat the transcript, summarize everyone, announce your role, or invent a formal review unless the conversation requires one.",
     ]
       .filter(Boolean)
       .join("\n\n"),

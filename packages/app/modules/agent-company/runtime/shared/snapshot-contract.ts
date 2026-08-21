@@ -139,6 +139,14 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
     const responsibilities = Array.isArray(entry.agent.responsibilities)
       ? entry.agent.responsibilities.flatMap((item) => text(item) ?? [])
       : undefined
+    const brain = isRecord(entry.agent.brain)
+      && text(entry.agent.brain.big_model)
+      && text(entry.agent.brain.small_model)
+      ? {
+          bigModel: text(entry.agent.brain.big_model)!,
+          smallModel: text(entry.agent.brain.small_model)!,
+        }
+      : undefined
     const collaborators = Array.isArray(entry.collaborators)
       ? entry.collaborators.flatMap((item) => text(item) ?? [])
       : undefined
@@ -160,6 +168,7 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
       || !workload
       || since === undefined
       || !responsibilities
+      || !brain
       || !collaborators
       || !["online", "offline"].includes(String(entry.presence))
     ) return
@@ -169,6 +178,7 @@ export function parseAgents(value: unknown): Parsed<CompanyAgent[]> {
       role: text(entry.agent.role),
       department: text(entry.agent.department),
       responsibilities,
+      brain,
       employment,
       attention,
       activity,
@@ -224,15 +234,73 @@ export function parseMessages(value: unknown, agents: CompanyAgent[]): Parsed<Co
     if (!isRecord(entry) || !isRecord(entry.author) || !isRecord(entry.time)) return
     const id = text(entry.id)
     const authorID = text(entry.author.id)
+    const sequence = number(entry.sequence)
     const body = text(entry.body)
     const created = number(entry.time.created)
     const createdAt = created === undefined ? undefined : new Date(created)
     const kind = ["agent", "user", "system"].includes(String(entry.author.kind))
       ? entry.author.kind as "agent" | "user" | "system"
       : undefined
+    const messageKind = ["text", "poll", "system"].includes(String(entry.kind))
+      ? entry.kind as CompanyMessage["messageKind"]
+      : undefined
+    const reactions = Array.isArray(entry.reactions)
+      ? entry.reactions.flatMap((reaction) =>
+          isRecord(reaction)
+          && text(reaction.emoji)
+          && number(reaction.count) !== undefined
+          && typeof reaction.reacted === "boolean"
+            ? [{ emoji: text(reaction.emoji)!, count: number(reaction.count)!, reacted: reaction.reacted }]
+            : [])
+      : []
+    const pollVotes = Array.isArray(entry.pollVotes)
+      ? entry.pollVotes.flatMap((vote) =>
+          isRecord(vote)
+          && text(vote.optionID)
+          && number(vote.count) !== undefined
+          && typeof vote.selected === "boolean"
+            ? [{ optionID: text(vote.optionID)!, count: number(vote.count)!, selected: vote.selected }]
+            : [])
+      : []
+    const deliveries = Array.isArray(entry.deliveries)
+      ? entry.deliveries.flatMap((delivery) =>
+          isRecord(delivery) && text(delivery.agentID) && text(delivery.status)
+            ? [{ agentID: text(delivery.agentID)!, status: text(delivery.status)!, reason: text(delivery.reason) }]
+            : [])
+      : []
+    const mentions = Array.isArray(entry.mentions)
+      ? entry.mentions.flatMap<{ kind: "agent" | "role"; value: string }>((mention) => {
+          if (!isRecord(mention)) return []
+          if (mention.kind === "agent" && text(mention.agent_id)) return [{ kind: "agent" as const, value: text(mention.agent_id)! }]
+          if (mention.kind === "role" && text(mention.role)) return [{ kind: "role" as const, value: text(mention.role)! }]
+          return []
+        })
+      : []
+    const resources = Array.isArray(entry.resources)
+      ? entry.resources.flatMap((resource) => {
+          if (!isRecord(resource) || !text(resource.kind)) return []
+          const label = text(resource.label) ?? text(resource.name) ?? text(resource.url) ?? text(resource.path)
+          return label ? [{ kind: text(resource.kind)!, label }] : []
+        })
+      : []
+    const poll = isRecord(entry.poll)
+      && text(entry.poll.question)
+      && Array.isArray(entry.poll.options)
+      && typeof entry.poll.multiple === "boolean"
+      ? {
+          question: text(entry.poll.question)!,
+          options: entry.poll.options.flatMap((option) =>
+            isRecord(option) && text(option.id) && text(option.label)
+              ? [{ id: text(option.id)!, label: text(option.label)! }]
+              : []),
+          multiple: entry.poll.multiple,
+          closedAt: number(entry.poll.closed_at),
+        }
+      : undefined
     if (
       !id
       || !authorID
+      || sequence === undefined
       || !body
       || created === undefined
       || !Number.isInteger(created)
@@ -240,17 +308,28 @@ export function parseMessages(value: unknown, agents: CompanyAgent[]): Parsed<Co
       || !createdAt
       || Number.isNaN(createdAt.getTime())
       || !kind
+      || !messageKind
     ) return
     const author = agents.find((agent) => agent.id === authorID)
     if (kind === "agent" && !author) return
     return {
       id,
+      sequence,
       author: author?.name ?? (kind === "user" ? "你" : "系统"),
+      authorID,
       role: author?.role ?? kind,
       body,
       threadID: text(entry.sourceThreadID),
+      replyToID: text(entry.replyToID),
+      mentions,
+      resources,
       time: new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(createdAt),
       kind,
+      messageKind,
+      reactions,
+      poll,
+      pollVotes,
+      deliveries,
     }
   })
   if (messages.some((entry) => entry === undefined)) return { ok: false }

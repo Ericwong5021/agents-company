@@ -50,6 +50,7 @@ const Input = z
         content: z.string().max(200_000),
       }).strict(),
     ])).max(8).default([]),
+    reply_to: z.string().startsWith("cmsg_").optional(),
     intent_override: z.enum(["execute", "discuss", "project_followup"]).optional(),
   })
   .strict()
@@ -106,6 +107,7 @@ export default defineAgentCompanyHandler(async (event) => {
         body: parsed.data.body,
         mentions: parsed.data.mentions,
         resources: parsed.data.resources,
+        reply_to: parsed.data.reply_to,
         intent_override: parsed.data.intent_override,
       },
     }),

@@ -92,7 +92,7 @@ beforeEach(async () => {
 afterEach(resetDatabase)
 
 describe.serial("M2 board message intake", () => {
-  test.serial("persists a board root need, thread, members, message, and queued run in one accepted result", async () => {
+  test.serial("persists a board root need, thread, members, and durable room message without a centralized run", async () => {
     const accepted = await run((conversation) =>
       conversation.sendMessage(
         input({
@@ -114,12 +114,11 @@ describe.serial("M2 board message intake", () => {
     expect(accepted.replayed).toBe(false)
     expect(accepted.rootNeedID).toBeString()
     expect(accepted.threadID).toBeString()
-    expect(accepted.runID).toBeString()
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(ConversationThreadTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(ConversationThreadMemberTable).all())).toHaveLength(4)
     expect(Database.use((db) => db.select().from(ChannelMessageTable).all())).toHaveLength(1)
-    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(1)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
     expect(Database.use((db) => db.select().from(ChannelMessageTable).get()?.mentions)).toEqual([
       { kind: "role", role: "ceo" },
     ])
@@ -148,10 +147,9 @@ describe.serial("M2 board message intake", () => {
     )
     expect(reply.rootNeedID).toBe(first.rootNeedID)
     expect(reply.threadID).toBe(first.threadID)
-    expect(reply.runID).not.toBe(first.runID)
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(ConversationThreadTable).all())).toHaveLength(1)
-    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(2)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
   })
 
   test.serial("promotes one low-confidence board message to an executable goal without duplicating it", async () => {
@@ -160,7 +158,6 @@ describe.serial("M2 board message intake", () => {
     expect(discussion).toMatchObject({
       rootNeedID: undefined,
       threadID: undefined,
-      runID: undefined,
       autoProjected: false,
       needsIntentConfirmation: true,
     })
@@ -177,10 +174,9 @@ describe.serial("M2 board message intake", () => {
     })
     expect(promoted.rootNeedID).toBeString()
     expect(promoted.threadID).toBeString()
-    expect(promoted.runID).toBeString()
     expect(Database.use((db) => db.select().from(ChannelMessageTable).all())).toHaveLength(1)
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(1)
-    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(1)
+    expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
   })
 
   test.serial("rolls back the root need, thread, and run when the final message write fails", async () => {
@@ -205,7 +201,9 @@ describe.serial("M2 board message intake", () => {
         }),
       ),
     )
-    expect(companyMessage).toMatchObject({ rootNeedID: undefined, threadID: undefined, runID: undefined })
+    expect(companyMessage.rootNeedID).toBeUndefined()
+    expect(companyMessage.threadID).toBeUndefined()
+    expect(companyMessage.runID).toBeUndefined()
 
     const project = await run((conversation) =>
       conversation.ensureProjectChannel({
@@ -223,7 +221,9 @@ describe.serial("M2 board message intake", () => {
         }),
       ),
     )
-    expect(projectMessage).toMatchObject({ rootNeedID: undefined, threadID: undefined, runID: undefined })
+    expect(projectMessage.rootNeedID).toBeUndefined()
+    expect(projectMessage.threadID).toBeUndefined()
+    expect(projectMessage.runID).toBeUndefined()
     expect(Database.use((db) => db.select().from(RootNeedTable).all())).toHaveLength(0)
     expect(Database.use((db) => db.select().from(ConversationRunTable).all())).toHaveLength(0)
   })

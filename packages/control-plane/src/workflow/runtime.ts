@@ -290,6 +290,18 @@ export const layer = Layer.effect(
             ),
           )
 
+    const resolveWorkflowAgentModel = (
+      opts: AgentOpts,
+      fallback: { providerID: ProviderID; modelID: ModelID } | undefined,
+      warned: Set<string>,
+    ) =>
+      Effect.gen(function* () {
+        const brain = opts.companyAgentID && companyAgents
+          ? yield* companyAgents.getBrain(opts.companyAgentID)
+          : undefined
+        return yield* resolveAgentModel(opts.model ?? brain?.big, fallback, warned)
+      })
+
     // Process-wide concurrency ceiling: ONE semaphore shared by every run
     // (including nested children), so tree-wide concurrent agents can never
     // exceed it regardless of nesting depth. It is a PURE process/config property,
@@ -1094,7 +1106,7 @@ export const layer = Layer.effect(
                 // resolved struct, so resume keys stay stable across config changes).
                 // Never-throws: an unknown group falls back to input.model.
                 const resolvedModel = await bridge.promise(
-                  resolveAgentModel(o.model, input.model, entry.warnedModelRefs),
+                  resolveWorkflowAgentModel(o, input.model, entry.warnedModelRefs),
                 )
                 if (useRuntime) return spawnRuntime(promptStr, o, resolvedModel)
                 const actor = spawnRef.current
@@ -1127,7 +1139,7 @@ export const layer = Layer.effect(
             entry.agentCount++
             // Resolve the guest's model ref host-side (isolated agents aren't
             // journaled, so there's no key to keep stable here). Never-throws.
-            const resolvedModel = await bridge.promise(resolveAgentModel(o.model, input.model, entry.warnedModelRefs))
+            const resolvedModel = await bridge.promise(resolveWorkflowAgentModel(o, input.model, entry.warnedModelRefs))
             if (useRuntime) return spawnRuntime(promptStr, o, resolvedModel)
             const actor = spawnRef.current
             if (!actor) throw new Error("Actor service unavailable")

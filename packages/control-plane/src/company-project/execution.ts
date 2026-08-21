@@ -822,7 +822,7 @@ const acceptanceVerification = (item: WorkItem, summary: string, submission: unk
       ? ["定价或成本公式包含多项加减，但没有用括号明确运算顺序"]
       : []),
     ...(symbolicFormulaLines.length &&
-    !/变量[^\n。；]{0,40}(?:定义|说明|规则)|符号(?:定义|说明)|其中[：:]/.test(content)
+    !/变量(?:[^\n。；]{0,40}(?:定义|说明|规则)|\s*[：:])|符号(?:定义|说明)|其中[：:]/.test(content)
       ? ["定价或成本公式使用了符号变量，但没有在同一成果中定义变量与单位"]
       : []),
     ...(quantitative &&
@@ -1206,6 +1206,9 @@ const workerScript = (
             : undefined,
           item.error
             ? `上一轮系统核验未通过：${item.error}。本次必须直接修正该问题并重新逐项核对，不能只解释或复述失败原因。`
+            : undefined,
+          item.work_type === "decision"
+            ? "Decision 结构硬约束：submission.recommendedId 必须逐字等于 submission.approaches 中某个非空 id；即使结论尚待后续研究，也必须从已列候选中给出当前证据下的暂定推荐，并在 reasoning 中写明验证门槛和可逆条件，不能另填 pending、unknown 或候选列表外的值。"
             : undefined,
           reviewFeedback
             ? `上一轮独立复核要求返工：${JSON.stringify(reviewFeedback)}。必须逐条回应 findings，并提交修正后的实际证据。`
@@ -1935,7 +1938,12 @@ const serviceLayer = Layer.effect(
             const bashArgs = z
               .object({ command: z.string(), args: z.array(z.string()).default([]) })
               .safeParse(start.payload.args)
-            const bashTokens = bashArgs.success ? bashArgs.data.command.trim().split(/\s+/) : []
+            const bashTokens = bashArgs.success
+              ? bashArgs.data.command
+                  .trim()
+                  .split(/\s*(?:&&|\|\||;|\n)\s*/)
+                  .flatMap((command) => command.trim().split(/\s+/))
+              : []
             const bashCommand = path.basename(bashTokens[0] ?? "")
             const normalizedBashArgs = bashArgs?.success
               ? bashArgs.data.args.length
@@ -1943,7 +1951,7 @@ const serviceLayer = Layer.effect(
                 : bashTokens.slice(1)
               : []
             const mechanical = start.payload.toolName === "bash" && mechanicalReviewerTools.has(bashCommand)
-            const mechanicalPaths =
+            const mechanicalPaths = (
               bashCommand === "jq"
                 ? normalizedBashArgs.filter((arg) => !arg.startsWith("-")).slice(1)
                 : bashCommand === "shasum"
@@ -1952,6 +1960,7 @@ const serviceLayer = Layer.effect(
                         !arg.startsWith("-") && !["-a", "--algorithm"].includes(values[index - 1] ?? ""),
                     )
                   : normalizedBashArgs.filter((arg) => !arg.startsWith("-"))
+            ).filter((candidate) => !["&&", "||", ";", "|"].includes(candidate))
             const resolvedMechanicalPaths = mechanicalPaths.map((candidate) =>
               path.resolve(input.project.output_dir, candidate),
             )
@@ -1963,11 +1972,27 @@ const serviceLayer = Layer.effect(
                 (input.target_artifact.materialized_sha256 &&
                   result.includes(input.target_artifact.materialized_sha256))) &&
               (!["cmp", "diff"].includes(bashCommand) || new Set(resolvedMechanicalPaths).size > 1)
-            if (!exactRead && !exactGrep && !mechanicalRead) return []
+            const commandReads = bashArgs.success
+              ? bashArgs.data.command
+                  .trim()
+                  .split(/\s*(?:&&|\|\||;|\n)\s*/)
+                  .some((command) => {
+                    const tokens = command.trim().split(/\s+/)
+                    const executable = path.basename(tokens[0] ?? "")
+                    if (!["cat", "sed", "head", "tail", "grep", "rg", "jq"].includes(executable)) return false
+                    return tokens
+                      .slice(1)
+                      .filter((candidate) => !candidate.startsWith("-"))
+                      .some((candidate) => path.resolve(input.project.output_dir, candidate) === artifactPath)
+                  })
+              : false
+            const bashContentRead =
+              start.payload.toolName === "bash" && result.includes("exit code: 0") && commandReads
+            if (!exactRead && !exactGrep && !mechanicalRead && !bashContentRead) return []
             return [
               {
                 event_ids: [start.event.id, event.id],
-                content: exactRead || exactGrep,
+                content: exactRead || exactGrep || bashContentRead,
                 mechanical: exactGrep || mechanicalRead,
               },
             ]
@@ -4454,7 +4479,14 @@ const serviceLayer = Layer.effect(
       })
       const items = yield* projects.listWorkItems(project.id)
       const blocked = items.filter((item) => item.status === "blocked" || item.status === "failed")
-      if (!blocked.length) throw new Error(`Company project ${project.id} has no retryable work items`)
+      const strandedReviewers = items.filter((item) => {
+        if (item.kind !== "reviewer" || item.status !== "pending") return false
+        const parentID = reviewedWorkItemID(item)
+        const parent = parentID ? items.find((candidate) => candidate.id === parentID) : undefined
+        return parent?.status === "running" && ["pending", "running"].includes(parent.review_status)
+      })
+      if (!blocked.length && !strandedReviewers.length)
+        throw new Error(`Company project ${project.id} has no retryable work items`)
       yield* Effect.forEach(
         (yield* attention.list({ project_id: project.id, status: "open" })).filter(
           (record) =>
@@ -4469,18 +4501,36 @@ const serviceLayer = Layer.effect(
           }),
         { concurrency: 1, discard: true },
       )
-      const rejectedReviewers = blocked.flatMap((reviewer) => {
-        const workerID = reviewedWorkItemID(reviewer)
-        if (reviewer.kind !== "reviewer" || !workerID) return []
-        const worker = items.find((item) => item.id === workerID)
-        return worker?.status === "completed" && worker.review_status === "rejected" ? [{ worker, reviewer }] : []
-      })
+      const rejectedReviewers = [
+        ...blocked.flatMap((reviewer) => {
+          const workerID = reviewedWorkItemID(reviewer)
+          if (reviewer.kind !== "reviewer" || !workerID) return []
+          const worker = items.find((item) => item.id === workerID)
+          return worker?.status === "completed" && worker.review_status === "rejected" ? [{ worker, reviewer }] : []
+        }),
+        ...blocked.flatMap((worker) => {
+          if (worker.kind !== "worker" || worker.review_status !== "rejected") return []
+          const reviewer = items.find(
+            (item) => item.kind === "reviewer" && reviewedWorkItemID(item) === worker.id,
+          )
+          return reviewer && ["completed", "blocked", "failed"].includes(reviewer.status)
+            ? [{ worker, reviewer }]
+            : []
+        }),
+      ].filter(
+        (pair, index, pairs) =>
+          pairs.findIndex(
+            (candidate) => candidate.worker.id === pair.worker.id && candidate.reviewer.id === pair.reviewer.id,
+          ) === index,
+      )
       yield* Effect.forEach(
         rejectedReviewers,
         ({ worker, reviewer }) => projects.reworkRejectedReview({ worker_id: worker.id, reviewer_id: reviewer.id }),
         { discard: true },
       )
-      const reworkedReviewers = new Set(rejectedReviewers.map(({ reviewer }) => reviewer.id))
+      const reworkedReviewers = new Set(
+        rejectedReviewers.flatMap(({ worker, reviewer }) => [worker.id, reviewer.id]),
+      )
       yield* Effect.forEach(
         blocked.filter((item) => !reworkedReviewers.has(item.id)),
         (item) => projects.retryWorkItem(item.id),
