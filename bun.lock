@@ -26,7 +26,7 @@
     },
     "packages/app": {
       "name": "@agents-company/app",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "@agents-company/sdk": "workspace:*",
         "@agents-company/shared": "workspace:*",
@@ -79,7 +79,7 @@
     },
     "packages/control-plane": {
       "name": "@agents-company/control-plane",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "bin": {
         "agents": "./bin/agents",
       },
@@ -224,7 +224,7 @@
     },
     "packages/plugin": {
       "name": "@agents-company/plugin",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "@agents-company/sdk": "workspace:*",
         "effect": "catalog:",
@@ -239,7 +239,7 @@
     },
     "packages/relay": {
       "name": "@agents-company/relay",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "@agents-company/shared": "workspace:*",
         "hono": "catalog:",
@@ -262,7 +262,7 @@
     },
     "packages/sdk/js": {
       "name": "@agents-company/sdk",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "cross-spawn": "catalog:",
       },
@@ -278,7 +278,7 @@
     },
     "packages/shared": {
       "name": "@agents-company/shared",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "bin": {
         "control-plane": "./bin/control-plane",
       },
@@ -302,7 +302,7 @@
     },
     "packages/slack": {
       "name": "@agents-company/slack",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "@agents-company/sdk": "workspace:*",
         "@slack/bolt": "^3.17.1",
@@ -337,7 +337,7 @@
     },
     "packages/ui": {
       "name": "@agents-company/ui",
-      "version": "0.1.5-beta.1",
+      "version": "0.1.5-beta.2",
       "dependencies": {
         "@agents-company/sdk": "workspace:*",
         "@agents-company/shared": "workspace:*",
