@@ -313,7 +313,7 @@ async function runScenario(
 
         assert.deepEqual(
           (await page.getByRole("navigation", { name: "主导航" }).getByRole("link").evaluateAll(links =>
-            links.map(link => link.getAttribute("aria-label") ?? ""))
+            links.map(link => link.getAttribute("aria-label") ?? "")))
             .filter(label => navigation.some(item => item.label === label)),
           navigation.map(item => item.label),
         )
