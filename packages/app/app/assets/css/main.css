@@ -362,6 +362,15 @@ html.dark .shiki span {
   transform: scale(0.96);
 }
 
+.ac-shell-rail__navigation {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  align-items: center;
+  flex-direction: column;
+}
+
 .ac-shell-rail__nav {
   display: flex;
   width: 100%;

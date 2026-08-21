@@ -161,40 +161,42 @@ useHead(() => ({
             <Logo />
           </NuxtLink>
 
-          <nav class="ac-shell-rail__nav" aria-label="主导航">
-            <NuxtLink
-              v-for="item in railNavigation"
-              :key="item.to"
-              :to="item.to"
-              class="ac-shell-rail__item"
-              :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(item, route.path) }"
-              :aria-label="item.label"
-              :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
-              :title="item.label"
-            >
-              <UIcon :name="item.icon" />
-              <span
-                v-if="item.to === '/inbox' && attentionCount"
-                class="ac-shell-rail__badge"
-                :aria-label="`${attentionCount} 项待处理`"
-              >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
-            </NuxtLink>
-          </nav>
+          <nav class="ac-shell-rail__navigation" aria-label="主导航">
+            <div class="ac-shell-rail__nav">
+              <NuxtLink
+                v-for="item in railNavigation"
+                :key="item.to"
+                :to="item.to"
+                class="ac-shell-rail__item"
+                :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(item, route.path) }"
+                :aria-label="item.label"
+                :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
+                :title="item.label"
+              >
+                <UIcon :name="item.icon" />
+                <span
+                  v-if="item.to === '/inbox' && attentionCount"
+                  class="ac-shell-rail__badge"
+                  :aria-label="`${attentionCount} 项待处理`"
+                >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
+              </NuxtLink>
+            </div>
 
-          <div class="ac-shell-rail__footer">
-            <NuxtLink
-              v-if="settingsNavigation"
-              :to="settingsNavigation.to"
-              class="ac-shell-rail__item"
-              :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(settingsNavigation, route.path) }"
-              :aria-label="settingsNavigation.label"
-              :aria-current="isShellNavigationActive(settingsNavigation, route.path) ? 'page' : undefined"
-              :title="settingsNavigation.label"
-            >
-              <UIcon :name="settingsNavigation.icon" />
-            </NuxtLink>
-            <UserMenu />
-          </div>
+            <div class="ac-shell-rail__footer">
+              <NuxtLink
+                v-if="settingsNavigation"
+                :to="settingsNavigation.to"
+                class="ac-shell-rail__item"
+                :class="{ 'ac-shell-rail__item--active': isShellNavigationActive(settingsNavigation, route.path) }"
+                :aria-label="settingsNavigation.label"
+                :aria-current="isShellNavigationActive(settingsNavigation, route.path) ? 'page' : undefined"
+                :title="settingsNavigation.label"
+              >
+                <UIcon :name="settingsNavigation.icon" />
+              </NuxtLink>
+              <UserMenu />
+            </div>
+          </nav>
         </aside>
 
         <button
