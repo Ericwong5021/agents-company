@@ -18,7 +18,8 @@ FROM node:24-bookworm-slim AS webui
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=webui-build /workspace/packages/app/.output .
-CMD ["sh", "-c", "mkdir -p /data/db && node server/index.mjs"]
+COPY --from=webui-build /workspace/deploy/remote-access/migrate-webui.mjs ./server/migrate-webui.mjs
+CMD ["sh", "-c", "mkdir -p /data/db && node server/migrate-webui.mjs && node server/index.mjs"]
 
 FROM oven/bun:1.3.14-slim AS relay
 WORKDIR /app
