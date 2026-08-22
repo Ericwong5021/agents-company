@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cumora 风格董事会群聊改造验收报告</title>
+  <style>
+    :root { color-scheme: light; --ink:#0A1B2E; --muted:#5B7186; --line:#E5ECF2; --blue:#00A8F0; --blue-soft:#F2FAFE; --coral:#FF7A6B; --coral-soft:#FFD9D2; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: linear-gradient(145deg, #E1F3FD, #FAFCFE 38%); color: var(--ink); font: 16px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(920px, calc(100% - 32px)); margin: 32px auto; padding: clamp(24px, 5vw, 56px); background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 24px 70px rgba(10,27,46,.10); }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.04em; }
+    h2 { margin: 36px 0 12px; padding-top: 8px; font-size: 21px; border-top: 1px solid var(--line); }
+    p, li { color: #233A53; }
+    a { color: #0078C8; }
+    code { padding: 2px 6px; background: var(--blue-soft); border-radius: 6px; color: #003B6F; }
+    .lede { margin: 0 0 28px; color: var(--muted); }
+    .outcome { padding: 18px 20px; background: var(--blue-soft); border-left: 4px solid var(--blue); border-radius: 12px; }
+    .tokens { display: grid; gap: 10px; padding: 0; list-style: none; }
+    .tokens li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+    .boundary { padding: 18px 20px; background: #fff8f6; border-left: 4px solid var(--coral); border-radius: 12px; }
+    @media (max-width: 560px) { main { margin: 0; width: 100%; border-radius: 0; border: 0; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Cumora 风格董事会群聊改造验收报告</h1>
+  <p class="lede">日期：2026-08-23</p>
+
+  <h2>结论</h2>
+  <div class="outcome"><p>董事会已从治理表单页面重构为群聊优先的协作空间。页面以真实董事、消息、回复关系、表情反馈、投票和发言状态为主，Founder OS 治理信息移入右侧上下文栏和折叠工作台。</p></div>
+  <p>本次参考的是 Cumora 官方网站与 MIT 开源仓库。核对的源码版本为 <code>5dbbdee15b66e9f3faa52aacad14e8e27fe583e1</code>，重点参考其消息层级、浅色工作区、品牌蓝与珊瑚色身份区分、群成员状态和紧凑输入区，没有引入 Cumora 运行时依赖。</p>
+  <p>来源：<a href="https://cumora.ai/">cumora.ai</a>，<a href="https://github.com/yetone/cumora">GitHub 官方仓库</a></p>
+
+  <h2>产品行为</h2>
+  <ul>
+    <li>董事会成员从当前公司 Agent 投影，不包含静态演示成员。</li>
+    <li>每位成员独立判断是否发言。公开消息按顺序落库；发现新消息时，旧响应会保留并重新阅读，避免多人同时发布过期回复。</li>
+    <li>Agent 回复带 <code>reply_to_id</code>，界面显示引用卡片，点击可回到原消息并短暂高亮。</li>
+    <li>用户可回复消息、添加表情、发起投票、投票和查看成员响应状态。</li>
+    <li>Agent 没有新的文字价值时，可以保持安静，也可以用 👀、✅、🎯、👍、❤️ 做语义反馈；反馈以 Agent 身份持久化。</li>
+    <li>治理授权、决策台账、人工控制、影子建议和治理资产仍保留，但不再抢占群聊主界面。</li>
+  </ul>
+
+  <h2>设计系统</h2>
+  <ul class="tokens">
+    <li>品牌蓝：<code>#00A8F0</code>、<code>#0078C8</code>、<code>#003B6F</code></li>
+    <li>浅蓝背景：<code>#F2FAFE</code>、<code>#E1F3FD</code>、<code>#C2E6FB</code>、<code>#8FD3F7</code>、<code>#4FC2F4</code></li>
+    <li>创始人珊瑚色：<code>#FF7A6B</code>、<code>#FFD9D2</code>、<code>#C84E3F</code></li>
+    <li>强调金：<code>#F4B740</code></li>
+    <li>中性色：<code>#0A1B2E</code>、<code>#233A53</code>、<code>#5B7186</code>、<code>#94A8BC</code>、<code>#C5D2DE</code>、<code>#E5ECF2</code>、<code>#FAFCFE</code>、<code>#FFFFFF</code></li>
+  </ul>
+  <p>视觉方向为浅色、克制、消息优先。非显然的选择是：Agent 使用蓝色，创始人使用珊瑚色；回复关系放进消息内部，不增加线程侧栏；Agent 的沉默也被设计成可观察状态，而不是伪造一条回复。</p>
+
+  <h2>验收证据</h2>
+  <ul>
+    <li><code>packages/app</code> Nuxt typecheck：通过。</li>
+    <li><code>packages/control-plane</code> <code>bun typecheck</code>：通过。</li>
+    <li>根目录 lint：0 errors，3090 个仓库既有 warnings。</li>
+    <li>group-session probe：2/2 通过。</li>
+    <li>reaction、poll vote、read watermark 定向 HTTP 合约测试：1/1 通过。</li>
+    <li><code>git diff --check</code>：通过。</li>
+    <li>真实 Nuxt 页面，桌面 1440×900：4 条消息、4 组持久化反应、回复栏和引用跳转均可见，横向溢出为 0。</li>
+    <li>真实 Nuxt 页面，手机 390×844：相同消息与交互成立，横向溢出为 0。</li>
+    <li>临时验收消息仅用于本地页面检查，完成截图后已移除，产品未加入占位内容或演示数据。</li>
+  </ul>
+  <p>截图：<code>packages/app/.artifacts/board-cumora-qa/board-desktop.png</code>，<code>packages/app/.artifacts/board-cumora-qa/board-mobile.png</code></p>
+
+  <h2>已知验证边界</h2>
+  <div class="boundary"><ul>
+    <li>R0 配置矩阵在现有自动登录 <code>waitForResponse</code> 处超时，未进入董事会断言。该脚本本次只修改了标题期望。</li>
+    <li>将 <code>conversation/runtime.test.ts</code> 与 <code>server/company-conversation.test.ts</code> 合并到同一进程执行时出现共享服务缺失和 hook timeout；单独执行本次相关的 reaction 合约测试通过。</li>
+    <li>本地假 Control Plane 不实现 Founder Advisor 和事件流端点，因此视觉验收期间对应请求返回 404/500；董事会消息、回复和反应渲染使用临时本地 fixture 验证，随后恢复为空。</li>
+  </ul></div>
+</main>
+</body>
+</html>

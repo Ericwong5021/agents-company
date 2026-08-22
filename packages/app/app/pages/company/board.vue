@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue"
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue"
 import type {
   FounderAdvisorConvergence,
   FounderBoardGovernanceProjection,
   FounderShadowComparison,
   FounderShadowDecision,
 } from "@agents-company/sdk/v2/founder-os"
-import type { CompanyBoardThread } from "../../../modules/agent-company/runtime/shared/company-contract"
+import type { CompanyAgent, CompanyBoardThread } from "../../../modules/agent-company/runtime/shared/company-contract"
 
 const { data: snapshot, refresh } = useCompanySnapshot()
 const route = useRoute()
@@ -21,6 +21,9 @@ const pollQuestion = ref("")
 const pollOptions = ref(["", ""])
 const pollMultiple = ref(false)
 const readSequenceAtOpen = ref(0)
+const highlightedMessageID = ref("")
+const messageFeed = ref<HTMLElement>()
+const initialScrollDone = ref(false)
 const companyScopeConfirmed = ref(false)
 const scopeInitialized = ref(Boolean(initialRouteProject))
 const appliedRouteProject = ref(initialRouteProject)
@@ -63,10 +66,22 @@ const visibleBoardMessages = computed(() =>
     ? snapshot.value.messages.filter((message) => message.body.includes(scopeProjectID.value))
     : snapshot.value.messages)
 const chatMessages = computed(() => [...visibleBoardMessages.value].sort((a, b) => a.sequence - b.sequence))
+const boardAgents = computed(() => {
+  const agents = snapshot.value.agents.filter((agent) =>
+    agent.id.startsWith("board-") || ["ceo", "cto", "product_lead", "CEO", "CTO", "Product Lead"].includes(agent.role ?? ""))
+  return agents.length ? agents : snapshot.value.agents.slice(0, 3)
+})
 const boardThreadId = computed(() =>
   chatMessages.value.findLast((message) => message.threadID)?.threadID)
 const boardMessages = computed(() =>
   visibleBoardMessages.value.filter((message) => message.threadID === boardThreadId.value))
+const quickReactions = ["👀", "✅", "🎯", "👍", "❤️"]
+const respondingAgentIDs = computed(() => new Set(
+  chatMessages.value.flatMap((message) => message.deliveries
+    .filter((delivery) => ["pending", "triaging", "running", "held"].includes(delivery.status))
+    .map((delivery) => delivery.agentID)),
+))
+const respondingAgents = computed(() => boardAgents.value.filter((agent) => respondingAgentIDs.value.has(agent.id)))
 const currentRequest = computed(() =>
   [...boardMessages.value].sort((a, b) => b.sequence - a.sequence).find((message) => message.kind === "user")
   ?? boardMessages.value.at(-1))
@@ -197,6 +212,40 @@ function deliveryLabel(message: typeof chatMessages.value[number]) {
 
 function replyTo(message: typeof chatMessages.value[number]) {
   replyTarget.value = { id: message.id, author: message.author, body: message.body }
+  nextTick(() => document.querySelector<HTMLTextAreaElement>(".founder-board-chat .ac-composer__input")?.focus())
+}
+
+function jumpToMessage(messageID: string) {
+  highlightedMessageID.value = messageID
+  const element = document.getElementById(`board-message-${messageID}`)
+  element?.scrollIntoView({ behavior: "smooth", block: "center" })
+  element?.focus({ preventScroll: true })
+  window.setTimeout(() => {
+    if (highlightedMessageID.value === messageID) highlightedMessageID.value = ""
+  }, 1600)
+}
+
+function memberState(agent: CompanyAgent) {
+  if (respondingAgentIDs.value.has(agent.id)) return "thinking"
+  if (agent.activity === "working") return "working"
+  if (agent.presence === "online") return "available"
+  return "resting"
+}
+
+function memberStateLabel(agent: CompanyAgent) {
+  if (respondingAgentIDs.value.has(agent.id)) return "正在组织回复"
+  if (agent.activity === "working") return agent.subject || "正在处理工作"
+  if (agent.presence === "online") return "在线"
+  return "离线"
+}
+
+function scrollToLatest() {
+  if (!messageFeed.value) return
+  const shouldScroll = !initialScrollDone.value
+    || messageFeed.value.scrollHeight - messageFeed.value.scrollTop - messageFeed.value.clientHeight < 180
+  if (!shouldScroll) return
+  messageFeed.value.scrollTop = messageFeed.value.scrollHeight
+  initialScrollDone.value = true
 }
 
 async function react(messageID: string, emoji: string) {
@@ -453,6 +502,8 @@ async function intervene() {
 async function refreshBoardMessages() {
   await refresh()
   await loadBoard()
+  await nextTick()
+  scrollToLatest()
   const sequence = chatMessages.value.at(-1)?.sequence
   if (sequence !== undefined) {
     await $fetch("/api/agent-company/board-action", {
@@ -470,6 +521,7 @@ onMounted(() => {
     readSequenceAtOpen.value = Number(localStorage.getItem(`agent-company:board-read:${snapshot.value.company.id}`)) || 0
   }
   void loadBoard()
+  nextTick(scrollToLatest)
 })
 watch(() => snapshot.value.company.id, (companyId) => {
   if (!companyId) return
@@ -485,6 +537,7 @@ watch(
 watch(() => shadowRun.projectId, () => {
   companyScopeConfirmed.value = false
 })
+watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
 </script>
 
 <template>
@@ -504,92 +557,126 @@ watch(() => shadowRun.projectId, () => {
 
     <template #body>
       <div class="company-page founder-board-page" lang="zh">
-        <header class="company-page__header founder-board-page__header">
-          <div>
-            <p class="company-eyebrow">创始人治理</p>
-            <h1>董事会治理</h1>
-            <p class="company-page__lede">
-              <template v-if="projectScoped">
-                当前仅显示“{{ scopeProject?.title ?? `工作 #${shortWorkID(scopeProjectID)}` }}”的治理记录。
-              </template>
-              <template v-else>讨论、依据、决策台账与人工接管共享同一条可追溯事实链。</template>
-            </p>
-          </div>
-          <div class="founder-principal">
-            <span class="founder-principal__mark" aria-hidden="true">董</span>
+        <header class="founder-board-page__topbar">
+          <div class="founder-board-page__identity">
+            <span aria-hidden="true">#</span>
             <div>
-              <strong>{{ board?.principal.displayName ?? "AI 大东 · 创始人代理" }}</strong>
-              <span>董事会创始人代理 · 非新增员工</span>
+              <h1>董事会</h1>
+              <p v-if="projectScoped">{{ scopeProject?.title ?? `工作 #${shortWorkID(scopeProjectID)}` }}</p>
+              <p v-else>目标、战略、重大升级与创始人决策</p>
             </div>
+          </div>
+          <div class="founder-board-page__live" :data-active="respondingAgents.length ? 'true' : 'false'" role="status">
+            <span aria-hidden="true" />
+            <template v-if="respondingAgents.length">
+              {{ respondingAgents.map((agent) => agent.name).join("、") }} 正在组织回复
+            </template>
+            <template v-else>{{ boardAgents.filter((agent) => agent.presence === "online").length }} 位董事在线</template>
           </div>
         </header>
 
         <CompanyModuleNav />
 
         <div class="founder-chat-shell">
-          <section class="company-section founder-board-chat" aria-label="董事会群聊">
+          <section class="founder-board-chat" aria-label="董事会群聊">
             <div class="founder-board-chat__head">
-              <div>
-                <p class="company-eyebrow">Board room</p>
-                <h2>董事会群聊</h2>
-                <span>每位董事独立阅读、判断与回应；没有主持人抢答排序。</span>
+              <div class="founder-board-chat__title">
+                <span aria-hidden="true">★</span>
+                <div>
+                  <h2>董事会群聊</h2>
+                  <p>每位董事独立阅读后轮流回应，没有新信息时会用表情或保持安静。</p>
+                </div>
               </div>
               <div class="founder-board-chat__members" aria-label="群成员">
-                <span v-for="agent in snapshot.agents" :key="agent.id" :title="boardPersonLabel(agent.name, agent.role)">
+                <span
+                  v-for="agent in boardAgents"
+                  :key="agent.id"
+                  :data-state="memberState(agent)"
+                  :title="`${boardPersonLabel(agent.name, agent.role)} · ${memberStateLabel(agent)}`"
+                >
                   {{ agent.name.slice(0, 1) }}
                 </span>
+                <span data-state="founder" title="创始人 · 你">我</span>
               </div>
             </div>
 
-            <div class="founder-board-messages founder-board-messages--chat">
+            <div ref="messageFeed" class="founder-board-messages founder-board-messages--chat" role="log" aria-live="polite" aria-relevant="additions">
               <template v-for="(message, index) in chatMessages" :key="message.id">
-              <div v-if="startsUnread(index)" class="founder-board-unread"><span>未读消息</span></div>
-              <article :class="{ 'is-founder': message.kind === 'user' }">
-                <div class="founder-board-message__avatar" aria-hidden="true">
-                  {{ message.kind === "user" ? "我" : personLabel(message.author).slice(0, 1) }}
-                </div>
-                <div class="founder-board-message__content">
-                  <header>
-                    <strong>{{ personLabel(message.author) }}</strong>
-                    <span>#{{ message.sequence }} · {{ personLabel(message.role) ? `${personLabel(message.role)} · ` : "" }}{{ message.time }}</span>
-                  </header>
-                  <blockquote v-if="replyPreview(message)">
-                    {{ replyPreview(message)?.author }}：{{ replyPreview(message)?.body }}
-                  </blockquote>
-                  <p>{{ message.body }}</p>
-                  <div v-if="message.mentions.length || message.resources.length" class="founder-board-message__references">
-                    <span v-for="mention in message.mentions" :key="`${mention.kind}:${mention.value}`">@{{ snapshot.agents.find((agent) => agent.id === mention.value)?.name ?? personLabel(mention.value) }}</span>
-                    <span v-for="resource in message.resources" :key="`${resource.kind}:${resource.label}`">{{ resource.kind }} · {{ resource.label }}</span>
+                <div v-if="startsUnread(index)" class="founder-board-unread"><span>未读消息</span></div>
+                <article
+                  :id="`board-message-${message.id}`"
+                  :class="{ 'is-founder': message.kind === 'user' }"
+                  :data-highlighted="highlightedMessageID === message.id"
+                  tabindex="-1"
+                >
+                  <div class="founder-board-message__avatar" :data-kind="message.kind" aria-hidden="true">
+                    {{ message.kind === "user" ? "我" : personLabel(message.author).slice(0, 1) }}
                   </div>
-                  <div v-if="message.poll" class="founder-board-poll">
-                    <button
-                      v-for="option in message.poll.options"
-                      :key="option.id"
-                      type="button"
-                      :data-selected="message.pollVotes.some((vote) => vote.optionID === option.id && vote.selected)"
-                      @click="vote(message.id, option.id)"
-                    >
-                      <span>{{ option.label }}</span>
-                      <strong>{{ message.pollVotes.find((item) => item.optionID === option.id)?.count ?? 0 }}</strong>
-                    </button>
+                  <div class="founder-board-message__body">
+                    <header>
+                      <strong>{{ message.kind === "user" ? "你" : personLabel(message.author) }}</strong>
+                      <span v-if="message.kind !== 'user' && personLabel(message.role)">{{ personLabel(message.role) }}</span>
+                      <time>{{ message.time }}</time>
+                    </header>
+                    <div class="founder-board-message__content">
+                      <button
+                        v-if="replyPreview(message)"
+                        type="button"
+                        class="founder-board-message__quote"
+                        @click="message.replyToID && jumpToMessage(message.replyToID)"
+                      >
+                        <strong>{{ personLabel(replyPreview(message)?.author) }}</strong>
+                        <span>{{ replyPreview(message)?.body }}</span>
+                      </button>
+                      <p>{{ message.body }}</p>
+                      <div v-if="message.mentions.length || message.resources.length" class="founder-board-message__references">
+                        <span v-for="mention in message.mentions" :key="`${mention.kind}:${mention.value}`">@{{ snapshot.agents.find((agent) => agent.id === mention.value)?.name ?? personLabel(mention.value) }}</span>
+                        <span v-for="resource in message.resources" :key="`${resource.kind}:${resource.label}`">{{ resource.kind }} · {{ resource.label }}</span>
+                      </div>
+                      <div v-if="message.poll" class="founder-board-poll">
+                        <p>{{ message.poll.question }}</p>
+                        <button
+                          v-for="option in message.poll.options"
+                          :key="option.id"
+                          type="button"
+                          :data-selected="message.pollVotes.some((item) => item.optionID === option.id && item.selected)"
+                          @click="vote(message.id, option.id)"
+                        >
+                          <span>{{ option.label }}</span>
+                          <strong>{{ message.pollVotes.find((item) => item.optionID === option.id)?.count ?? 0 }}</strong>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="founder-board-message__actions">
+                      <button
+                        v-for="reaction in message.reactions"
+                        :key="reaction.emoji"
+                        type="button"
+                        class="founder-board-reaction"
+                        :data-active="reaction.reacted"
+                        :aria-label="`${reaction.emoji}，${reaction.count} 个回应`"
+                        @click="react(message.id, reaction.emoji)"
+                      >
+                        <span>{{ reaction.emoji }}</span><strong>{{ reaction.count }}</strong>
+                      </button>
+                      <div class="founder-board-message__quick-actions">
+                        <button
+                          v-for="emoji in quickReactions.filter((candidate) => !message.reactions.some((reaction) => reaction.emoji === candidate && reaction.reacted))"
+                          :key="emoji"
+                          type="button"
+                          :aria-label="`用 ${emoji} 回应`"
+                          @click="react(message.id, emoji)"
+                        >{{ emoji }}</button>
+                        <button type="button" aria-label="回复这条消息" @click="replyTo(message)">
+                          <UIcon name="i-lucide-reply" />
+                        </button>
+                      </div>
+                    </div>
+                    <span v-if="deliveryLabel(message)" class="founder-board-message__activity">
+                      <i aria-hidden="true"><span /><span /><span /></i>{{ deliveryLabel(message) }}
+                    </span>
                   </div>
-                  <div class="founder-board-message__actions">
-                    <button type="button" @click="replyTo(message)">回复</button>
-                    <button
-                      v-for="reaction in message.reactions"
-                      :key="reaction.emoji"
-                      type="button"
-                      :data-active="reaction.reacted"
-                      @click="react(message.id, reaction.emoji)"
-                    >
-                      {{ reaction.emoji }} {{ reaction.count }}
-                    </button>
-                    <button v-if="!message.reactions.some((reaction) => reaction.emoji === '👍')" type="button" @click="react(message.id, '👍')">＋ 👍</button>
-                    <button v-if="!message.reactions.some((reaction) => reaction.emoji === '✅')" type="button" @click="react(message.id, '✅')">＋ ✅</button>
-                  </div>
-                  <span v-if="deliveryLabel(message)" class="founder-board-message__activity">{{ deliveryLabel(message) }}</span>
-                </div>
-              </article>
+                </article>
               </template>
               <p v-if="!chatMessages.length" class="company-empty">
                 {{ projectScoped ? "当前工作暂无董事会群聊消息。" : "群聊还是空的。发出第一条消息，董事会成员会独立判断是否回应。" }}
@@ -605,7 +692,7 @@ watch(() => shadowRun.projectId, () => {
                 @sent="replyTarget = undefined; refreshBoardMessages()"
               />
               <button type="button" class="founder-board-poll-toggle" @click="pollOpen = !pollOpen">
-                {{ pollOpen ? "收起投票" : "发起投票" }}
+                <UIcon name="i-lucide-chart-no-axes-column" />{{ pollOpen ? "收起投票" : "发起投票" }}
               </button>
               <form v-if="pollOpen" class="founder-board-poll-form" @submit.prevent="createPoll">
                 <input v-model="pollQuestion" maxlength="500" placeholder="投票问题">
@@ -620,40 +707,62 @@ watch(() => shadowRun.projectId, () => {
           </section>
 
           <aside class="founder-governance-rail">
-            <section class="company-section founder-board-takeover">
-              <div class="company-section__heading">
+            <section class="founder-board-room-info">
+              <div class="founder-principal">
+                <span class="founder-principal__mark" aria-hidden="true">董</span>
                 <div>
-                  <p class="company-eyebrow">Governance</p>
-                  <h2>治理边界</h2>
+                  <strong>{{ board?.principal.displayName ?? "AI 大东 · 创始人代理" }}</strong>
+                  <span>创始人治理投影 · 非新增员工</span>
                 </div>
+              </div>
+              <h2>群成员</h2>
+              <div class="founder-board-roster">
+                <div v-for="agent in boardAgents" :key="agent.id">
+                  <span class="founder-board-roster__avatar" :data-state="memberState(agent)">{{ agent.name.slice(0, 1) }}</span>
+                  <div>
+                    <strong>{{ personLabel(agent.name) }}</strong>
+                    <span>{{ personLabel(agent.role) || "董事" }}</span>
+                  </div>
+                  <i :data-state="memberState(agent)" :title="memberStateLabel(agent)" />
+                </div>
+              </div>
+            </section>
+
+            <section class="founder-board-room-info">
+              <div class="founder-board-room-info__head">
+                <h2>治理边界</h2>
+                <span>{{ board?.advisorCanSpeak ? "顾问可发言" : "顾问已停止" }}</span>
               </div>
               <dl class="founder-governance-facts">
                 <div><dt>当前模式</dt><dd>{{ modeLabel(board?.mode.effective.founderTwinMode) }}</dd></div>
                 <div><dt>治理授权</dt><dd>{{ governanceStatusLabel(board?.authorization.status) }}</dd></div>
-                <div><dt>顾问发言</dt><dd>{{ board?.advisorCanSpeak ? "允许" : "已停止" }}</dd></div>
                 <div><dt>决策台账</dt><dd>{{ visibleDecisions.length }} 条</dd></div>
               </dl>
-              <p>群聊只形成讨论与决策意图。执行仍需进入 Decision Ledger，并通过 Founder OS 权限与审批门槛。</p>
+              <p>群聊形成讨论与决策意图，执行仍需通过 Founder OS 权限与审批门槛。</p>
             </section>
 
-            <section v-if="boardThreadId" class="company-section founder-board-takeover">
-              <div class="company-section__heading">
-                <div>
-                  <p class="company-eyebrow">人工控制</p>
-                  <h2>立即接管</h2>
-                </div>
+            <details v-if="boardThreadId" class="founder-board-control">
+              <summary><span>人工控制</span><UIcon name="i-lucide-chevron-down" /></summary>
+              <div>
+                <p>{{ interventionEffect }}</p>
+                <label><span>动作</span><select v-model="intervention.kind"><option value="takeover">接管</option><option value="pause">暂停</option><option value="correct">纠正</option><option value="reject">否决</option><option value="redefine_goal">重定义目标</option></select></label>
+                <label><span>关联项目</span><select v-model="intervention.projectId"><option value="">仅停止当前董事会代理</option><option v-for="project in snapshot.projects" :key="project.id" :value="project.id">{{ project.title }}</option></select></label>
+                <label><span>原因</span><textarea v-model="intervention.reason" rows="3" /></label>
+                <label v-if="intervention.kind === 'redefine_goal'"><span>新目标</span><textarea v-model="intervention.newGoal" rows="3" /></label>
+                <UButton color="error" :loading="loading" :disabled="!intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())" @click="intervene">提交“{{ interventionActionLabel }}”</UButton>
+                <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
               </div>
-              <p>{{ interventionEffect }}</p>
-              <label><span>动作</span><select v-model="intervention.kind"><option value="takeover">接管</option><option value="pause">暂停</option><option value="correct">纠正</option><option value="reject">否决</option><option value="redefine_goal">重定义目标</option></select></label>
-              <label><span>关联项目</span><select v-model="intervention.projectId"><option value="">仅停止当前董事会代理</option><option v-for="project in snapshot.projects" :key="project.id" :value="project.id">{{ project.title }}</option></select></label>
-              <label><span>原因</span><textarea v-model="intervention.reason" rows="3" /></label>
-              <label v-if="intervention.kind === 'redefine_goal'"><span>新目标</span><textarea v-model="intervention.newGoal" rows="3" /></label>
-              <UButton color="error" :loading="loading" :disabled="!intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())" @click="intervene">提交“{{ interventionActionLabel }}”</UButton>
-              <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
-            </section>
+            </details>
           </aside>
         </div>
 
+        <details class="founder-governance-archive">
+          <summary>
+            <span><UIcon name="i-lucide-landmark" />治理工作台</span>
+            <small>影子建议、决策对照、台账与治理资产</small>
+            <UIcon name="i-lucide-chevron-down" />
+          </summary>
+          <div class="founder-governance-archive__body">
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
           当前模式或真实授权尚未满足，顾问代理保持安全关闭，页面不能提高模式。
         </p>
@@ -942,6 +1051,8 @@ watch(() => shadowRun.projectId, () => {
             </article>
           </div>
         </section>
+          </div>
+        </details>
       </div>
     </template>
   </UDashboardPanel>

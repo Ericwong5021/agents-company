@@ -8,7 +8,7 @@ const navigation = [
   { label: "公司总览", heading: "Agent Company", path: "/company" },
   { label: "收件箱", heading: "收件箱", path: "/inbox" },
   { label: "工作", heading: "工作", path: "/work" },
-  { label: "董事会", heading: "董事会治理", path: "/company/board" },
+  { label: "董事会", heading: "董事会", path: "/company/board" },
   { label: "团队", heading: "团队", path: "/team" },
   { label: "成果库", heading: "成果库", path: "/library" },
   { label: "设置", heading: "设置", path: "/settings" },

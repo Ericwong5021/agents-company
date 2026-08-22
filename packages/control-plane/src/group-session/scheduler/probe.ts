@@ -1,4 +1,4 @@
-import type { Bid, BidLevel, BidType, AddressedAs } from "./bidding.types"
+import type { AddressedAs, Bid, BidLevel, BidType, ReactionEmoji } from "./bidding.types"
 import { Stream, Effect, Ref } from "effect"
 import { LLM } from "@/session/llm"
 import { Provider } from "@/provider"
@@ -41,7 +41,8 @@ export function buildProbePrompt(input: ProbeInput): string {
     `A human message deserves engagement from the group, not a reply from every agent. Use must for a direct request, blocker, correction, direct responsibility, or material objection; want for a distinct answer or action that materially advances the conversation; could for a non-essential addition that should normally stay silent; pass for agreement, acknowledgement, repetition, or no new value.`,
     `After another agent speaks, respond only to a direct ask, a material correction, or a necessary next action. If the latest visible message is your own, pass.`,
     `Use addressedAs=direct only when the user or another agent explicitly addresses this agent, mention for a role or @ mention, otherwise none.`,
-    `Output ONLY a JSON object with fields: level, type, addressedAs, reason.`,
+    `When level is could or pass, optionally choose one lightweight reaction from 👀, ✅, 🎯, 👍, ❤️ if it communicates useful acknowledgement without adding a repetitive message. Omit reaction when silence is better.`,
+    `Output ONLY a JSON object with fields: level, type, addressedAs, reason, and optional reaction.`,
     `reason must be a complete public decision note in the language of the last event: explain relevance, distinct value or why passing, material risk or opportunity, and the proposed next action. Do not reveal private hidden reasoning.`,
   ]
   return lines.join("\n")
@@ -64,11 +65,15 @@ export function parseBid(raw: string): Bid {
     const addressedAs = parsed.addressedAs && ["direct", "mention", "none"].includes(parsed.addressedAs)
       ? (parsed.addressedAs as AddressedAs)
       : ("none" as AddressedAs)
+    const reaction = typeof parsed.reaction === "string" && ["👀", "✅", "🎯", "👍", "❤️"].includes(parsed.reaction)
+      ? parsed.reaction as ReactionEmoji
+      : undefined
     return {
       level,
       type,
       addressedAs,
       reason: typeof parsed.reason === "string" ? parsed.reason.slice(0, 1200) : "",
+      reaction,
     }
   } catch {
     return fallbackPass("invalid JSON")

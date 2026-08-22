@@ -4,9 +4,12 @@ export type BidType = "objection" | "answer" | "question" | "claim" | "info" | "
 
 export type AddressedAs = "direct" | "mention" | "none"
 
+export type ReactionEmoji = "👀" | "✅" | "🎯" | "👍" | "❤️"
+
 export interface Bid {
   level: BidLevel
   type: BidType
   addressedAs: AddressedAs
   reason: string
+  reaction?: ReactionEmoji
 }

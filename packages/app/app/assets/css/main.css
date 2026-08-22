@@ -7,6 +7,23 @@
 }
 
 :root {
+  --ac-brand: #00a8f0;
+  --ac-brand-deep: #0078c8;
+  --ac-brand-ink: #003b6f;
+  --ac-sky-50: #f2fafe;
+  --ac-sky-100: #e1f3fd;
+  --ac-sky-200: #c2e6fb;
+  --ac-sky-300: #8fd3f7;
+  --ac-sky-glow: #4fc2f4;
+  --ac-coral: #ff7a6b;
+  --ac-coral-soft: #ffd9d2;
+  --ac-coral-deep: #c84e3f;
+  --ac-gold: #f4b740;
+  --ac-available: #6ec56a;
+  --ac-working: #f4b740;
+  --ac-thinking: #8a78c8;
+  --ac-waiting: #ff7a6b;
+  --ac-resting: #b8c4d1;
   --ac-stage: #e6f3fb;
   --ac-stage-end: #f5f0ea;
   --ac-canvas: #f6f9fb;
@@ -54,6 +71,23 @@
 }
 
 .dark {
+  --ac-brand: #66c7f2;
+  --ac-brand-deep: #8fd3f7;
+  --ac-brand-ink: #d9f1fc;
+  --ac-sky-50: #132d3b;
+  --ac-sky-100: #19384a;
+  --ac-sky-200: #285169;
+  --ac-sky-300: #4d91b5;
+  --ac-sky-glow: #66c7f2;
+  --ac-coral: #ff8a7e;
+  --ac-coral-soft: #4a2929;
+  --ac-coral-deep: #ffb0a7;
+  --ac-gold: #f4c76d;
+  --ac-available: #85d381;
+  --ac-working: #f4c76d;
+  --ac-thinking: #aa98e1;
+  --ac-waiting: #ff8a7e;
+  --ac-resting: #708795;
   --ac-stage: #09131d;
   --ac-stage-end: #111922;
   --ac-canvas: #0d1720;

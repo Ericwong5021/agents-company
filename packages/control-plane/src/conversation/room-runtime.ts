@@ -21,6 +21,7 @@ import { ChannelMemberTable, ChannelMessageTable, ChannelTable, ConversationThre
 import {
   ChannelDeliveryTable,
   ChannelMessageHoldTable,
+  ChannelReactionTable,
   ChannelReadStateTable,
   claimChannelSequence,
 } from "./room.sql"
@@ -283,7 +284,7 @@ export const layer: Layer.Layer<
           const fallbackHuman = latest.delivery.trigger_kind === "human" && info.role_key === "ceo"
           if (latest.delivery.trigger_kind !== "mention" && !shouldRespond(decision) && !fallbackHuman) {
             yield* Effect.sync(() =>
-              Database.use((db) =>
+              Database.transaction((db) => {
                 db
                   .update(ChannelDeliveryTable)
                   .set({
@@ -293,8 +294,21 @@ export const layer: Layer.Layer<
                     time_updated: Date.now(),
                   })
                   .where(eq(ChannelDeliveryTable.id, latest.delivery.id))
-                  .run(),
-              ),
+                  .run()
+                if (!decision.reaction) return
+                const reactedAt = Date.now()
+                db.insert(ChannelReactionTable)
+                  .values({
+                    message_id: latest.message.id,
+                    principal_kind: "agent",
+                    principal_id: input.agentID,
+                    emoji: decision.reaction,
+                    time_created: reactedAt,
+                    time_updated: reactedAt,
+                  })
+                  .onConflictDoNothing()
+                  .run()
+              }),
             )
             yield* bus.publish(ServerEvent.ChannelInvalidated, { channel_id: latest.message.channel_id }).pipe(Effect.ignore)
             return

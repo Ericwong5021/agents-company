@@ -298,13 +298,13 @@ function onKeydown(event: KeyboardEvent) {
 
     <div v-if="target.kind === 'board'" class="ac-composer__routing" role="radiogroup" aria-label="消息用途">
       <button type="button" role="radio" :aria-checked="routeMode === 'auto'" :data-active="routeMode === 'auto'" @click="routeMode = 'auto'">
-        自动判断
+        自动
       </button>
       <button type="button" role="radio" :aria-checked="routeMode === 'execute'" :data-active="routeMode === 'execute'" @click="routeMode = 'execute'">
-        作为目标执行
+        作为目标
       </button>
       <button type="button" role="radio" :aria-checked="routeMode === 'discuss'" :data-active="routeMode === 'discuss'" @click="routeMode = 'discuss'">
-        仅讨论
+        讨论
       </button>
     </div>
 
@@ -328,7 +328,7 @@ function onKeydown(event: KeyboardEvent) {
           :title="options.length || roleOptions.length ? '选择要提及的团队成员或角色' : '公司名册为空，暂无可提及对象'"
           @click="showMentions = !showMentions"
         >
-          @ 团队成员<template v-if="selectedMentions.length + selectedRoles.length">（{{ selectedMentions.length + selectedRoles.length }}）</template>
+          <UIcon name="i-lucide-at-sign" />董事<template v-if="selectedMentions.length + selectedRoles.length"> {{ selectedMentions.length + selectedRoles.length }}</template>
         </button>
         <button
           type="button"
@@ -336,10 +336,10 @@ function onKeydown(event: KeyboardEvent) {
           :data-active="showResources"
           @click="showResources = !showResources"
         >
-          添加资源<template v-if="resources.length">（{{ resources.length }}）</template>
+          <UIcon name="i-lucide-link-2" />资源<template v-if="resources.length"> {{ resources.length }}</template>
         </button>
         <button type="button" class="ac-composer__tool" :disabled="sending || resources.length >= MAX_COMPOSER_RESOURCES" @click="filePicker?.click()">
-          文本附件
+          <UIcon name="i-lucide-paperclip" />附件
         </button>
         <input
           ref="filePicker"
@@ -353,7 +353,7 @@ function onKeydown(event: KeyboardEvent) {
           v-for="intent in composerQuickIntents"
           :key="intent.id"
           type="button"
-          class="ac-composer__tool"
+          class="ac-composer__tool ac-composer__tool--quick"
           @click="quickIntent(intent.prefix)"
         >
           {{ intent.label }}
@@ -365,7 +365,7 @@ function onKeydown(event: KeyboardEvent) {
         :disabled="!submittable"
         @click="send()"
       >
-        {{ sending ? "发送中…" : "发送" }}
+        {{ sending ? "发送中…" : "发送" }}<UIcon name="i-lucide-send" />
       </button>
     </div>
 

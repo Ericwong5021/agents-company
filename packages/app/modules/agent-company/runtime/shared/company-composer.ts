@@ -15,7 +15,7 @@ export const MAX_COMPOSER_RESOURCES = 8
 export const MAX_TEXT_ATTACHMENT_BYTES = 200_000
 
 export function composerTargetLabel(target: ComposerTarget): string {
-  if (target.kind === "board") return "公司看板"
+  if (target.kind === "board") return "董事会"
   return `当前项目 · ${target.title}`
 }
 
