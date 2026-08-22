@@ -1,131 +1,41 @@
-- 使用中文跟用户对话。
-- 只有在缺失信息会实质改变产品结果、权限边界或不可逆操作时才向用户提问；一次只问一个。其余情况基于已有上下文做合理假设并推进，不要重复确认已经收敛的产品决策。
-- Use AgentCompany Compose skills when available, otherwise use superpowers skill if installed.
-- To regenerate the JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
-- ALWAYS USE PARALLEL TOOLS WHEN APPLICABLE.
-- The default branch in this repo is `main`.
-- CI triggers on both `main` and `dev` branches.
-- Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
-- Agent Company is a new product rebuilt from AgentCompany foundations, not an AgentCompany compatibility release. Do not preserve legacy AgentCompany filesystem/config/API compatibility unless the user explicitly asks for a migration bridge.
+# Agent Company 开发约定
 
-## Report Output
+## 工作方式
 
-- Every report delivered to the user must be written to disk in both Markdown (`.md`) and standalone HTML (`.html`) formats.
-- Use the same base filename and equivalent content for both files. Markdown is the canonical source; HTML must be rendered from it and remain readable without the repository or a development server.
-- The final response must include clickable paths to both files. A chat-only report, JSON artifact, or a single-format file does not satisfy report delivery.
+- 使用中文沟通。信息足够时直接推进，只有产品结果、权限边界或不可逆操作受影响时才提问，一次只问一个。
+- 默认在 `main` 分支开发，不主动创建分支。保留工作区内与当前任务无关的改动。
+- 优先完成能解决实际问题的最小实现，避免过度设计、兼容层和无关重构。
+- 错误必须暴露。先定位根因，再修复；关键路径保留足够的日志和可追溯信息。
+- 能自动完成的操作直接完成，适合并行的工具调用并行执行。
+- 功能开发完成后主动提交代码，不自动推送或发布。
 
-## Core Focus (as of 2026-07-30)
+## 产品边界
 
-The current product target is the local-first **Pre-Public** release described in `docs/product-design/PRODUCT-CONSTITUTION.md` and `docs/Agent Company 产品 PRD.md`.
+- 产品真值以 `docs/README.md` 索引的文档为准。当前按 `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` 的 R0 到 R4 顺序推进，当前阶段是 R0。
+- `packages/app` 是唯一产品入口，`packages/control-plane` 负责本地控制面和 Agent 运行时，不恢复终端产品界面。
+- 产品是单用户、本地优先、领域中立的 Agent 公司，核心是动态自组织和自治理。软件开发只是领域适配器。
+- 不保留旧 AgentCompany 的文件系统、配置或 API 兼容性，除非用户明确要求迁移桥接。
+- Ambient、Reflection、Direct、Dreaming 和 Agent Home 继续冻结。多用户云托管、移动端、复杂 2D/3D 办公室不在当前范围。
+- 机器 Gate 通过不代表人工授权或真实样本验收通过。代码和设计文档不一致时，明确说明差距。
 
-Current execution order comes from `docs/product-design/Agent-Company-Experience-Refactor-Plan-v1.0.md` (stages R0–R4; the active stage is R0). `docs/product-design/implementation-plan.md` defines milestone architecture and exit criteria but no longer decides what to work on next. Ambient, Reflection, Direct, Dreaming, and Agent Home are frozen until the Life-layer unfreeze conditions in PRD 4.1 are met — do not start work on them, and do not describe them as available.
+## 代码约定
 
-Founder OS v1 product development is complete at candidate `b7aca6b87ecc7722a3a3fff8b5d027cf66463fa8`; this does not change the R0–R4 release order or authorize higher runtime modes. `founderTwinMode` and `companyCommonsMode` remain fail-closed behind their global maxima, and human authorization or real-sample acceptance must never be inferred from machine Gate success.
+- 优先使用 Bun API、类型推断、函数式数组方法和提前返回。
+- 避免 `any`、不必要的 `try/catch`、解构、变量、接口和 `else`。
+- 只在逻辑需要复用或组合时拆函数。Drizzle 字段使用 `snake_case`。
+- `src/config` 新模块沿用文件顶部的 self-export 模式。
+- 重新生成 JavaScript SDK 时运行 `./packages/sdk/js/script/build.ts`。
+- 不写注释，除非用户明确要求。
 
-- The shared WebUI in `packages/app` is the only product access surface.
-- The local Control Plane and agent runtime live in `packages/control-plane`.
-- The terminal UI has been removed. Keep the non-interactive CLI and local server headless; do not reintroduce a terminal product surface unless another explicit product decision restores that scope.
-- The first public release focuses on a single-user, local-first, domain-neutral Agent company whose core differentiator is dynamic self-organization and self-governance. Do not reduce the product to software development or a preconfigured team of specialist Agents.
-- Software development is a deep domain adapter, not the global product boundary. Prefer one primary repository per independently verifiable software delivery unit, while keeping Project and cross-domain work independent from repository count.
-- The shared WebUI must prioritize visual quality, group-chat high-signal collaboration, Thread worklog/artifact/preview layers, visible failure attempts, and employee cards driven by real Agent activity projections.
-- Ambient roaming, observation, exploration, and socializing remain the long-term design intent — valuable only when backed by real events — but are frozen for now (see above). Future 2D/3D office views must reuse the employee-card state contract instead of inventing decorative activity.
-- Keep multi-user cloud hosting, mobile clients, Kanban-first project management, exhaustive industry/app coverage, and a complex 2D/3D office out of the active release scope unless another explicit product decision changes it.
-- Product decisions and document precedence are indexed in `docs/README.md`. When code and target design differ, describe the gap rather than presenting planned behavior as implemented.
+## 验证
 
-## Style Guide
+- 默认不新增测试代码。只有用户明确要求，或现有测试因改动而过时时才更新测试。
+- 只运行与改动直接相关的最小验证，不做默认的全仓测试、全量构建或重复验收。
+- 测试和 `bun typecheck` 必须从对应 package 目录运行，不能在仓库根目录运行测试，也不能直接运行 `tsc`。
+- 纯文档改动只检查内容和 diff，不运行代码测试或构建。
 
-### General Principles
+## 文档
 
-- Keep things in one function unless composable or reusable
-- Avoid `try`/`catch` where possible
-- Avoid using the `any` type
-- Use Bun APIs when possible, like `Bun.file()`
-- Rely on type inference when possible; avoid explicit type annotations or interfaces unless necessary for exports or clarity
-- Prefer functional array methods (flatMap, filter, map) over for loops; use type guards on filter to maintain type inference downstream
-- In `src/config`, follow the existing self-export pattern at the top of the file (for example `export * as ConfigAgent from "./agent"`) when adding a new config module.
-
-Reduce total variable count by inlining when a value is only used once.
-
-```ts
-// Good
-const journal = await Bun.file(path.join(dir, "journal.json")).json()
-
-// Bad
-const journalPath = path.join(dir, "journal.json")
-const journal = await Bun.file(journalPath).json()
-```
-
-### Destructuring
-
-Avoid unnecessary destructuring. Use dot notation to preserve context.
-
-```ts
-// Good
-obj.a
-obj.b
-
-// Bad
-const { a, b } = obj
-```
-
-### Variables
-
-Prefer `const` over `let`. Use ternaries or early returns instead of reassignment.
-
-```ts
-// Good
-const foo = condition ? 1 : 2
-
-// Bad
-let foo
-if (condition) foo = 1
-else foo = 2
-```
-
-### Control Flow
-
-Avoid `else` statements. Prefer early returns.
-
-```ts
-// Good
-function foo() {
-  if (condition) return 1
-  return 2
-}
-
-// Bad
-function foo() {
-  if (condition) return 1
-  else return 2
-}
-```
-
-### Schema Definitions (Drizzle)
-
-Use snake_case for field names so column names don't need to be redefined as strings.
-
-```ts
-// Good
-const table = sqliteTable("session", {
-  id: text().primaryKey(),
-  project_id: text().notNull(),
-  created_at: integer().notNull(),
-})
-
-// Bad
-const table = sqliteTable("session", {
-  id: text("id").primaryKey(),
-  projectID: text("project_id").notNull(),
-  createdAt: integer("created_at").notNull(),
-})
-```
-
-## Testing
-
-- Avoid mocks as much as possible
-- Test actual implementation, do not duplicate logic into tests
-- Tests cannot run from repo root (guard: `do-not-run-tests-from-root`); run from package dirs like `packages/control-plane`.
-
-## Type Checking
-
-- Always run `bun typecheck` from package directories (e.g., `packages/control-plane`), never `tsc` directly.
+- 默认不生成报告、计划、总结、审查文档或 Markdown/HTML 双份文件，用户明确要求时才生成。
+- 只有公开行为、配置、关键技术栈或产品方向变化时，才更新对应的现有真值文档。不要为同一事实新增重复文档。
+- 最终回复保持简短，说明结果、必要验证和提交信息即可。
