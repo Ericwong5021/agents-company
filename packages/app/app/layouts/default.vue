@@ -295,11 +295,13 @@ useHead(() => ({
         >
           <span class="ac-mobile-tabbar__icon">
             <UIcon :name="item.icon" />
-            <span
-              v-if="item.to === '/inbox' && attentionCount"
-              class="ac-mobile-tabbar__badge"
-              :aria-label="`${attentionCount} 项待处理`"
-            >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
+            <ClientOnly>
+              <span
+                v-if="item.to === '/inbox' && attentionCount"
+                class="ac-mobile-tabbar__badge"
+                :aria-label="`${attentionCount} 项待处理`"
+              >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
+            </ClientOnly>
           </span>
           <span>{{ item.mobileLabel }}</span>
         </NuxtLink>
