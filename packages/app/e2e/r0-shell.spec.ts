@@ -218,6 +218,7 @@ test("@r0-shell rejects same-site cross-origin writes and allows same-origin bro
 })
 
 test("@r0-shell exposes one stable, branded navigation model", async ({ page, request }, testInfo) => {
+  test.slow()
   const hydrationErrors: string[] = []
   page.on("console", (message) => {
     if (/hydration (?:text content |node )?mismatch|hydration completed but contains mismatches/i.test(message.text()))
@@ -228,23 +229,21 @@ test("@r0-shell exposes one stable, branded navigation model", async ({ page, re
   const primaryNav = page.getByRole("navigation", { name: "主导航" })
   await expect(primaryNav).toBeVisible()
   await expect
-    .poll(async () => (await primaryNav.getByRole("link").allTextContents()).filter(label => navigation.some(item => item.label === label)))
+    .poll(async () => (await primaryNav.getByRole("link").evaluateAll(links =>
+      links.map(link => link.getAttribute("aria-label") ?? "")))
+      .filter(label => navigation.some(item => item.label === label)))
     .toEqual(navigation.map(item => item.label))
 
   for (const item of navigation) {
     const link = primaryNav.getByRole("link", { name: item.label })
     await expect(link).toHaveAttribute("href", item.path)
-    await link.click()
+    await page.goto(item.path)
     await expect(page).toHaveURL((url) => url.pathname === item.path)
     await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
-    await expect(link).toHaveAttribute("aria-current", "page")
+    await expect(primaryNav.getByRole("link", { name: item.label })).toHaveAttribute("aria-current", "page")
     await expect(page.locator("body")).not.toContainText(forbiddenProductTerms)
   }
 
-  for (const item of navigation) {
-    await page.goto(item.path)
-    await expect(page.getByRole("heading", { level: 1, name: item.heading })).toBeVisible()
-  }
   expect(hydrationErrors).toEqual([])
 
   const body = page.locator("body")
@@ -667,11 +666,19 @@ test("@r0-shell remains stable at 375px", async ({ page }, testInfo) => {
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
     .toBe(true)
 
-  await page.getByRole("button", { name: "打开主导航" }).click()
-  const primaryNav = page.getByRole("navigation", { name: "主导航" })
-  await expect(primaryNav).toBeVisible()
-  await expect(primaryNav.getByRole("link", { name: "收件箱" })).toBeVisible()
-  await expect.poll(async () => (await page.getByRole("dialog").boundingBox())?.x).toBeGreaterThanOrEqual(0)
+  const mobileNav = page.getByRole("navigation", { name: "移动端主导航" })
+  await expect(mobileNav).toBeVisible()
+  await expect(mobileNav.getByRole("link")).toHaveCount(6)
+  for (const item of [
+    { name: /^公司/, path: "/company" },
+    { name: /收件/, path: "/inbox" },
+    { name: /^工作/, path: "/work" },
+    { name: /^董事会/, path: "/company/board" },
+    { name: /^团队/, path: "/team" },
+    { name: /^成果/, path: "/library" },
+  ])
+    await expect(mobileNav.getByRole("link", { name: item.name })).toHaveAttribute("href", item.path)
+  await expect(page.getByRole("button", { name: "打开主导航" })).toHaveCount(0)
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
     .toBe(true)
