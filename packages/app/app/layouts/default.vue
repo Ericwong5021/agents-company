@@ -78,7 +78,7 @@ const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigat
     ? { ...item, to: `${item.to}?project=${encodeURIComponent(routeProjectID.value)}` }
     : item));
 const pageTitle = computed(() => activeShellNavigationItem(navigation.value, route.path)?.label);
-const railNavigation = computed(() => navigation.value.filter(item => item.mobileLabel));
+const railNavigation = computed(() => navigation.value.filter(item => item.to.split("?", 1)[0] !== "/settings"));
 const mobileNavigation = computed(() => navigation.value.filter(item => item.mobileLabel));
 const settingsNavigation = computed(() => navigation.value.find(item => item.to.split("?", 1)[0] === "/settings"));
 const paneGroups = computed(() => [
