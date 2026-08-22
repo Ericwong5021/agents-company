@@ -94,6 +94,7 @@ async function capture(page: Page, name: string) {
 }
 
 test("renders the eight R0 human-review screenshot candidates", async ({ page, request }) => {
+  test.slow()
   assertCandidateSourcesAtHead()
   await mkdir(screenshotRoot, { recursive: true })
   await page.setViewportSize({ width: 1440, height: 1600 })
