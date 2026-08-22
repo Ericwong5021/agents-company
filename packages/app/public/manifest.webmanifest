@@ -1,0 +1,30 @@
+{
+  "id": "/",
+  "name": "Agent Company",
+  "short_name": "Agent Company",
+  "description": "A local-first company operated by autonomous agents.",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "/inbox",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f1f7fb",
+  "theme_color": "#1b1718",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/agent-company-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/agent-company-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "prefer_related_applications": false
+}

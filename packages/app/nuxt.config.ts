@@ -40,6 +40,7 @@ export default defineNuxtConfig({
     "/api/internal/**": { headers: noStore },
     "/api/agent-company/**": { headers: noStore },
     "/_eve_internal/**": { headers: noStore },
+    "/sw.js": { headers: { "cache-control": "no-cache", "service-worker-allowed": "/" } },
   },
   nitro: {
     output: {
@@ -62,9 +63,17 @@ export default defineNuxtConfig({
         { name: "description", content: "A local-first company operated by autonomous agents." },
         { name: "theme-color", content: "#1b1718" },
         { name: "color-scheme", content: "light dark" },
+        { name: "mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+        { name: "apple-mobile-web-app-title", content: "Agent Company" },
         { name: "robots", content: "noindex, nofollow" },
       ],
-      link: [{ rel: "icon", type: "image/svg+xml", href: "/agent-company-mark.svg" }],
+      link: [
+        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "icon", type: "image/svg+xml", href: "/agent-company-mark.svg" },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/agent-company-icon-180.png" },
+      ],
     },
   },
   fonts: {
