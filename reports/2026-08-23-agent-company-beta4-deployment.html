@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Company v0.1.5-beta.4 本地与 VPS 部署报告</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f2eb; color: #24231f; }
+    body { margin: 0; }
+    main { width: min(920px, calc(100% - 32px)); margin: 32px auto; padding: 32px; box-sizing: border-box; background: #fffdf8; border: 1px solid #ded8cc; border-radius: 20px; box-shadow: 0 18px 50px rgba(58, 47, 28, .08); }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); line-height: 1.15; }
+    h2 { margin: 34px 0 12px; padding-top: 8px; border-top: 1px solid #e7e1d5; font-size: 21px; }
+    p, li, td, th { font-size: 15px; line-height: 1.7; }
+    ul { padding-left: 22px; }
+    code { padding: 2px 6px; border-radius: 6px; background: #eee9df; overflow-wrap: anywhere; }
+    a { color: #9b4b22; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border: 1px solid #ded8cc; text-align: left; vertical-align: top; }
+    th { background: #f2ede3; }
+    .date { margin: 0 0 24px; color: #6d685f; }
+    .notice { padding: 14px 16px; border-left: 4px solid #ca713a; background: #fff3e8; }
+    @media (max-width: 640px) { main { width: 100%; margin: 0; padding: 22px 18px 40px; border: 0; border-radius: 0; } table { display: block; overflow-x: auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Agent Company v0.1.5-beta.4 本地与 VPS 部署报告</h1>
+  <p class="date">日期：2026-08-23</p>
+
+  <h2>结论</h2>
+  <p>Agent Company <code>v0.1.5-beta.4</code> 已部署到本机和 VPS。VPS 继续只运行 Relay 与 WebUI，本机 Control Plane 保持唯一权威运行时。公网和本地均已取得真实认证会话与真实 Snapshot，连接状态为 <code>ready</code>，当前可见 3 名 Agent。</p>
+  <p class="notice">本报告不记录登录密码。密码只在最终交付消息中直接提供给负责人。</p>
+
+  <h2>发布制品</h2>
+  <ul>
+    <li>Preview：<code>v0.1.5-beta.4</code></li>
+    <li>发布源提交：<code>f5fa3da3846d85059e39898660191f5444405a72</code></li>
+    <li>Preview workflow：<code>32582219189</code>，成功</li>
+    <li>Relay 镜像：<code>ghcr.io/ericwong5021/agents-company-relay@sha256:d933511338db830eaab0c2d6cc851fade8bd97dd229a64a85afa0af6a209267d</code></li>
+    <li>WebUI 镜像：<code>ghcr.io/ericwong5021/agents-company-webui@sha256:ba2b1a4ba7d6d5a75e39978ce8e513c0d9197d2e950b16e6aa5336c719759102</code></li>
+    <li>本地 CLI、安装脚本、VPS 脚本和远程配置均通过 GitHub Attestation 与 <code>checksums.txt</code> 校验</li>
+  </ul>
+
+  <h2>本地部署</h2>
+  <ul>
+    <li>Control Plane 版本：<code>0.1.5-beta.4</code></li>
+    <li>Control Plane：<code>http://127.0.0.1:4096</code></li>
+    <li>Control Plane 健康检查：<code>/global/health</code> 返回 <code>healthy: true</code></li>
+    <li>Control Plane 服务：<code>cn.talktodo.agentcompany.runtime</code>，由 <code>launchd</code> 常驻管理</li>
+    <li>WebUI：<a href="http://127.0.0.1:3210">http://127.0.0.1:3210</a></li>
+    <li>WebUI 服务：<code>cn.talktodo.agentcompany.webui</code>，由 <code>launchd</code> 常驻管理</li>
+    <li>WebUI 生产构建目录：<code>~/.local/share/agent-company/webui/v0.1.5-beta.4/.output</code></li>
+    <li>本地登录页：HTTP 200</li>
+    <li>本地自动认证：HTTP 200，仅接受可信 loopback 请求</li>
+    <li>本地 Snapshot：HTTP 200，<code>connection: ready</code>，3 名 Agent，无运行时问题</li>
+  </ul>
+
+  <h2>VPS 部署</h2>
+  <ul>
+    <li>公网地址：<a href="https://cumora.talktodo.cn/">https://cumora.talktodo.cn/</a></li>
+    <li>登录邮箱：<code>970699442@qq.com</code></li>
+    <li>已安装版本：<code>v0.1.5-beta.4</code></li>
+    <li>已安装源提交：<code>f5fa3da3846d85059e39898660191f5444405a72</code></li>
+    <li>Relay 容器：healthy</li>
+    <li>WebUI 容器：healthy</li>
+    <li>入口代理：Nginx，继续监听 80/443；容器只绑定 VPS loopback 端口</li>
+    <li>TLS：Let's Encrypt，证书有效期至 2026-11-17</li>
+    <li>VPS 根分区：60 GB，总占用 50 GB，可用 6.5 GB，占用率 89%</li>
+  </ul>
+
+  <h2>分层验收</h2>
+  <table>
+    <thead><tr><th>层级</th><th>结果</th><th>证据</th></tr></thead>
+    <tbody>
+      <tr><td>发布来源</td><td>通过</td><td>Preview workflow 成功，版本、源提交、镜像摘要一致</td></tr>
+      <tr><td>本地 Runtime</td><td>通过</td><td>beta.4，健康检查成功，远程连接在线</td></tr>
+      <tr><td>本地 WebUI</td><td>通过</td><td>生产构建常驻，登录和认证均为 200</td></tr>
+      <tr><td>VPS 容器</td><td>通过</td><td>Relay 与 WebUI 均为 healthy</td></tr>
+      <tr><td>HTTPS</td><td>通过</td><td>登录页 200，TLS 证书有效</td></tr>
+      <tr><td>未认证隔离</td><td>通过</td><td>公网 Snapshot 返回 401</td></tr>
+      <tr><td>公网认证</td><td>通过</td><td>登录 200，会话 200，账号与配置邮箱一致</td></tr>
+      <tr><td>真实数据</td><td>通过</td><td>公网 Snapshot 200，<code>connection: ready</code>，3 名 Agent</td></tr>
+      <tr><td>权威边界</td><td>通过</td><td>本机 Runtime 仍连接同一 Relay，VPS 未启动第二个 Control Plane</td></tr>
+    </tbody>
+  </table>
+
+  <h2>移动端界面门禁</h2>
+  <p>发布源提交的浏览器门禁中，375px 稳定性、六项移动端主导航、无横向溢出、路由状态和 Team 内容 Tab 均已执行。候选截图用例最初把页面的 <code>role="tablist"</code> 错当成 <code>navigation</code> 查询，导致等待超时；失败截图确认页面中的组织、成员、历史三个 Tab 及 2 名候选成员均已真实渲染。</p>
+  <p>测试选择器在提交 <code>ec7c4965f7d21fd017b3f7730887cec093a8021b</code> 中改为按 <code>tablist</code> 查询，没有修改生产代码。修正后的 8 张候选截图用例在本机通过，截图阶段耗时 1.4 分钟；GitHub test workflow <code>32585783657</code> 及同提交的 lint、typecheck、package-check、体验元数据 workflow 均已成功。</p>
+  <p>本次尝试连接可见浏览器做公网截图验收时，没有可用浏览器实例。因此本报告没有把接口结果冒充视觉截图证据；当前视觉结论只采用同一页面代码的 CI Playwright 门禁。</p>
+
+  <h2>运维提示</h2>
+  <ul>
+    <li>本机 WebUI 和 Control Plane 都由 <code>launchd</code> 自动保持运行。</li>
+    <li>VPS 升级脚本在替换容器前已备份上一版配置和持久卷，并保留失败回滚路径。</li>
+    <li>VPS 磁盘占用率已达 89%。本次没有清理任何可能属于其他服务的 Docker 镜像或缓存，后续应单独安排有边界的磁盘审计。</li>
+  </ul>
+</main>
+</body>
+</html>
