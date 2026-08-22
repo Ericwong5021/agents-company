@@ -78,7 +78,8 @@ const navigation = computed(() => visibleShellNavigation(appConfig.shell.navigat
     ? { ...item, to: `${item.to}?project=${encodeURIComponent(routeProjectID.value)}` }
     : item));
 const pageTitle = computed(() => activeShellNavigationItem(navigation.value, route.path)?.label);
-const railNavigation = computed(() => navigation.value.filter(item => item.to.split("?", 1)[0] !== "/settings"));
+const railNavigation = computed(() => navigation.value.filter(item => item.mobileLabel));
+const mobileNavigation = computed(() => navigation.value.filter(item => item.mobileLabel));
 const settingsNavigation = computed(() => navigation.value.find(item => item.to.split("?", 1)[0] === "/settings"));
 const paneGroups = computed(() => [
   {
@@ -282,6 +283,27 @@ useHead(() => ({
           <slot />
         </main>
       </UDashboardGroup>
+
+      <nav class="ac-mobile-tabbar" aria-label="移动端主导航">
+        <NuxtLink
+          v-for="item in mobileNavigation"
+          :key="item.to"
+          :to="item.to"
+          class="ac-mobile-tabbar__item"
+          :class="{ 'ac-mobile-tabbar__item--active': isShellNavigationActive(item, route.path) }"
+          :aria-current="isShellNavigationActive(item, route.path) ? 'page' : undefined"
+        >
+          <span class="ac-mobile-tabbar__icon">
+            <UIcon :name="item.icon" />
+            <span
+              v-if="item.to === '/inbox' && attentionCount"
+              class="ac-mobile-tabbar__badge"
+              :aria-label="`${attentionCount} 项待处理`"
+            >{{ attentionCount > 99 ? "99+" : attentionCount }}</span>
+          </span>
+          <span>{{ item.mobileLabel }}</span>
+        </NuxtLink>
+      </nav>
     </div>
   </div>
 </template>

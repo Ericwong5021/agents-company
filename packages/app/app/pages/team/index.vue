@@ -109,6 +109,17 @@ const organizationAgents = computed(() => [
           workload: { active: assignment.status === "released" ? 0 : 1, blocked: 0 },
         }]),
 ])
+const teamViews = ["organization", "members", "history"] as const
+type TeamView = (typeof teamViews)[number]
+const activeView = computed<TeamView>(() =>
+  teamViews.includes(route.query.view as TeamView) ? route.query.view as TeamView : "organization")
+const historicalMemberCount = computed(() =>
+  historicalTemporaries.value.length + historicalProjectedAssignments.value.length)
+const teamViewItems = computed(() => [
+  { key: "organization" as const, label: "组织", icon: "i-lucide-network", count: currentAssignments.value.length },
+  { key: "members" as const, label: "成员", icon: "i-lucide-users-round", count: organizationAgents.value.length },
+  { key: "history" as const, label: "历史", icon: "i-lucide-history", count: historicalMemberCount.value },
+])
 const organizationAssignments = computed<OrganizationGraphAssignment[]>(() => currentAssignments.value.map(assignment => ({
   id: assignment.assignmentId,
   agentID: assignment.agent.id,
@@ -207,6 +218,16 @@ function releaseReasonLabel(value?: string | null) {
   return value
 }
 
+function teamViewRoute(view: TeamView) {
+  return {
+    path: "/team",
+    query: {
+      ...route.query,
+      view: view === "organization" ? undefined : view,
+    },
+  }
+}
+
 async function retry() {
   await Promise.all([refresh(), refreshOrganization()])
 }
@@ -269,7 +290,23 @@ async function retry() {
             当前工作的责任分配投影不可用，不会显示为零分配。
           </p>
 
-          <div class="ac-organization-workspace">
+          <nav class="ac-team-view-tabs" aria-label="团队内容" role="tablist">
+            <NuxtLink
+              v-for="view in teamViewItems"
+              :key="view.key"
+              :to="teamViewRoute(view.key)"
+              class="ac-team-view-tab"
+              :data-active="activeView === view.key"
+              :aria-selected="activeView === view.key"
+              role="tab"
+            >
+              <UIcon :name="view.icon" aria-hidden="true" />
+              <span>{{ view.label }}</span>
+              <small>{{ view.count }}</small>
+            </NuxtLink>
+          </nav>
+
+          <div v-if="activeView === 'organization'" class="ac-organization-workspace">
             <OrganizationCanvas
               :company-name="snapshot.company.name"
               :agents="organizationAgents"
@@ -280,8 +317,7 @@ async function retry() {
             <OrganizationFactsPanel :node="displayedOrganizationNode" :project-id="primaryWorkID" />
           </div>
 
-          <details class="ac-team-directory">
-            <summary>查看成员卡片与责任证据（{{ organizationAgents.length }}）</summary>
+          <div v-else-if="activeView === 'members'" class="ac-team-directory ac-team-directory--open">
             <template
               v-for="group in [
                 { key: 'employees', title: '正式员工', members: employees },
@@ -488,16 +524,10 @@ async function retry() {
               </article>
             </div>
             </section>
-          </details>
+          </div>
 
-          <details
-            v-if="historicalTemporaries.length || historicalProjectedAssignments.length"
-            class="ac-detail-panel"
-          >
-            <summary>
-              历史工作成员（{{ historicalTemporaries.length + historicalProjectedAssignments.length }}）
-            </summary>
-            <div class="ac-team-grid">
+          <section v-else class="ac-team-history" aria-label="历史工作成员">
+            <div v-if="historicalMemberCount" class="ac-team-grid">
               <article v-for="agent in historicalTemporaries" :key="agent.id" class="ac-team-card">
                 <h2>
                   <NuxtLink :to="`/team/${encodeURIComponent(agent.id)}`" class="ac-team-card__link">
@@ -519,7 +549,16 @@ async function retry() {
                 </NuxtLink>
               </article>
             </div>
-          </details>
+            <div v-else class="ac-empty-state ac-empty-state--compact">
+              <div class="ac-empty-state__content">
+                <span class="ac-empty-state__icon" aria-hidden="true">
+                  <UIcon name="i-lucide-history" />
+                </span>
+                <h2>还没有历史成员</h2>
+                <p>成员退出当前工作后，会在这里保留可追溯记录。</p>
+              </div>
+            </div>
+          </section>
         </template>
 
         <section v-else-if="!unavailableOrganizationCount" class="ac-empty-state">

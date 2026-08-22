@@ -9,7 +9,8 @@ const appConfig = useAppConfig() as {
   }
 }
 
-const items = computed(() => appConfig.shell.navigation)
+const paths = new Set(["/company", "/company/board", "/company/operations"])
+const items = computed(() => appConfig.shell.navigation.filter(item => paths.has(item.to)))
 
 function isActive(path: string) {
   return route.path === path || (path !== "/inbox" && route.path.startsWith(`${path}/`))

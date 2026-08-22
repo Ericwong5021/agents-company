@@ -50,8 +50,11 @@ onMounted(() => {
     :ui="{ left: 'min-w-0', right: 'gap-2' }"
   >
     <template #left>
+      <NuxtLink to="/company" class="ac-mobile-brand" aria-label="打开公司总览">
+        <Logo />
+      </NuxtLink>
       <UButton
-        class="min-h-10 min-w-10 lg:hidden"
+        class="ac-shell-navbar__menu min-h-10 min-w-10 lg:hidden"
         color="neutral"
         variant="ghost"
         icon="i-lucide-menu"
@@ -74,9 +77,10 @@ onMounted(() => {
         :aria-label="connectionAriaLabel"
       >
         <span class="ac-connection-pill__dot" aria-hidden="true" />
-        <span>{{ connectionLabel }}</span>
+        <span class="ac-connection-pill__label">{{ connectionLabel }}</span>
       </NuxtLink>
       <slot />
+      <span class="ac-mobile-account"><UserMenu /></span>
     </template>
   </UDashboardNavbar>
 </template>

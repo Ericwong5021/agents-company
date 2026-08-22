@@ -39,7 +39,7 @@ const currentWork = computed(() =>
     </template>
 
     <template #body>
-      <div class="company-page">
+      <div class="company-page company-page--overview">
         <header class="company-page__header">
           <div>
             <p class="company-eyebrow">公司总览</p>
@@ -150,6 +150,7 @@ const currentWork = computed(() =>
             <div class="ac-work3__actions">
               <NuxtLink class="ac-work3__action" to="/inbox">收件箱</NuxtLink>
               <NuxtLink class="ac-work3__action" to="/company/board">董事会</NuxtLink>
+              <NuxtLink class="ac-work3__action" to="/company/operations">运营记录</NuxtLink>
               <NuxtLink class="ac-work3__action" to="/team">团队</NuxtLink>
               <NuxtLink class="ac-work3__action" to="/library">成果库</NuxtLink>
             </div>
