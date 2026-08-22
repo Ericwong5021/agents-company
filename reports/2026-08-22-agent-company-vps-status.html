@@ -26,6 +26,8 @@
       <li>协议：<code>agent-company-remote/v1</code></li>
       <li>公网健康检查：通过</li>
       <li>登录页：HTTP 200</li>
+      <li>实际账号登录：HTTP 200</li>
+      <li>登录后 Snapshot API：HTTP 200</li>
       <li>本地 Control Plane：已连接</li>
       <li>VPS 容器：Relay 与 WebUI 均为 healthy</li>
     </ul>
@@ -37,7 +39,7 @@
       <li>登录账号：<code>970699442@qq.com</code></li>
       <li>登录密码：VPS 私有环境变量中配置的 32 位随机值</li>
     </ul>
-    <p>密码未写入本报告、仓库或聊天记录；已复制到当前 Mac 的剪贴板。</p>
+    <p>实际密码已按要求直接交付在本次对话中。为避免把现网凭据提交到 Git 历史，密码不写入仓库报告。</p>
     <h2>发布与恢复能力</h2>
     <p>当前实现使用 GitHub Preview Release 的固定镜像摘要和受验证发布制品。VPS 部署脚本会校验 attestation 与 checksum，升级前备份 Relay/WebUI 数据卷，并在失败时恢复上一版本。</p>
     <h2>当前缺口</h2>

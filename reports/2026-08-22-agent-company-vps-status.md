@@ -12,6 +12,8 @@ Agent Company 已经采用与 Better Codex 相同的核心思路完成 VPS 远�
 - 协议：`agent-company-remote/v1`
 - 公网健康检查：通过
 - 登录页：HTTP 200
+- 实际账号登录：HTTP 200
+- 登录后 Snapshot API：HTTP 200
 - 本地 Control Plane：已连接
 - VPS 容器：Relay 与 WebUI 均为 healthy
 
@@ -26,7 +28,7 @@ VPS 运行 Relay、WebUI 和 HTTPS 入口，本地 Control Plane 通过出站 We
 - 登录账号：`970699442@qq.com`
 - 登录密码：VPS 私有环境变量中配置的 32 位随机值
 
-密码未写入本报告、仓库或聊天记录；已复制到当前 Mac 的剪贴板。
+实际密码已按要求直接交付在本次对话中。为避免把现网凭据提交到 Git 历史，密码不写入仓库报告。
 
 ## 发布与恢复能力
 
