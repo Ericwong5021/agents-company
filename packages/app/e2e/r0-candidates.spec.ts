@@ -94,7 +94,7 @@ async function capture(page: Page, name: string) {
 }
 
 test("renders the eight R0 human-review screenshot candidates", async ({ page, request }) => {
-  test.setTimeout(300_000)
+  test.slow()
   assertCandidateSourcesAtHead()
   await mkdir(screenshotRoot, { recursive: true })
   await page.setViewportSize({ width: 1440, height: 1600 })
@@ -140,7 +140,7 @@ test("renders the eight R0 human-review screenshot candidates", async ({ page, r
   await capture(page, "delivery")
 
   await open(page, "/team")
-  await page.getByRole("navigation", { name: "团队内容" }).getByRole("tab", { name: /^成员/ }).click()
+  await page.getByRole("tablist", { name: "团队内容" }).getByRole("tab", { name: /^成员/ }).click()
   await expect(page).toHaveURL((url) => url.pathname === "/team" && url.searchParams.get("view") === "members")
   await expect(page.getByRole("heading", { level: 2, name: "小岚" })).toBeVisible()
   await capture(page, "team")
