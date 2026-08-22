@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Company VPS 远程访问状态</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { max-width: 860px; margin: 0 auto; padding: 40px 24px 64px; line-height: 1.7; }
+    h1 { line-height: 1.2; }
+    h2 { margin-top: 2rem; }
+    code { padding: .12rem .35rem; border-radius: .35rem; background: color-mix(in srgb, currentColor 10%, transparent); }
+    a { color: #ea580c; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Agent Company VPS 远程访问状态</h1>
+    <p>日期：2026-08-22</p>
+    <h2>结论</h2>
+    <p>Agent Company 已经采用与 Better Codex 相同的核心思路完成 VPS 远程访问，并且当前正在运行，不需要再从零开发或部署。</p>
+    <ul>
+      <li>公网地址：<a href="https://cumora.talktodo.cn/">https://cumora.talktodo.cn/</a></li>
+      <li>版本：<code>v0.1.5-beta.3</code></li>
+      <li>源提交：<code>3f5aed0194642d116491274016cc7897d02fdf4e</code></li>
+      <li>协议：<code>agent-company-remote/v1</code></li>
+      <li>公网健康检查：通过</li>
+      <li>登录页：HTTP 200</li>
+      <li>本地 Control Plane：已连接</li>
+      <li>VPS 容器：Relay 与 WebUI 均为 healthy</li>
+    </ul>
+    <h2>架构边界</h2>
+    <p>VPS 运行 Relay、WebUI 和 HTTPS 入口，本地 Control Plane 通过出站 WebSocket 连接 Relay。VPS 不取代本地 Control Plane 的权威写入职责，浏览器请求由 Relay 转发给本地服务。</p>
+    <p>这与 Better Codex 的远程架构一致：远端提供 Web 访问与中继，本地 Runtime/Control Plane 保持权威数据源。</p>
+    <h2>登录</h2>
+    <ul>
+      <li>登录账号：<code>970699442@qq.com</code></li>
+      <li>登录密码：VPS 私有环境变量中配置的 32 位随机值</li>
+    </ul>
+    <p>密码未写入本报告、仓库或聊天记录；已复制到当前 Mac 的剪贴板。</p>
+    <h2>发布与恢复能力</h2>
+    <p>当前实现使用 GitHub Preview Release 的固定镜像摘要和受验证发布制品。VPS 部署脚本会校验 attestation 与 checksum，升级前备份 Relay/WebUI 数据卷，并在失败时恢复上一版本。</p>
+    <h2>当前缺口</h2>
+    <p>仓库已有完整部署代码和发布制品，但缺少一份面向使用者、与 Better Codex <code>SELF_HOSTING.md</code> 同等级的 Agent Company 自托管说明。这个文档缺口不影响当前实例运行。</p>
+  </main>
+</body>
+</html>
