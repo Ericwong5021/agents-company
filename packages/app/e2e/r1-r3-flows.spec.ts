@@ -67,7 +67,7 @@ test("@r1-r3-flows @scenario-deliv03 opens a delivered artifact with inline prev
 }, testInfo) => {
   await enterWorkspace(page, "/library/artifacts/project-delivered/artifact-report")
 
-  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
+  await expect(page.locator(".ac-workspace-header").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
 
   // DELIV-03：真实成果必须可打开、可下载、可复制链接，而不是只展示 kind/title/status。
   const download = page.getByRole("link", { name: "下载成果" })

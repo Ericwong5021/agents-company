@@ -372,11 +372,11 @@ test("@r0-shell renders shared work and evidence projections without raw status"
   await expect(artifactLink).toHaveAttribute("href", "/library/artifacts/project-delivered/artifact-report")
   await page.goto("/library/artifacts/project-delivered/artifact-report")
   await expect(page).toHaveURL((url) => url.pathname === "/library/artifacts/project-delivered/artifact-report")
-  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
+  await expect(page.locator(".ac-workspace-header").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
   await expect(page.getByText("核心路径已完成审查，交付状态与证据来源均可追溯。")).toBeVisible()
   await expect(page.getByText("只读", { exact: true })).toBeVisible()
   await page.reload()
-  await expect(page.locator("section").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
+  await expect(page.locator(".ac-workspace-header").getByRole("heading", { level: 1, name: "体验审查报告", exact: true })).toBeVisible()
   const artifactRequests = await request.get(`${controlPlaneURL}/__test/requests`).then((response) => response.json())
   expect(
     artifactRequests.items.some(
