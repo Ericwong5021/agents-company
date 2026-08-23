@@ -1,4 +1,10 @@
 <!-- Adapted from yetone/cumora@5dbbdee under the MIT License. Reimplemented for Vue/Nuxt and AgentCompany domain models. -->
+<script lang="ts">
+let documentResizeOwner: symbol | undefined
+let documentResizeCursor = ""
+let documentResizeUserSelect = ""
+</script>
+
 <script setup lang="ts">
 import type { CSSProperties } from "vue"
 
@@ -29,8 +35,9 @@ const size = defineModel<number>({ required: true })
 const dragging = ref(false)
 let startX = 0
 let startSize = 0
-let previousCursor = ""
-let previousUserSelect = ""
+const resizeOwner = Symbol()
+let activePointerID: number | undefined
+let activeHandle: HTMLElement | undefined
 
 const clampedSize = computed(() => Math.min(props.max, Math.max(props.min, size.value)))
 const style = computed<CSSProperties>(() => ({
@@ -42,33 +49,44 @@ function setSize(nextSize: number) {
 }
 
 function restoreDocumentState() {
-  document.body.style.cursor = previousCursor
-  document.body.style.userSelect = previousUserSelect
+  if (documentResizeOwner !== resizeOwner) return
+  document.body.style.cursor = documentResizeCursor
+  document.body.style.userSelect = documentResizeUserSelect
+  documentResizeOwner = undefined
 }
 
-function stopResize() {
+function stopResize(event?: PointerEvent) {
   if (!dragging.value) return
+  if (event && event.pointerId !== activePointerID) return
   dragging.value = false
   window.removeEventListener("pointermove", resize)
   window.removeEventListener("pointerup", stopResize)
   window.removeEventListener("pointercancel", stopResize)
+  if (activePointerID !== undefined && activeHandle?.hasPointerCapture(activePointerID)) activeHandle.releasePointerCapture(activePointerID)
+  activePointerID = undefined
+  activeHandle = undefined
   restoreDocumentState()
   emit("resizeEnd", size.value)
 }
 
 function resize(event: PointerEvent) {
+  if (event.pointerId !== activePointerID) return
   const delta = event.clientX - startX
   setSize(startSize + (props.side === "left" ? delta : -delta))
 }
 
 function startResize(event: PointerEvent) {
-  if (props.disabled) return
+  if (props.disabled || dragging.value || documentResizeOwner) return
   event.preventDefault()
   dragging.value = true
+  documentResizeOwner = resizeOwner
+  activePointerID = event.pointerId
+  activeHandle = event.currentTarget as HTMLElement
+  activeHandle.setPointerCapture(activePointerID)
   startX = event.clientX
   startSize = clampedSize.value
-  previousCursor = document.body.style.cursor
-  previousUserSelect = document.body.style.userSelect
+  documentResizeCursor = document.body.style.cursor
+  documentResizeUserSelect = document.body.style.userSelect
   document.body.style.cursor = "col-resize"
   document.body.style.userSelect = "none"
   window.addEventListener("pointermove", resize)

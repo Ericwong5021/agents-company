@@ -829,6 +829,10 @@
   background: var(--ac-thinking);
 }
 
+.founder-board-chat__members span[data-state="attention"]::after {
+  background: var(--ui-color-error-500);
+}
+
 .founder-board-messages--chat {
   min-height: 420px;
   max-height: min(62vh, 720px);
@@ -871,6 +875,28 @@
   flex: 1;
   background: color-mix(in srgb, var(--ac-brand) 36%, transparent);
   content: "";
+}
+
+.founder-board-new-messages {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 5px;
+  margin: -46px auto 12px;
+  border: 1px solid var(--ui-border-accented);
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  box-shadow: var(--ac-shadow-popover);
+  color: var(--ac-brand-deep);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 7px 12px;
+}
+
+.founder-board-new-messages:hover {
+  background: var(--ui-bg-accented);
 }
 
 .founder-board-message__avatar {
@@ -1067,12 +1093,26 @@
 }
 
 .founder-board-message__quick-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
   opacity: 0;
   transform: translateY(2px) scale(0.98);
   transition: opacity 150ms ease, transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.founder-board-reaction-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-bg-elevated);
+  box-shadow: var(--ac-shadow-popover);
+  padding: 4px;
 }
 
 .founder-board-messages--chat article:hover .founder-board-message__quick-actions,
@@ -1415,6 +1455,10 @@
 .founder-board-roster i[data-state="thinking"] {
   background: var(--ac-thinking);
   animation: founder-status-pulse 1.4s ease-in-out infinite;
+}
+
+.founder-board-roster i[data-state="attention"] {
+  background: var(--ui-color-error-500);
 }
 
 .founder-governance-facts {

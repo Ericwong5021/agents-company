@@ -14,7 +14,8 @@ const initialRouteProject = typeof route.query.project === "string" ? route.quer
 const board = ref<FounderBoardGovernanceProjection | null>(null)
 const thread = ref<CompanyBoardThread | null>(null)
 const loading = ref(false)
-const actionMessage = ref("")
+const governanceMessage = ref("")
+const interventionMessage = ref("")
 const replyTarget = ref<{ id: string; author: string; body: string }>()
 const pollOpen = ref(false)
 const pollQuestion = ref("")
@@ -24,6 +25,11 @@ const readSequenceAtOpen = ref(0)
 const highlightedMessageID = ref("")
 const messageFeed = ref<HTMLElement>()
 const initialScrollDone = ref(false)
+const newMessageCount = ref(0)
+const followLatest = ref(true)
+const knownMessageIDs = ref(new Set<string>())
+const interruptedScrollTop = ref<number>()
+const reactionMenuMessageID = ref("")
 const companyScopeConfirmed = ref(false)
 const scopeInitialized = ref(Boolean(initialRouteProject))
 const appliedRouteProject = ref(initialRouteProject)
@@ -226,29 +232,53 @@ function jumpToMessage(messageID: string) {
 }
 
 function memberState(agent: CompanyAgent) {
-  if (respondingAgentIDs.value.has(agent.id)) return "thinking"
+  if (agent.activity === "failed" || agent.attention === "urgent" || agent.interruptibility === "needs_intervention") return "attention"
+  if (respondingAgentIDs.value.has(agent.id) || ["recovering", "waiting"].includes(agent.activity)) return "thinking"
+  if (agent.activity === "interrupted") return "resting"
   if (agent.activity === "working") return "working"
   if (agent.presence === "online") return "available"
   return "resting"
 }
 
 function memberStateLabel(agent: CompanyAgent) {
+  if (agent.activity === "failed") return agent.risk || "执行失败"
+  if (agent.activity === "interrupted") return "执行已中断"
+  if (agent.interruptibility === "needs_intervention") return agent.risk || "需要人工介入"
+  if (agent.attention === "urgent") return agent.risk || "需要立即关注"
   if (respondingAgentIDs.value.has(agent.id)) return "正在组织回复"
+  if (agent.activity === "recovering") return "正在恢复"
+  if (agent.activity === "waiting") return "等待继续"
   if (agent.activity === "working") return agent.subject || "正在处理工作"
   if (agent.presence === "online") return "在线"
   return "离线"
 }
 
-function scrollToLatest() {
-  if (!messageFeed.value) return
-  const shouldScroll = !initialScrollDone.value
-    || messageFeed.value.scrollHeight - messageFeed.value.scrollTop - messageFeed.value.clientHeight < 180
-  if (!shouldScroll) return
+function isNearLatest() {
+  if (!messageFeed.value) return true
+  return messageFeed.value.scrollHeight - messageFeed.value.scrollTop - messageFeed.value.clientHeight < 180
+}
+
+function scrollToLatest(force = false) {
+  if (!messageFeed.value || (!force && initialScrollDone.value && !followLatest.value)) return false
   messageFeed.value.scrollTop = messageFeed.value.scrollHeight
   initialScrollDone.value = true
+  followLatest.value = true
+  newMessageCount.value = 0
+  return true
+}
+
+function onMessageFeedScroll() {
+  if (interruptedScrollTop.value !== undefined) return
+  followLatest.value = isNearLatest()
+  if (followLatest.value) newMessageCount.value = 0
+}
+
+function toggleReactionMenu(messageID: string) {
+  reactionMenuMessageID.value = reactionMenuMessageID.value === messageID ? "" : messageID
 }
 
 async function react(messageID: string, emoji: string) {
+  reactionMenuMessageID.value = ""
   await $fetch("/api/agent-company/board-action", {
     method: "POST",
     body: { kind: "reaction", message_id: messageID, emoji },
@@ -284,7 +314,7 @@ async function createPoll() {
     pollOpen.value = false
   })
   loading.value = false
-  await refreshBoardMessages()
+  await refreshBoardMessages(true)
 }
 
 function replyPreview(message: typeof chatMessages.value[number]) {
@@ -353,11 +383,11 @@ async function loadBoard() {
 async function runShadow() {
   if (!shadowRun.currentGoal.trim() || loading.value) return
   if (!shadowScopeReady.value) {
-    actionMessage.value = "请先选择一项工作；若确需综合多项工作，请明确确认公司范围。"
+    governanceMessage.value = "请先选择一项工作；若确需综合多项工作，请明确确认公司范围。"
     return
   }
   loading.value = true
-  actionMessage.value = ""
+  governanceMessage.value = ""
   const source = currentRequest.value
   await $fetch<FounderShadowDecision>("/api/agent-company/founder-shadow/run", {
     method: "POST",
@@ -383,11 +413,11 @@ async function runShadow() {
     },
   }).then(
     (result) => {
-      actionMessage.value = result.status === "suggested"
+      governanceMessage.value = result.status === "suggested"
         ? "影子建议已写入只读记录。"
         : `影子建议保持阻断：${result.blockReasons.map(blockReasonLabel).join("、")}`
     },
-    () => actionMessage.value = "影子建议未写入，请检查上下文与本地服务状态。",
+    () => governanceMessage.value = "影子建议未写入，请检查上下文与本地服务状态。",
   )
   loading.value = false
   await loadBoard()
@@ -402,7 +432,7 @@ async function compareShadow() {
     || loading.value
   ) return
   loading.value = true
-  actionMessage.value = ""
+  governanceMessage.value = ""
   await $fetch<FounderShadowComparison>("/api/agent-company/founder-shadow/compare", {
     method: "POST",
     body: {
@@ -420,10 +450,10 @@ async function compareShadow() {
     },
   }).then(
     () => {
-      actionMessage.value = "影子建议对照已写入，未冒充人工确认样本。"
+      governanceMessage.value = "影子建议对照已写入，未冒充人工确认样本。"
       comparison.rationale = ""
     },
-    () => actionMessage.value = "影子建议对照未写入，请检查决策台账引用。",
+    () => governanceMessage.value = "影子建议对照未写入，请检查决策台账引用。",
   )
   loading.value = false
   await loadBoard()
@@ -441,7 +471,7 @@ async function convergeAdvisor() {
     || loading.value
   ) return
   loading.value = true
-  actionMessage.value = ""
+  governanceMessage.value = ""
   await $fetch<FounderAdvisorConvergence>("/api/agent-company/founder-board/converge", {
     method: "POST",
     body: {
@@ -460,10 +490,10 @@ async function convergeAdvisor() {
       dissent: [],
     },
   }).then(
-    (result) => actionMessage.value = result.status === "intent_recorded"
+    (result) => governanceMessage.value = result.status === "intent_recorded"
       ? "顾问代理的决策意图已写入决策台账，未创建执行。"
       : `顾问代理保持未执行：${result.events.at(-1)?.reason ?? result.authority.reason}`,
-    () => actionMessage.value = "顾问代理未能形成决策意图，请检查董事会来源链。",
+    () => governanceMessage.value = "顾问代理未能形成决策意图，请检查董事会来源链。",
   )
   loading.value = false
   await loadBoard()
@@ -472,7 +502,7 @@ async function convergeAdvisor() {
 async function intervene() {
   if (!boardThreadId.value || !intervention.reason.trim() || loading.value) return
   loading.value = true
-  actionMessage.value = ""
+  interventionMessage.value = ""
   await $fetch("/api/agent-company/founder-board/intervene", {
     method: "POST",
     body: {
@@ -488,22 +518,22 @@ async function intervene() {
     },
   })
     .then(() => {
-      actionMessage.value = "接管记录与停止请求已写入治理审计链。"
+      interventionMessage.value = "接管记录与停止请求已写入治理审计链。"
       intervention.reason = ""
       intervention.newGoal = ""
     })
     .catch(() => {
-      actionMessage.value = "接管记录未完成，请检查本地服务状态。"
+      interventionMessage.value = "接管记录未完成，请检查本地服务状态。"
     })
   loading.value = false
   await Promise.all([loadBoard(), refresh()])
 }
 
-async function refreshBoardMessages() {
+async function refreshBoardMessages(forceLatest = false) {
   await refresh()
   await loadBoard()
   await nextTick()
-  scrollToLatest()
+  scrollToLatest(forceLatest)
   const sequence = chatMessages.value.at(-1)?.sequence
   if (sequence !== undefined) {
     await $fetch("/api/agent-company/board-action", {
@@ -520,11 +550,16 @@ onMounted(() => {
   if (snapshot.value.company.id) {
     readSequenceAtOpen.value = Number(localStorage.getItem(`agent-company:board-read:${snapshot.value.company.id}`)) || 0
   }
+  knownMessageIDs.value = new Set(chatMessages.value.map((message) => message.id))
   void loadBoard()
   nextTick(scrollToLatest)
 })
-watch(() => snapshot.value.company.id, (companyId) => {
+watch(() => snapshot.value.company.id, (companyId, previousCompanyId) => {
   if (!companyId) return
+  if (!knownMessageIDs.value.size || (previousCompanyId && previousCompanyId !== companyId)) {
+    knownMessageIDs.value = new Set(chatMessages.value.map((message) => message.id))
+    interruptedScrollTop.value = undefined
+  }
   if (import.meta.client && readSequenceAtOpen.value === 0) {
     readSequenceAtOpen.value = Number(localStorage.getItem(`agent-company:board-read:${companyId}`)) || 0
   }
@@ -537,7 +572,37 @@ watch(
 watch(() => shadowRun.projectId, () => {
   companyScopeConfirmed.value = false
 })
-watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
+watch(() => [scopeProjectID.value, ...chatMessages.value.map((message) => message.id)], (current, previous) => {
+  const [scope, ...messageIDs] = current
+  const [previousScope] = previous
+  if (scope !== previousScope) {
+    initialScrollDone.value = false
+    followLatest.value = true
+    newMessageCount.value = 0
+    knownMessageIDs.value = new Set(messageIDs)
+    interruptedScrollTop.value = undefined
+    nextTick(() => scrollToLatest(true))
+    return
+  }
+  if (!messageIDs.length && knownMessageIDs.value.size) {
+    interruptedScrollTop.value ??= messageFeed.value?.scrollTop
+    return
+  }
+  const addedCount = messageIDs.filter((messageID) => !knownMessageIDs.value.has(messageID)).length
+  messageIDs.forEach((messageID) => knownMessageIDs.value.add(messageID))
+  const shouldFollow = !initialScrollDone.value || followLatest.value
+  const restoreScrollTop = interruptedScrollTop.value
+  interruptedScrollTop.value = undefined
+  if (!addedCount && restoreScrollTop === undefined) return
+  nextTick(() => {
+    if (shouldFollow) {
+      scrollToLatest(true)
+      return
+    }
+    if (restoreScrollTop !== undefined && messageFeed.value) messageFeed.value.scrollTop = restoreScrollTop
+    newMessageCount.value += addedCount
+  })
+})
 </script>
 
 <template>
@@ -600,7 +665,7 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
               </div>
             </div>
 
-            <div ref="messageFeed" class="founder-board-messages founder-board-messages--chat" role="log" aria-live="polite" aria-relevant="additions">
+            <div ref="messageFeed" class="founder-board-messages founder-board-messages--chat" role="log" aria-live="polite" aria-relevant="additions" @scroll.passive="onMessageFeedScroll">
               <template v-for="(message, index) in chatMessages" :key="message.id">
                 <div v-if="startsUnread(index)" class="founder-board-unread"><span>未读消息</span></div>
                 <article
@@ -660,13 +725,21 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
                         <span>{{ reaction.emoji }}</span><strong>{{ reaction.count }}</strong>
                       </button>
                       <div class="founder-board-message__quick-actions">
+                        <div v-if="reactionMenuMessageID === message.id" class="founder-board-reaction-menu">
+                          <button
+                            v-for="emoji in quickReactions.filter((candidate) => !message.reactions.some((reaction) => reaction.emoji === candidate))"
+                            :key="emoji"
+                            type="button"
+                            :aria-label="`用 ${emoji} 回应`"
+                            @click="react(message.id, emoji)"
+                          >{{ emoji }}</button>
+                        </div>
                         <button
-                          v-for="emoji in quickReactions.filter((candidate) => !message.reactions.some((reaction) => reaction.emoji === candidate && reaction.reacted))"
-                          :key="emoji"
                           type="button"
-                          :aria-label="`用 ${emoji} 回应`"
-                          @click="react(message.id, emoji)"
-                        >{{ emoji }}</button>
+                          aria-label="添加表情回应"
+                          :aria-expanded="reactionMenuMessageID === message.id"
+                          @click="toggleReactionMenu(message.id)"
+                        ><UIcon name="i-lucide-smile-plus" /></button>
                         <button type="button" aria-label="回复这条消息" @click="replyTo(message)">
                           <UIcon name="i-lucide-reply" />
                         </button>
@@ -682,6 +755,9 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
                 {{ projectScoped ? "当前工作暂无董事会群聊消息。" : "群聊还是空的。发出第一条消息，董事会成员会独立判断是否回应。" }}
               </p>
             </div>
+            <button v-if="newMessageCount" type="button" class="founder-board-new-messages" @click="scrollToLatest(true)">
+              <UIcon name="i-lucide-arrow-down" />{{ newMessageCount }} 条新消息
+            </button>
 
             <template v-if="!projectScoped">
               <CompanyComposer
@@ -689,7 +765,7 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
                 :agents="snapshot.agents"
                 :reply-to="replyTarget"
                 @cancel-reply="replyTarget = undefined"
-                @sent="replyTarget = undefined; refreshBoardMessages()"
+                @sent="replyTarget = undefined; refreshBoardMessages(true)"
               />
               <button type="button" class="founder-board-poll-toggle" @click="pollOpen = !pollOpen">
                 <UIcon name="i-lucide-chart-no-axes-column" />{{ pollOpen ? "收起投票" : "发起投票" }}
@@ -750,7 +826,7 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
                 <label><span>原因</span><textarea v-model="intervention.reason" rows="3" /></label>
                 <label v-if="intervention.kind === 'redefine_goal'"><span>新目标</span><textarea v-model="intervention.newGoal" rows="3" /></label>
                 <UButton color="error" :loading="loading" :disabled="!intervention.reason.trim() || (intervention.kind === 'redefine_goal' && !intervention.newGoal.trim())" @click="intervene">提交“{{ interventionActionLabel }}”</UButton>
-                <p v-if="actionMessage" class="company-provider-form__message" role="status">{{ actionMessage }}</p>
+                <p v-if="interventionMessage" class="company-provider-form__message" role="status">{{ interventionMessage }}</p>
               </div>
             </details>
           </aside>
@@ -763,6 +839,7 @@ watch(() => chatMessages.value.at(-1)?.id, () => nextTick(scrollToLatest))
             <UIcon name="i-lucide-chevron-down" />
           </summary>
           <div class="founder-governance-archive__body">
+        <p v-if="governanceMessage" class="company-provider-form__message" role="status">{{ governanceMessage }}</p>
         <p v-if="board?.authorization.status !== 'authorized'" class="company-notice">
           当前模式或真实授权尚未满足，顾问代理保持安全关闭，页面不能提高模式。
         </p>
