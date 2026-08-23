@@ -156,6 +156,35 @@ describe.serial("Company bootstrap", () => {
     expect(current.company.board.map((member) => member.id)).toEqual(["board-ceo", "board-cto", "board-product-lead"])
   })
 
+  test.serial("replaces a missing repository binding with the managed company repository", async () => {
+    await using repo = await tmpdir({ git: true })
+    await bootstrap(repo.path)
+    await Instance.disposeAll()
+    const moved = `${repo.path}-missing`
+    await fs.rename(repo.path, moved)
+
+    try {
+      const repaired = await Instance.provide({
+        directory: moved,
+        fn: () =>
+          AppRuntime.runPromise(
+            Company.Service.use((company) => company.ensureManagedRepository()),
+          ),
+      })
+      const managedRoot = await fs.realpath(path.join(Global.Path.data, "projects", "company", "repository"))
+      expect(repaired.company.repository?.root_path).toBe(managedRoot)
+      expect(Database.use((db) => db.select().from(RepositoryBindingTable).get())?.root_path).toBe(
+        repaired.company.repository?.root_path,
+      )
+      expect(Bun.spawnSync(["git", "rev-parse", "--is-inside-work-tree"], {
+        cwd: repaired.company.repository?.root_path,
+      }).stdout.toString().trim()).toBe("true")
+    } finally {
+      await Instance.disposeAll()
+      await fs.rename(moved, repo.path)
+    }
+  })
+
   test.serial("repairs orphan company rows into the default empty workspace", async () => {
     await using repo = await tmpdir({ git: true })
     Database.use((db) => db.insert(CompanyAgentTable).values({ id: "board-ceo", name: "Orphaned agent" }).run())

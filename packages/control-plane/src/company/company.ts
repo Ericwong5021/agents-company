@@ -12,6 +12,7 @@ import { Project } from "@/project"
 import { ProjectID } from "@/project/schema"
 import { Provider } from "@/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { Log } from "@/util"
 import { CompanyAgentTable } from "@/company-agent/company-agent.sql"
 import {
   CompanyCommonsChunkTable,
@@ -620,7 +621,24 @@ export const layer = Layer.effect(
     const ensureManagedRepository = Effect.fn("Company.ensureManagedRepository")(function* () {
       const state = yield* getCurrent()
       if (state.state !== "ready") return corrupt()
-      if (state.company.repository) return state
+      if (state.company.repository) {
+        const existing = yield* Effect.tryPromise({
+          try: () => fs.realpath(state.company.repository!.root_path),
+          catch: (error) => error,
+        }).pipe(Effect.match({
+          onSuccess: (root) => ({ ok: true as const, root }),
+          onFailure: (error) => ({ ok: false as const, error }),
+        }))
+        if (existing.ok) {
+          yield* inspectRepository(existing.root)
+          return state
+        }
+        if ((existing.error as NodeJS.ErrnoException).code !== "ENOENT") return yield* Effect.fail(existing.error)
+        Log.Default.warn("repairing missing company repository binding", {
+          companyID: state.company.id,
+          rootPath: state.company.repository.root_path,
+        })
+      }
 
       const root = path.join(Global.Path.data, "projects", "company", "repository")
       yield* Effect.tryPromise({ try: () => fs.mkdir(root, { recursive: true }), catch: (error) => error })
@@ -631,8 +649,23 @@ export const layer = Layer.effect(
         Database.transaction((tx) => {
           const currentState = current(tx)
           if (currentState.state !== "ready") return corrupt()
-          if (currentState.company.repository) return currentState
           const now = Date.now()
+          if (currentState.company.repository) {
+            tx.update(RepositoryBindingTable)
+              .set({
+                project_id: candidate.project_id,
+                root_path: candidate.root_path,
+                default_branch: candidate.default_branch,
+                bootstrap_head_commit: candidate.bootstrap_head_commit,
+                bootstrap_dirty: candidate.dirty,
+                time_updated: now,
+              })
+              .where(eq(RepositoryBindingTable.company_id, COMPANY_ID))
+              .run()
+            const result = current(tx)
+            if (result.state !== "ready") return corrupt()
+            return result
+          }
           tx.insert(RepositoryBindingTable)
             .values({
               id: REPOSITORY_BINDING_ID,
