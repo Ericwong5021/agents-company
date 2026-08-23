@@ -313,7 +313,7 @@ useHead(() => ({ title: pageTitle.value }))
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ac-app-shell__sidebar {
+  .ac-app-shell > .ac-app-shell__sidebar {
     position: absolute;
     z-index: 100;
     inset: 0 auto 0 0;
