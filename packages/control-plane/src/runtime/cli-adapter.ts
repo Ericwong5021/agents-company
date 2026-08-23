@@ -16,6 +16,31 @@ import { RuntimeCapabilityMatrix } from "./capability-matrix"
 
 type CliRuntimeID = Exclude<RuntimeID, "pi">
 
+const runtimeBinaryName = (runtime: CliRuntimeID) => runtime === "codex" ? "codex" : "claude"
+
+function runtimeSearchPath(environment: NodeJS.ProcessEnv = process.env) {
+  const home = environment.HOME || environment.USERPROFILE || os.homedir()
+  return [...new Set([
+    ...(environment.PATH ?? "").split(path.delimiter),
+    environment.BUN_INSTALL ? path.join(environment.BUN_INSTALL, "bin") : undefined,
+    environment.PNPM_HOME,
+    path.join(home, ".bun", "bin"),
+    path.join(home, ".local", "bin"),
+    path.join(home, ".volta", "bin"),
+    path.join(home, ".asdf", "shims"),
+    path.join(home, ".mise", "shims"),
+    path.join(home, ".npm-global", "bin"),
+    path.join(home, ".local", "share", "pnpm"),
+    ...(process.platform === "darwin" ? ["/opt/homebrew/bin"] : []),
+    "/usr/local/bin",
+  ].filter((item): item is string => Boolean(item)))]
+    .join(path.delimiter)
+}
+
+export function findCliRuntimeBinary(runtime: CliRuntimeID, environment: NodeJS.ProcessEnv = process.env) {
+  return Bun.which(runtimeBinaryName(runtime), { PATH: runtimeSearchPath(environment) }) ?? undefined
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
   return value as Record<string, unknown>
@@ -141,13 +166,17 @@ function publishedSignal(value: unknown) {
   return { signal_type, body }
 }
 
-function environment(input: AgentRunSpec): NodeJS.ProcessEnv {
+function environment(input: AgentRunSpec, binary: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     HOME: input.runtimeHome,
     USERPROFILE: input.runtimeHome,
     ...(input.runtime === "codex" ? { CODEX_HOME: input.runtimeHome } : {}),
-    ...(input.runtime === "codex" ? { PATH: `${path.join(input.runtimeHome, "bin")}${path.delimiter}${process.env.PATH ?? ""}` } : {}),
+    PATH: [
+      ...(input.runtime === "codex" ? [path.join(input.runtimeHome, "bin")] : []),
+      path.dirname(binary),
+      runtimeSearchPath(),
+    ].join(path.delimiter),
     DISABLE_AUTOUPDATER: "1",
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
@@ -161,9 +190,11 @@ function start(input: AgentRunSpec, onEvent: (event: AgentRunEvent) => void): Ag
   const temporaryOutputSchema = prepareOutputSchema(input)
   prepareSignalPublisher(input)
   const processCommand = cliCommand(input)
-  const child = spawn(processCommand.binary, processCommand.args, {
+  const binary = findCliRuntimeBinary(input.runtime)
+  if (!binary) throw new Error(`${runtimeBinaryName(input.runtime)} executable was not found`)
+  const child = spawn(binary, processCommand.args, {
     cwd: input.cwd,
-    env: environment(input),
+    env: environment(input, binary),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   })
@@ -281,21 +312,25 @@ class CliRuntimeAdapter implements AgentRuntimePort {
   }
 
   async discover() {
-    const binary = this.runtime === "codex" ? "codex" : "claude"
-    const available = Boolean(Bun.which(binary))
-    const version = available
+    const name = runtimeBinaryName(this.runtime)
+    const binary = findCliRuntimeBinary(this.runtime)
+    const version = binary
       ? await (async () => {
-          const process = Bun.spawn([binary, "--version"], { stdout: "pipe", stderr: "ignore" })
-          const output = (await new Response(process.stdout).text()).trim()
-          return (await process.exited) === 0 ? output : undefined
+          const child = Bun.spawn([binary, "--version"], {
+            env: { ...process.env, PATH: runtimeSearchPath() },
+            stdout: "pipe",
+            stderr: "ignore",
+          })
+          const output = (await new Response(child.stdout).text()).trim()
+          return (await child.exited) === 0 ? output : undefined
         })()
       : undefined
     return {
       runtime: this.runtime,
-      available,
+      available: Boolean(binary),
       version,
       authenticated: undefined,
-      reason: available ? undefined : `${binary} executable was not found`,
+      reason: binary ? undefined : `${name} executable was not found`,
     }
   }
 

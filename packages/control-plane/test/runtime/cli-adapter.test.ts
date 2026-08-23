@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { cliCommand, codexPrompt, type AgentRunSpec } from "../../src/runtime"
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import os from "os"
+import path from "path"
+import { cliCommand, codexPrompt, findCliRuntimeBinary, type AgentRunSpec } from "../../src/runtime"
 
 const spec: AgentRunSpec = {
   runID: "run-1",
@@ -23,5 +26,16 @@ describe("Codex CLI adapter", () => {
     expect(cliCommand(spec).args).toContain("approval_policy=\"never\"")
     expect(cliCommand(spec).args).toContain("--ignore-user-config")
     expect(cliCommand(spec).args).not.toContain("--ask-for-approval")
+  })
+
+  test("finds Codex in user installation directories outside the service PATH", () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "agent-company-runtime-"))
+    const binary = path.join(home, ".bun", "bin", process.platform === "win32" ? "codex.exe" : "codex")
+    mkdirSync(path.dirname(binary), { recursive: true })
+    writeFileSync(binary, "")
+    chmodSync(binary, 0o700)
+
+    expect(findCliRuntimeBinary("codex", { HOME: home, PATH: "/usr/bin:/bin" })).toBe(binary)
+    rmSync(home, { recursive: true, force: true })
   })
 })
